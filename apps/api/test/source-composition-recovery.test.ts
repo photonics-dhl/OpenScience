@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
 import { reconcileHermesResearchRuns } from '@openscience/domain';
-import { sourceCompositionRecoveryFixture, sourceReviewPacketFailureFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
+import { sourceCompositionRecoveryFixture, sourceReviewPacketFailureFixture, sourceSavedCompositionFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function fixture(packet = false) {
-  const f = packet ? await sourceReviewPacketFailureFixture() : await sourceCompositionRecoveryFixture(); const redis = createFakeRedis();
+async function fixture(packet: boolean | 'saved' = false) {
+  const f = packet === 'saved' ? await sourceSavedCompositionFixture() : packet ? await sourceReviewPacketFailureFixture() : await sourceCompositionRecoveryFixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
@@ -22,6 +22,29 @@ async function fixture(packet = false) {
 }
 
 describe('existing retry-generation final composition HTTP contract', () => {
+  it('offers one native review of the saved paid composition and hides its private proof', async () => {
+    const f = await fixture('saved'); const version = f.run.version;
+    const get = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
+    expect(get.statusCode).toBe(200);
+    expect(get.json().run).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-fresh', chargeableAttempts: 1 });
+    expect(get.body).not.toMatch(/savedCompositionCandidate|rejectedOutputs|providerAuditId|draftClaims/);
+    const tasks = f.db.agentTasks.length; const ledger = f.db.usageLedger.length;
+    const [first, second] = await Promise.all([f.post('saved-tab-one', { expectedVersion: version }),
+      f.post('saved-tab-two', { expectedVersion: version })]);
+    expect(first.statusCode).toBe(202); expect(second.statusCode).toBe(202);
+    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect((await f.post('saved-tab-one', { expectedVersion: version })).statusCode).toBe(202);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+  });
+  it('denies a changed saved reply over HTTP without charging another task', async () => {
+    const f = await fixture('saved');
+    const last = f.db.agentTasks.at(-1)!;
+    (last.result as { scientificReview: { rejectedOutputs: { text: string }[] } }).scientificReview.rejectedOutputs[1]!.text += ' ';
+    const tasks = f.db.agentTasks.length; const ledger = structuredClone(f.db.usageLedger);
+    const denied = await f.post('changed-paid-reply');
+    expect(denied.statusCode).toBe(400); expect(denied.json().error.code).toBe('VALIDATION_ERROR');
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
+  });
   it('projects and replays one paid independent continuation for an exact initial local overflow', async () => {
     const f = await fixture(true); const version = f.run.version;
     const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });

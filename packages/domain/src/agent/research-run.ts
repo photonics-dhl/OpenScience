@@ -7,8 +7,8 @@ import { requireActiveMembership } from '../workspace/helpers';
 import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
-import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
-import { inspectHermesSourceReviewRecovery, inspectHermesPrivateSourceReanalysis, readHermesPrivateSourceReanalysisReplay,
+import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, reviewHermesSavedCompositionInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
+import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, inspectHermesPrivateSourceReanalysis, readHermesPrivateSourceReanalysisReplay,
   requireNoPrivateSourceReanalysisWriter, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
@@ -18,7 +18,7 @@ import { parseStoryboardDocument, presentationStoryboardView } from '../assets/s
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
-import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
+import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
 import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
@@ -347,11 +347,15 @@ export async function getHermesResearchRun(
           chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
         : await inspectHermesSourceCompositionRecovery(deps.prisma, run.id).then(composition => composition
           ? { chargeableAttempts: 1, generationRecovery: 'source-composition' as const }
-          : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
+          : (run.steps.filter(step => step.stage === 'source_composition').length === 2
+            ? inspectHermesSavedCompositionCandidate(deps.prisma, run.id) : Promise.resolve(null)).then(saved => saved && run.status === 'failed'
+            && run.steps.length === 3 && saved.source.agentTaskId === saved.replacement?.id
+            ? { chargeableAttempts: 1, generationRecovery: 'source-review-fresh' as const }
+            : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
           ...(proof.technicalRecovery ? { generationRecovery: 'source-review-not-submitted' as const }
             : proof.reviewMode === 'web' ? { generationRecovery: 'source-review-independent' as const }
             : proof.savedOutputEvidence ? { generationRecovery: 'source-review-saved' as const }
-            : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null)).catch(() => null)
+            : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null))).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
   const view = toView(run, recovery ?? undefined);
   if (WRITE_ROLES.has(authority.membership.role)) {
@@ -2715,6 +2719,22 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               || !proof || proof.replacement?.id !== metadata.newAgentTaskId)
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Final source composition recovery key changed');
             return { run, dispatchIds: [] as string[] };
+          }
+          const savedComposition = run.steps.filter(step => step.stage === 'source_composition').length === 2
+            ? await inspectHermesSavedCompositionCandidate(tx, run.id) : null;
+          if (savedComposition) {
+            const reviews = run.steps.filter(step => step.stage === 'source_review');
+            if (reviews.length) {
+              const initial = reviews.length === 1 && reviews[0]?.ordinal === 0 && reviews[0].agentTaskId
+                ? await inspectInitialHermesSourceReview(tx, reviews[0].agentTaskId, true) : null;
+              if (!initial?.savedCompositionCandidate
+                || !isDeepStrictEqual(initial.savedCompositionCandidate, savedComposition.savedCompositionCandidate))
+                throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Saved composition review binding changed');
+              return { run, dispatchIds: [] as string[] };
+            }
+            if (run.version !== input.expectedVersion) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before source review');
+            const taskId = await reviewHermesSavedCompositionInTransaction(deps, tx, input, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [taskId] };
           }
           const finalComposition = run.versionId === null ? await inspectHermesSourceCompositionRecovery(tx, run.id) : null;
           if (finalComposition) {

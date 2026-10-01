@@ -4,7 +4,7 @@ import { getHermesResearchRun, retryHermesGeneration, reconcileHermesResearchRun
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
 import { requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { inspectHermesSourceCompositionRecovery } from '../../src/ingestion/source-composition-recovery';
-import { sourceCompositionRecoveryFixture, sourceCompositionCandidate as candidate, sourceReviewPacketFailureFixture } from './source-composition-recovery-fixture';
+import { sourceCompositionRecoveryFixture, sourceCompositionCandidate as candidate, sourceReviewPacketFailureFixture, sourceSavedCompositionFixture as savedCompositionFixture } from './source-composition-recovery-fixture';
 import { claimAgentTask, markTaskProgress } from '../../src/agent/agent';
 import { requireHermesSourceCompositionRecoveryExecution } from '../../src/ingestion/source-composition-recovery';
 
@@ -15,6 +15,7 @@ async function claimedRecovery() {
   owner.result = { sourceMapRef: structuredClone(f.reference) };
   return { ...f, owner, executionInput: { ownerTaskId: id, ingestionTaskId: f.source.id, sourceAgentTaskId: f.failed.id, executionAttempt: 1 } };
 }
+
 
 async function failedPacketIndependent() {
   const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
@@ -35,6 +36,107 @@ async function failedPacketIndependent() {
 }
 
 describe('same-run final source composition recovery', () => {
+  it('reviews a proven paid composition once without rerunning composition or rewriting failed science', async () => {
+    const f = await savedCompositionFixture(); const before = structuredClone(f.owner);
+    const compositions = structuredClone(f.db.hermesResearchSteps.filter(step => step.runId === f.run.id && step.stage === 'source_composition'));
+    const tasks = f.db.agentTasks.length; const debits = f.db.usageLedger.length;
+    expect(await getHermesResearchRun(f.deps, f.resumeInput)).toMatchObject({ generationRecovery: 'source-review-fresh', chargeableAttempts: 1 });
+    await retryHermesGeneration(f.deps, f.resumeInput);
+    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(debits + 1);
+    const review = f.db.agentTasks.at(-1)!;
+    expect(f.db.hermesResearchSteps.filter(step => step.runId === f.run.id && step.stage === 'source_review')).toMatchObject([{ ordinal: 0, agentTaskId: review.id }]);
+    expect(f.owner).toEqual(before);
+    for (const step of compositions) expect(f.db.hermesResearchSteps.find(row => row.id === step.id)).toEqual(step);
+    const after = structuredClone(f.db.usageLedger);
+    await retryHermesGeneration(f.deps, f.resumeInput);
+    await retryHermesGeneration(f.deps, { ...f.resumeInput, idempotencyKey: 'another-tab-saved-composition-review' });
+    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toEqual(after);
+    await claimAgentTask(f.deps, review.id);
+    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: review.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.owner.id, compositionTaskId: f.owner.id, executionAttempt: 1 }))
+      .toMatchObject({ mode: 'model', savedCompositionCandidate: { responseHash: f.output.responseHash,
+        structuredAttempt: 2, providerAuditId: 'saved-paid-compose-audit' }, nativeSourceReview: { taskId: review.id } });
+  });
+  it.each(['raw', 'hash', 'ordinal', 'audit-missing', 'audit-extra', 'audit-order', 'audit-usage', 'audit-model', 'audit-actor', 'audit-target',
+    'unknown-reference', 'claim-parent', 'summary-cap', 'saved-stage', 'non-pdf'] as const)(
+    'denies changed paid candidate before creating or charging review (%s)', async change => {
+      const f = await savedCompositionFixture();
+      const last = f.owner.result.scientificReview.rejectedOutputs[1];
+      const audit = f.db.auditLogs.find(row => row.id === 'saved-paid-compose-audit')!;
+      if (change === 'raw') last.text += ' ';
+      if (change === 'hash') last.responseHash = '0'.repeat(64);
+      if (change === 'ordinal') last.structuredAttempt = 1;
+      if (change === 'audit-missing') f.db.auditLogs.splice(f.db.auditLogs.indexOf(audit), 1);
+      if (change === 'audit-extra') f.db.auditLogs.push({ ...structuredClone(audit), id: 'extra-paid-audit' });
+      if (change === 'audit-order') audit.createdAt = new Date(0);
+      if (change === 'audit-usage') audit.metadata.outputTokens += 1;
+      if (change === 'audit-model') audit.metadata.model = 'other';
+      if (change === 'audit-actor') audit.actorId = f.input.userId;
+      if (change === 'audit-target') audit.targetType = 'other';
+      if (change === 'non-pdf') Object.assign(f.db.artifacts.find(row => row.id === f.source.artifactId)!,
+        { mimeType: 'text/plain', logicalPath: 'source.txt' });
+      if (change === 'saved-stage') f.owner.result.scientificReview.semanticStage.passageBindings[0].sourcePassageIds = ['P99999'];
+      if (['unknown-reference', 'claim-parent', 'summary-cap'].includes(change)) {
+        const parsed = JSON.parse(last.text);
+        if (change === 'unknown-reference') parsed.draftClaims[0].sourceBindings[0].sourcePassageId = 'P99999';
+        if (change === 'claim-parent') parsed.draftClaims[0].kind = 'boundary';
+        if (change === 'summary-cap') parsed.fields.results.summary = 'x'.repeat(4001);
+        last.text = JSON.stringify(parsed); last.byteLength = Buffer.byteLength(last.text);
+        last.responseHash = createHash('sha256').update(last.text).digest('hex');
+      }
+      const tasks = f.db.agentTasks.length; const debits = structuredClone(f.db.usageLedger); const dispatch = f.redis.lpush.mock.calls.length;
+      expect((await getHermesResearchRun(f.deps, f.resumeInput)).canRetryGeneration).not.toBe(true);
+      await expect(retryHermesGeneration(f.deps, f.resumeInput)).rejects.toBeDefined();
+      expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(debits);
+      expect(f.redis.lpush).toHaveBeenCalledTimes(dispatch);
+    });
+
+  it.each(['audit-sink', 'presentation-writer'] as const)('blocks unavailable continuation prerequisites before charging (%s)', async change => {
+    const f = await savedCompositionFixture(); const tasks = f.db.agentTasks.length; const ledger = structuredClone(f.db.usageLedger);
+    const deps = change === 'audit-sink' ? { ...f.deps, audit: undefined } : f.deps;
+    if (change === 'presentation-writer') Object.assign(f.prisma.agentTask, { count: async () => 1 });
+    await expect(retryHermesGeneration(deps, f.resumeInput)).rejects.toBeDefined();
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
+  });
+
+  it.each(['missing', 'amount', 'actor', 'policy'] as const)('revalidates the new review reservation before native execution (%s)', async change => {
+    const f = await savedCompositionFixture(); await retryHermesGeneration(f.deps, f.resumeInput);
+    const review = f.db.agentTasks.at(-1)!; await claimAgentTask(f.deps, review.id);
+    const debit = f.db.usageLedger.find(row => row.idempotencyKey === `agent-task-reserve:${review.id}`)!;
+    if (change === 'missing') f.db.usageLedger.splice(f.db.usageLedger.indexOf(debit), 1);
+    if (change === 'amount') debit.delta = -2n;
+    if (change === 'actor') debit.userId = 'other';
+    if (change === 'policy') debit.metadata = { ...debit.metadata, policy: 'other' };
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: review.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.owner.id, compositionTaskId: f.owner.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
+  });
+
+  it('advances only the completed native review while preserving both failed composition phases', async () => {
+    const f = await savedCompositionFixture(); await retryHermesGeneration(f.deps, f.resumeInput);
+    const review = f.db.agentTasks.at(-1)!;
+    review.status = 'succeeded'; review.result = candidate(f);
+    Object.assign(review.result.scientificReview, { contractVersion: '5', sourceAgentTaskId: f.owner.id });
+    review.result.reviewedClaimSuggestions = [{ ...review.result.scientificReview.draftClaims[0],
+      sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] }];
+    f.db.ingestionTasks.find(row => row.id === f.source.id)!.state = 'needs_review';
+    expect(await ensureHermesIngestionReview(f.deps, { actorId: f.run.actorId, runId: f.run.id, taskId: f.source.id })).toBe('ready');
+    expect(f.db.hermesResearchSteps.filter(step => step.runId === f.run.id && step.stage === 'source_composition')
+      .map(step => step.status)).toEqual(['failed', 'failed']);
+    expect(f.db.hermesResearchSteps.find(step => step.runId === f.run.id && step.stage === 'source_review')!.status).toBe('succeeded');
+  });
+
+  it('recovers a lost review receipt after later progress without granting another composition or review', async () => {
+    const f = await savedCompositionFixture(); await retryHermesGeneration(f.deps, f.resumeInput);
+    const review = f.db.agentTasks.at(-1)!;
+    review.status = 'succeeded'; review.result = candidate(f);
+    Object.assign(review.result.scientificReview, { contractVersion: '5', sourceAgentTaskId: f.owner.id });
+    f.run.status = 'awaiting_claim_review'; f.run.versionId = '00000000-0000-4000-8000-000000009999';
+    const tasks = f.db.agentTasks.length; const ledger = structuredClone(f.db.usageLedger);
+    await retryHermesGeneration(f.deps, { ...f.resumeInput, idempotencyKey: 'lost-saved-review-later' });
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: review.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.owner.id, compositionTaskId: f.owner.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
+  });
   it('does not charge or offer the legacy packet recovery after compact formatting also exceeded the bound', async () => {
     const f = await sourceReviewPacketFailureFixture();
     for (const key of Object.keys(f.review.result.fieldDiagnosticsDetails))
@@ -324,6 +426,30 @@ describe('same-run final source composition recovery', () => {
       expect(f.db.agentTasks.find(row => row.id === f.owner.id)!.result).toEqual(result);
     });
 
+  it.each([221, 4000])('stores complete %i-character private science without weakening reviewed Claims', async length => {
+    const f = await claimedRecovery(); const result = candidate(f);
+    result.core.method = '科'.repeat(length);
+    expect(await markTaskProgress(f.deps, { taskId: f.owner.id, status: 'succeeded', result, expectedExecutionAttempt: 1 }))
+      .toMatchObject({ status: 'succeeded' });
+    expect(f.db.agentTasks.find(row => row.id === f.owner.id)!.result).toEqual(result);
+    expect(result.reviewedClaimSuggestions).toBeUndefined();
+  });
+
+  it.each(['provided', 'unknown'] as const)('binds private draft references to the signed reading input (%s)', async scope => {
+    const f = await claimedRecovery();
+    f.failed.result.scientificReview.semanticStage.passageBindings[0]!.qualifierPassageIds = ['P00002'];
+    const result = candidate(f);
+    result.scientificReview.draftClaims[0]!.sourceBindings[0]!.sourcePassageId = scope === 'provided' ? 'P00002' : 'P99999';
+    if (scope === 'provided') {
+      await expect(markTaskProgress(f.deps, { taskId: f.owner.id, status: 'succeeded', result, expectedExecutionAttempt: 1 }))
+        .resolves.toMatchObject({ status: 'succeeded' });
+      expect(result.evidence.insight.locator).toBe('passages:P00001');
+    } else {
+      await expect(markTaskProgress(f.deps, { taskId: f.owner.id, status: 'succeeded', result, expectedExecutionAttempt: 1 }))
+        .rejects.toBeDefined();
+    }
+  });
+
   it.each(['membership', 'cancelled', 'lease', 'pointer', 'receipt', 'checkpoint', 'incoming-map', 'incoming-stage', 'contract-five',
     'approved-claims', 'missing-draft', 'empty-draft', 'malformed-draft', 'summary-length', 'candidate-hash', 'blocked-hash'])(
     'rejects changed %s in the actual terminal write after work has completed', async change => {
@@ -342,7 +468,7 @@ describe('same-run final source composition recovery', () => {
       if (change === 'missing-draft') delete review.draftClaims;
       if (change === 'empty-draft') review.draftClaims = [];
       if (change === 'malformed-draft') review.draftClaims = [{ clientKey: 'core' }];
-      if (change === 'summary-length') result.core.method = 'x'.repeat(221);
+      if (change === 'summary-length') result.core.method = 'x'.repeat(4001);
       if (change === 'candidate-hash') review.reviewedCandidateHash = 'e'.repeat(64);
       if (change === 'blocked-hash') Object.assign(result, structuredClone(f.failed.result), {
         scientificReview: { ...structuredClone(f.failed.result.scientificReview), reviewedCandidateHash: 'e'.repeat(64) },

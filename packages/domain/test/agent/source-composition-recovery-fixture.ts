@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
 import { reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
+import { claimAgentTask } from '../../src/agent/agent';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
 import { HERMES_INDEPENDENT_SOURCE_REVIEW } from '../../src/ingestion/source-review-recovery';
 
@@ -132,4 +133,44 @@ export async function exhaustedRecoveredCompositionFixture() {
   return { ...f, root, current, run, verifier, deps: { ...f.deps, canRetrySourceReviewBeforeSubmission: verifier },
     input: { ...f.input, taskId: f.source.id, sourceAgentTaskId: current.id, idempotencyKey: 'fresh-after-recovered-composition',
       sourceReanalysis: { intent: 'new_paid_private_analysis' as const, sourceRunId: run.id, expectedRunVersion: run.version } } };
+}
+
+export async function sourceSavedCompositionFixture() {
+  const base = await sourceCompositionRecoveryFixture();
+  await retryHermesGeneration(base.deps, base.recoveryInput);
+  const owner = base.db.agentTasks.at(-1)!;
+  await claimAgentTask(base.deps, owner.id);
+  owner.result = { sourceMapRef: structuredClone(base.reference) };
+  const f = { ...base, owner };
+  const draft = sourceCompositionCandidate(f);
+  draft.core.results = '条件'.repeat(131);
+  const text = JSON.stringify({ fields: Object.fromEntries(Object.entries(draft.core).filter(([key]) => key !== 'schemaVersion')
+    .map(([field, summary]) => [field, { summary, sourcePassageIds: ['P00001'] }])),
+    needsMoreEvidence: [], draftClaims: draft.scientificReview.draftClaims });
+  const output = { kind: 'schema_validation', diagnostic: 'composition_results_summary_length', structuredAttempt: 2,
+    provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'f'.repeat(64),
+    responseHash: createHash('sha256').update(text).digest('hex'), byteLength: Buffer.byteLength(text), text,
+    finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 11 } };
+  f.owner.status = 'succeeded'; f.owner.result = structuredClone(f.failed.result);
+  const firstText = '{"fields":';
+  const first = { ...output, structuredAttempt: 1, kind: 'json_parse', diagnostic: 'invalid_json', promptHash: 'e'.repeat(64),
+    text: firstText, byteLength: Buffer.byteLength(firstText), responseHash: createHash('sha256').update(firstText).digest('hex') };
+  f.owner.result.scientificReview.rejectedOutputs = [first, output];
+  f.db.hermesResearchSteps.find(step => step.agentTaskId === f.owner.id && step.stage === 'source_composition')!.status = 'failed';
+  f.db.hermesResearchRuns.find(run => run.id === f.run.id)!.status = 'failed';
+  f.db.ingestionTasks.find(task => task.id === f.source.id)!.state = 'needs_review';
+  for (const [index, receipt] of [first, output].entries()) f.db.auditLogs.push({
+    id: index === 0 ? 'saved-first-compose-audit' : 'saved-paid-compose-audit', action: 'ai.gateway.call', targetType: 'ai_gateway',
+    requestId: f.owner.id, actorId: null, createdAt: new Date(1_000 + index),
+    metadata: { operation: 'text', outcome: 'succeeded', provider: receipt.provider, model: receipt.model,
+      promptHash: receipt.promptHash, inputTokens: 10, outputTokens: 11, finishReason: 'stop', maxOutputTokens: 65536,
+      retryCount: 0, fallbackReason: null, error: null } });
+  const readAudits = f.prisma.auditLog.findMany.bind(f.prisma.auditLog);
+  // This fixture preserves SQL ordering; insertion order is not provider-call ordinal.
+  Object.assign(f.prisma.auditLog, { findMany: async (args: Prisma.AuditLogFindManyArgs) => {
+    const rows = await readAudits({ ...args, take: undefined });
+    if (args.orderBy) rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    return args.take ? rows.slice(0, args.take) : rows;
+  } });
+  return { ...f, output, resumeInput: { ...f.recoveryInput, expectedVersion: f.run.version, idempotencyKey: 'saved-composition-review' } };
 }

@@ -8,7 +8,7 @@ import { automaticIngestionReviewStage } from './automatic-review';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { findSavedIngestionCommit } from './saved-source-commit';
 import { requireActiveMembership } from '../workspace/helpers';
-import { inspectHermesRecoveredSourceComposition } from './source-composition-recovery';
+import { inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, hasOrdinarySourceTaskDebit, type HermesSavedSourceCompositionCandidate } from './source-composition-recovery';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
@@ -34,6 +34,7 @@ export type HermesSavedSourceReviewOutput = {
   promptHash: string; provider: string; model: string; byteLength: number;
 };
 export type HermesSourceReviewExecution = { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput;
+  savedCompositionCandidate?: HermesSavedSourceCompositionCandidate;
   nativeSourceReview?: import('./native-source-review').NativeSourceReviewIdentity } | {
   mode: 'web'; provider: 'chatgpt-web-science-review'; model: 'chatgpt-web/6-pro';
   runId: string; taskId: string; savedOutput?: HermesSavedSourceReviewOutput;
@@ -1027,7 +1028,7 @@ export async function requireHermesSourceReviewRecoveryBinding(tx: Prisma.Transa
 }
 
 /** Initial review uses the existing refresh receipt; a missing receipt never selects a provider. */
-export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionClient, ownerTaskId: string) {
+export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionClient, ownerTaskId: string, savedCompositionHistory = false) {
   const steps = await tx.hermesResearchStep.findMany({ where: { stage: 'source_review', ordinal: 0, agentTaskId: ownerTaskId }, take: 2 });
   if (steps.length !== 1) return null;
   const step = steps[0]!;
@@ -1040,11 +1041,13 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   const compositions = run?.steps.filter(item => item.stage === 'source_composition') ?? [];
   const recoveredComposition = run && compositions.length === 2 ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
   if (!run || !owner || !source || step.ordinal !== 0 || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9
-    || run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
-    || !['running', 'awaiting_source_review'].includes(run.status) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
-    || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 2 || run.steps.length !== 2 + compositions.length
+    || (!savedCompositionHistory && (run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
+      || !['running', 'awaiting_source_review'].includes(run.status))) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
+    || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 2
+    || (!savedCompositionHistory && run.steps.length !== 2 + compositions.length)
     || (compositions.length === 2 && !recoveredComposition)
-    || run.steps.some(item => item.ingestionTaskId !== source.id || item.artifactId !== source.artifactId || item.presentationAssetId !== null)
+    || run.steps.filter(item => !savedCompositionHistory || ['source_ingestion', 'source_composition', 'source_review'].includes(item.stage))
+      .some(item => item.ingestionTaskId !== source.id || item.artifactId !== source.artifactId || item.presentationAssetId !== null)
     || canonical[0]!.agentTaskId !== owner.id || source.agentTaskId !== owner.id || source.retryCount !== 0
     || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
     || source.artifact.workspaceId !== run.researchObject.workspaceId || source.artifact.deletedAt || source.artifact.bytesPurgedAt
@@ -1054,6 +1057,7 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
     metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
   if (receipts.length !== 1) return null;
   const metadata = record(receipts[0]!.metadata);
+  if (savedCompositionHistory && metadata.savedCompositionCandidate === undefined) return null;
   if (metadata.executor !== 'hermes' || metadata.authorizedByUserId !== run.actorId || metadata.runId !== run.id
     || metadata.stage !== 'source_review' || metadata.artifactId !== source.artifactId
     || typeof metadata.oldAgentTaskId !== 'string' || metadata.oldAgentTaskId !== metadata.compositionSourceAgentTaskId) return null;
@@ -1061,9 +1065,16 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   if (!reviewMode) return null;
   const independent = reviewMode === 'web';
   const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
+  const savedComposition = metadata.savedCompositionCandidate !== undefined
+    ? await inspectHermesSavedCompositionCandidate(tx, run.id) : null;
+  if (metadata.savedCompositionCandidate !== undefined && (!savedComposition || independent
+    || !isDeepStrictEqual(metadata.savedCompositionCandidate, savedComposition.savedCompositionCandidate)
+    || savedComposition.replacement?.id !== composition?.id || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh'
+    || metadata.noReanalysis !== true || metadata.noProviderSwitch !== true
+    || !await hasOrdinarySourceTaskDebit(tx, owner.id, run.actorId))) return null;
   if (!composition || composition.status !== 'succeeded'
     || (recoveredComposition ? recoveredComposition.replacement?.id !== composition.id
-      || recoveredComposition.replacementStep?.status !== 'succeeded'
+      || recoveredComposition.replacementStep?.status !== (savedComposition ? 'failed' : 'succeeded')
       : compositions.some(item => item.ordinal !== 0 || item.agentTaskId !== composition.id || item.status !== 'succeeded'))) return null;
   const key = `ingestion-analysis-compose:${source.id}:${composition.id}:${composition.id}:scientific-review-v4`;
   if (owner.idempotencyKey !== key || owner.session.idempotencyKey !== `${key}:session`) return null;
@@ -1073,7 +1084,7 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
       || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })) return null;
   }
   try {
-    if (automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
+    if (!savedComposition && automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
     const reference = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
     if (metadata.sourceMapSha256 !== reference.serializedSha256) return null;
     if (owner.status === 'succeeded') {
@@ -1085,7 +1096,8 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
         || !isDeepStrictEqual(review.semanticStage, record(record(composition.result).scientificReview).semanticStage)) return null;
     }
   } catch { return null; }
-  return { run, source, composition, owner, independent };
+  return { run, source, composition, owner, independent,
+    ...(savedComposition ? { savedCompositionCandidate: savedComposition.savedCompositionCandidate } : {}) };
 }
 
 /** Resolve the recorded role, with fresh actor/source/lease checks before the existing submission. */
@@ -1113,6 +1125,7 @@ export async function requireHermesSourceReviewExecution(tx: Prisma.TransactionC
   if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new Error('[blocked] Source review binding changed');
   const savedOutput = continuation?.savedOutput;
   if (!(first?.independent || continuation?.reviewMode === 'web')) return { mode: 'model', ...(savedOutput ? { savedOutput } : {}),
+    ...(first?.savedCompositionCandidate ? { savedCompositionCandidate: first.savedCompositionCandidate } : {}),
     ...nativeSourceRole(owner, proof.composition, proof.source.id, proof.source.artifact, savedOutput ? 1 : 2) };
   if (readNativeSourceReview(owner.result)) throw new Error('[blocked] Native source role cannot use historical Web review');
   return { mode: 'web', provider: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider, model: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel,

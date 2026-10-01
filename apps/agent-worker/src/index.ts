@@ -33,6 +33,7 @@ import {
   resolveHermesPrivateSourceReanalysisExecution,
   requireHermesSourceCompositionRecoveryExecution,
   type HermesSavedSourceReviewOutput,
+  type HermesSavedSourceCompositionCandidate,
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
 } from '@openscience/domain';
@@ -367,6 +368,7 @@ export function createHandlers(
       let requireReusableSemanticStage = false;
       let reviewExistingSourceTaskId: string | undefined;
       let savedReviewOutput: HermesSavedSourceReviewOutput | undefined;
+      let savedCompositionCandidate: HermesSavedSourceCompositionCandidate | undefined;
       let sourceReviewRecovery: SourceReviewNotSubmittedInput | undefined;
       let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
@@ -412,6 +414,7 @@ export function createHandlers(
             executionInput), { isolationLevel: 'Serializable' });
           scientificReviewMode = execution.mode;
           savedReviewOutput = execution.savedOutput;
+          savedCompositionCandidate = execution.mode === 'model' ? execution.savedCompositionCandidate : undefined;
           sourceReviewRecovery = execution.mode === 'web' ? execution.notSubmittedRecovery : undefined;
           if (execution.mode === 'model' && execution.nativeSourceReview) {
             const identity = structuredClone(execution.nativeSourceReview);
@@ -683,6 +686,7 @@ export function createHandlers(
             mode: scientificReviewMode,
             requireReviewedClaims,
             ...(savedReviewOutput ? { savedReviewOutput } : {}),
+            ...(savedCompositionCandidate ? { savedCompositionCandidate } : {}),
             ...(sourceReviewRecovery ? { sourceReviewRecovery } : {}),
             ...(nativeSourceReview ? { nativeSourceReview } : {}),
             ...(beforeReviewProviderCall ? { beforeReviewProviderCall } : {}),
