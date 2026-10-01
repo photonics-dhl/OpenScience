@@ -41,7 +41,7 @@ class SkillScope:
 
 
 def create_task_agent_class(native_agent_type, transport_factory, allowed_tools):
-    """Override only client construction and the execution boundary, never the agent loop."""
+    """Adapt a fixed readonly tool profile; never use this class for writes or paid tools."""
     allowed = frozenset(allowed_tools)
     if not allowed:
         raise ValueError("The task must have an explicit tool set")
@@ -68,6 +68,12 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools)
                 if call.function.name not in allowed:
                     raise NativeTaskStopped("Native task attempted a tool outside its advertised scope")
             return super()._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
+
+        @staticmethod
+        def _deduplicate_tool_calls(tool_calls):
+            # Distinct IDs belong to distinct provider tool_use blocks. Removing a
+            # harmless readonly call breaks the complete provider continuation.
+            return tool_calls
 
     return TaskAgent
 

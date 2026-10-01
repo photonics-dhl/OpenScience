@@ -122,34 +122,71 @@ def main():
             replacement = agent._ensure_primary_openai_client(reason="offline-rebuild")
             assert replacement is not old_client and not replacement.is_closed()
             replacement.close()
+            primary_invoked = list(invoked)
+
+            duplicate_requests = []
+            duplicate_ids = ["duplicate-a", "duplicate-b"]
+            duplicate_blocks = [{"type": "thinking", "thinking": "opaque-test", "signature": "duplicate-signature"}] + [
+                {"type": "tool_use", "id": call_id, "name": "paper_read", "input": {"passageId": "P00021"}} for call_id in duplicate_ids]
+            def duplicate_handler(request):
+                body = json.loads(request.content)
+                duplicate_requests.append(body)
+                first = len(duplicate_requests) == 1
+                content = duplicate_blocks if first else [{"type": "text", "text": "Both bound reads returned."}]
+                # On the known failing upstream behavior, finish the fixture so the
+                # assertion reports lost IDs directly instead of invoking native retries.
+                actual_ids = [m["tool_call_id"] for m in body["messages"] if m.get("role") == "tool"]
+                if gateway_script and (first or actual_ids == duplicate_ids):
+                    node = subprocess.run(["node", str(gateway_script)], input=json.dumps({"request": body, "responseContent": content, "ordinal": len(duplicate_requests) - 1}),
+                        text=True, capture_output=True, timeout=20, env={"PATH": "/usr/bin:/bin", "NODE_PATH": str(node_modules) if node_modules else ""})
+                    assert node.returncode == 0, node.stderr
+                    return httpx.Response(200, json=json.loads(node.stdout))
+                return httpx.Response(200, json={"id": "duplicates", "object": "chat.completion", "created": 0, "model": "MiniMax-M3",
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": None if first else "Both bound reads returned.",
+                        **({"tool_calls": [{"id": i, "type": "function", "function": {"name": "paper_read", "arguments": '{"passageId":"P00021"}'}} for i in duplicate_ids],
+                            "reasoning_details": [{"type": "openscience-provider-content", "provider_content": {"provider": "offline", "model": "MiniMax-M3", "content": duplicate_blocks}}]} if first else {})},
+                        "finish_reason": "tool_calls" if first else "stop"}], "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+            duplicate_cls = create_task_agent_class(AIAgent, lambda: httpx.MockTransport(duplicate_handler), allowed)
+            duplicate_agent = duplicate_cls(base_url="http://openscience-worker/v1", api_key="openscience-task-transport", provider="openai",
+                api_mode="chat_completions", model="MiniMax-M3", max_iterations=8, max_tokens=4096, enabled_toolsets=["openscience-task"],
+                quiet_mode=True, save_trajectories=False, persist_session=False, skip_context_files=True, session_id="offline-duplicates")
+            duplicate_result = duplicate_agent.run_conversation("Read the same bound passage twice.", system_message="Use native source tools.", task_id="offline-duplicates")
+            assert duplicate_result.get("final_response") == "Both bound reads returned."
+            actual_ids = [m["tool_call_id"] for m in duplicate_requests[1]["messages"] if m.get("role") == "tool"]
+            assert actual_ids == duplicate_ids and len(invoked) == 6, "Native deduplication lost a valid readonly call ID"
+            duplicate_agent.client.close()
 
             denied_requests = []
             def denied_handler(request):
                 denied_requests.append(json.loads(request.content))
                 return httpx.Response(200, json={"id": "denied", "object": "chat.completion", "created": 0, "model": "MiniMax-M3",
                     "choices": [{"index": 0, "message": {"role": "assistant", "content": None, "tool_calls": [
-                        {"id": "call-denied", "type": "function", "function": {"name": "skills_list", "arguments": "{}"}}]}, "finish_reason": "tool_calls"}],
+                        {"id": call_id, "type": "function", "function": {"name": "paper_read", "arguments": '{"passageId":"P00021"}'}} for call_id in ["allowed-first", "denied-second"]]}, "finish_reason": "tool_calls"}],
                     "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
             denied_cls = create_task_agent_class(AIAgent, lambda: httpx.MockTransport(denied_handler), allowed)
             denied_agent = denied_cls(base_url="http://openscience-worker/v1", api_key="openscience-task-transport", provider="openai",
                 api_mode="chat_completions", model="MiniMax-M3", max_iterations=8, max_tokens=4096, enabled_toolsets=["openscience-task"],
                 quiet_mode=True, save_trajectories=False, persist_session=False, skip_context_files=True, session_id="offline-denied")
+            denied_checks = []
             def revoked(_name, _args):
-                raise PermissionError("offline task permission revoked")
+                denied_checks.append(_name)
+                if len(denied_checks) == 2:
+                    raise PermissionError("offline task permission revoked")
             guard_registered_tools(registry, allowed, revoked, SkillScope(task_home / "skills"))
             stopped = False
             try:
                 denied_agent.run_conversation("Read the bound source.", system_message="Use native skills.", task_id="offline-denied")
             except NativeTaskStopped:
                 stopped = True
-            assert stopped and len(denied_requests) == 1 and len(invoked) == 4, "Native loop continued after tool authority was revoked"
+            assert stopped and len(denied_requests) == 1 and len(invoked) == 7 and len(denied_checks) == 2, "Native loop continued after tool authority was revoked"
             denied_agent.client.close()
 
         print(json.dumps({"runtime": "actual installed run_agent.AIAgent", "version": "0.10.0", "modelRequests": len(captured),
-                          "externalProviderCalls": 0, "nativeToolCalls": [entry["name"] for entry in invoked],
+                          "externalProviderCalls": 0, "nativeToolCalls": [entry["name"] for entry in primary_invoked],
                           "fullReferenceRead": True, "sourceRead": True, "continuationPreserved": True, "clientRebuild": True,
                           "gatewayRoundTrip": bool(gateway_script),
                           "revokedToolStopsLoop": True,
+                          "duplicateReadonlyIdsPreserved": True, "duplicateSecondAuthorizationStopsLoop": True,
                           "scientificQualityValidated": False}))
 
 
