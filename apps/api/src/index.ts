@@ -2,7 +2,7 @@ import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { createPersonalWorkspace } from '@openscience/domain';
-import { createStorageAdapter } from '@openscience/storage';
+import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
 import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
@@ -105,6 +105,7 @@ async function main(): Promise<void> {
       redis,
       mailer,
       storage,
+      malwareScanner: createClamAvScanner(process.env.CLAMAV_HOST ?? '127.0.0.1', Number(process.env.CLAMAV_PORT ?? 3310)),
       ...(researchObjectSearch ? { researchObjectSearch } : {}),
       ...(searchPrisma ? { deleteSearchContent: (scope: Parameters<typeof deleteSearchContent>[1]) => deleteSearchContent(searchPrisma, scope) } : {}),
       ...(searchPrisma ? { setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(searchPrisma, tx, scope) } : {}),

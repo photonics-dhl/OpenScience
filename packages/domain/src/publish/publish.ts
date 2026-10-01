@@ -37,12 +37,8 @@ const TRANSITIONS: Record<VersionStatus, VersionStatus[]> = {
 
 const VERSION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author']);
 
-function requireVersionAuthority(
-  version: { researchObject: { createdBy: string } },
-  userId: string,
-  membership: { role: string },
-): void {
-  if (version.researchObject.createdBy !== userId && !VERSION_WRITE_ROLES.has(membership.role)) {
+function requireVersionAuthority(membership: { role: string }, restorePublicVisibility = false): void {
+  if (!VERSION_WRITE_ROLES.has(membership.role) || (restorePublicVisibility && !['owner', 'maintainer'].includes(membership.role))) {
     throw new PublishError('FORBIDDEN', 'Insufficient authority to change or publish this Version');
   }
 }
@@ -68,7 +64,7 @@ export async function transitionVersionStatus(
     if (!version || version.researchObject.deletedAt) throw new PublishError('NOT_FOUND', '版本不存在');
     const { workspace, membership } = await requireMembership(transactionDeps, version.researchObject.workspaceId, input.userId);
     if (workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
-    requireVersionAuthority(version, input.userId, membership);
+    requireVersionAuthority(membership);
 
     const from = version.status as VersionStatus;
     if (from === input.status) return { id: version.id, status: from };
@@ -147,7 +143,7 @@ async function publishVersionOnce(
   if (!version || version.researchObject.deletedAt) throw new PublishError('NOT_FOUND', '版本不存在');
   const { workspace, membership } = await requireMembership(deps, version.researchObject.workspaceId, input.userId);
   if (workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
-  requireVersionAuthority(version, input.userId, membership);
+  requireVersionAuthority(membership);
   const issuedPublication = await deps.prisma.publication.findFirst({ where: { versionId: version.id } });
   if (issuedPublication && version.status !== 'published') {
     throw new PublishError('ALREADY_PUBLISHED', '此快照已发行；发布更新须使用新的私有草稿');
@@ -158,6 +154,7 @@ async function publishVersionOnce(
     let pub = issuedPublication;
     if (!pub) throw new PublishError('VALIDATION_ERROR', '公开版本缺少发布记录');
     if (version.researchObject.visibility !== 'public') {
+      requireVersionAuthority(membership, true);
       if (!input.r3Confirmed) {
         throw new PublishError('R3_CONFIRMATION_REQUIRED', '公开可见性扩展属 R3 高影响操作，需显式确认（§9.4）');
       }
@@ -171,6 +168,9 @@ async function publishVersionOnce(
         if (!current || current.researchObject.deletedAt || current.status !== 'published') {
           throw new PublishError('ILLEGAL_TRANSITION', 'Version status changed before visibility expansion');
         }
+        const currentAuthority = await requireMembership({ ...deps, prisma: tx as typeof deps.prisma }, current.researchObject.workspaceId, input.userId);
+        if (currentAuthority.workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
+        requireVersionAuthority(currentAuthority.membership, true);
         const existingPublication = await tx.publication.findFirst({ where: { versionId: version.id } });
         if (current.researchObject.visibility !== 'public') {
           await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });
@@ -283,7 +283,7 @@ async function publishVersionOnce(
     const transactionDeps = { ...deps, prisma: tx as unknown as typeof deps.prisma };
     const currentAuthority = await requireMembership(transactionDeps, currentVersion.researchObject.workspaceId, input.userId);
     if (currentAuthority.workspace.status !== 'active') throw new PublishError('FORBIDDEN', 'Archived workspace is read-only');
-    requireVersionAuthority(currentVersion, input.userId, currentAuthority.membership);
+    requireVersionAuthority(currentAuthority.membership);
     const currentSnapshot = await loadPublicationNarrativeSnapshot(transactionDeps, {
       researchObjectId: version.researchObjectId,
       versionId: version.id,

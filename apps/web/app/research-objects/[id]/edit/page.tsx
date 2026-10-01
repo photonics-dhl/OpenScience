@@ -1,4 +1,5 @@
 'use client';
+import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -1154,6 +1155,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 </div>
                 <p className="mt-3 text-sm leading-6 text-os-muted-paper">{ingestionReviewActive ? t('ingestionProposalBody') : tw('confirmedSources')}</p>
                 {ingestionProposal?.hermesRunId ? <Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(roId)}/hermes?run=${encodeURIComponent(ingestionProposal.hermesRunId)}`}>{t('viewNarrative')}</Link> : null}
+                {ingestionProposal && hasEmptyIngestionCore(ingestionProposal.detail.task) ? <p role="status" className="mb-4 border-l-2 border-os-vermilion-ink pl-3 text-sm leading-6 text-os-muted-paper">{t('emptyExtractionNotice')}</p> : null}
                 {ingestionProposal && !ingestionProposal.hermesRunId && isRefreshableIngestionAnalysis(ingestionProposal.detail.task) ? (
                   <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4">
                     <p className="text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p>

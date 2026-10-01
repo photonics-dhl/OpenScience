@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream';
+import type { MalwareScanner } from '@openscience/storage';
 import { streamToBuffer } from '@openscience/storage';
 
 export interface ScanResult {
@@ -8,9 +9,9 @@ export interface ScanResult {
 
 /**
  * 恶意内容扫描（§17 MUST）。
- * 当前为进程内快速阻断器：拒绝 EICAR、PE/可执行魔数与明显 ZIP 路径穿越；生产仍需在 quarantine 层接入 ClamAV/同类引擎后才可称为完整病毒扫描。
+ * 当前为进程内快速阻断器：拒绝 EICAR、PE/可执行魔数与明显 ZIP 路径穿越；完整引擎由服务入口注入；未注入时仅供受控离线测试使用。
  */
-export async function scanFile(content: Buffer | Readable): Promise<ScanResult> {
+export async function scanFile(content: Buffer | Readable, malwareScanner?: MalwareScanner): Promise<ScanResult> {
   const buf = Buffer.isBuffer(content) ? content : await streamToBuffer(content);
   if (buf.subarray(0, 2).toString('ascii') === 'MZ') return { safe: false, threat: 'pe-executable' };
   if (buf.includes(Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'))) {
@@ -22,6 +23,11 @@ export async function scanFile(content: Buffer | Readable): Promise<ScanResult> 
     || zipSignature.equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
   if (isZipContainer && (buf.includes(Buffer.from('../')) || buf.includes(Buffer.from('..\\')))) {
     return { safe: false, threat: 'archive-path-traversal' };
+  }
+  if (malwareScanner) {
+    try { await malwareScanner(buf); }
+    catch (error) { return { safe: false, threat: error instanceof Error && error.message === '[blocked] malware detected'
+      ? 'malware-detected' : 'scanner-unavailable' }; }
   }
   return { safe: true };
 }

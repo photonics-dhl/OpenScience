@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import type { DashboardResearch } from './ResearchList';
 import type { HermesRailTask } from '@/components/hermes/HermesRail';
-import { hermesTaskHref } from '@/components/hermes/hermes-state';
+import { hermesTaskHref, isActionableHermesTask, selectPriorityHermesTask } from '@/components/hermes/hermes-state';
 
 export interface ContinueResearchProps {
   research: DashboardResearch | null;
@@ -40,13 +40,13 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
     );
   }
 
-  const researchTasks = tasks.filter((candidate) => candidate.researchObjectId === research.id);
-  const task = researchTasks.find((candidate) => candidate.state === 'needs_review') ?? researchTasks[0];
+  const researchTasks = tasks.filter((candidate) => candidate.researchObjectId === research.id && isActionableHermesTask(candidate));
+  const task = selectPriorityHermesTask(researchTasks);
   const review = task?.state === 'needs_review';
   const failed = task?.state.startsWith('failed_');
   const processing = task && ['queued', 'uploading', 'parsing', 'stored'].includes(task.state);
   const href = task ? hermesTaskHref(task)
-    : `/research-objects/${encodeURIComponent(research.id)}/edit`;
+    : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'edit'}`;
   return (
     <section
       className="group surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"

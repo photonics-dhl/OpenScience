@@ -91,6 +91,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     let active = true;
     let revision = 0;
     const clearViewer = () => {
+      if (actorRef.current) setError(t(sourceReanalysisInFlight.current ? 'sourceReanalysis.contextError' : 'narrative.identityChanged'));
       revision += 1; actorRef.current = ''; setActorId(''); setRestoredOwner('');
       setInstruction(''); setRun(null); setPendingRestored(false);
       setSourceReanalysisIntent(null); setSourceReanalysisError('');
@@ -98,7 +99,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     const refreshViewer = async () => {
       const requested = ++revision;
       try {
-        const user = await getCurrentUser({ fresh: true });
+        const user = await getCurrentUser();
         if (!active || revision !== requested) return;
         if (actorRef.current !== user.userId) {
           clearViewer(); actorRef.current = user.userId; setActorId(user.userId);
@@ -191,9 +192,8 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     return () => controller.abort();
   }, [actorId, owner, restoredOwner, selectedTask?.id, researchObjectId, runId, sourceScope, resolveRetry, onRunCreated, t]);
   const sourceLabel = (task: DashboardTaskApi) => {
-    const shortId = task.id.slice(0, 8);
-    const id = eligibleTasks.some(other => other.id !== task.id && other.logicalPath === task.logicalPath && other.id.startsWith(shortId)) ? task.id : shortId;
-    return `${task.logicalPath} · ${sourceStatus(task.state)} · ${id}`;
+    const number = eligibleTasks.findIndex(other => other.id === task.id) + 1;
+    return `${task.logicalPath} · ${sourceStatus(task.state)} · ${t('analysisRecord', { number })}`;
   };
 
   const loadRun = React.useCallback(async (signal?: AbortSignal, background = false) => {
@@ -202,6 +202,11 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     try {
       const result = await getHermesResearchRun(researchObjectId, runId, signal);
       if (signal?.aborted || actorRef.current !== actorId) return;
+      if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId) {
+        setRun(null);
+        setError(previous => previous || t('narrative.identityChanged'));
+        return;
+      }
       setRun(result.run);
       onRunUpdated?.(result.run);
       setError('');

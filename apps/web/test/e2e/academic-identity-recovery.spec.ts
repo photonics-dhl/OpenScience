@@ -23,10 +23,9 @@ async function prepare(page: Page) {
 
 test('loading failure stays unknown, blocks writes and can be retried', async ({ page }) => {
   await prepare(page);
-  let attempts = 0;
+  let unavailable = true;
   await page.route('**/api/auth/academic-identity', (route) => {
-    attempts += 1;
-    return attempts === 1
+    return unavailable
       ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'private internal detail' } } })
       : route.fulfill({ json: identity });
   });
@@ -35,6 +34,7 @@ test('loading failure stays unknown, blocks writes and can be retried', async ({
   await expect(panel.getByRole('alert')).toContainText('does not mean verification was lost');
   await expect(panel).not.toContainText('private internal detail');
   await expect(panel.getByRole('button', { name: 'Connect ORCID', exact: true })).toBeDisabled();
+  unavailable = false;
   await panel.getByRole('button', { name: 'Reload identity status' }).click();
   await expect(panel.getByRole('button', { name: 'Connect ORCID', exact: true })).toBeEnabled();
 });

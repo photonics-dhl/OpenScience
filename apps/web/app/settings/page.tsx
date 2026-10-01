@@ -12,18 +12,19 @@ import { MotionPreferenceControl } from '@/components/settings/MotionPreferenceC
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import {
   ApiClientError,
-  getCurrentUser,
   logout,
-  type CurrentUser,
 } from '@/lib/api';
 import { SurfaceState } from '@/components/research/ResearchSurfaceShell';
+import { useSession } from '@/components/auth/SessionProvider';
+import { AccountLoadState } from '@/components/settings/AccountLoadState';
+import { UsageBalance } from '@/components/settings/UsageBalance';
 
 export default function SettingsPage() {
   const t = useTranslations('productSurfaces');
   const meT = useTranslations('myAccount');
   const locale = useLocale();
   const router = useRouter();
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const { user, status, refresh } = useSession();
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -32,16 +33,11 @@ export default function SettingsPage() {
       router.replace(query.has('identityError') ? '/me?identityError=retry#identity' : !query.has('identity') && window.location.hash === '#research-profile' ? '/me#research-profile' : '/me#identity');
       return;
     }
-    void getCurrentUser()
-      .then(setUser)
-      .catch((cause) => {
-        if (cause instanceof ApiClientError && cause.status === 401) router.replace('/auth/login?returnTo=%2Fsettings');
-        else setError(cause);
-      });
-  }, [router]);
+    if (status === 'anonymous') router.replace('/auth/login?returnTo=%2Fsettings');
+  }, [router, status]);
   async function signOut() { setBusy(true); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause as Error); setBusy(false); } }
   if (error) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
-  if (!user) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={meT('settingsTitle')} /></DashboardShell>;
+  if (!user || status !== 'authenticated') return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('settingsTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
   return (
     <DashboardShell className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
       <header className="account-heading">
@@ -55,10 +51,10 @@ export default function SettingsPage() {
           <dl className="mt-6 divide-y divide-os-rule-paper text-base">
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.name')}</dt><dd className="mt-1 text-os-ink">{user.displayName}</dd></div>
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.email')}</dt><dd className="mt-1 text-os-ink">{user.email}</dd></div>
-            <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.level')}</dt><dd className="mt-1 text-os-ink">{user.level}</dd></div>
           </dl>
           <Link href="/me#identity" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('continueIdentity')}</Link>
         </section>
+        <UsageBalance />
         <section className="surface-folio-sheet px-5 py-6">
           <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
           <div className="mt-5 flex items-center justify-between border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>

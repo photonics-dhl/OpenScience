@@ -10,7 +10,7 @@ import { enforceJournalWorkspaceBoundary } from '../journal-boundary';
 import { requireCurrentUser } from './session-guard';
 
 /** artifacts 路由依赖：AuthDeps + StorageAdapter（P1B-3 对象存储）。 */
-export type ArtifactRouteDeps = AuthDeps & { storage: StorageAdapter };
+export type ArtifactRouteDeps = AuthDeps & { storage: StorageAdapter; malwareScanner?: import('@openscience/storage').MalwareScanner };
 
 function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
@@ -31,6 +31,15 @@ function fieldValue(field: unknown): string | undefined {
     return typeof v === 'string' ? v : undefined;
   }
   return undefined;
+}
+
+function attachmentDisposition(logicalPath: string): string {
+  // UTF-8 roundtrip also replaces malformed legacy surrogate code units.
+  const filename = Buffer.from(logicalPath.split(/[\\/]/).pop() ?? '', 'utf8').toString('utf8')
+    .replace(/\p{Cc}/gu, '') || 'download';
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
+  const encoded = encodeURIComponent(filename).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 /**
@@ -90,10 +99,10 @@ export function registerArtifactRoutes(app: FastifyInstance, deps: ArtifactRoute
     const { id } = artifactIdParams.parse(req.params);
     const artifact = await getArtifact(deps, { userId: user.userId, artifactId: id });
     const blob = await getBlob(deps.storage, artifact.blobSha256);
-    const filename = artifact.logicalPath.split('/').pop() ?? artifact.logicalPath;
     return reply
       .header('Content-Type', artifact.mimeType ?? 'application/octet-stream')
-      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .header('Content-Disposition', attachmentDisposition(artifact.logicalPath))
+      .header('Cache-Control', 'private, no-store')
       .header('Content-Length', String(artifact.size))
       .send(blob.body);
   });

@@ -75,6 +75,28 @@ function makeDeps() {
 }
 
 describe('academic identity credentials', () => {
+  it.each(['/\\evil.example/path', '//evil.example/path', '/settings\\evil', '/settings\r\nLocation: evil', '/\tevil', '/settings\u0000', 'https://evil.example/path'])('rejects unsafe ORCID return path %j at creation and consumption', async (returnTo) => {
+    const { deps, redisStore } = makeDeps();
+    const { authorizationUrl } = await beginOrcidConnection(deps, 'user-1', returnTo);
+    const state = new URL(authorizationUrl).searchParams.get('state')!;
+    expect(JSON.parse(redisStore.get(`orcid:state:${state}`)!)).toMatchObject({ returnTo: '/settings' });
+    // Old persisted state is also validated before becoming a Location header.
+    redisStore.set(`orcid:state:${state}`, JSON.stringify({ userId: 'user-1', returnTo }));
+    deps.fetch = async () => new Response(JSON.stringify({ orcid: '0000-0002-1825-0097' }), { status: 200 });
+    await expect(completeOrcidConnection(deps, 'user-1', { code: 'oauth-code', state }))
+      .resolves.toMatchObject({ returnTo: '/settings' });
+  });
+
+  it('preserves a same-origin local path, query and fragment for ORCID', async () => {
+    const { deps, redisStore } = makeDeps();
+    const returnTo = '/settings?tab=identity#orcid';
+    const { authorizationUrl } = await beginOrcidConnection(deps, 'user-1', returnTo);
+    const state = new URL(authorizationUrl).searchParams.get('state')!;
+    expect(JSON.parse(redisStore.get(`orcid:state:${state}`)!)).toMatchObject({ returnTo });
+    deps.fetch = async () => new Response(JSON.stringify({ orcid: '0000-0002-1825-0097' }), { status: 200 });
+    await expect(completeOrcidConnection(deps, 'user-1', { code: 'oauth-code', state })).resolves.toMatchObject({ returnTo });
+  });
+
   it('creates a user-bound one-time ORCID state and stores the authenticated iD', async () => {
     const { deps, credentials, redisStore } = makeDeps();
     const { authorizationUrl } = await beginOrcidConnection(deps, 'user-1');

@@ -53,10 +53,20 @@ async function makePublicRoWithCommit() {
   // commit + artifact
   const artifact = await createArtifact(deps, { logicalPath: 'data/a.csv', content: Buffer.from('a,b\n1,2\n'), uploadedBy: owner.id, workspaceId: 'ws-1' });
   const commit = await createCommit(deps, { researchObjectId: ro.id, userId: owner.id, message: 'v1', version: 1, sdfCore: CORE, artifacts: [{ logicalPath: 'data/a.csv', artifactId: artifact.artifactId }] });
+  // Fork consumes an issued snapshot, never an unpublished working version.
+  Object.assign(db.versions.find(row => row.id === commit.versionId)!, { status: 'published', publicationNo: 1, researchRecord: { publicationMetadata: { schemaVersion: 1, title: 'Source', licenses: LICENSES } } });
+  db.publications.push({ id: 'source-publication', versionId: commit.versionId });
   return { deps, db, owner, forker, ro, artifact, commit };
 }
 
 describe('Fork（§8.1 + §4.2 + §6.3 + §7.1）', () => {
+  it.each(['viewer', 'reviewer', 'contributor'])('%s cannot create main content through Fork', async role => {
+    const { deps, db, forker, ro } = await makePublicRoWithCommit();
+    db.memberships.find(row => row.userId === forker.id)!.role = role;
+    const before = [db.researchObjects.length, db.commits.length, db.artifacts.length];
+    await expect(forkResearchObject(deps, { sourceResearchObjectId: ro.id, userId: forker.id, workspaceId: 'ws-2', publicIdPrefix: 'OSR' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect([db.researchObjects.length, db.commits.length, db.artifacts.length]).toEqual(before);
+  });
   it('fork 成功：新 RO 有 publicId + ForkRelation + Blob 引用共享 + 许可复制', async () => {
     const { deps, forker, ro, artifact, commit } = await makePublicRoWithCommit();
     const result = await forkResearchObject(
@@ -90,10 +100,10 @@ describe('Fork（§8.1 + §4.2 + §6.3 + §7.1）', () => {
   });
 
   it('许可继承阻断：显式放宽 → INHERITANCE_VIOLATION（§6.3）', async () => {
-    const { deps, forker, ro } = await makePublicRoWithCommit();
-    // 源 text=CC-BY-4.0 → target CC-BY-NC 是加严（允许）；放宽测试用 ARR→... 实际源 CC-BY 最宽松。
-    // 改用源许可变 ARR 场景：直接造一个 ARR 源。
-    await setLicenses(deps, { researchObjectId: ro.id, userId: (await deps.prisma.researchObject.findUnique({ where: { id: ro.id } }))!.createdBy, licenses: { text: 'ALL-RIGHTS-RESERVED', code: 'MIT', data: 'CC0-1.0' } });
+    const { deps, db, forker, ro, commit } = await makePublicRoWithCommit();
+    // Synthetic issued source carries ARR. Changing live draft licenses must
+    // never rewrite the immutable license snapshot used by Fork.
+    db.versions.find(row => row.id === commit.versionId)!.researchRecord.publicationMetadata.licenses.text = 'ALL-RIGHTS-RESERVED';
     await expect(
       forkResearchObject(
         deps,

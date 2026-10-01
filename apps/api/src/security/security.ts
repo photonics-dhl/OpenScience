@@ -22,6 +22,19 @@ const PUBLIC_AUTH_WRITES = new Set([
   '/auth/login',
 ]);
 
+function isTrustedLoginSource(req: FastifyRequest, allowedOrigins: string[]): boolean {
+  const source = req.headers.origin ?? req.headers.referer;
+  // CLI clients do not send browser source headers. Browser cross-site hints still fail closed.
+  if (source === undefined) return req.headers['sec-fetch-site'] !== 'cross-site';
+  try {
+    const url = new URL(source);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    if (req.headers.origin !== undefined && source !== url.origin) return false;
+    const sameOrigin = new URL(`${req.protocol}://${req.host}`).origin;
+    return url.origin === sameOrigin || allowedOrigins.includes(url.origin);
+  } catch { return false; }
+}
+
 /** 仅无会话的公开认证写入豁免；logout 等会话变更仍受 CSRF 保护。 */
 function isWriteRoute(req: FastifyRequest): boolean {
   if (PUBLIC_AUTH_WRITES.has(req.url.split('?')[0] ?? req.url)) return false;
@@ -59,6 +72,11 @@ export async function registerSecurity(app: FastifyInstance, opts: SecurityOptio
       return reply.send({ csrfToken: token });
     });
     app.addHook('preHandler', (req, reply, done) => {
+      if (req.method === 'POST' && req.url.split('?')[0] === '/auth/login' && !isTrustedLoginSource(req, opts.allowedOrigins)) {
+        void reply.status(403).send({ error: { code: 'CSRF_INVALID', message: '登录请求来源无效', requestId: String(req.id) } });
+        done();
+        return;
+      }
       if (isWriteRoute(req)) app.csrfProtection(req, reply, done);
       else done();
     });

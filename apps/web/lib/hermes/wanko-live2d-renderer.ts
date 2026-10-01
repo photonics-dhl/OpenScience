@@ -16,7 +16,9 @@ import {
   setWankoNativePresentation,
 } from './wanko-model-presentation';
 
-const MODEL_SOURCE = '/hermes/live2d/wanko/wanko_touch.model3.json';
+import { LIVE2D_ASSET_ROOT } from './live2d-assets.mjs';
+
+const MODEL_SOURCE = `${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.model3.json`;
 const abortError = () => new DOMException('Wanko Live2D initialization aborted', 'AbortError');
 
 interface CubismCoreModel {

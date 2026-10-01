@@ -6,15 +6,17 @@ import Link from 'next/link';
 import { useSession } from '@/components/auth/SessionProvider';
 import { JournalAdminLink } from '@/components/journals/JournalAdminLink';
 import { cn } from '@/lib/utils';
+import { PRODUCT_PRIMARY_ROUTES } from '@/lib/product-navigation';
 
 interface SiteHeaderProps {
-  active?: 'explore' | 'developers' | 'journals';
+  active?: 'explore' | 'developers' | 'journals' | 'guide';
   context?: 'landing' | 'public-product';
   tone?: 'dark' | 'paper';
 }
 
 export default function SiteHeader({ active, context = 'landing', tone = 'dark' }: SiteHeaderProps) {
   const t = useTranslations('landing');
+  const routeT = useTranslations('productNavigation');
   const accountT = useTranslations('myAccount');
   const { status, user } = useSession();
   const authenticatedUser = status === 'authenticated' ? user : null;
@@ -22,7 +24,7 @@ export default function SiteHeader({ active, context = 'landing', tone = 'dark' 
   const accountLabel = authenticatedUser ? (context === 'landing' ? t('nav.desk') : authenticatedUser.displayName) : status === 'anonymous' ? t('nav.login') : t('nav.desk');
   const linkClassName = cn(
     'inline-flex items-center px-2 text-sm no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-3',
-    context === 'landing' ? 'min-h-10 max-[359px]:hidden' : 'min-h-11',
+    context === 'landing' ? 'min-h-10' : 'min-h-11',
     tone === 'dark' ? 'text-os-muted-dark hover:text-os-paper' : 'text-os-muted-paper hover:text-os-ink',
   );
 
@@ -30,15 +32,12 @@ export default function SiteHeader({ active, context = 'landing', tone = 'dark' 
     <div
       className={cn(
         'items-center gap-1 sm:gap-3',
-        context === 'public-product' ? 'grid w-full grid-cols-3 sm:flex sm:w-auto sm:min-w-max' : 'flex min-w-max',
+        context === 'public-product' ? 'grid w-full grid-cols-3 sm:flex sm:w-auto sm:flex-wrap' : 'flex flex-wrap',
       )}
       data-mobile-navigation-grid={context === 'public-product' ? 'true' : undefined}
       data-navigation-tone={tone}
     >
-      {context === 'public-product' ? <Link data-reading-role="control" href="/dashboard" className={linkClassName}>{t('nav.desk')}</Link> : null}
-      <Link href="/explore" aria-current={active === 'explore' ? 'page' : undefined} data-reading-role="control" className={linkClassName}>{t('nav.explore')}</Link>
-      <Link href="/journals" aria-current={active === 'journals' ? 'page' : undefined} data-reading-role="control" className={linkClassName}>期刊</Link>
-      <Link data-reading-role="control" href="/research-objects/new" className={linkClassName}>{t('nav.create')}</Link>
+      {PRODUCT_PRIMARY_ROUTES.map(({ href, id }) => <Link key={id} href={href} aria-current={active === id ? 'page' : undefined} data-reading-role="control" className={linkClassName}>{routeT(id)}</Link>)}
       <Link href="/developers" aria-current={active === 'developers' ? 'page' : undefined} aria-label={t('nav.developersLabel')} data-reading-role="control" className={cn(linkClassName, 'max-[359px]:inline-flex')}>{t('nav.developers')}</Link>
       <JournalAdminLink className={cn(linkClassName, 'max-[359px]:inline-flex font-semibold')} />
       <Link

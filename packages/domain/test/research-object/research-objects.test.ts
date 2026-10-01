@@ -17,6 +17,15 @@ function makeDeps(audit?: AuditSink) {
 }
 
 describe('createResearchObject（验收步骤 2：个人空间建私有 RO）', () => {
+  it.each(['viewer', 'reviewer', 'contributor'])('%s cannot create main content through initial SDF', async (role) => {
+    const { deps, db, user } = makeDeps();
+    db.memberships[0].role = role;
+    await expect(createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Denied', sdf: { core: { schemaVersion: '0.1.0', problem: 'Injected' } } }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects).toHaveLength(0);
+    expect(db.sdfDocuments).toHaveLength(0);
+  });
+
   it('同事务建 RO + SDFDocument + 六 SDFNode（原子）', async () => {
     const { deps, db, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'My first RO' });
@@ -104,14 +113,47 @@ describe('getResearchObject', () => {
 });
 
 describe('updateResearchObject（乐观锁，§16）', () => {
+  it.each(['owner', 'maintainer', 'author'])('%s may edit metadata without being the creator', async (role) => {
+    const { deps, db, user } = makeDeps();
+    const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Original' });
+    db.memberships[0].role = role;
+    db.researchObjects[0].createdBy = 'another-creator';
+    await expect(updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { title: 'Changed' } }))
+      .resolves.toMatchObject({ title: 'Changed', version: 2, status: 'draft', visibility: 'private' });
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor'])('%s cannot edit metadata after creating the RO', async (role) => {
+    const { deps, db, user } = makeDeps();
+    const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Original' });
+    db.memberships[0].role = role;
+    await expect(updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { title: 'Changed' } }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects[0]).toMatchObject({ title: 'Original', version: 1 });
+  });
+
+  it.each([{ status: 'published' }, { status: 'withdrawn' }, { status: 'archived' }, { visibility: 'public' }, { visibility: 'private' }])(
+    'generic update rejects lifecycle patch %j without mutation or audit', async (patch) => {
+      const records: unknown[] = [];
+      const { deps, db, user } = makeDeps({ record: async (event) => void records.push(event) });
+      const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Original' });
+      records.length = 0;
+      // An untyped caller must receive the same protection as the HTTP schema.
+      const unsafePatch = { title: 'Changed', ...patch } as Parameters<typeof updateResearchObject>[1]['patch'];
+      await expect(updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: unsafePatch }))
+        .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(db.researchObjects[0]).toMatchObject({ title: 'Original', status: 'draft', visibility: 'private', version: 1 });
+      expect(records).toHaveLength(0);
+    },
+  );
+
   it('正确 version 更新成功 → version 递增 + 审计', async () => {
     const records: unknown[] = [];
     const audit: AuditSink = { record: async (e) => void records.push(e) };
     const { deps, user } = makeDeps(audit);
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'v1' });
-    const updated = await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { title: 'v2', visibility: 'invite_only' } });
+    const updated = await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { title: 'v2' } });
     expect(updated.title).toBe('v2');
-    expect(updated.visibility).toBe('invite_only');
+    expect(updated.visibility).toBe('private');
     expect(updated.version).toBe(2);
     expect(records.some((r) => (r as { action: string }).action === 'research_object.update')).toBe(true);
   });

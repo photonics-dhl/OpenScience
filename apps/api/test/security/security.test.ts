@@ -31,6 +31,34 @@ async function makeApp(opts: { secureCookies?: boolean; allowedOrigins?: string[
 }
 
 describe('registerSecurity（CSRF/CORS/helmet）', () => {
+  it.each([
+    { origin: 'https://evil.example' },
+    { origin: 'null' },
+    { referer: 'https://evil.example/login' },
+    { origin: 'https://evil.example', referer: 'http://localhost/login' },
+    { referer: '/login' },
+    { 'sec-fetch-site': 'cross-site' },
+  ])('blocks cross-site login before the handler: %j', async (headers) => {
+    const app = await makeApp({ csrf: true });
+    try {
+      const result = await app.inject({ method: 'POST', url: '/auth/login?next=dashboard', headers });
+      expect(result.statusCode).toBe(403);
+      expect(result.json().error.code).toBe('CSRF_INVALID');
+    } finally { await app.close(); }
+  });
+
+  it.each([
+    {}, // CLI without browser headers remains supported.
+    { origin: 'http://localhost' },
+    { referer: 'http://localhost/auth/login' },
+    { origin: 'https://app.example.com' },
+  ])('allows same-origin, configured-origin and headerless CLI login: %j', async (headers) => {
+    const app = await makeApp({ csrf: true, allowedOrigins: ['https://app.example.com'] });
+    try {
+      expect((await app.inject({ method: 'POST', url: '/auth/login', headers })).statusCode).toBe(200);
+    } finally { await app.close(); }
+  });
+
   it('CSRF 开启：写请求无 token → 403 CSRF_INVALID', async () => {
     const app = await makeApp({ csrf: true });
     const res = await app.inject({ method: 'POST', url: '/protected', payload: { x: 1 } });

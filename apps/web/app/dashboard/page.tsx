@@ -15,7 +15,6 @@ import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
-import { isProcessingHermesTask } from '@/components/hermes/hermes-state';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -211,7 +210,6 @@ export default function DashboardPage() {
   }
 
   const guideWorking = guideTask?.status === 'pending' || guideTask?.status === 'running';
-  const processingTasks = tasks.filter(isProcessingHermesTask);
   const suggestion = deriveHermesGuide({ tasks, researchObjects });
   const dashboardContext = {
     tasks: tasks.slice(0, 20).map((task) => ({ id: task.id, researchObjectId: task.researchObjectId, state: task.state })),
@@ -248,7 +246,7 @@ export default function DashboardPage() {
         </header>
 
         <div className={styles.continueResearch}>
-          <ContinueResearch research={researchObjects[0] ?? null} tasks={processingTasks} />
+          <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
         </div>
         <div className={styles.taskRail}>
           <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />

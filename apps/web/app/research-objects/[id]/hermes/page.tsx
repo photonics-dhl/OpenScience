@@ -12,6 +12,7 @@ import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
+import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { ApiClientError, confirmIngestionTask, apiRequest, getExistingHermesResearchRun, getResearchObject, getIngestionTask, getResearchIngestion, isRefreshableIngestionAnalysis, refreshIngestionAnalysis, retryIngestionTask, type IngestionConfirmation, type DashboardTaskApi, type HermesResearchRun, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
@@ -134,13 +135,14 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
 
   const complete = useMemo(() => fields.every((field) => core[field].trim().length > 0), [core]);
   const canonicalAllMissing = detail ? isCanonicalAllMissingExtraction(detail.task) : false;
+  const emptyExtraction = detail ? hasEmptyIngestionCore(detail.task) : false;
   const paidReanalysis = canonicalAllMissing || (detail?.task.state === 'failed_retryable' && detail.task.retryCount === 1);
   const compensatedReanalysis = detail?.task.state === 'failed_retryable' && detail.task.retryCount === 2;
   const proposalUnavailable = detail ? isRetryableSdfExtraction(detail.task) : false;
   const reviewPreflightRecovery = detail ? isReviewPreflightRecovery(detail.task) : false;
   const legacyFullDocumentLimit = detail ? isLegacyFullDocumentLimit(detail.task) : false;
   const legacyRefreshAvailable = detail ? isRefreshableIngestionAnalysis(detail.task) : false;
-  const approvalOpen = detail?.task.state === 'needs_review' && Boolean(detail.task.agentTaskId) && !proposalUnavailable;
+  const approvalOpen = detail?.task.state === 'needs_review' && Boolean(detail.task.agentTaskId) && !proposalUnavailable && fields.some(field => core[field].trim());
   const reviewSuggestion = useMemo(() => detail ? ({
     bodyKey: 'guide.review.body',
     href: `/research-objects/${encodeURIComponent(detail.researchObjectId)}/edit`,
@@ -252,8 +254,9 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
             <span className="font-data">{detail.task.logicalPath}</span>
-            <span>{t('taskState', { state: statusT(detail.task.state) })}</span>
+            <span>{emptyExtraction ? t('emptyExtractionTitle') : t('taskState', { state: statusT(detail.task.state) })}</span>
           </div>
+          {emptyExtraction ? <section role="status" className="mb-5 border-l-2 border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold">{t('emptyExtractionTitle')}</h2><p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('emptyExtractionBody')}</p><Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit?ingestionTask=${encodeURIComponent(taskId)}`}>{t('manualEdit')}</Link></section> : null}
           {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t(reviewPreflightRecovery ? 'proposalReviewRecoveryTitle' : paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}>
             <h2 className="font-reading text-2xl text-os-ink">{t(reviewPreflightRecovery ? 'proposalReviewRecoveryTitle' : paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}</h2>
             <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(reviewPreflightRecovery ? 'proposalReviewRecoveryBody' : legacyFullDocumentLimit ? 'proposalLongDocumentRecoveryBody' : compensatedReanalysis ? 'proposalCompensationBody' : paidReanalysis ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
@@ -268,7 +271,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
           </section></>}
           {saved && <nav aria-label={t('entryActions')} className="mt-6 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit` }>{t('continueEditing')}</Link><Link className="inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/versions${confirmation ? `?version=${encodeURIComponent(confirmation.versionId)}` : ''}`}>{t('viewVersions')}</Link></nav>}
           {saved && run?.status === 'awaiting_source_review' && confirmation ? <HermesSourceReview researchObjectId={routeParams.id} run={run} confirmation={confirmation} onSubmitted={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
-          {!proposalUnavailable ? <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer> : null}
+          {!proposalUnavailable ? <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-5"><p className="text-base text-os-muted-paper" role="status">{saved ? confirmation ? t('saved') : t('legacyConfirmation') : emptyExtraction && !fields.some(field => core[field].trim()) ? t('emptyExtractionTitle') : approvalOpen ? complete ? t('ready') : t('incomplete') : t('taskState', { state: statusT(detail.task.state) })}</p><button type="button" disabled={saving || saved || !approvalOpen} onClick={confirm} className="min-h-11 rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? t('saving') : saved ? t('confirmed') : t('confirm')}</button></footer> : null}
         </div>
         <aside aria-label={t('marginLabel')} className="border-t border-os-rule-paper pt-3 lg:border-l lg:border-t-0 lg:pl-5">
           <p data-reading-role="caption" className="text-os-muted-paper">{t('boundary')}</p>

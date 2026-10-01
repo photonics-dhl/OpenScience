@@ -1,5 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { canAccessRo } from '../visibility/access';
 import type { ArtifactDeps } from '../artifact/artifacts';
@@ -66,7 +66,8 @@ export async function forkResearchObject(
   if (!source || source.visibility !== 'public') {
     throw new ForkError('SOURCE_NOT_PUBLIC', '仅公开的 RO 可被 Fork（§4.2）');
   }
-  await requireMembership(deps, input.workspaceId, input.userId);
+  const target = await requireActiveMembership(deps.prisma, input.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author'].includes(target.membership.role)) throw new ForkError('FORBIDDEN', '无权在目标空间创建研究');
 
   // 源最新版本 + manifest（§7.2.3 快照）
   const sourceVersion = await deps.prisma.version.findFirst({
@@ -102,6 +103,8 @@ export async function forkResearchObject(
   const core = (sourceManifest.coreJson as Record<string, string>) ?? emptyCore();
 
   const result = await deps.prisma.$transaction(async (tx) => {
+    const currentTarget = await requireActiveMembership(tx, input.workspaceId, input.userId);
+    if (!['owner', 'maintainer', 'author'].includes(currentTarget.membership.role)) throw new ForkError('FORBIDDEN', '无权在目标空间创建研究');
     // 新 RO + sdf core 快照
     const ro = await tx.researchObject.create({
       data: {

@@ -21,6 +21,26 @@ function fullCore(overrides: Record<string, string> = {}) {
 }
 
 describe('sdf 读写（P1B-1 合同 + 乐观锁）', () => {
+  it.each(['viewer', 'reviewer', 'contributor'])('%s cannot edit the live SDF', async (role) => {
+    const { deps, db, user } = makeDeps();
+    const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'S', sdf: { core: fullCore() } });
+    db.memberships[0].role = role;
+    await expect(updateSdfDocument(deps, { userId: user.id, roId: ro.id, version: 1, core: fullCore({ problem: 'Changed' }) }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.sdfDocuments[0].coreJson.problem).toBe('P');
+    expect(db.commits).toHaveLength(0);
+    expect(db.researchObjects[0].version).toBe(1);
+  });
+
+  it.each(['owner', 'maintainer', 'author'])('%s may save a private SDF draft', async (role) => {
+    const { deps, db, user } = makeDeps();
+    const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'S', sdf: { core: fullCore() } });
+    db.memberships[0].role = role;
+    await expect(updateSdfDocument(deps, { userId: user.id, roId: ro.id, version: 1, core: fullCore({ problem: 'Changed' }) }))
+      .resolves.toMatchObject({ core: { problem: 'Changed' } });
+    expect(db.versions[0].status).toBe('draft');
+  });
+
   it('getSdfDocument 返回 core + 六 nodes', async () => {
     const { deps, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'S', sdf: { core: fullCore() } });

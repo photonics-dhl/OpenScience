@@ -6,15 +6,11 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { useSession } from '@/components/auth/SessionProvider';
 import { JournalAdminLink } from '@/components/journals/JournalAdminLink';
+import { PRODUCT_PRIMARY_ROUTES, type PrimaryProductRouteId } from '@/lib/product-navigation';
 
-export type ProductRouteId = 'dashboard' | 'explore' | 'create' | 'settings' | 'profile' | 'journalAdmin';
+export type ProductRouteId = PrimaryProductRouteId | 'profile' | 'journalAdmin';
 
-const productRoutes: ReadonlyArray<{ href: string; id: ProductRouteId }> = [
-  { href: '/dashboard', id: 'dashboard' },
-  { href: '/explore', id: 'explore' },
-  { href: '/research-objects/new', id: 'create' },
-  { href: '/settings', id: 'settings' },
-];
+const productRoutes = PRODUCT_PRIMARY_ROUTES;
 
 const identityRoutes = productRoutes.filter(({ id }) => id === 'explore' || id === 'dashboard');
 
@@ -33,8 +29,8 @@ export function ProductRouteNavigation({
   return (
     <ul
       className={cn(
-        'm-0 grid w-full list-none items-stretch gap-1 p-0 sm:flex sm:min-w-max',
-        variant === 'identity' ? (administrator ? 'grid-cols-3' : 'grid-cols-2') : (administrator ? 'grid-cols-3' : 'grid-cols-4'),
+        'm-0 grid w-full list-none items-stretch gap-1 p-0 sm:flex sm:flex-wrap',
+        variant === 'identity' ? (administrator ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-3',
       )}
       data-product-route-navigation="true"
     >

@@ -1,6 +1,6 @@
 import type { RoVisibility } from '../research-object/types';
 import type { WorkspaceDeps } from '../workspace/types';
-import { requireMembership } from '../workspace/helpers';
+import { requireActive, requireMembership } from '../workspace/helpers';
 import { VisibilityError } from './errors';
 import type { AuditContext, AuditEvent } from '@openscience/observability';
 
@@ -20,6 +20,16 @@ function audit(deps: WorkspaceDeps, event: Omit<AuditEvent, 'requestId' | 'ip'>,
   void deps.audit?.record({ ...event, requestId: ctx.requestId, ip: ctx.ip });
 }
 
+/** Access administration follows workspace invitations (§3.3), not content authorship. */
+async function requireVisibilityAuthority(deps: WorkspaceDeps, researchObjectId: string, userId: string) {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: researchObjectId } });
+  if (!ro || ro.deletedAt) throw new VisibilityError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  const { workspace, membership } = await requireMembership(deps, ro.workspaceId, userId);
+  requireActive(workspace);
+  if (!['owner', 'maintainer'].includes(membership.role)) throw new VisibilityError('FORBIDDEN', '无权修改可见性或访问授权');
+  return ro;
+}
+
 /**
  * 可见性变更（§4.2 扩大需显式审批 + §17 审计）：
  * - 缩小/同级（public→private 等）→ 直接应用 + 审计
@@ -31,9 +41,7 @@ export async function requestVisibilityChange(
   input: { userId: string; researchObjectId: string; toVisibility: RoVisibility },
   ctx: AuditContext = {},
 ): Promise<VisibilityChangeResult> {
-  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new VisibilityError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  const ro = await requireVisibilityAuthority(deps, input.researchObjectId, input.userId);
 
   // 幂等：无变化直接成功（Design Gate 决策）
   if (ro.visibility === input.toVisibility) {
@@ -77,15 +85,13 @@ export async function requestVisibilityChange(
   return { applied: true };
 }
 
-/** invite_only 指定账户（§4.2）：成员发起，写 VisibilityGrant。 */
+/** invite_only 指定账户（§4.2）：Owner/Maintainer 发起，写 VisibilityGrant。 */
 export async function grantVisibility(
   deps: WorkspaceDeps,
   input: { userId: string; researchObjectId: string; granteeId: string },
   ctx: AuditContext = {},
 ): Promise<void> {
-  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new VisibilityError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  const ro = await requireVisibilityAuthority(deps, input.researchObjectId, input.userId);
 
   await deps.prisma.visibilityGrant.upsert({
     where: { researchObjectId_granteeId: { researchObjectId: ro.id, granteeId: input.granteeId } },

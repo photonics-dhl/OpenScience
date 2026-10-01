@@ -37,7 +37,6 @@ const createBody = z.object({
 const updateBody = z.object({
   version: z.number().int().positive(),
   title: z.string().min(1).max(200).optional(),
-  status: z.enum(['draft', 'under_review', 'approved', 'published', 'revised', 'withdrawn', 'restricted', 'rejected', 'archived']).optional(),
 }).strict();
 const sdfBody = z.object({
   version: z.number().int().positive(),
@@ -108,7 +107,7 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
     const body = updateBody.parse(req.body);
     const updated = await updateResearchObject(
       deps,
-      { userId: user.userId, roId: id, version: body.version, patch: { title: body.title, status: body.status } },
+      { userId: user.userId, roId: id, version: body.version, patch: { title: body.title } },
       auditCtx(req),
     );
     return reply.send({ researchObject: updated });

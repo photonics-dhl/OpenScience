@@ -3,6 +3,7 @@ export type ArtifactErrorCode =
   | 'FORBIDDEN'
   | 'VALIDATION_ERROR'
   | 'FILE_TOO_LARGE' // 超配额（§13.3）
+  | 'SCAN_UNAVAILABLE'
   | 'MALICIOUS_FILE'; // 病毒扫描不通过（§17）
 
 export class ArtifactError extends Error {

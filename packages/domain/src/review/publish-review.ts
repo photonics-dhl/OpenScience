@@ -1,5 +1,6 @@
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
+import { ReviewError } from './errors';
 import { recordAudit } from '../workspace/audit';
 import { notify } from '../notification/notifications';
 import { getEffectiveLicenses } from '../license/licenses';
@@ -49,8 +50,9 @@ async function runPublicationReviewAttempt(
     where: { id: input.versionId },
     include: { researchObject: { include: { sdfDocument: true } }, manifest: { include: { entries: true } } },
   });
-  if (!version) throw new Error('版本不存在');
-  await requireMembership(deps, version.researchObject.workspaceId, input.userId);
+  if (!version || version.researchObject.deletedAt) throw new ReviewError('RESEARCH_OBJECT_NOT_FOUND', '版本不存在');
+  const { membership } = await requireActiveMembership(deps.prisma, version.researchObject.workspaceId, input.userId);
+  if (!['owner', 'maintainer', 'author'].includes(membership.role)) throw new ReviewError('FORBIDDEN', '无权执行发布审核');
   const narrativeSnapshot = await loadPublicationNarrativeSnapshot(deps, {
     researchObjectId: version.researchObjectId,
     versionId: version.id,
@@ -80,11 +82,7 @@ async function runPublicationReviewAttempt(
   const prohibited = checkProhibitedContent(reviewedText);
   if (prohibited) blocks.push(prohibited);
 
-  // 5. 无法确认发布者权限（§17：membership 已过 + RO 创建者或作者）
-  const isPublisher = version.researchObject.createdBy === input.userId;
-  if (!isPublisher) {
-    blocks.push({ code: 'publisher_authority', reason: '仅 RO 创建者或作者组可确认发布（§17）' });
-  }
+  // Publisher authority uses the current workspace role, checked before review and again before persistence.
 
   // 6. 未选择许可证（§6.3 + P1C-4）
   const licenses = await getEffectiveLicenses(deps, { researchObjectId: version.researchObjectId, userId: input.userId, versionId: version.id });
@@ -118,6 +116,8 @@ async function runPublicationReviewAttempt(
   // §15 AIReview 记录（versionId 唯一，幂等 upsert）+ §16 事件 + 审计
   const warnings = [publicationSnapshotWarning(narrativeSnapshot.digest)];
   const review = await deps.prisma.$transaction(async (tx) => {
+    const { membership: currentMembership } = await requireActiveMembership(tx, version.researchObject.workspaceId, input.userId);
+    if (!['owner', 'maintainer', 'author'].includes(currentMembership.role)) throw new ReviewError('FORBIDDEN', '无权执行发布审核');
     const transactionDeps = { ...deps, prisma: tx as unknown as typeof deps.prisma };
     const currentVersion = await tx.version.findUnique({ where: { id: version.id } });
     if (!currentVersion || currentVersion.status !== version.status) {

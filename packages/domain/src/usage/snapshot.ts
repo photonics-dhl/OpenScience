@@ -11,8 +11,11 @@ const WORKSPACE_RESOURCES: readonly QuotaResource[] = ['file_size_bytes', 'stora
 export interface UsageSnapshotItem {
   resource: string;
   scope: string | null;
+  /** AI credit: monthly grant amount, not a cap on accumulated balance. */
   limit: number | null;
+  /** AI credit: cumulative consumption; other resources: current usage. */
   used: number;
+  /** AI credit: actual signed ledger balance. */
   remaining: number;
   allowed: boolean;
 }
@@ -36,7 +39,16 @@ export async function getUsageSnapshot(
   const userItems: UsageSnapshotItem[] = [];
   for (const resource of USER_RESOURCES) {
     const policy = await resolvePolicy(deps, { userLevel: undefined, resource });
-    const used = await getBalance(deps, { userId, resource });
+    const balance = await getBalance(deps, { userId, resource });
+    if (resource === 'ai_credit') {
+      const consumption = await deps.prisma.usageLedger.aggregate({
+        where: { userId, resource, kind: 'consume' }, _sum: { delta: true },
+      });
+      userItems.push({ resource, scope: policy?.scope ?? null, limit: policy ? policy.limitValue : null,
+        used: Math.max(0, -Number(consumption._sum.delta ?? 0)), remaining: balance, allowed: balance > 0 });
+      continue;
+    }
+    const used = balance;
     const { remaining, allowed } = checkLimit({ used, limit: policy ? policy.limitValue : null });
     userItems.push({ resource, scope: policy?.scope ?? null, limit: policy?.limitValue ?? null, used, remaining, allowed });
   }

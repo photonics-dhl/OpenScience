@@ -1,9 +1,9 @@
 import type { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
-import type { StorageAdapter } from '@openscience/storage';
+import type { MalwareScanner, StorageAdapter } from '@openscience/storage';
 import { getBlobStorageKey, putBlob, streamToBuffer } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ArtifactError } from './errors';
@@ -15,6 +15,7 @@ import { lockTrashReferences } from '../trash/trash';
 /** domain artifact 依赖：在 WorkspaceDeps 基础上叠加 StorageAdapter（P1A-2 对象存储）。 */
 export interface ArtifactDeps extends WorkspaceDeps {
   storage: StorageAdapter;
+  malwareScanner?: MalwareScanner;
 }
 
 export interface CreateArtifactInput {
@@ -47,7 +48,7 @@ export interface ArtifactDetail extends CreateArtifactResult {
  * 上传 Artifact（§7.2.2 逻辑路径/MIME/大小/Blob hash + §17 类型检测/大小限制/恶意扫描）：
  * 1. 成员校验（跨 workspace 越权 → 404）
  * 2. 配额检查（§13.3，超限 FILE_TOO_LARGE）
- * 3. 病毒扫描（P1B-3 占位，P1B-8 实装）
+ * 3. 快速阻断与服务入口注入的 ClamAV 扫描
  * 4. MIME 检测（魔数，失败 mimeType=null + 审计）
  * 5. putBlob 内容寻址（去重，§7.1）+ Blob 行 upsert
  * 6. Artifact 行入库 + 审计
@@ -57,7 +58,10 @@ export async function createArtifact(
   input: CreateArtifactInput,
   ctx: AuditContext = {},
 ): Promise<CreateArtifactResult> {
-  await requireMembership(deps, input.workspaceId, input.uploadedBy);
+  const { membership } = await requireActiveMembership(deps.prisma, input.workspaceId, input.uploadedBy);
+  if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) {
+    throw new ArtifactError('FORBIDDEN', '无权上传研究材料');
+  }
 
   const logicalPath = normalizeLogicalPath(input.logicalPath);
 
@@ -84,8 +88,9 @@ export async function createArtifact(
   // 配额（§13.3）
   await checkUploadQuota(deps, { workspaceId: input.workspaceId, fileSize: content.length });
 
-  // 快速恶意内容阻断；完整生产扫描仍需 quarantine + ClamAV 类引擎（§17）
-  const scan = await scanFile(content);
+  // 快速阻断 + 生产注入的 ClamAV；扫描成功前不写对象或 Artifact。
+  const scan = await scanFile(content, deps.malwareScanner);
+  if (scan.threat === 'scanner-unavailable') throw new ArtifactError('SCAN_UNAVAILABLE', '文件安全扫描暂不可用，请稍后重试');
   if (!scan.safe) {
     throw new ArtifactError('MALICIOUS_FILE', `检测到恶意内容${scan.threat ? `: ${scan.threat}` : ''}`);
   }
@@ -104,6 +109,11 @@ export async function createArtifact(
   try {
     created = await deps.prisma.$transaction(async (tx) => {
     await lockTrashReferences(tx);
+    // Serialize role revocation/archive against persistence after the slow scan.
+    await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${input.workspaceId}::uuid AND user_id = ${input.uploadedBy}::uuid FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${input.workspaceId}::uuid FOR SHARE`;
+    const current = await requireActiveMembership(tx, input.workspaceId, input.uploadedBy);
+    if (!['owner', 'maintainer', 'author', 'contributor'].includes(current.membership.role)) throw new ArtifactError('FORBIDDEN', '无权上传研究材料');
     await tx.trashObjectCleanup.updateMany({ where: { objectKey: getBlobStorageKey(contentSha256) }, data: { state: 'retained', lastError: null } });
     blob = await putBlob(deps.storage, content);
     await tx.blob.upsert({

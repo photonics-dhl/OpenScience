@@ -4,7 +4,6 @@ import { createResearchObject } from '../../src/research-object/research-objects
 import { canAccessRo, requireRoAccess } from '../../src/visibility/access';
 import { requestVisibilityChange, grantVisibility, isVisibilityExpansion } from '../../src/visibility/requests';
 import { VisibilityError } from '../../src/visibility/errors';
-import { updateResearchObject } from '../../src/research-object/research-objects';
 
 async function makeRo() {
   const { prisma, db } = createFakePrisma();
@@ -31,15 +30,15 @@ describe('canAccessRo（§4.2 三态矩阵 + §17 越权）', () => {
   });
 
   it('public：任意可见（含匿名）', async () => {
-    const { deps, user, ro } = await makeRo();
-    await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { visibility: 'public' } });
+    const { deps, ro } = await makeRo();
+    await deps.prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } });
     expect(await canAccessRo(deps, { researchObjectId: ro.id })).toBe('granted');
     expect(await canAccessRo(deps, { researchObjectId: ro.id, userId: 'anyone' })).toBe('granted');
   });
 
   it('invite_only：成员可见，grant 命中可见，未 grant denied，匿名 denied', async () => {
     const { deps, db, user, ro } = await makeRo();
-    await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { visibility: 'invite_only' } });
+    await deps.prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'invite_only' } });
     const guest = await seedOutsider(db, 'guest-vis');
     expect(await canAccessRo(deps, { researchObjectId: ro.id, userId: guest.id })).toBe('denied');
     // grant 后可见
@@ -61,9 +60,59 @@ describe('canAccessRo（§4.2 三态矩阵 + §17 越权）', () => {
 });
 
 describe('requestVisibilityChange（§4.2 扩大审批 + 缩小应用 + 幂等）', () => {
+  it.each(['viewer', 'reviewer', 'contributor', 'author'])('%s cannot change visibility or grant access, even as creator', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = role;
+    for (const toVisibility of ['private', 'invite_only', 'public'] as const) {
+      await expect(requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility }))
+        .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
+    await expect(grantVisibility(deps, { userId: user.id, researchObjectId: ro.id, granteeId: 'guest' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.visibilityRequests).toHaveLength(0);
+    expect(db.visibilityGrants).toHaveLength(0);
+    expect(db.researchObjects[0].visibility).toBe('private');
+  });
+
+  it.each(['owner', 'maintainer'])('%s can request expansion and grant invite access', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.memberships[0].role = role;
+    await expect(requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'public' }))
+      .resolves.toMatchObject({ applied: false });
+    await grantVisibility(deps, { userId: user.id, researchObjectId: ro.id, granteeId: 'guest' });
+    expect(db.visibilityGrants).toHaveLength(1);
+    expect(db.researchObjects[0].visibility).toBe('private');
+  });
+
+  it.each(['viewer', 'reviewer', 'contributor', 'author'])('%s cannot shrink public visibility', async (role) => {
+    const { deps, db, user, ro } = await makeRo();
+    db.researchObjects[0].visibility = 'public';
+    db.memberships[0].role = role;
+    await expect(requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'private' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.researchObjects[0].visibility).toBe('public');
+  });
+
+  it('archived workspaces and deleted research objects cannot change visibility or grants', async () => {
+    const { deps, db, user, ro } = await makeRo();
+    db.workspaces[0].status = 'archived';
+    await expect(requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'public' }))
+      .rejects.toMatchObject({ code: 'WORKSPACE_ARCHIVED' });
+    await expect(grantVisibility(deps, { userId: user.id, researchObjectId: ro.id, granteeId: 'guest' }))
+      .rejects.toMatchObject({ code: 'WORKSPACE_ARCHIVED' });
+    db.workspaces[0].status = 'active';
+    db.researchObjects[0].deletedAt = new Date();
+    await expect(requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'public' }))
+      .rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+    await expect(grantVisibility(deps, { userId: user.id, researchObjectId: ro.id, granteeId: 'guest' }))
+      .rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+    expect(db.visibilityRequests).toHaveLength(0);
+    expect(db.visibilityGrants).toHaveLength(0);
+  });
+
   it('缩小（private→ 无，同级）或缩小 public→private → 直接应用', async () => {
     const { deps, user, ro } = await makeRo();
-    await updateResearchObject(deps, { userId: user.id, roId: ro.id, version: 1, patch: { visibility: 'public' } });
+    await deps.prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } });
     const result = await requestVisibilityChange(deps, { userId: user.id, researchObjectId: ro.id, toVisibility: 'private' });
     expect(result.applied).toBe(true);
     expect((await deps.prisma.researchObject.findUnique({ where: { id: ro.id } }))!.visibility).toBe('private');

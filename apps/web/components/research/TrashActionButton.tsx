@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ApiClientError, apiRequest } from '@/lib/api';

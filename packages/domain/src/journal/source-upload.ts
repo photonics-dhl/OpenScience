@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
-import { putBlob, getBlobStorageKey, type StorageAdapter } from '@openscience/storage';
+import { putBlob, getBlobStorageKey, type MalwareScanner, type StorageAdapter } from '@openscience/storage';
 import type { WorkspaceDeps } from '../workspace/types';
 import { scanFile } from '../artifact/scan';
 import { lockTrashReferences } from '../trash/trash';
@@ -32,13 +32,14 @@ async function failStagingUpload(deps: WorkspaceDeps, journalId: string, article
   });
 }
 
-export async function uploadJournalSource(deps: WorkspaceDeps & { storage: StorageAdapter }, userId: string, journalId: string, articleId: string, input: { revision: number; requestKey: string; filename: string; content: Buffer }) {
+export async function uploadJournalSource(deps: WorkspaceDeps & { storage: StorageAdapter; malwareScanner?: MalwareScanner }, userId: string, journalId: string, articleId: string, input: { revision: number; requestKey: string; filename: string; content: Buffer }) {
   await journalScope(deps.prisma, journalId, userId, JOURNAL_EDIT_ROLES, true);
   const ext = input.filename.split('.').at(-1)?.toLowerCase() ?? '';
   if (!MIME[ext] || !input.content.length || input.content.length > JOURNAL_FILE_LIMIT) throw new JournalError('VALIDATION_ERROR', '支持 PDF、DOCX、TXT 和 Markdown，单文件上限 50 MB');
   validateJournalUploadContent(ext, input.content);
-  const scan = await scanFile(input.content);
-  if (!scan.safe) throw new JournalError('VALIDATION_ERROR', '文件未通过安全检查');
+  const scan = await scanFile(input.content, deps.malwareScanner);
+  if (scan.threat === 'scanner-unavailable') throw new JournalError('SCAN_UNAVAILABLE', '文件安全扫描暂不可用，请稍后重试');
+  if (!scan.safe) throw new JournalError('MALICIOUS_FILE', '文件未通过安全检查');
   const contentSha256 = createHash('sha256').update(input.content).digest('hex');
   const label = input.filename.slice(0, 200);
   const staged = await journalTransaction(deps, journalId, async (tx) => {

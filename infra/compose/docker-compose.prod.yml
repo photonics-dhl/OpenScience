@@ -93,6 +93,8 @@ services:
     env_file:
       - /opt/openscience/.env.prod
     environment:
+      CLAMAV_HOST: malware-scanner
+      CLAMAV_PORT: "3310"
       MINIMAX_IMAGE_ENABLED: "true"
       CHATGPT_WEB_IMAGE_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
@@ -122,6 +124,8 @@ services:
       redis:
         condition: service_healthy
       object-storage:
+        condition: service_healthy
+      malware-scanner:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/auth/me').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]

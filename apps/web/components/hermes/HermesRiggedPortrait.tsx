@@ -5,6 +5,7 @@ import type { MutableRefObject, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { HermesPetMeshInput, HermesPetMeshRenderer } from '@/lib/hermes/pet-mesh-renderer';
+import { deferVisibleLive2DStart } from '@/lib/hermes/defer-live2d';
 import {
   createHermesRuntimeStatus,
   getHermesRuntimeFailureReason,
@@ -54,6 +55,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
     if (!canvas || !stage) return;
     const startingStatus = createHermesRuntimeStatus(rendererGeneration);
     publishStatus(startingStatus);
+    if (reducedMotion) return;
     const abortController = new AbortController();
     let cancelled = false;
     let contextLost = false;
@@ -65,6 +67,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
     const applySuspension = () => {
       desiredSuspended = document.hidden || !stage.isConnected || !intersecting;
       renderer?.setSuspended(initialFrameDrawn && (desiredSuspended || staticPresentationRef.current));
+      deferred?.notify();
     };
     const resizeObserver = new ResizeObserver(() => renderer?.resize());
     const intersectionObserver = new IntersectionObserver(([entry]) => {
@@ -91,8 +94,9 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
       publishStatus(reduceHermesRuntimeStatus(startingStatus, { reason: 'context-lost', type: 'failed' }));
     };
     canvas.addEventListener('webglcontextlost', onContextLost);
-    stage.dataset.hermesRuntimeOwner = 'initializing';
-    void import('@/lib/hermes/pet-mesh-renderer')
+    const initialize = () => {
+      stage.dataset.hermesRuntimeOwner = 'initializing';
+      void import('@/lib/hermes/pet-mesh-renderer')
       .then(({ createWankoLive2DRenderer }) => createWankoLive2DRenderer(
         canvas,
         stage,
@@ -135,8 +139,11 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
           type: 'failed',
         }));
       });
+    };
+    const deferred = deferVisibleLive2DStart(initialize, () => !cancelled && !document.hidden && intersecting && stage.isConnected);
     return () => {
       cancelled = true;
+      deferred?.dispose();
       abortController.abort();
       document.removeEventListener('visibilitychange', syncVisibility);
       canvas.removeEventListener('webglcontextlost', onContextLost);
@@ -144,7 +151,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
       resizeObserver.disconnect();
       stopOwnedRenderer();
     };
-  }, [inputRef, rendererGeneration]);
+  }, [inputRef, rendererGeneration, reducedMotion]);
 
   return (
     <span

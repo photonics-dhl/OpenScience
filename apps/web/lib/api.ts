@@ -1,5 +1,9 @@
 /** OpenScience web API client：对接 apps/api（同源反代或 dev 直连）。 */
 import type { IngestionClaimSelection as DomainIngestionClaimSelection, IngestionClaimEvidenceSuggestion as DomainClaimSuggestion } from '@openscience/domain';
+import type { UsageSnapshot } from '@openscience/domain';
+import { RequestCache, type ReadOptions } from './request-cache';
+export type { UsageSnapshot, UsageSnapshotItem } from '@openscience/domain';
+export type { ReadOptions } from './request-cache';
 
 /** 核心六字段（§5.1，对齐 SDF_CORE_FIELDS）。 */
 export interface SdfCore {
@@ -96,14 +100,58 @@ export interface ArtifactReference {
 }
 
 let csrfToken: string | null = null;
+let csrfRequest: Promise<string> | null = null;
 let currentUserRequest: Promise<CurrentUser> | null = null;
+let currentUserRequestFresh = false;
+let currentUserValue: { user: CurrentUser; expiresAt: number } | null = null;
+let currentAccountId: string | undefined;
 let sessionRevision = 0;
+const SESSION_REUSE_MS = 5_000;
+const READ_TIMEOUT_MS = 10_000;
+const researchReads = new RequestCache(1_000);
 export const SESSION_INVALIDATED_EVENT = 'openscience-session-invalidated';
 export const SESSION_CHANGED_EVENT = 'openscience-session-changed';
 
 export function invalidateSessionClientCache(): void {
   sessionRevision += 1;
   currentUserRequest = null;
+  currentUserRequestFresh = false;
+  currentUserValue = null;
+  currentAccountId = undefined;
+  csrfToken = null;
+  csrfRequest = null;
+  researchReads.invalidate();
+}
+
+function sessionChangedError(): ApiClientError {
+  return new ApiClientError('CLIENT_SESSION_CHANGED', 'Session changed. Refresh before continuing.', 409);
+}
+
+function currentIdentityResult(current: CurrentUser): CurrentUser {
+  if (currentUserValue?.user !== current) throw sessionChangedError();
+  return structuredClone(current);
+}
+
+async function boundedRead<T>(load: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+  try { return await load(controller.signal); }
+  finally { clearTimeout(timer); }
+}
+
+function readRequest<T>(path: string): Promise<T> {
+  return boundedRead((signal) => apiRequest<T>(path, { cache: 'no-store', signal }));
+}
+
+/** XHR writes can use this at start and completion, just like apiRequest writes. */
+export function invalidateResearchClientCache(): void {
+  researchReads.invalidate();
+}
+
+function readResearchData<T>(path: string, options: ReadOptions = {}): Promise<T> {
+  // Module memory must never share private results between server-rendered requests.
+  if (typeof window === 'undefined') return readRequest<T>(path);
+  return researchReads.read(path, () => readRequest<T>(path), options);
 }
 
 function notifySessionInvalidated(): void {
@@ -131,26 +179,45 @@ function isProtectedWrite(path: string, init?: RequestInit): boolean {
 }
 
 export async function getCsrfToken(): Promise<string> {
+  const revision = sessionRevision;
   if (csrfToken) return csrfToken;
-  const res = await fetch('/api/csrf-token', { credentials: 'include' });
-  if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
-  const body = await res.json() as { csrfToken: string };
-  csrfToken = body.csrfToken;
-  return csrfToken;
+  if (csrfRequest) {
+    const token = await csrfRequest;
+    if (revision !== sessionRevision) throw sessionChangedError();
+    return token;
+  }
+  const tracked = boundedRead(async (signal) => {
+    const res = await fetch('/api/csrf-token', { credentials: 'include', cache: 'no-store', signal });
+    if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
+    const body = await res.json() as { csrfToken: string };
+    if (revision !== sessionRevision) throw sessionChangedError();
+    csrfToken = body.csrfToken;
+    return csrfToken;
+  }).finally(() => { if (csrfRequest === tracked) csrfRequest = null; });
+  csrfRequest = tracked;
+  const token = await tracked;
+  if (revision !== sessionRevision) throw sessionChangedError();
+  return token;
 }
 
 interface ProtectedXhr {
   open(method: string, url: string): void;
   setRequestHeader(name: string, value: string): void;
   withCredentials: boolean;
+  addEventListener?(type: string, listener: () => void, options?: AddEventListenerOptions): void;
 }
 
 /** Prepare progress-capable multipart XHR without overriding its browser-generated boundary. */
 export async function prepareProtectedXhr(xhr: ProtectedXhr, method: string, path: string): Promise<void> {
+  const revision = sessionRevision;
+  const writes = !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
+  if (writes) invalidateResearchClientCache();
   const token = await getCsrfToken();
+  if (revision !== sessionRevision) throw sessionChangedError();
   xhr.open(method, path);
   xhr.withCredentials = true;
   xhr.setRequestHeader('x-csrf-token', token);
+  if (writes) xhr.addEventListener?.('loadend', invalidateResearchClientCache, { once: true });
 }
 
 function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
@@ -162,34 +229,46 @@ function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
 
 /** Same-origin browser transport. Protected writes carry the API CSRF token. */
 export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry = true): Promise<T> {
-  const headers = Object.fromEntries(new Headers(init?.headers).entries());
-  if (!headers['content-type']) headers['content-type'] = 'application/json';
-  if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
-
   const requestSessionRevision = sessionRevision;
-  const res = await fetch(path, {
-    ...init,
-    credentials: 'include',
-    headers,
-  });
-  if (!res.ok) {
-    let body: ApiErrorBody | undefined;
-    try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
-    const route = path.split('?')[0] ?? path;
-    if (res.status === 401 && body?.error.code === 'SESSION_INVALID'
-      && requestSessionRevision === sessionRevision
-      && route !== '/api/auth/me' && !PUBLIC_AUTH_WRITES.has(route)) notifySessionInvalidated();
-    if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
-      csrfToken = null;
-      return apiRequest<T>(path, init, false);
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const writes = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  // Clear at start AND settlement: a read during a write cannot survive its result.
+  if (writes) invalidateResearchClientCache();
+  try {
+    const headers = Object.fromEntries(new Headers(init?.headers).entries());
+    if (!headers['content-type']) headers['content-type'] = 'application/json';
+    if (isProtectedWrite(path, init)) {
+      headers['x-csrf-token'] = await getCsrfToken();
+      if (requestSessionRevision !== sessionRevision) throw sessionChangedError();
     }
-    const retryAfter = res.headers.get('retry-after')?.trim();
-    const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : undefined;
-    throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status,
-      retryAfterMs !== undefined && Number.isSafeInteger(retryAfterMs) && retryAfterMs <= 2_147_483_647 ? retryAfterMs : undefined);
+
+    const res = await fetch(path, {
+      ...init,
+      credentials: 'include',
+      headers,
+    });
+    if (!res.ok) {
+      let body: ApiErrorBody | undefined;
+      try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+      const route = path.split('?')[0] ?? path;
+      if (res.status === 401 && body?.error.code === 'SESSION_INVALID'
+        && requestSessionRevision === sessionRevision
+        && route !== '/api/auth/me' && !PUBLIC_AUTH_WRITES.has(route)) notifySessionInvalidated();
+      if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
+        if (requestSessionRevision !== sessionRevision) throw sessionChangedError();
+        csrfToken = null;
+        return await apiRequest<T>(path, init, false);
+      }
+      const retryAfter = res.headers.get('retry-after')?.trim();
+      const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : undefined;
+      throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status,
+        retryAfterMs !== undefined && Number.isSafeInteger(retryAfterMs) && retryAfterMs <= 2_147_483_647 ? retryAfterMs : undefined);
+    }
+    if (res.status === 204) return undefined as T;
+    return await res.json() as T;
+  } finally {
+    if (writes) invalidateResearchClientCache();
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
 }
 
 const request = apiRequest;
@@ -241,24 +320,61 @@ export async function loginWithPassword(input: {
   return result;
 }
 
-export async function getCurrentUser(options: { fresh?: boolean } = {}): Promise<CurrentUser> {
-  if (options.fresh) {
-    sessionRevision += 1;
-    currentUserRequest = null;
+export async function getCurrentUser(options: ReadOptions = {}): Promise<CurrentUser> {
+  if (typeof window === 'undefined') return readRequest<CurrentUser>('/api/auth/me');
+  // Fresh checks share a fresh read, but supersede an older background/mount read.
+  if (currentUserRequest && (!options.fresh || currentUserRequestFresh)) {
+    const current = await currentUserRequest;
+    return currentIdentityResult(current);
   }
-  if (currentUserRequest && !options.fresh) return currentUserRequest;
-  const pending = request<CurrentUser>('/api/auth/me');
-  const tracked = pending
+  if (currentUserRequest) {
+    // The ordinary read may have started with a different cookie. Fence its data too.
+    sessionRevision += 1;
+    csrfToken = null;
+    csrfRequest = null;
+    researchReads.invalidate();
+  }
+  if (!options.fresh && currentUserValue && currentUserValue.expiresAt > Date.now()) {
+    return structuredClone(currentUserValue.user);
+  }
+  currentUserValue = null;
+  const revision = sessionRevision;
+  const tracked = readRequest<CurrentUser>('/api/auth/me')
+    .then((current) => {
+      if (revision !== sessionRevision || currentUserRequest !== tracked) throw sessionChangedError();
+      const accountChanged = currentAccountId !== undefined && currentAccountId !== current.userId;
+      if (accountChanged) {
+        sessionRevision += 1;
+        csrfToken = null;
+        csrfRequest = null;
+        researchReads.invalidate();
+      }
+      currentAccountId = current.userId;
+      currentUserValue = { user: current, expiresAt: Date.now() + SESSION_REUSE_MS };
+      // Consumers clear their old local state and join this identity read.
+      if (accountChanged) window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+      return current;
+    })
     .catch((cause) => {
       if (currentUserRequest === tracked && cause instanceof ApiClientError
         && cause.status === 401 && cause.code === 'SESSION_INVALID') notifySessionInvalidated();
       throw cause;
     })
     .finally(() => {
-      if (currentUserRequest === tracked) currentUserRequest = null;
+      if (currentUserRequest === tracked) {
+        currentUserRequest = null;
+        currentUserRequestFresh = false;
+      }
     });
   currentUserRequest = tracked;
-  return tracked;
+  currentUserRequestFresh = Boolean(options.fresh);
+  const current = await tracked;
+  return currentIdentityResult(current);
+}
+
+/** Exact server snapshot; ai_credit fields retain the endpoint's ledger semantics. */
+export function getUsage(options: ReadOptions = {}): Promise<UsageSnapshot> {
+  return readResearchData('/api/usage', options);
 }
 
 export interface AcademicIdentityStatus {
@@ -283,8 +399,8 @@ export interface AcademicIdentityStatus {
   capabilities: { orcid: boolean; institutionEmail: boolean };
 }
 
-export function getAcademicIdentityStatus(): Promise<AcademicIdentityStatus> {
-  return request('/api/auth/academic-identity');
+export function getAcademicIdentityStatus(options: ReadOptions = {}): Promise<AcademicIdentityStatus> {
+  return readResearchData('/api/auth/academic-identity', options);
 }
 
 export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
@@ -498,8 +614,8 @@ export function retryHermesGeneration(
     body: JSON.stringify({ expectedVersion }),
   });
 }
-export async function listResearchIngestionTasks(researchObjectId: string): Promise<{ tasks: DashboardTaskApi[] }> {
-  return request(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`);
+export async function listResearchIngestionTasks(researchObjectId: string, options: ReadOptions = {}): Promise<{ tasks: DashboardTaskApi[] }> {
+  return readResearchData(`/api/ingestion?actionable=true&researchObjectId=${encodeURIComponent(researchObjectId)}`, options);
 }
 
 export async function getDashboardOverview(): Promise<{
@@ -823,8 +939,8 @@ export async function createResearchObjectWithMaterials(
 }
 
 /** 查 RO 详情（含 SDF core）。 */
-export async function getResearchObject(id: string): Promise<{ researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } }> {
-  return request(`/api/research-objects/${id}`);
+export async function getResearchObject(id: string, options: ReadOptions = {}): Promise<{ researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } }> {
+  return readResearchData(`/api/research-objects/${encodeURIComponent(id)}`, options);
 }
 
 /** 更新 SDF（乐观锁 version，§16）。 */
@@ -833,8 +949,12 @@ export async function updateSdf(roId: string, version: number, core: SdfCore): P
 }
 
 /** 查版本列表（P1B-4）。 */
-export async function listVersions(roId: string): Promise<{ versions: VersionSummary[] }> {
-  return request(`/api/research-objects/${roId}/versions`);
+export async function listVersions(roId: string, options: ReadOptions = {}): Promise<{ versions: VersionSummary[] }> {
+  return readResearchData(`/api/research-objects/${encodeURIComponent(roId)}/versions`, options);
+}
+
+export function getVersionMaterials(versionId: string, options: ReadOptions = {}): Promise<{ version: { versionId: string; snapshot: { artifacts: ArtifactReference[] } } }> {
+  return readResearchData(`/api/versions/${encodeURIComponent(versionId)}`, options);
 }
 
 export interface PresentationClaim {
@@ -1385,8 +1505,8 @@ export async function getAgentTask(roId: string, taskId: string, signal?: AbortS
   return request(`/api/agent/tasks/${taskId}`, { signal });
 }
 
-export async function getResearchIdentity(): Promise<ResearchIdentityProfile> {
-  return (await request<{ profile: ResearchIdentityProfile }>('/api/research-identity')).profile;
+export async function getResearchIdentity(options: ReadOptions = {}): Promise<ResearchIdentityProfile> {
+  return (await readResearchData<{ profile: ResearchIdentityProfile }>('/api/research-identity', options)).profile;
 }
 
 export async function updateResearchIdentity(
@@ -1707,8 +1827,8 @@ export interface ResearchIngestion {
   latestConfirmation: IngestionConfirmation | null;
 }
 
-export async function getResearchIngestion(researchObjectId: string): Promise<ResearchIngestion> {
-  return apiRequest(`/api/research-objects/${encodeURIComponent(researchObjectId)}/ingestion`);
+export async function getResearchIngestion(researchObjectId: string, options: ReadOptions = {}): Promise<ResearchIngestion> {
+  return readResearchData(`/api/research-objects/${encodeURIComponent(researchObjectId)}/ingestion`, options);
 }
 
 export type IngestionTaskState = 'queued' | 'uploading' | 'stored' | 'parsing' | 'needs_review' | 'confirmed' | 'written' | 'failed_retryable' | 'failed_blocked';

@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const nginx = readFileSync(new URL('./openscience.conf', import.meta.url), 'utf8');
 const deploy = readFileSync(new URL('../scripts/deploy.sh', import.meta.url), 'utf8');
+const transaction = readFileSync(new URL('../scripts/production-deploy-transaction.sh', import.meta.url), 'utf8');
 
 function locationBlock(signature) {
   const start = nginx.indexOf(signature);
@@ -50,10 +51,23 @@ test('Tunnel origin trusts only loopback CF client identity and sends one proxy 
 test('every production deployment reconciles and validates the active nginx config', () => {
   assert.match(deploy, /install -m 0644 \$RELEASE_ROOT\/infra\/nginx\/openscience\.conf \$NGINX_CONF/);
   assert.doesNotMatch(deploy, /test -f \$NGINX_CONF \|\| cp/);
-  assert.match(deploy, /nginx -t/);
+  assert.match(deploy, /production-deploy-transaction\.sh/);
+  assert.match(transaction, /nginx -t/);
 });
 
 test('public acceptance can bind evidence to the current immutable release', () => {
   assert.match(nginx, /location = \/__release \{[\s\S]*?alias \/opt\/openscience\/\.release-id;/);
   assert.match(nginx, /location = \/__release \{[\s\S]*?Cache-Control "no-store"/);
+});
+
+
+test('generated browser errors keep branded status and no version disclosure', () => {
+  assert.equal((nginx.match(/server_tokens off;/g) ?? []).length, 2);
+  assert.match(locationBlock('location = /admin/journals {'), /error_page 403 = @browser_forbidden;/);
+  assert.match(locationBlock('location @browser_forbidden {'), /return 403/);
+  assert.match(locationBlock('location @browser_unauthorized {'), /WWW-Authenticate "Basic realm=\\"openscience-admin\\"" always;/);
+  for (const code of [500, 502, 503, 504]) {
+    assert.match(locationBlock(`location @browser_error_${code} {`), new RegExp(`return ${code}`));
+  }
+  assert.doesNotMatch(nginx, /proxy_intercept_errors on;/);
 });
