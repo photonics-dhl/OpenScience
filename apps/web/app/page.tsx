@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 
 import Hero from '@/components/landing/Hero';
 import LatestResearch from '@/components/landing/LatestResearch';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 
 export default async function Page() {
@@ -12,10 +12,12 @@ export default async function Page() {
 
   return (
     <PublicShell
-      headerActions={<SiteHeader />}
+      headerActions={<SiteHeader context="public-product" tone="dark" />}
+      headerUtilities={<PublicProductAccess tone="dark" />}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}
       tone="dark"
+      wrapHeaderActionsOnMobile
     >
       <Hero locale={locale} />
       <Suspense fallback={<section className="min-h-72 bg-white" aria-busy="true" />}><LatestResearch /></Suspense>

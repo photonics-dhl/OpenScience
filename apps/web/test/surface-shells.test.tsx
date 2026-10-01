@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -15,6 +15,16 @@ import HermesReviewPage, { isCanonicalAllMissingExtraction, isRetryableSdfExtrac
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
   useTranslations: () => (key: string) => key,
+}));
+vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
+  getTranslations: async () => (key: string) => key,
+}));
+vi.mock('next/font/google', () => ({
+  Archivo: () => ({ className: 'archivo-font' }),
+}));
+vi.mock('@/lib/public-server-api', () => ({
+  getServerResearchIndex: async () => ({ items: [], nextCursor: null }),
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => null,
@@ -82,6 +92,28 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(primitives).toContain('[&_button]:rounded-panel');
     expect(primitives).toContain('active:translate-y-px');
     expect(primitives).toContain('motion-reduce:[&_a]:transform-none');
+  });
+
+  it('renders the actual Landing Page with a wrapped public row and separate work utilities', async () => {
+    vi.stubGlobal('React', React);
+    const { default: Page } = await import('../app/page');
+    const markup = renderToStaticMarkup(await Page());
+    const header = markup.match(/<header\b[^>]*>[\s\S]*?<\/header>/u)?.[0] ?? '';
+    const navigation = header.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? '';
+    const outsideNavigation = header.replace(navigation, '');
+
+    expect(navigation).toContain('data-mobile-navigation-layout="wrapped"');
+    expect(navigation).toContain('data-mobile-navigation-grid="true"');
+    expect(navigation.match(/href="([^"]+)"/gu)).toEqual([
+      'href="/explore"', 'href="/journals"', 'href="/guide"',
+    ]);
+    expect(outsideNavigation).toContain('data-shell-utility="true"');
+    for (const href of ['/dashboard', '/auth/login']) {
+      expect(outsideNavigation).toContain(`href="${href}"`);
+      expect(navigation).not.toContain(`href="${href}"`);
+    }
+    expect(navigation).not.toContain('<details');
+    expect(navigation).not.toContain('href="/research-objects/new"');
   });
 
   it('marks primary shell navigation as protected from the Hermes travel footprint', () => {

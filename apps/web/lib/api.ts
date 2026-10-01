@@ -1679,8 +1679,8 @@ export interface PublicResearchVersion {
 }
 
 /** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
-export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
-  return request(`/api/research/${publicId}/v/${versionNo}`);
+export async function getPublicResearchVersion(publicId: string, versionNo: number, signal?: AbortSignal): Promise<{ research: PublicResearchVersion }> {
+  return request(`/api/research/${publicId}/v/${versionNo}`, { signal });
 }
 
 export async function getPublicEvidenceSource(

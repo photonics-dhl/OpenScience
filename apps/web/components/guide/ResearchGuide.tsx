@@ -5,20 +5,20 @@ import Link from 'next/link';
 import { ArrowRight, ChevronDown, FileText, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ScientificText, scientificTextExcerpt } from '@/components/content/ScientificText';
-import { getExploreIndex, type ResearchIndexItemApi } from '@/lib/api';
+import { getPublicResearchVersion, type PublicResearchVersion } from '@/lib/api';
 import styles from './research-guide.module.css';
 
 const scenes = ['start', 'read', 'revise'] as const;
 const questions = ['blank', 'edit', 'source'] as const;
 
 function HermesPortrait() {
-  return <img className={styles.hermes} src="/hermes/wanko-static-transparent.png" width={156} height={190} alt="Hermes" />;
+  return <img className={styles.hermes} src="/hermes/wanko-static-transparent.png" width={156} height={190} alt="" />;
 }
 
 export function ResearchGuide() {
   const t = useTranslations('productGuide');
   const [selected, setSelected] = React.useState(0);
-  const [example, setExample] = React.useState<ResearchIndexItemApi | null>(null);
+  const [example, setExample] = React.useState<PublicResearchVersion | null>(null);
   const [loadState, setLoadState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [attempt, setAttempt] = React.useState(0);
   const [imageFailed, setImageFailed] = React.useState(false);
@@ -31,10 +31,9 @@ export function ResearchGuide() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8000);
     setLoadState('loading');
-    void getExploreIndex({ limit: 3 }, controller.signal).then(result => {
+    void getPublicResearchVersion('OSR-2026-000022', 4, controller.signal).then(({ research }) => {
       if (!active) return;
-      const illustrated = result.items.filter(item => item.thumbnail);
-      setExample(illustrated.find(item => item.publicId === 'OSR-2026-000022') ?? illustrated[0] ?? result.items[0] ?? null);
+      setExample(research);
       setImageFailed(false);
       setLoadState('ready');
     }).catch(() => { if (active) setLoadState('unavailable'); }).finally(() => window.clearTimeout(timeout));
@@ -52,29 +51,32 @@ export function ResearchGuide() {
   }
 
   const title = example ? <ScientificText as="h2" hideSourceMarkers className={styles.researchTitle}>{example.title}</ScientificText> : <h2 className={styles.researchTitle}>{t('exampleFallback')}</h2>;
-  const image = example?.thumbnail && !imageFailed ? <img src={example.thumbnail.url} alt={t('exampleAlt', { title: example.title })} width={1280} height={720} decoding="async" onError={() => setImageFailed(true)} /> : null;
+  const illustration = example?.presentationAssets.find(asset => asset.kind === 'image') ?? example?.presentationAssets.find(asset => asset.kind === 'chart' || asset.kind === 'svg');
+  const illustrationTitle = illustration?.reader?.title;
+  const image = illustration && example && !imageFailed ? <img src={illustration.url} alt={illustrationTitle || t('exampleAlt', { title: example.title })} width={1280} height={720} decoding="async" onError={() => setImageFailed(true)} /> : null;
 
   return <article className={styles.guide}>
     <header className={styles.hero}>
       <div className={styles.intro}>
-        <div className={styles.identity}><HermesPortrait /><p className={styles.eyebrow}>{t('eyebrow')}</p></div>
         <h1>{t('title')}</h1>
-        <p className={styles.lead}>{t('intro')}</p>
-        <Link href="/dashboard" className={styles.primary}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link>
-        <p className={styles.startNote}>{t('startNote')}</p>
+        <div className={styles.identity}><HermesPortrait /><p className={styles.lead}>{t('intro')}</p></div>
+        <div className={styles.actions}>
+          <Link href="/dashboard" className={styles.primary}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link>
+          <p className={styles.startNote}>{t('startNote')}</p>
+        </div>
       </div>
-      <section className={styles.proof} aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
+      <figure className={styles.proof} aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
         {loadState === 'loading' ? <div role="status" className={styles.proofLoading}><p>{t('loadingExample')}</p><div className={styles.skeleton} aria-hidden="true" /></div> : <>
-          <div className={styles.proofMeta}><span>{t('exampleLabel')}</span>{example ? <span>{example.authors.join(' · ')} · v{example.latestVersion}</span> : null}</div>
+          {example ? <div className={styles.proofMeta}><span>{example.authors.map(author => author.displayName).join(' · ')}</span><span>v{example.version.versionNo}</span></div> : null}
           {title}
-          {example?.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.insight, 130)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
+          {example?.version.core.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.version.core.insight, 130)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
           {image ? <div className={styles.scienceImage}>{image}</div> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
-          <div className={styles.proofFooter}>
-            {loadState === 'unavailable' ? <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('retryExample')}</button> : <span>{t('figureLabel')}</span>}
+          <figcaption className={styles.proofFooter}>
+            {loadState === 'unavailable' || imageFailed ? <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('retryExample')}</button> : <ScientificText as="p" hideSourceMarkers className={styles.figureCaption}>{illustration?.reader?.narration || illustrationTitle || t('figureLabel')}</ScientificText>}
             <Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link>
-          </div>
+          </figcaption>
         </>}
-      </section>
+      </figure>
     </header>
 
     <section className={styles.scenes} aria-labelledby={`${id}-scenes`}>
