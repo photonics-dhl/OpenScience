@@ -36,3 +36,35 @@
 @media (hover: hover) and (pointer: fine) { .card:hover { border-color: #99b8bb; box-shadow: 0 8px 24px #233b4810; } .search button:hover, .loadMore:hover { background: #0d5960; } }
 @media (max-width: 700px) { .discovery { padding-inline: 18px; } .heading { display: block; } .allLink { display: inline-flex; margin-top: 16px; } .cards, .prominent .cardLink { grid-template-columns: minmax(0, 1fr); } .cardBody, .prominent .cardBody { padding: 20px; } .card h2 { font-size: 22px; } }
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+
+/* The public index reads like a research catalogue. These rules intentionally
+   require its route marker; the Landing discovery module keeps its own layout. */
+.discovery[data-explore-index='true'] { background: var(--os-paper); padding-block: 48px 72px; }
+.discovery[data-explore-index='true'] .inner { max-width: 1200px; }
+.discovery[data-explore-index='true'] .heading { margin-bottom: 28px; }
+.discovery[data-explore-index='true'] .heading h1 { font-size: clamp(32px, 4vw, 44px); font-weight: 500; }
+.discovery[data-explore-index='true'] .intro { max-width: 44em; font-size: 16px; line-height: 1.85; }
+.discovery[data-explore-index='true'] .search { max-width: 680px; }
+.discovery[data-explore-index='true'] .count { margin-top: 8px; }
+.discovery[data-explore-index='true'] .cards { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 24px; border-top: 1px solid var(--os-rule-paper); }
+.discovery[data-explore-index='true'] .card { height: auto; padding-block: 32px; border: 0; border-bottom: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; overflow: visible; }
+.discovery[data-explore-index='true'] .cardLink { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: center; gap: 40px; }
+.discovery[data-explore-index='true'] .cover { padding: 16px; border: 0; border-radius: 8px; aspect-ratio: 16 / 10; }
+.discovery[data-explore-index='true'] .cardBody { min-width: 0; padding: 0; }
+.discovery[data-explore-index='true'] .cardBody:only-child { grid-column: 1 / -1; max-width: 54em; }
+.discovery[data-explore-index='true'] .card h2 { font: 400 clamp(26px, 2.7vw, 34px)/1.35 var(--font-editorial-serif), var(--font-cjk-serif), serif; letter-spacing: -.015em; }
+.discovery[data-explore-index='true'] .abstract { font-size: 16px; line-height: 1.85; }
+.discovery[data-explore-index='true'] .authors { margin-block: 16px 12px; }
+.discovery[data-explore-index='true'] .read { justify-content: flex-start; align-items: center; gap: 20px; padding-top: 4px; border: 0; min-height: 44px; }
+.discovery[data-explore-index='true'] .cardLink:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 6px; }
+@media (hover: hover) and (pointer: fine) {
+  .discovery[data-explore-index='true'] .card:hover { box-shadow: none; border-color: var(--os-rule-paper); }
+  .discovery[data-explore-index='true'] .cardLink:hover .read { text-decoration: underline; text-underline-offset: 4px; }
+}
+@media (max-width: 820px) {
+  .discovery[data-explore-index='true'] { padding-block: 32px 48px; }
+  .discovery[data-explore-index='true'] .cardLink { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .discovery[data-explore-index='true'] .cover { aspect-ratio: auto; min-height: 0; }
+  .discovery[data-explore-index='true'] .cover img { height: auto; max-height: 420px; }
+  .discovery[data-explore-index='true'] .card { padding-block: 24px; }
+}

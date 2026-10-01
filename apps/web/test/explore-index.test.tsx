@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,8 +20,9 @@ describe('Explore Research Index', () => {
     );
   });
 
-  it('renders a numbered editorial index with provenance-facing metadata and no cards', () => {
-    const markup = renderToStaticMarkup(createElement(ResearchIndex, {
+  it('renders the public identity, version, contribution and author with the matching reading link', () => {
+    vi.stubGlobal('React', React);
+    const markup = renderToStaticMarkup(React.createElement(ResearchIndex, {
       initialPage: {
         items: [{
           publicId: 'OSR-2026-000001', title: 'Ultrafast optical response', url: '/research/OSR-2026-000001', latestVersion: 2,
@@ -32,13 +33,12 @@ describe('Explore Research Index', () => {
       },
     }));
     expect(markup).toContain('<ol');
-    expect(markup).toContain('01');
     expect(markup).toContain('Ultrafast optical response');
     expect(markup).toContain('OSR-2026-000001');
+    expect(markup).toContain('v2');
+    expect(markup).toContain('2026-08-10');
+    expect(markup).toContain('A measured response.');
     expect(markup).toContain('Ada Researcher');
     expect(markup).toContain('href="/research/OSR-2026-000001"');
-    expect(markup).toContain('no-underline');
-    expect(markup).toContain('appearance-none');
-    expect(markup).not.toContain('rounded-card');
   });
 });
