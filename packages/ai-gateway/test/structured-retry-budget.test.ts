@@ -3,6 +3,19 @@ import { AiGateway } from '../src/gateway';
 import type { Provider } from '../src/provider';
 
 describe('bounded rejected response repair', () => {
+  it('binds each original or repair submission to the Gateway-owned ordinal', async () => {
+    const ordinals: number[] = []; let calls = 0;
+    const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({
+      text: ++calls === 1 ? 'bad' : '{"ok":true}', model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 },
+    }) };
+    const result = await new AiGateway({ providers: [provider] }).completeStructured((v): v is { ok: true } => Boolean(v && typeof v === 'object' && 'ok' in v && v.ok),
+      [{ role: 'user', content: 'source' }], { maxRetries: 1, primaryProviderOnly: true,
+        withProviderSubmission: async (ordinal, target, submit) => {
+          expect(target).toMatchObject({ provider: 'fixture', model: 'fixture', promptHash: expect.stringMatching(/^[a-f0-9]{64}$/u) });
+          ordinals.push(ordinal); return submit();
+        } });
+    expect(result).toEqual({ ok: true }); expect(ordinals).toEqual([0, 1]); expect(calls).toBe(2);
+  });
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid byte ceiling %s before submitting', async budget => {
     let calls = 0;
     const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => {

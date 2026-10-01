@@ -46,6 +46,7 @@ describe('server-bound Hermes native pixel review', () => {
     const request = input();
     expect(await f.gateway.reviewScientific(request, guard)).toMatchObject({ provider: f.provider.name, model: 'MiniMax-M3', promptHash: nativeImageReviewPromptHash(request) });
     const body = JSON.parse(String((f.fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.max_tokens).toBe(32768);
     expect(body.messages[0].content[1].source.data).toBe(bytes.toString('base64'));
     expect(f.authorize).toHaveBeenCalledOnce(); expect(f.checkpoint).toHaveBeenCalledOnce();
     const log = f.audit.record.mock.calls[0][0] as unknown as { metadata: Record<string, unknown> };
@@ -72,9 +73,44 @@ describe('server-bound Hermes native pixel review', () => {
     expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.checkpoint).toHaveBeenCalledOnce();
   });
 
+  it('never accepts valid-looking JSON from an output cut off at the thinking/output ceiling', async () => {
+    const f = setup(); f.fetcher.mockImplementation(async () => new Response(JSON.stringify({ model: 'MiniMax-M3',
+      content: [{ type: 'text', text: '{"decision":"accepted"}' }], stop_reason: 'max_tokens', usage: { input_tokens: 17, output_tokens: 32768 } }), { status: 200 }));
+    await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow();
+    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.checkpoint).toHaveBeenCalledOnce();
+  });
+
   it('blocks another submission when the durable owner reports an uncertain prior call', async () => {
     const f = setup(); f.checkpoint.mockRejectedValue(new Error('Already started'));
     await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow(); expect(f.fetcher).not.toHaveBeenCalled();
+  });
+
+  it('does not audit a saved response as a new provider call', async () => {
+    const f = setup(); f.checkpoint.mockImplementation(async () => ({ text: '{"decision":"accepted"}',
+      model: 'MiniMax-M3', finishReason: 'stop', usage: { inputTokens: 17, outputTokens: 8 } }));
+    await f.gateway.reviewScientific(input(), guard);
+    expect(f.fetcher).not.toHaveBeenCalled(); expect(f.audit.record).not.toHaveBeenCalled();
+  });
+
+  it('does not audit a checkpoint denial before actual submission', async () => {
+    const f = setup(); f.checkpoint.mockRejectedValue(new Error('Already started'));
+    await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow();
+    expect(f.fetcher).not.toHaveBeenCalled(); expect(f.audit.record).not.toHaveBeenCalled();
+  });
+
+  it('audits the actual completed call even if saving its response fails', async () => {
+    const f = setup(); f.checkpoint.mockImplementation(async (_input, _target, submit) => {
+      await submit(); throw new Error('Completion transaction failed');
+    });
+    await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow();
+    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.audit.record).toHaveBeenCalledOnce();
+    expect((f.audit.record.mock.calls[0][0] as unknown as { metadata: object }).metadata).toMatchObject({ outcome: 'succeeded' });
+  });
+
+  it('allows only one invocation of an owned submission closure', async () => {
+    const f = setup(); f.checkpoint.mockImplementation(async (_input, _target, submit) => { await submit(); return submit(); });
+    await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow();
+    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.audit.record).toHaveBeenCalledOnce();
   });
 
   it('does not select a text-only primary or fall back to another native model', async () => {

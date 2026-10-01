@@ -103,6 +103,8 @@ export type StructuredGenerationOptions = TextGenerationOptions & {
   primaryProviderOnly?: boolean;
   /** Trusted caller checkpoint, after internal authorization and before each actual provider submission. */
   beforeEachProviderCall?: () => Promise<void>;
+  /** Internal durable owner; ordinal 0 is the original call, later ordinals are bounded schema repairs. */
+  withProviderSubmission?: (ordinal: number, target: NativeImageReviewTarget, submit: () => Promise<ProviderResult>) => Promise<ProviderResult>;
   validationFeedback?: (value: unknown) => string | undefined;
   validationDiagnostic?: (value: unknown) => string | undefined;
   /** Opt-in private evidence capture only; callback failure never authorizes another attempt. */
@@ -214,7 +216,7 @@ export class AiGateway {
         attachments: input.attachments?.map(attachment => Object.freeze({ ...attachment, bytes: Buffer.from(attachment.bytes) })) };
       const messages = nativeImageReviewMessages(input);
       const result = await this.completeWithControls(messages, { thinking: 'adaptive', temperature: 0.1,
-        maxTokens: 4096, timeoutMs: 300_000 }, {
+        maxTokens: 32768, timeoutMs: 300_000 }, {
         primaryProviderOnly: true, reviewSourceIdentity: sourceEvidenceIdentity,
         beforeProviderAttempt: async () => {
           if (await this.illustrationReviewPolicy?.(Object.freeze({ ...input.authorizationContext })) !== true)
@@ -223,7 +225,8 @@ export class AiGateway {
         },
         submitProvider: (target, submit) => this.nativeImageReviewSubmission!(input, target, submit),
       });
-      if (!guard(parseStructuredJson(result.text))) throw new AiGatewayError('SCHEMA_VALIDATION', 'Invalid native image review response');
+      if (result.finishReason !== 'stop' || !guard(parseStructuredJson(result.text)))
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'Incomplete or invalid native image review response');
       return { text: result.text, promptHash: result.promptHash, responseHash: sha256Text(result.text), provider: result.provider, model: result.model };
     }
     if ('kind' in input.source && input.source.kind === 'illustration-plan') {
@@ -495,10 +498,12 @@ export class AiGateway {
       }
       await controls.beforeProviderAttempt?.();
       const attemptStart = Date.now();
-      try {
-        const result = controls.submitProvider
-          ? await controls.submitProvider({ provider: provider.name, model: provider.model, promptHash }, () => provider.complete(request))
-          : await provider.complete(request);
+      let submitted = false;
+      const submit = async (): Promise<ProviderResult> => {
+        if (submitted) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Provider submission already invoked');
+        submitted = true;
+        try {
+          const result = await provider.complete(request);
         await this.record({
           operation: controls.reviewSourceIdentity ? 'scientific_review' : 'text',
           provider: provider.name,
@@ -528,9 +533,8 @@ export class AiGateway {
           ...(opts.thinking ? { requestedThinking: opts.thinking } : {}),
           ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
         });
-        return { ...result, provider: provider.name, promptHash };
+        return result;
       } catch (e) {
-        lastError = e;
         const failure = textProviderFailure(e);
         const responseDetails = e instanceof TextProviderError ? e.details : undefined;
         await this.record({
@@ -564,6 +568,18 @@ export class AiGateway {
           fallbackReason: boundedFallbackReason(fallbackNotes),
           retryCount: i,
         });
+        throw e;
+      }
+      };
+      try {
+        const result = controls.submitProvider
+          ? await controls.submitProvider({ provider: provider.name, model: provider.model, promptHash }, submit)
+          : await submit();
+        return { ...result, provider: provider.name, promptHash };
+      } catch (e) {
+        lastError = e;
+        const failure = textProviderFailure(e);
+        const responseDetails = e instanceof TextProviderError ? e.details : undefined;
         // A completed response exhausted its output allowance; another provider
         // at the same allowance is not a transport recovery and spends it again.
         if (responseDetails?.finishReason === 'length') {
@@ -691,6 +707,8 @@ export class AiGateway {
           temperature: opts.temperature, maxTokens: currentMaxTokens,
           thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs,
         }, { ...controls, ...(beforeProviderAttempt ? { beforeProviderAttempt } : {}),
+          ...(opts.withProviderSubmission ? { submitProvider: (target: NativeImageReviewTarget, submit: () => Promise<ProviderResult>) =>
+            opts.withProviderSubmission!(attempt, target, submit) } : {}),
           primaryProviderOnly: controls.primaryProviderOnly || opts.primaryProviderOnly });
         if (result.finishReason === 'length') {
           throw new AiGatewayError('STRUCTURED_OUTPUT_TRUNCATED', 'structured output reached token limit');
