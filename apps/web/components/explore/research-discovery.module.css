@@ -40,19 +40,29 @@
 /* The public index reads like a research catalogue. These rules intentionally
    require its route marker; the Landing discovery module keeps its own layout. */
 .discovery[data-explore-index='true'] { background: var(--os-paper); padding-block: 48px 72px; }
+.discovery[data-explore-index='true'] ::selection { background: #cce4df; color: #133b3c; }
 .discovery[data-explore-index='true'] .inner { max-width: 1200px; }
 .discovery[data-explore-index='true'] .heading { margin-bottom: 28px; }
-.discovery[data-explore-index='true'] .heading h1 { font-size: clamp(32px, 4vw, 44px); font-weight: 500; }
+.discovery[data-explore-index='true'] .heading h1 { font-size: clamp(36px, 4.4vw, 52px); font-weight: 500; }
 .discovery[data-explore-index='true'] .intro { max-width: 44em; font-size: 16px; line-height: 1.85; }
-.discovery[data-explore-index='true'] .search { max-width: 680px; }
+.discovery[data-explore-index='true'] .search { max-width: 760px; gap: 12px; }
+.discovery[data-explore-index='true'] .searchField { display: grid; position: relative; flex: 1; min-width: 0; }
+.discovery[data-explore-index='true'] .searchIcon { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); pointer-events: none; color: var(--os-muted-paper); }
+.discovery[data-explore-index='true'] .search input { height: 50px; padding-left: 44px; caret-color: var(--os-vermilion-ink); border-color: var(--os-rule-paper); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.discovery[data-explore-index='true'] .search button { min-height: 50px; background: var(--os-vermilion-ink); transition: background-color 160ms ease, transform 100ms ease-out; }
+.discovery[data-explore-index='true'] .search button:active { transform: scale(.98); }
+.discovery[data-explore-index='true'] .search button:disabled { cursor: wait; opacity: .7; }
 .discovery[data-explore-index='true'] .count { margin-top: 8px; }
 .discovery[data-explore-index='true'] .cards { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 24px; border-top: 1px solid var(--os-rule-paper); }
 .discovery[data-explore-index='true'] .card { height: auto; padding-block: 32px; border: 0; border-bottom: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; overflow: visible; }
 .discovery[data-explore-index='true'] .cardLink { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: center; gap: 40px; }
 .discovery[data-explore-index='true'] .cover { padding: 16px; border: 0; border-radius: 8px; aspect-ratio: 16 / 10; }
+.discovery[data-explore-index='true'] .cards > li:first-child .card { padding-block: 40px; }
+.discovery[data-explore-index='true'] .cards > li:first-child .cover { padding: 20px; box-shadow: 0 8px 24px rgb(32 37 43 / .05); }
 .discovery[data-explore-index='true'] .cardBody { min-width: 0; padding: 0; }
 .discovery[data-explore-index='true'] .cardBody:only-child { grid-column: 1 / -1; max-width: 54em; }
 .discovery[data-explore-index='true'] .card h2 { font: 400 clamp(26px, 2.7vw, 34px)/1.35 var(--font-editorial-serif), var(--font-cjk-serif), serif; letter-spacing: -.015em; }
+.discovery[data-explore-index='true'] .cards > li:first-child .card h2 { font-size: clamp(32px, 3.4vw, 42px); }
 .discovery[data-explore-index='true'] .abstract { font-size: 16px; line-height: 1.85; }
 .discovery[data-explore-index='true'] .authors { margin-block: 16px 12px; }
 .discovery[data-explore-index='true'] .read { justify-content: flex-start; align-items: center; gap: 20px; padding-top: 4px; border: 0; min-height: 44px; }
@@ -60,6 +70,7 @@
 @media (hover: hover) and (pointer: fine) {
   .discovery[data-explore-index='true'] .card:hover { box-shadow: none; border-color: var(--os-rule-paper); }
   .discovery[data-explore-index='true'] .cardLink:hover .read { text-decoration: underline; text-underline-offset: 4px; }
+  .discovery[data-explore-index='true'] .search input:hover { border-color: #b8c9cb; }
 }
 @media (max-width: 820px) {
   .discovery[data-explore-index='true'] { padding-block: 32px 48px; }
@@ -67,4 +78,14 @@
   .discovery[data-explore-index='true'] .cover { aspect-ratio: auto; min-height: 0; }
   .discovery[data-explore-index='true'] .cover img { height: auto; max-height: 420px; }
   .discovery[data-explore-index='true'] .card { padding-block: 24px; }
+  .discovery[data-explore-index='true'] .cards > li:first-child .card { padding-block: 28px; }
+  .discovery[data-explore-index='true'] .cards > li:first-child .card h2 { font-size: 32px; }
+}
+@media (max-width: 420px) {
+  .discovery[data-explore-index='true'] .search { gap: 8px; }
+  .discovery[data-explore-index='true'] .search button { padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discovery[data-explore-index='true'] .search input, .discovery[data-explore-index='true'] .search button { transition: none; }
+  .discovery[data-explore-index='true'] .search button:active { transform: none; }
 }

@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
 import { getExploreIndex, type ResearchIndexPageApi } from '@/lib/api';
 import { ResearchCard } from './ResearchCard';
 import styles from './research-discovery.module.css';
@@ -47,8 +48,8 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
     <form onSubmit={event => { event.preventDefault(); void load(); }}>
       <div className={styles.search}>
         <label className="sr-only" htmlFor="research-search">{t('search')}</label>
-        <input id="research-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} />
-        <button type="submit">{t('searchAction')}</button>
+        <div className={styles.searchField}><Search className={styles.searchIcon} size={18} aria-hidden="true" /><input id="research-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} /></div>
+        <button type="submit" disabled={loading}>{loading ? t('loading') : t('searchAction')}</button>
       </div>
       <details className={styles.filters}>
         <summary>{t('refineSearch')}</summary>

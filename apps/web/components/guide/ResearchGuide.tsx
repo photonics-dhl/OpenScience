@@ -59,25 +59,31 @@ export function ResearchGuide() {
     <header className={styles.hero}>
       <div className={styles.intro}>
         <h1>{t('title')}</h1>
-        <div className={styles.identity}><HermesPortrait /><p className={styles.lead}>{t('intro')}</p></div>
+        <p className={styles.lead}>{t('intro')}</p>
         <div className={styles.actions}>
           <Link href="/dashboard" className={styles.primary}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link>
           <p className={styles.startNote}>{t('startNote')}</p>
         </div>
       </div>
-      <figure className={styles.proof} aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
+      <div className={styles.companion}><HermesPortrait /></div>
+    </header>
+
+    <figure className={styles.proof} aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
         {loadState === 'loading' ? <div role="status" className={styles.proofLoading}><p>{t('loadingExample')}</p><div className={styles.skeleton} aria-hidden="true" /></div> : <>
-          {example ? <div className={styles.proofMeta}><span>{example.authors.map(author => author.displayName).join(' · ')}</span><span>v{example.version.versionNo}</span></div> : null}
-          {title}
-          {example?.version.core.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.version.core.insight, 130)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
-          {image ? <div className={styles.scienceImage}>{image}</div> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
+          {example ? <div className={styles.proofMeta}><span>{example.publicId}</span><span>{example.authors.map(author => author.displayName).join(' · ')}</span><span>v{example.version.versionNo}</span></div> : null}
+          <div className={styles.proofLayout}>
+            <div className={styles.proofCopy}>
+              {title}
+              {example?.version.core.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.version.core.insight, 180)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
+              <Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link>
+            </div>
+            {image ? <div className={styles.scienceImage}>{image}</div> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
+          </div>
           <figcaption className={styles.proofFooter}>
             {loadState === 'unavailable' || imageFailed ? <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('retryExample')}</button> : <ScientificText as="p" hideSourceMarkers className={styles.figureCaption}>{illustration?.reader?.narration || illustrationTitle || t('figureLabel')}</ScientificText>}
-            <Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link>
           </figcaption>
         </>}
-      </figure>
-    </header>
+    </figure>
 
     <section className={styles.scenes} aria-labelledby={`${id}-scenes`}>
       <div className={styles.sectionHeading}><h2 id={`${id}-scenes`}>{t('sceneHeading')}</h2><p>{t('sceneIntro')}</p></div>
@@ -90,10 +96,9 @@ export function ResearchGuide() {
           <div className={styles.demonstration}>
             <div className={styles.demoHeader}><span>OpenScience.</span><span>{t(`scenes.${scene}.label`)}</span></div>
             {scene === 'read' ? <div className={styles.readDemo}>
-              {image ? <div className={styles.demoImage}>{image}</div> : <FileText size={36} aria-hidden="true" />}
-              <div><h3>{example ? <ScientificText hideSourceMarkers>{example.title}</ScientificText> : t('exampleFallback')}</h3><p>{t('readDemoBody')}</p><Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link></div>
+              <div><h3>{example ? <ScientificText hideSourceMarkers>{example.title}</ScientificText> : t('exampleFallback')}</h3><p>{t('readDemoBody')}</p>{example?.version.core.problem ? <ScientificText as="p" hideSourceMarkers className={styles.demoNarrative}>{scientificTextExcerpt(example.version.core.problem, 160)}</ScientificText> : null}<Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link></div>
             </div> : <div className={styles.workDemo}>
-              <div className={styles.paperRow}><FileText size={28} aria-hidden="true" /><div><h3>{example ? <ScientificText hideSourceMarkers>{example.title}</ScientificText> : t('materials')}</h3><p>{t(scene === 'start' ? 'materials' : 'continueExpression')}</p></div></div>
+              <div className={styles.paperRow}><FileText size={28} aria-hidden="true" /><div><h3>{t(scene === 'start' ? 'materials' : 'continueExpression')}</h3></div></div>
               {scene === 'start' ? <div className={styles.intake}><Plus size={22} aria-hidden="true" /><div><strong>{t('create')}</strong><p>{t('createBody')}</p></div></div> : <div className={styles.composer}><HermesPortrait /><p>{t('hermesPrompt')}</p></div>}
               <Link href="/dashboard" className={styles.textLink}>{t(scene === 'start' ? 'findEntry' : 'deskAgain')}<ArrowRight size={17} aria-hidden="true" /></Link>
             </div>}
@@ -103,6 +108,6 @@ export function ResearchGuide() {
     </section>
 
     <section className={styles.support}><h2>{t('questionsHeading')}</h2><div>{questions.map(key => <details key={key}><summary>{t(`questions.${key}.title`)}<ChevronDown size={16} aria-hidden="true" /></summary><p>{t(`questions.${key}.body`)}</p></details>)}</div></section>
-    <footer className={styles.invitation}><p>{t('invitation')}</p><Link href="/dashboard" className={styles.primary}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link></footer>
+    <footer className={styles.invitation}><p>{t('invitation')}</p><Link href="/dashboard" className={styles.textLink}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link></footer>
   </article>;
 }

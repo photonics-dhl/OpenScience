@@ -73,7 +73,7 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
   return (
     <section className={styles.researchLibrary} aria-labelledby="research-list-title">
       <div className={styles.libraryHeading}>
-        <h2 id="research-list-title" className={styles.sectionTitle}>
+        <h2 id="research-list-title" className={styles.libraryTitle}>
           {t('research.title')}
         </h2>
         <div className={styles.searchControls}>
@@ -129,9 +129,9 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
                   <span data-reading-role="caption" className={styles.entryMeta}>
                     <span>{t('research.draftRevision')}</span>
                     <span>{t('research.version', { version: research.versionNo })}</span>
-                    <span>{t(`research.status.${research.status}`)}</span>
                   </span>
                 </span>
+                <span data-reading-role="caption" className={styles.entryStatus}>{t(`research.status.${research.status}`)}</span>
                 <ArrowRight className={styles.entryArrow} size={18} aria-hidden="true" />
               </Link>
               <div className={styles.researchEntryAction} role="group" aria-label={research.title}>
