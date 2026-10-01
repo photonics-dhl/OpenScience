@@ -32,6 +32,79 @@ test('public guidance reaches creation through the research desk', async ({ page
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test('guide lessons support keyboard and mobile selection without business writes', async ({ page }) => {
+  await prepare(page);
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/guide');
+  await expect(page.getByRole('tab')).toHaveCount(6);
+  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-desktop.png', fullPage: true });
+  const first = page.getByRole('tab', { name: /研究桌面/ });
+  const second = page.getByRole('tab', { name: /创建或继续研究/ });
+  await first.click();
+  await first.press('ArrowDown');
+  await expect(second).toBeFocused();
+  await expect(second).toHaveAttribute('aria-selected', 'false');
+  await second.press('Enter');
+  await expect(page.getByRole('tabpanel').getByRole('heading', { name: '创建或继续研究', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '下一讲', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Hermes 整理与核查', exact: true })).toBeFocused();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole('combobox', { name: '选择要了解的步骤', exact: true }).selectOption('confirm');
+  await expect(page.getByRole('heading', { name: '作者确认', exact: true })).toBeVisible();
+  await expect(page.locator('article')).toContainText('不等于授权公开发布');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await page.locator('[data-guide-lesson]').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(writes).toEqual([]);
+  await page.locator('body').press('Control+Home');
+  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile.png', fullPage: true });
+});
+
+test('English guide keeps long lesson names and the desk entry readable', async ({ page }) => {
+  await prepare(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/guide');
+  await page.getByRole('combobox', { name: 'Choose a step to learn about', exact: true }).selectOption('express');
+  await expect(page.getByRole('heading', { name: 'Research visual storytelling', exact: true })).toBeVisible();
+  await expect(page.locator('article').getByRole('link', { name: 'Open research desk', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('[data-guide-lesson]')).toHaveCSS('opacity', '1');
+  await page.locator('body').press('Control+Home');
+  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile-en.png', fullPage: true });
+});
+
+test('account tools keep secondary entries accessible and gate platform administration', async ({ page }) => {
+  await prepare(page);
+  for (const width of [320, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/settings');
+    const tools = page.locator('header summary[aria-label="账户工具"]');
+    await tools.click();
+    const settings = page.locator('header').getByRole('link', { name: '设置', exact: true });
+    await expect(settings).toBeVisible();
+    await expect(page.locator('header a[href="/admin/journals"]')).toHaveCount(0);
+    for (const href of ['/settings', '/journals/manage', '/developers']) {
+      const entry = page.locator(`header a[href="${href}"]`);
+      await expect(entry).toBeVisible();
+      const box = await entry.boundingBox();
+      expect(box && box.x >= 0 && box.x + box.width <= width).toBe(true);
+    }
+    await page.locator('main h1').click({ position: { x: 12, y: 12 } });
+    await expect(settings).not.toBeVisible();
+    await tools.click();
+    await settings.press('Escape');
+    await expect(tools).toBeFocused();
+    await expect(settings).not.toBeVisible();
+  }
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { userId: 'admin-fixture', email: 'admin@example.invalid', displayName: '管理员', status: 'email_verified', level: 'free', platformRole: 'platform_admin' } }));
+  await page.goto('/guide');
+  await page.locator('header summary[aria-label="账户工具"]').click();
+  await expect(page.locator('header a[href="/admin/journals"]')).toBeVisible();
+});
+
 test('profile failure preserves session account and permits retry', async ({ page }) => {
   await prepare(page, true);
   await page.goto('/me');
@@ -95,7 +168,7 @@ test('headers wrap at 1024 and keep every primary entry on small screens', async
     const links = page.locator('nav [data-product-route-navigation] a');
     await expect(links).toHaveCount(4);
     for (const link of await links.all()) await expect(link).toBeVisible();
-    const rects = await page.locator('header').first().locator('a').evaluateAll(elements => elements.map(element => {
+    const rects = await page.locator('header').first().locator('a:visible').evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect(); return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom };
     }));
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
@@ -103,7 +176,7 @@ test('headers wrap at 1024 and keep every primary entry on small screens', async
       expect(a.right <= b.x + 1 || b.right <= a.x + 1 || a.bottom <= b.y + 1 || b.bottom <= a.y + 1).toBe(true);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width === 1024) await page.screenshot({ path: '../../tmp/vendor-findings/settings-1024.png', fullPage: true });
+    if (width === 1024) await page.screenshot({ path: '../../tmp/ui-narrative-20261001/settings-1024.png', fullPage: true });
   }
 });
 
@@ -173,5 +246,5 @@ test('station shows queued, review and failed work with static Hermes available'
   await expect(page.locator('[data-continuation-priority="primary"] a')).toHaveAttribute('href', '/research-objects/station-ro/edit?ingestionTask=task-needs_review');
   await expect(page.locator('.hermes-conversation-card img[alt="Hermes"]')).toBeVisible();
   expect(live2dRequests).toHaveLength(0);
-  await page.screenshot({ path: '../../tmp/vendor-findings/dashboard-1024.png', fullPage: true });
+  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/dashboard-1024.png', fullPage: true });
 });

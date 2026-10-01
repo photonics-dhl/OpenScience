@@ -63,14 +63,13 @@
 
 .continueResearch { grid-column: 1; }
 
-.startResearch,
+.startResearch { grid-column: 1; }
 .literature { grid-column: 1 / -1; }
-.startResearch > section { box-shadow:none; background:transparent; border-top:1px solid #dce1e5; border-radius:0; padding-inline:0; }
 
 .taskRail {
   grid-column: 2;
-  grid-row: 2;
-  align-self: stretch;
+  grid-row: 2 / span 2;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -96,8 +95,7 @@
   min-height: 0;
 }
 
-.continueResearch { align-self: stretch; }
-.continueResearch > section { height: 100%; }
+.continueResearch { align-self: start; }
 
 .taskRail > :global(.hermes-conversation-card) {
   position: relative;
@@ -265,6 +263,7 @@
 .deskTools > div { display:flex; flex-direction:column; gap:8px; position:absolute; z-index:30; right:0; top:calc(100% + 8px); width:220px; padding:12px; border-radius:12px; background:#fff; box-shadow:0 12px 32px rgb(29 41 53 / .12); }
 .deskTools > div a { padding:10px 12px; font-size:14px; }
 .desk .continueResearch > section { padding:28px; }
+.desk .startResearch > section { padding:24px 0; border-top:1px solid #dce1e5; border-radius:0; background:transparent; box-shadow:none; }
 .desk .library > section { padding:24px 0; border-top:1px solid #dce1e5; border-radius:0; background:transparent; box-shadow:none; }
 .desk .library li { background:transparent; }
 .desk .layout h2 { letter-spacing:0; }

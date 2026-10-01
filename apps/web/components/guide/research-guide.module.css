@@ -1,0 +1,67 @@
+.guide { max-width:1200px; margin-inline:auto; padding:56px 40px 64px; color:var(--os-ink); font-family:var(--font-ui); }
+.guide :is(h1,h2,h3,p,figure) { margin:0; }
+.intro { display:grid; grid-template-columns:minmax(0,7fr) minmax(0,5fr); align-items:center; gap:48px; padding-bottom:48px; }
+.eyebrow { color:var(--os-vermilion-ink); font:500 12px/1.5 var(--font-data); text-transform:uppercase; letter-spacing:.06em; }
+.intro h1 { margin:16px 0 20px; max-width:12ch; font-size:clamp(36px,4.5vw,52px); font-weight:600; line-height:1.24; letter-spacing:-.025em; text-wrap:balance; }
+:lang(zh) .intro h1 { letter-spacing:0; }
+.lead { max-width:40ch; color:var(--os-muted-paper); font-size:17px; line-height:1.8; text-wrap:pretty; }
+.primary { display:inline-flex; align-items:center; justify-content:space-between; gap:32px; min-height:48px; margin-top:28px; padding:10px 20px; border-radius:8px; background:var(--os-vermilion-ink); color:#fff; text-decoration:none; font-size:15px; font-weight:600; transition:transform 120ms var(--ease-standard), background-color 160ms ease; }
+.intro .startNote { margin-top:12px; font-size:14px; line-height:1.6; color:var(--os-muted-paper); }
+.intro .boundary { max-width:42ch; margin-top:20px; font-size:14px; line-height:1.7; color:var(--os-ink); }
+.evolution { justify-self:end; width:min(100%,360px); }
+.sheets { position:relative; height:230px; animation:lessonArrive 240ms var(--ease-standard); }
+.sheet { position:absolute; top:10px; left:8px; display:flex; flex-direction:column; gap:12px; width:78%; height:175px; padding:26px 28px; background:#fff; border:1px solid #d4dedf; border-radius:2px; }
+.sheet[data-layer='1'] { transform:translate(18px,14px); background:#f9fbfb; }
+.sheet[data-layer='2'] { transform:translate(36px,28px); box-shadow:0 8px 24px rgb(29 41 53 / .05); }
+.sheet i { display:block; height:1px; width:100%; background:#d8e1e1; }
+.sheet i:first-child { height:3px; width:64%; background:#20252b; margin-bottom:12px; }
+.sheet i:nth-child(3) { width:86%; }
+.sheet i:nth-child(4) { width:72%; }
+.sheet b { margin-top:auto; width:28px; height:2px; background:#125d66; }
+.evolution figcaption { display:flex; flex-direction:column; gap:5px; padding-left:44px; font-size:14px; line-height:1.6; }
+.evolution strong { font-weight:500; }.evolution figcaption span { color:var(--os-muted-paper); font-size:12px; }
+.manual { display:grid; grid-template-columns:minmax(0,3fr) minmax(0,9fr); gap:48px; border-top:1px solid var(--os-rule-paper); padding-top:36px; }
+.index, .lesson { min-width:0; }
+.desktopIndex { display:flex; flex-direction:column; margin-top:18px; }
+.desktopIndex button { display:grid; grid-template-columns:24px minmax(0,1fr) 16px; align-items:center; gap:12px; min-height:56px; padding:12px 0; border:0; border-bottom:1px solid var(--os-rule-paper); border-radius:0; background:transparent; text-align:left; color:var(--os-muted-paper); font:400 14px/1.6 var(--font-ui); cursor:pointer; }
+.number { color:var(--os-muted-paper); font:400 12px/1.5 var(--font-data); }
+.desktopIndex button svg { opacity:0; transition:opacity 140ms ease, transform 140ms ease; transform:translateX(-3px); }
+.desktopIndex button[aria-selected='true'] { color:var(--os-vermilion-ink); font-weight:600; }
+.desktopIndex button[aria-selected='true'] svg { opacity:1; transform:translateX(0); }
+.index .indexNote { margin-top:20px; color:var(--os-muted-paper); font-size:12px; line-height:1.8; }
+.mobileIndex { display:none; }
+.lesson { display:flex; flex-direction:column; padding-left:40px; border-left:1px solid var(--os-rule-paper); min-height:480px; }
+.lessonContent { max-width:680px; animation:lessonArrive 160ms var(--ease-standard); }
+.position { color:var(--os-muted-paper); font:400 12px/1.6 var(--font-data); }
+.lesson h2 { margin:12px 0 14px; font-size:28px; font-weight:600; line-height:1.4; letter-spacing:0; }
+.task { font-size:18px; line-height:1.7; }
+.lesson .body { margin-top:14px; font-size:16px; line-height:1.8; color:var(--os-muted-paper); text-wrap:pretty; }
+.lesson .example { margin-top:24px; padding:22px 24px; background:#fff; border:1px solid #e0e7e8; border-radius:4px; }
+.example figcaption { color:var(--os-muted-paper); font-size:12px; line-height:1.6; }
+.example h3 { margin-top:12px; font-size:16px; font-weight:500; line-height:1.6; }
+.example p { margin-top:8px; font-size:15px; line-height:1.8; white-space:pre-line; }
+.detail { margin-top:22px; border-bottom:1px solid var(--os-rule-paper); }
+.detail summary { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:48px; padding:12px 0; color:var(--os-vermilion-ink); font-size:14px; cursor:pointer; list-style:none; }
+.detail summary::-webkit-details-marker { display:none; }
+.detail summary svg { flex:none; transition:transform 140ms var(--ease-standard); }
+.detail[open] summary svg { transform:rotate(180deg); }
+.detail p { padding-bottom:20px; color:var(--os-muted-paper); font-size:14px; line-height:1.8; white-space:pre-line; }
+.detail dl { margin:0 0 20px; }
+.detail dl > div { display:grid; grid-template-columns:80px minmax(0,1fr); gap:12px; padding:10px 0; font-size:14px; line-height:1.7; }
+.detail dt { font-weight:500; }.detail dd { margin:0; color:var(--os-muted-paper); }
+.lessonFooter { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-top:auto; padding-top:24px; }
+.lessonFooter > div { display:flex; gap:24px; }
+.lessonFooter :is(a,button), .resources a { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0; border:0; background:transparent; color:var(--os-vermilion-ink); font:500 14px/1.5 var(--font-ui); text-decoration:none; cursor:pointer; }
+.lessonFooter button:disabled { color:var(--os-muted-paper); opacity:.5; cursor:default; }
+.resources { display:flex; flex-wrap:wrap; align-items:center; gap:12px 24px; margin-top:48px; padding-top:20px; border-top:1px solid var(--os-rule-paper); font-size:14px; color:var(--os-muted-paper); }
+.guide :is(a,button,summary,select):focus-visible, .lesson h2:focus-visible, .lesson:focus-visible { outline:2px solid var(--os-vermilion-ink); outline-offset:4px; }
+.primary:active { transform:scale(.98); }
+@media(hover:hover) { .primary:hover { background:#0d4d55; } .desktopIndex button:hover { color:var(--os-ink); } .lessonFooter a:hover, .resources a:hover { text-decoration:underline; text-underline-offset:4px; } }
+@media(max-width:1023px) {
+ .guide { padding:36px 24px 48px; }.intro { grid-template-columns:minmax(0,1fr); gap:24px; padding-bottom:32px; }.intro h1 { max-width:16ch; font-size:38px; }
+ .evolution { display:flex; align-items:center; justify-content:space-between; gap:16px; justify-self:stretch; width:100%; }.evolution figcaption { order:-1; padding-left:0; }.sheets { flex:none; width:160px; height:96px; }.sheet { top:0; left:0; width:115px; height:70px; padding:12px; gap:7px; }.sheet[data-layer='1'] { transform:translate(12px,8px); }.sheet[data-layer='2'] { transform:translate(24px,16px); }.sheet i:first-child { height:2px; margin-bottom:1px; }.sheet i:nth-child(4) { display:none; }
+ .manual { grid-template-columns:minmax(0,1fr); gap:24px; padding-top:24px; }.desktopIndex { display:none; }.mobileIndex { display:grid; gap:10px; font-size:14px; margin-top:16px; }.mobileIndex select { width:100%; min-height:48px; padding:10px 12px; background:#fff; border:1px solid var(--os-rule-paper); border-radius:8px; color:var(--os-ink); font:500 15px/1.5 var(--font-ui); }.index .indexNote { margin-top:12px; }.lesson { min-height:0; padding:0; border:0; }.lesson h2 { font-size:26px; }.resources { margin-top:32px; }
+}
+@media(max-width:479px) { .guide { padding-inline:20px; }.intro h1 { font-size:34px; }.lead { font-size:16px; }.evolution { gap:8px; }.evolution figcaption { max-width:16ch; }.evolution figcaption span { font-size:11px; }.lesson .example { padding:18px; }.lessonFooter { gap:8px; }.lessonFooter > div { gap:20px; }.resources > span { flex-basis:100%; } }
+@keyframes lessonArrive { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .lessonContent, .sheets { animation:none; }.primary, .desktopIndex button svg, .detail summary svg { transition:none; }.primary:active { transform:none; } }
