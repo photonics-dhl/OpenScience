@@ -50,3 +50,8 @@ Native-only ffe4激活后，普通确认来源的新私有cdaafe20复用原PDF/M
 必要修复仅在既有invalid_review反馈指出根对象/fields的具体缺失或错置位置；不会补写、重排或采用Agent科学内容，原finish和所有科学/来源/Claims守卫不变。实际flatten与nested错误回归先红2+1再绿，materializer14通过。
 
 独立session回归复现与原CP相同的66,165已用/98,304总预算/32,768申请：原guard在仍余32,139时拒下轮发布。候选把实际provider上限收窄到当前余量，不增加总额度、轮数、deadline或任务；重放按原cursor之前用量重建原上限，原SDK请求留存，未知started不得重发，overrun原CP保留但拒消费。实际provider上限及四份已付回答重放/session27通过；这证明代码拒绝路径，未证明生产transport stopped的隐藏原因。combined41/41及Worker TC/scopedlint通过，最终High GO；精确CI和正常app交付后再验证新的合法原生任务。Native-only更新不需要随本Worker变化重装运行时；全链科学与图文用户验收继续有效。
+## 根据真实失败落实方法消费
+
+1c修复精确CI成功，尚未中间部署；只读确认真实paidCP广告schema根三项、fields六项完整。独立科学审计在真实draft中发现引用编号误当指数、束模型平均条件漏写、传播算例/驱动与输出范围混淆及直接绑定缺口。现有科学规则覆盖，缺口在执行；未安装新Skill或代写科学答案。
+
+仅改Native goal原两句：使用原页区分编号和指数，核对正文/图注/附录同量表达、标明原文冲突；真实draft后主动回读影响核心的断言、算例/条件、平均与叠加操作及直接来源，再修订/review。区分作者采用假设与希望新增验证，收窄无据次要外推；needsMoreEvidence仍保留影响所保留主张且回读无法解决的实质缺口，未声称的扩展不自动卡住已支持核心。无附加审校模型、模板、门禁或本论文PIDs/数字答案，原科学守卫和预算不变。增量High代码/工作流GO；已有41及精确1c CI证据复用，必要入口控制5pass/Windows UDS6skip、未变Linux UDS复用，新Worker TC/scopedlint与文档检查0，新精确CI后合并一次正常app发布，再检查新的合法Native产物；不以提示词检查或fixture证明改善。
