@@ -43,3 +43,10 @@
 ## 原生工具错误语义
 
 实际Native首轮选择science分类为plugin namespace，现有Scope以BaseException硬停止而非给原生工具反馈。没有新增colon alias：仅未知/歧义选择或确认未逃逸的缺失引用返回既有success:false/error形状，让Agent在同一循环纠正；逐slot授权先执行，权限/I/O/绝对路径/父目录或symlink逃逸仍停止。真实隔离的已安装Agent旧实现RED、新实现通过错误反馈→发现→完整方法/引用，模拟SDK回答不冒充真实科学质量。成功Skill trace从最后完整已验证历史按call ID与success:true关联，失败请求不计为已读。永久修复ffe4已通过精确CI并由既有安装器交付；Worker成功读取trace仍为候选。当前真实failed任务/原回答不重开、不新增恢复grant；正常确认来源的新私有cdaafe20复用原PDF/Map，实际工具返回已确认方法Skill success:true与原页page_view_ready。继续检查科学终答，而非将接入通过当质量合格。
+## 真实源任务的格式反馈和剩余预算
+
+Native-only ffe4激活后，普通确认来源的新私有cdaafe20复用原PDF/Map，真实读取两方法Skill、来源与像素、保存draft；随后五次复核将科学字段或needsMoreEvidence放错JSON层级，现有纯guard正确拒收但反馈不能定位。未返回可采用的scienceCore，所有18轮已付回答与原failed状态保留，不重开任务或新增恢复grant。
+
+必要修复仅在既有invalid_review反馈指出根对象/fields的具体缺失或错置位置；不会补写、重排或采用Agent科学内容，原finish和所有科学/来源/Claims守卫不变。实际flatten与nested错误回归先红2+1再绿，materializer14通过。
+
+独立session回归复现与原CP相同的66,165已用/98,304总预算/32,768申请：原guard在仍余32,139时拒下轮发布。候选把实际provider上限收窄到当前余量，不增加总额度、轮数、deadline或任务；重放按原cursor之前用量重建原上限，原SDK请求留存，未知started不得重发，overrun原CP保留但拒消费。实际provider上限及四份已付回答重放/session27通过；这证明代码拒绝路径，未证明生产transport stopped的隐藏原因。combined41/41及Worker TC/scopedlint通过，最终High GO；精确CI和正常app交付后再验证新的合法原生任务。Native-only更新不需要随本Worker变化重装运行时；全链科学与图文用户验收继续有效。

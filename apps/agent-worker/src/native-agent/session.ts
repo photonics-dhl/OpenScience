@@ -86,7 +86,11 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       if (state && !isDeepStrictEqual(options.tools, state.turns[0]?.request.options.tools)) blocked('tool definitions changed');
       if (!Number.isSafeInteger(options.maxTokens) || !options.maxTokens || options.maxTokens > binding.maxOutputTokens)
         blocked('output budget changed');
-      const boundedOptions = { ...options, ...binding.generation, maxRequestBytes: binding.maxInputBytes,
+      // Replays use the allowance at their original cursor, not the cost of later paid turns.
+      const spentBefore = state?.turns.slice(0, cursor).reduce((total, turn) => total + (turn.state === 'completed' ? turn.response.usage.outputTokens : 0), 0) ?? 0;
+      const remaining = binding.maxTotalOutputTokens - spentBefore;
+      if (remaining <= 0) blocked('conversation output budget exhausted');
+      const boundedOptions = { ...options, ...binding.generation, maxTokens: Math.min(options.maxTokens, remaining), maxRequestBytes: binding.maxInputBytes,
         timeoutMs: Math.max(1, Math.min(600_000, binding.deadlineAt - now())) };
       const result = await input.gateway.nativeAgentComplete(messages, boundedOptions, {
         beforeProviderAttempt: authorize,
@@ -103,7 +107,7 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
           }
           if ((state?.turns.length ?? 0) !== cursor) blocked('turn order changed');
           const spent = state?.turns.reduce((total, turn) => total + (turn.state === 'completed' ? turn.response.usage.outputTokens : 0), 0) ?? 0;
-          if (cursor >= binding.maxTurns || options.maxTokens! > binding.maxTotalOutputTokens - spent)
+          if (cursor >= binding.maxTurns || boundedOptions.maxTokens > binding.maxTotalOutputTokens - spent)
             blocked('conversation output budget exhausted');
           if (state?.turns[0] && (state.turns[0].target.provider !== target.provider || state.turns[0].target.model !== target.model))
             blocked('provider identity changed');
@@ -128,7 +132,7 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       });
       await authorize(); // Receipt persistence does not grant permission to consume it.
       if (result.model !== binding.model) blocked('provider reported a different model');
-      if (result.usage.outputTokens > options.maxTokens!) blocked('provider exceeded reserved output budget');
+      if (result.usage.outputTokens > boundedOptions.maxTokens) blocked('provider exceeded reserved output budget');
       if (result.finishReason === 'length') blocked('output truncated; no automatic paid correction');
       cursor++;
       return nativeAgentSdkResponse(result, `${binding.taskId}:native-turn:${cursor}`);

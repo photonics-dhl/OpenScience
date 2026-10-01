@@ -2989,6 +2989,25 @@ async function reviewAndMaterializeCanonicalPartial(
   };
 }
 
+/** Explain a rejected native tool shape without changing validation or repairing its science. */
+function nativeReviewShapeFeedback(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  const root = value as Record<string, unknown>;
+  const feedback: string[] = [];
+  if (Object.keys(root).some(key => !['fields', 'needsMoreEvidence', 'claimSuggestions'].includes(key))) {
+    feedback.push('根对象只使用fields、needsMoreEvidence、claimSuggestions；六字段放在fields内，主张属性放在claimSuggestions的对应项内。');
+  }
+  if (!Object.hasOwn(root, 'needsMoreEvidence')) feedback.push('缺少根对象.needsMoreEvidence；该数组放在根对象，不能放在fields内。');
+  const fields = root.fields && typeof root.fields === 'object' && !Array.isArray(root.fields)
+    ? root.fields as Record<string, unknown> : {};
+  if (Object.keys(fields).some(key => !SDF_CORE_FIELDS.includes(key as (typeof SDF_CORE_FIELDS)[number]))) {
+    feedback.push('fields只使用problem、insight、method、results、limitations、reproducibility；needsMoreEvidence与claimSuggestions放在根对象。');
+  }
+  const missing = SDF_CORE_FIELDS.filter(field => !Object.hasOwn(fields, field));
+  if (missing.length) feedback.push(`缺少${missing.map(field => `fields.${field}`).join('、')}；逐项放回fields，保留原有科学内容和来源。`);
+  return feedback.join('\n');
+}
+
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
 export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[]) {
   let candidate: ScientificCompositionResponse | undefined;
@@ -3012,7 +3031,8 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
         this.finish(JSON.stringify(value));
         return { status: 'review_ready', guidance: 'The source/Claims structure is valid. This is not a scientific judgment or approval; recheck the actual science before returning this exact final JSON.' };
       } catch (error) {
-        return { status: 'invalid_review', feedback: error instanceof Error ? error.message : 'Invalid scientific review structure' };
+        const shape = nativeReviewShapeFeedback(value);
+        return { status: 'invalid_review', feedback: [shape, error instanceof Error ? error.message : 'Invalid scientific review structure'].filter(Boolean).join('\n') };
       }
     },
     finish(text: string): ExtractionResult {

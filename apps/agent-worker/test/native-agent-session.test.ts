@@ -13,15 +13,18 @@ const completion: Omit<GatewayCompletion, 'provider' | 'promptHash'> = { model: 
 function fixture(firstTool: boolean | number = false, toolInput: Record<string, unknown> = {}) {
   let state: NativeAgentSessionState | null = null;
   let calls = 0; let authorized = true; let loseAnswer = false; let lease = true; let loseLeaseAfterStart = false; let revokeAfterHTTP = false; let reportedModel = completion.model;
+  let outputTokens = completion.usage.outputTokens; const requestedAllowances: (number | undefined)[] = [];
   const preflight = new AnthropicCompatProvider('minimax', { baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async () => { throw new Error('Preflight sent HTTP'); });
-  const provider: TextProvider = { name: 'minimax', model: 'MiniMax-M3', preflightNativeTools: opts => preflight.preflightNativeTools(opts), async complete() {
+  const provider: TextProvider = { name: 'minimax', model: 'MiniMax-M3', preflightNativeTools: opts => preflight.preflightNativeTools(opts), async complete(options) {
     calls++; if (loseAnswer) throw new Error('unknown transport outcome');
+    requestedAllowances.push(options?.maxTokens);
+    const output = { ...structuredClone(completion), usage: { ...completion.usage, outputTokens } };
     if (revokeAfterHTTP) authorized = false;
-    if (calls <= Number(firstTool)) return { ...structuredClone(completion), text: '', finishReason: 'tool_calls',
+    if (calls <= Number(firstTool)) return { ...output, text: '', finishReason: 'tool_calls',
       toolCalls: [{ id: `read-${calls}`, type: 'function', function: { name: 'paper_read', arguments: JSON.stringify(toolInput) } }],
       providerContent: { provider: 'minimax', model: 'MiniMax-M3', content: [
         { type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'tool_use', id: `read-${calls}`, name: 'paper_read', input: toolInput }] } };
-    return { ...structuredClone(completion), model: reportedModel };
+    return { ...output, model: reportedModel };
   } };
   const gateway = new AiGateway({ providers: [provider] });
   const store = { async read() { return structuredClone(state); }, async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
@@ -37,7 +40,8 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
   } };
   const create = (limits: Partial<NativeAgentSessionBinding> = {}) => createNativeAgentSession({ gateway, binding: { ...binding, ...limits }, store, now: () => 100,
     authorize: async () => { if (!authorized || !lease) throw new Error('authority revoked'); } });
-  return { create, get calls() { return calls; }, get state() { return state; },
+  return { create, get calls() { return calls; }, get state() { return state; }, get requestedAllowances() { return requestedAllowances; },
+    reportOutputTokens: (tokens: number) => { outputTokens = tokens; },
     revoke: () => { authorized = false; }, changeLease: () => { lease = false; },
     loseLeaseAfterStart: () => { loseLeaseAfterStart = true; },
     revokeAfterHTTP: () => { revokeAfterHTTP = true; },
@@ -45,6 +49,26 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it('uses the real remaining 32139-token allowance and replays exact receipts without a new call', async () => {
+    const f = fixture(3); f.reportOutputTokens(22_055);
+    const limits = { maxTurns: 4, maxOutputTokens: 32_768, maxTotalOutputTokens: 98_304 };
+    const session = f.create(limits);
+    const calls: Array<Omit<typeof request, 'messages'> & { messages: unknown[] }> = []; const responses = [];
+    let next: (typeof calls)[number] = { ...request, max_tokens: 32_768 };
+    for (let index = 0; index < 3; index++) {
+      calls.push(structuredClone(next));
+      const response = await session.complete(next); responses.push(response);
+      next = { ...next, messages: [...next.messages, response.choices[0]!.message,
+        { role: 'tool', tool_call_id: `read-${index + 1}`, content: 'Original bound source' }] };
+    }
+    f.reportOutputTokens(10); calls.push(structuredClone(next)); responses.push(await session.complete(next));
+    expect(f.requestedAllowances).toEqual([32_768, 32_768, 32_768, 32_139]);
+    expect(f.state?.turns.at(-1)?.request.options.maxTokens).toBe(32_768);
+    expect(f.state?.turns.at(-1)?.effectiveOptions.maxTokens).toBe(32_139);
+    const restored = f.create(limits);
+    for (let index = 0; index < calls.length; index++) expect(await restored.complete(calls[index])).toEqual(responses[index]);
+    expect(f.calls).toBe(4);
+  });
   it('retains earlier request identity without copying the same long source into every private turn', async () => {
     const f = fixture(2); const session = f.create({ maxInputBytes: 64_000_000 });
     const first = await session.complete(request);
@@ -152,12 +176,20 @@ describe('native Agent durable SDK turns', () => {
     expect(f.calls).toBe(2);
   });
   it('reserves the next output allowance against remaining cumulative output', async () => {
-    const f = fixture(true); const session = f.create({ maxOutputTokens: 10, maxTotalOutputTokens: 15 });
+    const f = fixture(true); const session = f.create({ maxOutputTokens: 10, maxTotalOutputTokens: 10 });
     const small = { ...request, max_tokens: 10 }; const first = await session.complete(small);
     await expect(session.complete({ ...small, messages: [...small.messages, first.choices[0]!.message,
       { role: 'tool', tool_call_id: 'read-1', content: 'source' }] })).rejects.toThrow('output budget'); expect(f.calls).toBe(1);
-    const replay = f.create({ maxOutputTokens: 10, maxTotalOutputTokens: 15 });
+    const replay = f.create({ maxOutputTokens: 10, maxTotalOutputTokens: 10 });
     expect(await replay.complete(small)).toEqual(first); expect(f.calls).toBe(1);
+  });
+  it('retains a paid overrun but refuses consumption beyond the actual remaining allowance', async () => {
+    const f = fixture(true); const session = f.create({ maxOutputTokens: 10, maxTotalOutputTokens: 15 });
+    const small = { ...request, max_tokens: 10 }; const first = await session.complete(small);
+    await expect(session.complete({ ...small, messages: [...small.messages, first.choices[0]!.message,
+      { role: 'tool', tool_call_id: 'read-1', content: 'source' }] })).rejects.toThrow('exceeded reserved');
+    expect(f.requestedAllowances).toEqual([10, 5]);
+    expect(f.state?.turns.at(-1)?.state).toBe('completed'); expect(f.calls).toBe(2);
   });
   it('rejects oversized input before persisting started or submitting', async () => {
     const f = fixture(); await expect(f.create({ maxInputBytes: 20 }).complete(request)).rejects.toThrow('byte budget');

@@ -36,6 +36,39 @@ describe('actual native Agent scientific materializer', () => {
     expect(worker.review(review())).toMatchObject({ status: 'review_ready' });
     expect(worker.finish('```json\n' + JSON.stringify(review()) + '\n```').core.method).toBe(source);
   });
+  it('locates the actual flattened review fields without adopting or repairing the science', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft());
+    const complete = review();
+    const flattened = { ...complete, fields: { problem: complete.fields.problem },
+      ...Object.fromEntries(SDF_CORE_FIELDS.filter(field => field !== 'problem').map(field => [field, complete.fields[field]])),
+      parentClientKey: 'misplaced' };
+    const rejected = worker.review(flattened);
+    expect(rejected).toHaveProperty('status', 'invalid_review');
+    expect(rejected.feedback).toContain('根对象');
+    for (const field of SDF_CORE_FIELDS.filter(field => field !== 'problem')) expect(rejected.feedback).toContain(`fields.${field}`);
+    expect(() => worker.finish(JSON.stringify(flattened))).toThrow('contract');
+    expect(worker.review(complete)).toHaveProperty('status', 'review_ready');
+    expect(worker.finish(JSON.stringify(complete)).core.insight).toBe(source);
+  });
+  it('identifies a missing nested field while preserving the accepted private draft', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft());
+    const partial = review(); delete partial.fields.method;
+    expect(worker.review(partial)).toMatchObject({ status: 'invalid_review', feedback: expect.stringContaining('fields.method') });
+    expect(() => worker.finish(JSON.stringify(partial))).toThrow('contract');
+    expect(worker.finish(JSON.stringify(review())).core.method).toBe(source);
+  });
+  it('locates the actual misplaced evidence requests at the root and inside fields', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft());
+    const complete = review();
+    const misplaced = { fields: { ...complete.fields, needsMoreEvidence: complete.needsMoreEvidence },
+      claimSuggestions: complete.claimSuggestions };
+    const rejected = worker.review(misplaced);
+    expect(rejected).toHaveProperty('status', 'invalid_review');
+    expect(rejected.feedback).toContain('根对象.needsMoreEvidence');
+    expect(rejected.feedback).toContain('fields只使用');
+    expect(() => worker.finish(JSON.stringify(misplaced))).toThrow('contract');
+    expect(worker.finish(JSON.stringify(complete)).core.results).toBe(source);
+  });
   it('restores the last genuinely accepted draft by model call order despite reverse parallel replies', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001']);
     const older = draft(); older.fields.method!.summary = 'Earlier actual draft';
