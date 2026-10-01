@@ -109,6 +109,11 @@ export async function createArtifact(
   try {
     created = await deps.prisma.$transaction(async (tx) => {
     await lockTrashReferences(tx);
+    // Serialize role revocation/archive against persistence after the slow scan.
+    await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${input.workspaceId}::uuid AND user_id = ${input.uploadedBy}::uuid FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${input.workspaceId}::uuid FOR SHARE`;
+    const current = await requireActiveMembership(tx, input.workspaceId, input.uploadedBy);
+    if (!['owner', 'maintainer', 'author', 'contributor'].includes(current.membership.role)) throw new ArtifactError('FORBIDDEN', '无权上传研究材料');
     await tx.trashObjectCleanup.updateMany({ where: { objectKey: getBlobStorageKey(contentSha256) }, data: { state: 'retained', lastError: null } });
     blob = await putBlob(deps.storage, content);
     await tx.blob.upsert({

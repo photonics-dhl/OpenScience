@@ -39,7 +39,7 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
   validateJournalUploadContent(ext, input.content);
   const scan = await scanFile(input.content, deps.malwareScanner);
   if (scan.threat === 'scanner-unavailable') throw new JournalError('SCAN_UNAVAILABLE', '文件安全扫描暂不可用，请稍后重试');
-  if (!scan.safe) throw new JournalError('VALIDATION_ERROR', '文件未通过安全检查');
+  if (!scan.safe) throw new JournalError('MALICIOUS_FILE', '文件未通过安全检查');
   const contentSha256 = createHash('sha256').update(input.content).digest('hex');
   const label = input.filename.slice(0, 200);
   const staged = await journalTransaction(deps, journalId, async (tx) => {

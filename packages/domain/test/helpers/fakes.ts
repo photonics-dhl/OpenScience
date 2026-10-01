@@ -86,6 +86,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     };
   };
 
+  const ingestionAgentTask = (id: string, include: any) => {
+    const row = db.agentTasks.find(task => task.id === id);
+    return row ? agentTaskWithInclude(row, include?.include) : null;
+  };
+
   const agentTaskMatchesSession = (task: any, whereSession: any) => {
     if (!whereSession) return true;
     const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
@@ -541,6 +546,15 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findUnique: async ({ where }: any) => db.blobs.find((b) => b.sha256 === where.sha256) ?? null,
     },
     artifact: {
+      findFirst: async ({ where, include }: any) => {
+        const row = db.artifacts.find((artifact) =>
+          (where?.id === undefined || artifact.id === where.id) &&
+          (where?.workspaceId === undefined || artifact.workspaceId === where.workspaceId) &&
+          (where?.blobSha256 === undefined || artifact.blobSha256 === where.blobSha256) &&
+          (where?.deletedAt === undefined || isDeepStrictEqual(artifact.deletedAt ?? null, where.deletedAt)) &&
+          (where?.bytesPurgedAt === undefined || isDeepStrictEqual(artifact.bytesPurgedAt ?? null, where.bytesPurgedAt))) ?? null;
+        return row && include ? prisma.artifact.findUnique({ where: { id: row.id }, include }) : row;
+      },
       findMany: async ({ where }: any) => db.artifacts.filter((artifact) =>
         (where?.id?.in === undefined || where.id.in.includes(artifact.id)) &&
         (where?.workspaceId === undefined || artifact.workspaceId === where.workspaceId)),
@@ -638,20 +652,16 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             (where.commitId === undefined || v.commitId === where.commitId) &&
             (where.status === undefined || (typeof where.status === 'string' ? v.status === where.status : where.status.in.includes(v.status))) &&
             (where.publications?.some === undefined || db.publications.some(publication => publication.versionId === v.id)) &&
+            (where.manifest?.entries?.some === undefined || db.versionManifests.some(manifest =>
+              manifest.versionId === v.id && db.manifestEntries.some(entry => entry.manifestId === manifest.id &&
+                Object.entries(where.manifest.entries.some).every(([key, value]) => value === undefined || isDeepStrictEqual(entry[key], value))))) &&
             (where.researchObject?.visibility === undefined || db.researchObjects.some(ro => ro.id === v.researchObjectId && ro.visibility === where.researchObject.visibility)) &&
             (where.commit?.branch?.isDefault === undefined || db.commits.some(c => c.id === v.commitId && db.branches.some(branch => branch.id === c.branchId && branch.isDefault === where.commit.branch.isDefault))) &&
             (where.commit?.branchId === undefined || db.commits.some(c => c.id === v.commitId && c.branchId === where.commit.branchId)),
         );
         if (orderBy?.versionNo === 'desc') rows.sort((a, b) => b.versionNo - a.versionNo);
         const row = rows[0] ?? null;
-        if (!row || !include?.manifest) return row;
-        const manifest = db.versionManifests.find((m) => m.versionId === row.id) ?? null;
-        return {
-          ...row,
-          manifest: manifest
-            ? { ...manifest, entries: db.manifestEntries.filter((e) => e.manifestId === manifest.id) }
-            : null,
-        };
+        return row && include ? prisma.version.findUnique({ where: { id: row.id }, include }) : row;
       },
       findFirstOrThrow: async ({ where, include }: any) => {
         const row = await prisma.version.findFirst({ where, include });
@@ -1112,6 +1122,20 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     ingestionTask: {
+      findFirst: async ({ where, include }: any) => {
+        const row = db.ingestionTasks.find((task) => {
+          const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
+          return (where?.id === undefined || task.id === where.id) &&
+            (where?.batchId === undefined || task.batchId === where.batchId) &&
+            (where?.agentTaskId === undefined || task.agentTaskId === where.agentTaskId) &&
+            (where?.artifactId === undefined || task.artifactId === where.artifactId) &&
+            (where?.state === undefined || task.state === where.state) &&
+            (where?.batch === undefined || (!!batch &&
+              (where.batch.researchObjectId === undefined || batch.researchObjectId === where.batch.researchObjectId) &&
+              (where.batch.userId === undefined || batch.userId === where.batch.userId)));
+        }) ?? null;
+        return row && include ? prisma.ingestionTask.findUnique({ where: { id: row.id }, include }) : row;
+      },
       create: async ({ data }: any) => {
         const row = { id: nextId(), state: 'queued', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.ingestionTasks.push(row);
@@ -1127,7 +1151,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return {
           ...row,
           artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
-          agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
+          agentTask: include.agentTask ? ingestionAgentTask(row.agentTaskId, include.agentTask) : undefined,
           batch: batch ? { ...batch, researchObject } : null,
         };
       },
@@ -1151,7 +1175,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             ...row,
             artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
             batch: batch ? { ...batch, researchObject } : null,
-            agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
+            agentTask: include.agentTask ? ingestionAgentTask(row.agentTaskId, include.agentTask) : undefined,
           };
         });
       },

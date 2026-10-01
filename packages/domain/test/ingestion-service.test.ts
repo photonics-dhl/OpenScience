@@ -21,8 +21,9 @@ async function confirmationFixture() {
   for (const nodeType of Object.keys(CORE).filter(key => key !== 'schemaVersion')) db.sdfNodes.push({ id: nodeType, sdfDocumentId: 'sdf-1', nodeType, content: '' });
   const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')] });
   db.ingestionTasks[0].state = 'needs_review';
+  Object.assign(db.agentTasks[0], { status: 'succeeded', executionAttempt: 1 });
   db.agentTasks[0].result = { core: CORE, evidence: {}, needsMoreInformation: ['insight', 'method', 'results', 'limitations', 'reproducibility'] };
-  return { ...fixture, input: { userId: user.id, taskId: batch.tasks[0].id, version: 1, core: CORE } };
+  return { ...fixture, input: { userId: user.id, taskId: batch.tasks[0].id, sourceAgentTaskId: db.agentTasks[0].id, version: 1, core: CORE } };
 }
 
 describe('ingestion confirmation research record', () => {
@@ -101,18 +102,25 @@ describe('ingestion confirmation research record', () => {
     expect(db.versions).toHaveLength(1);
   });
 
-  it('keeps previous Claim/Evidence history and carries its graph as pending into the new version', async () => {
+  it('keeps previous Claim/Evidence history and preserves review for unchanged human claims and sources', async () => {
     const { deps, db, input } = await confirmationFixture();
     const prior = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 1,
       message: 'Prior record', artifacts: [{ logicalPath: 'notes.md', artifactId: db.artifacts[0].id }] });
     db.claimNodes.push({ id: 'old-claim', researchObjectId: TEST_RO_ID, versionId: prior.versionId, kind: 'core', statement: 'Earlier claim', assessment: 'supported', conditions: [], limitations: [], provenance: { source: 'human' }, extractionStatus: 'succeeded' });
     db.evidenceRecords.push({ id: 'old-evidence', researchObjectId: TEST_RO_ID, workspaceId: 'ws-1', versionId: prior.versionId, claimId: 'old-claim', artifactId: db.artifacts[0].id, kind: 'passage', title: 'Earlier source', exactQuote: 'Earlier quote', relation: 'supports', locator: {}, contentHash: db.artifacts[0].blobSha256, provenance: { source: 'human' }, extractionStatus: 'succeeded', verifiedByUserId: input.userId });
-    const originals = structuredClone({ claim: db.claimNodes[0], evidence: db.evidenceRecords[0] });
+    const originalClaim = db.claimNodes.find(row => row.versionId === prior.versionId && row.statement === 'Earlier claim')!;
+    const originalEvidence = db.evidenceRecords.find(row => row.versionId === prior.versionId && row.claimId === originalClaim.id)!;
+    const originals = structuredClone({ claim: originalClaim, evidence: originalEvidence });
     const next = await confirmIngestionTask(deps, { ...input, version: 2 });
-    expect(db.claimNodes[0]).toEqual(originals.claim);
-    expect(db.evidenceRecords[0]).toEqual(originals.evidence);
-    expect(db.claimNodes[1]).toMatchObject({ versionId: next.confirmation.versionId, statement: 'Earlier claim', extractionStatus: 'needs_review' });
-    expect(db.evidenceRecords[1]).toMatchObject({ versionId: next.confirmation.versionId, claimId: db.claimNodes[1].id, verifiedByUserId: null, extractionStatus: 'needs_review' });
+    expect(db.claimNodes.find(row => row.id === originalClaim.id)).toEqual(originals.claim);
+    expect(db.evidenceRecords.find(row => row.id === originalEvidence.id)).toEqual(originals.evidence);
+    const carriedClaim = db.claimNodes.find(row => row.versionId === next.confirmation.versionId && row.statement === 'Earlier claim')!;
+    expect(carriedClaim).toMatchObject({ versionId: next.confirmation.versionId, statement: 'Earlier claim',
+      assessment: 'supported', extractionStatus: 'succeeded', provenance: { source: 'human', previousClaimId: originalClaim.id, previousVersionId: prior.versionId } });
+    expect(db.evidenceRecords.find(row => row.versionId === next.confirmation.versionId && row.claimId === carriedClaim.id))
+      .toMatchObject({ versionId: next.confirmation.versionId, claimId: carriedClaim.id, artifactId: originalEvidence.artifactId,
+        contentHash: originalEvidence.contentHash, exactQuote: originalEvidence.exactQuote, verifiedByUserId: input.userId, extractionStatus: 'succeeded',
+        provenance: { source: 'human', previousEvidenceId: originalEvidence.id, previousVersionId: prior.versionId } });
   });
 
   it('enforces write permission on replay and keeps the original SDF snapshot after later edits', async () => {
@@ -136,11 +144,13 @@ describe('ingestion confirmation research record', () => {
         boundingBox: { x: 10, y: 20, width: 300, height: 30 }, parser: { name: 'fixture', version: '1' }, transformations: [] }] }],
     }, 'succeeded');
     db.agentTasks[0].result = { core: CORE, evidence: { problem: { quote: mode === 'missing' ? 'Invented quote' : quote, locator: 'page 999' } }, sourceMapRef };
-    await confirmIngestionTask(deps, mode === 'edited' ? { ...input, core: { ...CORE, problem: 'Changed claim' } } : input);
+    const result = await confirmIngestionTask(deps, mode === 'edited' ? { ...input, core: { ...CORE, problem: 'Changed claim' } } : input);
     expect(db.evidenceRecords).toHaveLength(mode === 'exact' ? 1 : 0);
     if (mode === 'exact') {
-      expect(db.evidenceRecords[0]).toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
-      expect(db.claimNodes[0]).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
+      const claim = db.claimNodes.find(row => row.versionId === result.confirmation.versionId && row.statement === CORE.problem)!;
+      expect(claim).toMatchObject({ assessment: 'missing', extractionStatus: 'needs_review' });
+      expect(db.evidenceRecords.find(row => row.versionId === result.confirmation.versionId && row.claimId === claim.id))
+        .toMatchObject({ exactQuote: quote, extractionStatus: 'needs_review', verifiedByUserId: null, locator: { page: 1, blockId: 'block-1', charRange: { start: 0, end: quote.length } } });
     }
   });
 
@@ -170,7 +180,7 @@ describe('ingestion confirmation research record', () => {
     }, 'succeeded');
     db.agentTasks[0].result = { core, evidence: { [field]: { quote } }, sourceMapRef };
     const result = await confirmIngestionTask(deps, { ...input, core });
-    const claim = db.claimNodes[0];
+    const claim = db.claimNodes.find(row => row.versionId === result.confirmation.versionId && row.statement === 'Source-grounded statement')!;
     const updated = await updateClaim(deps, { userId: input.userId, researchObjectId: TEST_RO_ID,
       versionId: result.confirmation.versionId, claimId: claim.id, expectedUpdatedAt: claim.updatedAt,
       patch: { statement: 'Human edited statement' } });

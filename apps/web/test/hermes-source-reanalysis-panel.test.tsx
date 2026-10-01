@@ -2,7 +2,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HermesResearchRunPanel } from '@/components/hermes/HermesResearchRunPanel';
-import type { HermesResearchRun } from '@/lib/api';
+import { invalidateSessionClientCache, type HermesResearchRun } from '@/lib/api';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { ids, newRun, newTask, sourceRun } from './fixtures/source-reanalysis';
@@ -28,6 +28,7 @@ vi.mock('next-intl', () => {
 });
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 afterEach(async () => {
+  invalidateSessionClientCache();
   translation.locale = 'en'; vi.unstubAllGlobals(); vi.clearAllMocks();
   const actual = await vi.importActual<typeof React>('react');
   vi.mocked(React.useState).mockImplementation(actual.useState);
@@ -66,6 +67,8 @@ describe('failed Hermes source reanalysis entry', () => {
 // Node-only hook lifecycle: effects, refs and event handlers run; HTTP is the external boundary.
 // This avoids a browser or a new DOM/test-renderer dependency for the bounded component tests.
 function mountedPanel(run = sourceRun()) {
+  // Each synthetic browser owns an independent session and in-memory reads.
+  invalidateSessionClientCache();
   const states: unknown[] = []; const refs: Array<{ current: unknown }> = [];
   const memos: Array<{ deps: React.DependencyList; value: unknown }> = [];
   const effects: Array<{ deps?: React.DependencyList; cleanup?: () => void }> = [];

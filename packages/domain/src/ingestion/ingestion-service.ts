@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { AI_CREDIT_RESOURCE, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, submitAgentTask, type AgentDeps } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
@@ -19,7 +19,8 @@ import { IngestionError } from './errors';
 import { loadDocumentSourceMapReference, parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { recordEntry } from '../usage/ledger';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
-import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
+import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
+import { lockTrashReferences } from '../trash/trash';
 import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 import { automaticIngestionReview, automaticIngestionReviewStage, requireUnchangedAutomaticCore, type HermesIngestionReviewStage } from './automatic-review';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
@@ -227,62 +228,70 @@ export async function createIngestionBatch(
     filename: logicalPaths[index], mimeType: file.mimeType ?? null,
     sha256: createHash('sha256').update(file.content).digest('hex'),
   })))).digest('hex');
-  let batch = await deps.prisma.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
+  const batch = await deps.prisma.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
   if (batch && (batch.userId !== input.userId || batch.researchObjectId !== ro.id || batch.requestDigest !== requestDigest)) {
     throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another ingestion request');
   }
-  if (!batch) {
-    try {
-      batch = await deps.prisma.ingestionBatch.create({
-        data: { researchObjectId: ro.id, userId: input.userId, idempotencyKey: stableKey, requestDigest },
-      });
-    } catch (error) {
-      if ((error as { code?: string }).code === 'P2002') {
-        batch = await deps.prisma.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
+  // Reject unsafe or revoked uploads before allocating ingestion state or tasks.
+  // Artifact keys stay identical, so accepted files still resume idempotently.
+  const preparedArtifacts: Array<Awaited<ReturnType<typeof createArtifact>>> = [];
+  for (const [index, file] of input.files.entries()) preparedArtifacts.push(await createArtifact(deps, {
+    logicalPath: logicalPaths[index], content: file.content,
+    uploadedBy: input.userId, workspaceId: ro.workspaceId, idempotencyKey: `${stableKey}:artifact:${index}`,
+  }, ctx));
+  const persist = async (tx: Prisma.TransactionClient) => {
+    await lockTrashReferences(tx);
+    // Match membership-before-workspace ordering used by ownership transfer.
+    await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${ro.workspaceId}::uuid AND user_id = ${input.userId}::uuid FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${ro.workspaceId}::uuid FOR SHARE`;
+    const { researchObject: currentRo } = await authorizeIngestionWrite({ ...deps, prisma: tx } as IngestionDeps, input);
+    if (currentRo.workspaceId !== ro.workspaceId) throw new IngestionError('VALIDATION_ERROR', 'Research object workspace changed');
+    let current = await tx.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
+    if (current && (current.userId !== input.userId || current.researchObjectId !== ro.id || current.requestDigest !== requestDigest)) {
+      throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another ingestion request');
+    }
+    if (!current) {
+      try {
+        current = await tx.ingestionBatch.create({ data: { researchObjectId: ro.id, userId: input.userId, idempotencyKey: stableKey, requestDigest } });
+      } catch (error) {
+        throwOwnedPrismaIdempotencyConflict(error, { modelName: 'IngestionBatch', field: 'idempotencyKey', column: 'idempotency_key', constraint: 'ingestion_batches_idempotency_key_key' });
       }
-      if (!batch) throw error;
     }
-  }
-  if (batch.userId !== input.userId || batch.researchObjectId !== ro.id || batch.requestDigest !== requestDigest) {
-    throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another ingestion request');
-  }
-  let sessionId = batch.agentSessionId;
-  if (!sessionId) {
-    const session = await createAgentSession(deps, {
-      userId: input.userId, researchObjectId: ro.id, kind: 'ingestion', title: `Ingestion ${batch.id}`, idempotencyKey: `${stableKey}:session`,
-    }, ctx);
-    batch = await deps.prisma.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
-    sessionId = session.id;
-  }
-
-  for (const [index, file] of input.files.entries()) {
-    const artifact = await createArtifact(deps, {
-      logicalPath: logicalPaths[index], content: file.content,
-      uploadedBy: input.userId, workspaceId: ro.workspaceId, idempotencyKey: `${stableKey}:artifact:${index}`,
-    }, ctx);
-    const agentTask = await submitAgentTask(deps, {
-      sessionId, userId: input.userId, kind: 'sdf.extract',
-      payload: { artifactId: artifact.artifactId, researchObjectId: ro.id },
-      idempotencyKey: `${stableKey}:extract:${index}`, dispatch: false,
-    }, ctx);
-    const existingTask = await deps.prisma.ingestionTask.findUnique({
-      where: { batchId_artifactId: { batchId: batch.id, artifactId: artifact.artifactId } },
-    });
-    if (!existingTask) {
-      await deps.prisma.ingestionTask.create({
-        data: { batchId: batch.id, artifactId: artifact.artifactId, agentTaskId: agentTask.id, state: 'queued' },
-      }).catch((error: unknown) => {
-        if ((error as { code?: string }).code !== 'P2002') throw error;
-      });
+    let sessionId = current.agentSessionId;
+    if (!sessionId) {
+      const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+        userId: input.userId, researchObjectId: ro.id, kind: 'ingestion', title: `Ingestion ${current.id}`, idempotencyKey: `${stableKey}:session`,
+      }, ctx);
+      await tx.ingestionBatch.update({ where: { id: current.id }, data: { agentSessionId: session.id } });
+      sessionId = session.id;
     }
-    await dispatchAgentTask(deps, agentTask.id);
+    const taskIds: string[] = [];
+    for (const [index, artifact] of preparedArtifacts.entries()) {
+      const { task } = await persistAgentTaskInTransaction(deps, tx, {
+        sessionId, userId: input.userId, kind: 'sdf.extract',
+        payload: { artifactId: artifact.artifactId, researchObjectId: ro.id }, idempotencyKey: `${stableKey}:extract:${index}`,
+      }, ctx);
+      const existingTask = await tx.ingestionTask.findUnique({ where: { batchId_artifactId: { batchId: current.id, artifactId: artifact.artifactId } } });
+      if (!existingTask) await tx.ingestionTask.create({ data: { batchId: current.id, artifactId: artifact.artifactId, agentTaskId: task.id, state: 'queued' } });
+      taskIds.push(task.id);
+    }
+    await recordAudit(deps, tx, {
+      actorId: input.userId, action: 'ingestion.batch.create', workspaceId: ro.workspaceId,
+      targetType: 'ingestion_batch', targetId: current.id, metadata: { researchObjectId: ro.id, fileCount: input.files.length },
+    }, ctx);
+    return { batchId: current.id, taskIds };
+  };
+  for (let attempt = 0; ; attempt += 1) {
+    let saved: Awaited<ReturnType<typeof persist>>;
+    try {
+      saved = await deps.prisma.$transaction(persist, { isolationLevel: 'Serializable', timeout: 30_000 });
+    } catch (error) {
+      if (((error as { code?: string }).code === 'P2034' || isOwnedPrismaIdempotencyConflict(error)) && attempt < 2) continue;
+      throw error;
+    }
+    for (const taskId of saved.taskIds) await dispatchAgentTask(deps, taskId);
+    return getIngestionBatch(deps, { userId: input.userId, batchId: saved.batchId });
   }
-
-  await recordAudit(deps, deps.prisma, {
-    actorId: input.userId, action: 'ingestion.batch.create', workspaceId: ro.workspaceId,
-    targetType: 'ingestion_batch', targetId: batch.id, metadata: { researchObjectId: ro.id, fileCount: input.files.length },
-  }, ctx);
-  return getIngestionBatch(deps, { userId: input.userId, batchId: batch.id });
 }
 
 function planLogicalPaths(filenames: string[]): string[] {

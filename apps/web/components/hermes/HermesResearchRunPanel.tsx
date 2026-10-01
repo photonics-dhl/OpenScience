@@ -91,6 +91,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     let active = true;
     let revision = 0;
     const clearViewer = () => {
+      if (actorRef.current) setError(t(sourceReanalysisInFlight.current ? 'sourceReanalysis.contextError' : 'narrative.identityChanged'));
       revision += 1; actorRef.current = ''; setActorId(''); setRestoredOwner('');
       setInstruction(''); setRun(null); setPendingRestored(false);
       setSourceReanalysisIntent(null); setSourceReanalysisError('');
@@ -201,6 +202,11 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     try {
       const result = await getHermesResearchRun(researchObjectId, runId, signal);
       if (signal?.aborted || actorRef.current !== actorId) return;
+      if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId) {
+        setRun(null);
+        setError(previous => previous || t('narrative.identityChanged'));
+        return;
+      }
       setRun(result.run);
       onRunUpdated?.(result.run);
       setError('');
