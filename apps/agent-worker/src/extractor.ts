@@ -2096,14 +2096,16 @@ function candidateClaimPassageIds(value: unknown): string[] {
 
 function scientificReviewPrompt(
   candidateHash: string, sourceMapHash: string, current: Record<string, unknown>,
-  reviewPassages: readonly CanonicalPassage[], hasAttachment: boolean,
+  reviewPassages: readonly CanonicalPassage[], sourceMedia: 'text' | 'pdf' | 'pages',
   contractVersion: ScientificReviewContractVersion = SCIENCE_REVIEW_CONTRACT_VERSION,
   requireReviewedClaims = false,
   draftClaims?: DraftClaimSuggestion[],
   compact = false,
 ): string {
   return [
-    hasAttachment ? '已提供原PDF，可核对原页。' : '本轮只有带P编号的解析原文，没有原页图像。不要声称已查看PDF/原图。按候选断言回读其依据、限定和相反材料；解析疑点只影响相关断言，不把技术缺陷写成论文局限。',
+    sourceMedia === 'pdf' ? '已提供原PDF，可核对原页。'
+      : sourceMedia === 'pages' ? '已提供所列原PDF页的图像与带P编号的解析原文，可核对实际提供页中的图形、定义、图注与公式。图像仅覆盖所列页，未提供完整PDF附件，不声称已查看其余页；仍须按候选断言回读依据、限定和相反材料。解析疑点只影响相关断言，不把技术缺陷写成论文局限。'
+        : '本轮只有带P编号的解析原文，没有原页图像。不要声称已查看PDF/原图。按候选断言回读其依据、限定和相反材料；解析疑点只影响相关断言，不把技术缺陷写成论文局限。',
       ...(compact ? [
         '六字段是全文六视角。核对候选/主张的支持、限定、冲突及跨段推导/图注/附录，不重新总结，候选不是证据。',
         'problem=缺口/问题；insight=核心新认识/贡献；method=如何得结果，跨模型/推导/设置/分析/图注/附录；results=有条件输出；limitations=假设/边界/未解；reproducibility=全文可重建配方及未披露细节。无同名章节或步骤分散不等于无方法/复现。',
@@ -2118,7 +2120,10 @@ function scientificReviewPrompt(
       '六项summary直接展示给用户，采用凝练连贯的自然语言。软目标：problem 70–120字，insight 90–150字，method 140–220字，results 140–220字，limitations 80–150字，reproducibility 140–220字；必要限定优先于长度。不要照抄公式、枚举所有参数或写成审计报告。保留决定科学身份的理论/数值/实验性质、关键条件、代表性定量结果及会改变结论的限定。生图或视频所需的镜头、构图、视觉元素、动画和完整参数另由内部brief生成，禁止写入六项summary。',
       '逐字段检查物理对象、角度/坐标定义、关系符、主峰与异号旁瓣、近远场、适用条件、背景比较范围、理论/模拟/实验身份、字段归属和限定词。不要因文字流畅而放行。',
       'accepted表示候选有原文支持，逐字保留summary与来源集合，issues为空；revised只用于纠正具体科学差异或来源错误、补足会改变结论的必要限定，并记录对应原文和issue。不因润色、压缩或达到软字数目标而改写正确候选，不为格式偏好制造科学issue。blocked仅用于现有材料无法形成任何科学上负责的字段摘要，或未解冲突会使所有可写摘要都误导。能够保留或修成准确受限摘要时使用accepted或revised，不能因局部未披露而清空整栏。',
-      'needsMoreEvidence仅用于附件或当前P段中本应存在但不可读、缺页，或核验摘要核心主张所必需的特定公式/图注/相邻段尚未进入复核上下文；它不是“作者没有报告实现细节”的标记。作者未报告的事项应在reproducibility或limitations摘要中明确限定。当前提供的是解析原文；只在实际收到附件时才可声称查阅原PDF。affectedFields必须结构化列出所有受影响字段，不能把范围藏在question文本里。',
+      'needsMoreEvidence仅用于附件或当前P段中本应存在但不可读、缺页，或核验摘要核心主张所必需的特定公式/图注/相邻段尚未进入复核上下文；它不是“作者没有报告实现细节”的标记。作者未报告的事项应在reproducibility或limitations摘要中明确限定。'
+        + (sourceMedia === 'pages' ? '仅可声称查阅本轮实际提供的解析原文和所列原页图像，未收到完整PDF附件，不能声称已查看其余页。'
+          : '当前提供的是解析原文；只在实际收到附件时才可声称查阅原PDF。')
+        + 'affectedFields必须结构化列出所有受影响字段，不能把范围藏在question文本里。',
       ]),
       ...(contractVersion === '5' ? [reviewedClaimSuggestionsPrompt(requireReviewedClaims, false, compact)] : []),
       REVIEW_CANDIDATE_SCIENCE,
@@ -2336,7 +2341,7 @@ function completeScientificReviewValidation(
     return claimsDiagnostic === undefined;
   };
   const reviewValidationFeedback = (): string => {
-    let feedback = (context?.requireReviewedClaims
+    let feedback = '结构诊断不是科学通过。' + REVIEW_CANDIDATE_SCIENCE + (context?.requireReviewedClaims
       ? '只返回fields、needsMoreEvidence和claimSuggestions；原文支持核心贡献时至少保留一条有依据的core主张，不编造。'
       : '只返回fields、needsMoreEvidence及可选claimSuggestions。')
       + '六字段各只含verdict、summary、sourcePassageIds、issues；verdict为accepted/revised/blocked，issues每项只含code、problem、sourcePassageIds，code遵循原合同。保留必要科学条件，P编号只取原文。'
@@ -2379,7 +2384,7 @@ async function modelScientificReviewCanonicalProposal(
       sourcePassageIds: proposal.fields[field].sourcePassageIds ?? [],
       needsMoreInformation: proposal.fields[field].needsMoreInformation,
     }]));
-    prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, false,
+    prompt = scientificReviewPrompt(candidateHash, sourceMapHash, current, reviewPassages, context.nativeSourceReview ? 'pages' : 'text',
       SCIENCE_REVIEW_CONTRACT_VERSION, context.requireReviewedClaims, context.savedReviewOutput ? undefined : context.draftClaims);
     const messages: ChatMessage[] = [{ role: 'system', content: SCIENTIFIC_CRITICAL_THINKING_SKILL.sourceReviewInstructions
       + '\n你是当前候选的来源审校者。按候选的每项实质断言回读原文并作最小必要修订，不另选主题重新成稿。accepted必须逐字保留原summary和原来源集合，issues为空；revised必须实际修正文或来源，issues至少一项，说明原断言、来源和修订原因；blocked必须有问题或明确补证请求。每项保留断言及其限定都须有最终引用，不以引用存在代替语义支持。纠正后仍须与其他字段的对象、算例和范围一致；不能把一个算例的互证写成另一个算例或全篇互证。只返回规定JSON，不宣布科学通过。' },
@@ -2813,7 +2818,7 @@ async function webScientificReviewCanonicalProposal(
   }]));
   let compactPacket = false;
   const promptFor = (selected: readonly CanonicalPassage[]) => scientificReviewPrompt(
-    candidateHash, sourceMapHash, current, selected, Boolean(context.sourceDocument), contractVersion,
+    candidateHash, sourceMapHash, current, selected, context.sourceDocument ? 'pdf' : 'text', contractVersion,
     context.requireReviewedClaims, context.savedReviewOutput ? undefined : context.draftClaims, compactPacket,
   ) + (contractVersion === '5' ? '\nP段为完整原文选段，不代表全文。必须同时核对原PDF中的定义、图注、算例及限定；若关键依据仍不可读或所需可引用P段缺失，返回needsMoreEvidence。本次为终审，不会自动补发。' : '')
     + (context.savedReviewOutput
