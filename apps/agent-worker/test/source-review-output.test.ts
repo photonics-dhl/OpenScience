@@ -81,7 +81,19 @@ describe('bounded private composition repair', () => {
         expect(requests).toHaveLength(outcome === 'repair' ? 4 : 3);
         expect(captured.map(c => c.ordinal)).toEqual(outcome === 'repair' ? [0, 1] : [0]);
         expect(result.scientificReview?.status).toBe('review_received'); expect(result.reviewedClaimSuggestions).toHaveLength(1);
-        for (const request of requests.slice(2)) expect(request.messages[1]?.images?.[0]?.data).toBe(pixels.toString('base64'));
+        if (outcome === 'repair') {
+          const feedback = requests[3]!.messages.at(-1)!.content;
+          expect(feedback).toContain('结构诊断不是科学通过');
+          expect(feedback).toContain('不能只修复父子关系或JSON结构');
+          expect(feedback).toContain('claimSuggestions[0].sourceBindings[0].sourcePassageId');
+        }
+        for (const request of requests.slice(2)) {
+          expect(request.messages[1]?.images?.[0]?.data).toBe(pixels.toString('base64'));
+          expect(request.messages[1]?.content).not.toContain('本轮只有带P编号的解析原文，没有原页图像');
+          expect(request.messages[1]?.content).not.toContain('当前提供的是解析原文；只在实际收到附件');
+          expect(request.messages[1]?.content).toContain('已提供所列原PDF页的图像');
+          expect(request.messages[1]?.content).not.toContain('已提供完整原PDF');
+        }
       }
     });
   const valid = () => ({ fields: structuredClone(fields), needsMoreEvidence: [], draftClaims: [{
