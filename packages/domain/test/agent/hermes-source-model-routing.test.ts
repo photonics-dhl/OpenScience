@@ -17,7 +17,9 @@ describe('Hermes owns new paper science reviews', () => {
     Object.assign(successor, { status: 'running', executionAttempt: 1 });
     expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: successor.id,
       ingestionTaskId: created.id, failedTaskId: original.id, compositionTaskId: original.id, executionAttempt: 1 }))
-      .toEqual({ mode: 'model' });
+      .toEqual({ mode: 'model', nativeSourceReview: { taskId: successor.id, ingestionTaskId: created.id,
+        compositionTaskId: original.id, artifactId: original.payload.artifactId,
+        documentSha256: original.result.sourceMapRef.contentHash, sourceMapHash: original.result.sourceMapRef.serializedSha256, maxAttempts: 2 } });
     expect(f.db.auditLogs.filter(row => historical.some(old => old.id === row.id))).toEqual(historical);
   });
 
