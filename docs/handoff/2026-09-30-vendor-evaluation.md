@@ -52,4 +52,4 @@
 - 核查限制：一般VisibilityRequest扩大仍仅pending，未找到审批落地消费者；部分非事务审计、全链路科研质量和长期SLA未验收。公开版本一致性核查不等于RO.status是出版状态，空六维不冒称PDF解析失败。
 - 原PDF/text/server-before保留在canonical `tmp/vendor-findings-20260930/`；全部新证据、生产截图及6页Word回复已归档到其`verification-20261001/`，临时生产者已结束，生成脚本按自身目录读取资料。生产实证：公网/源站精确版本一致，API/Web/Worker restart0/OOM false，各healthcheck服务healthy；登录后工作台→设置→个人主页可用，余额/500发放额及低额提示显示且free隐藏，auth/me从2降1，两个ingestion为不同scope均200；安装后的API扫描factory clean接受/EICAR阻断，路由307/指南200/404/匿名401/管理302及nosniff通过。首次HTTP脚本尾部Windows管道CR导致exit127，仅本地脚本问题，改用Git Bash原生管道后exit0；未改业务状态。09:40北京时间复查时应用运行约11分钟，各healthcheck服务healthy、主应用restart0/OOM false；六维全空材料从站内进入后提示清楚且采用按钮禁用，无业务写入或新AgentTask。Word经本机现有Word渲染及6页全检，21项齐全。
 
-- 修正已合入canonical并推送，合并代码d41a3893的CI36802074205 success；服务器仍为CURRENT所记修正版本，未发布并行原生审校新增代码。Root main及本任务隔离树干净；canonical另会话仍在编辑原生来源审校相关源码，未删除、暂存或混入本任务的最终说明提交。资料可交用户发送公司，测试环境、对象备份恢复、SLA与科研质量按上方边界继续。
+- 修正已合入canonical并推送，合并代码d41a3893的CI36802074205 success；服务器仍为CURRENT所记修正版本，未发布并行原生审校新增代码。Root main干净；本任务隔离树已由Codex archive归档，所需ignored证据已先迁移，已合并本地任务分支随后删除；canonical另会话仍在编辑原生来源审校相关源码，未删除、暂存或混入本任务的最终说明提交。资料可交用户发送公司，测试环境、对象备份恢复、SLA与科研质量按上方边界继续。
