@@ -180,11 +180,15 @@ export default function DashboardPage() {
       <DashboardShell
         activeRoute="dashboard"
         aria-busy="true"
-        mainClassName="grid place-items-center"
+        className={styles.desk}
+        mainClassName={styles.main}
         navigationLabel={t('context.navigation')}
         skipLabel={t('context.skip')}
       >
-        <p className="text-base text-os-muted-paper" aria-live="polite">{t('loading')}</p>
+        <section className={styles.stateSurface} aria-labelledby="dashboard-loading-title">
+          <h1 id="dashboard-loading-title" className={styles.title}>{t('title')}</h1>
+          <p className={styles.stateMessage} role="status">{t('loading')}</p>
+        </section>
       </DashboardShell>
     );
   }
@@ -193,15 +197,15 @@ export default function DashboardPage() {
     return (
       <DashboardShell
         activeRoute="dashboard"
-        mainClassName="grid place-items-center px-4"
+        className={styles.desk}
+        mainClassName={styles.main}
         navigationLabel={t('context.navigation')}
         skipLabel={t('context.skip')}
       >
-        <section className="surface-folio-sheet w-full max-w-xl border-y border-os-rule-paper px-6 py-10 text-center">
-          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('errors.kicker')}</p>
-          <h1 className="mt-4 text-4xl">{t('errors.title')}</h1>
-          <p role="alert" className="mt-3 text-base text-os-muted-paper">{error}</p>
-          <button className="mt-6 border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink hover:text-os-vermilion-ink" type="button" onClick={() => window.location.reload()}>
+        <section className={styles.stateSurface} aria-labelledby="dashboard-error-title">
+          <h1 id="dashboard-error-title" className={styles.title}>{t('errors.title')}</h1>
+          <p role="alert" className={styles.stateMessage}>{error}</p>
+          <button className={styles.primaryAction} type="button" onClick={() => window.location.reload()}>
             {t('errors.retry')}
           </button>
         </section>
@@ -233,15 +237,15 @@ export default function DashboardPage() {
       <div className={styles.layout}>
         <header className={styles.heading}>
           <div>
-          <p data-reading-role="caption" className={styles.eyebrow}>
-            {t('eyebrow')}
-          </p>
-          <h1 className={styles.title}>
-            {t('title')}
-          </h1>
-          <p data-reading-role="body" className={styles.welcome}>
-            {t('welcome', { name: user?.displayName ?? '' })}
-          </p>
+            <p data-reading-role="caption" className={styles.eyebrow}>
+              {t('eyebrow')}
+            </p>
+            <h1 className={styles.title}>
+              {t('title')}
+            </h1>
+            <p data-reading-role="body" className={styles.welcome}>
+              {t('welcome', { name: user?.displayName ?? '' })}
+            </p>
           </div>
           <details className={styles.deskTools}>
             <summary>{t('deskTools')}</summary>
@@ -249,12 +253,18 @@ export default function DashboardPage() {
           </details>
         </header>
 
-        <div className={styles.continueResearch}>
-          {researchObjects[0] ? <ContinueResearch research={researchObjects[0]} tasks={tasks} /> : <ImportStage />}
-        </div>
-        <div className={styles.taskRail}>
-          <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />
-          <HermesRail tasks={tasks} loadState={taskLoadState} />
+        <div className={styles.workSurface}>
+          <div className={styles.continueResearch}>
+            <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+          </div>
+          <div className={styles.taskRail}>
+            <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
+          </div>
+          {tasks.length > 0 || taskLoadState !== 'ready' ? (
+            <div className={styles.activityRail}>
+              <HermesRail tasks={tasks} loadState={taskLoadState} />
+            </div>
+          ) : null}
         </div>
         {researchObjects.length > 0 ? <div className={styles.startResearch}>
           <ImportStage />

@@ -11,6 +11,7 @@ async function prepare(page: Page, profileFails = false) {
       '/api/research-identity': { profile: { identities: [], primaryIdentity: null, disciplines: [], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: 1 } },
       '/api/auth/academic-identity': { steps: { registered: true, emailVerified: true, orcidConnected: false, institutionEmailVerified: false }, credentials: [], scopedRoles: [], capabilities: { orcid: false, institutionEmail: false } },
       '/api/research-objects': { researchObjects: [] },
+      '/api/explore': { items: [], nextCursor: null },
       '/api/workspaces': { workspaces: [{ id: 'vendor-workspace', name: '个人研究', type: 'personal', role: 'owner', isArchived: false }] },
       '/api/ingestion': { tasks: [] },
       '/api/usage': { user: [{ resource: 'ai_credit', scope: 'user_monthly', limit: 500, used: 8, remaining: 492, allowed: true }], workspaces: [] },
@@ -24,7 +25,7 @@ test('public guidance reaches creation through the research desk', async ({ page
   await page.goto('/guide');
   await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
   await expect(page.locator('article a[href^="/research-objects/new"]')).toHaveCount(0);
-  await page.locator('article').getByRole('link', { name: '打开研究桌面', exact: true }).click();
+  await page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first().click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
   await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/);
@@ -43,48 +44,55 @@ test('public guide sends an anonymous researcher to login with the desk destinat
   await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fdashboard$/);
 });
 
-test('guide lessons support keyboard and mobile selection without business writes', async ({ page }) => {
+test('guide scenes support keyboard and small screens without business writes', async ({ page }) => {
   await prepare(page);
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/guide');
-  await expect(page.getByRole('tab')).toHaveCount(6);
-  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-desktop.png', fullPage: true });
-  const first = page.getByRole('tab', { name: /研究桌面/ });
-  const second = page.getByRole('tab', { name: /创建或继续研究/ });
-  await first.click();
-  await first.press('ArrowDown');
+  await expect(page.getByRole('tab')).toHaveCount(3);
+  const first = page.getByRole('tab', { name: '从论文开始', exact: true });
+  const second = page.getByRole('tab', { name: '读懂研究', exact: true });
+  await first.focus();
+  await first.press('ArrowRight');
   await expect(second).toBeFocused();
-  await expect(second).toHaveAttribute('aria-selected', 'false');
-  await second.press('Enter');
-  await expect(page.getByRole('tabpanel').getByRole('heading', { name: '创建或继续研究', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '下一讲', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Hermes 整理与核查', exact: true })).toBeFocused();
+  await expect(second).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel').getByRole('heading', { name: '先抓住贡献，再深入阅读' })).toBeVisible();
+  await second.press('End');
+  await expect(page.getByRole('tab', { name: '继续完善', exact: true })).toBeFocused();
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.getByRole('combobox', { name: '选择要了解的步骤', exact: true }).selectOption('confirm');
-  await expect(page.getByRole('heading', { name: '作者确认', exact: true })).toBeVisible();
-  await expect(page.locator('article')).toContainText('不等于授权公开发布');
+  await first.click();
+  await expect(page.getByRole('tabpanel').getByRole('link', { name: '在桌面找到入口' })).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await page.locator('[data-guide-lesson]').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await page.getByRole('tabpanel').locator('div').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(writes).toEqual([]);
-  await page.getByRole('banner').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile.png', fullPage: true });
 });
 
-test('English guide keeps long lesson names and the desk entry readable', async ({ page }) => {
+test('English guide keeps task tabs and the desk entry readable on phones', async ({ page }) => {
   await prepare(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/guide');
-  await page.getByRole('combobox', { name: 'Choose a step to learn about', exact: true }).selectOption('express');
-  await expect(page.getByRole('heading', { name: 'Research visual storytelling', exact: true })).toBeVisible();
-  await expect(page.locator('article').getByRole('link', { name: 'Open research desk', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Keep developing', exact: true }).click();
+  await expect(page.getByRole('tabpanel').getByRole('heading', { name: 'Pick up where you want to work' })).toBeVisible();
+  await expect(page.locator('article').getByRole('link', { name: 'Enter research desk', exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.locator('[data-guide-lesson]')).toHaveCSS('opacity', '1');
-  await page.getByRole('banner').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile-en.png', fullPage: true });
+});
+
+test('guide remains usable when the public preview fails and can reload it', async ({ page }) => {
+  await prepare(page);
+  let reads = 0;
+  await page.route('**/api/explore?*', route => {
+    reads++;
+    return reads === 1 ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } }) : route.fulfill({ json: { items: [], nextCursor: null } });
+  });
+  await page.goto('/guide');
+  await expect(page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: '重新加载画面', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新加载画面', exact: true })).toHaveCount(0);
+  await expect(page.locator('article').getByRole('link', { name: '探索公开研究', exact: true })).toBeVisible();
+  expect(reads).toBe(2);
 });
 
 test('account tools keep secondary entries accessible and gate platform administration', async ({ page }) => {
@@ -163,7 +171,7 @@ test('guide is reachable from common primary navigation and 404 is localized', a
   await prepare(page);
   await page.goto('/settings');
   await page.locator('nav a[href="/guide"]').click();
-  await expect(page.getByRole('heading', { name: '从资料到公开研究' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '带上你的论文， 我们一起往下走。' })).toBeVisible();
   await expect(page.locator('article')).not.toContainText(/\b(?:RO|SDF)\b/);
   await page.goto('/vendor-path-that-does-not-exist');
   await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();

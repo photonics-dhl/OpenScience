@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getLocale, getTranslations } from 'next-intl/server';
 import LocaleSwitcher from '@/components/LocaleSwitcher';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 import readingStyles from '@/components/public/PublicReadingProduct.module.css';
 import type { Locale } from '@/i18n/locale';
@@ -62,7 +62,7 @@ export default async function DevelopersPage() {
   const locale = await getLocale() as Locale;
   const fields = ['core', 'authors', 'licenses', 'claims', 'evidence', 'artifacts', 'media', 'history', 'record', 'links'] as const;
   const paths = ['version.core', 'authors', 'licenses', 'claims', 'evidence', 'artifactPaths', 'presentationAssets', 'history', 'recordUrl', 'links'];
-  return <PublicShell className={`research-product ${readingStyles.surface} ${styles.shell}`} mainClassName={styles.main} tone="paper" headerActions={<SiteHeader active="developers" context="public-product" tone="paper" />} navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')} wrapHeaderActionsOnMobile>
+  return <PublicShell className={`research-product ${readingStyles.surface} ${styles.shell}`} mainClassName={styles.main} tone="paper" headerActions={<SiteHeader active="developers" context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />} navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')} wrapHeaderActionsOnMobile>
     <article className={styles.page}>
       <header className={`${readingStyles.identity} ${styles.header}`}>
         <div><p className="pub-kicker">OpenScience API</p><h1>{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>

@@ -2938,119 +2938,65 @@
     "skip": "Skip to content"
   },
   "productGuide": {
-    "title": "From materials to public research",
-    "intro": "Upload a paper or start a draft, work with Hermes to organize its contents, then confirm them and choose whether to publish.",
-    "navigation": "Website navigation",
-    "skip": "Skip to content",
-    "create": "Create research",
-    "desk": "Open research desk",
-    "research": {
-      "title": "What a research project contains",
-      "body": "A research project keeps papers, data, code, images and text together with traceable versions. Drafts are visible within the workspace permissions."
-    },
-    "fields": {
-      "title": "Six sections explain your research",
-      "body": "The text covers problem, insight, method, results, limitations and reproducibility. Hermes proposes content from your materials for you to check and confirm. A processing failure does not mean the paper omitted the information."
-    },
-    "publicId": {
-      "title": "Public identifiers support sharing and citation",
-      "body": "Published research receives a stable public identifier. Share its public page; a version link preserves the contents at that time. The identifier does not imply peer review approval."
-    },
-    "workflow": {
-      "title": "Four places to continue",
-      "body": "Overview reads the research; Edit changes its six sections; Presentation shows images and video; Materials holds the originals. Hermes keeps task status, reviews and supported recovery actions."
-    },
-    "eyebrow": "OPENSCIENCE · FIELD GUIDE",
-    "startNote": "Create research from the tools inside your desk.",
-    "boundary": "Human confirmation is required before publication. Publication does not mean peer review.",
-    "motifTitle": "One research object. Ongoing revision.",
-    "motifCaption": "A concept illustration, not research data.",
-    "journey": "A six-step research path",
-    "choose": "Choose a step to learn about",
-    "indexNote": "Read any lesson in any order. Selecting a lesson does not start a research task.",
-    "position": "Reading {current} / {total}",
-    "exampleTag": "Teaching example · Not actual research",
-    "exampleTitle": "Comparing two image-processing methods",
-    "previous": "Previous lesson",
-    "next": "Next lesson",
-    "deskAgain": "Go to research desk",
-    "readerPrompt": "Want to read existing work first?",
+    "navigation": "Primary navigation",
+    "skip": "Skip to the guide",
+    "eyebrow": "RESEARCH WITH HERMES",
+    "title": "Bring your paper.\nLet’s take it further.",
+    "intro": "Understand the central idea, shape the explanation,\nand keep developing your research.",
+    "desk": "Enter research desk",
+    "startNote": "Inside, choose “Upload PDF or materials”.",
+    "exampleLabel": "Research in focus",
+    "exampleAlt": "Core concept figure for “{title}”",
+    "exampleFallback": "Explore a research study",
+    "exampleFallbackBody": "Begin with its contribution and figures, then read further.",
+    "exampleUnavailable": "The research preview could not load. You can still enter your desk and start your own research.",
+    "exampleNoImage": "Continue with the text and original sources.",
+    "loadingExample": "Opening a research preview…",
+    "retryExample": "Reload preview",
+    "figureLabel": "Core concept figure",
+    "readExample": "Read this research",
     "explore": "Explore public research",
-    "developers": "Developer API",
-    "lessons": {
-      "desk": {
-        "title": "Research desk",
-        "task": "Find your research space, then choose where to continue.",
-        "body": "The homepage is for discovering public research and journals. Your desk is for continuing research, finding work that needs attention, and starting something new.",
-        "example": "You have a paper and an analysis script. Start a research object at your desk, or continue the existing object that already holds this work.",
-        "extraTitle": "How do exploration and the research desk differ?",
-        "extra": "Exploration serves readers with published research. The desk organizes accessible drafts, materials and task status. Account tools manage your identity and personal preferences."
-      },
+    "sceneHeading": "Where would you like to start?",
+    "sceneIntro": "Choose the situation closest to your work.",
+    "materials": "Paper and research materials",
+    "continueExpression": "Continue shaping this research",
+    "create": "Create research",
+    "createBody": "Begin with your paper or materials",
+    "hermesPrompt": "Which part would you like to work on?",
+    "findEntry": "Find the entry in your desk",
+    "deskAgain": "Return to your research desk",
+    "readDemoBody": "Begin with the contribution and core figure, then explore the text and original sources.",
+    "questionsHeading": "Before you begin,\nyou might like to know",
+    "invitation": "Ready? Begin with the research in your hands.",
+    "scenes": {
       "start": {
-        "title": "Create or continue research",
-        "task": "Keep related materials together so later revisions retain their context.",
-        "body": "At your desk, upload materials or start from a blank draft. If the research already exists, add new materials and revisions there rather than creating a duplicate.",
-        "example": "Research title: Comparing two image-processing methods\nmanuscript.pdf · observations.csv · analysis.py\nThese filenames illustrate organization. They are not downloadable research files.",
-        "extraTitle": "What does a research object contain?",
-        "extra": "Papers, data, code, images and text stay connected with traceable versions.\nOverview: read the full content. Edit: revise the text. Presentation: view research media. Materials: access the original sources.\nPresentation does not mean publication. Drafts remain visible only within their permitted workspace."
+        "label": "Start with a paper",
+        "title": "Bring your materials in",
+        "body": "Choose the upload entry in your research desk. A paper, supplementary material or an existing draft can be your starting point."
       },
-      "hermes": {
-        "title": "Hermes organization and review",
-        "task": "Understand the materials and check whether statements exceed the evidence.",
-        "body": "Hermes helps organize research and flags statements to check. A processing failure or missing extraction does not mean the paper omitted that information. Keep the sources and inspect recovery options on the original task.",
-        "example": "Material scope: dataset A only.\nStatement to check: “Applies to all images.”\nThe statement exceeds the available evidence and needs author attention.",
-        "extraTitle": "What questions do the six text sections answer?",
-        "extra": ""
+      "read": {
+        "label": "Understand a study",
+        "title": "Start with the contribution",
+        "body": "The central idea and core figure help you find your bearings. Methods, results and original sources sit within the same research."
       },
-      "confirm": {
-        "title": "Author confirmation",
-        "task": "Resolve review points and confirm the statements and their limits.",
-        "body": "Compare suggestions against the original sources. Address missing information and qualifications. Confirming content does not authorize publication; unconfirmed drafts remain distinct from formal content.",
-        "example": "Revised statement:\n“This study compares two methods on dataset A only. Other settings have not been validated.”",
-        "extraTitle": "Does confirmation publish the research automatically?",
-        "extra": "No. Confirming content and publishing it are separate decisions. Ordinary draft changes stay private. Explicit publication creates a version that readers can cite."
-      },
-      "express": {
-        "title": "Research visual storytelling",
-        "task": "Explain the contribution, mechanism and limits, then check the final media.",
-        "body": "Use the confirmed scientific content to choose source figures, illustrations or video. Hermes handles understanding and review; GPT generates images; the author checks the final text and media.",
-        "example": "Visual plan: explain the relation between the data, the two methods and their outputs. Do not add result plots that the materials do not provide, or treat artistic expression as experimental validation.",
-        "extraTitle": "What should images and video do?",
-        "extra": "Help readers understand the work without first reading the paper. Do not add unsupported relationships, values or conclusions. Outputs still require inspection. Availability, progress and recovery follow actual task status."
-      },
-      "publish": {
-        "title": "Explicit publication",
-        "task": "Select what this version includes, then decide whether to publish it.",
-        "body": "Check the text, media, attribution and sources. Public versions support sharing and citation. Publication does not imply peer review or replace the author’s judgment.",
-        "example": "Research A: the same research identity.\nVersion 1 and version 2: each refers to the content published at that time.\nThis example creates no identifier and publishes nothing.",
-        "extraTitle": "Should I cite the research or a specific version?",
-        "extra": "A stable public identifier helps share the research identity. A version link fixes the content at that publication and supports citation of that wording. The identifier does not mean peer review. Later changes follow the existing version or explicit correction process."
+      "revise": {
+        "label": "Keep developing",
+        "title": "Pick up where you want to work",
+        "body": "Open existing research to edit the text or ask Hermes a specific question. Materials, text and figures stay with that research."
       }
     },
-    "fieldList": {
-      "problem": {
-        "title": "Problem",
-        "body": "The question and the scope it covers."
+    "questions": {
+      "blank": {
+        "title": "Can I start without a paper?",
+        "body": "Choose “Start from blank” in your desk. Write down a research question and continue developing it in your research workspace."
       },
-      "insight": {
-        "title": "Insight",
-        "body": "The new understanding and how it differs from prior results."
+      "edit": {
+        "title": "Where do I edit existing research?",
+        "body": "Open the research from your desk and edit the text directly. You can also tell Hermes what you would like to change."
       },
-      "method": {
-        "title": "Method",
-        "body": "How the results were obtained, including steps and assumptions."
-      },
-      "results": {
-        "title": "Results",
-        "body": "What was found, and under which conditions."
-      },
-      "limitations": {
-        "title": "Limitations",
-        "body": "Boundaries, unknowns and settings not yet validated."
-      },
-      "reproducibility": {
-        "title": "Reproducibility",
-        "body": "How to reconstruct the results and what information is still missing."
+      "source": {
+        "title": "Where can I find the original paper?",
+        "body": "Open the materials area on the research reading page for the original paper and sources. You can return to the text while viewing its figures."
       }
     }
   },

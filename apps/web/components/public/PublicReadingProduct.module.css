@@ -181,6 +181,7 @@
 
 @media (min-width: 760px) {
   .leadingMedia { grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr); }
+  .leadingMedia[data-media-count='1'] { grid-template-columns: minmax(0, 1fr); }
 }
 
 .surface .leadingGallery .presentationAsset { padding: 0; background: var(--public-product-paper); }

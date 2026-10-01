@@ -8,6 +8,7 @@ import * as React from 'react';
 import type { DashboardResearch } from './ResearchList';
 import type { HermesRailTask } from '@/components/hermes/HermesRail';
 import { hermesTaskHref, isActionableHermesTask, selectPriorityHermesTask } from '@/components/hermes/hermes-state';
+import styles from '@/app/dashboard/dashboard.module.css';
 
 export interface ContinueResearchProps {
   research: DashboardResearch | null;
@@ -16,26 +17,31 @@ export interface ContinueResearchProps {
 
 export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps) {
   const t = useTranslations('dashboard');
-  const trashT = useTranslations('trash');
 
   if (!research) {
     return (
       <section
         aria-labelledby="continue-title"
-        className="surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"
+        className={styles.continuation}
         data-hermes-protected="true"
       >
-        <p data-reading-role="caption" className="text-os-vermilion-ink">{t('continue.title')}</p>
-        <h2 id="continue-title" className="mt-4 max-w-2xl text-3xl leading-tight text-os-ink sm:text-4xl">
+        <p data-reading-role="caption" className={styles.sectionLabel}>{t('import.eyebrow')}</p>
+        <h2 id="continue-title" className={styles.researchTitle}>
           {t('continue.emptyTitle')}
         </h2>
-        <p className="mt-4 max-w-xl text-base leading-7 text-os-muted-paper">
+        <p className={styles.continuationBody}>
           {t('continue.emptyBody')}
         </p>
-        <Link className="mt-7 inline-flex items-center border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href="/research-objects/new?mode=import">
+        <nav className={styles.continuationActions} aria-label={t('import.title')}>
+          <Link className={styles.continueAction} href="/research-objects/new?mode=import" data-action-priority="primary">
             {t('import.upload')}
-            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-        </Link>
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+          <Link className={styles.textAction} href="/research-objects/new?mode=blank" data-action-priority="primary">
+            {t('import.blank')}
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        </nav>
       </section>
     );
   }
@@ -49,29 +55,32 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
     : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'edit'}`;
   return (
     <section
-      className="group surface-folio-sheet border-y border-os-rule-paper px-5 py-6 sm:px-7 sm:py-8"
+      className={styles.continuation}
       aria-labelledby="continue-title"
       data-continuation-priority="primary"
       data-hermes-protected="true"
     >
-      <p data-reading-role="caption" className="text-os-vermilion-ink">{t('continue.title')}</p>
-      <h2 id="continue-title" className="mt-3 max-w-3xl text-3xl leading-[1.1] text-os-ink transition-colors group-hover:text-os-vermilion-ink sm:text-4xl">
+      <p data-reading-role="caption" className={styles.sectionLabel}>{t('continue.title')}</p>
+      <h2 id="continue-title" className={styles.researchTitle}>
         {research.title}
       </h2>
-      <div data-reading-role="caption" className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-data text-os-muted-paper">
+      <div data-reading-role="caption" className={styles.researchMeta}>
         <span className="sr-only">{research.publicId}</span>
-        <span>{trashT('privateDraft')}</span>
+        <span>{t('continue.draftRevision')}</span>
+        <span>{t('continue.version', { version: research.versionNo })}</span>
         {research.pendingCount > 0 ? (
-          <span className="text-os-vermilion-ink">
+          <span className={styles.attention}>
             {t('continue.needsAttention', { count: research.pendingCount })}
           </span>
         ) : processing ? <span>{t('continue.background')}</span> : null}
-        {task?.logicalPath ? <span className="max-w-full truncate">{task.logicalPath}</span> : null}
       </div>
-      <Link className="mt-7 inline-flex items-center border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href={href}>
+      {task?.logicalPath ? <p className={styles.sourcePath}>{task.logicalPath}</p> : null}
+      <div className={styles.continuationActions}>
+        <Link className={styles.continueAction} href={href}>
           {review ? t('continue.review') : failed ? t('continue.recover') : processing ? t('continue.progress') : t('continue.open')}
-          <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-      </Link>
+          <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+      </div>
     </section>
   );
 }

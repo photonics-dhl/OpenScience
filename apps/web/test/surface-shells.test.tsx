@@ -189,7 +189,7 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(entry).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
-  it('offers extraction recovery only for the legacy proposal-unavailable result without a core', () => {
+  it('preserves the existing extraction recovery budget and legacy proposal recovery', () => {
     expect(isRetryableSdfExtraction({
       state: 'needs_review', retryCount: 0, result: { status: 'needs_review', reason: 'sdf-proposal-unavailable' },
     })).toBe(true);
@@ -197,7 +197,8 @@ describe('Optical Editorial brand and surface shells', () => {
       state: 'needs_review', retryCount: 0, result: { core: { problem: 'reviewable' } },
     })).toBe(false);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 0, result: null })).toBe(true);
-    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(true);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 2, result: null })).toBe(false);
   });
 
   it('offers review-only preflight recovery once and keeps other blocked sources non-retryable', () => {

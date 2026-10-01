@@ -4,7 +4,7 @@ import { getServerPublicResearchVersion, PublicServerApiError } from '../../../.
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 import { PublicJournalRelease, type PublicJournalPackageData } from '@/components/journals/PublicJournalRelease';
 
@@ -47,6 +47,7 @@ export default async function Page({ params }: { params: { publicId: string; ver
   const publicShell = (children: React.ReactNode, mainClassName?: string) => (
     <PublicShell
       headerActions={<SiteHeader context="public-product" tone="paper" />}
+      headerUtilities={<PublicProductAccess />}
       mainClassName={mainClassName}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}

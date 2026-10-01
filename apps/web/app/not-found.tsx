@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 
 export default async function NotFound() {
   const t = await getTranslations('notFound');
-  return <PublicShell tone="paper" headerActions={<SiteHeader context="public-product" tone="paper" />} navigationLabel={t('navigation')} skipLabel={t('skip')} wrapHeaderActionsOnMobile>
+  return <PublicShell tone="paper" headerActions={<SiteHeader context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />} navigationLabel={t('navigation')} skipLabel={t('skip')} wrapHeaderActionsOnMobile>
     <div className="mx-auto max-w-3xl px-5 py-20">
       <p className="text-sm text-os-vermilion-ink">404</p>
       <h1 className="mt-4 text-4xl font-normal text-os-ink">{t('title')}</h1>

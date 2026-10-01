@@ -69,6 +69,7 @@ vi.mock('next-intl', () => ({
 
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/research-objects/new',
   useRouter: () => ({ replace, refresh: vi.fn(), push: vi.fn() }),
   useSearchParams: () => new URLSearchParams('mode=import'),
 }));

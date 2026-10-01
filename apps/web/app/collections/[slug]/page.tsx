@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getPublicEditorialCollection, PublicServerApiError } from '@/lib/public-server-api';
 import { EditorialCollection } from '@/components/editorial/EditorialCollection';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 import { getTranslations } from 'next-intl/server';
 
@@ -17,7 +17,7 @@ export default async function CollectionPage({ params }: { params: { slug: strin
   const shell = await getTranslations('shell');
   const publicShell = (children: React.ReactNode, mainClassName?: string) => (
     <PublicShell
-      headerActions={<SiteHeader context="public-product" tone="paper" />}
+      headerActions={<SiteHeader context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}
       mainClassName={mainClassName}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}

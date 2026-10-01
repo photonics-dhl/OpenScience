@@ -673,14 +673,14 @@ export async function getExploreIndex(input: {
   limit?: number;
   field?: string;
   artifactType?: string;
-} = {}): Promise<ResearchIndexPageApi> {
+} = {}, signal?: AbortSignal): Promise<ResearchIndexPageApi> {
   const params = new URLSearchParams();
   if (input.query) params.set('query', input.query);
   params.set('limit', String(input.limit ?? 20));
   if (input.field) params.set('field', input.field);
   if (input.artifactType) params.set('artifactType', input.artifactType);
   if (input.cursor) params.set('cursor', input.cursor);
-  return request(`/api/explore?${params.toString()}`);
+  return request(`/api/explore?${params.toString()}`, { signal });
 }
 
 export interface EditorialMediaApi {

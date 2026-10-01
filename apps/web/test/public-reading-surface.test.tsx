@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
@@ -119,6 +119,21 @@ const research = {
 } as const;
 
 describe('Optical Editorial public reading surface', () => {
+  beforeAll(() => vi.stubGlobal('React', React));
+  it('keeps public reading focused on the media available in this version', async () => {
+    const { PresentationAssetGallery } = await import('../components/public/PresentationAssetGallery');
+    const image = research.presentationAssets[0];
+    const imageOnly = renderToStaticMarkup(<PresentationAssetGallery assets={[image] as never} leading />);
+    expect(imageOnly).toContain(image.url);
+    expect(imageOnly).not.toContain('videoPlaceholder');
+    expect(imageOnly).not.toContain('data-media-placeholder');
+    const video = { ...image, id: 'asset-video', kind: 'video', url: '/published/video.mp4' };
+    const both = renderToStaticMarkup(<PresentationAssetGallery assets={[image, video] as never} leading />);
+    expect(both).toContain(image.url);
+    expect(both).toContain('<video');
+    expect(both).toContain(video.url);
+    expect(renderToStaticMarkup(<PresentationAssetGallery assets={[]} leading />)).toBe('');
+  });
   it('retains the downstream LegacyOverviewTab compatibility export', async () => {
     const { LegacyOverviewTab } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<LegacyOverviewTab research={research as never} />);
@@ -126,15 +141,13 @@ describe('Optical Editorial public reading surface', () => {
     expect(markup).toContain('class="copy-btn"');
   });
 
-  it('proves identity, license, citation and Insight before deep navigation', async () => {
+  it('puts identity, contribution and the figure before detailed reading and resources', async () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);
-    const tabs = markup.indexOf('data-public-deep-navigation');
-    for (const landmark of ['data-public-identity', 'data-public-license', 'data-public-citation', 'data-sdf-node="insight"']) {
-      const position = markup.indexOf(landmark);
-      expect(position).toBeGreaterThan(-1);
-      expect(position).toBeLessThan(tabs);
-    }
+    const positions = [research.title, research.version.core.insight, research.presentationAssets[0].url,
+      'data-sdf-node="problem"', 'data-public-license', 'data-public-citation'].map(landmark => markup.indexOf(landmark));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
   it('distinguishes continuing-object and immutable-version citations', async () => {
@@ -163,13 +176,12 @@ describe('Optical Editorial public reading surface', () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const withArtifact = { ...research, artifactPaths: [{ logicalPath: 'figures/charge-map.png', blobSha256: 'b'.repeat(64) }] };
     const markup = renderToStaticMarkup(<PublicReadingSurface research={withArtifact as never} />);
-    expect(markup).toContain('email_verified');
+    expect(markup).not.toContain('email_verified');
     expect(markup).toContain('data-corresponding-author="true"');
     expect(markup).toContain('2026-08-10');
     expect(markup).toContain('aaaaaaaa');
-    expect(markup).toContain('data-ai-review="passed"');
+    expect(markup).not.toContain('data-ai-review="passed"');
     expect(markup).toContain('figures/charge-map.png');
-    expect(markup).toContain('bbbbbbbb');
   });
 
   it('uses an absolute server API transport and resolves the latest continuing object', async () => {
@@ -179,20 +191,20 @@ describe('Optical Editorial public reading surface', () => {
     });
   });
 
-  it('renders a claim-first hierarchy with conditions, limitations and relation-aware evidence', async () => {
+  it('retains claim conditions and relation-aware evidence after the readable research', async () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);
     const identity = markup.indexOf('data-public-identity');
     const narrative = markup.indexOf('data-claim-narrative');
-    const deepNavigation = markup.indexOf('data-public-deep-navigation');
+    const methods = markup.indexOf('data-sdf-node="method"');
     expect(identity).toBeLessThan(narrative);
-    expect(narrative).toBeLessThan(deepNavigation);
+    expect(methods).toBeGreaterThan(identity);
+    expect(methods).toBeLessThan(narrative);
     expect(markup).toContain('data-claim-id="claim-core"');
     expect(markup).toContain('data-parent-claim-id="claim-core"');
-    expect(markup).toContain('data-claim-kind="counter"');
+    expect(markup).toContain(research.claims[2].statement);
     expect(markup).toContain('Room temperature');
     expect(markup).toContain('Demonstrated in one material family');
-    expect(markup).toContain('data-evidence-relation="supports"');
     expect(markup).toContain('The fitted transfer time is 78 ± 9 fs.');
   });
 
@@ -201,17 +213,17 @@ describe('Optical Editorial public reading surface', () => {
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);
     expect(markup).toContain('data-evidence-transcript="true"');
     expect(markup).toContain('data-print-evidence="true"');
-    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toMatch(/<details[^>]*>[\s\S]*data-evidence-transcript="true"/);
     expect(markup).not.toMatch(/data-evidence-transcript="true"[^>]*(hidden|aria-hidden)/);
     expect(markup).not.toMatch(/data-evidence-transcript="true"[^>]*style="[^"]*display:\s*none/);
   });
 
-  it('labels generated presentation media as presentation rather than evidence', async () => {
+  it('shows the scientific figure without generator metadata and retains evidence separately', async () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);
     expect(markup).toContain('data-presentation-gallery="true"');
-    expect(markup).toContain('data-presentation-label="not-evidence"');
-    expect(markup).toContain('MiniMax');
+    expect(markup).toContain(research.presentationAssets[0].url);
+    expect(markup).not.toContain('MiniMax');
     expect(markup).toContain('claim-core');
     expect(markup).not.toMatch(/data-evidence-transcript="true"[\s\S]*data-presentation-gallery="true"[\s\S]*data-evidence-relation=/);
   });

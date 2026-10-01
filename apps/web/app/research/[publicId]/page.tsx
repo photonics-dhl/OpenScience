@@ -4,7 +4,7 @@ import { getLatestPublicResearchVersion, PublicServerApiError } from '../../../l
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 
 /** P1D-9：RO 概览（最新版本，§6.1 稳定 URL）。 */
@@ -42,6 +42,7 @@ export default async function Page({ params }: { params: { publicId: string } })
     return (
       <PublicShell
         headerActions={<SiteHeader context="public-product" tone="paper" />}
+        headerUtilities={<PublicProductAccess />}
         navigationLabel={shell('primaryNavigation')}
         skipLabel={shell('skipToContent')}
         tone="paper"
@@ -57,6 +58,7 @@ export default async function Page({ params }: { params: { publicId: string } })
     return (
       <PublicShell
         headerActions={<SiteHeader context="public-product" tone="paper" />}
+        headerUtilities={<PublicProductAccess />}
         mainClassName="pub-page"
         navigationLabel={shell('primaryNavigation')}
         skipLabel={shell('skipToContent')}

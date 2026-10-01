@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PublicShell } from '@/components/shell/PublicShell';
-import SiteHeader from '@/components/landing/SiteHeader';
+import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { getServerPublicJournal, getServerPublicJournalArticles, PublicServerApiError } from '@/lib/public-server-api';
 
 export default async function JournalHome({ params, searchParams }: { params: { slug: string }; searchParams?: { cursor?: string } }) {
@@ -14,7 +14,7 @@ export default async function JournalHome({ params, searchParams }: { params: { 
     throw error;
   }
   const name = journal.nameEn || journal.nameZh;
-  return <PublicShell tone="paper" skipLabel="跳到内容" navigationLabel="主导航" wrapHeaderActionsOnMobile headerActions={<SiteHeader active="journals" context="public-product" tone="paper" />}>
+  return <PublicShell tone="paper" skipLabel="跳到内容" navigationLabel="主导航" wrapHeaderActionsOnMobile headerActions={<SiteHeader active="journals" context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}>
     <article className="mx-auto max-w-[78rem] break-words px-5 py-10 sm:px-8">
       <p className="text-sm text-os-muted-paper">{journal.subjects.join(' · ')}</p>
       <div className="mt-4 border-b border-os-rule-paper pb-8">

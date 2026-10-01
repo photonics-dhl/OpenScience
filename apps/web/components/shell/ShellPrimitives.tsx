@@ -50,7 +50,7 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
       {actions ? actionsKind === 'navigation' ? (
         <nav aria-label={navigationLabel}
           className={cn(
-            'ml-auto min-w-0 max-w-full [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none',
+            'ml-auto min-w-0 max-w-full overflow-x-auto overscroll-x-contain [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none',
             wrapActionsOnMobile && 'order-3 basis-full xl:order-none xl:basis-auto',
           )}
           data-mobile-navigation-layout={wrapActionsOnMobile ? 'wrapped' : undefined}

@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-
+import styles from '@/app/dashboard/dashboard.module.css';
 
 export interface ImportStageProps {
   compact?: boolean;
@@ -16,29 +16,31 @@ export function ImportStage({ compact = false }: ImportStageProps) {
   return (
     <section
       aria-labelledby="import-stage-title"
-      className="border-t border-os-rule-paper pt-5"
+      className={styles.importStage}
       data-hermes-protected="true"
     >
-      <p data-reading-role="caption" className="text-os-muted-paper">
-        {t('import.eyebrow')}
-      </p>
-      <h2 id="import-stage-title" className="mt-2 text-2xl font-medium text-os-ink">
-        {t('import.title')}
-      </h2>
-      {!compact ? (
-        <p data-reading-role="reading" className="mt-2 max-w-lg text-lg leading-[var(--leading-reading)] text-os-muted-paper">
-          {t('import.description')}
+      <div className={styles.importCopy}>
+        <p data-reading-role="caption" className={styles.sectionLabel}>
+          {t('import.eyebrow')}
         </p>
-      ) : null}
-      <nav className="mt-5 grid border-y border-os-rule-paper sm:grid-cols-2 sm:divide-x sm:divide-os-rule-paper" aria-label={t('import.title')}>
-          <Link className="group flex min-h-12 items-center justify-between px-1 py-4 text-sm font-medium text-os-ink outline-none hover:text-os-vermilion-ink focus-visible:ring-2 focus-visible:ring-os-vermilion-ink sm:pr-5" data-reading-role="control" href="/research-objects/new?mode=import" data-action-priority="primary">
-            {t('import.upload')}
-            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
-          </Link>
-          <Link className="group flex min-h-12 items-center justify-between px-1 py-4 text-sm font-medium text-os-ink outline-none hover:text-os-vermilion-ink focus-visible:ring-2 focus-visible:ring-os-vermilion-ink sm:pl-5" data-reading-role="control" href="/research-objects/new?mode=blank" data-action-priority="primary">
-            {t('import.blank')}
-            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
-          </Link>
+        <h2 id="import-stage-title" className={styles.sectionTitle}>
+          {t('import.title')}
+        </h2>
+        {!compact ? (
+          <p data-reading-role="reading" className={styles.importDescription}>
+            {t('import.description')}
+          </p>
+        ) : null}
+      </div>
+      <nav className={styles.createActions} aria-label={t('import.title')}>
+        <Link className={styles.createAction} data-reading-role="control" href="/research-objects/new?mode=import" data-action-priority="primary">
+          {t('import.upload')}
+          <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+        <Link className={styles.createAction} data-reading-role="control" href="/research-objects/new?mode=blank" data-action-priority="primary">
+          {t('import.blank')}
+          <ArrowRight size={16} aria-hidden="true" />
+        </Link>
       </nav>
     </section>
   );

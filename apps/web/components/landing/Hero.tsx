@@ -50,8 +50,8 @@ export default function Hero({ locale }: HeroProps) {
             <Link className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-vermilion pb-1 font-semibold text-os-paper no-underline transition-colors hover:text-os-vermilion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-2" data-hero-action="primary" href="/explore">
               {t('hero.ctaExplore')} <span aria-hidden="true">→</span>
             </Link>
-            <Link className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-rule-dark pb-1 font-semibold text-os-muted-dark no-underline transition-colors hover:border-os-paper hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-1 sm:row-start-1" data-hero-action="secondary" href="/dashboard">
-              {t('nav.desk')} <span aria-hidden="true">↗</span>
+            <Link className="group inline-flex min-h-12 items-center justify-between gap-8 border-b border-os-rule-dark pb-1 font-semibold text-os-muted-dark no-underline transition-colors hover:border-os-paper hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:col-start-1 sm:row-start-1" data-hero-action="secondary" href="/research-objects/new">
+              {t('hero.ctaCreate')} <span aria-hidden="true">↗</span>
             </Link>
           </div>
         </div>

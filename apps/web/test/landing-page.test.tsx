@@ -59,6 +59,10 @@ vi.mock('next/font/google', () => ({
   Archivo: () => ({ className: 'archivo-font' }),
 }));
 
+vi.mock('@/lib/public-server-api', () => ({
+  getServerResearchIndex: async () => ({ items: [], nextCursor: null }),
+}));
+
 describe('Optical Editorial landing page', () => {
   beforeAll(() => {
     vi.stubGlobal('React', React);
@@ -102,10 +106,9 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('data-landing-module="trust"');
   });
 
-  it('keeps public exploration and a real research-desk destination', async () => {
+  it('keeps Create, Explore and standalone login as real destinations', async () => {
     const markup = await renderLandingPage();
-    expect(markup).toContain('href="/dashboard"');
-    expect(markup).not.toContain('href="/research-objects/new"');
+    expect(markup).toContain('href="/research-objects/new"');
     expect(markup).toContain('href="/explore"');
     expect(markup).toContain('href="/auth/login"');
     const { default: ExplorePage } = await import('../app/explore/page');
@@ -116,7 +119,7 @@ describe('Optical Editorial landing page', () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-hero-action="primary"');
     expect(markup).toContain('data-hero-action="secondary"');
-    expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/dashboard"'));
+    expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/research-objects/new"'));
     expect(markup).not.toContain('data-hero-metadata-legend');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).toContain('data-typography-coupling="reference-plate"');
@@ -147,12 +150,10 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('data-optical-field="true"');
   });
 
-  it('uses the next viewport for the public research index', async () => {
+  it('keeps the existing published-research module below the optical surface', async () => {
     const { default: LatestResearch } = await import('../components/landing/LatestResearch');
     const markup = renderToStaticMarkup(await LatestResearch());
     expect(markup).toContain('data-landing-module="open-ro"');
-    expect(markup).toContain('id="open-ro"');
-    expect(markup).toContain('OPEN RESEARCH');
     expect(markup).toContain('href="/explore"');
     expect(markup).not.toContain('data-landing-module="principles"');
   });
@@ -164,15 +165,18 @@ describe('Optical Editorial landing page', () => {
     const navigation = markup.match(/<div[^>]*data-navigation-tone="paper"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? '';
     expect(navigation).toContain('href="/explore"');
     expect(navigation).toContain('href="/journals"');
-    expect(navigation).toContain('href="/guide"');
+    expect(navigation).not.toContain('text-os-muted-dark');
   });
 
-  it('gives public pages one desk entry and keeps creation inside the desk', async () => {
-    const { default: SiteHeader } = await import('../components/landing/SiteHeader');
+  it('keeps Landing navigation frozen while public product pages expose the research desk', async () => {
+    const { default: SiteHeader, PublicProductAccess } = await import('../components/landing/SiteHeader');
     const landing = renderToStaticMarkup(<SiteHeader />);
-    const publicProduct = renderToStaticMarkup(<SiteHeader active="explore" context="public-product" tone="paper" />);
+    const publicProduct = renderToStaticMarkup(<><SiteHeader active="explore" context="public-product" tone="paper" /><PublicProductAccess /></>);
 
-    expect(landing.match(/href="\/dashboard"/g)).toHaveLength(1);
+    expect(landing).toContain('href="/dashboard"');
+    expect(landing).toContain('href="/research-objects/new"');
+    expect(landing).toContain('href="/settings"');
+    expect(landing).toContain('href="/developers"');
     expect(publicProduct).toContain('href="/dashboard"');
     expect(publicProduct).toMatch(/aria-current="page"[^>]*href="\/explore"/u);
     expect(publicProduct).not.toContain('href="/research-objects/new"');
