@@ -5,13 +5,36 @@
   --product-shadow: 0 2px 8px rgb(29 41 53 / .04), 0 0 0 1px rgb(29 41 53 / .04);
   -webkit-font-smoothing: antialiased;
 }
-.surface-product-app { background:var(--os-paper); color:var(--os-ink); font-family:var(--font-ui); }
+.surface-product-app, [data-os-surface='identity'] {
+  --craft-ink: #182f35;
+  --craft-muted: #51666c;
+  --craft-accent: #125d66;
+  --craft-surface: #fff;
+  --craft-tint: #edf4f3;
+  --craft-rule: #dce5e5;
+  --craft-ease: cubic-bezier(.16, 1, .3, 1);
+  --craft-action: 160ms;
+  --craft-shadow-sheet: 0 16px 48px rgb(24 47 53 / .065);
+  --craft-shadow-control: 0 2px 4px rgb(24 47 53 / .1);
+}
+.surface-product-app {
+  --os-ink: var(--craft-ink);
+  --os-muted-paper: var(--craft-muted);
+  --os-rule-paper: var(--craft-rule);
+  --color-os-ink: var(--craft-ink);
+  --color-os-muted-paper: var(--craft-muted);
+  --color-os-rule-paper: var(--craft-rule);
+  --product-shadow: var(--craft-shadow-sheet);
+  background: var(--os-paper);
+  color: var(--os-ink);
+  font-family: var(--font-ui);
+}
 .surface-product-app > header { position:relative; z-index:40; }
 .surface-product-app :is(button, summary, a), .research-product :is(button, summary, a) { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
-.surface-product-app :is(button, summary), .research-product :is(button, summary) { transition:transform 120ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease; }
+.surface-product-app :is(button, summary), .research-product :is(button, summary) { transition:transform 120ms cubic-bezier(.2,.8,.2,1), background-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
 .surface-product-app button:not(:disabled):active, .research-product button:not(:disabled):active { transform:scale(.98); }
 .surface-product-app :is(input,textarea,select), .research-product :is(input,textarea,select) { transition:box-shadow 160ms ease, border-color 160ms ease; }
-.surface-product-app .product-main { padding-block:36px 64px; }
+.surface-product-app .product-main { padding-block:40px 72px; }
 .surface-product-app .surface-folio-sheet { box-shadow:var(--product-shadow); }
 .surface-product-app ::selection, .research-product ::selection { background:#d6e9e7; color:#1d2935; }
 .surface-product-app :is(input,textarea), .research-product :is(input,textarea) { caret-color:#126a70; }
@@ -35,7 +58,34 @@
 .surface-product-app :is(details,section) { scroll-margin-top:24px; }
 .account-workspace .account-monogram { background:#e7f1f2; color:#125d66; }
 .account-workspace .surface-folio-sheet { border-color:transparent; box-shadow:var(--product-shadow); }
+.surface-product-app a { text-underline-offset: .22em; text-decoration-thickness: 1px; }
+.surface-product-app :is(input, textarea, select) { accent-color: var(--craft-accent); }
+.surface-product-app :is(input, textarea, select):focus-visible { outline: 2px solid var(--craft-accent); outline-offset: 2px; }
+.surface-product-app :is(input, textarea)::placeholder { color: var(--craft-muted); opacity: 1; }
+.surface-product-app :is(pre, table) { font-variant-numeric: tabular-nums; }
+.surface-product-app :is(pre, [data-workspace-plane], [data-api-docs]) { scrollbar-width: thin; scrollbar-color: #a6bcbc transparent; }
+.surface-product-app [data-research-create] > header h1 { font: 400 clamp(30px, 3.2vw, 40px)/1.35 var(--font-reading-serif); text-wrap: balance; }
+.surface-product-app [data-research-create] > header { border-bottom-color: var(--craft-rule); }
+.surface-product-app [data-evidence-dropzone] { background: var(--craft-surface); border-style: dashed; }
+.surface-product-app [data-evidence-dropzone] button { box-shadow: var(--craft-shadow-control); }
+.surface-product-app [data-research-create] textarea { line-height: 1.8; }
+.surface-product-app [data-hermes-review-page] > header { border: 0; padding-left: 0; margin-block: 28px 36px; }
+.surface-product-app [data-hermes-review-page] > header h1 { font: 400 clamp(30px, 3.2vw, 40px)/1.35 var(--font-reading-serif); }
+.surface-product-app [data-hermes-review-page] > header p { max-width: 65ch; line-height: 1.8; }
+.surface-product-app [data-hermes-review-page] [data-hermes-review-field] { padding: 16px; border-color: var(--craft-rule); font-size: 16px; line-height: 1.85; }
+@media(hover:hover) and (pointer:fine) {
+  .surface-product-app [data-evidence-dropzone]:hover { border-color: var(--craft-accent); }
+  .surface-product-app [data-evidence-dropzone] button:not(:disabled):hover { background: #0d4d55; }
+}
 @media(hover:hover) { .research-return-link:hover { text-decoration:underline; text-underline-offset:4px; } }
+.surface-product-app [data-product-recovery] { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: start; gap: 48px; width: min(100%, 840px); margin-inline: auto; padding: 88px 24px 96px; }
+.surface-product-app [data-recovery-code] { margin: 0; color: var(--craft-accent); font: 400 88px/1 var(--font-reading-serif); letter-spacing: -.03em; }
+.surface-product-app [data-product-recovery] h1 { margin: 0; font: 400 clamp(28px, 3.2vw, 40px)/1.35 var(--font-reading-serif); text-wrap: balance; }
+.surface-product-app [data-product-recovery] h1 + p { max-width: 48ch; margin: 20px 0 28px; color: var(--craft-muted); font-size: 16px; line-height: 1.8; }
+.surface-product-app [data-product-recovery] nav { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding-top: 24px; border-top: 1px solid var(--craft-rule); }
+.surface-product-app [data-product-recovery] nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--craft-accent); font-size: 14px; }
+.surface-product-app [data-product-recovery] nav a:first-child { padding: 10px 18px; border-radius: 8px; background: var(--craft-accent); color: #fff; text-decoration: none; box-shadow: var(--craft-shadow-control); }
+@media(max-width:639px) { .surface-product-app [data-product-recovery] { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 48px 64px; } .surface-product-app [data-recovery-code] { font-size: 72px; } }
 @media(max-width:639px) { .surface-product-app .product-main { padding-block:24px 44px; } .surface-product-app [data-research-create] > header h1 { font-size:26px; } .surface-product-app [data-evidence-dropzone] { min-height:190px; padding:24px 16px; } }
 @media(prefers-reduced-motion:reduce) {
   .surface-product-app :is(button,summary,input,textarea,select), .research-product :is(button,summary,input,textarea,select) { transition:none; }

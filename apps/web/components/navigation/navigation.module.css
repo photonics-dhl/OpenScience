@@ -17,13 +17,14 @@
 [data-navigation-tone='dark'] .accountTools summary { color:var(--os-muted-dark); }
 .accountTools summary svg { transition:transform 160ms var(--ease-standard); }
 .accountTools[open] summary svg { transform:rotate(180deg); }
-.accountPanel { position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:220px; padding:12px; background:#fff; color:#20252b; border-radius:12px; box-shadow:0 12px 32px rgb(25 38 42 / .14), 0 0 0 1px rgb(25 38 42 / .06); animation:arrive 160ms var(--ease-standard); }
+.accountPanel { position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:232px; max-width:calc(100vw - 32px); padding:10px; background:#fff; color:#182f35; border-radius:12px; box-shadow:0 16px 40px rgb(24 47 53 / .16); transform-origin:top right; animation:arrive 180ms var(--ease-optical); }
 .accountPanel p { margin:0; padding:4px 12px 8px; color:#626c76; font:500 12px/1.5 var(--font-ui); }
-.accountPanel a { display:flex; align-items:center; min-height:44px; padding:8px 12px; color:#20252b; text-decoration:none; border-radius:6px; font:400 14px/1.4 var(--font-ui); }
+.accountPanel a { display:flex; align-items:center; min-height:44px; padding:8px 12px; color:#182f35; text-decoration:none; border-radius:6px; font:400 14px/1.4 var(--font-ui); transition:background-color 120ms ease,color 120ms ease; }
 .accountPanel a[aria-current='page'] { background:#edf4f4; color:#125d66; }
 .primaryLink:focus-visible, .publicLink:focus-visible, .deskLink:focus-visible, .account a:focus-visible, .account summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
 .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:scale(.98); }
 @media(hover:hover) { .primaryLink:hover, .publicLink:hover, .accountPanel a:hover { color:#125d66; background:#edf4f4; } .deskLink:hover { background:#e7f1f2; } [data-navigation-tone='dark'] .publicLink:hover, [data-navigation-tone='dark'] .deskLink:hover { background:rgb(241 238 231 / .08); color:var(--os-paper); } .accountTools summary:hover { background:#edf4f4; color:#125d66; } }
 @media(max-width:639px) { .primary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; } .primaryLink { display:flex; padding:0 8px; } .publicNavigation { gap:8px; } .publicLinks { flex:1; } .publicLink { padding-inline:9px; } .access { gap:8px; } [data-navigation-tone='dark'] .access { border-color:var(--os-rule-dark); } .accountName { display:none; } }
-@keyframes arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
-@media(prefers-reduced-motion:reduce) { .primaryLink, .publicLink, .deskLink, .accountLink, .accountTools summary svg { transition:none; } .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:none; } .accountPanel { animation:none; } }
+@keyframes arrive { from { opacity:.5; transform:translateY(-2px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+.accountTools:has(summary:focus-visible) .accountPanel { animation:none; }
+@media(prefers-reduced-motion:reduce) { .primaryLink, .publicLink, .deskLink, .accountLink, .accountTools summary svg, .accountPanel a { transition:none; } .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:none; } .accountPanel { animation:none; } }

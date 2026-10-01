@@ -185,7 +185,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
     try {
       await refreshIngestionAnalysis(taskId, detail.task.agentTaskId);
       if (mounted.current) setReload((value) => value + 1);
-    } catch (cause) {
+    } catch {
       try {
         const current = await getIngestionTask(taskId);
         if (current.task.agentTaskId && current.task.agentTaskId !== detail.task.agentTaskId) {
@@ -239,15 +239,15 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
   return <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
     {workspaceNavigation}
     <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12">
-    <div className="mx-auto max-w-[90rem]">
+    <div className="mx-auto max-w-[90rem]" data-hermes-review-page="true">
       <Link href="/dashboard" className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink hover:underline">← {t('back')}</Link>
-      <header className="mt-5 max-w-3xl border-l-2 border-os-vermilion-ink pl-5">
+      <header className="mt-5 max-w-3xl border-l border-os-vermilion-ink pl-5">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
         <h1 className="mt-2 font-reading text-2xl font-semibold text-os-ink">{t('title')}</h1>
         <p data-reading-role="body" className="mt-3 max-w-[66ch] text-os-muted-paper">{t('description')}</p>
       </header>
       {literatureEntry}
-      {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
+      {error && <p className="mt-6 max-w-3xl border-l border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail && error && <div className="mt-4 flex flex-wrap items-center gap-5"><button type="button" onClick={() => setReload((value) => value + 1)} className="min-h-11 font-semibold text-os-vermilion-ink underline">{t('retry')}</button><Link className="min-h-11 py-3 text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/hermes`}>{t('allTasks')}</Link></div>}
       {runId ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} onRunUpdated={setRun} /> : null}
       {loading ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : !detail ? null : <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_288px]">
@@ -256,13 +256,13 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
             <span className="font-data">{detail.task.logicalPath}</span>
             <span>{emptyExtraction ? t('emptyExtractionTitle') : t('taskState', { state: statusT(detail.task.state) })}</span>
           </div>
-          {emptyExtraction ? <section role="status" className="mb-5 border-l-2 border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold">{t('emptyExtractionTitle')}</h2><p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('emptyExtractionBody')}</p><Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit?ingestionTask=${encodeURIComponent(taskId)}`}>{t('manualEdit')}</Link></section> : null}
+          {emptyExtraction ? <section role="status" className="mb-5 border-l border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold">{t('emptyExtractionTitle')}</h2><p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('emptyExtractionBody')}</p><Link className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(routeParams.id)}/edit?ingestionTask=${encodeURIComponent(taskId)}`}>{t('manualEdit')}</Link></section> : null}
           {proposalUnavailable ? <section className="surface-folio-sheet border-y border-os-rule-paper px-4 py-6 sm:px-6" aria-label={t(reviewPreflightRecovery ? 'proposalReviewRecoveryTitle' : paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}>
             <h2 className="font-reading text-2xl text-os-ink">{t(reviewPreflightRecovery ? 'proposalReviewRecoveryTitle' : paidReanalysis ? 'proposalReanalysisTitle' : 'proposalUnavailableTitle')}</h2>
             <p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t(reviewPreflightRecovery ? 'proposalReviewRecoveryBody' : legacyFullDocumentLimit ? 'proposalLongDocumentRecoveryBody' : compensatedReanalysis ? 'proposalCompensationBody' : paidReanalysis ? 'proposalReanalysisBody' : 'proposalUnavailableBody')}</p>
             <button type="button" disabled={saving} onClick={() => void retryExtraction()} className="mt-5 min-h-11 touch-manipulation rounded-panel bg-os-vermilion-ink px-5 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40">{saving ? t(reviewPreflightRecovery ? 'proposalReviewRecovering' : 'proposalRetrying') : t(reviewPreflightRecovery ? 'proposalReviewRecovery' : compensatedReanalysis ? 'proposalCompensation' : paidReanalysis ? 'proposalReanalysis' : 'proposalRetry')}</button>
           </section> : <><p className="mb-4 text-sm text-os-muted-paper">{t('reviewPending')}</p>
-          {legacyRefreshAvailable ? <section className="mb-5 border-l-2 border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold text-os-ink">{t('legacyRefreshTitle')}</h2><p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p><button type="button" disabled={saving} onClick={() => void refreshLegacyExtraction()} className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-40">{saving ? t('legacyRefreshing') : t('legacyRefreshAction')}</button></section> : null}
+          {legacyRefreshAvailable ? <section className="mb-5 border-l border-os-vermilion-ink pl-4"><h2 className="text-lg font-semibold text-os-ink">{t('legacyRefreshTitle')}</h2><p className="mt-2 max-w-[66ch] text-sm leading-6 text-os-muted-paper">{t('legacyRefreshBody')}</p><button type="button" disabled={saving} onClick={() => void refreshLegacyExtraction()} className="mt-3 min-h-11 rounded-panel border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink disabled:opacity-40">{saving ? t('legacyRefreshing') : t('legacyRefreshAction')}</button></section> : null}
           <section aria-label={t('fieldLabel')} className="surface-folio-sheet divide-y divide-os-rule-paper border-y border-os-rule-paper">
             {fields.map((field, index) => <div key={field} className="grid gap-3 px-4 py-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:px-6">
               <label htmlFor={`hermes-review-${field}`}><span className="block font-data text-xs text-os-vermilion-ink">0{index + 1}</span><span className="mt-1 block text-sm font-semibold text-os-ink">{fieldT(field)}</span>{!core[field].trim() && <span className="block text-sm text-os-muted-paper">{t('missing')}</span>}</label>

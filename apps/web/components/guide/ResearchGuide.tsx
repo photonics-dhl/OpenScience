@@ -14,6 +14,7 @@ const questions = ['blank', 'edit', 'source'] as const;
 export function ResearchGuide() {
   const t = useTranslations('productGuide');
   const [selected, setSelected] = React.useState(0);
+  const [sceneMotion, setSceneMotion] = React.useState<'pointer' | 'keyboard'>('keyboard');
   const [example, setExample] = React.useState<PublicResearchVersion | null>(null);
   const [loadState, setLoadState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [attempt, setAttempt] = React.useState(0);
@@ -43,7 +44,7 @@ export function ResearchGuide() {
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = scenes.length - 1;
     else return;
-    event.preventDefault(); setSelected(next); tabs.current[next]?.focus();
+    event.preventDefault(); setSceneMotion('keyboard'); setSelected(next); tabs.current[next]?.focus();
   }
 
   const title = example ? <ScientificText as="h2" hideSourceMarkers className={styles.researchTitle}>{example.title}</ScientificText> : <h2 className={styles.researchTitle}>{t('exampleFallback')}</h2>;
@@ -83,10 +84,10 @@ export function ResearchGuide() {
     <section className={styles.scenes} aria-labelledby={`${id}-scenes`}>
       <div className={styles.sectionHeading}><h2 id={`${id}-scenes`}>{t('sceneHeading')}</h2><p>{t('sceneIntro')}</p></div>
       <div className={styles.tabs} role="tablist" aria-label={t('sceneHeading')}>
-        {scenes.map((key, index) => <button type="button" key={key} role="tab" id={`${id}-tab-${key}`} aria-controls={`${id}-panel`} aria-selected={selected === index} tabIndex={selected === index ? 0 : -1} ref={element => { tabs.current[index] = element; }} onKeyDown={event => moveScene(event, index)} onClick={() => setSelected(index)}>{t(`scenes.${key}.label`)}</button>)}
+        {scenes.map((key, index) => <button type="button" key={key} role="tab" id={`${id}-tab-${key}`} aria-controls={`${id}-panel`} aria-selected={selected === index} tabIndex={selected === index ? 0 : -1} ref={element => { tabs.current[index] = element; }} onKeyDown={event => moveScene(event, index)} onClick={event => { if (selected === index) return; setSceneMotion(event.detail > 0 ? 'pointer' : 'keyboard'); setSelected(index); }}>{t(`scenes.${key}.label`)}</button>)}
       </div>
       <section role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${scene}`} tabIndex={0} className={styles.scenePanel}>
-        <div key={scene} className={styles.sceneContent}>
+        <div key={scene} className={styles.sceneContent} data-scene-motion={sceneMotion}>
           <div className={styles.sceneCopy}><h3>{t(`scenes.${scene}.title`)}</h3><p>{t(`scenes.${scene}.body`)}</p></div>
           <div className={styles.demonstration}>
             <div className={styles.demoHeader}><span>OpenScience.</span><span>{t(`scenes.${scene}.label`)}</span></div>
