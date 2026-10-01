@@ -90,7 +90,9 @@ export interface ExtractionResult extends Record<string, unknown> {
   scientificReview?: {
     provider: string | null;
     model: string | null;
-    kind?: 'model_self_check' | 'independent_review';
+    kind?: 'model_self_check' | 'independent_review' | 'hermes_agent_review';
+    runtimeId?: string;
+    skillCatalogueId?: string;
     compositionSkill?: { id: string; version: string };
     /** Private composition candidates, never materialized as final Claims. */
     draftClaims?: DraftClaimSuggestion[];
@@ -1070,7 +1072,7 @@ function passageText(slices: readonly CanonicalPassageSlice[]): string {
   }).join('');
 }
 
-function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
+export function canonicalPassages(sourceMap: DocumentSourceMap): CanonicalPassage[] {
   const blocks = canonicalTextBlocks(sourceMap);
   const passages: CanonicalPassage[] = [];
   let pending: CanonicalPassageSlice[] = [];
@@ -2294,7 +2296,7 @@ function scientificReviewCandidateContext(context?: ScientificReviewContext) {
 
 function completeScientificReviewValidation(
   sourceMap: DocumentSourceMap, reviewPassages: readonly CanonicalPassage[],
-  proposal: ExtractedProposal, context?: ScientificReviewContext,
+  proposal: ExtractedProposal, context?: Pick<ScientificReviewContext, 'requireReviewedClaims'>,
 ) {
   let candidateIssues: string[] = [];
   let claimRepairIssues: string[] = [];
@@ -2984,6 +2986,52 @@ async function reviewAndMaterializeCanonicalPartial(
     fieldDiagnosticsDetails,
     unverifiedSummaries,
     unverifiedSourcePassageIds,
+  };
+}
+
+/** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
+export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[]) {
+  let candidate: ScientificCompositionResponse | undefined;
+  let candidateOrder = -1;
+  const passages = () => { const read = new Set(readPassageIds()); return canonicalPassages(sourceMap).filter(p => read.has(p.id)); };
+  const fieldProposal = (field: ScientificReviewField, provided: readonly CanonicalPassage[]): ExtractedFieldProposal => {
+    const segments = segmentsForPassages(sourceMap, field.sourcePassageIds, new Map(provided.map(p => [p.id, p])), true);
+    return { summary: field.summary, sourceQuote: segments.map(s => s.quote).join('\n'), sourcePassageIds: field.sourcePassageIds,
+      verifiedSegments: segments, needsMoreInformation: field.verdict === 'blocked' };
+  };
+  return {
+    draft(value: unknown, order = candidateOrder + 1): Record<string, unknown> {
+      const validation = scientificCompositionValidation(sourceMap, passages());
+      if (!validation.guard(value)) return { status: 'invalid_draft', feedback: validation.feedback(value) };
+      if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; }
+      return { status: 'draft_ready', fields: value.fields, draftClaims: value.draftClaims,
+        guidance: 'This is a private candidate, not scientific approval. Use the scientific and peer-review Skills, re-read the source and view relevant pages before returning your final review.' };
+    },
+    review(value: unknown): Record<string, unknown> {
+      try {
+        this.finish(JSON.stringify(value));
+        return { status: 'review_ready', guidance: 'The source/Claims structure is valid. This is not a scientific judgment or approval; recheck the actual science before returning this exact final JSON.' };
+      } catch (error) {
+        return { status: 'invalid_review', feedback: error instanceof Error ? error.message : 'Invalid scientific review structure' };
+      }
+    },
+    finish(text: string): ExtractionResult {
+      if (!candidate) throw new Error('[blocked] Native review requires a real prior Agent draft');
+      const provided = passages(); const normalized = normalizeScientificComposition(candidate);
+      const proposal = { schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field =>
+        [field, fieldProposal(normalized.fields[field], provided)])) as ExtractedProposal['fields'] };
+      const value: unknown = parseStructuredJson(text);
+      const validation = completeScientificReviewValidation(sourceMap, provided, proposal, { requireReviewedClaims: true });
+      if (!validation.completeReviewGuard(value)) throw new Error('[blocked] Native science contract: ' + validation.reviewValidationFeedback());
+      const awaiting = fieldsAffectedByReviewEvidence(value);
+      const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => [field,
+        { ...fieldProposal(value.fields[field], provided), needsMoreInformation: value.fields[field].verdict === 'blocked' || awaiting.has(field) }])) as ExtractedProposal['fields'];
+      const result = materializeCanonicalProposal({ schemaVersion: SDF_CORE_VERSION, fields });
+      const claims = materializeReviewedClaimSuggestions(sourceMap, result, value, provided);
+      return { ...result, reviewedClaimSuggestions: claims, nativeScientificFields: value.fields,
+        nativeNeedsMoreEvidence: value.needsMoreEvidence,
+        nativeReviewedCandidateHash: sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields }) };
+    },
   };
 }
 

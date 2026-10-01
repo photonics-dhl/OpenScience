@@ -104,6 +104,8 @@ export interface CompleteOptions {
   thinking?: 'adaptive' | 'disabled';
   topP?: number;
   timeoutMs?: number;
+  /** Trusted native-task byte budget, measured on the actual serialized provider body. */
+  maxRequestBytes?: number;
   tools?: readonly ChatToolDefinition[];
 }
 
@@ -115,6 +117,13 @@ function textTimeout(options: CompleteOptions): number {
     throw new TextProviderError('provider_error', 'Invalid text timeout');
   }
   return timeout;
+}
+
+function nativeRequestByteBudget(body: string, options: CompleteOptions): void {
+  if (options.maxRequestBytes === undefined) return;
+  if (!Number.isSafeInteger(options.maxRequestBytes) || options.maxRequestBytes < 1
+    || options.maxRequestBytes > 64_000_000 || Buffer.byteLength(body, 'utf8') > options.maxRequestBytes)
+    throw new TextProviderError('provider_error', 'Native task provider request exceeds its byte budget');
 }
 
 export interface Usage {
@@ -249,6 +258,7 @@ export class OpenAiCompatProvider implements Provider {
       throw new TextProviderError('provider_error', 'Native agent request exceeds the provider body limit');
     }
     textTimeout(opts);
+    nativeRequestByteBudget(body, opts);
     return { body, messages, tools };
   }
 
@@ -363,6 +373,7 @@ export class AnthropicCompatProvider implements Provider {
       if ((hasImages || tools) && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
         throw new TextProviderError('provider_error', 'Native image request exceeds the provider body limit');
       }
+      nativeRequestByteBudget(body, opts);
       return { body, hasImages };
   }
 

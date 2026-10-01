@@ -13,7 +13,7 @@ export { createPersonalWorkspace, type PersonalWorkspaceUser } from './workspace
 export { restoreVersionDraft } from './commit/restore-draft';
 export { publicHistoryMedia } from './commit/version-history';
 export { TrashError } from './trash/errors';
-export { TRASH_KINDS, moveToTrash, listTrash, restoreTrash, purgeTrash, listCleanableContent, purgeExpiredTrash, cleanTrashObjects, lockTrashReferences, lockLiveResearchObject, type TrashDeps, type TrashSearchScope } from './trash/trash';
+export { TRASH_KINDS, moveToTrash, listTrash, restoreTrash, purgeTrash, listCleanableContent, purgeExpiredTrash, cleanTrashObjects, lockTrashReferences, lockLiveResearchObject, rememberDiscardedTaskResult, type TrashDeps, type TrashSearchScope } from './trash/trash';
 export { canAccessPrivateRo, requirePrivateRoAccess } from './visibility/access';
 export { readPublicationMetadata, publicVersionNumber, type PublicationMetadata } from './publish/publication-metadata';
 export { publicArtifactDownloadUrl, readPublicArtifactManifest, getPublicArtifactDownload } from './artifact/public-artifact-download';
@@ -465,3 +465,5 @@ export { requireMembership } from './workspace/helpers';
 export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, projectIllustrationEvidence, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
+export { initialNativeAgentExecution, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority,
+  type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';

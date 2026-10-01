@@ -92,6 +92,8 @@ services:
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
+      - path: /opt/openscience-hermes/runtime.env
+        required: false
     environment:
       CLAMAV_HOST: malware-scanner
       CLAMAV_PORT: "3310"
@@ -170,6 +172,7 @@ services:
       - "11000"
     working_dir: /opt/openscience/apps/agent-worker
     volumes:
+      - /opt/openscience-hermes/inbox:/native-agent/inbox
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
       - scansci-papers:/data/papers
@@ -189,6 +192,8 @@ services:
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
+      - path: /opt/openscience-hermes/runtime.env
+        required: false
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
       CHATGPT_WEB_IMAGE_ENABLED: "true"

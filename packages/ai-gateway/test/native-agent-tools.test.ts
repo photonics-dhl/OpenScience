@@ -15,6 +15,25 @@ const controls = () => ({ beforeProviderAttempt: vi.fn(async () => undefined),
   submitProvider: vi.fn(async (_target: unknown, submit: () => Promise<unknown>) => submit()) });
 
 describe('native Hermes tool round trips through Gateway', () => {
+  it.each(['anthropic', 'openai'] as const)('enforces native task bytes on the actual %s HTTP body before checkpoint', async family => {
+    const bodies: string[] = [];
+    const fetcher = vi.fn(async (_url, options) => {
+      bodies.push(String(options.body));
+      return new Response(JSON.stringify({ model: config.model, content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn',
+        choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+        usage: { input_tokens: 1, output_tokens: 1, prompt_tokens: 1, completion_tokens: 1 } }));
+    });
+    const provider = family === 'anthropic' ? new AnthropicCompatProvider('m3', config, fetcher) : new OpenAiCompatProvider('m3', config, fetcher);
+    const gateway = new AiGateway({ providers: [provider] });
+    const messages: ChatMessage[] = [{ role: 'system', content: '论文范围和必要条件。' }, { role: 'user', content: 'Read the actual source.' }];
+    await gateway.nativeAgentComplete(messages, { tools: [tool] }, controls());
+    const exactBytes = Buffer.byteLength(bodies[0]!, 'utf8');
+    const blocked = controls();
+    await expect(gateway.nativeAgentComplete(messages, { tools: [tool], maxRequestBytes: exactBytes - 1 }, blocked)).rejects.toThrow('byte budget');
+    expect(blocked.submitProvider).not.toHaveBeenCalled(); expect(fetcher).toHaveBeenCalledTimes(1);
+    await gateway.nativeAgentComplete(messages, { tools: [tool], maxRequestBytes: exactBytes }, controls());
+    expect(fetcher).toHaveBeenCalledTimes(2); expect(bodies[1]).toBe(bodies[0]);
+  });
   it('accepts a tool-only response and replays all provider blocks unchanged before the exact tool result', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(response([{ type: 'text', text: 'Source-grounded answer.' }], 'end_turn'));
     const provider = new AnthropicCompatProvider('m3', config, fetcher);

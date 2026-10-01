@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
@@ -787,7 +787,7 @@ export async function recoverHermesSourceCompositionInTransaction(deps: AgentDep
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: run.actorId,
     researchObjectId: run.researchObjectId, kind: 'ingestion', title: `Final source composition ${source.id}`,
     idempotencyKey: `${recoveryKey}:hermes-recovery:${input.requestDigest}` }, ctx);
-  const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
+  const { task, replayed } = await persistHistoricalSourceTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
     kind: 'sdf.extract', payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: recoveryKey }, ctx);
   if (replayed) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Final composition has an unrecorded task binding');
   const changed = await tx.ingestionTask.updateMany({ where: { id: source.id, agentTaskId: failed.id, state: 'needs_review', retryCount: 0 },
@@ -835,7 +835,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
   const { task, replayed } = proof.technicalRecovery
     ? await persistHermesSourceReviewTechnicalTaskInTransaction(deps, tx, { runId: run.id, sessionId: session.id, userId: input.actorId },
       deps.canRetrySourceReviewBeforeSubmission!, ctx)
-    : await persistAgentTaskInTransaction(deps, tx, {
+    : await persistHistoricalSourceTaskInTransaction(deps, tx, {
     sessionId: session.id, userId: input.actorId, kind: 'sdf.extract',
     payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: recoveryKey,
   }, ctx);
@@ -921,7 +921,7 @@ export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps,
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: run.actorId,
     researchObjectId: run.researchObjectId, kind: 'ingestion', title: `Review saved source composition ${source.id}`,
     idempotencyKey: `${key}:session` }, ctx);
-  const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
+  const { task, replayed } = await persistHistoricalSourceTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
     kind: 'sdf.extract', payload: { artifactId: source.artifactId, researchObjectId: run.researchObjectId }, idempotencyKey: key }, ctx);
   if (replayed) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition has an unrecorded review task');
   if (source.artifact.mimeType === 'application/pdf' || source.artifact.logicalPath.toLowerCase().endsWith('.pdf')) {
@@ -1203,7 +1203,7 @@ export async function refreshIngestionAnalysis(
             title: `Ingestion scientific composition ${source.id}`,
             idempotencyKey: `${stableKey}:session`,
           }, ctx);
-          const { task: replacement, replayed } = await persistAgentTaskInTransaction(deps, tx, {
+          const { task: replacement, replayed } = await persistHistoricalSourceTaskInTransaction(deps, tx, {
             sessionId: session.id,
             userId: input.userId,
             kind: 'sdf.extract',
@@ -1364,7 +1364,7 @@ export async function refreshIngestionAnalysis(
           title: `Ingestion analysis refresh ${source.id}`,
           idempotencyKey: `${stableKey}:session`,
         }, ctx);
-        const { task: replacement, replayed } = await persistAgentTaskInTransaction(deps, tx, {
+        const { task: replacement, replayed } = await persistHistoricalSourceTaskInTransaction(deps, tx, {
           sessionId: session.id,
           userId: input.userId,
           kind: 'sdf.extract',

@@ -1,6 +1,7 @@
 import { requireStyleReferenceImage } from '@openscience/domain';
 import { startNativeImageReview } from '@openscience/domain';
-import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview } from '@openscience/domain';
+import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview, readNativeAgentExecution, requireNativeAgentExecutionAuthority } from '@openscience/domain';
+import { runNativePaperTask } from './native-agent/paper-task';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma } from '@prisma/client';
@@ -297,6 +298,7 @@ export function createHandlers(
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
     videoSpool?: HostVideoSpool;
+    nativeAgentInboxRoot?: string;
   } = {},
 ): Record<string, TaskHandler> {
   // BGE serves one CPU inference at a time. Keep indexing jobs serial in this
@@ -362,6 +364,9 @@ export function createHandlers(
         && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
       const externalProcessingEligible = serverDerivedEligibility
         && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
+      const nativeAgentExecution = readNativeAgentExecution(ownerTask.result);
+      if (nativeAgentExecution && (!externalProcessingEligible || !options.nativeAgentInboxRoot))
+        throw new Error('[blocked] Native Agent processing authority or installed host is unavailable');
       let reusableSourceMap: DocumentSourceMap | undefined;
       let partialParserSourceMap: DocumentSourceMap | undefined;
       let reusableExtractionResult: Record<string, unknown> | undefined;
@@ -378,7 +383,7 @@ export function createHandlers(
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const parserCheckpoint = ownerTask.result;
       if (parserCheckpoint && typeof parserCheckpoint === 'object' && !Array.isArray(parserCheckpoint)
-        && Object.keys(parserCheckpoint).join(',') === 'sourceMapRef') {
+        && Object.keys(parserCheckpoint).filter(key => key !== 'nativeAgentExecution' && key !== 'nativeAgentObjects').join(',') === 'sourceMapRef') {
         const reference = parseDocumentSourceMapReference(parserCheckpoint.sourceMapRef);
         if (ownerTask.kind !== 'sdf.extract' || ownerTask.status !== 'running'
           || ownerTask.executionAttempt !== task.executionAttempt || ownerTask.deletedAt
@@ -647,9 +652,10 @@ export function createHandlers(
             select: { id: true },
           });
           if (!currentArtifact) throw new Error('[blocked] Parser checkpoint source is unavailable');
-          const nativeOwner = nativeSourceReview ? await tx.agentTask.findUnique({ where: { id: task.id } }) : undefined;
+          const nativeOwner = nativeSourceReview || nativeAgentExecution ? await tx.agentTask.findUnique({ where: { id: task.id } }) : undefined;
           if (nativeSourceReview && !readNativeSourceReview(nativeOwner?.result)) throw new Error('[blocked] Native source role disappeared before checkpoint');
-          const checkpoint = { ...(nativeSourceReview ? nativeOwner!.result as Record<string, unknown> : {}), sourceMapRef: { ...sourceMapRef } };
+          if (nativeAgentExecution && !readNativeAgentExecution(nativeOwner?.result)) throw new Error('[blocked] Actual native Agent role disappeared before checkpoint');
+          const checkpoint = { ...(nativeSourceReview || nativeAgentExecution ? nativeOwner!.result as Record<string, unknown> : {}), sourceMapRef: { ...sourceMapRef } };
           const stored = await tx.agentTask.updateMany({
             where: {
               id: task.id, kind: 'sdf.extract', status: 'running', executionAttempt: task.executionAttempt,
@@ -658,7 +664,7 @@ export function createHandlers(
                 researchObjectId: ownerResearchObject.id,
                 researchObject: { deletedAt: null, workspaceId: ownerResearchObject.workspaceId } },
               payload: { equals: { artifactId: artifact.id, researchObjectId: ownerResearchObject.id } },
-              OR: nativeSourceReview ? [{ result: { equals: nativeOwner!.result as Prisma.InputJsonValue } }] : [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } },
+              OR: nativeSourceReview || nativeAgentExecution ? [{ result: { equals: nativeOwner!.result as Prisma.InputJsonValue } }] : [{ result: { equals: Prisma.AnyNull } }, { result: { equals: checkpoint } },
                 ...(partialParserSourceMap ? [{ result: { equals: parserCheckpoint as Prisma.InputJsonValue } }] : [])],
             },
             data: { result: checkpoint },
@@ -676,6 +682,20 @@ export function createHandlers(
       }
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
+      if (nativeAgentExecution) {
+        const latest = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
+        const result = await runNativePaperTask({ gateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
+          sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, inboxRoot: options.nativeAgentInboxRoot!,
+          authorize: async tx => {
+            await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
+            if (!await buildIngestionExternalProcessingPolicy(tx)(trustedAuthorizationContext))
+              throw new Error('[blocked] Native Agent external processing authority changed');
+          },
+          renderPages: async pages => (await options.parserCascade!.renderPages({ artifactId: artifact.id,
+            contentHash: artifact.blobSha256, content: bytes, mediaType: parserMediaType }, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages,
+        });
+        await enqueueFigureAuditFromResult(deps, task, result); return result;
+      }
       const extracted = await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
@@ -988,6 +1008,7 @@ async function main(): Promise<void> {
       process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
     );
     const handlers = createHandlers(gateway, {
+      nativeAgentInboxRoot: process.env.HERMES_NATIVE_AGENT_INBOX,
       parserCascade,
       externalProcessingPolicy,
       searchIndexer: buildSearchIndexerFromEnv(process.env, globalThis.fetch, trashSearchClient),

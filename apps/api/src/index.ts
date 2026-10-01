@@ -101,6 +101,7 @@ async function main(): Promise<void> {
         }
       : undefined;
     const app = ownedApp = await buildApp({
+      nativeAgentRuntime: nativeAgentRuntimeFromEnv(process.env),
       prisma,
       redis,
       mailer,
@@ -159,3 +160,4 @@ async function main(): Promise<void> {
 }
 
 void main().catch(error => { console.error('API startup failed', error); process.exitCode = 1; });
+import { nativeAgentRuntimeFromEnv } from '@openscience/domain';

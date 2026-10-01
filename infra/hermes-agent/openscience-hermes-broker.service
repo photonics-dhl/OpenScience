@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenScience fixed native Hermes launcher
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 @ADAPTER_RELEASE@/host_broker.py
+User=root
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/openscience-hermes/bridges /opt/openscience-hermes/inbox
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+StandardOutput=null
+StandardError=null

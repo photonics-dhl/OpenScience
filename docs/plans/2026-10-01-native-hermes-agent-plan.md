@@ -22,10 +22,16 @@
 
 ## 任务、恢复与部署
 
-范围：Worker原sdf.extract点、Domain原task.result私有执行状态、固定镜像与窄运维launcher。复用parser和任务，不新建任务账本；新的正常研究任务由原生Agent控制阅读/构稿，历史保持原模式。任务私有socket/工作目录连接Worker；运行入口固定镜像/挂载/资源，Worker无容器管理权限。
+范围：Worker原sdf.extract点、Domain原task.result私有执行状态、现有Python3.11不可变运行时快照、systemd RootDirectory模板与窄运维broker。复用parser和任务，不新建任务账本；新的正常研究任务由原生Agent控制阅读/构稿，历史保持原模式。任务私有socket/工作目录连接Worker；运行入口固定模板/挂载/资源，每任务DynamicUser、仅自己的HOME与UDS、无互联网地址族，Worker无容器管理权限。
 
 每模型轮/来源工具核执行租约、用户权限、文档身份及授权。已完成响应可沿同任务恢复，pending未知不得重发；轮次、累计token与deadline明确约束，不能把max9业务任务当90轮Agent预算。沿原任务一次收费，不加工具收费。六字段/Claims经现有科学materializer正式提交。独立High审查具体代码的隔离/恢复/并发/费用，再完成适用CI、干净已推SHA发布与原回退流程。
 
 ## 真实交付和清理
 
 普通站内创建一篇真实论文，观察全文/图表理解、Skill实际使用、六维/Claims、默认首选风格、Images2.5和Hermes像素核查；特别核2408论文材料边缘/中心、固定工况和模型假设。JSON/来源绑定通过不算科学正确。完成2–3篇真实论文的用户认可、普通作者/公开展示后，清理确认退役流程与服务器生成物，保留原文、费用、任务、会话、独有Skill及必要回退。
+
+## 原生托管切片验证
+
+私有Worker SDK桥已通过真实安装0.10.0的两进程验证：完整Skill/引用、按call ID关联的原页像素、完整Provider blocks和三份已完成回答重放。9次原生SDK请求只有6次模拟Gateway提交，外部模型0；DynamicUser实际不能访问宿主凭据/spool或创建互联网socket，运行时/Skill只读。模型调用参数JSON键序由原生规范化，按调用ID/类型/名称/JSON语义与未变完整Provider blocks核对；每轮既有请求前缀仍严格匹配。工程证据在CURRENT引用的ignored日志。
+
+后续source候选已接Domain私有对象引用/CAS、当前终态authority重核、server配置新任务marker、原Worker入口和真实paper_draft候选/现有科学Claims materializer；定向工程证据及独立High已收敛，尚待精确CI、生产协调安装和真实科学任务验证。新任务不先跑静态reader/reducer/composition；历史任务不按新配置改派，未知started不重发。实际独立冻结的已安装0.10.0 Agent→PaperTask/私有Store/科学物化完成11轮零外呼整合，原页与完整Skills/引用实际经过Native dispatch，22私有CP保留。原生512K配置与压缩器256K阈值已生效，压缩后的历史兼容尚未验证，严格停止。不得以模拟终答替代真实论文。

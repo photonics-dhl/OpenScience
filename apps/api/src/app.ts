@@ -46,6 +46,7 @@ import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
 export interface BuildAppOptions extends AuthRouteDeps {
+  nativeAgentRuntime?: import('@openscience/domain').AgentDeps['nativeAgentRuntime'];
   journalsEnabled?: boolean;
   journalMetadataFetcher?: typeof fetch;
   researchObjectSearch?: ResearchObjectSearchService;

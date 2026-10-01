@@ -30,6 +30,7 @@ import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVE
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
+import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, type NativeAgentRuntimeConfig } from './native-agent-execution';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -56,6 +57,8 @@ const ALLOWED: Record<AgentTaskStatus, AgentTaskStatus[]> = {
 /** Agent 依赖：WorkspaceDeps + Redis（队列）。 */
 export interface AgentDeps extends WorkspaceDeps {
   redis: Redis;
+  /** Installed immutable server runtime, never taken from a public task payload. */
+  nativeAgentRuntime?: NativeAgentRuntimeConfig;
 }
 
 export interface AgentTaskView {
@@ -586,6 +589,8 @@ async function persistAgentTaskCoreInTransaction(
   }
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
+  const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
+    ? initialNativeAgentExecution(deps.nativeAgentRuntime) : undefined;
   try {
     task = await tx.agentTask.create({
       data: {
@@ -594,7 +599,7 @@ async function persistAgentTaskCoreInTransaction(
         payload: input.payload as never,
         interestContext: interestContext as never,
         idempotencyKey: input.idempotencyKey,
-        ...(nativeReviewResult ? { result: nativeReviewResult } : {}),
+        ...(nativeReviewResult ? { result: nativeReviewResult } : nativeAgentResult ? { result: nativeAgentResult as unknown as Prisma.InputJsonObject } : {}),
       },
     });
   } catch (error) {
@@ -649,6 +654,15 @@ export async function persistAgentTaskInTransaction(
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
 }
 
+/** Package-internal historical operation after its caller validates the persisted correction/review proof.
+ * Client idempotency keys never choose an execution engine. Not exported from the package entry. */
+export async function persistHistoricalSourceTaskInTransaction(
+  deps: AgentDeps, tx: Prisma.TransactionClient, input: Omit<SubmitAgentTaskInput, 'dispatch'>, ctx: AuditContext = {},
+) {
+  if (input.kind !== 'sdf.extract') throw new AgentError('VALIDATION_ERROR', 'Historical source operation requires sdf.extract');
+  return persistAgentTaskInTransaction({ ...deps, nativeAgentRuntime: undefined }, tx, input, ctx);
+}
+
 /** Package-internal: only one proved-unsubmitted Hermes review can reuse its exact original debit. */
 export async function persistHermesSourceReviewTechnicalTaskInTransaction(
   deps: AgentDeps, tx: Prisma.TransactionClient, input: { runId: string; sessionId: string; userId: string },
@@ -662,7 +676,7 @@ export async function persistHermesSourceReviewTechnicalTaskInTransaction(
     throw new AgentError('VALIDATION_ERROR', 'Source review reservation cannot be reused');
   const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, input.userId);
   if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new AgentError('VALIDATION_ERROR', 'Source review writer is unavailable');
-  return persistAgentTaskCoreInTransaction(deps, tx, { sessionId: input.sessionId, userId: input.userId,
+  return persistAgentTaskCoreInTransaction({ ...deps, nativeAgentRuntime: undefined }, tx, { sessionId: input.sessionId, userId: input.userId,
     kind: 'sdf.extract', payload: { artifactId: proof.source.artifactId, researchObjectId: proof.run.researchObjectId },
     idempotencyKey: proof.recoveryKey }, ctx, { sourceReviewReservationTaskId: proof.technicalRecovery.originalTaskId,
     reservationLedgerId: proof.technicalRecovery.reservationLedgerId });
@@ -946,6 +960,8 @@ export async function retryAgentTask(
         if (nativeReview?.state === 'started') throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
         const nativeSource = readNativeSourceReview(task.result);
         if (nativeSource?.attempts.some(a => a.state === 'started')) throw new AgentError('ILLEGAL_TRANSITION', 'Native source review outcome is unconfirmed');
+        const nativeAgent = readNativeAgentExecution(task.result);
+        if (nativeAgent?.checkpoint?.state === 'started') throw new AgentError('ILLEGAL_TRANSITION', 'Native Agent outcome is unconfirmed');
         if (sourceSearch) {
           const source = await assertSearchIndexSourceLive(tx, task);
           if (!source) throw new SearchIndexSourceError();
@@ -966,12 +982,13 @@ export async function retryAgentTask(
           where: {
             id: task.id, sessionId: task.sessionId, status: task.status, kind: task.kind, retryCount: task.retryCount, error: task.error,
             executionAttempt: task.executionAttempt,
-            ...(sourceSearch || scienceRecovery || nativeReview || nativeSource ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
+            ...(sourceSearch || scienceRecovery || nativeReview || nativeSource || nativeAgent ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
             ...(scienceRecovery ? { deletedAt: null, payload: { equals: task.payload as Prisma.InputJsonValue } } : {}),
           },
           data: {
             status: 'pending', progress: 0,
-            result: nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
+            result: nativeAgent ? task.result as Prisma.InputJsonValue
+              : nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
               : nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
               : scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
               && isJsonRecord(task.payload.storyboard) && task.payload.storyboard.output === 'image'
@@ -1121,13 +1138,15 @@ async function markTaskProgressOnce(
       if (execution.mode !== 'model' || !execution.nativeSourceReview)
         throw new AgentError('ILLEGAL_TRANSITION', 'Native source review authority changed');
     }
-    const result = nativeSourceReviewTerminalResult(current, input.status,
-      await nativeImageReviewTerminalResult(tx, current, input.status, input.result));
+    if (input.status === 'succeeded' && readNativeAgentExecution(current.result))
+      await requireNativeAgentExecutionAuthority(tx, { taskId: current.id, executionAttempt: current.executionAttempt });
+    const result = nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
+      await nativeImageReviewTerminalResult(tx, current, input.status, input.result)));
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },
         status: currentStatus,
-        ...(current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview'))
+        ...(current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview') || Object.hasOwn(current.result, 'nativeAgentExecution'))
           ? { result: { equals: current.result as Prisma.InputJsonValue } } : {}),
         ...(input.expectedExecutionAttempt === undefined
           ? {}
@@ -1294,8 +1313,10 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.storyboardScienceDiagnostics;
   delete publicResult.nativeImageReview;
   delete publicResult.nativeSourceReview;
+  delete publicResult.nativeAgentExecution;
+  delete publicResult.nativeAgentObjects;
   if (sourceMapRef === undefined && Object.keys(publicResult).length === 0
-    && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview'))) return null;
+    && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview') || Object.hasOwn(rawResult, 'nativeAgentExecution'))) return null;
   if (sourceMapRef === undefined) return publicResult;
   try {
     const reference = parseDocumentSourceMapReference(sourceMapRef);

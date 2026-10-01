@@ -1,0 +1,47 @@
+[Unit]
+Description=OpenScience native Hermes task %i
+After=local-fs.target
+
+[Service]
+Type=exec
+# Installer writes this file with the two fixed immutable release/runtime paths.
+RootDirectory=@ROOT_DIRECTORY@
+BindReadOnlyPaths=/usr /lib /lib64 /etc/ld.so.cache
+BindReadOnlyPaths=@NATIVE_RUNTIME@:/opt/hermes-agent
+BindReadOnlyPaths=@NATIVE_RUNTIME@/.runtime-id:/runtime-id
+BindReadOnlyPaths=@ADAPTER_RELEASE@:/adapter
+BindReadOnlyPaths=@SKILL_CATALOGUE@:/catalogue
+BindReadOnlyPaths=/opt/openscience-hermes/bridges/%i/worker.sock:/bridge/worker.sock
+BindPaths=/var/lib/openscience-hermes/%i:/task
+DynamicUser=yes
+StateDirectory=openscience-hermes/%i
+StateDirectoryMode=0700
+WorkingDirectory=/task
+Environment=HOME=/task HERMES_HOME=/task HERMES_TELEMETRY_ENABLED=false HERMES_NO_AUTO_UPDATE=1 PYTHONUNBUFFERED=1
+Environment=OPENSCIENCE_NATIVE_INSTANCE=%i
+ExecStart=/opt/hermes-agent/.venv/bin/python /adapter/task_runtime.py
+Restart=no
+RuntimeMaxSec=1800
+TimeoutStopSec=10
+KillMode=control-group
+MemoryMax=1G
+TasksMax=128
+CPUQuota=100%
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0077
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

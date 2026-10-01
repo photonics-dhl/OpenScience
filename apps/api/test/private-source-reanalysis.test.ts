@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
+import { readNativeAgentExecution } from '@openscience/domain';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from '../../../packages/domain/test/agent/private-source-reanalysis-fixture';
 import { exhaustedRecoveredCompositionFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
 import { buildApp } from '../src/app';
@@ -8,18 +9,30 @@ import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function apiFixture(recoveredComposition = false) {
+async function apiFixture(recoveredComposition = false, native = false) {
   const f = recoveredComposition ? await exhaustedRecoveredCompositionFixture() : await privateSourceReanalysisFixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
-    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false });
+    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
+    ...(native ? { nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' } } : {}) });
   apps.push(app);
   return { ...f, app, cookies: { openscience_session: token }, url: `/ingestion/${f.input.taskId}/reanalyze`,
     body: { processingConsent: true, sourceAgentTaskId: f.current.id, sourceReanalysis: f.input.sourceReanalysis } };
 }
 
 describe('POST existing ingestion reanalyze paid private source HTTP contract', () => {
+  it('uses server-native configuration for a fresh private paper task through actual HTTP and replays without a second debit', async () => {
+    const f = await apiFixture(false, true); const before = f.db.usageLedger.length;
+    const post = (key: string) => f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
+      headers: { 'idempotency-key': key }, payload: f.body });
+    const first = await post('native-first'); const replay = await post('native-another-tab');
+    expect(first.statusCode).toBe(202); expect(replay.statusCode).toBe(202); expect(first.json()).toEqual(replay.json());
+    const task = f.db.agentTasks.find(row => row.id === first.json().task.agentTaskId)!;
+    expect(readNativeAgentExecution(task.result)).toMatchObject({ kind: 'hermes-agent', runtimeId: 'fixture-native-runtime',
+      skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' });
+    expect(f.db.usageLedger.length).toBe(before + 1); expect(first.body).not.toContain('nativeAgentExecution');
+  });
   it('uses the real recovered-composition history through the existing GET and POST without reopening it or charging twice', async () => {
     const f = await apiFixture(true); const before = structuredClone(f.db);
     const get = () => f.app.inject({ method: 'GET', url: `/research-objects/${f.ids.ro}/hermes-runs/${f.input.sourceReanalysis.sourceRunId}`, cookies: f.cookies });

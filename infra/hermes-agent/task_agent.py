@@ -40,7 +40,7 @@ class SkillScope:
         return target
 
 
-def create_task_agent_class(native_agent_type, transport_factory, allowed_tools):
+def create_task_agent_class(native_agent_type, transport_factory, allowed_tools, page_images=None):
     """Adapt a fixed readonly tool profile; never use this class for writes or paid tools."""
     allowed = frozenset(allowed_tools)
     if not allowed:
@@ -60,14 +60,18 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools)
             kwargs = dict(client_kwargs)
             # This is a task-local transport label, never a supplier credential.
             kwargs.update(api_key="openscience-task-transport", base_url="http://openscience-worker/v1", max_retries=0)
-            kwargs["http_client"] = httpx.Client(transport=transport_factory())
+            kwargs["http_client"] = httpx.Client(transport=transport_factory(), trust_env=False)
             return OpenAI(**kwargs)
 
         def _execute_tool_calls(self, assistant_message, messages, effective_task_id, api_call_count=0):
             for call in assistant_message.tool_calls or []:
                 if call.function.name not in allowed:
                     raise NativeTaskStopped("Native task attempted a tool outside its advertised scope")
-            return super()._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
+            start = len(messages)
+            result = super()._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
+            if page_images is not None:
+                append_bound_page_images(assistant_message.tool_calls, messages[start:], messages, page_images)
+            return result
 
         @staticmethod
         def _deduplicate_tool_calls(tool_calls):
@@ -76,6 +80,30 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools)
             return tool_calls
 
     return TaskAgent
+
+
+def append_bound_page_images(calls, new_messages, messages, page_images):
+    """Adapt successful native source-tool results into actual user pixels, after all tool results."""
+    import json
+    results = {m.get("tool_call_id"): m for m in new_messages if isinstance(m, dict) and m.get("role") == "tool"}
+    content = []
+    for call in calls or []:
+        if call.function.name != "paper_view":
+            continue
+        result = results.get(call.id)
+        if not result or not isinstance(result.get("content"), str):
+            continue
+        try:
+            output = json.loads(result["content"])
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(output, dict) or output.get("status") != "page_view_ready":
+            continue
+        # Worker checks this exact successful result against its bound source before releasing pixels.
+        parts = page_images(call.id, json.loads(call.function.arguments), output)
+        content.extend(parts)
+    if content:
+        messages.append({"role": "user", "content": content})
 
 
 def guard_registered_tools(registry, allowed_tools, authorize, skill_scope: SkillScope):

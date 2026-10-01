@@ -512,7 +512,8 @@ export class AiGateway {
       }
       // Outside the provider retry catch: lost authority must stop all fallbacks.
       const request = { model: provider.model, messages, temperature: opts.temperature, maxTokens: opts.maxTokens,
-        thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs, ...(opts.tools ? { tools: opts.tools } : {}) };
+        thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs, ...(opts.tools ? { tools: opts.tools } : {}),
+        ...(opts.maxRequestBytes !== undefined ? { maxRequestBytes: opts.maxRequestBytes } : {}) };
       if (controls.nativeAgent) {
         if (!provider.preflightNativeTools) throw new AiGatewayError('SCHEMA_VALIDATION', 'Native agent preflight unavailable');
         provider.preflightNativeTools(request);

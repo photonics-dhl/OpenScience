@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll fixed native Hermes task submissions
+
+[Timer]
+OnBootSec=5
+OnUnitInactiveSec=2
+AccuracySec=1
+Unit=openscience-hermes-broker.service
+
+[Install]
+WantedBy=timers.target
