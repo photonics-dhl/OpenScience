@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，稳定观察及回复整理中。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
+- 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
 - 来源model路由与M3原生传输a7已随公司问题修正发布，科研质量尚未验收。像素审图候选已接真实Worker保存/调用/重放路径：server-owned角色与started/completed CAS，未知不重付、完成可复用，纠错/换风格统一消费精确完成记录；be1310精确CI通过；后续32K/finish=stop与真实发送审计、单次闭包/原修复ordinal增量44 Gateway/56 Domain/13 Worker通过、High GO。仍需相关原论文页进入同轮来源审校、后续精确候选CI、部署及真实论文科学/图文验收。旧fixture/lint债务已用HEAD控制区分，不称全仓绿；身份、费用与清理边界只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
