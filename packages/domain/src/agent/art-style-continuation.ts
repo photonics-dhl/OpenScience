@@ -85,7 +85,7 @@ async function readBase(tx: Prisma.TransactionClient, input: Pick<ArtStyleContin
     || review.stage !== 'final-brief' || review.decision !== 'accepted' || review.requestId !== parentAsset.id
     || review.candidateHash !== digest(parent.view.document) || review.sourceEvidenceIdentity !== parent.sourceEvidenceIdentity)
     unavailable('An exact owned approved parent and accepted final brief are required');
-  requireAcceptedSceneImageReview(image, parent);
+  requireAcceptedSceneImageReview(image, parent, imageTask!.result);
   const source = await sourceSnapshot(tx, run);
   if (source.evidenceIdentity !== parent.sourceEvidenceIdentity) unavailable('Reviewed evidence differs from the accepted parent');
   const checkpoint = record(record(parentTask.result).storyboardCheckpoint);

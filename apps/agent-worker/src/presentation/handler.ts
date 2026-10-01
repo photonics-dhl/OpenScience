@@ -7,6 +7,7 @@ import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@opensci
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
+import { readNativeImageReviewCheckpoint, completeNativeImageReview } from '@openscience/domain';
 import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, HERMES_AUTHORITY_REARM_MARKER, PRESENTATION_ASSET_LABEL, VISUAL_NARRATIVE_PROFILE, parsePresentationGenerationPayload, requireHermesPresentationTaskAuthority, requireStoryboardArtCorrectionAuthorization, readInitialSciencePlanningRetryChain, requirePixelPlanningPreProviderRearm, requirePixelStoryboardOutputResume, requireHermesCompletedImageReviewRecovery, requireManualSceneImageReviewReceipt, requirePresentationWriteScope, withPresentationAssetWrite } from '@openscience/domain';
 import type { TaskHandler } from '../index';
 import { hasStandaloneScienceDiagnostics, readStandaloneScienceRecovery } from '@openscience/domain';
@@ -436,6 +437,9 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
       || snapshot.outputResumeTarget !== undefined || snapshot.outputResumeSubmissionAttempt !== undefined))
     || input.requestId !== input.authorizationContext.taskId) throw new Error('[blocked] Invalid illustration review submission');
   const { owner, payload } = await requireIllustrationReviewAuthority(prisma, input.authorizationContext);
+  const nativeReview = readNativeImageReviewCheckpoint(owner.result);
+  if (source.kind === 'illustration-image' ? Boolean(nativeReview) !== (snapshot.imageReviewMode === 'model-native')
+    : snapshot.imageReviewMode !== undefined) throw new Error('[blocked] Image review role changed');
   const planningContinuation = source.kind === 'illustration-plan'
     ? await readCurrentPlanningContinuation(prisma, owner, payload, input.authorizationContext.actorId) : null;
   const savedOutputResume = snapshot.outputResumeMode === 'saved-final-review' && payload.hermesRunAuthority
@@ -636,10 +640,14 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         || !await options.gateway.canResumeImageBeforeSubmission(task.id)) {
         throw new Error('[blocked] Image retry has no durable pre-submission proof');
       }
+      const native = readNativeImageReviewCheckpoint(owner.result);
+      const marker = { hermesRecovery: HERMES_AUTHORITY_REARM_MARKER, ...(native ? { nativeImageReview: native } : {}) };
+      if (native && native.state !== 'not_started' || !isDeepStrictEqual(owner.result, marker))
+        throw new Error('[blocked] Hermes authority retry marker is invalid');
       const consumed = await deps.prisma.agentTask.updateMany({ where: {
         id: task.id, status: 'running', executionAttempt: task.executionAttempt, retryCount: 1,
-        result: { equals: { hermesRecovery: HERMES_AUTHORITY_REARM_MARKER } },
-      }, data: { result: Prisma.DbNull } });
+        result: { equals: marker as Prisma.InputJsonObject },
+      }, data: { result: native ? { nativeImageReview: native } as Prisma.InputJsonObject : Prisma.DbNull } });
       if (consumed.count !== 1) throw new Error('[blocked] Hermes authority retry marker is invalid');
     }
     if (payload.video && task.executionAttempt > 1) throw new Error('[blocked] Previous video attempt has no saved result; explicit new generation is required');
@@ -771,7 +779,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         ? await readNarrativePixelReplanAuthority(deps.prisma, { runId: payload.hermesRunAuthority.runId, actorId: scope.userId }) : null;
       // A technical replacement owns a fresh request identity. Crash re-entry reuses that
       // request's reservation, rather than requiring an unrelated completed-only receipt.
-      const completedOnly = Boolean(recoveryParent) && !technicalReplacement;
+      const nativeReview = readNativeImageReviewCheckpoint(owner.result);
+      const completedOnly = !nativeReview && Boolean(recoveryParent) && !technicalReplacement;
       const requireCompletedRecovery = async (tx: Prisma.TransactionClient) => {
         if (!completedOnly) return;
         if (!options.gateway?.resumeScientificReviewFromCompletedResult || !payload.hermesRunAuthority)
@@ -789,6 +798,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const attachment = generatedImageReviewAttachment(imageBytes, saved.contentHash, contentType);
       const authorizationContext = Object.freeze({ taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
       const illustrationContext = { executionAttempt: task.executionAttempt, claimContent: presentationClaimContent(claims), baseIdentity: sceneParent.identity,
+        ...(nativeReview ? { imageReviewMode: 'model-native' as const } : {}),
         ...(technicalRecovery ? { primaryProviderOnly: true as const } : {}) };
       const authorityInput: ScienceReviewInput = {
         requestId: task.id, authorizationContext, illustrationContext,
@@ -806,11 +816,13 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const current = await requireSavedImageForReview(tx, payload, task.id, saved.contentHash, sourceEvidenceIdentity, sceneParent.identity);
         if (current.objectKey !== saved.objectKey) throw new Error('[blocked] Saved image storage identity changed');
         const provenance = current.provenance as Record<string, unknown>;
-        return { current, provenance, review: readStoredGeneratedImageReview(provenance.imageReview, identity) };
+        const currentTask = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+        return { current, provenance, review: readStoredGeneratedImageReview(provenance.imageReview, identity, currentTask.result) };
       };
       const stored = await withPresentationAssetWrite(deps.prisma, scope, readCurrent, { refreshWorkingRecord: false });
       let imageReview = stored.review;
       if (!imageReview) {
+        if (nativeReview && nativeReview.state !== 'not_started') throw new Error('[blocked] Native image review outcome is unconfirmed; another submission is forbidden');
         const parentRow = await deps.prisma.presentationAsset.findUniqueOrThrow({ where: { id: payload.sceneImage.storyboardAssetId } });
         const settings = parseStoryboardRequest((parentRow.provenance as Record<string, unknown>).storyboardSettings);
         // The object and draft row already exist. No model call is made while holding the write lock.
@@ -837,6 +849,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           await tx.presentationAsset.update({ where: { id: saved.id }, data: {
             provenance: JSON.parse(JSON.stringify({ ...provenance, imageReview: reviewed })) as Prisma.InputJsonObject,
           } });
+          if (nativeReview) await completeNativeImageReview(tx, { taskId: task.id, executionAttempt: task.executionAttempt, review: reviewed });
           await deps.audit?.record({ actorId: scope.userId, action: 'presentation_asset.image_reviewed', workspaceId: researchObject.workspaceId,
             targetType: 'presentation_asset', targetId: saved.id,
             metadata: { taskId: task.id, contentHash: saved.contentHash, decision: reviewed.decision,

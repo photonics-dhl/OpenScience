@@ -287,7 +287,12 @@ describe('bounded ordinary-user art style continuation', () => {
     Object.assign(imageAsset, { id: imageTask.id, status: 'draft', label: 'presentation_not_evidence', updatedAt: new Date(), objectKey: 'new-private.png' });
     Object.assign(imageAsset.provenance, { taskId: imageTask.id, sceneImage: imageTask.payload.sceneImage, parentIdentity: parent.identity });
     Object.assign(imageAsset.provenance.imageReview, { requestId: imageTask.id, parentIdentity: parent.identity,
+      provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
       decision: decision === 'accepted' ? 'accepted' : 'blocked', repairInstruction: decision !== 'accepted' ? 'The new image fails its approved brief.' : null });
+    const pixel = imageAsset.provenance.imageReview;
+    imageTask.result = { nativeImageReview: { mode: 'model-native', state: 'completed', executionAttempt: 1,
+      requestId: imageTask.id, contentHash: pixel.contentHash, sourceEvidenceIdentity: pixel.sourceEvidenceIdentity,
+      parentIdentity: pixel.parentIdentity, promptHash: pixel.promptHash, provider: pixel.provider, model: pixel.model, review: pixel } };
     f.db.presentationAssets.push(imageAsset);
     f.db.presentationAssetClaims.push({ presentationAssetId: imageTask.id, claimId: id(6) });
     expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ advanced: 1, errors: 0 });

@@ -1,9 +1,25 @@
 import { expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { generatedSceneImageRequiresPixelReview } from '@openscience/domain';
+import { nativeImageReviewPromptHash, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { readStoredGeneratedImageReview, reviewGeneratedImage } from '../../src/presentation/generated-image-review';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+it('retains full source text above the historical browser budget for a native Hermes review', async () => {
+  const input = pixelInput();
+  Object.assign(input.illustrationContext, { imageReviewMode: 'model-native' });
+  const quote = 'Source relationship and limitations. ' + 'x'.repeat(64000);
+  input.claims = [{ id: 'claim', kind: 'finding', statement: 'Bounded finding', conditions: [], limitations: [],
+    sourcePassages: [{ evidenceId: 'e', relation: 'supports', text: quote }] }];
+  const reviewScientific = vi.fn(async (request: ScienceReviewInput) => {
+    expect(request.prompt.length).toBeGreaterThan(61440); expect(request.prompt.length).toBeLessThanOrEqual(100000);
+    expect(request.prompt).toContain(quote);
+    const text = JSON.stringify({ decision: 'accepted', summary: 'Full context inspected.', repairInstruction: null });
+    return { text, promptHash: nativeImageReviewPromptHash(request), responseHash: hash(text), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' };
+  });
+  await expect(reviewGeneratedImage({ reviewScientific } as never, input as never)).resolves.toMatchObject({ model: 'MiniMax-M3' });
+  expect(reviewScientific).toHaveBeenCalledOnce();
+});
 function pixelInput() {
   const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
   return { bytes, contentType: 'image/png', claims: [] as unknown[],
@@ -48,6 +64,7 @@ it('keeps science and art intact but excludes optional style choices from the pi
   const reviewScientific = vi.fn(async (request: { prompt: string }) => {
     const projected = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n{"locale":') + 1));
     const { visualAction: _visual, styleRecommendations: _choices, ...expected } = scene;
+    void [_visual, _choices];
     expect(projected.scene).toEqual(expected);
     expect(request.prompt).not.toContain('Readable relationships');
     const text = JSON.stringify({ decision: 'accepted', summary: 'The relation is clear.', repairInstruction: null });

@@ -15,7 +15,7 @@ import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTEN
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustrationSourceSupport } from '../assets/illustration-brief';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
-import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew } from '../assets/scene-image';
+import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
@@ -3170,6 +3170,10 @@ async function repairRejectedNarrativeImages(deps: HermesResearchRunDeps, tx: Pr
     if (!payload.sceneImage || payload.sceneImage.revisionAssetId || review.decision !== 'blocked'
       || review.stage !== 'generated-image' || review.contentHash !== asset.contentHash
       || typeof review.repairInstruction !== 'string' || !review.repairInstruction.trim() || review.repairInstruction.length > 400) return false;
+    try { readStoredGeneratedImageReview(review, { requestId: asset.id, contentHash: asset.contentHash,
+      sourceEvidenceIdentity: String(jsonRecord(asset.provenance).sourceEvidenceIdentity),
+      parentIdentity: String(jsonRecord(asset.provenance).parentIdentity) }, task.result); }
+    catch { return false; }
     replacements.push({ ordinal: step.ordinal, replacesTaskId: task.id,
       payload: { ...payload, sceneImage: { ...payload.sceneImage, revisionAssetId: asset.id } } });
   }

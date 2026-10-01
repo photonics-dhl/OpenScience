@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { nativeImageReviewPromptHash, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
+import { nativeImageReviewProvider } from '@openscience/domain';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput, type ScienceReviewAttachment } from '@openscience/ai-gateway';
 import { storyboardSceneStyles, readStoredGeneratedImageReview as parseStoredGeneratedImageReview, type GeneratedImageReview, type ImageReviewIdentity, type StoryboardDocument, type StoryboardRequest } from '@openscience/domain';
@@ -6,8 +8,8 @@ import type { PresentationClaim } from './chart-generator';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { automaticStyleReviewGuidance } from '../skills/installed-media-skills';
 
-export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity): GeneratedImageReview | undefined {
-  try { return parseStoredGeneratedImageReview(value, expected); }
+export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity, owningTaskResult?: unknown): GeneratedImageReview | undefined {
+  try { return parseStoredGeneratedImageReview(value, expected, owningTaskResult); }
   catch { throw new Error('[blocked] Saved image review does not match the persisted image'); }
 }
 const sha256 = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -74,7 +76,9 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     scene: { ...reviewScene, ...(scene.paperOriginal ? { paperOriginal: { assetId: scene.paperOriginal.assetId, contentHash: scene.paperOriginal.contentHash } } : {}) },
     claims: input.claims.map(claim => ({ id: claim.id, kind: claim.kind, statement: claim.statement, assessment: claim.assessment,
       conditions: claim.conditions, limitations: claim.limitations, evidence: claim.sourcePassages ?? [] })) })}`;
-  if (prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) throw new Error(`[blocked] Generated image review exceeds the source input budget (${prompt.length} > ${SCIENCE_REVIEW_MAX_PROMPT_CHARS} characters)`);
+  const promptLimit = input.illustrationContext.imageReviewMode === 'model-native'
+    ? ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS : SCIENCE_REVIEW_MAX_PROMPT_CHARS;
+  if (prompt.length > promptLimit) throw new Error(`[blocked] Generated image review exceeds the source input budget (${prompt.length} > ${promptLimit} characters)`);
   const request: ScienceReviewInput = {
     requestId: identity.requestId, authorizationContext: input.authorizationContext, illustrationContext: input.illustrationContext,
     source: { kind: 'illustration-image', researchObjectId: input.researchObjectId, versionId: input.versionId,
@@ -86,10 +90,12 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
   });
   // A malformed/uncertain response keeps its original spool record; there is no model retry here.
   const decision = parseDecision(JSON.parse(result.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')));
-  if (result.promptHash !== sha256(prompt) || result.responseHash !== sha256(result.text)
-    || (result.provider !== 'chatgpt-web-science-review'
-      && !(result.provider === 'codex-sol-image-review' && result.model === 'gpt-5.6-sol'))
+  const native = input.illustrationContext.imageReviewMode === 'model-native';
+  if (result.promptHash !== (native ? nativeImageReviewPromptHash(request) : sha256(prompt)) || result.responseHash !== sha256(result.text)
+    || (native ? !nativeImageReviewProvider(result.provider, result.model)
+      : result.provider !== 'chatgpt-web-science-review'
+        && !(result.provider === 'codex-sol-image-review' && result.model === 'gpt-5.6-sol'))
     || !result.model) throw new Error('[blocked] Generated image review receipt is invalid');
   return { stage: 'generated-image', ...identity, ...decision, promptHash: result.promptHash,
-    responseHash: result.responseHash, provider: result.provider, model: result.model };
+    responseHash: result.responseHash, provider: result.provider as GeneratedImageReview['provider'], model: result.model };
 }

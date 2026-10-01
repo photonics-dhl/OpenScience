@@ -1,6 +1,7 @@
 import { requireStyleReferenceImage } from './scene-image';
+import { imageReviewHasNoSubmission } from './native-image-review';
 import { requireArtStyleContinuationTaskAuthority } from '../agent/art-style-continuation';
-import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
+import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageReviewTaskResult, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
@@ -222,11 +223,13 @@ export async function readNarrativeImageRenderSource(prisma: Prisma.TransactionC
     || parentReview.sourceEvidenceIdentity !== parent.sourceEvidenceIdentity
     || metadata.taskId !== image.id || metadata.source !== 'approved_storyboard_scene'
     || metadata.storyboardContentHash !== parent.contentHash || review.requestId !== image.id
-    || review.provider !== 'chatgpt-web-science-review' || typeof review.model !== 'string' || !review.model.trim()
+    || typeof review.model !== 'string' || !review.model.trim()
     || ![parentReview.promptHash, parentReview.responseHash, review.promptHash, review.responseHash, parent.sourceEvidenceIdentity]
       .every(value => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value)))
     throw new PresentationAssetError('VALIDATION_ERROR', 'Rendering correction requires the unchanged accepted narrative and pixel review');
   const parentPayload = parsePresentationGenerationPayload(parentTask.payload);
+  readStoredGeneratedImageReview(review, { requestId: image.id, contentHash: image.contentHash,
+    sourceEvidenceIdentity: String(parent.sourceEvidenceIdentity), parentIdentity: parent.identity }, task.result);
   if (parentPayload.kind !== 'interactive_html' || !parentPayload.storyboard?.narrative || parentPayload.storyboard.output !== 'image'
     || parentPayload.researchObjectId !== input.researchObjectId || parentPayload.versionId !== input.versionId
     || !isDeepStrictEqual(parentPayload.sourceClaimIds, payload.sourceClaimIds)
@@ -422,7 +425,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         const parent = await requireSceneImageParent(deps.prisma, { ...input, sourceClaimIds: ids, sceneImage });
         sceneValid = parent?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
         if (sceneValid && parent && await sceneImageRequiresPixelReview(deps.prisma, asset)) {
-          try { requireAcceptedSceneImageReview(asset, parent); }
+          try { requireAcceptedSceneImageReview(asset, parent, await sceneImageReviewTaskResult(deps.prisma, asset.id)); }
           catch (error) { if (!(error instanceof PresentationAssetError)) throw error; pixelReviewAccepted = false; }
         }
       } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; sceneValid = false; }
@@ -528,7 +531,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const imageReview = stage === 'scene_image' ? readStoredGeneratedImageReview(p.imageReview, {
         requestId: asset.id, contentHash: asset.contentHash,
         sourceEvidenceIdentity: String(p.sourceEvidenceIdentity ?? ''), parentIdentity: String(p.parentIdentity ?? ''),
-      }) : undefined;
+      }, task?.result) : undefined;
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
@@ -625,7 +628,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
         if (currentClaims.length !== links.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')) throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Scene image source Claims are invalid');
         const parent = await requireSceneImageParent(tx, { researchObjectId: input.researchObjectId, versionId: input.versionId, sourceClaimIds: links.map(link => link.claimId).sort(), sceneImage });
         if (!parent || parent.identity !== (asset.provenance as Prisma.JsonObject).parentIdentity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed');
-        if (await sceneImageRequiresPixelReview(tx, asset)) requireAcceptedSceneImageReview(asset, parent);
+        if (await sceneImageRequiresPixelReview(tx, asset)) requireAcceptedSceneImageReview(asset, parent, await sceneImageReviewTaskResult(tx, asset.id));
       }
       if (hasVideoProvenance(asset)) {
         const video = presentationVideoView(asset);
@@ -704,12 +707,14 @@ export async function readNarrativeImageReplanSource(prisma: Pick<Prisma.Transac
         || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), expectedIds)
         || review.stage !== 'generated-image' || review.decision !== 'blocked' || review.repairInstruction !== null
         || review.requestId !== image.id || review.contentHash !== image.contentHash || review.parentIdentity !== p.parentIdentity
-        || review.sourceEvidenceIdentity !== p.sourceEvidenceIdentity || review.provider !== 'chatgpt-web-science-review'
+        || review.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
         || typeof review.model !== 'string' || !review.model.trim()
         || typeof review.summary !== 'string' || !review.summary.trim() || review.summary.length > 2000
         || ![review.promptHash, review.responseHash, p.sourceEvidenceIdentity].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative image rejection is not eligible for scientific replanning');
     }
+    readStoredGeneratedImageReview(review, { requestId: image.id, contentHash: image.contentHash,
+        sourceEvidenceIdentity: String(p.sourceEvidenceIdentity), parentIdentity: String(p.parentIdentity) }, imageTask?.result);
     const parent = await prisma.presentationAsset.findUnique({ where: { id: sceneImage.storyboardAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
     const task = await prisma.agentTask.findUnique({ where: { id: sceneImage.storyboardAssetId }, include: { session: true } });
     for (const candidate of [task, imageTask]) {
@@ -821,7 +826,7 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative scene asset identity changed');
         }
         if (imageTask.status === 'failed') {
-            if (imageTask.result !== null || !imageTask.error || scene.revisionAssetId || scene.styleReferenceAssetId
+            if (!imageReviewHasNoSubmission(imageTask.result) || !imageTask.error || scene.revisionAssetId || scene.styleReferenceAssetId
                 || (technicalRecovery && (imageTask.executionAttempt !== 1 || imageTask.retryCount !== 0))
                 || (image && (image.status !== 'draft' || provenance.imageReview != null))) {
                 throw new PresentationAssetError('VALIDATION_ERROR', 'Failed scene is not an unreviewed terminal result');
@@ -931,8 +936,6 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
                 : [pixelReview.decision === 'accepted' ? 'approved' : 'rejected']).includes(image.status)
             || pixelReview.requestId !== image.id || pixelReview.contentHash !== image.contentHash
             || pixelReview.parentIdentity !== parentIdentity || pixelReview.sourceEvidenceIdentity !== p.sourceEvidenceIdentity
-            || (pixelReview.provider !== 'chatgpt-web-science-review'
-              && !(pixelReview.provider === 'codex-sol-image-review' && pixelReview.model === 'gpt-5.6-sol'))
             || typeof pixelReview.model !== 'string' || !pixelReview.model.trim()
             || typeof pixelReview.summary !== 'string' || !pixelReview.summary.trim() || pixelReview.summary.length > 2000
             || (pixelReview.repairInstruction !== null && (pixelReview.decision !== 'blocked'
@@ -940,6 +943,8 @@ async function readNarrativeTerminalSceneSource(prisma: Pick<Prisma.TransactionC
             || ![pixelReview.promptHash, pixelReview.responseHash].every(value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value))) {
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative pixel review set is incomplete or changed');
         }
+        readStoredGeneratedImageReview(pixelReview, { requestId: image.id, contentHash: image.contentHash,
+            sourceEvidenceIdentity: String(p.sourceEvidenceIdentity), parentIdentity: String(parentIdentity) }, imageTask!.result);
         images.push({ image, task: imageTask!, sceneIndex: scene.sceneIndex, review: pixelReview });
     }
     images.sort((a, b) => a.sceneIndex - b.sceneIndex);
@@ -1511,7 +1516,7 @@ export async function copyNarrativeImageForReview(tx: Prisma.TransactionClient, 
 }
 
 function isLocalImageReviewBudgetFailure(task: Pick<AgentTask, 'status' | 'error' | 'result' | 'retryCount' | 'executionAttempt'> | null): boolean {
-    if (!task || task.status !== 'failed' || task.result !== null || task.retryCount !== 0 || task.executionAttempt !== 1) return false;
+    if (!task || task.status !== 'failed' || !imageReviewHasNoSubmission(task.result) || task.retryCount !== 0 || task.executionAttempt !== 1) return false;
     // This error is emitted before reviewScientific. Do not accept arbitrary blocked errors or suffixes.
     const match = /^\[blocked\] Generated image review exceeds the source input budget(?: \(([1-9][0-9]{0,14}) > ([1-9][0-9]{0,14}) characters\))?$/u.exec(task.error ?? '');
     return !!match && match[0] === task.error && (!match[1] || Number(match[1]) > Number(match[2]));

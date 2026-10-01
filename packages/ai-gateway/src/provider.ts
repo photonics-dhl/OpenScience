@@ -171,6 +171,8 @@ export interface Provider {
   readonly model: string;
   /** Explicit native pixel capability; omission means text only. */
   readonly supportsImageInput?: boolean;
+  /** Exact deterministic native-body validation before a durable submission checkpoint. */
+  preflightNativeImages?(opts: CompleteOptions): void;
   complete(opts: CompleteOptions): Promise<ProviderResult>;
 }
 
@@ -277,17 +279,12 @@ export class AnthropicCompatProvider implements Provider {
 
   get supportsImageInput(): boolean { return NATIVE_IMAGE_MODELS.test(this.model); }
 
-  async complete(opts: CompleteOptions): Promise<ProviderResult> {
+  private requestBody(opts: CompleteOptions): { body: string; hasImages: boolean } {
     const snapshot = snapshotChatMessages(opts.messages);
     const hasImages = snapshot.some(message => message.images !== undefined);
     if (hasImages && (!this.supportsImageInput || opts.model !== this.model)) {
       throw new TextProviderError('provider_error', 'Provider model cannot inspect native images');
     }
-    const timeout = textTimeout(opts);
-    const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try {
       const system = snapshot
         .filter((message) => message.role === 'system')
         .map((message) => message.content)
@@ -310,6 +307,18 @@ export class AnthropicCompatProvider implements Provider {
       if (hasImages && Buffer.byteLength(body, 'utf8') > NATIVE_IMAGE_REQUEST_MAX_BYTES) {
         throw new TextProviderError('provider_error', 'Native image request exceeds the provider body limit');
       }
+      return { body, hasImages };
+  }
+
+  preflightNativeImages(opts: CompleteOptions): void { this.requestBody(opts); }
+
+  async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const { body, hasImages } = this.requestBody(opts);
+    const timeout = textTimeout(opts);
+    const dispatcher = timeout > 300_000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
       const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/messages`, {
         method: 'POST',
         headers: {

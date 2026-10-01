@@ -59,6 +59,11 @@ on:
       - 'packages/ai-gateway/src/provider.ts'
       - 'packages/ai-gateway/src/index.ts'
       - 'packages/ai-gateway/test/native-image-input.test.ts'
+      - 'packages/ai-gateway/src/native-image-review.ts'
+      - 'packages/ai-gateway/test/native-image-review.test.ts'
+      - 'packages/domain/src/assets/native-image-review.ts'
+      - 'packages/domain/test/assets/native-image-review.test.ts'
+      - 'apps/agent-worker/test/presentation/native-image-review.test.ts'
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
@@ -198,6 +203,11 @@ on:
       - 'packages/ai-gateway/src/provider.ts'
       - 'packages/ai-gateway/src/index.ts'
       - 'packages/ai-gateway/test/native-image-input.test.ts'
+      - 'packages/ai-gateway/src/native-image-review.ts'
+      - 'packages/ai-gateway/test/native-image-review.test.ts'
+      - 'packages/domain/src/assets/native-image-review.ts'
+      - 'packages/domain/test/assets/native-image-review.test.ts'
+      - 'apps/agent-worker/test/presentation/native-image-review.test.ts'
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
@@ -317,7 +327,9 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-science-diagnostics.test.ts test/agent/storyboard-science-recovery.test.ts test/agent/standalone-science-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/ingestion-parser.test.ts -t "Docling table normalization"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/workspace-guide.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/generated-image-review.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/generated-image-review.test.ts test/presentation/native-image-review.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/native-image-review.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/trash/content-list.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "reports private media retention authority"

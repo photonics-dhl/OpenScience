@@ -1,26 +1,30 @@
 import type { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { PresentationAssetError } from './errors';
 import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
+import { nativeImageReviewProvider, nativeImageReviewMatches, readNativeImageReviewCheckpoint } from './native-image-review';
 
 export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string; revisionAssetId?: string }
 export interface GeneratedImageReview {
   stage: 'generated-image'; requestId: string; decision: 'accepted' | 'blocked'; summary: string;
   repairInstruction: string | null; contentHash: string; sourceEvidenceIdentity: string;
   parentIdentity: string; promptHash: string; responseHash: string;
-  provider: 'chatgpt-web-science-review' | 'codex-sol-image-review'; model: string;
+  provider: 'chatgpt-web-science-review' | 'codex-sol-image-review' | `minimax-key-${number}-model-${number}`; model: string;
 }
 export type ImageReviewIdentity = Pick<GeneratedImageReview, 'requestId' | 'contentHash' | 'sourceEvidenceIdentity' | 'parentIdentity'>;
 const reviewHash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 
 /** One receipt format for persisted image review, used by workers and approval. */
-export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity): GeneratedImageReview | undefined {
+export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity, owningTaskResult?: unknown): GeneratedImageReview | undefined {
   if (value === undefined) return undefined;
   const saved = value as Record<string, unknown> | null;
+  const native = readNativeImageReviewCheckpoint(owningTaskResult);
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)
     || Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
     || saved.stage !== 'generated-image'
-    || (saved.provider !== 'chatgpt-web-science-review'
-      && !(saved.provider === 'codex-sol-image-review' && saved.model === 'gpt-5.6-sol'))
+    || (native ? !nativeImageReviewProvider(saved.provider, saved.model) || !nativeImageReviewMatches(native, expected, saved)
+      : saved.provider !== 'chatgpt-web-science-review'
+        && !(saved.provider === 'codex-sol-image-review' && saved.model === 'gpt-5.6-sol'))
     || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200
     || ![saved.contentHash, saved.sourceEvidenceIdentity, saved.promptHash, saved.responseHash].every(reviewHash)
     || Object.entries(expected).some(([key, expectedValue]) => saved[key] !== expectedValue)
@@ -35,13 +39,13 @@ export function readStoredGeneratedImageReview(value: unknown, expected: ImageRe
 }
 
 export function requireAcceptedSceneImageReview(asset: { id: string; contentHash: string; provenance: unknown },
-  parent: { identity: string; sourceEvidenceIdentity?: string }): void {
+  parent: { identity: string; sourceEvidenceIdentity?: string }, owningTaskResult?: unknown): void {
   const provenance = asset.provenance as Record<string, unknown> | null;
   if (['admin_reviewed_import', 'version_history_copy'].includes(String(provenance?.source))) return;
   const review = readStoredGeneratedImageReview(provenance?.imageReview, {
     requestId: asset.id, contentHash: asset.contentHash,
     sourceEvidenceIdentity: String(provenance?.sourceEvidenceIdentity ?? ''), parentIdentity: parent.identity,
-  });
+  }, owningTaskResult);
   if (provenance?.source !== 'approved_storyboard_scene' || provenance.taskId !== asset.id
     || provenance.sourceEvidenceIdentity !== parent.sourceEvidenceIdentity || review?.decision !== 'accepted') {
     throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image requires an accepted pixel review for the saved image and current sources');
@@ -52,6 +56,62 @@ export function generatedSceneImageRequiresPixelReview(payload: unknown): boolea
   const task = payload as Record<string, unknown> | null;
   const authority = task?.hermesRunAuthority as Record<string, unknown> | null;
   return !['onchip-field-sampling-v1', 'content-driven-v1', 'content-driven-image-v1'].includes(String(authority?.profile));
+}
+
+export async function sceneImageReviewTaskResult(prisma: Pick<Prisma.TransactionClient, 'agentTask'>, assetId: string): Promise<unknown> {
+  const task = await prisma.agentTask.findUnique({ where: { id: assetId } });
+  if (readNativeImageReviewCheckpoint(task?.result) && (task!.deletedAt || task!.kind !== 'presentation.generate' || task!.status !== 'succeeded'))
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Native image review owner is not completed');
+  return task?.result;
+}
+
+/** New task initialization happens after exact replay lookup and never changes the request payload. */
+export function initialNativeImageReviewResult(kind: string, payload: unknown) {
+  const p = payload as Record<string, unknown> | null;
+  if (kind !== 'presentation.generate' || !p || typeof p !== 'object' || Array.isArray(p)
+    || p.schemaVersion !== 1 || p.kind !== 'image' || p.sceneImage === undefined
+    || !generatedSceneImageRequiresPixelReview(p)) return undefined;
+  parseSceneImageRequest(p.sceneImage);
+  return { nativeImageReview: { mode: 'model-native' as const, state: 'not_started' as const } };
+}
+
+/** Terminal status cannot erase or invent the private role, even when the handler returns diagnostics. */
+export async function nativeImageReviewTerminalResult(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>,
+  task: { id: string; kind: string; payload: unknown; result: unknown }, status: string, incoming: unknown) {
+  const checkpoint = readNativeImageReviewCheckpoint(task.result);
+  const result = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming as Record<string, unknown> : undefined;
+  if (!checkpoint) {
+    if (result?.nativeImageReview !== undefined
+      || task.kind === 'presentation.generate' && nativeImageReviewProvider(
+        (result?.imageReview as Record<string, unknown> | undefined)?.provider,
+        (result?.imageReview as Record<string, unknown> | undefined)?.model))
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Historical image task cannot mint a native review role');
+    return incoming;
+  }
+  if (!initialNativeImageReviewResult(task.kind, task.payload)
+    || result?.nativeImageReview !== undefined && !isDeepStrictEqual(result.nativeImageReview, checkpoint))
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Native image review role changed at terminal write');
+  if (status === 'succeeded') {
+    if (checkpoint.state !== 'completed' || !result || result.assetId !== task.id || result.contentHash !== checkpoint.contentHash)
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Native image review is not completed');
+    if (!readStoredGeneratedImageReview(result.imageReview, {
+      requestId: task.id, contentHash: checkpoint.contentHash,
+      sourceEvidenceIdentity: checkpoint.sourceEvidenceIdentity, parentIdentity: checkpoint.parentIdentity,
+    }, task.result)) throw new PresentationAssetError('VALIDATION_ERROR', 'Native image review receipt is missing');
+    const image = await prisma.presentationAsset.findUnique({ where: { id: task.id } });
+    const p = image?.provenance as Record<string, unknown> | null;
+    const payload = task.payload as Record<string, unknown>;
+    if (!image || image.deletedAt || image.kind !== 'image' || image.researchObjectId !== payload.researchObjectId
+      || image.versionId !== payload.versionId || image.contentHash !== checkpoint.contentHash
+      || p?.taskId !== task.id || p.source !== 'approved_storyboard_scene'
+      || p.parentIdentity !== checkpoint.parentIdentity || p.sourceEvidenceIdentity !== checkpoint.sourceEvidenceIdentity
+      || !isDeepStrictEqual(p.imageReview, checkpoint.review))
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Native image review does not match the persisted image');
+  } else if (result?.imageReview !== undefined && (checkpoint.state !== 'completed'
+    || !isDeepStrictEqual(result.imageReview, checkpoint.review))) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Uncompleted native image task cannot return an accepted review');
+  }
+  return { ...(result ?? task.result as Record<string, unknown>), nativeImageReview: checkpoint };
 }
 
 /** Only explicit legacy Hermes profiles lack a pixel-review writer. Manual tasks must be reviewed. */
@@ -98,6 +158,8 @@ export async function requireSceneImageRevision(prisma: Pick<Prisma.TransactionC
     || typeof review.repairInstruction !== 'string' || !review.repairInstruction.trim() || review.repairInstruction.length > 400) {
     throw new PresentationAssetError('VALIDATION_ERROR', 'Image correction requires a matching completed internal review');
   }
+  readStoredGeneratedImageReview(review, { requestId: asset.id, contentHash: asset.contentHash,
+    sourceEvidenceIdentity: String(parent.sourceEvidenceIdentity), parentIdentity: parent.identity }, task.result);
   return { assetId: asset.id, repairInstruction: review.repairInstruction };
 }
 

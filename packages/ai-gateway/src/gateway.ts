@@ -24,6 +24,7 @@ import {
 } from './ocr';
 import { TextProviderError, snapshotChatMessages, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
 import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult, type SourceReviewNotSubmittedProof } from './science-review-protocol';
+import { nativeImageReviewMessages, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
@@ -80,6 +81,7 @@ export interface AiGatewayOptions {
   illustrationReviewPolicy?: ExternalProcessingPolicy;
   /** Revalidate task, sources and base immediately before each illustration text attempt. */
   authorizeIllustrationReview?: (input: ScienceReviewInput) => Promise<void>;
+  nativeImageReviewSubmission?: NativeImageReviewSubmission;
   ocrLimits?: Partial<OcrLimits>;
 }
 
@@ -89,6 +91,7 @@ export type SchemaGuard<T> = (value: unknown) => value is T;
 export type GatewayCompletion = ProviderResult & { provider: string; promptHash: string };
 
 type TextExecutionControls = {
+  submitProvider?: (target: NativeImageReviewTarget, submit: () => Promise<ProviderResult>) => Promise<ProviderResult>;
   beforeProviderAttempt?: () => Promise<void>;
   reviewSourceIdentity?: string;
   primaryProviderOnly?: boolean;
@@ -153,6 +156,7 @@ export class AiGateway {
   private readonly externalProcessingPolicy?: ExternalProcessingPolicy;
   private readonly illustrationReviewPolicy?: ExternalProcessingPolicy;
   private readonly authorizeIllustrationReview?: (input: ScienceReviewInput) => Promise<void>;
+  private readonly nativeImageReviewSubmission?: NativeImageReviewSubmission;
   private readonly ocrLimits: Partial<OcrLimits>;
 
   constructor(opts: AiGatewayOptions) {
@@ -176,6 +180,7 @@ export class AiGateway {
     this.externalProcessingPolicy = opts.externalProcessingPolicy;
     this.illustrationReviewPolicy = opts.illustrationReviewPolicy;
     this.authorizeIllustrationReview = opts.authorizeIllustrationReview;
+    this.nativeImageReviewSubmission = opts.nativeImageReviewSubmission;
     this.ocrLimits = { ...(opts.ocrLimits ?? {}) };
   }
 
@@ -198,6 +203,29 @@ export class AiGateway {
   }
 
   private async reviewScientificControlled(input: ScienceReviewInput, guard: SchemaGuard<unknown> | undefined, completedOnly: boolean): Promise<ScienceReviewProviderResult> {
+    if (input.illustrationContext?.imageReviewMode !== undefined) {
+      if (completedOnly || !guard || !this.authorizeIllustrationReview || !this.nativeImageReviewSubmission
+        || !('kind' in input.source) || input.source.kind !== 'illustration-image')
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image review requires its durable submission owner');
+      const sourceEvidenceIdentity = input.source.sourceEvidenceIdentity;
+      input = { ...input, source: Object.freeze({ ...input.source }),
+        authorizationContext: Object.freeze({ ...input.authorizationContext }),
+        illustrationContext: Object.freeze({ ...input.illustrationContext }),
+        attachments: input.attachments?.map(attachment => Object.freeze({ ...attachment, bytes: Buffer.from(attachment.bytes) })) };
+      const messages = nativeImageReviewMessages(input);
+      const result = await this.completeWithControls(messages, { thinking: 'adaptive', temperature: 0.1,
+        maxTokens: 4096, timeoutMs: 300_000 }, {
+        primaryProviderOnly: true, reviewSourceIdentity: sourceEvidenceIdentity,
+        beforeProviderAttempt: async () => {
+          if (await this.illustrationReviewPolicy?.(Object.freeze({ ...input.authorizationContext })) !== true)
+            throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native image review denied');
+          await this.authorizeIllustrationReview!(input);
+        },
+        submitProvider: (target, submit) => this.nativeImageReviewSubmission!(input, target, submit),
+      });
+      if (!guard(parseStructuredJson(result.text))) throw new AiGatewayError('SCHEMA_VALIDATION', 'Invalid native image review response');
+      return { text: result.text, promptHash: result.promptHash, responseHash: sha256Text(result.text), provider: result.provider, model: result.model };
+    }
     if ('kind' in input.source && input.source.kind === 'illustration-plan') {
       if (!guard || input.attachments !== undefined || !input.prompt.trim()
         || input.prompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS || !this.authorizeIllustrationReview) {
@@ -459,18 +487,18 @@ export class AiGateway {
         continue;
       }
       // Outside the provider retry catch: lost authority must stop all fallbacks.
+      const request = { model: provider.model, messages, temperature: opts.temperature, maxTokens: opts.maxTokens,
+        thinking: opts.thinking, topP: opts.topP, timeoutMs: opts.timeoutMs };
+      if (imageCount && controls.submitProvider) {
+        if (!provider.preflightNativeImages) throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image preflight unavailable');
+        provider.preflightNativeImages(request);
+      }
       await controls.beforeProviderAttempt?.();
       const attemptStart = Date.now();
       try {
-        const result = await provider.complete({
-          model: provider.model,
-          messages,
-          temperature: opts.temperature,
-          maxTokens: opts.maxTokens,
-          thinking: opts.thinking,
-          topP: opts.topP,
-          timeoutMs: opts.timeoutMs,
-        });
+        const result = controls.submitProvider
+          ? await controls.submitProvider({ provider: provider.name, model: provider.model, promptHash }, () => provider.complete(request))
+          : await provider.complete(request);
         await this.record({
           operation: controls.reviewSourceIdentity ? 'scientific_review' : 'text',
           provider: provider.name,

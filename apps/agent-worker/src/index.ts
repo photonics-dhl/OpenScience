@@ -1,4 +1,5 @@
 import { requireStyleReferenceImage } from '@openscience/domain';
+import { startNativeImageReview } from '@openscience/domain';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma } from '@prisma/client';
@@ -83,6 +84,7 @@ const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAtte
 }>();
 type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
 type IllustrationSubmission = NonNullable<ConstructorParameters<typeof ChatGptWebScienceReviewProvider>[0]['withIllustrationSubmission']>;
+type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
 
 /** Fence only local producer writes; provider waiting and model execution never hold this transaction. */
 export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' | 'presentation.generate'): SpoolSubmission {
@@ -937,7 +939,8 @@ async function main(): Promise<void> {
       },
       externalProcessingPolicy,
       undefined,
-      { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission },
+      { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission,
+        nativeImageReview: createNativeImageReviewSubmission(prisma) },
       illustrationReviewPolicy,
     );
     const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
@@ -1031,13 +1034,34 @@ function configuredWorkerConcurrency(env: NodeJS.ProcessEnv): number {
   return Number.isFinite(configured) ? Math.min(8, Math.max(1, configured)) : 4;
 }
 
+/** Commit intent before HTTP; a Worker crash after acceptance cannot silently pay again. */
+export function createNativeImageReviewSubmission(prisma: WorkerDeps['prisma'],
+  readExecution: () => { taskId: string; executionAttempt: number } | undefined = () => spoolTaskExecution.getStore()): NativeImageReviewSubmission {
+  return async (input, target, submit) => {
+    const execution = readExecution();
+    if (!execution || execution.taskId !== input.requestId || execution.executionAttempt !== input.illustrationContext?.executionAttempt
+      || input.illustrationContext.imageReviewMode !== 'model-native' || !('kind' in input.source)
+      || input.source.kind !== 'illustration-image' || !input.illustrationContext.baseIdentity)
+      throw new Error('[blocked] Native image review lacks its claimed worker execution');
+    const identity = { requestId: input.requestId, contentHash: input.source.candidateHash,
+      sourceEvidenceIdentity: input.source.sourceEvidenceIdentity, parentIdentity: input.illustrationContext.baseIdentity };
+    await prisma.$transaction(async tx => {
+      await lockTrashReferences(tx);
+      await requireIllustrationReviewSubmission(tx, input);
+      await startNativeImageReview(tx, { taskId: input.requestId, executionAttempt: execution.executionAttempt, identity, target });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+    // No database transaction is held while the paid model runs.
+    return submit();
+  };
+}
+
 export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
   audit?: ConstructorParameters<typeof AiGateway>[0]['audit'],
   externalProcessingPolicy: ExternalProcessingPolicy = async () => false,
   runtimeCapabilityPolicy: ProviderCapabilityPolicy = new MutableProviderKillSwitch(),
-  spoolSubmissions?: { image: SpoolSubmission; review: SpoolSubmission; illustration?: IllustrationSubmission },
+  spoolSubmissions?: { image: SpoolSubmission; review: SpoolSubmission; illustration?: IllustrationSubmission; nativeImageReview?: NativeImageReviewSubmission },
   illustrationReviewPolicy?: ExternalProcessingPolicy,
 ): AiGateway {
   const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
@@ -1164,6 +1188,7 @@ export function buildGateway(
     authorizeIllustrationReview: spoolSubmissions?.illustration
       ? input => spoolSubmissions.illustration!(input, async () => undefined)
       : undefined,
+    nativeImageReviewSubmission: spoolSubmissions?.nativeImageReview,
   });
 }
 

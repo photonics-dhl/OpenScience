@@ -27,6 +27,8 @@ import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIn
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
 import { inspectHermesSourceReviewRecovery, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
+import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
+import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -195,6 +197,8 @@ function evaluateAgentTaskRetryEligibility(
   }
   if (task.kind === 'presentation.generate') {
     // Managed runs must restore their task, step and run together through retry-generation.
+    try { if (readNativeImageReviewCheckpoint(task.result)?.state === 'started') return { authorityValid: true, canRetry: false }; }
+    catch { return { authorityValid: true, canRetry: false }; }
     return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
@@ -580,6 +584,7 @@ async function persistAgentTaskCoreInTransaction(
     }
   }
   let task: AgentTask;
+  const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
   try {
     task = await tx.agentTask.create({
       data: {
@@ -588,6 +593,7 @@ async function persistAgentTaskCoreInTransaction(
         payload: input.payload as never,
         interestContext: interestContext as never,
         idempotencyKey: input.idempotencyKey,
+        ...(nativeReviewResult ? { result: nativeReviewResult } : {}),
       },
     });
   } catch (error) {
@@ -935,6 +941,8 @@ export async function retryAgentTask(
           }
         }
         const sourceSearch = isRetryableSourceSearchIndex(task);
+        const nativeReview = readNativeImageReviewCheckpoint(task.result);
+        if (nativeReview?.state === 'started') throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
         if (sourceSearch) {
           const source = await assertSearchIndexSourceLive(tx, task);
           if (!source) throw new SearchIndexSourceError();
@@ -955,12 +963,13 @@ export async function retryAgentTask(
           where: {
             id: task.id, sessionId: task.sessionId, status: task.status, kind: task.kind, retryCount: task.retryCount, error: task.error,
             executionAttempt: task.executionAttempt,
-            ...(sourceSearch || scienceRecovery ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
+            ...(sourceSearch || scienceRecovery || nativeReview ? { result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } } : {}),
             ...(scienceRecovery ? { deletedAt: null, payload: { equals: task.payload as Prisma.InputJsonValue } } : {}),
           },
           data: {
             status: 'pending', progress: 0,
-            result: scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
+            result: nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
+              : scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
               && isJsonRecord(task.payload.storyboard) && task.payload.storyboard.output === 'image'
               && isJsonRecord(task.result) && (isJsonRecord(task.result.storyboardCheckpoint) || isJsonRecord(task.result.storyboardPlanningCheckpoint))
               ? { ...(isJsonRecord(task.result.storyboardCheckpoint) ? { storyboardCheckpoint: task.result.storyboardCheckpoint }
@@ -1100,10 +1109,13 @@ async function markTaskProgressOnce(
     if (input.status === 'succeeded' && current.kind === 'sdf.extract'
       && current.idempotencyKey?.startsWith(SOURCE_COMPOSITION_RECOVERY_PREFIX))
       await requireHermesSourceCompositionRecoveryResult(tx, current, input.result);
+    const result = await nativeImageReviewTerminalResult(tx, current, input.status, input.result);
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },
         status: currentStatus,
+        ...(current.result && typeof current.result === 'object' && Object.hasOwn(current.result, 'nativeImageReview')
+          ? { result: { equals: current.result as Prisma.InputJsonValue } } : {}),
         ...(input.expectedExecutionAttempt === undefined
           ? {}
           : { executionAttempt: input.expectedExecutionAttempt }),
@@ -1111,7 +1123,7 @@ async function markTaskProgressOnce(
       data: {
         status: input.status,
         ...(input.progress !== undefined ? { progress: input.progress } : {}),
-        ...(input.result !== undefined ? { result: input.result as never } : {}),
+        ...(result !== undefined ? { result: result as never } : {}),
         ...(input.error !== undefined ? { error: input.error } : {}),
       },
     });
@@ -1267,6 +1279,8 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.storyboardAcceptanceCheckpoint;
   delete publicResult.storyboardArtCorrection;
   delete publicResult.storyboardScienceDiagnostics;
+  delete publicResult.nativeImageReview;
+  if (sourceMapRef === undefined && Object.keys(publicResult).length === 0 && Object.hasOwn(rawResult, 'nativeImageReview')) return null;
   if (sourceMapRef === undefined) return publicResult;
   try {
     const reference = parseDocumentSourceMapReference(sourceMapRef);

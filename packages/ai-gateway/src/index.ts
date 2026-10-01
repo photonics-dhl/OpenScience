@@ -27,6 +27,7 @@ export {
   type MiniMaxVisionPricing,
 } from './provider';
 export { ChatGptWebScienceReviewProvider, type ChatGptWebScienceReviewConfig } from './science-review';
+export { nativeImageReviewMessages, nativeImageReviewPromptHash, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
 export { CodexSolImageReviewProvider, type CodexSolReviewConfig } from './codex-sol-review';
 export { CODEX_SOL_REVIEW_PROVIDER, CODEX_SOL_REVIEW_MODEL, CODEX_SOL_REVIEW_EFFORT,
   validateCodexSolReviewRequest, validateCodexSolReviewResult,
