@@ -347,7 +347,8 @@ export async function getHermesResearchRun(
           chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
         : await inspectHermesSourceCompositionRecovery(deps.prisma, run.id).then(composition => composition
           ? { chargeableAttempts: 1, generationRecovery: 'source-composition' as const }
-          : inspectHermesSavedCompositionCandidate(deps.prisma, run.id).then(saved => saved && run.status === 'failed'
+          : (run.steps.filter(step => step.stage === 'source_composition').length === 2
+            ? inspectHermesSavedCompositionCandidate(deps.prisma, run.id) : Promise.resolve(null)).then(saved => saved && run.status === 'failed'
             && run.steps.length === 3 && saved.source.agentTaskId === saved.replacement?.id
             ? { chargeableAttempts: 1, generationRecovery: 'source-review-fresh' as const }
             : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
@@ -2719,7 +2720,8 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Final source composition recovery key changed');
             return { run, dispatchIds: [] as string[] };
           }
-          const savedComposition = await inspectHermesSavedCompositionCandidate(tx, run.id);
+          const savedComposition = run.steps.filter(step => step.stage === 'source_composition').length === 2
+            ? await inspectHermesSavedCompositionCandidate(tx, run.id) : null;
           if (savedComposition) {
             const reviews = run.steps.filter(step => step.stage === 'source_review');
             if (reviews.length) {
