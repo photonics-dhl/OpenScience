@@ -31,6 +31,10 @@
 .filterControls select { min-height: 42px; border: 1px solid #dce4e8; border-radius: 8px; padding: 8px 12px; background: #fff; color: #1d2935; }
 .count { margin: 8px 0 0; color: #6a7883; font-size: 13px; }
 .feedback { margin: 20px 0; color: #596875; font-size: 15px; line-height: 1.7; }
+.feedback > p { margin: 0; }
+.retry { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--os-vermilion-ink); font: 500 14px/1.5 var(--font-ui); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.retry:disabled { opacity: .55; cursor: wait; }
+.retry:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 4px; }
 .loadMore { display: block; margin: 28px auto 0; }
 .cardLink:focus-visible, .search input:focus-visible, .search button:focus-visible, .filters summary:focus-visible, .filters select:focus-visible, .loadMore:focus-visible, .allLink:focus-visible { outline: 3px solid #80b7b6; outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) { .card:hover { border-color: #99b8bb; box-shadow: 0 8px 24px #233b4810; } .search button:hover, .loadMore:hover { background: #0d5960; } }

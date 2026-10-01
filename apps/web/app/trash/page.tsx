@@ -67,11 +67,12 @@ export default function TrashPage() {
           const archived = entry.kind === 'research_object' && Boolean(entry.retainedReason);
           const purging = entry.state === 'purge_pending';
           const title = labels.title(entry);
-          return <li className={styles.row} key={entry.id}>
+          return <li className={styles.row} data-trash-entry aria-busy={busy === entry.id} key={entry.id}>
             <div><strong className={styles.itemTitle} title={title}>{title}</strong><small>{t(`kind.${entry.kind}`)} · {new Date(entry.deletedAt).toLocaleString(locale)}</small><small>{archived ? t('archived') : purging ? t('purging') : entry.retainedReason ? t('retained') : entry.purgeAfter ? t('expires', { date: new Date(entry.purgeAfter).toLocaleString(locale) }) : ''}</small></div>
-            <div className="flex flex-wrap gap-2">
+            <div className="trash-entry-actions">
               <button className={styles.action} type="button" disabled={busy !== null || purging} onClick={() => void act(entry, 'restore')}>{t('restore')}</button>
               {!archived && <button className={styles.action} type="button" disabled={busy !== null} onClick={() => { setSelected(entry); confirm.current?.showModal(); }}>{t(purging ? 'retry' : 'purge')}</button>}
+              {busy === entry.id ? <span role="status">{t('working')}</span> : null}
             </div>
           </li>;
         })}

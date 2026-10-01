@@ -3,19 +3,23 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { JournalSummary } from '../lib/journal-api';
 
-const api = vi.hoisted(() => ({ listJournals: vi.fn() }));
+const api = vi.hoisted(() => ({ listJournals: vi.fn(), listMyJournals: vi.fn() }));
+const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('@/lib/journal-api', () => api);
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('@/components/shell/DashboardShell', () => ({ DashboardShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof React>();
   return { ...actual, useState: vi.fn(), useRef: vi.fn(), useCallback: (callback: unknown) => callback, useEffect: vi.fn() };
 });
 import { JournalDirectory } from '../components/journals/JournalDirectory';
+import MyJournalsPage from '../app/journals/manage/page';
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(React.useEffect).mockImplementation(() => {}); });
 
 // An isolated Node hook host runs the component's actual event handlers.
 // The existing project tests use this approach without a browser/DOM dependency.
-function mountDirectory(initial: JournalSummary[], initialNextCursor: string | null = null) {
+function mountDirectory(initial: JournalSummary[], initialNextCursor: string | null = null, component?: () => React.ReactNode) {
   const states: unknown[] = [];
   const refs: Array<{ current: unknown }> = [];
   let stateIndex = 0; let refIndex = 0;
@@ -29,7 +33,7 @@ function mountDirectory(initial: JournalSummary[], initialNextCursor: string | n
   }) as typeof React.useRef);
   return () => {
     stateIndex = 0; refIndex = 0;
-    return JournalDirectory({ initial, initialNextCursor });
+    return component ? component() : JournalDirectory({ initial, initialNextCursor });
   };
 }
 
@@ -106,4 +110,29 @@ it('appends a cursor page once without duplicating entries or using an unsubmitt
   const markup = renderToStaticMarkup(render());
   expect(markup.match(/href="\/journals\/one"/g)).toHaveLength(1);
   expect(markup).toContain('Photonics Journal');
+});
+
+it('shows account journal loading without claiming the account has no journals', () => {
+  const render = mountDirectory([], null, MyJournalsPage);
+  const markup = renderToStaticMarkup(render());
+  expect(markup).toContain('正在加载我的期刊');
+  expect(markup).not.toContain('尚未加入期刊');
+});
+
+it('recovers the account journal list from a failed load using the local retry action', async () => {
+  let load: (() => void) | undefined;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
+  api.listMyJournals.mockRejectedValueOnce(new Error('Journal list unavailable'))
+    .mockResolvedValueOnce({ items: [journal('optics', 'Optics Journal')] });
+  const render = mountDirectory([], null, MyJournalsPage);
+  render(); load!(); await settle();
+  const alert = find(render(), element => element.props.role === 'alert');
+  expect(renderToStaticMarkup(alert)).toContain('Journal list unavailable');
+  find(alert, element => element.type === 'button').props.onClick!();
+  expect(renderToStaticMarkup(render())).toContain('正在加载我的期刊');
+  await settle();
+  const markup = renderToStaticMarkup(render());
+  expect(markup).toContain('Optics Journal');
+  expect(markup).toContain('href="/journals/manage/optics"');
+  expect(markup).not.toContain('role="alert"');
 });

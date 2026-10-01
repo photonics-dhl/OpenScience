@@ -75,6 +75,9 @@ describe('global companion SSR ownership', () => {
     expect(markup).toContain('Research content');
     expect(markup).not.toContain('hermes-guide-goal');
     expect(markup).not.toContain('Current research object');
+    expect(markup).not.toContain('data-hermes-presence-control');
+    expect(markup).toContain('data-hermes-size-mode="automatic"');
+    expect(markup).toContain('data-hermes-stage-size="200"');
   });
 
   it.each(['/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('leaves %s to its own harness', (pathname) => {

@@ -16,6 +16,7 @@ export default async function JournalHome({ params, searchParams }: { params: { 
   const name = journal.nameEn || journal.nameZh;
   return <PublicShell mainClassName="craft-journal craft-journal-public" tone="paper" skipLabel="跳到内容" navigationLabel="主导航" wrapHeaderActionsOnMobile headerActions={<SiteHeader active="journals" context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}>
     <article className="mx-auto max-w-[78rem] break-words px-5 py-10 sm:px-8">
+      <Link className="journal-back-link" href="/journals">← 期刊目录</Link>
       <header data-journal-masthead>
         <div>
         <h1 className="font-reading text-5xl font-normal tracking-[-.04em]">{name}</h1>
@@ -34,13 +35,13 @@ export default async function JournalHome({ params, searchParams }: { params: { 
         <h2 className="text-2xl font-normal">论文</h2>
         {!page.items.length ? <p className="py-8 text-os-muted-paper">当前页暂无公开论文目录。</p> : <div className="divide-y divide-os-rule-paper">{page.items.map((article) => <div data-journal-paper className="py-5" key={article.id}>
           <p className="m-0 text-sm text-os-muted-paper">{article.metadata.publishedDate ?? '出版日期待补充'}</p>
-          <h3 className="my-2 text-xl font-normal">{article.metadata.title}</h3>
+          <h3 className="my-2 text-xl font-normal"><a href={article.releases[0]?.url || article.metadata.originalUrl}>{article.metadata.title}</a></h3>
           <p className="text-sm text-os-muted-paper">{article.metadata.authors.join('，')}</p>
           {article.contentState !== 'active' ? <p className="text-sm text-os-vermilion-ink">平台解读{article.contentState === 'withdrawn' ? '已撤回' : '已限制公开'}</p> : null}
           <div className="flex flex-wrap gap-4"><a className="text-sm text-os-ink" href={article.metadata.originalUrl}>查看原文{article.metadata.doi ? ` · DOI ${article.metadata.doi}` : ''} →</a>
             {article.releases[0] ? <Link className="text-sm text-os-ink" href={article.releases[0].url}>阅读固定解读版本 →</Link> : null}</div>
         </div>)}</div>}
-        <nav aria-label="论文分页" className="mt-6 flex gap-5 text-sm">
+        <nav aria-label="论文分页" className="mt-6 flex flex-wrap gap-5 text-sm">
           {searchParams?.cursor ? <Link href={`/journals/${journal.slug}`}>返回第一页</Link> : null}
           {page.nextCursor ? <Link href={`/journals/${journal.slug}?cursor=${encodeURIComponent(page.nextCursor)}`}>下一页论文 →</Link> : null}
         </nav>

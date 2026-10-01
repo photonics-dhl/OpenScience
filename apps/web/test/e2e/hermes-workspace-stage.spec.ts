@@ -87,11 +87,11 @@ test('floating Hermes preserves click intent and settles away from protected wor
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const anchor = page.locator('[data-hermes-dock-anchor="true"]');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
   await expect(anchor).toBeHidden();
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
-  expect({ width: Math.round(stageBox!.width), height: Math.round(stageBox!.height) }).toEqual({ width: 360, height: 360 });
+  expect({ width: Math.round(stageBox!.width), height: Math.round(stageBox!.height) }).toEqual({ width: 200, height: 200 });
   const viewport = page.viewportSize()!;
   expect(stageBox!.x).toBeGreaterThanOrEqual(0);
   expect(stageBox!.y).toBeGreaterThanOrEqual(0);
@@ -217,11 +217,11 @@ test('floating Hermes preserves click intent and settles away from protected wor
   });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '168');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   const mobileBox = await stage.boundingBox();
   expect(mobileBox).not.toBeNull();
-  expect({ width: Math.round(mobileBox!.width), height: Math.round(mobileBox!.height) }).toEqual({ width: 200, height: 200 });
+  expect({ width: Math.round(mobileBox!.width), height: Math.round(mobileBox!.height) }).toEqual({ width: 168, height: 168 });
   const mobileInput = await input.boundingBox();
   expect(mobileInput).not.toBeNull();
   await page.mouse.move(mobileInput!.x + mobileInput!.width / 2, mobileInput!.y + mobileInput!.height / 2);
@@ -347,7 +347,7 @@ test('Hermes never persists a transitional desktop hull after mobile edge histor
   }, desktopKey);
 
   await page.setViewportSize({ width: 800, height: 900 });
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
   await page.clock.runFor(2_000);
   const readSettledSafety = () => stage.evaluate((element) => {
     const stageBounds = element.getBoundingClientRect();
@@ -357,7 +357,7 @@ test('Hermes never persists a transitional desktop hull after mobile edge histor
       .map((node) => node.getBoundingClientRect())
       .filter((bounds) => bounds.width > 0 && bounds.height > 0);
     return {
-      finalHull: hull.height >= 330,
+      finalHull: hull.height >= stageBounds.height - 40,
       insideViewport: hull.left >= 0 && hull.top >= 0 && hull.right <= window.innerWidth && hull.bottom <= window.innerHeight,
       protectedSafe: protectedRegions.every((region) => !(
         hull.left < region.right && hull.right > region.left && hull.top < region.bottom && hull.bottom > region.top
@@ -368,7 +368,7 @@ test('Hermes never persists a transitional desktop hull after mobile edge histor
   await expect.poll(async () => {
     const safety = await readSettledSafety();
     return { finalHull: safety.finalHull, insideViewport: safety.insideViewport, stageSize: safety.stageSize };
-  }).toEqual({ finalHull: true, insideViewport: true, stageSize: 360 });
+  }).toEqual({ finalHull: true, insideViewport: true, stageSize: 200 });
   let settledDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
   if (settledDesktopPreference === null) {
     expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.hermesTestDesktopWrites ?? '[]'))).toEqual([]);
@@ -419,7 +419,7 @@ test('Hermes never persists a transitional desktop hull after mobile edge histor
   await expect.poll(async () => {
     const safety = await readSettledSafety();
     return { finalHull: safety.finalHull, insideViewport: safety.insideViewport, protectedSafe: safety.protectedSafe, stageSize: safety.stageSize };
-  }).toEqual({ finalHull: true, insideViewport: true, protectedSafe: true, stageSize: 360 });
+  }).toEqual({ finalHull: true, insideViewport: true, protectedSafe: true, stageSize: 200 });
   const restoredDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
   expect(restoredDesktopPreference).not.toBeNull();
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));

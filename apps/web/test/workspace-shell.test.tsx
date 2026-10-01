@@ -13,7 +13,10 @@ vi.mock('next-intl', () => ({
 }));
 
 import EditorLayout from '../components/editor/EditorLayout';
+import CoreEditor from '../components/editor/CoreEditor';
+import ArtifactUploader from '../components/editor/ArtifactUploader';
 import { ArtifactRow } from '../components/research/ArtifactRow';
+import { ArtifactViewer } from '../components/research/ArtifactViewer';
 import { BeforeAfterProposal } from '../components/research/BeforeAfterProposal';
 import { EvidenceSnippet } from '../components/research/EvidenceSnippet';
 import { ObjectHeader } from '../components/research/ObjectHeader';
@@ -110,5 +113,40 @@ describe('Optical Editorial Research Object workspace', () => {
     }));
     expect(markup).toContain('data-artifact-row="true"');
     expect(markup).not.toMatch(/card|rounded-(?:xl|2xl|3xl)/);
+  });
+
+  it('keeps long research titles available and announces save feedback', () => {
+    const markup = renderToStaticMarkup(createElement(ObjectHeader, {
+      objectId: 'private-id', title: 'A long research title with a mathematical contribution',
+      version: 4, visibility: 'private', saveState: 'saving',
+    }));
+    expect(markup).not.toContain('truncate');
+    expect(markup).not.toContain('private-id');
+    expect(markup).toMatch(/data-save-state="saving" role="status"/);
+  });
+
+  it('offers heading edit controls for all six passages without visible section numbers', () => {
+    const core = { schemaVersion: '0.1.0', problem: '$E=mc^2$ [S12]', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const props = { core, activeField: null, onEdit: () => undefined, onSelectField: () => undefined };
+    const editable = renderToStaticMarkup(createElement(CoreEditor, props));
+    const reading = renderToStaticMarkup(createElement(CoreEditor, { ...props, readOnly: true }));
+    expect(editable.match(/<h2[^>]*>[\s\S]*?<button/g)).toHaveLength(6);
+    expect(editable).toContain('data-sdf-math-display="true"');
+    expect(editable).not.toContain('[S12]');
+    expect(editable).not.toMatch(/>0[1-6]</);
+    expect(reading).not.toContain('<button');
+    expect(reading.match(/data-read-only="true"/g)).toHaveLength(6);
+  });
+
+  it('keeps upload format details secondary and gives preview actions touch targets', () => {
+    const uploader = renderToStaticMarkup(createElement(ArtifactUploader, {
+      workspaceId: 'workspace', researchObjectId: 'ro', artifacts: [], onArtifactsChange: () => undefined,
+    }));
+    const viewer = renderToStaticMarkup(createElement(ArtifactViewer, { artifactId: 'artifact', logicalPath: 'paper.pdf' }));
+    expect(uploader).toContain('<details');
+    expect(uploader).toContain('focus-within:outline');
+    expect(uploader).toContain('aria-busy="false"');
+    expect(viewer).toContain('/api/artifacts/artifact/download');
+    expect(viewer.match(/min-h-11/g)).toHaveLength(2);
   });
 });

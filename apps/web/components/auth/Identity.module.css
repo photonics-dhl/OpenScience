@@ -22,9 +22,9 @@
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  align-items: start;
-  gap: 56px;
-  width: min(100%, 960px);
+  align-items: center;
+  gap: 64px;
+  width: min(100%, 1040px);
   margin: 0 auto;
   padding: 56px 32px;
   min-height: calc(100dvh - 72px);
@@ -34,7 +34,7 @@
 .context { grid-column: 1; grid-row: 1; min-width: 0; align-self: center; }
 .welcome { max-width: 360px; margin: 0 auto; }
 .eyebrow { color: #125d66; font-size: 13px; font-weight: 600; margin: 0 0 12px; }
-.shell .welcome h2 { font: 400 26px/1.55 var(--font-reading-serif); margin: 0; text-wrap: pretty; }
+.shell .welcome h2 { max-width: 16ch; font: 400 clamp(28px, 3vw, 36px)/1.4 var(--font-reading-serif); margin: 0; text-wrap: balance; }
 .description { margin: 16px 0 0; font-size: 15px; line-height: 1.8; color: #52626b; text-wrap: pretty; }
 .tagline { margin: 24px 0 0; font-size: 13px; line-height: 1.6; color: #52626b; }
 
@@ -42,10 +42,10 @@
   width: 100%;
   max-width: none;
   background: #fff;
-  border: 0;
+  border: 1px solid #e4e9eb;
   border-radius: 12px;
   padding: 28px;
-  box-shadow: none;
+  box-shadow: 0 8px 32px rgb(24 43 51 / .045);
 }
 .shell [data-auth-flow] > [data-reading-role="caption"] { border: 0; padding: 0; margin: 0 0 12px; font: 600 13px/1.5 var(--font-sans); color: #125d66; }
 .shell [data-auth-flow] h1 { max-width: none; margin: 0; font: 600 28px/1.35 var(--font-sans); letter-spacing: normal; text-wrap: balance; }
@@ -56,7 +56,7 @@
 .shell [data-auth-flow] input:disabled { background: #f3f6f7; }
 .shell [data-auth-flow] input:focus-visible { outline: 2px solid #125d66; outline-offset: 2px; }
 .shell [data-auth-flow] button[type="button"] { border: 0; background: transparent; cursor: pointer; color: #125d66; }
-.shell [data-auth-flow] button[type="submit"] { background: #125d66; color: #fff; border-radius: 6px; border: 0; }
+.shell [data-auth-flow] button[type="submit"] { min-height: 48px; background: #125d66; color: #fff; border-radius: 6px; border: 0; font-weight: 600; }
 .shell [data-auth-flow] button { min-height: 44px; transition: background-color 150ms ease, color 150ms ease; }
 .shell [data-auth-flow] button:disabled { opacity: .55; cursor: default; }
 .shell [data-auth-flow] button:focus-visible, .shell [data-auth-flow] a:focus-visible { outline: 2px solid #125d66; outline-offset: 3px; }
@@ -80,7 +80,7 @@
   .context { grid-column: 1; grid-row: 2; padding-top: 0; }
   .shell [data-auth-flow] { max-width: 480px; margin: 0 auto; padding: 24px; }
   .welcome { text-align: center; }
-  .shell .welcome h2 { font-size: 22px; }
+  .shell .welcome h2 { max-width: none; font-size: 24px; }
 }
 
 .shell [data-signup-profile] { border-block: 1px solid #e0e6e8; }

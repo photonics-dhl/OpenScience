@@ -9,6 +9,8 @@ import styles from './research-discovery.module.css';
 
 const FIELDS = ['', 'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const ARTIFACT_TYPES = ['', 'document', 'image', 'data', 'code', 'video', 'other'];
+type IndexFilters = { query: string; field: string; artifactType: string };
+type IndexRequest = { cursor?: string; append: boolean; filters: IndexFilters };
 
 export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPageApi }) {
   const t = useTranslations('explore');
@@ -20,10 +22,12 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
   const [error, setError] = useState('');
   const requestId = useRef(0);
   const appliedFilters = useRef({ query: '', field: '', artifactType: '' });
+  const failedRequest = useRef<IndexRequest | null>(null);
 
-  async function load(cursor?: string, append = false) {
+  async function load(cursor?: string, append = false, replayFilters?: IndexFilters) {
     const id = ++requestId.current;
-    const filters = append ? appliedFilters.current : { query: query.trim(), field, artifactType };
+    const filters = replayFilters ?? (append ? appliedFilters.current : { query: query.trim(), field, artifactType });
+    failedRequest.current = null;
     setLoading(true);
     setError('');
     try {
@@ -31,8 +35,8 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
       if (id !== requestId.current) return;
       appliedFilters.current = filters;
       setPage(current => ({ items: append ? [...current.items, ...result.items.filter(item => !current.items.some(existing => existing.publicId === item.publicId))] : result.items, nextCursor: result.nextCursor }));
-    } catch (cause) {
-      if (id === requestId.current) setError(cause instanceof Error ? cause.message : t('error'));
+    } catch {
+      if (id === requestId.current) { failedRequest.current = { cursor, append, filters }; setError(t('error')); }
     } finally {
       if (id === requestId.current) setLoading(false);
     }
@@ -60,7 +64,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
       </details>
     </form>
     <p className={styles.count}>{t('recentFirst')}</p>
-    {error ? <p className={styles.feedback} role="alert">{error}</p> : null}
+    {error ? <div className={styles.feedback} role="alert"><p>{error}</p><button className={styles.retry} type="button" disabled={loading} onClick={() => { const failed = failedRequest.current; if (failed) void load(failed.cursor, failed.append, failed.filters); }}>{t('retry')}</button></div> : null}
     {loading && !page.items.length ? <p className={styles.feedback} role="status">{t('loading')}</p> : null}
     {!loading && !page.items.length && !error ? <p className={styles.feedback}>{t('empty')}</p> : null}
     <ol className={styles.cards}>{page.items.map(item => <li key={item.publicId}><ResearchCard item={item} prominent={page.items.length === 1} /></li>)}</ol>

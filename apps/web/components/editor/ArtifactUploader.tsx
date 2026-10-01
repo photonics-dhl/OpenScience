@@ -37,6 +37,8 @@ export default function ArtifactUploader({
   onIngestionStarted?: (task: IngestionTaskSummary) => void;
 }) {
   const t = useTranslations('editor');
+  const commonT = useTranslations('common');
+  const intakeT = useTranslations('ingestion.intake');
   const fileRef = useRef<HTMLInputElement>(null);
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const currentArtifacts = useRef(artifacts);
@@ -110,10 +112,10 @@ export default function ArtifactUploader({
 
   return (
     <HermesAnchor id="source-import">
-    <section className="mt-10 border-t border-os-rule-dark pt-5" id="artifacts">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="m-0 font-editorial text-2xl font-normal text-os-paper">{t('artifacts')}</h2>
-        <label className={`inline-flex min-h-10 items-center rounded-panel border border-os-rule-dark px-3 text-sm text-os-paper ${uploadPending ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+    <section className="mt-8 border-t border-os-rule-paper pt-5" id="artifacts" aria-busy={uploadPending}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="m-0 text-lg font-semibold text-os-ink">{t('artifacts')}</h2>
+        <label className={`inline-flex min-h-11 items-center rounded-control border border-os-rule-paper px-4 text-sm font-medium text-os-vermilion-ink transition-colors duration-150 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-os-vermilion-ink motion-reduce:transition-none ${uploadPending ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-os-paper-strong'}`}>
           {t('uploadArtifact')}
           <input
             ref={fileRef}
@@ -127,20 +129,23 @@ export default function ArtifactUploader({
           />
         </label>
       </div>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('ingestionUploadNotice')}</p>
+      <details className="mt-3 text-sm leading-6 text-os-muted-paper">
+        <summary className="min-h-11 w-fit cursor-pointer py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-vermilion-ink">{intakeT('allFormats')}</summary>
+        <p className="mt-1 max-w-2xl">{t('ingestionUploadNotice')}</p>
+      </details>
       <div className="mt-4">
         {jobs.map((job) => (
           <div key={job.logicalPath}>
             <ArtifactRow action={job.artifactId ? <ArtifactViewer artifactId={job.artifactId} logicalPath={job.logicalPath} /> : undefined} name={job.logicalPath} status={t(`artifactStatus.${job.state}`)} meta={job.taskId ? t('ingestionQueued') : job.artifactId ? t('artifactStored') : undefined} />
             {job.state === 'uploading' && (
-              <div className="h-1 bg-os-rule-dark" role="progressbar" aria-valuenow={job.progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full bg-os-paper" style={{ width: `${job.progress}%` }} />
+              <div className="h-1 bg-os-rule-paper" role="progressbar" aria-label={job.logicalPath} aria-valuenow={job.progress} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-full bg-os-vermilion-ink" style={{ width: `${job.progress}%` }} />
               </div>
             )}
             {job.state === 'error' && (
-              <div className="flex items-center justify-between border-b border-os-rule-dark py-2 text-sm text-os-paper">
-                <span>{job.error ?? t('uploadFailed')}</span>
-                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => retry(job)}>{t('common.retry')}</button>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-os-rule-paper py-2 text-sm">
+                <span className="min-w-0 flex-1 break-words text-state-danger" role="alert">{job.error ?? t('uploadFailed')}</span>
+                <button type="button" className="min-h-11 rounded-control border border-os-rule-paper bg-transparent px-4 text-os-vermilion-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-vermilion-ink" onClick={() => retry(job)}>{commonT('retry')}</button>
               </div>
             )}
           </div>

@@ -1057,27 +1057,9 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(presence).toBeVisible();
-  await presence.locator('summary').click();
-  await presence.getByRole('menuitemradio', { name: /original/i }).focus();
-  await page.keyboard.press('ArrowDown');
-  await expect(presence.getByRole('menuitemradio', { name: /compact/i })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(presence.locator('summary')).toBeFocused();
-
-  for (const [choice, expectedSize] of [['compact', '200'], ['quiet', '200'], ['original', '360']] as const) {
-    await presence.locator('summary').click();
-    await presence.getByRole('menuitemradio', { name: new RegExp(choice, 'i') }).click();
-    await expect(stage).toHaveAttribute('data-hermes-presence-mode', choice);
-    await expect(stage).toHaveAttribute('data-hermes-stage-size', expectedSize);
-    await expect(presence.locator('summary')).toBeFocused();
-    if (choice !== 'original') {
-      await trigger.click({ button: 'right' });
-      await expect(page.getByRole('menu', { name: /Hermes/u })).toHaveAttribute('data-compact', 'true');
-      await page.keyboard.press('Escape');
-    }
-  }
-  await page.screenshot({ fullPage: true, path: `${outDir}/hermes-presence-editor.png`, animations: 'disabled' });
+  await expect(presence).toHaveCount(0);
+  await expect(stage).toHaveAttribute('data-hermes-size-mode', 'automatic');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
 
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
@@ -1103,7 +1085,6 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const mouth = document.querySelector<HTMLElement>('[data-hermes-visible-mouth-anchor="true"]')!.getBoundingClientRect();
     const tail = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const stateLabel = document.querySelector<HTMLElement>('.hermes-visual-state-label')!.getBoundingClientRect();
-    const presence = document.querySelector<HTMLElement>('[data-hermes-presence-control="true"]')!.getBoundingClientRect();
     const motion = document.querySelector<HTMLElement>('.hermes-motion-enable')!.getBoundingClientRect();
     const tailTip = {
       x: tail.left + tail.width / 2,
@@ -1119,7 +1100,6 @@ test('Hermes action menu / editor companion feedback stays in the research margi
       mouthDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
       pseudoTailCount: [getComputedStyle(feedbackNode, '::before').content, getComputedStyle(feedbackNode, '::after').content].filter((content) => content !== 'none').length,
       stateCollision: overlaps(feedback, stateLabel),
-      presenceCollision: overlaps(feedback, presence),
       motionCollision: overlaps(feedback, motion),
       tailTip,
       tailContained: tailTip.x >= margin.left && tailTip.x <= margin.right && tailTip.y >= margin.top && tailTip.y <= margin.bottom,
@@ -1133,7 +1113,6 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   expect(geometry.mouthDistance, JSON.stringify(geometry)).toBeLessThanOrEqual(8);
   expect(geometry.pseudoTailCount, JSON.stringify(geometry)).toBe(0);
   expect(geometry.stateCollision, JSON.stringify(geometry)).toBe(false);
-  expect(geometry.presenceCollision, JSON.stringify(geometry)).toBe(false);
   expect(geometry.motionCollision, JSON.stringify(geometry)).toBe(false);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-editor-feedback.png`, animations: 'disabled' });
   await expect(feedback).toBeHidden({ timeout: 5000 });

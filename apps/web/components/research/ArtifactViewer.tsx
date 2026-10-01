@@ -29,6 +29,7 @@ async function hasPdfSignature(blob: Blob) {
 
 export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string; logicalPath: string }) {
   const t = useTranslations('attachmentViewer');
+  const commonT = useTranslations('common');
   const previewType = previewTypeFor(logicalPath);
   const objectUrl = useRef<string | null>(null);
   const requestVersion = useRef(0);
@@ -99,8 +100,8 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {previewType ? <button className="min-h-9 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button" onClick={() => void openPreview()}>{t('preview')}</button> : null}
-      <a className="min-h-9 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a>
+      {previewType ? <button className="inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-50" type="button" disabled={loading} onClick={() => void openPreview()}>{t('preview')}</button> : null}
+      <a className="inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a>
       {previewType ? <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) closePreview(); }}>
         <DialogContent className="max-h-[90dvh] max-w-5xl overflow-y-auto border-os-rule-paper bg-os-paper p-4 sm:p-6" onEscapeKeyDown={closePreview}>
           <div className="flex items-start justify-between gap-4">
@@ -108,15 +109,15 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
               <DialogTitle className="break-all font-editorial text-2xl font-normal text-os-ink">{logicalPath}</DialogTitle>
               <DialogDescription className="mt-2 text-os-muted-paper">{t('safePreviewNotice')}</DialogDescription>
             </div>
-            <DialogClose asChild><button className="min-h-10 shrink-0 rounded-panel border border-os-rule-paper px-3 text-sm text-os-ink" type="button">{t('close')}</button></DialogClose>
+            <DialogClose asChild><button className="min-h-11 shrink-0 rounded-control border border-os-rule-paper px-3 text-sm text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button">{t('close')}</button></DialogClose>
           </div>
           <div className="mt-5 min-h-48 border border-os-rule-paper bg-os-paper-strong">
             {loading ? <p className="p-5 text-sm text-os-muted-paper" role="status">{t('loading')}</p> : null}
-            {error ? <p className="p-5 text-sm text-os-vermilion" role="alert">{t('unavailable')}</p> : null}
+            {error ? <div className="p-5"><p className="m-0 text-sm leading-6 text-state-danger" role="alert">{t('unavailable')}</p><button className="mt-3 min-h-11 rounded-control border border-os-rule-paper px-4 text-sm text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button" onClick={() => void openPreview()}>{commonT('retry')}</button></div> : null}
             {preview?.kind === 'image' ? <img alt={logicalPath} className="mx-auto max-h-[65dvh] w-auto max-w-full object-contain" src={preview.url} /> : null}
             {preview?.kind === 'pdf' ? <object aria-label={t('documentTitle', { name: logicalPath })} className="h-[65dvh] w-full bg-white" data={preview.url} type="application/pdf"><p className="p-5 text-sm text-os-ink">{t('unavailable')}</p></object> : null}
           </div>
-          {error ? <a className="mt-4 inline-flex min-h-10 items-center underline underline-offset-4" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a> : null}
+          {error ? <a className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a> : null}
         </DialogContent>
       </Dialog> : null}
     </div>

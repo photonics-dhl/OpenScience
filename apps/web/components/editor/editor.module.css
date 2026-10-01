@@ -20,13 +20,29 @@
   margin-top: 0;
 }
 
-.sectionHeading label {
+.sectionHeading > span:not(.sectionMarker),
+.sectionEdit {
   color: #263743;
-  cursor: text;
   font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.012em;
   line-height: 1.4;
+}
+
+.sectionEdit {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.sectionEdit:focus-visible {
+  outline: 2px solid #126a70;
+  outline-offset: 4px;
+  border-radius: 2px;
 }
 
 .sectionMarker {
@@ -34,15 +50,6 @@
   height: 2px;
   flex: 0 0 auto;
   background: #126a70;
-}
-
-.sectionNumber {
-  margin-left: auto;
-  color: #596875;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
 }
 
 .proseInput {
@@ -87,6 +94,8 @@
   background: #f2f8f7;
   box-shadow: 0 0 0 3px rgba(18, 106, 112, 0.18);
 }
+
+.mathSurface[data-read-only] { cursor: auto; }
 
 .sourceLink {
   display: inline-flex;
@@ -163,9 +172,9 @@
   color: #fff;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .proseInput:hover,
-  .mathSurface:hover { background: rgba(234, 245, 243, 0.55); }
+  .mathSurface:not([data-read-only]):hover { background: rgba(234, 245, 243, 0.55); }
 }
 
 @media (max-width: 640px) {

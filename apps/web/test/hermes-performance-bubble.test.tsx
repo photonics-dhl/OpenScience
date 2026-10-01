@@ -57,7 +57,7 @@ describe('Hermes performance bubble', () => {
     const bubble = cssRule('.hermes-performance-bubble');
     const tail = cssRule('.hermes-performance-bubble::after');
     const leftBelow = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
-    const mobileBelow = cssRule(".hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
+    const mobileBelow = cssRule(".hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
     const rightAbove = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='right'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after");
     const reducedFeedback = cssRule(".hermes-workspace-stage[data-hermes-motion-preference='reduced'] .hermes-menu-feedback");
     const speakingFooter = cssRule(".hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label");
@@ -80,7 +80,7 @@ describe('Hermes performance bubble', () => {
     expect(reducedFeedback).toContain('animation: none;');
     expect(speakingFooter).toContain('display: none;');
     expect(visibleCta).toContain('pointer-events: auto;');
-    expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-performance-bubble");
+    expect(globals).toContain(":is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-performance-bubble");
     expect(globals).not.toContain("[data-hermes-stage-size='176']");
   });
 

@@ -272,7 +272,7 @@ describe('Optical Editorial brand and surface shells', () => {
 
     expect(markup.match(/data-literature-entry="true"/g)).toHaveLength(1);
     expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
-    expect(markup).toContain('data-literature-tone="dark"');
+    expect(markup).toContain('data-literature-tone="paper"');
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 

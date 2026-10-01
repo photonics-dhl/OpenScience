@@ -8,7 +8,6 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/dashboard', useSearchPa
 import { HermesRail } from '../components/hermes/HermesRail';
 import { HermesAssistantDrawer, createDrawerLiteratureIntent, resolveDrawerLiteratureTarget } from '../components/hermes/HermesAssistantDrawer';
 import { HermesVisualAdapter } from '../components/hermes/HermesVisualAdapter';
-import { HermesPresenceControl } from '../components/hermes/HermesPresenceControl';
 import { deriveHermesGuide } from '../components/hermes/hermes-guide';
 import { deriveHermesCompositeVisualState, deriveHermesVisualState, hermesTaskHref } from '../components/hermes/hermes-state';
 import { HERMES_CONTEXT_ACTIONS, resolveHermesIntroSequence, resolveHermesResearchHref } from '../lib/hermes/context-menu-actions';
@@ -52,18 +51,6 @@ describe('Hermes dashboard guidance', () => {
     ]);
     expect(resolveHermesIntroSequence('continue-research')[1]?.messageKey).toBe('guide.menu.intro.continue');
     expect(resolveHermesIntroSequence('neutral')[1]?.messageKey).toBe('guide.menu.intro.neutral');
-  });
-
-  it('keeps an explicit original, compact and quiet presence control in work surfaces', () => {
-    const markup = renderToStaticMarkup(createElement(HermesPresenceControl, {
-      mode: 'compact', onChange: () => undefined,
-    }));
-    expect(markup).toContain('data-hermes-presence-control="true"');
-    expect(markup.match(/role="menuitemradio"/g) ?? []).toHaveLength(3);
-    expect(markup).toContain('>original</span>');
-    expect(markup).toContain('>compact</span>');
-    expect(markup).toContain('>quiet</span>');
-    expect(markup).toContain('aria-checked="true"');
   });
 
   it('renders an accessible assistant drawer with a real goal composer and transcript', () => {

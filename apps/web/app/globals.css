@@ -2254,7 +2254,7 @@ body {
   pointer-events: none;
 }
 
-.hermes-dock-anchor:has(.hermes-workspace-stage[data-hermes-stage-size='200']:not([data-hermes-guide-target])) {
+.hermes-dock-anchor:has(.hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']):not([data-hermes-guide-target])) {
   min-height: 18rem;
 }
 
@@ -3217,7 +3217,7 @@ body {
     translate: none;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-companion-bubble {
     right: .5rem;
     width: min(12rem, calc(100vw - 1rem));
     padding: .55rem 2.35rem .58rem .68rem;
@@ -3225,8 +3225,8 @@ body {
     line-height: 1.34;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-performance-bubble,
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-performance-bubble,
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback {
     top: .35rem;
     bottom: auto;
     right: auto;
@@ -3238,7 +3238,7 @@ body {
     line-height: 1.42;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback {
     top: -1.4rem;
     bottom: auto;
     left: -1.75rem;
@@ -3247,44 +3247,44 @@ body {
     padding: 0;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback-copy {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback-copy {
     top: 1rem;
     left: .55rem;
     width: 8.9rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-visible-mouth-anchor {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-visible-mouth-anchor {
     top: 38%;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-visible-crown-anchor {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-visible-crown-anchor {
     top: 17%;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
     top: -1.85rem;
     bottom: auto;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
     right: auto;
     left: .5rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-performance-bubble .hermes-companion-actions {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-performance-bubble .hermes-companion-actions {
     display: none;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-guide-target] .hermes-functional-bubble {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-guide-target] .hermes-functional-bubble {
     padding-right: .68rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble > p,
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-companion-bubble > p,
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
     margin: 0;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-guide-target] .hermes-functional-bubble > p:not(.hermes-companion-explanation) {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-guide-target] .hermes-functional-bubble > p:not(.hermes-companion-explanation) {
     margin-right: 2rem;
   }
 
