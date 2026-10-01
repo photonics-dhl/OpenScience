@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChevronDown, FileText, Plus } from 'lucide-react';
+import { ArrowRight, ChevronDown, FileText, MessageCircle, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ScientificText, scientificTextExcerpt } from '@/components/content/ScientificText';
 import { getPublicResearchVersion, type PublicResearchVersion } from '@/lib/api';
@@ -10,10 +10,6 @@ import styles from './research-guide.module.css';
 
 const scenes = ['start', 'read', 'revise'] as const;
 const questions = ['blank', 'edit', 'source'] as const;
-
-function HermesPortrait() {
-  return <img className={styles.hermes} src="/hermes/wanko-static-transparent.png" width={156} height={190} alt="" />;
-}
 
 export function ResearchGuide() {
   const t = useTranslations('productGuide');
@@ -65,7 +61,6 @@ export function ResearchGuide() {
           <p className={styles.startNote}>{t('startNote')}</p>
         </div>
       </div>
-      <div className={styles.companion}><HermesPortrait /></div>
     </header>
 
     <figure className={styles.proof} aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
@@ -99,7 +94,7 @@ export function ResearchGuide() {
               <div><h3>{example ? <ScientificText hideSourceMarkers>{example.title}</ScientificText> : t('exampleFallback')}</h3><p>{t('readDemoBody')}</p>{example?.version.core.problem ? <ScientificText as="p" hideSourceMarkers className={styles.demoNarrative}>{scientificTextExcerpt(example.version.core.problem, 160)}</ScientificText> : null}<Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link></div>
             </div> : <div className={styles.workDemo}>
               <div className={styles.paperRow}><FileText size={28} aria-hidden="true" /><div><h3>{t(scene === 'start' ? 'materials' : 'continueExpression')}</h3></div></div>
-              {scene === 'start' ? <div className={styles.intake}><Plus size={22} aria-hidden="true" /><div><strong>{t('create')}</strong><p>{t('createBody')}</p></div></div> : <div className={styles.composer}><HermesPortrait /><p>{t('hermesPrompt')}</p></div>}
+              {scene === 'start' ? <div className={styles.intake}><Plus size={22} aria-hidden="true" /><div><strong>{t('create')}</strong><p>{t('createBody')}</p></div></div> : <div className={styles.composer}><MessageCircle size={24} aria-hidden="true" /><p>{t('hermesPrompt')}</p></div>}
               <Link href="/dashboard" className={styles.textLink}>{t(scene === 'start' ? 'findEntry' : 'deskAgain')}<ArrowRight size={17} aria-hidden="true" /></Link>
             </div>}
           </div>

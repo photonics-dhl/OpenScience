@@ -696,7 +696,6 @@ function HermesAssistantDrawerContent({
     >
       <section className="hermes-conversation" data-hermes-drawer-state={busy ? 'working' : task?.status ?? 'ready'}>
         <header className="hermes-conversation-header">
-          <img src="/hermes/wanko-static-transparent.png" width={96} height={96} alt="" className="hermes-conversation-portrait" />
           <div><h2>Hermes</h2><p>{tc('role')}</p></div>
           <button type="button" className="hermes-conversation-close" onClick={() => onOpenChange(false)} aria-label={t('guide.close')}>×</button>
         </header>

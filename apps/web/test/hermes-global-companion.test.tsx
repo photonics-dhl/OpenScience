@@ -27,12 +27,46 @@ import { HermesWorkspaceStageProvider } from '../components/hermes/HermesWorkspa
 import { HermesVisualAdapter } from '../components/hermes/HermesVisualAdapter';
 import { HermesDockAnchor } from '../components/hermes/HermesDockAnchor';
 import { HermesAssistantDrawer } from '../components/hermes/HermesAssistantDrawer';
+import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel';
+import { ResearchGuide } from '../components/guide/ResearchGuide';
 
 const suggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' };
 
 beforeEach(() => { navigation.push.mockClear(); handlers.items.clear(); });
 
 describe('global companion SSR ownership', () => {
+  it.each(['return', 'create'] as const)('keeps the %s identity invitation with only the floating companion', (intent) => {
+    navigation.pathname = intent === 'return' ? '/auth/login' : '/auth/register';
+    const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider>
+      <ResearchIdentityPanel intent={intent} eyebrow="Your research companion" title="Your next discovery starts here."
+        description="Read papers and explore your ideas with Hermes." tagline="Papers · Ideas · Discoveries" />
+    </HermesWorkspaceStageProvider>);
+    expect(markup).toContain('Your next discovery starts here.');
+    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
+    expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
+  });
+
+  it('keeps the actual guide invitation with only the floating companion', () => {
+    navigation.pathname = '/guide';
+    const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><ResearchGuide /></HermesWorkspaceStageProvider>);
+    expect(markup).toContain('href="/dashboard"');
+    expect(markup).toContain('role="tablist"');
+    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
+    expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
+  });
+
+  it('opens the actual conversation without adding a second companion portrait', () => {
+    navigation.pathname = '/research-objects/object/edit';
+    const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider>
+      <HermesAssistantDrawer docked open onOpenChange={() => {}} locale="en" suggestion={suggestion}
+        route="research-object-edit" routeResearchObjectId="object" dashboardContext={{ tasks: [], researchObjects: [] }} />
+    </HermesWorkspaceStageProvider>);
+    expect(markup).toContain('id="hermes-guide-goal"');
+    expect(markup).toContain('<h2>Hermes</h2>');
+    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
+    expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
+  });
+
   it.each(['/', '/guide', '/explore', '/auth/login', '/me', '/journals/example', '/dashboard', '/research-objects/object/edit'])('renders exactly one Wanko on %s', (pathname) => {
     navigation.pathname = pathname;
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><main>Research content</main></HermesWorkspaceStageProvider>);

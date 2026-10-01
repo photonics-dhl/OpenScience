@@ -31,9 +31,8 @@
 }
 
 .main { grid-column: 2; grid-row: 1; min-width: 0; }
-.context { grid-column: 1; grid-row: 1; min-width: 0; padding-top: 32px; }
+.context { grid-column: 1; grid-row: 1; min-width: 0; align-self: center; }
 .welcome { max-width: 360px; margin: 0 auto; }
-.mascot { display: block; width: 168px; height: 196px; object-fit: contain; margin: 0 0 24px; }
 .eyebrow { color: #125d66; font-size: 13px; font-weight: 600; margin: 0 0 12px; }
 .shell .welcome h2 { font: 400 26px/1.55 var(--font-reading-serif); margin: 0; text-wrap: pretty; }
 .description { margin: 16px 0 0; font-size: 15px; line-height: 1.8; color: #52626b; text-wrap: pretty; }
@@ -81,7 +80,6 @@
   .context { grid-column: 1; grid-row: 2; padding-top: 0; }
   .shell [data-auth-flow] { max-width: 480px; margin: 0 auto; padding: 24px; }
   .welcome { text-align: center; }
-  .mascot { width: 120px; height: 140px; margin: 0 auto 16px; }
   .shell .welcome h2 { font-size: 22px; }
 }
 

@@ -14,7 +14,7 @@
 .article button { cursor:pointer; background:transparent; border:0; font:inherit; }
 .article button,.article a,.article summary,.rail a { min-height:44px; }
 .actions button,.discuss { display:inline-flex; align-items:center; gap:8px; }
-.article button img { width:34px; height:34px; border-radius:50%; }
+.actions button > svg,.discuss > svg { flex:none; }
 .section { padding-top:30px; }
 .narrative { white-space:pre-wrap; overflow-wrap:anywhere; font-size:17px; line-height:1.85; color:#303d45; margin:0; }
 .discuss { font-size:13px!important; margin-top:10px; padding:0; }

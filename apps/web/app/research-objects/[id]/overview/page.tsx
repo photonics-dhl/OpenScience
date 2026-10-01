@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { MessageCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
@@ -103,12 +104,12 @@ function ResearchOverview({ params, requestedVersionId }: { params: { id: string
         </section>;
   return <ResearchSurfaceShell key={object.id} active="overview" object={object} className={styles.surface} rail={<div className={styles.rail}><span className={styles.companionLabel}>HERMES</span><h2>{t('overview.companionTitle')}</h2><p>{t('overview.companionBody')}</p></div>}>
     {openAssistant => <article className={styles.article} data-research-overview={object.id}>
-      <header className={styles.header}><p>{t('overview.kicker')}</p><h1>{object.title}</h1><div className={styles.actions}><Link href={entries.length ? `${root}/edit` : hasIngestionTask ? ingestionHref : scopedIngestion.status === 'ready' ? `${root}/files` : `${root}/hermes`}>{t(entries.length ? 'overview.continue' : hasIngestionTask ? 'overview.continueIngestion' : scopedIngestion.status === 'ready' ? 'overview.upload' : 'overview.openHermes')}</Link><button type="button" data-testid="overview-hermes" onClick={() => openAssistant(null)}><img src="/hermes/wanko-static.png" alt="" />Hermes</button></div></header>
+      <header className={styles.header}><p>{t('overview.kicker')}</p><h1>{object.title}</h1><div className={styles.actions}><Link href={entries.length ? `${root}/edit` : hasIngestionTask ? ingestionHref : scopedIngestion.status === 'ready' ? `${root}/files` : `${root}/hermes`}>{t(entries.length ? 'overview.continue' : hasIngestionTask ? 'overview.continueIngestion' : scopedIngestion.status === 'ready' ? 'overview.upload' : 'overview.openHermes')}</Link><button type="button" data-testid="overview-hermes" onClick={() => openAssistant(null)}><MessageCircle size={18} aria-hidden="true" />Hermes</button></div></header>
       {entries.length === 0 ? <section className={styles.start} data-surface-state={hasIngestionTask ? 'actionable' : scopedIngestion.status}><span className={styles.startMark} aria-hidden="true">01</span><h2>{t(hasIngestionTask ? 'overview.ingestionTitle' : scopedIngestion.status === 'loading' ? 'overview.ingestionLoadingTitle' : scopedIngestion.status === 'failed' ? 'overview.ingestionUnknownTitle' : 'overview.emptyTitle')}</h2><p>{t(hasIngestionTask ? 'overview.ingestionBody' : scopedIngestion.status === 'loading' ? 'overview.ingestionLoadingBody' : scopedIngestion.status === 'failed' ? 'overview.ingestionUnknownBody' : 'overview.emptyBody')}</p>{hasIngestionTask ? <Link className={styles.startAssistant} href={ingestionHref}>{t('overview.continueIngestion')} →</Link> : scopedIngestion.status === 'ready' ? <button type="button" className={styles.startAssistant} onClick={() => openAssistant(null)}>{t('overview.ask')} →</button> : <Link className={styles.startAssistant} href={`${root}/hermes`}>{t('overview.openHermes')} →</Link>}<div className={styles.steps}><Link href={`${root}/edit`}><span>02</span><strong>{t('overview.stepOne')}</strong><p>{t('overview.stepOneBody')}</p></Link><Link href={`${root}/presentation`}><span>03</span><strong>{t('overview.stepTwo')}</strong><p>{t('overview.stepTwoBody')}</p></Link></div></section> : null}
       {entries.length === 0 && (assets.length > 0 || mediaFailed || mediaLoading) ? media : null}
       {entries.map((field, index) => <section key={field} id={`overview-${field}`} className={styles.section} data-hermes-protected="true">
         <h2>{t(`fields.${field}`)}</h2><ScientificText hideSourceMarkers as="p" className={styles.narrative}>{object.sdf.core[field]}</ScientificText>
-        <button type="button" className={styles.discuss} data-testid={`overview-discuss-${field}`} onClick={() => openAssistant(targets[field])}><img src="/hermes/wanko-static.png" alt="" />{t('overview.discuss')}</button>
+        <button type="button" className={styles.discuss} data-testid={`overview-discuss-${field}`} onClick={() => openAssistant(targets[field])}><MessageCircle size={18} aria-hidden="true" />{t('overview.discuss')}</button>
         {index === Math.min(1, entries.length - 1) ? media : null}
       </section>)}
       <details className={styles.evidence}>
