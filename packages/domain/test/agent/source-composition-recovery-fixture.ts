@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -100,4 +101,35 @@ export async function sourceReviewPacketFailureFixture() {
   return { ...f, source: f.db.ingestionTasks.find(row => row.id === source.id)!, run,
     composition: f.db.agentTasks.find(row => row.id === composition.id)!, review: f.db.agentTasks.find(row => row.id === review.id)!,
     packetInput: { ...f.recoveryInput, expectedVersion: run.version, idempotencyKey: 'same-packet-review-recovery' } };
+}
+
+export async function exhaustedRecoveredCompositionFixture() {
+  const f = await sourceReviewPacketFailureFixture();
+  await retryHermesGeneration(f.deps, f.packetInput);
+  const root = f.db.agentTasks.at(-1)!;
+  Object.assign(root, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.review.result) });
+  Object.assign(root.result.scientificReview, { status: 'blocked_scientific_review', attemptId: '22222222-2222-5222-8222-222222222222' });
+  for (const field of Object.keys(root.result.fieldDiagnosticsDetails)) root.result.fieldDiagnosticsDetails[field] = 'scientificReview=unavailable';
+  f.db.auditLogs.push({ id: 'recovered-packet-web-call', action: 'ai.gateway.call', requestId: root.id, actorId: null, targetType: 'ai_gateway',
+    metadata: { operation: 'scientific_review', outcome: 'failed', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
+      promptHash: 'c'.repeat(64), inputContentHash: f.reference.contentHash, fallbackReason: null, retryCount: 0, error: 'scientific_review_failed' } });
+  const stop = () => {
+    f.db.ingestionTasks.find(row => row.id === f.source.id)!.state = 'needs_review';
+    f.db.hermesResearchSteps.find(row => row.stage === 'source_review' && row.agentTaskId === f.db.agentTasks.at(-1)!.id)!.status = 'failed';
+    f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.status = 'failed';
+  };
+  stop();
+  const verifier = vi.fn(async () => true);
+  await retryHermesGeneration({ ...f.deps, canRetrySourceReviewBeforeSubmission: verifier }, {
+    ...f.packetInput, expectedVersion: f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.version,
+    idempotencyKey: 'last-packet-technical-successor' });
+  const current = f.db.agentTasks.at(-1)!;
+  Object.assign(current, { status: 'succeeded', executionAttempt: 1, result: structuredClone(root.result) });
+  stop(); verifier.mockClear();
+  const run = f.db.hermesResearchRuns.find(row => row.id === f.run.id)!;
+  // Persisted LIVE parser step is complete; the shared fake does not run parser-step reconciliation.
+  f.db.hermesResearchSteps.find(row => row.runId === run.id && row.stage === 'source_ingestion')!.status = 'succeeded';
+  return { ...f, root, current, run, verifier, deps: { ...f.deps, canRetrySourceReviewBeforeSubmission: verifier },
+    input: { ...f.input, taskId: f.source.id, sourceAgentTaskId: current.id, idempotencyKey: 'fresh-after-recovered-composition',
+      sourceReanalysis: { intent: 'new_paid_private_analysis' as const, sourceRunId: run.id, expectedRunVersion: run.version } } };
 }

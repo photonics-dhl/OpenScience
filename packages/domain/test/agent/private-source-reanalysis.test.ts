@@ -2,8 +2,75 @@ import { describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
 import { getHermesResearchRun, reconcileHermesResearchRuns } from '../../src/agent/research-run';
-import { resolveHermesPrivateSourceReanalysisExecution } from '../../src/ingestion/source-review-recovery';
+import { resolveHermesPrivateSourceReanalysisExecution, requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
+import { exhaustedRecoveredCompositionFixture } from './source-composition-recovery-fixture';
+
+
+describe('new private analysis after the real recovered-composition and packet history', () => {
+  it('does not grant the exhausted technical task an execution lease', async () => {
+    const f = await exhaustedRecoveredCompositionFixture();
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: f.current.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.root.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
+  });
+
+  it('keeps the original paid handle after its fresh normal run advances to review', async () => {
+    const f = await exhaustedRecoveredCompositionFixture();
+    const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
+    const { run, successor } = await advancePrivateSourceReanalysisToReview(f, created.id, 'source_review', 'fresh-after-recovered-run');
+    expect(run.maxAgentTasks).toBe(9);
+    expect(successor.id).not.toBe(f.current.id);
+    const before = structuredClone(f.db);
+    const replay = await reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: 'lost-first-response' });
+    expect(replay.id).toBe(created.id); expect(f.db).toEqual(before);
+  });
+  it('exposes one fresh analysis without reopening the exhausted review or calling its provider verifier', async () => {
+    const f = await exhaustedRecoveredCompositionFixture();
+    const view = await getHermesResearchRun(f.deps, { actorId: f.input.userId, researchObjectId: f.ids.ro, runId: f.run.id });
+    expect(view.sourceReanalysis).toEqual({ ingestionTaskId: f.source.id, sourceAgentTaskId: f.current.id });
+    expect(view.canRetryGeneration).not.toBe(true);
+    expect(f.verifier).not.toHaveBeenCalled();
+  });
+
+  it('reuses the exact Map with one new debit and replays the same paid operation without changing old history', async () => {
+    const f = await exhaustedRecoveredCompositionFixture(); const old = structuredClone(f.db);
+    const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
+    const replay = await reanalyzeConfirmedIngestion(f.deps, { ...f.input, idempotencyKey: 'other-browser-tab' });
+    expect(replay.id).toBe(created.id);
+    expect(f.db.agentTasks).toHaveLength(old.agentTasks.length + 1);
+    expect(f.db.usageLedger).toHaveLength(old.usageLedger.length + 1);
+    expect(f.db.hermesResearchRuns).toEqual(old.hermesResearchRuns);
+    expect(f.db.hermesResearchSteps).toEqual(old.hermesResearchSteps);
+    expect(f.db.agentTasks.slice(0, old.agentTasks.length)).toEqual(old.agentTasks);
+    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    expect(await resolveHermesPrivateSourceReanalysisExecution(f.prisma as unknown as Prisma.TransactionClient, {
+      ownerTaskId: owner.id, ingestionTaskId: created.id, sourceAgentTaskId: f.current.id, executionAttempt: 1,
+    })).toEqual({ sourceMapRef: f.reference });
+    expect(f.verifier).not.toHaveBeenCalled();
+  });
+
+  it.each(['composition-receipt', 'composition-debit', 'packet-receipt', 'packet-body', 'technical-proof', 'review-received', 'extra-step',
+    'review-session', 'source-map', 'current-pointer', 'composition-step', 'review-step'])(
+    'rejects changed %s before charging or creating a task', async change => {
+    const f = await exhaustedRecoveredCompositionFixture();
+    if (change === 'composition-receipt') f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_composition_recovery'
+      && row.targetId === f.run.id)!.metadata.sourceMapSha256 = '9'.repeat(64);
+    if (change === 'composition-debit') f.db.usageLedger.find(row => row.idempotencyKey === `agent-task-reserve:${f.composition.id}`)!.delta = 0;
+    if (change === 'packet-receipt') f.db.auditLogs.find(row => row.metadata?.newAgentTaskId === f.root.id)!.metadata.packetFailureEvidence.initialReviewAuditId = 'foreign';
+    if (change === 'packet-body') f.review.result.unverifiedSummaries.method += ' changed';
+    if (change === 'technical-proof') f.db.auditLogs.find(row => row.metadata?.newAgentTaskId === f.current.id)!.metadata.notSubmittedRecovery.input.promptHash = '9'.repeat(64);
+    if (change === 'review-received') f.current.result.scientificReview.status = 'review_received';
+    if (change === 'extra-step') f.db.hermesResearchSteps.push({ ...structuredClone(f.db.hermesResearchSteps.at(-1)!), id: 'foreign-step', ordinal: 3 });
+    if (change === 'review-session') f.db.agentSessions.find(row => row.id === f.current.sessionId)!.kind = 'chat';
+    if (change === 'source-map') f.current.result.sourceMapRef.serializedSha256 = '9'.repeat(64);
+    if (change === 'current-pointer') f.db.ingestionTasks.find(row => row.id === f.source.id)!.agentTaskId = f.root.id;
+    if (change === 'composition-step') f.db.hermesResearchSteps.find(row => row.stage === 'source_composition' && row.agentTaskId === f.composition.id)!.status = 'failed';
+    if (change === 'review-step') f.db.hermesResearchSteps.find(row => row.stage === 'source_review' && row.agentTaskId === f.current.id)!.status = 'succeeded';
+    const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length };
+    await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).rejects.toThrow();
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+  });
+});
 
 describe('new paid private source analysis', () => {
   it('starts fresh composition from the current full SourceMap without altering exhausted history', async () => {

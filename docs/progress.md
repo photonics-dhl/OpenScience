@@ -2,7 +2,7 @@
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
-- Hermes来源同轮原论文像素与成图native审核候选已补接，206 Domain/110 Worker及构建/TC/定向lint、独立High通过。真实原PDF离线21图页与全部关键来源/native body预检通过、0模型外呼；原文本丢式号已通过完整公式页视觉核查候选补接，不猜编号、不加AI阶段。生产已是公司修正e017，候选包含其合并；本增量仍待精确CI/部署/真实科学与Images2.5完整验收。详细身份、证据、未决与清理边界只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- Hermes来源与成图native像素审阅候选精确CI已成功，真实原PDF离线图页与关键来源/body预算通过，尚无真实科学验收。10-01站内核实a927凝练恢复后的失败历史缺新分析入口，已仅复用完整historical proof补接，Domain272/API45、build/TC/定向lint及High GO；旧任务和收费不改。入口候选仍待精确CI、部署及真实Hermes→Images2.5→Hermes审图；详细身份、证据、清理范围只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 09-30视频：真实H3原片已取回并完整解码，像素复核发现触材及非局域波纹；已修正后续提示，生成被供应商余额不足拒绝。原片/请求/收据已保留，未改RO公开状态；实际镜头和精确恢复点只见Hermes CURRENT。
 - 2026-09-30：公司评估用固定源码/服务器说明已完成，独立High与最终ZIP检查通过；用户确认公司只做正式上线和年度运维，功能继续由我方开发。快照、脱敏/验收边界与证据见 [评估交接](handoff/2026-09-30-vendor-evaluation.md)，未发送公司或部署应用。

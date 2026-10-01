@@ -97,6 +97,33 @@ export async function inspectHermesPrivateSourceReanalysis(tx: Prisma.Transactio
     || typeof settings.instruction !== 'string' || !settings.instruction.trim() || settings.instruction.length > 1000) return null;
   const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
   const reviews = run.steps.filter(step => step.stage === 'source_review').sort((a, b) => a.ordinal - b.ordinal);
+  if (run.steps.some(step => step.stage === 'source_composition')) {
+    const compositions = run.steps.filter(step => step.stage === 'source_composition').sort((a, b) => a.ordinal - b.ordinal);
+    if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || canonical[0]!.status !== 'succeeded'
+      || compositions.length !== 2 || compositions.some((step, index) => step.ordinal !== index
+        || step.status !== (index === 0 ? 'failed' : 'succeeded'))
+      || reviews.length !== 3 || reviews.some((step, index) => step.ordinal !== index || step.status !== 'failed')
+      || run.steps.length !== 6 || run.steps.length + 3 > run.maxAgentTasks || !canonical[0]!.agentTaskId) return null;
+    const history = await inspectCompletedHermesSourceReviewHistory(tx, run.id, canonical[0]!.agentTaskId);
+    const recovered = history ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
+    if (!history?.replacement || !recovered?.replacement || history.reviewMode !== 'web'
+      || history.recoveryClass !== SOURCE_REVIEW_NOT_SUBMITTED || !history.packetFailureEvidence
+      || recovered.replacement.id !== history.composition.id || history.source.id !== recovered.source.id) return null;
+    const { source, composition: anchor, replacement: current } = history;
+    const reference = recovered.reference;
+    if (source.state !== 'needs_review' || source.agentTaskId !== current.id
+      || !isDeepStrictEqual(parseDocumentSourceMapReference(record(current.result).sourceMapRef), reference)) return null;
+    const authority = await requireActiveMembership(tx, run.researchObject.workspaceId, run.actorId).catch(() => null);
+    if (!authority || authority.workspace.status !== 'active' || !SOURCE_WRITE_ROLES.has(authority.membership.role)) return null;
+    const tasks = await tx.agentTask.findMany({ where: { id: { in: reviews.map(step => step.agentTaskId!) } }, include: { session: true } });
+    if (tasks.length !== reviews.length || tasks.some(task => task.session.kind !== 'ingestion')) return null;
+    if (await findSavedIngestionCommit(tx, { taskId: source.id, researchObjectId: run.researchObjectId })
+      || await tx.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${source.id}` } })
+      || await tx.commit.findUnique({ where: { idempotencyKey: `hermes-ingestion:${run.id}:${source.id}` } })) return null;
+    return { run, source, current, anchor, reference,
+      input: { intent: PRIVATE_SOURCE_REANALYSIS, sourceRunId: run.id, expectedRunVersion: run.version },
+      historicalSessionIds: [...new Set([recovered.parent, recovered.failed, anchor, ...tasks].map(task => task.sessionId))] };
+  }
   if (canonical.length !== 1 || canonical[0]!.ordinal !== 0 || !['succeeded', 'failed'].includes(canonical[0]!.status)
     || reviews.length < 3 || run.steps.length !== 1 + reviews.length || run.steps.length + 3 > 9
     || reviews.some((step, index) => step.ordinal !== index || step.status !== 'failed' || !step.agentTaskId)
@@ -441,11 +468,24 @@ type SchemaContractRepairEvidence = {
 /** Read-only eligibility for an explicit paid recovery, never spend authorization or scientific approval. */
 export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionClient, runId: string,
   replacementTaskId?: string, canRetryBeforeSubmission?: SourceReviewNotSubmittedVerifier) {
+  return inspectHermesSourceReviewForPurpose(tx, runId, replacementTaskId, canRetryBeforeSubmission, 'execution');
+}
+
+/** Completed history proves only eligibility for a separate paid private analysis. */
+async function inspectCompletedHermesSourceReviewHistory(tx: Prisma.TransactionClient, runId: string, replacementTaskId: string) {
+  return inspectHermesSourceReviewForPurpose(tx, runId, replacementTaskId, undefined, 'completed-history');
+}
+
+async function inspectHermesSourceReviewForPurpose(tx: Prisma.TransactionClient, runId: string,
+  replacementTaskId: string | undefined, canRetryBeforeSubmission: SourceReviewNotSubmittedVerifier | undefined,
+  purpose: 'execution' | 'completed-history') {
+  const history = purpose === 'completed-history';
   const run = await tx.hermesResearchRun.findUnique({ where: { id: runId },
     include: { steps: true, researchObject: true } });
   if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.versionId !== null
     || run.sourceClaimIds.length || run.sourceReviewDigest || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
-    || !(replacementTaskId ? ['running', 'awaiting_source_review'].includes(run.status) : run.status === 'failed')) return null;
+    || !(history ? run.status === 'failed' && Boolean(replacementTaskId)
+      : replacementTaskId ? ['running', 'awaiting_source_review'].includes(run.status) : run.status === 'failed')) return null;
   const canonical = run.steps.filter(step => step.stage === 'source_ingestion');
   const compositions = run.steps.filter(step => step.stage === 'source_composition').sort((a, b) => a.ordinal - b.ordinal);
   const reviews = run.steps.filter(step => step.stage === 'source_review').sort((a, b) => a.ordinal - b.ordinal);
@@ -501,6 +541,11 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
   if (typeof anchorId !== 'string' || !anchorId || reviews.some(step => step.agentTaskId === anchorId)) return null;
   const composition = await tx.agentTask.findUnique({ where: { id: anchorId }, include: { session: true } });
   const replacement = replacementTaskId ? byId.get(replacementTaskId) : null;
+  if (history && (!replacement || replacement.status !== 'succeeded' || replacement.executionAttempt !== 1
+    || replacement.retryCount !== 0 || reviews.at(-1)?.status !== 'failed' || source?.state !== 'needs_review'
+    || record(record(replacement.result).scientificReview).kind !== 'independent_review'
+    || record(record(replacement.result).scientificReview).contractVersion !== '5'
+    || record(record(replacement.result).scientificReview).status !== 'blocked_scientific_review')) return null;
   if (!source || !failed || !composition || (replacementTaskId && !replacement)
     || source.agentTaskId !== (replacementTaskId ?? failed.id) || sourceStep.agentTaskId !== source.agentTaskId
     || source.artifactId !== sourceStep.artifactId || source.batch.userId !== run.actorId
@@ -530,6 +575,7 @@ export async function inspectHermesSourceReviewRecovery(tx: Prisma.TransactionCl
     }
   }
   const technicalReplacement = replacement && recoveryReceipts.get(replacement.id)?.recoveryClass === SOURCE_REVIEW_NOT_SUBMITTED;
+  if (history && !technicalReplacement) return null;
   const isIndependentIntent = (value: unknown) => value === INDEPENDENT_REVIEW_CLASS || value === PACKET_OVERFLOW_REVIEW_CLASS;
   const independentReplacement = replacement && (isIndependentIntent(recoveryReceipts.get(replacement.id)?.recoveryClass) || technicalReplacement);
   const technicalRoots = failedSteps.filter(step => isIndependentIntent(recoveryReceipts.get(step.agentTaskId!)?.recoveryClass));

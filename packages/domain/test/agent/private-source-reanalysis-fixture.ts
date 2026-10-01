@@ -153,7 +153,7 @@ export async function privateSourceReanalysisFixture() {
 export type PrivateSourceReanalysisFixture = Awaited<ReturnType<typeof privateSourceReanalysisFixture>>;
 
 export async function advancePrivateSourceReanalysisToReview(f: PrivateSourceReanalysisFixture, ingestionTaskId: string,
-  stage: 'source_review' | 'source_composition' = 'source_review') {
+  stage: 'source_review' | 'source_composition' = 'source_review', runKey = 'fresh-normal-narrative') {
   const original = f.db.agentTasks.find(task => f.db.ingestionTasks.find(source => source.id === ingestionTaskId)?.agentTaskId === task.id)!;
   Object.assign(original, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.anchorResult) });
   if (stage === 'source_composition') {
@@ -165,7 +165,7 @@ export async function advancePrivateSourceReanalysisToReview(f: PrivateSourceRea
   }
   f.db.ingestionTasks.find(source => source.id === ingestionTaskId)!.state = 'needs_review';
   const run = await createHermesResearchRun(f.deps, { actorId: f.input.userId, researchObjectId: f.ids.ro,
-    ingestionTaskIds: [ingestionTaskId], idempotencyKey: 'fresh-normal-narrative', generation: {
+    ingestionTaskIds: [ingestionTaskId], idempotencyKey: runKey, generation: {
       profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'auto', instruction: 'Explain the paper',
     } });
   await reconcileHermesResearchRuns(f.deps);

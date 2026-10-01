@@ -1,24 +1,41 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from '../../../packages/domain/test/agent/private-source-reanalysis-fixture';
+import { exhaustedRecoveredCompositionFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function apiFixture() {
-  const f = await privateSourceReanalysisFixture(); const redis = createFakeRedis();
+async function apiFixture(recoveredComposition = false) {
+  const f = recoveredComposition ? await exhaustedRecoveredCompositionFixture() : await privateSourceReanalysisFixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
     mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false });
   apps.push(app);
-  return { ...f, app, cookies: { openscience_session: token }, url: `/ingestion/${f.ids.source}/reanalyze`,
+  return { ...f, app, cookies: { openscience_session: token }, url: `/ingestion/${f.input.taskId}/reanalyze`,
     body: { processingConsent: true, sourceAgentTaskId: f.current.id, sourceReanalysis: f.input.sourceReanalysis } };
 }
 
 describe('POST existing ingestion reanalyze paid private source HTTP contract', () => {
+  it('uses the real recovered-composition history through the existing GET and POST without reopening it or charging twice', async () => {
+    const f = await apiFixture(true); const before = structuredClone(f.db);
+    const get = () => f.app.inject({ method: 'GET', url: `/research-objects/${f.ids.ro}/hermes-runs/${f.input.sourceReanalysis.sourceRunId}`, cookies: f.cookies });
+    const view = await get(); expect(view.statusCode).toBe(200);
+    expect(view.json().run.sourceReanalysis).toEqual({ ingestionTaskId: f.input.taskId, sourceAgentTaskId: f.current.id });
+    const post = (key: string) => f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
+      headers: { 'idempotency-key': key }, payload: f.body });
+    const first = await post('recovered-first-tab'); const replay = await post('recovered-second-tab');
+    expect(first.statusCode).toBe(202); expect(replay.statusCode).toBe(202); expect(first.json()).toEqual(replay.json());
+    expect(f.db.usageLedger).toHaveLength(before.usageLedger.length + 1);
+    expect(f.db.hermesResearchRuns).toEqual(before.hermesResearchRuns);
+    expect(f.db.hermesResearchSteps).toEqual(before.hermesResearchSteps);
+    expect(f.db.agentTasks.slice(0, before.agentTasks.length)).toEqual(before.agentTasks);
+    expect(f.verifier).not.toHaveBeenCalled();
+    expect((await get()).json().run.sourceReanalysis.existingIngestionTaskId).toBe(first.json().task.id);
+  });
   it('returns the unchanged 202 task envelope and replays different keys without a new charge or private task fields', async () => {
     const f = await apiFixture(); const before = f.db.usageLedger.length;
     const post = (key: string) => f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
