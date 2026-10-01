@@ -32,6 +32,17 @@ test('public guidance reaches creation through the research desk', async ({ page
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test('public guide sends an anonymous researcher to login with the desk destination', async ({ page }) => {
+  await prepare(page);
+  await page.route('**/api/auth/me', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'fixture anonymous' } } }));
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/guide');
+  await expect(page.locator('header a[href="/auth/login"]')).toBeVisible();
+  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
+  await page.getByRole('banner').getByRole('link', { name: '研究桌面', exact: true }).click();
+  await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fdashboard$/);
+});
+
 test('guide lessons support keyboard and mobile selection without business writes', async ({ page }) => {
   await prepare(page);
   const writes: string[] = [];
@@ -58,7 +69,7 @@ test('guide lessons support keyboard and mobile selection without business write
   expect(await page.locator('[data-guide-lesson]').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(writes).toEqual([]);
-  await page.locator('body').press('Control+Home');
+  await page.getByRole('banner').scrollIntoViewIfNeeded();
   await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile.png', fullPage: true });
 });
 
@@ -72,7 +83,7 @@ test('English guide keeps long lesson names and the desk entry readable', async 
   await expect(page.locator('article').getByRole('link', { name: 'Open research desk', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('[data-guide-lesson]')).toHaveCSS('opacity', '1');
-  await page.locator('body').press('Control+Home');
+  await page.getByRole('banner').scrollIntoViewIfNeeded();
   await page.screenshot({ path: '../../tmp/ui-narrative-20261001/guide-mobile-en.png', fullPage: true });
 });
 
