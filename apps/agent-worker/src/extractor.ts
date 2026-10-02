@@ -3044,17 +3044,34 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
   };
   return {
     draft(value: unknown, order = candidateOrder + 1, toolCallId?: string): Record<string, unknown> {
-      const validation = scientificCompositionValidation(sourceMap, passages());
-      if (!validation.guard(value)) return { status: 'invalid_draft', feedback: validation.feedback(value) };
+      const provided = passages(); const validation = scientificCompositionValidation(sourceMap, provided);
+      if (!validation.guard(value)) {
+        const known = new Set(provided.map(p => p.id));
+        const available = new Set(canonicalPassages(sourceMap).map(p => p.id));
+        const fields = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).fields : undefined;
+        const unread = fields && typeof fields === 'object' && !Array.isArray(fields) ? SDF_CORE_FIELDS.flatMap(field => {
+          const item = (fields as Record<string, unknown>)[field];
+          const ids = item && typeof item === 'object' && !Array.isArray(item) ? (item as Record<string, unknown>).sourcePassageIds : undefined;
+          const candidates = Array.isArray(ids) ? [...new Set(ids.filter((id): id is string => typeof id === 'string' && /^P\d{5}$/.test(id)))].slice(0, MAX_SOURCE_PASSAGE_IDS) : [];
+          const missing = candidates.filter(id => available.has(id) && !known.has(id));
+          const foreign = candidates.filter(id => !available.has(id));
+          return [
+            ...(missing.length ? [`fields.${field}.sourcePassageIds尚未完整读取：${missing.join('、')}；保留的主张确需这些来源时，用paper_read读取并核对支持关系。`] : []),
+            ...(foreign.length ? [`fields.${field}.sourcePassageIds不属于当前SourceMap：${foreign.join('、')}；不能引用这些编号，按实际原文核对证据。`] : []),
+          ];
+        }) : [];
+        return { status: 'invalid_draft', feedback: [validation.feedback(value), ...unread].join('\n') };
+      }
       if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; candidateToolCallId = toolCallId; }
       return { status: 'draft_ready',
         ...(toolCallId ? { draftToolCallId: toolCallId } : {}),
-        guidance: 'The full private draft is retained, not approved. Check its core mechanism, representative result, conditions and contrary material against original sources. Review this exact draft with explicit field decisions; accepted selects its existing text, revised supplies your actual correction. Choose only Claims needed to explain the contribution.' };
+        guidance: 'The private draft is retained, not approved. Recheck the relations that can change its core explanation: the mechanism, quantities and comparison scope, representative result, necessary conditions, and contrary source material. For retained extrema, necessity, causal or cross-case claims, read the applicable original scientific-critical-thinking method reference and use paper_read/paper_view to check support and counterexamples. Do not expand the science merely to fix formatting or read every rejected ID: read it if needed to support the retained claim, otherwise revise that claim and its evidence. Review this exact draft with explicit field decisions; accepted selects its existing text, revised supplies your actual correction. Claims and evidence requests serve the retained contribution.' };
     },
-    review(value: unknown): Record<string, unknown> {
+    review(value: unknown, toolCallId?: string): Record<string, unknown> {
       try {
         this.finish(JSON.stringify(value));
-        return { status: 'review_ready', guidance: 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, finish with {"reviewToolCallId":"the exact ID of this paper_review call"}; do not regenerate the full review.' };
+        return { status: 'review_ready', ...(toolCallId ? { reviewToolCallId: toolCallId } : {}),
+          guidance: 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, copy the returned reviewToolCallId into the final {"reviewToolCallId":"..."}; draftToolCallId identifies the draft, not this review. Do not regenerate the full review.' };
       } catch (error) {
         const shape = nativeReviewShapeFeedback(value);
         const compact = value && typeof value === 'object' && Object.hasOwn(value, 'draftToolCallId');

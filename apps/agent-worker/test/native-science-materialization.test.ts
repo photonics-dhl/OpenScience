@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { createNativeScientificMaterializer } from '../src/extractor';
 import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft } from '../src/native-agent/paper-task';
+import { createNativePaperTools } from '../src/native-agent/paper-tools';
 import type { ChatMessage } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 const parser = { name: 'fixture', version: '1' };
@@ -51,6 +52,51 @@ describe('actual native Agent scientific materializer', () => {
   });
   const compactReview = () => ({ draftToolCallId: 'draft-a', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
     needsMoreEvidence: [], claimSuggestions: 'unchanged' });
+  it('returns the actual successful review ID for final selection and keeps the draft ID unusable as a review', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const receipt = worker.review(compactReview(), 'review-a');
+    expect(receipt).toMatchObject({ status: 'review_ready', reviewToolCallId: 'review-a' });
+    const messages = reviewedHistory(); messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(compactReview());
+    messages[3]!.content = JSON.stringify(receipt);
+    expect(finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages,
+      JSON.stringify({ reviewToolCallId: receipt.reviewToolCallId })).core.insight).toBe(source);
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages,
+      JSON.stringify({ reviewToolCallId: 'draft-a' }))).toThrow('selected review');
+  });
+  it('does not expose a ready-review selection ID for a rejected review', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const value = { ...compactReview(), draftToolCallId: 'other-draft' };
+    const receipt = worker.review(value, 'review-invalid');
+    expect(receipt.status).toBe('invalid_review');
+    expect(receipt).not.toHaveProperty('reviewToolCallId');
+  });
+  it('reports every unread source ID in the draft without silently reading or changing its evidence', async () => {
+    const largerMap = structuredClone(map);
+    largerMap.pages[0]!.blocks.push({ ...structuredClone(largerMap.pages[0]!.blocks[0]!), id: 'two' },
+      { ...structuredClone(largerMap.pages[0]!.blocks[0]!), id: 'three' });
+    for (const block of largerMap.pages[0]!.blocks) block.text = source.repeat(6);
+    const paper = createNativePaperTools(largerMap, async () => []);
+    await paper.call('paper_read', { passageIds: ['P00001'] });
+    const worker = createNativeScientificMaterializer(largerMap, () => paper.observedPassageIds);
+    const value = draft(); value.fields.limitations!.sourcePassageIds = ['P00002']; value.fields.reproducibility!.sourcePassageIds = ['P00003'];
+    const receipt = worker.draft(value, 1, 'draft-a');
+    expect(receipt.status).toBe('invalid_draft');
+    expect(receipt.feedback).toContain('fields.limitations.sourcePassageIds');
+    expect(receipt.feedback).toContain('P00002');
+    expect(receipt.feedback).toContain('fields.reproducibility.sourcePassageIds');
+    expect(receipt.feedback).toContain('P00003');
+    expect(paper.observedPassageIds).toEqual(['P00001']);
+    await paper.call('paper_read', { passageIds: ['P00002', 'P00003'] });
+    expect(worker.draft(value, 2, 'draft-a').status).toBe('draft_ready');
+  });
+  it('distinguishes nonexistent source IDs from passages that can actually be read', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']);
+    const value = draft(); value.fields.method!.sourcePassageIds = ['P99999'];
+    const receipt = worker.draft(value, 1, 'draft-a');
+    expect(receipt.status).toBe('invalid_draft');
+    expect(receipt.feedback).toContain('不属于当前SourceMap：P99999');
+    expect(receipt.feedback).not.toContain('用paper_read读取');
+  });
   it('consumes a short final selection of the actual compact review and reconstructs the bound draft after restart', () => {
     const messages = reviewedHistory(); messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(compactReview());
     const result = finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, JSON.stringify({ reviewToolCallId: 'review-a' }));
