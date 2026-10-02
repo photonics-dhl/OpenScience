@@ -51,7 +51,8 @@ describe('failed Hermes source reanalysis entry', () => {
     const html = renderRun(run);
     expect(html).toContain(locale === 'zh' ? '新建付费分析并继续' : 'Start new paid analysis');
     expect(html).toContain('PDF/OCR');
-    expect(html).toContain('ChatGPT');
+    expect(html).toContain(locale === 'zh' ? '后续生图等待新服务接入' : 'image generation will continue after the new service is connected');
+    expect(html).not.toContain('ChatGPT');
     run.sourceReanalysis = undefined;
     expect(renderRun(run)).not.toContain(locale === 'zh' ? '新建付费分析并继续' : 'Start new paid analysis');
   });
