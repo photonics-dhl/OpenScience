@@ -4,7 +4,7 @@
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
-- 10-02 原生Hermes修复精确CI通过，Native-only ffe4安装激活exit0、应用仍f011；原timer/public runtime配对恢复。真实broker隔离挂载与Skill选择错误已修，Worker成功读取trace仅候选未部署。新私有task cdaafe20实际读取Skill/正文/原图并形成草稿，但复核JSON层级错误循环后failed；原18份回答/费用保护。位置反馈及实际请求上限按剩余额度收窄的Worker候选红绿41/41、TC/lint通过，最终High GO及1c精确CI已通过；真实草稿科学问题进一步促使两句Native goal工作流改写，主动回读核心断言/算例/条件/直接来源及原页编号/表达冲突，增量High GO；补入口控制/TC/lint、新精确CI后合并一次发布，未建v3；科学输出、原生分镜/审图与2–3篇普通作者自动出图/人审公开尚待验收。版本/任务/证据与下一步只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 10-02 原生Hermes的工具反馈、成功Skill trace、剩余预算与主动证据复核流程已通过精确CI/High并正常应用发布；Native运行配对、可写目录与调度器实读通过。首次字体下载失败未切服务，实际Next字体fetch恢复后发布exit0。唯一新的普通私有论文分析已running，真实Skill/原文/原页工具正在运行；旧失败回答/费用保留。科学结果、原生分镜/审图及2–3篇普通作者自动出图/人审公开仍未验收。唯一版本、任务、证据与下一步见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 09-30视频：真实H3原片已取回并完整解码，像素复核发现触材及非局域波纹；已修正后续提示，生成被供应商余额不足拒绝。原片/请求/收据已保留，未改RO公开状态；实际镜头和精确恢复点只见Hermes CURRENT。
 - 2026-09-30：公司评估用固定源码/服务器说明已完成，独立High与最终ZIP检查通过；用户确认公司只做正式上线和年度运维，功能继续由我方开发。快照、脱敏/验收边界与证据见 [评估交接](handoff/2026-09-30-vendor-evaluation.md)，未发送公司或部署应用。
