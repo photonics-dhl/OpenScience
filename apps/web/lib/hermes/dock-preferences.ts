@@ -84,12 +84,25 @@ export function resetHermesDockPreferences(
 
 export function resolveHermesDock(
   preferences: HermesDockPreferences,
-  viewport: { width: number; height: number },
+  viewport: { width: number; height: number; left?: number; top?: number },
   actor: { width: number; height: number },
   viewportChanged: boolean,
 ) {
-  const desired = { x: preferences.xRatio * viewport.width, y: preferences.yRatio * viewport.height };
+  const desired = {
+    x: (viewport.left ?? 0) + preferences.xRatio * viewport.width,
+    y: (viewport.top ?? 0) + preferences.yRatio * viewport.height,
+  };
   if (!viewportChanged) return desired;
+  return clampHermesDockToViewport(desired, viewport, actor);
+}
+
+export function clampHermesDockToViewport(
+  desired: { x: number; y: number },
+  viewport: { width: number; height: number; left?: number; top?: number },
+  actor: { width: number; height: number },
+) {
+  const left = viewport.left ?? 0;
+  const top = viewport.top ?? 0;
   return resolveHermesSettledDock({
     desired,
     footprint: {
@@ -99,6 +112,6 @@ export function resolveHermesDock(
       top: actor.height / 2,
     },
     obstacles: [],
-    viewport: { bottom: viewport.height, left: 0, right: viewport.width, top: 0 },
+    viewport: { bottom: top + viewport.height, left, right: left + viewport.width, top },
   }).point;
 }

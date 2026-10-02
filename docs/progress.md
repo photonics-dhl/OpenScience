@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-01 UI：用户选指南A继续细化，已允许统一首页导航，Landing主视觉与正文保留；设计配置试用、新原生候选及验证边界只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 10-02 UI：用户授权全部页面修改部署和公司Word更新；整轮UI已合入canonical，软键盘Hermes位置P2已修，定向检查通过，发布复审与CI进行中。布局、360px/嘴部气泡、实际上线与观察边界只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 

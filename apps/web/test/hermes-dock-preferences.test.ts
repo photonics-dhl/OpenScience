@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  clampHermesDockToViewport,
   loadHermesDockPreferences,
   hasStoredHermesDockPreferences,
   resetHermesDockPreferences,
   resolveHermesDock,
   saveHermesDockPreferences,
 } from '@/lib/hermes/dock-preferences';
+import { resolveHermesFloatingSize } from '@/lib/hermes/stage-sizing';
 
 class MemoryStorage {
   private readonly values = new Map<string, string>();
@@ -58,5 +60,21 @@ describe('Hermes dock preferences', () => {
     resetHermesDockPreferences(storage, 'workspace-a', 'desktop');
     expect(hasStoredHermesDockPreferences(storage, 'workspace-a', 'desktop')).toBe(false);
     expect(storage.getItem('openscience:hermes-dock:v1:workspace-a:desktop')).toBeNull();
+  });
+
+  it.each([{ left: 0, top: 0 }, { left: 42, top: 96 }])('keeps the whole companion visible with a keyboard or panned viewport: %j', (offset) => {
+    const viewport = { ...offset, width: 390, height: 300 };
+    const size = resolveHermesFloatingSize(viewport.width, viewport.height);
+    const actor = { width: size, height: size };
+    const preferences = loadHermesDockPreferences(new MemoryStorage(), 'workspace-a', 'mobile');
+    const initial = resolveHermesDock(preferences, viewport, actor, true);
+    const restored = clampHermesDockToViewport({ x: 343, y: 658 }, viewport, actor);
+
+    for (const point of [initial, restored]) {
+      expect(point.x - size / 2).toBeGreaterThanOrEqual(viewport.left);
+      expect(point.y - size / 2).toBeGreaterThanOrEqual(viewport.top);
+      expect(point.x + size / 2).toBeLessThanOrEqual(viewport.left + viewport.width);
+      expect(point.y + size / 2).toBeLessThanOrEqual(viewport.top + viewport.height);
+    }
   });
 });

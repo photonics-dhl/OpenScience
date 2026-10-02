@@ -10,6 +10,7 @@ import { resolveHermesAutonomousAction, type HermesBehaviorInput } from '@/lib/h
 import { createHermesAnchorRegistry, type HermesAnchorAction, type HermesAnchorId, type HermesAnchorRegistration, type HermesAnchorRegistry } from '@/lib/hermes/anchor-registry';
 import type { WorkspaceGuidePayload } from '@/lib/api';
 import {
+  clampHermesDockToViewport,
   hasStoredHermesDockPreferences,
   loadHermesDockPreferences,
   resolveHermesDock,
@@ -539,6 +540,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [guideBubbleMeasuring, guideTarget]);
 
   useEffect(() => {
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
     setDockReady(false);
     const kind = viewportClass();
     const contextPrefix = `${workspaceId}:${kind}:`;
@@ -557,13 +559,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     setCustomDock(stored);
     if (stored || !hasUsableAnchor) {
       const size = stageSize;
-      const resolved = resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true);
+      const resolved = resolveHermesDock(preferences, viewportSize, { height: size, width: size }, true);
       positionRef.current = resolved;
       setPosition(resolved);
     }
     setDockKind(kind);
     setDockReady(true);
-  }, [stageSize, hasUsableAnchor, workspaceId]);
+  }, [stageSize, hasUsableAnchor, viewportSize, workspaceId]);
 
   useClientLayoutEffect(() => {
     const currentPathname = window.location.pathname;
@@ -586,12 +588,9 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, currentKind);
     const desired = currentContextMatches
       ? origin.point
-      : resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: half * 2, width: half * 2 }, true);
+      : resolveHermesDock(preferences, viewportSize, { height: half * 2, width: half * 2 }, true);
     if (!currentContextMatches) setCustomDock(stored);
-    const restored = {
-      x: Math.min(window.innerWidth - half, Math.max(half, desired.x)),
-      y: Math.min(window.innerHeight - half, Math.max(half, desired.y)),
-    };
+    const restored = clampHermesDockToViewport(desired, viewportSize, { height: stageSize, width: stageSize });
     const stageBounds = stageRef.current?.getBoundingClientRect();
     const actualCenter = stageBounds ? {
       x: stageBounds.left + stageBounds.width / 2,
@@ -617,7 +616,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     setGuideRestoreActive(true);
     positionRef.current = restored;
     setPosition(restored);
-  }, [stageSize, customDock, dockKind, dockReady, dragging, guideTarget, pathname, workspaceId]);
+  }, [stageSize, customDock, dockKind, dockReady, dragging, guideTarget, pathname, viewportSize, workspaceId]);
 
   const consumeSettledMove = useCallback(() => {
     const stage = stageRef.current;
@@ -757,20 +756,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const bubble = bubbleRef.current;
     const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
     if (!stage || !bubble || !actor) return;
-    const viewport = window.visualViewport;
     const placement = resolveHermesBubblePlacement({
       actor: expandHermesRectForMotion(actor.getBoundingClientRect(), visualAction),
       bubble: { height: bubble.offsetHeight, width: bubble.offsetWidth },
       obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
         .map((element) => element.getBoundingClientRect())
-        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
-          && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
-      viewport: {
-        bottom: (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight),
-        left: viewport?.offsetLeft ?? 0,
-        right: (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth),
-        top: viewport?.offsetTop ?? 0,
-      },
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > viewportSize.left && bounds.bottom > viewportSize.top
+          && bounds.left < viewportSize.right && bounds.top < viewportSize.bottom),
+      viewport: viewportSize,
     });
     const stageBounds = stage.getBoundingClientRect();
     setBubblePlacement(placement ? {
@@ -998,17 +991,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   useEffect(() => {
     if (!dockReady || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     if (guideTarget) return;
-    const size = stageSize;
-    const half = size / 2;
-    const viewportLeft = 0;
-    const viewportTop = 0;
-    const viewportRight = window.innerWidth;
-    const viewportBottom = window.innerHeight;
     const current = positionRef.current;
-    const next = {
-      x: Math.min(viewportRight - half, Math.max(viewportLeft + half, current.x)),
-      y: Math.min(viewportBottom - half, Math.max(viewportTop + half, current.y)),
-    };
+    const next = clampHermesDockToViewport(current, viewportSize, { height: stageSize, width: stageSize });
     if (Math.hypot(next.x - current.x, next.y - current.y) >= .05) setPosition(next);
   }, [stageSize, dockReady, guideTarget, viewportSize]);
 
@@ -1034,9 +1018,9 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       }, 'patrol'),
       obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
         .map((element) => element.getBoundingClientRect())
-        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
-          && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
-      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > viewportSize.left && bounds.bottom > viewportSize.top
+          && bounds.left < viewportSize.right && bounds.top < viewportSize.bottom),
+      viewport: viewportSize,
     });
     setPatrolEnvelopeSafe(settled.safe);
     if (!settled.safe || Math.hypot(settled.point.x - anchorCenter.x, settled.point.y - anchorCenter.y) < .5) return;
@@ -1079,13 +1063,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     }, footprintFromBounds(stageBounds, center));
     const obstacles = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
       .map((element) => element.getBoundingClientRect())
-      .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
-        && bounds.left < window.innerWidth && bounds.top < window.innerHeight);
+      .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > viewportSize.left && bounds.bottom > viewportSize.top
+        && bounds.left < viewportSize.right && bounds.top < viewportSize.bottom);
     const settled = resolveHermesSettledDock({
       desired: center,
       footprint,
       obstacles,
-      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+      viewport: viewportSize,
     });
     if (!settled.safe) {
       setPatrolEnvelopeSafe(false);
@@ -1095,7 +1079,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       desired: settled.point,
       footprint: expandHermesFootprintForMotion(footprint, 'patrol'),
       obstacles,
-      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+      viewport: viewportSize,
     });
     setPatrolEnvelopeSafe(patrolSettled.safe
       && Math.hypot(patrolSettled.point.x - settled.point.x, patrolSettled.point.y - settled.point.y) < .5);
@@ -1109,8 +1093,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, dockKind);
         saveHermesDockPreferences(window.localStorage, workspaceId, dockKind, {
           ...preferences,
-          xRatio: settled.point.x / window.innerWidth,
-          yRatio: settled.point.y / window.innerHeight,
+          xRatio: (settled.point.x - viewportSize.left) / viewportSize.width,
+          yRatio: (settled.point.y - viewportSize.top) / viewportSize.height,
         });
         setDockStored(true);
         setSettlingNewDock(false);
@@ -1123,8 +1107,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     saveHermesDockPreferences(window.localStorage, workspaceId, kind, {
       ...preferences,
-      xRatio: settled.point.x / window.innerWidth,
-      yRatio: settled.point.y / window.innerHeight,
+      xRatio: (settled.point.x - viewportSize.left) / viewportSize.width,
+      yRatio: (settled.point.y - viewportSize.top) / viewportSize.height,
     });
   }, [behavior.primary, stageSize, customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion,
     settlingDockReady, settlingNewDock, stageMotionVersion, viewportSize, workspaceId]);
@@ -1198,12 +1182,11 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         advancePerformance(nextPointer, true);
         return;
       }
-      const halfWidth = bounds.width / 2;
-      const halfHeight = bounds.height / 2;
-      setPosition({
-        x: Math.min(window.innerWidth - halfWidth, Math.max(halfWidth, drag.originX + dx)),
-        y: Math.min(window.innerHeight - halfHeight, Math.max(halfHeight, drag.originY + dy)),
-      });
+      setPosition(clampHermesDockToViewport(
+        { x: drag.originX + dx, y: drag.originY + dy },
+        viewportSize,
+        { width: bounds.width, height: bounds.height },
+      ));
     }
     advancePerformance(nextPointer, Boolean(drag));
   };
@@ -1253,13 +1236,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     } : actorMotionFootprint;
     const obstacles = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
       .map((element) => element.getBoundingClientRect())
-      .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
-        && bounds.left < window.innerWidth && bounds.top < window.innerHeight);
+      .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > viewportSize.left && bounds.bottom > viewportSize.top
+        && bounds.left < viewportSize.right && bounds.top < viewportSize.bottom);
     const instantSettled = resolveHermesSettledDock({
       desired: center,
       footprint,
       obstacles,
-      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+      viewport: viewportSize,
     });
     if (!instantSettled.safe) {
       setPatrolEnvelopeSafe(false);
@@ -1271,7 +1254,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       desired: instantSettled.point,
       footprint: motionFootprint,
       obstacles,
-      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+      viewport: viewportSize,
     });
     const maximumEnvelopeCorrection = Math.min(
       Math.max(...Object.values(HERMES_PATROL_MOTION_ENVELOPE)) + 12,
@@ -1279,10 +1262,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     );
     const edgeAllowance = stageBounds.width * .2 + 2;
     const releasedEdges = [
-      { final: motionSettled.point.x - actorFootprint.left, initial: stageBounds.left },
-      { final: window.innerWidth - motionSettled.point.x - actorFootprint.right, initial: window.innerWidth - stageBounds.right },
-      { final: motionSettled.point.y - actorFootprint.top, initial: stageBounds.top },
-      { final: window.innerHeight - motionSettled.point.y - actorFootprint.bottom, initial: window.innerHeight - stageBounds.bottom },
+      { final: motionSettled.point.x - actorFootprint.left - viewportSize.left, initial: stageBounds.left - viewportSize.left },
+      { final: viewportSize.right - motionSettled.point.x - actorFootprint.right, initial: viewportSize.right - stageBounds.right },
+      { final: motionSettled.point.y - actorFootprint.top - viewportSize.top, initial: stageBounds.top - viewportSize.top },
+      { final: viewportSize.bottom - motionSettled.point.y - actorFootprint.bottom, initial: viewportSize.bottom - stageBounds.bottom },
     ];
     const nearestReleasedEdge = releasedEdges.reduce((nearest, candidate) => (
       candidate.initial < nearest.initial ? candidate : nearest
@@ -1298,8 +1281,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     saveHermesDockPreferences(window.localStorage, workspaceId, kind, {
       ...preferences,
-      xRatio: settled.point.x / window.innerWidth,
-      yRatio: settled.point.y / window.innerHeight,
+      xRatio: (settled.point.x - viewportSize.left) / viewportSize.width,
+      yRatio: (settled.point.y - viewportSize.top) / viewportSize.height,
     });
   };
 
