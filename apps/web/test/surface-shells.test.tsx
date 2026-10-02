@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -16,7 +16,18 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'en',
   useTranslations: () => (key: string) => key,
 }));
+vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
+  getTranslations: async () => (key: string) => key,
+}));
+vi.mock('next/font/google', () => ({
+  Archivo: () => ({ className: 'archivo-font' }),
+}));
+vi.mock('@/lib/public-server-api', () => ({
+  getServerResearchIndex: async () => ({ items: [], nextCursor: null }),
+}));
 vi.mock('next/navigation', () => ({
+  usePathname: () => null,
   useRouter: () => ({ replace: () => undefined }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -83,6 +94,28 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(primitives).toContain('motion-reduce:[&_a]:transform-none');
   });
 
+  it('renders the actual Landing Page with a wrapped public row and separate work utilities', async () => {
+    vi.stubGlobal('React', React);
+    const { default: Page } = await import('../app/page');
+    const markup = renderToStaticMarkup(await Page());
+    const header = markup.match(/<header\b[^>]*>[\s\S]*?<\/header>/u)?.[0] ?? '';
+    const navigation = header.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? '';
+    const outsideNavigation = header.replace(navigation, '');
+
+    expect(navigation).toContain('data-mobile-navigation-layout="wrapped"');
+    expect(navigation).toContain('data-mobile-navigation-grid="true"');
+    expect(navigation.match(/href="([^"]+)"/gu)).toEqual([
+      'href="/explore"', 'href="/journals"', 'href="/guide"',
+    ]);
+    expect(outsideNavigation).toContain('data-shell-utility="true"');
+    for (const href of ['/dashboard', '/auth/login']) {
+      expect(outsideNavigation).toContain(`href="${href}"`);
+      expect(navigation).not.toContain(`href="${href}"`);
+    }
+    expect(navigation).not.toContain('<details');
+    expect(navigation).not.toContain('href="/research-objects/new"');
+  });
+
   it('marks primary shell navigation as protected from the Hermes travel footprint', () => {
     const dashboard = renderToStaticMarkup(createElement(
       DashboardShell,
@@ -111,9 +144,10 @@ describe('Optical Editorial brand and surface shells', () => {
     ));
 
     expect(markup).toContain('data-product-route-navigation="true"');
-    for (const href of ['/dashboard', '/explore', '/research-objects/new', '/settings']) {
+    for (const href of ['/dashboard', '/explore', '/journals', '/guide']) {
       expect(markup).toContain(`href="${href}"`);
     }
+    expect(markup).not.toContain('href="/research-objects/new"');
   });
 
   it('identity pages keep public discovery and the research desk reachable', () => {
@@ -187,7 +221,7 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(entry).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
-  it('offers extraction recovery only for the legacy proposal-unavailable result without a core', () => {
+  it('preserves the existing extraction recovery budget and legacy proposal recovery', () => {
     expect(isRetryableSdfExtraction({
       state: 'needs_review', retryCount: 0, result: { status: 'needs_review', reason: 'sdf-proposal-unavailable' },
     })).toBe(true);
@@ -195,7 +229,8 @@ describe('Optical Editorial brand and surface shells', () => {
       state: 'needs_review', retryCount: 0, result: { core: { problem: 'reviewable' } },
     })).toBe(false);
     expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 0, result: null })).toBe(true);
-    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(false);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 1, result: null })).toBe(true);
+    expect(isRetryableSdfExtraction({ state: 'failed_retryable', retryCount: 2, result: null })).toBe(false);
   });
 
   it('offers review-only preflight recovery once and keeps other blocked sources non-retryable', () => {
@@ -237,7 +272,7 @@ describe('Optical Editorial brand and surface shells', () => {
 
     expect(markup.match(/data-literature-entry="true"/g)).toHaveLength(1);
     expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
-    expect(markup).toContain('data-literature-tone="dark"');
+    expect(markup).toContain('data-literature-tone="paper"');
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 

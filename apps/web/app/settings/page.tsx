@@ -11,10 +11,8 @@ import { AccountLink } from '@/components/navigation/AccountLink';
 import { MotionPreferenceControl } from '@/components/settings/MotionPreferenceControl';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import {
-  ApiClientError,
   logout,
 } from '@/lib/api';
-import { SurfaceState } from '@/components/research/ResearchSurfaceShell';
 import { useSession } from '@/components/auth/SessionProvider';
 import { AccountLoadState } from '@/components/settings/AccountLoadState';
 import { UsageBalance } from '@/components/settings/UsageBalance';
@@ -22,10 +20,11 @@ import { UsageBalance } from '@/components/settings/UsageBalance';
 export default function SettingsPage() {
   const t = useTranslations('productSurfaces');
   const meT = useTranslations('myAccount');
+  const actionT = useTranslations('trash');
   const locale = useLocale();
   const router = useRouter();
   const { user, status, refresh } = useSession();
-  const [error, setError] = useState<ApiClientError | Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -35,11 +34,10 @@ export default function SettingsPage() {
     }
     if (status === 'anonymous') router.replace('/auth/login?returnTo=%2Fsettings');
   }, [router, status]);
-  async function signOut() { setBusy(true); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause as Error); setBusy(false); } }
-  if (error) return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
-  if (!user || status !== 'authenticated') return <DashboardShell activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('settingsTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
+  async function signOut() { if (busy) return; setBusy(true); setError(null); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause instanceof Error ? cause : new Error(t('state.errorTitle'))); setBusy(false); } }
+  if (!user || status !== 'authenticated') return <DashboardShell mainClassName="craft-account" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('settingsTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
   return (
-    <DashboardShell className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
+    <DashboardShell mainClassName="craft-account" className="account-workspace" activeRoute="settings" headerActions={<AccountLink user={user} />} navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
       <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('settings.kicker')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('settingsTitle')}</h1>
@@ -57,9 +55,13 @@ export default function SettingsPage() {
         <UsageBalance />
         <section className="surface-folio-sheet px-5 py-6">
           <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
-          <div className="mt-5 flex items-center justify-between border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>
+          <div className="account-preference-row mt-5 border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>
           <MotionPreferenceControl />
-          <button data-reading-role="control" className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink disabled:opacity-40" disabled={busy} onClick={signOut}><LogOut className="h-4 w-4" />{t('settings.signOut')}</button>
+          <div className="account-form-actions mt-6" aria-busy={busy}>
+            <button type="button" data-reading-role="control" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink disabled:opacity-40" disabled={busy} onClick={signOut}><LogOut className="h-4 w-4" />{busy ? actionT('working') : t('settings.signOut')}</button>
+            {busy ? <span role="status">{actionT('working')}</span> : null}
+          </div>
+          {error ? <p role="alert" className="account-form-error mt-3">{error.message}</p> : null}
         </section>
       </div>
     </DashboardShell>

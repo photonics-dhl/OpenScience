@@ -327,12 +327,12 @@ async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) 
 }
 
 function expectedGlobalRoutes(surface: string) {
-  if (surface === 'landing') return ['/explore', '/research-objects/new', '/auth/login'];
+  if (surface === 'landing') return ['/explore', '/journals', '/guide', '/dashboard', '/auth/login'];
   if (surface === 'auth' || surface === 'login') return ['/dashboard', '/explore'];
   if (surface === 'public' || surface === 'explore' || surface === 'collection') {
-    return ['/dashboard', '/explore', '/research-objects/new', '/auth/login'];
+    return ['/dashboard', '/explore', '/journals', '/guide', '/auth/login'];
   }
-  return ['/dashboard', '/explore', '/research-objects/new', '/settings'];
+  return ['/dashboard', '/explore', '/journals', '/guide'];
 }
 
 async function assertGlobalRouteNavigation(page: Page, surface: string) {
@@ -433,7 +433,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
     });
     expect(postStateGeometry.excess, JSON.stringify(postStateGeometry.offenders, null, 2)).toBe(0);
     expect(postStateGeometry.companionOverlaps).toEqual([]);
-    expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
+    expect(await page.locator('[data-hermes-global-companion="true"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
 
     if (motionContract === 'static-optical') {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
@@ -500,8 +500,8 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   const trigger = page.locator('[data-hermes-input-owner="true"]');
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.waitForTimeout(4500);
-  expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
-  expect(await page.locator('[data-hermes-placement="anchored"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
+  expect(await page.locator('[data-hermes-global-companion="true"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
+  expect(await page.locator('[data-hermes-global-companion="true"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
   await page.locator('[data-hermes-companion-margin="true"]').evaluate((margin) => {
     const actor = margin.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
     if (!actor) throw new Error('Hermes actor is missing');
@@ -1034,7 +1034,7 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
     const tip = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const mouthPoint = { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
     const tipPoint = { x: tip.left + tip.width / 2, y: tip.top + tip.height / 2 };
-    const bodyBottom = feedback.top + feedback.height * (92 / 148);
+    const bodyBottom = feedback.top + feedback.height * (99 / 188);
     return {
       bodyClearance: crown.top + crown.height / 2 - bodyBottom,
       distance: Math.hypot(tipPoint.x - mouthPoint.x, tipPoint.y - mouthPoint.y),
@@ -1057,27 +1057,9 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(presence).toBeVisible();
-  await presence.locator('summary').click();
-  await presence.getByRole('menuitemradio', { name: /original/i }).focus();
-  await page.keyboard.press('ArrowDown');
-  await expect(presence.getByRole('menuitemradio', { name: /compact/i })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(presence.locator('summary')).toBeFocused();
-
-  for (const [choice, expectedSize] of [['compact', '200'], ['quiet', '200'], ['original', '360']] as const) {
-    await presence.locator('summary').click();
-    await presence.getByRole('menuitemradio', { name: new RegExp(choice, 'i') }).click();
-    await expect(stage).toHaveAttribute('data-hermes-presence-mode', choice);
-    await expect(stage).toHaveAttribute('data-hermes-stage-size', expectedSize);
-    await expect(presence.locator('summary')).toBeFocused();
-    if (choice !== 'original') {
-      await trigger.click({ button: 'right' });
-      await expect(page.getByRole('menu', { name: /Hermes/u })).toHaveAttribute('data-compact', 'true');
-      await page.keyboard.press('Escape');
-    }
-  }
-  await page.screenshot({ fullPage: true, path: `${outDir}/hermes-presence-editor.png`, animations: 'disabled' });
+  await expect(presence).toHaveCount(0);
+  await expect(stage).toHaveAttribute('data-hermes-size-mode', 'automatic');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
 
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
@@ -1103,7 +1085,6 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const mouth = document.querySelector<HTMLElement>('[data-hermes-visible-mouth-anchor="true"]')!.getBoundingClientRect();
     const tail = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const stateLabel = document.querySelector<HTMLElement>('.hermes-visual-state-label')!.getBoundingClientRect();
-    const presence = document.querySelector<HTMLElement>('[data-hermes-presence-control="true"]')!.getBoundingClientRect();
     const motion = document.querySelector<HTMLElement>('.hermes-motion-enable')!.getBoundingClientRect();
     const tailTip = {
       x: tail.left + tail.width / 2,
@@ -1112,14 +1093,13 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const overlaps = (first: DOMRect, second: DOMRect) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
     return {
       actorVisible: actor.width > 0 && actor.height > 0,
-      bodyClearance: crown.top + crown.height / 2 - (feedback.top + feedback.height * (92 / 148)),
+      bodyClearance: crown.top + crown.height / 2 - (feedback.top + feedback.height * (99 / 188)),
       contained: feedback.left >= margin.left && feedback.right <= margin.right && feedback.top >= margin.top && feedback.bottom <= margin.bottom,
       excess: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
       mouthDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
       pseudoTailCount: [getComputedStyle(feedbackNode, '::before').content, getComputedStyle(feedbackNode, '::after').content].filter((content) => content !== 'none').length,
       stateCollision: overlaps(feedback, stateLabel),
-      presenceCollision: overlaps(feedback, presence),
       motionCollision: overlaps(feedback, motion),
       tailTip,
       tailContained: tailTip.x >= margin.left && tailTip.x <= margin.right && tailTip.y >= margin.top && tailTip.y <= margin.bottom,
@@ -1133,7 +1113,6 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   expect(geometry.mouthDistance, JSON.stringify(geometry)).toBeLessThanOrEqual(8);
   expect(geometry.pseudoTailCount, JSON.stringify(geometry)).toBe(0);
   expect(geometry.stateCollision, JSON.stringify(geometry)).toBe(false);
-  expect(geometry.presenceCollision, JSON.stringify(geometry)).toBe(false);
   expect(geometry.motionCollision, JSON.stringify(geometry)).toBe(false);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-editor-feedback.png`, animations: 'disabled' });
   await expect(feedback).toBeHidden({ timeout: 5000 });

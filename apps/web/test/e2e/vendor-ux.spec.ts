@@ -11,11 +11,118 @@ async function prepare(page: Page, profileFails = false) {
       '/api/research-identity': { profile: { identities: [], primaryIdentity: null, disciplines: [], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: 1 } },
       '/api/auth/academic-identity': { steps: { registered: true, emailVerified: true, orcidConnected: false, institutionEmailVerified: false }, credentials: [], scopedRoles: [], capabilities: { orcid: false, institutionEmail: false } },
       '/api/research-objects': { researchObjects: [] },
+      '/api/explore': { items: [], nextCursor: null },
+      '/api/workspaces': { workspaces: [{ id: 'vendor-workspace', name: '个人研究', type: 'personal', role: 'owner', isArchived: false }] },
+      '/api/ingestion': { tasks: [] },
       '/api/usage': { user: [{ resource: 'ai_credit', scope: 'user_monthly', limit: 500, used: 8, remaining: 492, allowed: true }], workspaces: [] },
     };
     await route.fulfill({ json: bodies[path] ?? {} });
   });
 }
+
+test('public guidance reaches creation through the research desk', async ({ page }) => {
+  await prepare(page);
+  await page.goto('/guide');
+  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
+  await expect(page.locator('article a[href^="/research-objects/new"]')).toHaveCount(0);
+  await page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/);
+  await page.getByRole('link', { name: '返回研究桌面', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test('public guide sends an anonymous researcher to login with the desk destination', async ({ page }) => {
+  await prepare(page);
+  await page.route('**/api/auth/me', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'fixture anonymous' } } }));
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/guide');
+  await expect(page.locator('header a[href="/auth/login"]')).toBeVisible();
+  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
+  await page.getByRole('banner').getByRole('link', { name: '研究桌面', exact: true }).click();
+  await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fdashboard$/);
+});
+
+test('guide scenes support keyboard and small screens without business writes', async ({ page }) => {
+  await prepare(page);
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/guide');
+  await expect(page.getByRole('tab')).toHaveCount(3);
+  const first = page.getByRole('tab', { name: '从论文开始', exact: true });
+  const second = page.getByRole('tab', { name: '读懂研究', exact: true });
+  await first.focus();
+  await first.press('ArrowRight');
+  await expect(second).toBeFocused();
+  await expect(second).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel').getByRole('heading', { name: '先抓住贡献，再深入阅读' })).toBeVisible();
+  await second.press('End');
+  await expect(page.getByRole('tab', { name: '继续完善', exact: true })).toBeFocused();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await first.click();
+  await expect(page.getByRole('tabpanel').getByRole('link', { name: '在桌面找到入口' })).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await page.getByRole('tabpanel').locator('div').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(writes).toEqual([]);
+});
+
+test('English guide keeps task tabs and the desk entry readable on phones', async ({ page }) => {
+  await prepare(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/guide');
+  await page.getByRole('tab', { name: 'Keep developing', exact: true }).click();
+  await expect(page.getByRole('tabpanel').getByRole('heading', { name: 'Pick up where you want to work' })).toBeVisible();
+  await expect(page.locator('article').getByRole('link', { name: 'Enter research desk', exact: true }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('guide remains usable when the public preview fails and can reload it', async ({ page }) => {
+  await prepare(page);
+  let reads = 0;
+  await page.route('**/api/explore?*', route => {
+    reads++;
+    return reads === 1 ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } }) : route.fulfill({ json: { items: [], nextCursor: null } });
+  });
+  await page.goto('/guide');
+  await expect(page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: '重新加载画面', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新加载画面', exact: true })).toHaveCount(0);
+  await expect(page.locator('article').getByRole('link', { name: '探索公开研究', exact: true })).toBeVisible();
+  expect(reads).toBe(2);
+});
+
+test('account tools keep secondary entries accessible and gate platform administration', async ({ page }) => {
+  await prepare(page);
+  for (const width of [320, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/settings');
+    const tools = page.locator('header summary[aria-label="账户工具"]');
+    await tools.click();
+    const settings = page.locator('header').getByRole('link', { name: '设置', exact: true });
+    await expect(settings).toBeVisible();
+    await expect(page.locator('header a[href="/admin/journals"]')).toHaveCount(0);
+    for (const href of ['/settings', '/journals/manage', '/developers']) {
+      const entry = page.locator(`header a[href="${href}"]`);
+      await expect(entry).toBeVisible();
+      const box = await entry.boundingBox();
+      expect(box && box.x >= 0 && box.x + box.width <= width).toBe(true);
+    }
+    await page.locator('main h1').click({ position: { x: 12, y: 12 } });
+    await expect(settings).not.toBeVisible();
+    await tools.click();
+    await settings.press('Escape');
+    await expect(tools).toBeFocused();
+    await expect(settings).not.toBeVisible();
+  }
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { userId: 'admin-fixture', email: 'admin@example.invalid', displayName: '管理员', status: 'email_verified', level: 'free', platformRole: 'platform_admin' } }));
+  await page.goto('/guide');
+  await page.locator('header summary[aria-label="账户工具"]').click();
+  await expect(page.locator('header a[href="/admin/journals"]')).toBeVisible();
+});
 
 test('profile failure preserves session account and permits retry', async ({ page }) => {
   await prepare(page, true);
@@ -64,7 +171,7 @@ test('guide is reachable from common primary navigation and 404 is localized', a
   await prepare(page);
   await page.goto('/settings');
   await page.locator('nav a[href="/guide"]').click();
-  await expect(page.getByRole('heading', { name: '从资料到公开研究' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '带上你的论文， 我们一起往下走。' })).toBeVisible();
   await expect(page.locator('article')).not.toContainText(/\b(?:RO|SDF)\b/);
   await page.goto('/vendor-path-that-does-not-exist');
   await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();
@@ -78,9 +185,9 @@ test('headers wrap at 1024 and keep every primary entry on small screens', async
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/settings');
     const links = page.locator('nav [data-product-route-navigation] a');
-    await expect(links).toHaveCount(6);
+    await expect(links).toHaveCount(4);
     for (const link of await links.all()) await expect(link).toBeVisible();
-    const rects = await page.locator('header').first().locator('a').evaluateAll(elements => elements.map(element => {
+    const rects = await page.locator('header').first().locator('a:visible').evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect(); return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom };
     }));
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
@@ -88,7 +195,7 @@ test('headers wrap at 1024 and keep every primary entry on small screens', async
       expect(a.right <= b.x + 1 || b.right <= a.x + 1 || a.bottom <= b.y + 1 || b.bottom <= a.y + 1).toBe(true);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width === 1024) await page.screenshot({ path: '../../tmp/vendor-findings/settings-1024.png', fullPage: true });
+    if (width === 1024) await page.screenshot({ path: '../../tmp/ui-narrative-20261001/settings-1024.png', fullPage: true });
   }
 });
 
@@ -158,5 +265,5 @@ test('station shows queued, review and failed work with static Hermes available'
   await expect(page.locator('[data-continuation-priority="primary"] a')).toHaveAttribute('href', '/research-objects/station-ro/edit?ingestionTask=task-needs_review');
   await expect(page.locator('.hermes-conversation-card img[alt="Hermes"]')).toBeVisible();
   expect(live2dRequests).toHaveLength(0);
-  await page.screenshot({ path: '../../tmp/vendor-findings/dashboard-1024.png', fullPage: true });
+  await page.screenshot({ path: '../../tmp/ui-narrative-20261001/dashboard-1024.png', fullPage: true });
 });

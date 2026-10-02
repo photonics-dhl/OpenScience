@@ -237,7 +237,7 @@ try {
     await waitForRig(page);
 
     const stage = page.locator('[data-hermes-workspace-stage="true"]');
-    const expectedSize = viewport.width <= 640 ? '200' : '360';
+    const expectedSize = viewport.width <= 640 ? '168' : '200';
     assert.equal(await stage.getAttribute('data-hermes-stage-size'), expectedSize, label + ' must use the production-derived endpoint');
     assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1, label + ' must have one canvas owner');
     assert.equal(await page.locator('[data-live2d-instance="wanko"]').count(), 1, label + ' must have one model owner');
@@ -374,7 +374,7 @@ try {
     const acrossBreakpoint = viewport.width <= 640 ? { height: 900, width: 800 } : { height: 844, width: 639 };
     await page.setViewportSize(acrossBreakpoint);
     await page.waitForFunction((size) => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === size,
-      acrossBreakpoint.width <= 640 ? '200' : '360');
+      acrossBreakpoint.width <= 640 ? '168' : '200');
     await waitForStableStageGeometry(page);
     await assertFootprintsSafe(page, acrossBreakpoint, label + ' across 640px breakpoint');
     await page.setViewportSize(viewport);

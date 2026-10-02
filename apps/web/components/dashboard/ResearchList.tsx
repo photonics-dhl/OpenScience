@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { ArrowRight, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { TrashActionButton } from '@/components/research/TrashActionButton';
 import { listMyWorkspaces, searchResearchObjects, type ResearchObjectSearchApi, type WorkspaceApi } from '@/lib/api';
+import styles from '@/app/dashboard/dashboard.module.css';
 
 export interface DashboardResearch {
   id: string;
@@ -26,7 +27,6 @@ export interface ResearchListProps {
 
 export function ResearchList({ researchObjects, onChanged }: ResearchListProps) {
   const t = useTranslations('dashboard');
-  const trashT = useTranslations('trash');
   const [query, setQuery] = useState('');
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
@@ -71,32 +71,31 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
     }));
 
   return (
-    <section className="border-t border-os-rule-paper pt-5" aria-labelledby="research-list-title">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 id="research-list-title" className="mt-2 text-2xl font-medium text-os-ink">
-            {t('research.title')}
-          </h2>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:max-w-xs">
+    <section className={styles.researchLibrary} aria-labelledby="research-list-title">
+      <div className={styles.libraryHeading}>
+        <h2 id="research-list-title" className={styles.libraryTitle}>
+          {t('research.title')}
+        </h2>
+        <div className={styles.searchControls}>
           {workspaces.length > 1 ? (
-            <label className="flex items-center gap-2 text-sm text-os-muted-paper">
-              <span className="shrink-0">{t('research.searchScope')}</span>
-              <select className="min-w-0 flex-1 border-b border-os-rule-paper bg-transparent py-1 text-os-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-os-vermilion-ink"
+            <label className={styles.searchScope}>
+              <span>{t('research.searchScope')}</span>
+              <select className={styles.scopeSelect}
                 value={workspaceId} onChange={event => setWorkspaceId(event.target.value)}>
                 {workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
               </select>
             </label>
           ) : null}
-          <label className="relative block w-full border-b border-os-rule-paper sm:max-w-xs">
+          <label className={styles.searchField}>
             <span className="sr-only">{t('research.search')}</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-os-muted-paper" aria-hidden="true" />
+            <Search className={styles.searchIcon} size={16} aria-hidden="true" />
             <Input
-              className="rounded-none border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
+              className={styles.searchInput}
               type="search"
               placeholder={t('research.search')}
               value={query}
               maxLength={120}
+              aria-describedby={normalizedQuery ? 'research-search-status' : undefined}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
@@ -104,41 +103,43 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
       </div>
 
       {normalizedQuery ? (
-        <p role="status" className="mt-3 text-sm text-os-muted-paper">
+        <p id="research-search-status" role="status" className={styles.searchFeedback}>
           {searchFailed ? t('research.searchUnavailable')
             : searching ? t('research.searchLoading')
               : t(`research.searchMode.${currentResult!.data!.search.mode}`)}
-          {searchFailed ? <button type="button" className="ml-2 underline underline-offset-4" onClick={() => setRetry(value => value + 1)}>{t('errors.retry')}</button> : null}
+          {searchFailed ? <button type="button" className={styles.textAction} onClick={() => setRetry(value => value + 1)}>{t('errors.retry')}</button> : null}
         </p>
       ) : null}
       {!searching && !searchFailed && visible.length === 0 ? (
-        <p className="mt-6 border-y border-os-rule-paper px-4 py-7 text-center text-sm text-os-muted-paper">
+        <p className={styles.libraryEmpty}>
           {researchObjects.length === 0 ? t('research.empty') : t('research.noResults')}
         </p>
       ) : visible.length > 0 ? (
-        <ul className="mt-5 list-none divide-y divide-os-rule-paper border-y border-os-rule-paper p-0" aria-label={t('research.title')}>
+        <ul className={styles.researchEntries} aria-label={t('research.title')}>
           {visible.map((research) => (
-            <li key={research.id} className="flex items-center gap-3">
+            <li key={research.id} className={styles.researchEntry}>
               <Link
                 href={`/research-objects/${encodeURIComponent(research.id)}/edit`}
-                className="group grid min-h-14 min-w-0 flex-1 gap-2 px-1 py-4 outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"
+                className={styles.researchLink}
               >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-os-ink group-hover:text-os-vermilion-ink">
+                <span className={styles.researchEntryCopy}>
+                  <span className={styles.researchEntryTitle}>
                     {research.title}
                   </span>
-                  <span data-reading-role="caption" className="mt-1 block font-data text-os-muted-paper">
-                    {trashT('privateDraft')}
+                  <span data-reading-role="caption" className={styles.entryMeta}>
+                    <span>{t('research.draftRevision')}</span>
+                    <span>{t('research.version', { version: research.versionNo })}</span>
                   </span>
                 </span>
-                <span data-reading-role="caption" className="font-data text-os-muted-paper">
-                  {t(`research.status.${research.status}`)}
-                </span>
+                <span data-reading-role="caption" className={styles.entryStatus}>{t(`research.status.${research.status}`)}</span>
+                <ArrowRight className={styles.entryArrow} size={18} aria-hidden="true" />
               </Link>
-              <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
-                setRetry(value => value + 1);
-                onChanged?.();
-              }} />
+              <div className={styles.researchEntryAction} role="group" aria-label={research.title}>
+                <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
+                  setRetry(value => value + 1);
+                  onChanged?.();
+                }} />
+              </div>
             </li>
           ))}
         </ul>

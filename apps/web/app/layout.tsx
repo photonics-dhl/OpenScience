@@ -13,6 +13,9 @@ import type { Locale } from "../i18n/locale";
 import { HermesWorkspaceStageProvider } from "../components/hermes/HermesWorkspaceStage";
 import { SessionProvider } from "../components/auth/SessionProvider";
 import "./globals.css";
+import "./product-polish.css";
+import "./account-journal-craft.css";
+import "./hermes-companion.css";
 import "katex/dist/katex.min.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.

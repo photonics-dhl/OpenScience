@@ -8,6 +8,7 @@ import {
   GitCompareArrows,
   Library,
   Moon,
+  MoreHorizontal,
   MoveDiagonal2,
   PartyPopper,
   Route,
@@ -16,7 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -59,6 +60,7 @@ export interface HermesVisualAdapterProps {
   actionStartedAtMs?: number;
   assistantOpen?: boolean;
   compactPresentation?: boolean;
+  navigationOnly?: boolean;
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
   onInvoke: () => void;
@@ -86,10 +88,12 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
+  const tn = useTranslations('productNavigation');
   const locale = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
   const linkRef = useRef<HTMLButtonElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -339,7 +343,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       if (actorTopAfterLayout === undefined) return;
       if (compactMenu && anchored) {
         // The compact sheet reserves document flow below the long-press point.
-        // Counter-scroll that reflow so the 200 px actor stays under the finger.
+        // Counter-scroll that reflow so the actor stays under the finger.
         window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
         alignMenuToCrown();
         menuFrame = window.requestAnimationFrame(alignMenuToCrown);
@@ -532,7 +536,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     clearLongPress();
     if (suppressClickTimerRef.current) clearTimeout(suppressClickTimerRef.current);
     if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
-  }, []);
+    navigationTimerRef.current = null;
+  }, [pathname, navigationOnly]);
 
   useEffect(() => {
     if (assistantOpen) engageArticulation({ x: .42, y: -.12 });
@@ -626,7 +631,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     <ContextMenu open={menuOpen} onOpenChange={updateMenuOpen}>
       <ContextMenuTrigger asChild>
         <button
-          aria-label={t('guide.menu.trigger')}
+          aria-label={navigationOnly ? tn('dashboard') : t('guide.invoke')}
           className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
           onBlur={resetGaze}
           onClick={() => {
@@ -698,6 +703,16 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
         </button>
       </ContextMenuTrigger>
+      <button
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        aria-label={t('guide.menu.trigger')}
+        className="hermes-pet-menu-button"
+        data-hermes-pet-menu-button="true"
+        onClick={dispatchContextMenu}
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      ><MoreHorizontal aria-hidden="true" size={18} /></button>
       <ContextMenuContent
         aria-label={t('guide.menu.label')}
         className="hermes-context-menu"
@@ -744,7 +759,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               data-hermes-action-group={group}
               hidden={compactMenu && compactGroup !== group}
             >
-              {HERMES_CONTEXT_ACTIONS.filter((item) => item.group === group).map((item, index) => {
+              {HERMES_CONTEXT_ACTIONS.filter((item) => item.group === group && !(navigationOnly && group === 'research')).map((item, index) => {
                 const Icon = HERMES_ACTION_ICONS[item.icon];
                 return (
                   <ContextMenuItem
@@ -760,6 +775,18 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
                   </ContextMenuItem>
                 );
               })}
+              {navigationOnly && group === 'research' ? (['dashboard', 'guide'] as const).map((destination) => (
+                <ContextMenuItem
+                  className="hermes-context-menu-item"
+                  data-hermes-navigation={destination}
+                  key={destination}
+                  onSelect={() => router.push(`/${destination}`)}
+                >
+                  <span className="hermes-context-menu-icon">{destination === 'dashboard'
+                    ? <Route aria-hidden="true" size={17} /> : <BookOpen aria-hidden="true" size={17} />}</span>
+                  <strong>{tn(destination)}</strong>
+                </ContextMenuItem>
+              )) : null}
             </ContextMenuGroup>
           </React.Fragment>
         ))}

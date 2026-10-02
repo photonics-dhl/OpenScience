@@ -95,11 +95,14 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
           <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field}>
             <h2 className={styles.sectionHeading}>
               <span aria-hidden="true" className={styles.sectionMarker} />
-              <label htmlFor={`sdf-field-${field}`}>{t(field)}</label>
-              <span className={styles.sectionNumber}>{String(index + 1).padStart(2, '0')}</span>
+              {readOnly ? <span>{t(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => {
+                setEditingField(field);
+                onSelectField(field);
+                window.requestAnimationFrame(() => document.getElementById(`sdf-field-${field}`)?.focus());
+              }}>{t(field)}</button>}
             </h2>
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
-              {readOnly ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading">{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (
+              {readOnly ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading" data-read-only="true">{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (
                 <ScientificText
                   hideSourceMarkers
                   aria-label={`${t(field)} · ${t('coreEdit')}`}

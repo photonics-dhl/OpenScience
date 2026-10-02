@@ -1,7 +1,19 @@
 import * as React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionStatus } from '../components/auth/SessionProvider';
+import type { CurrentUser } from '../lib/api';
+
+const session = vi.hoisted(() => ({
+  managed: true,
+  user: null as CurrentUser | null,
+  status: 'anonymous' as SessionStatus,
+  refresh: async () => null,
+}));
+
+vi.mock('@/components/auth/SessionProvider', () => ({ useSession: () => session }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => {
@@ -59,14 +71,28 @@ vi.mock('next/font/google', () => ({
   Archivo: () => ({ className: 'archivo-font' }),
 }));
 
+vi.mock('@/lib/public-server-api', () => ({
+  getServerResearchIndex: async () => ({ items: [], nextCursor: null }),
+}));
+
 describe('Optical Editorial landing page', () => {
   beforeAll(() => {
     vi.stubGlobal('React', React);
   });
 
+  beforeEach(() => {
+    session.status = 'anonymous';
+    session.user = null;
+  });
+
   async function renderLandingPage() {
     const { default: Page } = await import('../app/page');
     return renderToStaticMarkup(await Page());
+  }
+
+  async function renderLandingHeader() {
+    const markup = await renderLandingPage();
+    return markup.match(/<header\b[^>]*>[\s\S]*?<\/header>/u)?.[0] ?? '';
   }
 
   it('declares the intentional pre-hydration html class mutation', () => {
@@ -146,15 +172,10 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('data-optical-field="true"');
   });
 
-  it('uses the next viewport for a complete Open RO anatomy instead of principle placeholders', async () => {
-    const markup = await renderLandingPage();
+  it('keeps the existing published-research module below the optical surface', async () => {
+    const { default: LatestResearch } = await import('../components/landing/LatestResearch');
+    const markup = renderToStaticMarkup(await LatestResearch());
     expect(markup).toContain('data-landing-module="open-ro"');
-    expect(markup).toContain('data-open-ro-index="true"');
-    expect(markup.match(/data-sdf-node=/g)).toHaveLength(6);
-    expect(markup.match(/data-sdf-node-summary=/g) ?? []).toHaveLength(6);
-    expect(markup.match(/tabindex="0"/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
-    expect(markup).toContain('data-open-ro-density="calm"');
-    expect(markup).toContain('Open Research Object');
     expect(markup).toContain('href="/explore"');
     expect(markup).not.toContain('data-landing-module="principles"');
   });
@@ -164,22 +185,80 @@ describe('Optical Editorial landing page', () => {
     const markup = renderToStaticMarkup(await ExplorePage());
     expect(markup).toContain('data-navigation-tone="paper"');
     const navigation = markup.match(/<div[^>]*data-navigation-tone="paper"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? '';
-    expect(navigation).toContain('text-os-muted-paper');
-    expect(navigation).toContain('border-os-rule-paper text-os-ink');
+    expect(navigation).toContain('href="/explore"');
+    expect(navigation).toContain('href="/journals"');
     expect(navigation).not.toContain('text-os-muted-dark');
   });
 
-  it('keeps Landing navigation frozen while public product pages expose the research desk', async () => {
-    const { default: SiteHeader } = await import('../components/landing/SiteHeader');
-    const landing = renderToStaticMarkup(<SiteHeader />);
-    const publicProduct = renderToStaticMarkup(<SiteHeader active="explore" context="public-product" tone="paper" />);
+  it('shares public discovery links and one research desk entry on Landing and public product pages', async () => {
+    const { default: SiteHeader, PublicProductAccess } = await import('../components/landing/SiteHeader');
+    const landing = await renderLandingHeader();
+    const publicProduct = renderToStaticMarkup(<><SiteHeader active="explore" context="public-product" tone="paper" /><PublicProductAccess /></>);
 
-    expect(landing).not.toContain('href="/dashboard"');
-    expect(publicProduct).toContain('href="/dashboard"');
+    for (const markup of [landing, publicProduct]) {
+      const publicLinks = markup.match(/<ul\b[^>]*>[\s\S]*?<\/ul>/u)?.[0] ?? '';
+      expect(publicLinks.match(/href="([^"]+)"/gu)).toEqual([
+        'href="/explore"', 'href="/journals"', 'href="/guide"',
+      ]);
+      expect(markup.match(/href="\/dashboard"/gu)).toHaveLength(1);
+      expect(markup).toContain('href="/auth/login"');
+      for (const href of ['/research-objects/new', '/settings', '/developers', '/admin/journals']) {
+        expect(markup).not.toContain(`href="${href}"`);
+      }
+      expect(markup).toContain('data-mobile-navigation-grid="true"');
+    }
     expect(publicProduct).toMatch(/aria-current="page"[^>]*href="\/explore"/u);
-    expect(publicProduct).toContain('href="/research-objects/new"');
-    expect(publicProduct).toContain('href="/auth/login"');
-    expect(publicProduct).toContain('data-mobile-navigation-grid="true"');
-    expect(landing).not.toContain('data-mobile-navigation-grid="true"');
+  });
+
+  it.each(['user', 'moderator', 'platform_admin'] as const)('keeps %s account tools inside the existing menu', async (platformRole) => {
+    session.status = 'authenticated';
+    session.user = {
+      userId: 'navigation-user', email: 'reader@example.test', displayName: 'Researcher',
+      status: 'active', level: 'L1', platformRole,
+    };
+    const markup = await renderLandingHeader();
+    const navigation = markup.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? '';
+    const tools = markup.match(/<details\b[^>]*>[\s\S]*?<\/details>/u)?.[0] ?? '';
+    const outsideTools = markup.replace(tools, '');
+    const utilities = markup.match(/<div\b[^>]*data-shell-utility="true"[^>]*>[\s\S]*$/u)?.[0] ?? '';
+
+    expect(markup.match(/href="\/dashboard"/gu)).toHaveLength(1);
+    expect(markup.match(/<details\b/gu)).toHaveLength(1);
+    expect(markup).toContain('href="/me"');
+    expect(navigation).not.toContain('<details');
+    expect(navigation.match(/href="([^"]+)"/gu)).toEqual([
+      'href="/explore"', 'href="/journals"', 'href="/guide"',
+    ]);
+    expect(utilities).toContain('href="/dashboard"');
+    expect(utilities).toContain(tools);
+    expect(utilities).not.toContain('<nav');
+    expect(markup).not.toContain('href="/auth/login"');
+    expect(markup).not.toContain('href="/research-objects/new"');
+    expect(tools).toContain('<summary aria-label="accountTools"');
+    for (const href of ['/settings', '/journals/manage', '/developers']) {
+      expect(tools).toContain(`href="${href}"`);
+      expect(outsideTools).not.toContain(`href="${href}"`);
+    }
+    if (platformRole === 'platform_admin') {
+      expect(tools).toContain('href="/admin/journals"');
+    } else {
+      expect(markup).not.toContain('href="/admin/journals"');
+    }
+    expect(outsideTools).not.toContain('href="/admin/journals"');
+  });
+
+  it.each(['loading', 'unavailable'] as const)('keeps the desk reachable without claiming a session while %s', async (status) => {
+    session.status = status;
+    session.user = {
+      userId: 'stale-user', email: 'reader@example.test', displayName: 'Stale researcher',
+      status: 'active', level: 'L1', platformRole: 'platform_admin',
+    };
+    const markup = await renderLandingHeader();
+
+    expect(markup.match(/href="\/dashboard"/gu)).toHaveLength(1);
+    expect(markup).not.toContain('href="/auth/login"');
+    expect(markup).not.toContain('href="/me"');
+    expect(markup).not.toContain('<details');
+    expect(markup).not.toContain('Stale researcher');
   });
 });

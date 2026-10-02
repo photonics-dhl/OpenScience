@@ -49,7 +49,7 @@ export function JournalProcessingQueue({ journalId }: { journalId: string }) {
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : '无法加入加工队列。'); }
     finally { inFlight.current = false; setBusy(false); }
   }
-  return <div className="grid min-w-0 gap-6">
+  return <div data-journal-processing className="grid min-w-0 gap-6">
     <header className="border-b border-os-rule-paper pb-5">
       <Link className="text-sm" href={`/journals/manage/${journalId}`}>← 返回期刊工作台</Link>
       <h1 className="mt-5 text-3xl font-normal">加工优先级</h1>

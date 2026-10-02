@@ -1,6 +1,15 @@
 export type Point = { x: number; y: number };
 export type RectLike = { bottom: number; left: number; right: number; top: number };
 export type Footprint = { bottom: number; left: number; right: number; top: number };
+
+export function includeHermesControlFootprint(actor: Footprint, controls: Footprint): Footprint {
+  return {
+    bottom: Math.max(actor.bottom, controls.bottom),
+    left: Math.max(actor.left, controls.left),
+    right: Math.max(actor.right, controls.right),
+    top: Math.max(actor.top, controls.top),
+  };
+}
 export type HermesBubblePlacement = {
   horizontal: 'center' | 'left' | 'right';
   vertical: 'above' | 'below';

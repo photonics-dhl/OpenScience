@@ -11,6 +11,7 @@ import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
@@ -180,11 +181,15 @@ export default function DashboardPage() {
       <DashboardShell
         activeRoute="dashboard"
         aria-busy="true"
-        mainClassName="grid place-items-center"
+        className={styles.desk}
+        mainClassName={styles.main}
         navigationLabel={t('context.navigation')}
         skipLabel={t('context.skip')}
       >
-        <p className="text-base text-os-muted-paper" aria-live="polite">{t('loading')}</p>
+        <section className={styles.stateSurface} aria-labelledby="dashboard-loading-title">
+          <h1 id="dashboard-loading-title" className={styles.title}>{t('title')}</h1>
+          <p className={styles.stateMessage} role="status">{t('loading')}</p>
+        </section>
       </DashboardShell>
     );
   }
@@ -193,15 +198,15 @@ export default function DashboardPage() {
     return (
       <DashboardShell
         activeRoute="dashboard"
-        mainClassName="grid place-items-center px-4"
+        className={styles.desk}
+        mainClassName={styles.main}
         navigationLabel={t('context.navigation')}
         skipLabel={t('context.skip')}
       >
-        <section className="surface-folio-sheet w-full max-w-xl border-y border-os-rule-paper px-6 py-10 text-center">
-          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('errors.kicker')}</p>
-          <h1 className="mt-4 text-4xl">{t('errors.title')}</h1>
-          <p role="alert" className="mt-3 text-base text-os-muted-paper">{error}</p>
-          <button className="mt-6 border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink hover:text-os-vermilion-ink" type="button" onClick={() => window.location.reload()}>
+        <section className={styles.stateSurface} aria-labelledby="dashboard-error-title">
+          <h1 id="dashboard-error-title" className={styles.title}>{t('errors.title')}</h1>
+          <p role="alert" className={styles.stateMessage}>{error}</p>
+          <button className={styles.primaryAction} type="button" onClick={() => window.location.reload()}>
             {t('errors.retry')}
           </button>
         </section>
@@ -223,8 +228,6 @@ export default function DashboardPage() {
       mainClassName={styles.main}
       headerActions={(
         <div className={styles.utilities}>
-          <ResearchContentManager />
-          <Link href="/trash" className="inline-flex min-h-11 items-center text-sm text-os-vermilion-ink underline">{trashT('title')}</Link>
           <AccountLink user={user} />
           <LocaleSwitcher locale={locale} />
         </div>
@@ -234,27 +237,39 @@ export default function DashboardPage() {
     >
       <div className={styles.layout}>
         <header className={styles.heading}>
-          <p data-reading-role="caption" className={styles.eyebrow}>
-            {t('eyebrow')}
-          </p>
-          <h1 className={styles.title}>
-            {t('title')}
-          </h1>
-          <p data-reading-role="body" className={styles.welcome}>
-            {t('welcome', { name: user?.displayName ?? '' })}
-          </p>
+          <div>
+            <p data-reading-role="caption" className={styles.eyebrow}>
+              {t('eyebrow')}
+            </p>
+            <h1 className={styles.title}>
+              {t('title')}
+            </h1>
+            <p data-reading-role="body" className={styles.welcome}>
+              {t('welcome', { name: user?.displayName ?? '' })}
+            </p>
+          </div>
+          <details className={styles.deskTools}>
+            <summary>{t('deskTools')}</summary>
+            <div><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
+          </details>
         </header>
 
-        <div className={styles.continueResearch}>
-          <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+        <div className={styles.workSurface}>
+          <div className={styles.continueResearch}>
+            <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+          </div>
+          <div className={styles.taskRail}>
+            <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
+          </div>
+          {tasks.length > 0 || taskLoadState !== 'ready' ? (
+            <div className={styles.activityRail}>
+              <HermesRail tasks={tasks} loadState={taskLoadState} />
+            </div>
+          ) : null}
         </div>
-        <div className={styles.taskRail}>
-          <HermesConversationCard onInvoke={() => setHermesOpen(true)} working={guideWorking} />
-          <HermesRail tasks={tasks} loadState={taskLoadState} />
-        </div>
-        <div className={styles.startResearch}>
+        {researchObjects.length > 0 ? <div className={styles.startResearch}>
           <ImportStage />
-        </div>
+        </div> : null}
         <div className={styles.literature}>
           <LiteratureAcquisitionDisclosure
             initialTask={literatureTask}
@@ -267,6 +282,7 @@ export default function DashboardPage() {
           <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} />
         </div>
       </div>
+      <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
       <HermesAssistantDrawer
         dashboardContext={dashboardContext}
         locale={locale}

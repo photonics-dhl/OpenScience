@@ -355,7 +355,10 @@
     "journals": "期刊",
     "journalsShort": "期刊",
     "guide": "使用指南",
-    "guideShort": "指南"
+    "guideShort": "指南",
+    "accountTools": "账户工具",
+    "myJournals": "我的期刊",
+    "developers": "开发者 API"
   },
   "editor": {
     "savedVersionSources": "核查最近保存版本的来源",
@@ -1061,7 +1064,7 @@
     "continue": {
       "title": "继续研究",
       "emptyTitle": "导入第一份科研资料",
-      "emptyBody": "Hermes 会先保留来源证据，再提出可供你确认的 SDF 字段。",
+      "emptyBody": "从论文、数据或一个问题开始，逐步整理为可阅读、可修订的研究。",
       "open": "继续编辑研究",
       "version": "版本 {version}",
       "pending": "{count} 项等待处理",
@@ -1074,7 +1077,7 @@
     },
     "import": {
       "eyebrow": "开始新的研究",
-      "title": "添加论文或研究资料",
+      "title": "创建研究",
       "description": "上传 PDF 等现有资料交给 Hermes 整理，也可以从空白开始。",
       "upload": "上传 PDF 或资料",
       "blank": "从空白开始"
@@ -1360,7 +1363,8 @@
       "title": "无法加载工作台",
       "load": "暂时无法恢复研究上下文。",
       "retry": "重新加载"
-    }
+    },
+    "deskTools": "资料管理"
   },
   "createResearch": {
     "back": "返回研究驾驶舱",
@@ -1400,7 +1404,8 @@
     "progressLabel": "创建进度",
     "identityStep": "研究身份",
     "evidenceStep": "证据来源",
-    "eyebrow": "OpenScience / Research Object"
+    "eyebrow": "OpenScience / Research Object",
+    "backToDesk": "返回研究桌面"
   },
   "hermesReview": {
     "snapshotLoadError": "无法读取已确认的版本快照，请重试后查看保存内容。",
@@ -1752,20 +1757,20 @@
     "eyebrow": "公开研究索引",
     "title": "发现研究，读懂贡献。",
     "description": "先看核心图解和研究要点，再深入原文、方法与来源。",
-    "empty": "当前索引条件下没有公开 Research Object。",
+    "empty": "没有找到匹配的研究，试试其他关键词或搜索范围。",
     "create": "创建科研对象",
-    "indexLabel": "已发布 Research Object 索引",
+    "indexLabel": "公开研究",
     "search": "搜索研究标题或内容",
     "field": "内容范围",
     "artifactType": "资料类型",
     "allFields": "全部内容",
     "allArtifacts": "全部资料",
     "apply": "应用筛选",
-    "loading": "正在读取公开索引…",
-    "error": "暂时无法加载公开索引。",
-    "loadMore": "继续浏览索引",
+    "loading": "正在加载研究…",
+    "error": "研究暂时没能加载，请再试一次。",
+    "loadMore": "查看更多研究",
     "unknownAuthor": "作者记录待补充",
-    "noArtifacts": "暂无 Artifact",
+    "noArtifacts": "暂无相关资料",
     "fields": {
       "problem": "问题",
       "insight": "洞见",
@@ -1789,7 +1794,8 @@
     "readResearch": "阅读研究",
     "recentTitle": "最新公开研究",
     "recentDescription": "从一张图读懂核心思路，继续了解研究结论与适用边界。",
-    "browseAll": "探索全部研究"
+    "browseAll": "探索全部研究",
+    "retry": "重新加载"
   },
   "presentation": {
     "existingImageReview": {
@@ -2277,6 +2283,7 @@
     "note": "编辑说明",
     "notePlaceholder": "为什么它属于这一期",
     "media": "可选的期刊配套媒体",
+    "mediaIncomplete": "补齐媒体地址、描述、署名、许可和 HTTPS 来源后再提交，或清空媒体内容。",
     "mediaHint": "填写媒体 URL 时，必须同时提供替代文本、署名、许可和来源证明。",
     "image": "图片",
     "video": "视频",
@@ -2933,27 +2940,66 @@
     "skip": "跳至正文"
   },
   "productGuide": {
-    "title": "从资料到公开研究",
-    "intro": "上传论文或创建草稿，与 Hermes 整理研究内容，再由你确认并决定公开。",
-    "navigation": "网站导航",
-    "skip": "跳至正文",
-    "create": "新建研究",
-    "desk": "打开研究桌面",
-    "research": {
-      "title": "一项研究包含什么",
-      "body": "一个研究项目把论文、数据、代码、图片与正文放在一起，并保留可追踪的版本。草稿只在允许访问的工作区内可见。"
+    "navigation": "主导航",
+    "skip": "跳到使用指南",
+    "eyebrow": "和 HERMES 一起研究",
+    "title": "带上你的论文，\n把研究讲清楚。",
+    "intro": "和 Hermes 从原文出发，梳理核心思路与图文表达，在自己的研究空间里继续完善。",
+    "desk": "进入研究桌面",
+    "startNote": "进入后，选择“上传 PDF 或资料”。",
+    "exampleLabel": "研究表达",
+    "exampleAlt": "《{title}》的核心概念图",
+    "exampleFallback": "走进一项研究",
+    "exampleFallbackBody": "从贡献与图文开始，沿着正文深入阅读。",
+    "exampleUnavailable": "研究画面暂时未能加载。你仍可以进入桌面，开始自己的研究。",
+    "exampleNoImage": "继续阅读正文与原文资料。",
+    "loadingExample": "正在打开研究画面…",
+    "retryExample": "重新加载画面",
+    "figureLabel": "核心概念图",
+    "readExample": "阅读这项研究",
+    "explore": "探索公开研究",
+    "sceneHeading": "下一步，想做些什么？",
+    "sceneIntro": "从你手头的任务开始。",
+    "materials": "论文与研究资料",
+    "continueExpression": "继续整理当前研究表达",
+    "create": "创建研究",
+    "createBody": "从你手上的论文或资料开始",
+    "hermesPrompt": "你想继续完善哪一部分？",
+    "findEntry": "进入桌面，上传材料",
+    "deskAgain": "回到自己的研究桌面",
+    "readDemoBody": "先看贡献与核心图，再深入正文与原文来源。",
+    "questionsHeading": "你可能还想知道",
+    "invitation": "让手头的研究，继续向前。",
+    "scenes": {
+      "start": {
+        "label": "从论文开始",
+        "title": "把手头的材料带进来",
+        "body": "在研究桌面选择上传入口。论文、补充材料与已有草稿，都可以成为这项研究的起点。"
+      },
+      "read": {
+        "label": "读懂研究",
+        "title": "先抓住贡献，再深入阅读",
+        "body": "贡献和核心图帮助建立理解。继续往下读，方法、结果和原文来源就在同一项研究中。"
+      },
+      "revise": {
+        "label": "继续完善",
+        "title": "从你想修改的地方继续",
+        "body": "打开已有研究，直接修改正文，或把具体问题交给 Hermes。材料、内容与图文留在当前研究里。"
+      }
     },
-    "fields": {
-      "title": "六项正文帮助读者理解研究",
-      "body": "正文按问题、洞见、方法、结果、局限和可复现性组织。Hermes 从资料中提出建议，你核对来源后确认；处理失败不代表论文没有报告相关内容。"
-    },
-    "publicId": {
-      "title": "公开编号用来分享和引用",
-      "body": "研究公开后会获得稳定的公开编号。分享公开页面链接即可；具体版本链接固定当时的内容，公开编号不代表通过同行评审。"
-    },
-    "workflow": {
-      "title": "继续研究的四个入口",
-      "body": "概览阅读完整内容；编辑修改六项正文；展示查看图片与视频；材料查看原始资料。Hermes 中保留处理状态、审核及支持的恢复操作。"
+    "questions": {
+      "blank": {
+        "title": "还没有论文，也可以开始吗？",
+        "body": "在研究桌面选择“从空白开始”，先写下研究问题，进入自己的研究工作区继续整理。"
+      },
+      "edit": {
+        "title": "在哪里修改已有研究？",
+        "body": "从研究桌面打开对应研究，直接编辑正文。也可以向 Hermes 说明想修改的内容，继续当前研究。"
+      },
+      "source": {
+        "title": "在哪里找到论文原文？",
+        "body": "在研究阅读页的资料区域打开原文与来源；查看图文时可以随时回到正文。"
+      }
     }
   },
   "journalServiceLabels": {

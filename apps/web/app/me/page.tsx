@@ -124,11 +124,11 @@ export default function MyProfilePage() {
       setWriteStatus('saved');
     } catch (cause) { await handleWriteFailure(cause, owner); } finally { if (accountOwner.current === owner) setBusy(false); }
   }
-  if (!user || status !== 'authenticated') return <DashboardShell activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('profileTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
+  if (!user || status !== 'authenticated') return <DashboardShell mainClassName="craft-account" activeRoute="profile" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><h1 className="text-3xl text-os-ink">{meT('profileTitle')}</h1><AccountLoadState loading={status === 'loading'} onRetry={() => void refresh(true)} /></DashboardShell>;
   const profileReady = profile && profileOwner === user.userId && !profileLoading && !error;
   const completedProfileGroups = profileReady ? [profile.identities.length, profile.disciplines.length, profile.methods.length, profile.topics.length, profile.languages.length].filter(Boolean).length : 0;
   return (
-    <DashboardShell className="account-workspace" activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
+    <DashboardShell mainClassName="craft-account" className="account-workspace" activeRoute="profile" headerActions={<AccountLink user={user} active />} navigationLabel={meT('profileTitle')} skipLabel={t('settings.skip')}>
       <header className="account-heading">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{meT('privateLabel')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{meT('profileTitle')}</h1>
@@ -156,7 +156,8 @@ export default function MyProfilePage() {
             <div><h2 className="text-lg font-semibold text-os-ink">{meT('researchProfileTitle')}</h2><p className="mt-1 text-sm text-os-muted-paper">{meT('researchProfileProgress', { completed: completedProfileGroups })}</p></div>
             <span aria-live="polite" className="text-sm text-os-muted-paper">{profileDirty ? meT('unsavedChanges') : meT('allChangesSaved')}</span>
           </div>
-          <fieldset disabled={busy} aria-busy={busy}>
+          <form aria-label={meT('researchProfileTitle')} aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void saveProfile(); }}>
+          <fieldset disabled={busy}>
             <ResearchProfileFields value={profile} onChange={(next) => { if (busy) return; setProfile({ ...profile, ...next }); setWriteStatus(current => current === 'draft-conflict' ? current : 'idle'); setWriteError(''); }} />
           </fieldset>
           {profileDirty ? <p id="profile-signal-help" className="mt-4 text-sm text-os-muted-paper">{meT('saveBeforeSignals')}</p> : null}
@@ -169,9 +170,9 @@ export default function MyProfilePage() {
                 <h3 className="text-sm font-semibold text-os-ink">{label}</h3>
                 <ul className="mt-2 grid gap-2 text-sm text-os-muted-paper">
                   {profile[field].map((signal) => (
-                    <li key={signal} className="flex items-center justify-between gap-3 border-b border-os-rule-paper py-2">
+                    <li key={signal} className="account-signal-row border-b border-os-rule-paper py-2">
                       <span>{signal}</span>
-                      <button className="text-os-vermilion-ink hover:underline" disabled={busy || profileDirty || writeStatus === 'draft-conflict'} aria-describedby={profileDirty ? "profile-signal-help" : undefined} onClick={() => void decideSignal(signal, decision)}>
+                      <button type="button" className="text-os-vermilion-ink hover:underline" disabled={busy || profileDirty || writeStatus === 'draft-conflict'} aria-describedby={profileDirty ? "profile-signal-help" : undefined} onClick={() => void decideSignal(signal, decision)}>
                         {identityT(decision)}
                       </button>
                     </li>
@@ -180,15 +181,16 @@ export default function MyProfilePage() {
               </div>
             ))}
           </div>
-          <div className="mt-6 flex flex-wrap items-center gap-4">
-            <Button disabled={busy || !profileDirty || writeStatus === 'draft-conflict'} onClick={() => void saveProfile()}>{busy ? identityT('saving') : identityT('save')}</Button>
-            <Button variant="ghost" disabled={busy || (!profileDirty && writeStatus !== 'draft-conflict')} onClick={() => { if (savedProfile) setProfile(savedProfile); setWriteError(''); setWriteStatus('idle'); }}>{meT('discardChanges')}</Button>
-            {writeStatus === 'draft-conflict' ? <Button variant="ghost" disabled={busy} onClick={() => setWriteStatus('idle')}>{meT('keepLocalChanges')}</Button> : null}
-            <span aria-live="polite" className="text-sm text-os-muted-paper">
-              {writeStatus === 'saved' ? identityT('saved') : writeStatus === 'draft-conflict' ? meT('profileConflict') : writeStatus === 'conflict' ? identityT('conflict') : ''}
+          <div className="account-form-actions mt-6">
+            <Button type="submit" disabled={busy || !profileDirty || writeStatus === 'draft-conflict'}>{busy ? identityT('saving') : identityT('save')}</Button>
+            <Button type="button" variant="ghost" disabled={busy || (!profileDirty && writeStatus !== 'draft-conflict')} onClick={() => { if (savedProfile) setProfile(savedProfile); setWriteError(''); setWriteStatus('idle'); }}>{meT('discardChanges')}</Button>
+            {writeStatus === 'draft-conflict' ? <Button type="button" variant="ghost" disabled={busy} onClick={() => setWriteStatus('idle')}>{meT('keepLocalChanges')}</Button> : null}
+            <span role="status" className="text-sm text-os-muted-paper">
+              {busy ? identityT('saving') : writeStatus === 'saved' ? identityT('saved') : writeStatus === 'draft-conflict' ? meT('profileConflict') : writeStatus === 'conflict' ? identityT('conflict') : ''}
             </span>
           </div>
           {writeError ? <p role="alert" className="mt-3 text-sm text-os-vermilion-ink">{writeError}</p> : null}
+          </form>
           </>}
         </section>
       </div>

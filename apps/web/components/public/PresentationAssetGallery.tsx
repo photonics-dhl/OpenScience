@@ -14,15 +14,16 @@ export function PresentationAssetGallery({ assets, leading = false }: { assets: 
       kind,
       label: asset.reader?.title ?? label,
       url: asset.url,
-      description: asset.reader?.narration ?? t('notEvidence'),
+      description: asset.reader?.narration,
     });
     const imageSlides = assets.filter((asset) => asset.kind === 'image' || asset.kind === 'chart').map((asset, index) => toSlide(asset, 'image', index === 0 ? t('coreImageTitle') : t('imageNumber', { number: index + 1 })));
     const videoSlides = assets.filter((asset) => asset.kind === 'video').map((asset, index) => toSlide(asset, 'video', index === 0 ? t('videoTitle') : t('videoNumber', { number: index + 1 })));
+    if (imageSlides.length === 0 && videoSlides.length === 0) return null;
     return <section className={`${styles.gallery} ${styles.leadingGallery}`} data-presentation-gallery="true" aria-label={t('title')}>
       <h2 className="sr-only">{t('title')}</h2>
-      <div className={styles.leadingMedia} data-has-video={videoSlides.length > 0}>
-        <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} eager />
-        <ResearchMediaDeck title={t('videoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} />
+      <div className={styles.leadingMedia} data-media-count={Number(imageSlides.length > 0) + Number(videoSlides.length > 0)}>
+        {imageSlides.length > 0 ? <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} eager /> : null}
+        {videoSlides.length > 0 ? <ResearchMediaDeck title={t('videoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} /> : null}
       </div>
     </section>;
   }

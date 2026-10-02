@@ -5,6 +5,7 @@ import { ShellHeader, SkipLink } from './ShellPrimitives';
 
 interface PublicShellProps extends React.HTMLAttributes<HTMLDivElement> {
   headerActions?: React.ReactNode;
+  headerUtilities?: React.ReactNode;
   mainClassName?: string;
   navigationLabel?: string;
   skipLabel: string;
@@ -16,6 +17,7 @@ function PublicShell({
   children,
   className,
   headerActions,
+  headerUtilities,
   mainClassName,
   navigationLabel,
   skipLabel,
@@ -34,7 +36,7 @@ function PublicShell({
       {...props}
     >
       <SkipLink tone={tone}>{skipLabel}</SkipLink>
-      <ShellHeader actions={headerActions} navigationLabel={navigationLabel} tone={tone} wrapActionsOnMobile={wrapHeaderActionsOnMobile} />
+      <ShellHeader actions={headerActions} utilities={headerUtilities} navigationLabel={navigationLabel} tone={tone} wrapActionsOnMobile={wrapHeaderActionsOnMobile} />
       <main className={cn('min-h-[calc(100dvh-3.5rem)]', mainClassName)} id="main-content" tabIndex={-1}>
         {children}
       </main>

@@ -355,7 +355,10 @@
     "journals": "Journals",
     "journalsShort": "Journals",
     "guide": "Guide",
-    "guideShort": "Guide"
+    "guideShort": "Guide",
+    "accountTools": "Account tools",
+    "myJournals": "My journals",
+    "developers": "Developer API"
   },
   "editor": {
     "savedVersionSources": "Check sources in the latest saved version",
@@ -1061,7 +1064,7 @@
     "continue": {
       "title": "Continue research",
       "emptyTitle": "Import your first research material",
-      "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
+      "emptyBody": "Start with a paper, data, or a question. Build a readable, evolving research object.",
       "open": "Continue editing",
       "version": "Version {version}",
       "pending": "{count} items need attention",
@@ -1074,7 +1077,7 @@
     },
     "import": {
       "eyebrow": "Start new research",
-      "title": "Add a paper or research material",
+      "title": "Start a research object",
       "description": "Upload a PDF or other material for Hermes to organise, or begin from a blank record.",
       "upload": "Upload PDF or material",
       "blank": "Start from blank"
@@ -1360,7 +1363,8 @@
       "title": "Dashboard unavailable",
       "load": "We could not restore your research context.",
       "retry": "Reload"
-    }
+    },
+    "deskTools": "Research utilities"
   },
   "createResearch": {
     "back": "Dashboard",
@@ -1400,7 +1404,8 @@
     "progressLabel": "Creation progress",
     "identityStep": "Research identity",
     "evidenceStep": "Evidence source",
-    "eyebrow": "OpenScience / Research Object"
+    "eyebrow": "OpenScience / Research Object",
+    "backToDesk": "Back to research desk"
   },
   "hermesReview": {
     "snapshotLoadError": "The saved confirmation snapshot could not be loaded. Retry to view its contents.",
@@ -1752,20 +1757,20 @@
     "eyebrow": "Public research index",
     "title": "Discover research. Understand its contribution.",
     "description": "Start with the concept image and key findings, then explore the methods and original sources.",
-    "empty": "No public Research Objects match this index view.",
+    "empty": "No matching research yet. Try another keyword or broaden your search.",
     "create": "Create a Research Object",
-    "indexLabel": "Published Research Object index",
+    "indexLabel": "Public research",
     "search": "Search research titles or content",
     "field": "Content",
     "artifactType": "Material type",
     "allFields": "All content",
     "allArtifacts": "All materials",
     "apply": "Apply filters",
-    "loading": "Reading the public index…",
-    "error": "The public index could not be loaded.",
-    "loadMore": "Continue index",
+    "loading": "Loading research…",
+    "error": "Research could not be loaded. Please try again.",
+    "loadMore": "Show more research",
     "unknownAuthor": "Author record pending",
-    "noArtifacts": "No artifacts",
+    "noArtifacts": "No related materials",
     "fields": {
       "problem": "Problem",
       "insight": "Insight",
@@ -1789,7 +1794,8 @@
     "readResearch": "Read research",
     "recentTitle": "Recently shared research",
     "recentDescription": "See the central idea, then explore the findings and their limits.",
-    "browseAll": "Explore all research"
+    "browseAll": "Explore all research",
+    "retry": "Try again"
   },
   "presentation": {
     "existingImageReview": {
@@ -2277,6 +2283,7 @@
     "note": "Editorial note",
     "notePlaceholder": "Why this object belongs in the issue",
     "media": "Optional issue media",
+    "mediaIncomplete": "Complete the media URL, description, credit, license and HTTPS source before submitting, or clear the media details.",
     "mediaHint": "If a media URL is supplied, alt text, credit, licence and source provenance are all required.",
     "image": "Image",
     "video": "Video",
@@ -2933,27 +2940,66 @@
     "skip": "Skip to content"
   },
   "productGuide": {
-    "title": "From materials to public research",
-    "intro": "Upload a paper or start a draft, work with Hermes to organize its contents, then confirm them and choose whether to publish.",
-    "navigation": "Website navigation",
-    "skip": "Skip to content",
+    "navigation": "Primary navigation",
+    "skip": "Skip to the guide",
+    "eyebrow": "RESEARCH WITH HERMES",
+    "title": "Bring your paper.\nMake the research clear.",
+    "intro": "Work with Hermes from the original paper, shape its ideas and visual explanation, and keep developing it in your research workspace.",
+    "desk": "Enter research desk",
+    "startNote": "Inside, choose “Upload PDF or materials”.",
+    "exampleLabel": "Research in focus",
+    "exampleAlt": "Core concept figure for “{title}”",
+    "exampleFallback": "Explore a research study",
+    "exampleFallbackBody": "Begin with its contribution and figures, then read further.",
+    "exampleUnavailable": "The research preview could not load. You can still enter your desk and start your own research.",
+    "exampleNoImage": "Continue with the text and original sources.",
+    "loadingExample": "Opening a research preview…",
+    "retryExample": "Reload preview",
+    "figureLabel": "Core concept figure",
+    "readExample": "Read this research",
+    "explore": "Explore public research",
+    "sceneHeading": "What would you like to do next?",
+    "sceneIntro": "Begin with the task in front of you.",
+    "materials": "Paper and research materials",
+    "continueExpression": "Continue shaping this research",
     "create": "Create research",
-    "desk": "Open research desk",
-    "research": {
-      "title": "What a research project contains",
-      "body": "A research project keeps papers, data, code, images and text together with traceable versions. Drafts are visible within the workspace permissions."
+    "createBody": "Begin with your paper or materials",
+    "hermesPrompt": "Which part would you like to work on?",
+    "findEntry": "Enter your desk to upload",
+    "deskAgain": "Return to your research desk",
+    "readDemoBody": "Begin with the contribution and core figure, then explore the text and original sources.",
+    "questionsHeading": "A few things you might like to know",
+    "invitation": "Take the research in your hands further.",
+    "scenes": {
+      "start": {
+        "label": "Start with a paper",
+        "title": "Bring your materials in",
+        "body": "Choose the upload entry in your research desk. A paper, supplementary material or an existing draft can be your starting point."
+      },
+      "read": {
+        "label": "Understand a study",
+        "title": "Start with the contribution",
+        "body": "The central idea and core figure help you find your bearings. Methods, results and original sources sit within the same research."
+      },
+      "revise": {
+        "label": "Keep developing",
+        "title": "Pick up where you want to work",
+        "body": "Open existing research to edit the text or ask Hermes a specific question. Materials, text and figures stay with that research."
+      }
     },
-    "fields": {
-      "title": "Six sections explain your research",
-      "body": "The text covers problem, insight, method, results, limitations and reproducibility. Hermes proposes content from your materials for you to check and confirm. A processing failure does not mean the paper omitted the information."
-    },
-    "publicId": {
-      "title": "Public identifiers support sharing and citation",
-      "body": "Published research receives a stable public identifier. Share its public page; a version link preserves the contents at that time. The identifier does not imply peer review approval."
-    },
-    "workflow": {
-      "title": "Four places to continue",
-      "body": "Overview reads the research; Edit changes its six sections; Presentation shows images and video; Materials holds the originals. Hermes keeps task status, reviews and supported recovery actions."
+    "questions": {
+      "blank": {
+        "title": "Can I start without a paper?",
+        "body": "Choose “Start from blank” in your desk. Write down a research question and continue developing it in your research workspace."
+      },
+      "edit": {
+        "title": "Where do I edit existing research?",
+        "body": "Open the research from your desk and edit the text directly. You can also tell Hermes what you would like to change."
+      },
+      "source": {
+        "title": "Where can I find the original paper?",
+        "body": "Open the materials area on the research reading page for the original paper and sources. You can return to the text while viewing its figures."
+      }
     }
   },
   "journalServiceLabels": {

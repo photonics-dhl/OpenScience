@@ -673,14 +673,14 @@ export async function getExploreIndex(input: {
   limit?: number;
   field?: string;
   artifactType?: string;
-} = {}): Promise<ResearchIndexPageApi> {
+} = {}, signal?: AbortSignal): Promise<ResearchIndexPageApi> {
   const params = new URLSearchParams();
   if (input.query) params.set('query', input.query);
   params.set('limit', String(input.limit ?? 20));
   if (input.field) params.set('field', input.field);
   if (input.artifactType) params.set('artifactType', input.artifactType);
   if (input.cursor) params.set('cursor', input.cursor);
-  return request(`/api/explore?${params.toString()}`);
+  return request(`/api/explore?${params.toString()}`, { signal });
 }
 
 export interface EditorialMediaApi {
@@ -1679,8 +1679,8 @@ export interface PublicResearchVersion {
 }
 
 /** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
-export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
-  return request(`/api/research/${publicId}/v/${versionNo}`);
+export async function getPublicResearchVersion(publicId: string, versionNo: number, signal?: AbortSignal): Promise<{ research: PublicResearchVersion }> {
+  return request(`/api/research/${publicId}/v/${versionNo}`, { signal });
 }
 
 export async function getPublicEvidenceSource(

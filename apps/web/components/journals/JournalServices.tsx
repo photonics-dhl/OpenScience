@@ -54,7 +54,7 @@ export function JournalServices({ journalId }: { journalId: string }) {
   }
   if (error) return <section role="alert"><p>{error}</p><button onClick={() => void load()}>重试加载服务与额度</button></section>;
   if (!data) return <p aria-live="polite">正在加载服务与额度…</p>;
-  return <div className="grid min-w-0 gap-6">
+  return <div data-journal-services className="grid min-w-0 gap-6">
     <header className="border-b border-os-rule-paper pb-5">
       <Link href={`/journals/manage/${journalId}`}>← 返回期刊工作台</Link>
       <h1 className="mt-5 text-3xl font-normal">服务包与额度</h1>
@@ -62,7 +62,7 @@ export function JournalServices({ journalId }: { journalId: string }) {
       {data.requestedPlanChoice ? <p>待人工处理方案：{displayPlanName(data.requestedPlanChoice)}，尚未开通。</p> : null}
       <p className="text-sm text-os-muted-paper">服务按人工报价开通，不自动扣款或续费。人工编辑、审核和发布固定版本不消耗 AI 草稿额度。</p>
     </header>
-    <section className="grid gap-2 sm:grid-cols-5" aria-label="额度概览">
+    <section data-journal-stats className="grid gap-2 sm:grid-cols-5" aria-label="额度概览">
       <Metric label="可用 AI 草稿额度" value={data.credits.available} />
       <Metric label="已预占" value={data.credits.reserved} />
       <Metric label="已消耗" value={data.credits.consumed} />
@@ -72,7 +72,7 @@ export function JournalServices({ journalId }: { journalId: string }) {
     <section className="min-w-0" aria-labelledby="credit-batches">
       <h2 id="credit-batches" className="text-xl font-normal">额度、到期与存储</h2>
       <p>材料存储：{bytes(data.storage.usedBytes)} / {bytes(data.storage.limitBytes)}</p>
-      {data.grants.length ? <div className="overflow-x-auto">
+      {data.grants.length ? <div className="overflow-x-auto" tabIndex={0} role="region" aria-labelledby="credit-batches">
         <table className="w-full text-left text-sm">
           <thead><tr><th className="p-2">发放</th><th className="p-2">可用</th><th className="p-2">预占</th><th className="p-2">已用</th><th className="p-2">到期时间</th></tr></thead>
           <tbody>{data.grants.map((grant) => <tr key={grant.id} className="border-t border-os-rule-paper">
@@ -102,5 +102,5 @@ export function JournalServices({ journalId }: { journalId: string }) {
     {message ? <p role="status">{message}</p> : null}
   </div>;
 }
-function Metric({ label, value }: { label: string; value: number }) { return <div className="border border-os-rule-paper p-3"><p className="text-sm">{label}</p><p className="text-2xl">{value}</p></div>; }
+function Metric({ label, value }: { label: string; value: number }) { return <div data-journal-stat className="border border-os-rule-paper p-3"><p className="text-sm">{label}</p><p className="text-2xl">{value}</p></div>; }
 function bytes(value: string) { const count = Number(value); return count < 1048576 ? `${Math.round(count / 1024)} KB` : `${(count / 1048576).toFixed(1)} MB`; }
