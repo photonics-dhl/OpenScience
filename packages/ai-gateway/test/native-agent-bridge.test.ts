@@ -10,6 +10,27 @@ const continuation = { provider: 'm3', model: 'MiniMax-M3', content: [{ type: 't
 const calls = [{ id: 'call-1', type: 'function', function: { name: 'skills_list', arguments: '{}' } }];
 
 describe('real native SDK messages at the private Gateway bridge', () => {
+  it('preserves a confirmed missing tool-call response as incomplete tool use, never a final stop or fabricated call', () => {
+    const providerContent = { ...continuation, content: [{ type: 'thinking', thinking: 'opaque', signature: 'unchanged' },
+      { type: 'text', text: 'Preparing the saved draft.' }] };
+    const response = nativeAgentSdkResponse({ text: 'Preparing the saved draft.', provider: 'm3', model: 'MiniMax-M3', promptHash: 'test',
+      usage: { inputTokens: 20, outputTokens: 8 }, finishReason: 'other', providerStopReason: 'tool_use', providerContent }, 'incomplete-turn');
+    expect(response.choices[0].finish_reason).toBe('tool_calls');
+    expect(response.choices[0].message.tool_calls).toBeUndefined();
+    expect(response.choices[0].message.content).toBe('Preparing the saved draft.');
+    expect(response.choices[0].message.reasoning_details?.[0]?.provider_content).toEqual(providerContent);
+  });
+  it.each(['unrecognized', 'missing', 'pause_turn', 'refusal'] as const)('does not reinterpret %s as a correctable missing call', reason => {
+    expect(() => nativeAgentSdkResponse({ text: 'Partial answer', provider: 'm3', model: 'MiniMax-M3', promptHash: 'test',
+      usage: { inputTokens: 20, outputTokens: 8 }, finishReason: 'other', providerStopReason: reason,
+      providerContent: { ...continuation, content: [{ type: 'text', text: 'Partial answer' }] } }, 'invalid')).toThrow('Unsupported native agent SDK response');
+  });
+  it('refuses a tool-use stop without the original complete thinking/text-only provider blocks', () => {
+    const response = { text: 'Partial', provider: 'm3', model: 'MiniMax-M3', promptHash: 'test',
+      usage: { inputTokens: 20, outputTokens: 8 }, finishReason: 'other' as const, providerStopReason: 'tool_use' as const };
+    expect(() => nativeAgentSdkResponse(response, 'missing-blocks')).toThrow();
+    expect(() => nativeAgentSdkResponse({ ...response, providerContent: continuation }, 'unparsed-tool-block')).toThrow();
+  });
   it('maps native history without turning tool calls or complete provider content into text', () => {
     const input = nativeAgentSdkRequest({ model: 'MiniMax-M3', stream: false, max_tokens: 4096, tools, messages: [
       { role: 'system', content: 'Bound task.' }, { role: 'user', content: 'Read.' },

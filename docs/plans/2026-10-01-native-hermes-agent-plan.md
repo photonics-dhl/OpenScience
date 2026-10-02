@@ -101,3 +101,9 @@ Native安装器优先用科学Skill的nativeInstructions/nativeSourceReviewInstr
 运行校验瓶颈实测是100929项walk/文件hash与浏览器cgroup触顶造成的共享磁盘竞争，closure扫描不是瓶颈。每批8个异步identity按原序归并，所有文件/链接/权限/目录闭包范围保持；拒绝前排空本批。旧串行900s未完成、候选740s完成，环境负载不同，暂不作等价实时digest或稳定性能主张。浏览器8→10GiB同容器在线有界缓解经High条件GO，保留无swap/4CPU/只读/无特权/网络none/原profile，无重启/闭页；未知页面不得清理。installer两条全量verify改900s，其他命令120s；Linux验证与真实安装仍待完成。完成证据与运行身份只记录CURRENT。
 
 - 10-02收敛：自动run使用Native私有图解规划，审批和图片派发前都暂停；GET/UI以image-api-pending显示方案就绪。High发现并修复失败结果私有字段丢失、终态来源并发快照和自动旧通道派发三处问题。新增诊断有限记录stop reason，错误不再笼统归为传输问题，未知提交仍拒收且不重发。代码High GO；一次新合法私有任务须待精确CI/部署，用于真实质量和完整诊断，不能证明v7异常已修复；失败不盲重开，图片仍停用。
+
+## 已完成回复缺工具调用的有界纠正
+
+v8实际paid回复stop_reason=tool_use但只有thinking/text，没有tool_use块；不是未知发送或GPT网络故障。保持原CP的other与完整不透明内容，SDK如实标tool_calls而不造调用或标stop。TaskAgent只对这个完整响应沿原AIAgent.run_conversation继续一次，携带完整历史、同task/system并减去已用迭代；原Worker总输出/turn/deadline不变，已付prefix计数保证重放不能增加纠正次数。第二次同类异常保存后拒绝，length/未知started/权限撤回不继续。提示允许为科学核对回读，不重启任务或重复保存未变化字段。最终host仍要求真实终答与原科学物化。
+
+独立High最终GO；Gateway47、Worker35、Python12+1Windows skip、UI24及build/TC/scopedlint通过。真实安装Agent的隔离LinuxUDS离线运行证明首次异常后进程中断、重放5回答、正确后续工具/像素/终答；重复异常零采用，零外呼。该证据不证明真实科学质量。新说明去掉新来源分析入口的旧ChatGPT订阅提示，历史Web任务身份不变。精确CI/配对发布和新的真实论文验证见CURRENT；旧v8不重开。

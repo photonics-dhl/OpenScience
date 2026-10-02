@@ -16,6 +16,53 @@ class NativeStub:
 
 
 class AdapterTests(unittest.TestCase):
+    def test_missing_call_never_reopens_exhausted_errored_or_interrupted_native_results(self):
+        for patch in [{'api_calls':8},{'api_calls':0},{'error':'failed'},{'interrupted':True},{'partial':True}]:
+            with self.subTest(patch=patch):
+                calls=[]
+                class NativeConversation:
+                    def __init__(self):self.max_iterations=8
+                    def run_conversation(self,*args,**kwargs):
+                        calls.append(kwargs)
+                        return {'api_calls':2,'messages':[{'role':'assistant','content':'Incomplete','finish_reason':'tool_calls'}],**patch}
+                cls=create_task_agent_class(NativeConversation,lambda:None,{'paper_read'})
+                with self.assertRaises(NativeTaskStopped):cls().run_conversation('Goal',task_id='same')
+                self.assertEqual(len(calls),1)
+
+    def test_repeated_missing_call_stops_after_one_native_correction_and_restores_the_limit(self):
+        calls=[]
+        class NativeConversation:
+            def __init__(self):self.max_iterations=8
+            def run_conversation(self,*args,**kwargs):
+                calls.append(kwargs)
+                return {'api_calls':2,'messages':[{'role':'assistant','content':'Incomplete','finish_reason':'tool_calls'}]}
+        cls=create_task_agent_class(NativeConversation,lambda:None,{'paper_read'});agent=cls()
+        with self.assertRaises(NativeTaskStopped):agent.run_conversation('Goal',task_id='same')
+        self.assertEqual(len(calls),2)
+        self.assertEqual(agent.max_iterations,8)
+
+    def test_missing_tool_call_reenters_the_native_loop_with_exact_history_and_remaining_budget_once(self):
+        history=[{'role':'user','content':'Original goal'}, {'role':'assistant','content':'Preparing the draft.',
+            'finish_reason':'tool_calls','reasoning_details':[{'opaque':'unchanged'}]}]
+        calls=[]
+        class NativeConversation:
+            def __init__(self):self.max_iterations=8
+            def run_conversation(self,user_message,system_message=None,conversation_history=None,task_id=None,**kwargs):
+                calls.append((user_message,system_message,conversation_history,task_id,self.max_iterations))
+                if len(calls)==1:return {'messages':history,'final_response':'Preparing the draft.','api_calls':3,'completed':True}
+                return {'messages':[*conversation_history,{'role':'user','content':user_message},
+                    {'role':'assistant','content':'Done.','finish_reason':'stop'}],'final_response':'Done.','api_calls':2,'completed':True}
+        cls=create_task_agent_class(NativeConversation,lambda:None,{'paper_read'})
+        agent=cls();result=agent.run_conversation('Original goal',system_message='Original scope',task_id='same-task')
+        self.assertEqual(result['final_response'],'Done.')
+        self.assertEqual(len(calls),2)
+        self.assertEqual(calls[1][2],history)
+        self.assertEqual(calls[1][1],'Original scope')
+        self.assertEqual(calls[1][3],'same-task')
+        self.assertEqual(calls[1][4],5)
+        self.assertEqual(result['api_calls'],5)
+        self.assertEqual(agent.max_iterations,8)
+
     def guarded_skill(self, root, calls, authorize):
         entry = SimpleNamespace(name='skill_view', toolset='skills', schema={},
             handler=lambda args, **_kwargs: calls.append(args) or json.dumps({'success': True}),

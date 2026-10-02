@@ -52,8 +52,25 @@ async function fixture(finalText = 'final', stopReason = 'end_turn') {
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
+  it('never accepts the missing-call interim text as a completed task', async () => {
+    const f = await fixture('Preparing the saved draft.', 'tool_use');
+    try {
+      const first = await post(f.socketPath, '/v1/chat/completions', f.sdk);
+      const args = { passageIds: ['P00001'] };
+      await post(f.socketPath, '/task/tools/authorize', { name: 'paper_read', arguments: args });
+      const read = await post(f.socketPath, '/task/tools/call', { name: 'paper_read', arguments: args });
+      const message = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
+      const interim = await post(f.socketPath, '/v1/chat/completions', { ...f.sdk, messages: [...f.sdk.messages, message,
+        { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(read.body) }] });
+      expect(interim.status).toBe(200);
+      expect((interim.body.choices as Array<{ finish_reason: string }>)[0]?.finish_reason).toBe('tool_calls');
+      expect((await post(f.socketPath, '/task/finish', { status: 'completed', finalResponse: 'Preparing the saved draft.' })).status).toBe(409);
+      await expect(f.final).rejects.toThrow('stopped');
+      expect(f.providerCalls).toBe(2);
+    } finally { await f.cleanup(); }
+  });
   it('reports an unsupported paid response without flattening it into a transport error or submitting again', async () => {
-    const f = await fixture('Incomplete review {', 'tool_use');
+    const f = await fixture('Incomplete review {', 'pause_turn');
     try {
       const first = await post(f.socketPath, '/v1/chat/completions', f.sdk);
       const args = { passageIds: ['P00001'] };
@@ -65,7 +82,7 @@ describe.skipIf(process.platform === 'win32')('private native Unix socket router
       expect(rejected.status).toBe(409);
       await expect(f.final).rejects.toThrow('provider response has no valid completion or tool call');
       expect(f.state.turns.at(-1)).toMatchObject({ state: 'completed', response: {
-        text: 'Incomplete review {', providerStopReason: 'tool_use' } });
+        text: 'Incomplete review {', providerStopReason: 'pause_turn' } });
       expect(f.providerCalls).toBe(2);
     } finally { await f.cleanup(); }
   });

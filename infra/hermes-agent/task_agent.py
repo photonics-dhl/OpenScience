@@ -69,6 +69,38 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
             # Task checkpoints use complete SDK responses; use its existing non-stream path.
             self._disable_streaming = True
 
+        def run_conversation(self, user_message, system_message=None, conversation_history=None, task_id=None, **kwargs):
+            result = super().run_conversation(user_message, system_message=system_message,
+                conversation_history=conversation_history, task_id=task_id, **kwargs)
+
+            def missing_call(value):
+                history = value.get('messages') or []
+                last = history[-1] if history else None
+                return isinstance(last, dict) and last.get('role') == 'assistant' \
+                    and last.get('finish_reason') == 'tool_calls' and not last.get('tool_calls')
+
+            if not missing_call(result):
+                return result
+            spent = result.get('api_calls')
+            if result.get('error') or result.get('interrupted') or result.get('partial') \
+                    or type(spent) is not int or spent < 1 or spent >= self.max_iterations:
+                raise NativeTaskStopped('Native incomplete tool response cannot continue in this scope')
+            original_limit = self.max_iterations
+            self.max_iterations = original_limit - spent
+            try:
+                continued = super().run_conversation(
+                    'Your last response indicated tool use but supplied no tool call. No tool ran for that response. '
+                    'Continue from the saved results above and issue the intended call using its tool schema. '
+                    'Do not restart the task or save unchanged fields again. Re-read sources as needed for the remaining checks. '
+                    'Finish only after the required tools succeed.',
+                    system_message=system_message, conversation_history=result['messages'], task_id=task_id, **kwargs)
+                if missing_call(continued):
+                    raise NativeTaskStopped('Native provider omitted a tool call again')
+                continued['api_calls'] = spent + continued.get('api_calls', 0)
+                return continued
+            finally:
+                self.max_iterations = original_limit
+
         def _create_openai_client(self, client_kwargs, *, reason, shared):
             import httpx
             from openai import OpenAI

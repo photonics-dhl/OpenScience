@@ -1474,9 +1474,9 @@
     "sourceReanalysis": {
       "start": "Start new paid analysis",
       "continue": "Continue analysis",
-      "description": "Reuse the extracted source and skip PDF/OCR. Hermes analyzes the full paper and checks the science, then automatically prepares illustrations. The new private analysis and workflow use the existing rates; subsequent image generation uses ChatGPT subscription usage. The old attempt is preserved.",
-      "restoreDescription": "Continue the private analysis already created and restore or start its workflow, without starting another paid analysis. Subsequent processing uses the existing rates; image generation uses ChatGPT subscription usage. The old attempt is preserved.",
-      "pendingDescription": "Restore the same saved request with its original source and settings. Earlier processing may already have been charged; this does not create another analysis. PDF/OCR is reused. Subsequent processing uses the existing rates; image generation uses ChatGPT subscription usage. The old attempt is preserved.",
+      "description": "Reuse the extracted source and skip PDF/OCR. Hermes analyzes the full paper and checks the science, then automatically prepares illustrations. The new private analysis and workflow use the existing rates; image generation will continue after the new service is connected. The old attempt is preserved.",
+      "restoreDescription": "Continue the private analysis already created and restore or start its workflow, without starting another paid analysis. Subsequent processing uses the existing rates; image generation will continue after the new service is connected. The old attempt is preserved.",
+      "pendingDescription": "Restore the same saved request with its original source and settings. Earlier processing may already have been charged; this does not create another analysis. PDF/OCR is reused. Subsequent processing uses the existing rates; image generation will continue after the new service is connected. The old attempt is preserved.",
       "analyzing": "Starting the new private analysis…",
       "startingRun": "Restoring the analysis and illustrated workflow…",
       "uncertain": "The response could not be confirmed. Continue analysis to restore this same request. Earlier processing may already have been charged.",

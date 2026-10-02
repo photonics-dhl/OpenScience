@@ -11,7 +11,7 @@ export {
   type NativeAgentExecutionControls,
 } from './gateway';
 export { type ChatToolDefinition, type ChatToolCall, type ProviderAssistantContent } from './native-tool-protocol';
-export { nativeAgentSdkRequest, nativeAgentSdkResponse } from './native-agent-bridge';
+export { nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall } from './native-agent-bridge';
 export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,

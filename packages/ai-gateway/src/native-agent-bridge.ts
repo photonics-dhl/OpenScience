@@ -68,13 +68,22 @@ export function nativeAgentSdkRequest(value: unknown, expectedModel: string): { 
   return { messages: snapshot, options };
 }
 
+/** A received response can announce tool use while omitting the call. Preserve it for native format correction. */
+export function nativeAgentHasMissingToolCall(completion: GatewayCompletion): boolean {
+  const blocks = completion.providerContent?.content;
+  return completion.finishReason === 'other' && completion.providerStopReason === 'tool_use'
+    && !completion.toolCalls?.length && !!completion.text.trim() && !!blocks?.length
+    && blocks.every(block => block.type === 'thinking' || block.type === 'text');
+}
+
 /** SDK extra field is preserved by the installed native _build_assistant_message; no extracted thinking text is needed. */
 export function nativeAgentSdkResponse(completion: GatewayCompletion, requestId: string) {
-  if (!completion.toolCalls && completion.finishReason !== 'stop' && completion.finishReason !== 'length')
+  const missingToolCall = nativeAgentHasMissingToolCall(completion);
+  if (!completion.toolCalls && !missingToolCall && completion.finishReason !== 'stop' && completion.finishReason !== 'length')
     throw new TextProviderError('provider_response_shape', 'Unsupported native agent SDK response');
   return {
     id: requestId, object: 'chat.completion', created: 0, model: completion.model,
-    choices: [{ index: 0, finish_reason: completion.finishReason === 'length' ? 'length' : completion.toolCalls ? 'tool_calls' : 'stop',
+    choices: [{ index: 0, finish_reason: completion.finishReason === 'length' ? 'length' : completion.toolCalls || missingToolCall ? 'tool_calls' : 'stop',
       message: { role: 'assistant', content: completion.text,
         ...(completion.toolCalls ? { tool_calls: completion.toolCalls } : {}),
         ...(completion.providerContent ? { reasoning_details: [{ type: 'openscience-provider-content', provider_content: completion.providerContent }] } : {}),

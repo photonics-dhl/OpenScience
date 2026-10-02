@@ -16,6 +16,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
   let calls = 0; let authorized = true; let loseAnswer = false; let lease = true; let loseLeaseAfterStart = false; let revokeAfterHTTP = false; let reportedModel = completion.model;
   let outputTokens = completion.usage.outputTokens; const requestedAllowances: (number | undefined)[] = [];
   let finishReason = completion.finishReason;
+  let providerStopReason: GatewayCompletion['providerStopReason'];
   const preflight = new AnthropicCompatProvider('minimax', { baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async () => { throw new Error('Preflight sent HTTP'); });
   const provider: TextProvider = { name: 'minimax', model: 'MiniMax-M3', preflightNativeTools: opts => preflight.preflightNativeTools(opts), async complete(options) {
     calls++; if (loseAnswer) throw new Error('unknown transport outcome');
@@ -26,7 +27,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
       toolCalls: [{ id: `read-${calls}`, type: 'function', function: { name: 'paper_read', arguments: JSON.stringify(toolInput) } }],
       providerContent: { provider: 'minimax', model: 'MiniMax-M3', content: [
         { type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'tool_use', id: `read-${calls}`, name: 'paper_read', input: toolInput }] } };
-    return { ...output, model: reportedModel, finishReason };
+    return { ...output, model: reportedModel, finishReason, ...(providerStopReason ? { providerStopReason } : {}) };
   } };
   const gateway = new AiGateway({ providers: [provider] });
   const store = { async read() { return structuredClone(state); }, async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
@@ -45,6 +46,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
   return { create, get calls() { return calls; }, get state() { return state; }, get requestedAllowances() { return requestedAllowances; },
     reportOutputTokens: (tokens: number) => { outputTokens = tokens; },
     reportFinishReason: (value: GatewayCompletion['finishReason']) => { finishReason = value; },
+    reportProviderStopReason: (value: GatewayCompletion['providerStopReason']) => { providerStopReason = value; },
     revoke: () => { authorized = false; }, changeLease: () => { lease = false; },
     loseLeaseAfterStart: () => { loseLeaseAfterStart = true; },
     revokeAfterHTTP: () => { revokeAfterHTTP = true; },
@@ -52,6 +54,40 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it('replays a known missing call unchanged and continues the same paid history without repeating the original submission', async () => {
+    const f = fixture(); f.reportFinishReason('other'); f.reportProviderStopReason('tool_use');
+    const first = await f.create().complete(request);
+    expect(first.choices[0].finish_reason).toBe('tool_calls');
+    expect(first.choices[0].message.tool_calls).toBeUndefined();
+    expect(f.state?.turns[0]).toMatchObject({ state: 'completed', response: { finishReason: 'other', providerStopReason: 'tool_use' } });
+    const restored = f.create(); expect(await restored.complete(request)).toEqual(first); expect(f.calls).toBe(1);
+    f.reportFinishReason('stop'); f.reportProviderStopReason('end_turn');
+    const next = { ...request, messages: [...request.messages, first.choices[0].message,
+      { role: 'user', content: 'Issue the intended tool call without repeating saved work.' }] };
+    expect((await restored.complete(next)).choices[0].finish_reason).toBe('stop');
+    expect(f.calls).toBe(2);
+    expect(f.state?.turns[1]?.request.messages[2]?.providerContent).toEqual(completion.providerContent);
+  });
+  it('retains a second paid missing call but refuses another correction, including after process restart', async () => {
+    const f = fixture(); f.reportFinishReason('other'); f.reportProviderStopReason('tool_use');
+    const session = f.create(); const first = await session.complete(request);
+    const next = { ...request, messages: [...request.messages, first.choices[0].message,
+      { role: 'user', content: 'Issue the intended tool call.' }] };
+    await expect(session.complete(next)).rejects.toThrow('omitted a tool call again');
+    expect(f.state?.turns.at(-1)?.state).toBe('completed');
+    const restored = f.create(); await restored.complete(request);
+    await expect(restored.complete(next)).rejects.toThrow('omitted a tool call again');
+    expect(f.calls).toBe(2);
+  });
+  it.each(['authority', 'turn-budget'] as const)('does not grant a missing-call continuation past the original %s', async boundary => {
+    const f = fixture(); f.reportFinishReason('other'); f.reportProviderStopReason('tool_use');
+    const session = f.create(boundary === 'turn-budget' ? { maxTurns: 1 } : {});
+    const first = await session.complete(request);
+    if (boundary === 'authority') f.revoke();
+    await expect(session.complete({ ...request, messages: [...request.messages, first.choices[0].message,
+      { role: 'user', content: 'Issue the intended tool call.' }] })).rejects.toThrow();
+    expect(f.calls).toBe(1);
+  });
   it.each(['other', 'unknown', undefined] as const)('preserves a paid unsupported stop (%s), gives an accurate response error and never resubmits it', async reason => {
     const f = fixture(); f.reportFinishReason(reason);
     for (let attempt = 0; attempt < 2; attempt++) {
