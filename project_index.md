@@ -6,7 +6,7 @@
 
 公司上线/年度运维评估的固定代码快照、脱敏边界与只读证据见 [2026-09-30评估交接](docs/handoff/2026-09-30-vendor-evaluation.md)。公司仅做上线与运维，功能由我方继续；这是一次性样本，不是新的运行CURRENT。
 
-整站叙事、逐页区域/按钮职责、成熟界面范围及指南构图研究见[产品设计10-01节](docs/specs/2026-09-05-integrated-research-product-design.md#2026-10-01-全站入口与视觉收敛本轮目标)和[实施计划](docs/plans/2026-09-05-integrated-research-product-plan.md)；[可交互指南／桌面／阅读比较稿](docs/proposals/2026-10-01-research-interface-review.html)供查看真实素材的构图，Landing主视觉与正文保留，导航已获准统一。产品叙事与界面方法由[product-story-design](.agents/skills/product-story-design/SKILL.md)接入现有前端Skill；用户反馈、候选位置、已观察范围和发布状态只见Hermes CURRENT。
+整站叙事、逐页区域/按钮职责、成熟界面范围及指南构图研究见[产品设计10-01节](docs/specs/2026-09-05-integrated-research-product-design.md#2026-10-01-全站入口与视觉收敛本轮目标)和[实施计划](docs/plans/2026-09-05-integrated-research-product-plan.md)；[可交互指南／桌面／阅读比较稿](docs/proposals/2026-10-01-research-interface-review.html)供查看真实素材的构图，Landing主视觉与正文保留，导航已获准统一；最新首页取消浮动Hermes、帽沿短尾及逐页细化见[10-02设计纠正](docs/specs/2026-09-05-integrated-research-product-design.md#2026-10-02-气泡与逐页细化纠正)。产品叙事与界面方法由[product-story-design](.agents/skills/product-story-design/SKILL.md)接入现有前端Skill；用户反馈、候选位置、已观察范围和发布状态只见Hermes CURRENT。
 
 | 路径 | 用途 | 状态 |
 |---|---|---|

@@ -58,8 +58,8 @@
 
 ## 2026-10-02 UI 发布与公司回复更新
 
-- 用户授权发布全部UI修改并交Word，报价范围仍为正式上线与年度运维，功能/科研质量由我方负责；保留ECS、独立测试环境、每周发版、12430020紧急审批、日期待定。
-- 整轮UI已合入交付线；软键盘Hermes位置P2修正通过独立High，215相关Web检查、55几何检查、lint/typecheck通过。首轮CI旧入口/不完整账户fixture失败已修，精确发布CI通过且含33模拟浏览器流程；实际source/release只从Hermes CURRENT定锚。
-- 11:18正常构建发布exit0，无迁移或新Native目录安装，无模型/业务写入；公开与源站版本、3主应用挂载同源，12路径×两链路预期HTTP，API/Worker healthy、Web running、restart0/OOM false、事务journal清除。11:26约8分钟复查仍restart0/OOM false且版本/指南/登录/公开探索200；真实逐页/手机/嘴部气泡/角色浏览器因saved permissions核验故障未完成，不用模拟流程或HTTP代称视觉验收。
-- 最新服务器事实与完整日志归ignored `tmp/ui-release-20261002/`：16逻辑核、Linux4.0.4；发布后RAM总30.07/已用22.22/available7.85GiB、盘67%/余47.83GiB。11:07主库133.23MiB，55 blobs逻辑138.33MiB/对象卷物理1.09GiB，artifact106/未删104，1 active期刊但homepage未发布。每日03:00双库备份7组；对象备份、异地副本、恢复演练与SLA/RPO/RTO仍待交付。
-- 正式Word `tmp/vendor-delivery-20261002/OpenScience 上线评估问题核查回复.docx` 已完成，9页/21项/7比较表；作者核查和权威qa/final目录9页PNG全检通过，无草稿占位/溢出/重叠；主线程也核了内容与首末页。原PDF/旧Word保留，记录本轮上线、观察、科研研发和运维责任边界；11:26短时复查单独归项目收据。首轮90da固定代码包是历史评估源，不冒称新版代码；本轮不授予GitHub/服务器账号，不发送报价商。canonical另会话仍在编辑原生来源审阅5个文件，未删除、暂存或混入本轮提交；UI树同源干净，暂保留用于受阻的真实视觉QA，下一次UI成功发布后清理。
+- 用户授权发布全部UI修改并交Word，报价仍为正式上线与年度运维；功能/科研质量由我方负责。保留ECS、独立测试环境、每周发版、12430020紧急审批、日期待定。
+- 上午整轮界面发布的215 Web/55几何检查和33模拟浏览器流程保留为当时证据。本轮新纠正：首页取消浮动Hermes，其他页默认360px/帽沿左上角短尾；继续细化阅读/媒体/表单与控件，修复390px版本选择器横溢出。132定向检查、TC/lint/样式检查、两位独立High最终GO及精确CI通过；部署exit0，无迁移/新付费界面验收任务。随后并行科研修正保留全部UI，实际运行版本只见[Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md)。
+- 13:51与13:56 HTTPS只读复查：公网与正确TLS源站版本、3主应用源码挂载一致，12路径×两链路均预期，API/Worker healthy、Web running、restart0/OOM false、事务journal清除；不证明长期SLA。真实逐页/手机/帽沿气泡/角色浏览器因saved permissions核验故障未完成，不用模拟流程或HTTP代称视觉验收。
+- 新证据归ignored tmp/ui-hat-polish-20261002/，旧tmp/ui-release-20261002/保留。Word资源记录13:51点时RAM总30.07/available7.52GiB、Swap0、根盘余45.28GiB；11:07库/对象聚合及每日03:00双库备份仍分别标原取证时间。对象备份、异地副本、恢复演练与SLA/RPO/RTO待交付。
+- 正式Word tmp/vendor-delivery-20261002/OpenScience 上线评估问题核查回复.docx已原地更新，9页/21项/7表，qa/hat-polish/pages九页全检无溢出/重叠/缺字；bundled renderer缺soffice的诊断保留，改用现有Word只读PDF导出与bundled Poppler渲染。原PDF/旧Word（qa/hat-polish/previous-1126.docx）保留，未发送公司。首轮90da固定包为历史评估源，后续交接需明确新固定版本；不授予GitHub/服务器账号。本轮只提交自身UI/交付记录，并行科研工作由其会话负责；UI树为受阻视觉QA暂留，清理期限见CURRENT。
