@@ -37,9 +37,9 @@ def copy_resources(source, target):
 
 def write_science_skills(source, catalogue, science):
     for name, description, body in [
-            ('scientific-critical-thinking', 'Understand scientific manuscripts and their core contribution using original evidence, conditions and research-type appropriate reasoning.', science['instructions']),
+            ('scientific-critical-thinking', 'Understand scientific manuscripts and their core contribution using original evidence, conditions and research-type appropriate reasoning.', science.get('nativeInstructions', science['instructions'])),
             ('openscience-source-review', 'After recording a real paper_draft, review that candidate against original passages and actual figures; align central claims, comparisons, conditions and evidence.',
-             'Use this method only after paper_draft records a real candidate. Initial whole-paper understanding uses scientific-critical-thinking; this review preserves the chosen focus.\n\n'+science['sourceReviewInstructions'])]:
+             'Use this method only after paper_draft records a real candidate. Initial whole-paper understanding uses scientific-critical-thinking; this review preserves the chosen focus.\n\n'+science.get('nativeSourceReviewInstructions', science['sourceReviewInstructions']))]:
         folder = catalogue/'science'/name
         folder.mkdir(parents=True)
         if name == 'scientific-critical-thinking':

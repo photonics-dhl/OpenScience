@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { createNativeScientificMaterializer } from '../src/extractor';
-import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft } from '../src/native-agent/paper-task';
+import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL } from '../src/native-agent/paper-task';
+import type { NativeAgentSessionState } from '../src/native-agent/session';
 import { createNativePaperTools } from '../src/native-agent/paper-tools';
 import type { ChatMessage } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
@@ -15,6 +16,56 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 describe('actual native Agent scientific materializer', () => {
+  it('keeps original paid paper tools and their old feedback while fresh tasks receive comparison context', () => {
+    const old = { ...structuredClone(NATIVE_PAPER_NOTE_DRAFT_TOOL), description: 'Original paid draft tool description' };
+    const saved = { binding: { allowedTools: ['paper_field', 'paper_draft'] }, turns: [{ request: { options: { tools: [
+      { type: 'function', function: { name: 'skills_list', parameters: { type: 'object' } } },
+      { type: 'function', function: old },
+    ] } } }] } as unknown as NativeAgentSessionState;
+    const profile = nativePaperToolProfile(saved);
+    expect(profile).toMatchObject({ useNotes: true, reviewContext: false, sourceTools: [old] });
+    profile.sourceTools[0]!.parameters.changed = true;
+    expect(old.parameters).not.toHaveProperty('changed');
+    expect(nativePaperToolProfile(null)).toMatchObject({ useNotes: true, reviewContext: true });
+    expect(nativePaperToolProfile(null).sourceTools).toContainEqual(NATIVE_PAPER_NOTE_DRAFT_TOOL);
+  });
+  it('retains comparison context when replaying tasks that originally received its tool description', () => {
+    const saved = { binding: { allowedTools: ['paper_field', 'paper_draft'] }, turns: [{ request: { options: { tools: [
+      { type: 'function', function: structuredClone(NATIVE_PAPER_NOTE_DRAFT_TOOL) },
+    ] } } }] } as unknown as NativeAgentSessionState;
+    expect(nativePaperToolProfile(saved).reviewContext).toBe(true);
+  });
+  it('returns complete selected source passages for the Agent to compare before its existing review decision', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], { reviewContext: true });
+    const receipt = worker.draft(draft(), 0, 'draft-evidence');
+    expect(receipt).toMatchObject({ status: 'draft_ready', draftToolCallId: 'draft-evidence',
+      reviewContext: { source: { artifactId: 'paper', documentSha256: map.contentHash },
+        passages: [{ id: 'P00001', text: source, pageStart: 1, pageEnd: 1 }],
+        claims: [{ clientKey: 'core-a', sourceField: 'insight', sourceBindings: draft().draftClaims[0]!.sourceBindings }] } });
+    expect((receipt.reviewContext as { fields: unknown[] }).fields).toHaveLength(6);
+    expect(createNativeScientificMaterializer(map, () => ['P00001']).draft(draft(), 0, 'old-draft')).not.toHaveProperty('reviewContext');
+  });
+  it('does not reveal unread source or turn a failed draft into a source comparison receipt', () => {
+    const worker = createNativeScientificMaterializer(map, () => [], { reviewContext: true });
+    const receipt = worker.draft(draft(), 0, 'draft-unread');
+    expect(receipt.status).toBe('invalid_draft'); expect(receipt).not.toHaveProperty('reviewContext');
+  });
+  it('keeps a comparison receipt tied to the actual call when a newer draft has already been stored', async () => {
+    const larger = structuredClone(map);
+    larger.pages[0]!.blocks[0]!.text = source.repeat(8);
+    larger.pages[0]!.blocks.push({ ...structuredClone(larger.pages[0]!.blocks[0]!), id: 'later', text: 'A different reported comparison and condition. '.repeat(20) });
+    const paper = createNativePaperTools(larger, async () => []);
+    await paper.call('paper_read', { passageIds: ['P00001', 'P00002'] });
+    const worker = createNativeScientificMaterializer(larger, () => paper.observedPassageIds, { reviewContext: true });
+    const newer = draft();
+    for (const field of SDF_CORE_FIELDS) newer.fields[field]!.sourcePassageIds = ['P00002'];
+    newer.draftClaims[0]!.sourceBindings = [{ sourcePassageId: 'P00002', relation: 'supports' }];
+    expect(worker.draft(newer, 10, 'newer').status).toBe('draft_ready');
+    const olderReceipt = worker.draft(draft(), 9, 'older');
+    expect(olderReceipt).toMatchObject({ draftToolCallId: 'older', reviewContext: { passages: [{ id: 'P00001', text: source.repeat(8) }] } });
+    expect(worker.review({ ...compactReview(), draftToolCallId: 'older' }).status).toBe('invalid_review');
+    expect(worker.review({ ...compactReview(), draftToolCallId: 'newer' }).status).toBe('review_ready');
+  });
   const selectedNotes = () => ({ fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
     claimToolCallIds: ['claim-core'], needsMoreEvidence: [] });
   function saveNotes(worker: ReturnType<typeof createNativeScientificMaterializer>) {

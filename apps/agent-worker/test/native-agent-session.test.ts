@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionBinding } from '../src/native-agent/session';
 import { AiGateway, AnthropicCompatProvider, nativeAgentSdkRequest, type GatewayCompletion, type TextProvider } from '@openscience/ai-gateway';
+import { nativePaperToolProfile } from '../src/native-agent/paper-task';
 
 const binding = { taskId: 'task', artifactId: 'artifact', documentSha256: 'document', sourceMapHash: 'map',
   runtimeId: 'fixed-installed-runtime', skillCatalogueId: 'fixed-catalogue', model: 'MiniMax-M3', allowedTools: ['paper_read'],
@@ -49,6 +50,20 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it('replays an original paid session when its permission order differs from SDK tool order without another submission', async () => {
+    const f = fixture();
+    const originalPermissions = ['skills_list', 'skill_view', 'paper_read', 'paper_review'];
+    const reordered = { ...request, tools: [...originalPermissions].reverse().map(name => ({ type: 'function',
+      function: { name, description: `Original ${name}`, parameters: { type: 'object' } } })) };
+    const original = await f.create({ allowedTools: originalPermissions }).complete(reordered);
+    const profile = nativePaperToolProfile(f.state);
+    const restored = f.create({ allowedTools: profile.allowedTools });
+    expect(await restored.complete(reordered)).toEqual(original);
+    expect(profile.allowedTools).toEqual(originalPermissions);
+    profile.allowedTools.reverse();
+    expect(f.state!.binding.allowedTools).toEqual(originalPermissions);
+    expect(f.calls).toBe(1);
+  });
   it('uses the real remaining 32139-token allowance and replays exact receipts without a new call', async () => {
     const f = fixture(3); f.reportOutputTokens(22_055);
     const limits = { maxTurns: 4, maxOutputTokens: 32_768, maxTotalOutputTokens: 98_304 };

@@ -8,6 +8,7 @@ import { canonicalPassages, createNativeScientificMaterializer } from '../extrac
 import { extractFigureReferences } from '../skills/figure-list';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { createNativeAgentSession } from './session';
+import type { NativeAgentSessionState } from './session';
 import { createNativeTaskStore } from './task-store';
 import { runHostedNativeTask } from './host-task';
 import { createNativePaperTools, NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
@@ -58,7 +59,7 @@ export const NATIVE_PAPER_CLAIM_TOOL = { name: 'paper_claim',
   parameters: NATIVE_PAPER_DRAFT_TOOL.parameters.properties.draftClaims.items,
 };
 export const NATIVE_PAPER_NOTE_DRAFT_TOOL = { name: 'paper_draft',
-  description: 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval.',
+  description: 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.',
   parameters: { type: 'object', additionalProperties: false, required: ['fieldToolCallIds', 'claimToolCallIds', 'needsMoreEvidence'], properties: {
     fieldToolCallIds: { type: 'object', additionalProperties: false, required: SDF_CORE_FIELDS,
       properties: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { type: 'string' }])) },
@@ -143,6 +144,20 @@ const NOTE_INSTRUCTIONS = INSTRUCTIONS.replace(
   'paper_draft的problem、method、results、insight、limitations、reproducibility全部放在fields内。格式纠错按反馈定位修复现有内容；新增或重写科学断言须来自实际回读。',
   '用paper_field分项保存problem、method、results、insight、limitations、reproducibility，用paper_claim逐条保存必要主张；同一轮可并行保存独立项目。工具返回的fieldToolCallId、claimToolCallId逐字复制到paper_draft的fieldToolCallIds、claimToolCallIds，只选择、不转写正文。科学或格式问题只重存受影响的项，其余ID保持；不同算例、量与空间位置不可合并。新增或重写科学断言须来自实际回读。');
 
+export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
+  // Original paid tools keep their exact schemas and feedback when replayed.
+  const useNotes = !saved || saved.binding.allowedTools.includes('paper_field');
+  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_NOTE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]), NATIVE_PAPER_REVIEW_TOOL];
+  const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
+    if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved paper tool description is absent');
+    return { ...structuredClone(tool.function), description: tool.function.description };
+  });
+  const sourceTools = originalTools?.length ? originalTools : currentTools;
+  const reviewContext = !saved || sourceTools.find(tool => tool.name === 'paper_draft')?.description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
+  const allowedTools = saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)];
+  return { useNotes, sourceTools, reviewContext, allowedTools };
+}
+
 /** Normal source task entry. No preceding static reducer, provider fallback, new task or approval. */
 export async function runNativePaperTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };
   task: { id: string; executionAttempt: number; result: unknown }; sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference;
@@ -152,12 +167,10 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   if (!execution) throw new Error('[blocked] Actual native Agent execution marker is absent');
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  // Preserve the previously bound profile/schema for old paid checkpoints; only fresh tasks gain these tools.
-  const useNotes = !saved || saved.binding.allowedTools.includes('paper_field');
-  const sourceTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_NOTE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]), NATIVE_PAPER_REVIEW_TOOL];
+  const { useNotes, sourceTools, reviewContext, allowedTools } = nativePaperToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
-    model: execution.model, allowedTools: ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)],
+    model: execution.model, allowedTools,
     maxTurns: 32, maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
     maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES,
     // M3's documented guaranteed floor, rather than the proxy endpoint's unknown-model fallback.
@@ -168,7 +181,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
-  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds);
+  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
       : name === 'paper_claim' ? materializer.claim(args, sequence!, callId!) : name === 'paper_draft' ? materializer.draft(args, sequence, callId)

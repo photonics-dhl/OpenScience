@@ -3015,7 +3015,7 @@ function nativeReviewShapeFeedback(value: unknown): string {
 }
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
-export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[]) {
+export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean } = {}) {
   let candidate: ScientificCompositionResponse | undefined;
   let candidateOrder = -1;
   let candidateToolCallId: string | undefined;
@@ -3134,8 +3134,20 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
         return { status: 'invalid_draft', feedback: [validation.feedback(value), ...unread].join('\n') };
       }
       if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; candidateToolCallId = toolCallId; }
+      // Pair this actual call with its already-read evidence. This is input for the Agent's judgment, not a support verdict.
+      const selectedIds = new Set([...SDF_CORE_FIELDS.flatMap(field => value.fields[field].sourcePassageIds), ...candidateClaimPassageIds(value.draftClaims)]);
+      const reviewContext = options.reviewContext ? {
+        source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash },
+        fields: SDF_CORE_FIELDS.map(field => ({ field, sourcePassageIds: [...value.fields[field].sourcePassageIds] })),
+        claims: (value.draftClaims ?? []).map(raw => {
+          const claim = raw as { clientKey: string; sourceField: string; sourceBindings: unknown[] };
+          return { clientKey: claim.clientKey, sourceField: claim.sourceField, sourceBindings: structuredClone(claim.sourceBindings) };
+        }),
+        passages: provided.filter(p => selectedIds.has(p.id)).map(p => ({ id: p.id, pageStart: p.pageStart, pageEnd: p.pageEnd, text: p.text })),
+      } : undefined;
       return { status: 'draft_ready',
         ...(toolCallId ? { draftToolCallId: toolCallId } : {}),
+        ...(reviewContext ? { reviewContext } : {}),
         guidance: 'The private draft is retained, not approved. Recheck the relations that can change its core explanation: the mechanism, quantities and comparison scope, representative result, necessary conditions, and contrary source material. For retained extrema, necessity, causal or cross-case claims, read the applicable original scientific-critical-thinking method reference and use paper_read/paper_view to check support and counterexamples. Do not expand the science merely to fix formatting or read every rejected ID: read it if needed to support the retained claim, otherwise revise that claim and its evidence. Review this exact draft with explicit field decisions; accepted selects its existing text, revised supplies your actual correction. Claims and evidence requests serve the retained contribution.' };
     },
     review(value: unknown, toolCallId?: string): Record<string, unknown> {
