@@ -14,6 +14,22 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 describe('actual native Agent scientific materializer', () => {
+  it('keeps the full candidate usable without echoing its long body into draft feedback', () => {
+    const candidate = draft();
+    for (const field of SDF_CORE_FIELDS) candidate.fields[field]!.summary = source.repeat(5);
+    const final = { ...review(), fields: Object.fromEntries(SDF_CORE_FIELDS.map(field =>
+      [field, { ...candidate.fields[field], verdict: 'accepted', issues: [] }])) };
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']);
+    const receipt = worker.draft(candidate);
+    expect(receipt).toHaveProperty('status', 'draft_ready');
+    expect(JSON.stringify(receipt).length).toBeLessThan(2000);
+    expect(worker.finish(JSON.stringify(final)).core.method).toBe(candidate.fields.method!.summary);
+    const restored = createNativeScientificMaterializer(map, () => ['P00001']);
+    restoreNativePaperDraft(restored, [{ role: 'assistant', content: '', toolCalls: [{ id: 'large-draft', type: 'function',
+      function: { name: 'paper_draft', arguments: JSON.stringify(candidate) } }] },
+    { role: 'tool', toolCallId: 'large-draft', content: JSON.stringify(receipt) }]);
+    expect(restored.finish(JSON.stringify(final)).core.results).toBe(candidate.fields.results!.summary);
+  });
   it('records only actually successful native skill reads, retaining full-reference selection', () => {
     const selections = [
       { name: 'science:paper-method' }, { name: 'paper-method' },

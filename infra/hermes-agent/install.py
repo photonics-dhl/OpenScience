@@ -35,6 +35,33 @@ def copy_resources(source, target):
     shutil.copytree(source, target, symlinks=True, ignore=ignore)
 
 
+def write_science_skills(source, catalogue, science):
+    for name, description, body in [
+            ('scientific-critical-thinking', 'Understand scientific manuscripts and their core contribution using original evidence, conditions and research-type appropriate reasoning.', science['instructions']),
+            ('openscience-source-review', 'After recording a real paper_draft, review that candidate against original passages and actual figures; align central claims, comparisons, conditions and evidence.',
+             'Use this method only after paper_draft records a real candidate. Initial whole-paper understanding uses scientific-critical-thinking; this review preserves the chosen focus.\n\n'+science['sourceReviewInstructions'])]:
+        folder = catalogue/'science'/name
+        folder.mkdir(parents=True)
+        if name == 'scientific-critical-thinking':
+            copy_resources(source/'infra'/'hermes-agent'/'science-references', folder/'upstream')
+            body += '\n\n## On-demand original method references\n' \
+                'Read [the source index](upstream/README.md) and [the complete original method](upstream/critical-thinking-method.md) when needed. ' \
+                'For unsupported inference or scope changes, use [logical fallacies](upstream/references/logical_fallacies.md); ' \
+                'for confirmation or anchoring while reviewing your own draft, use [common biases](upstream/references/common_biases.md); ' \
+                'for observation, assumption and inference distinctions, use [scientific method](upstream/references/scientific_method.md). ' \
+                'Load only relevant references with skill_view and the displayed file_path. Choose an appraisal framework appropriate to this paper; clinical grading is not a default for theoretical physics. ' \
+                'These read-only references grant no new tool, script, external service or approval authority.'
+        else:
+            body += '\n\nFor a difficult inference or possible confirmation bias, select the relevant original references through ' \
+                'skill_view(name="scientific-critical-thinking", file_path="upstream/README.md"). ' \
+                'The task is source-grounded manuscript appraisal, not a journal intake or editorial decision. ' \
+                'Recheck retained claims against the bound paper; structural feedback does not freeze your wording or make it scientifically correct.'
+        (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{science["version"]}"\n---\n\n'
+            'Project method adaptation; reuse paper_overview, paper_search, paper_read and paper_view for this task. '
+            'The Agent controls progressive source reading; do not run external scripts or another provider. '
+            'Use P IDs actually fully read, and source pixels for visual scientific relations.\n\n'+body+'\n', encoding='utf-8')
+
+
 def close_symlinks(snapshot, original, external_mounts=()):
     """A read-only copy must not retain links into mutable source, credentials or an unmounted cache."""
     snapshot = snapshot.resolve(strict=True)
@@ -147,16 +174,7 @@ def install(source, runtime_snapshot, defer_timer=True):
                 science = json.loads(command(['node', '-e',
                     'process.stdout.write(JSON.stringify(require(process.argv[1]).SCIENTIFIC_CRITICAL_THINKING_SKILL))',
                     str(source/'apps/agent-worker/dist/skills/scientific-critical-thinking.js')]).stdout)
-                for name, description, body in [
-                    ('scientific-critical-thinking', 'Understand scientific manuscripts and their core contribution using original evidence, conditions and research-type appropriate reasoning.', science['instructions']),
-                    ('openscience-source-review', 'After recording a real paper_draft, review that candidate against original passages and actual figures; align central claims, comparisons, conditions and evidence.',
-                     'Use this method only after paper_draft records a real candidate. Initial whole-paper understanding uses scientific-critical-thinking; this review preserves the chosen focus.\n\n'+science['sourceReviewInstructions'])]:
-                    folder = catalogue/'science'/name
-                    folder.mkdir(parents=True)
-                    (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{science["version"]}"\n---\n\n'
-                        'Project method adaptation; reuse paper_overview, paper_search, paper_read and paper_view for this task. '
-                        'The Agent controls progressive source reading; do not run external scripts or another provider. '
-                        'Use P IDs actually fully read, and source pixels for visual scientific relations.\n\n'+body+'\n', encoding='utf-8')
+                write_science_skills(source, catalogue, science)
                 for name in ART_SKILLS:
                     copy_resources(source/'.agents/skills'/name, catalogue/'illustration'/name)
                 close_symlinks(runtime, NATIVE, ('/usr', '/lib', '/lib64'))

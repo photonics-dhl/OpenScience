@@ -3023,13 +3023,13 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       const validation = scientificCompositionValidation(sourceMap, passages());
       if (!validation.guard(value)) return { status: 'invalid_draft', feedback: validation.feedback(value) };
       if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; }
-      return { status: 'draft_ready', fields: value.fields, draftClaims: value.draftClaims,
-        guidance: 'This is a private candidate, not scientific approval. Use the scientific and peer-review Skills, re-read the source and view relevant pages before returning your final review.' };
+      return { status: 'draft_ready',
+        guidance: 'The complete private candidate is retained in this task and your actual tool-call history; it is not scientific approval. Treat it as a proposition to check, not as evidence. Use the appropriate scientific method references to check central claims against direct source text and actual pages: objects, case, quantity definition, conditions, inference and contrary material. Scrutinize maxima, universal or missing-information statements and causal implications. Use the bound paper tools where a check needs further evidence; narrow unsupported secondary claims. Revise the candidate when needed, then use paper_review. Do not merely copy the draft into accepted fields.' };
     },
     review(value: unknown): Record<string, unknown> {
       try {
         this.finish(JSON.stringify(value));
-        return { status: 'review_ready', guidance: 'The source/Claims structure is valid. This is not a scientific judgment or approval; recheck the actual science before returning this exact final JSON.' };
+        return { status: 'review_ready', guidance: 'The source/Claims structure is valid, not scientific judgment or approval. Structural validation does not freeze the content. Recheck the actual science; if you find a problem, revise the candidate and its review under the existing accepted/revised rules and check the changed JSON again before your final answer.' };
       } catch (error) {
         const shape = nativeReviewShapeFeedback(value);
         return { status: 'invalid_review', feedback: [shape, error instanceof Error ? error.message : 'Invalid scientific review structure'].filter(Boolean).join('\n') };

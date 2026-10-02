@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-原生Hermes Agent接入：`docs/plans/2026-10-01-native-hermes-agent-plan.md`（[计划](docs/plans/2026-10-01-native-hermes-agent-plan.md)）记录薄SDK适配、Gateway工具往返及真实论文验收；`apps/agent-worker/src/native-agent/paper-task.ts`是实际来源Agent入口，方法消费/断点见[能力台账](docs/runbooks/hermes-capability-registry.md)。用户已明确必接入，运行/质量状态只见唯一Hermes CURRENT。
+原生Hermes Agent接入：`docs/plans/2026-10-01-native-hermes-agent-plan.md`（[计划](docs/plans/2026-10-01-native-hermes-agent-plan.md)）记录薄SDK适配、Gateway工具往返与真实论文验收；apps/agent-worker/src/native-agent/paper-task.ts是实际来源Agent入口；infra/hermes-agent/science-references/保存原方法、8份按需参考和MIT来源，install.py接入既有两科学方法。反馈/能力断点见[能力台账](docs/runbooks/hermes-capability-registry.md)，候选、运行和科学质量只见唯一Hermes CURRENT。
 
 论文旁白与原图试片：`packages/ai-gateway/src/minimax-speech.ts`、`infra/codex-image-runner/video-narration-pilot.mjs` 沿现有按量配置生成独立音轨并保留单次提交；`apps/media-demo/` 的 `artwork-explainer-v1` 消费已审原图及实际音频字幕。操作见[视频手册](docs/runbooks/science-video-demo.md#论文独立旁白试片2026-09-30)，实际成片与未完成 RO 接线只见 CURRENT。
 

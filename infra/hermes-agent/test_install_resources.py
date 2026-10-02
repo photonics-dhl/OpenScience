@@ -4,11 +4,37 @@ from pathlib import Path
 import tempfile
 import unittest
 if os.name == 'posix':
-    from install import copy_resources, close_symlinks, freeze
+    from install import copy_resources, close_symlinks, freeze, write_science_skills
+    from task_agent import SkillScope
 
 
 @unittest.skipUnless(os.name == 'posix', 'Installer targets Linux')
 class InstallResourceTests(unittest.TestCase):
+    def test_installed_science_reference_is_complete_independent_and_readonly(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as folder:
+            root = Path(folder).resolve(); source = root/'source'
+            resources = source/'infra'/'hermes-agent'/'science-references'
+            copy_resources(Path(__file__).resolve().parent/'science-references', resources)
+            (resources/'.env').write_text('excluded fixture')
+            catalogue = root/'catalogue'
+            method = {'version': 'fixture', 'instructions': 'Retained understanding method',
+                      'sourceReviewInstructions': 'Retained review method'}
+            write_science_skills(source, catalogue, method)
+            scope = SkillScope(catalogue)
+            primary = scope.resolve('scientific-critical-thinking')
+            reference = scope.resolve('scientific-critical-thinking', 'upstream/references/logical_fallacies.md')
+            original = (resources/'references'/'logical_fallacies.md').read_bytes()
+            self.assertGreater(len(original), 10_000)
+            self.assertEqual(reference.read_bytes(), original)
+            self.assertIn('Retained understanding method', primary.read_text())
+            self.assertIn('references/', primary.read_text())
+            self.assertIn('Retained review method', scope.resolve('openscience-source-review').read_text())
+            self.assertFalse((reference.parent/'.env').exists())
+            close_symlinks(catalogue, source); freeze(catalogue)
+            (resources/'references'/'logical_fallacies.md').write_text('Changed source')
+            self.assertEqual(reference.read_bytes(), original)
+            self.assertEqual(reference.stat().st_mode & 0o222, 0)
+
     def test_existing_source_link_becomes_an_independent_snapshot_reference(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as folder:
             root = Path(folder).resolve(); source = root/'source'; source.mkdir()

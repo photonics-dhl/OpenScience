@@ -22,6 +22,7 @@ class InstallLifecycleTests(unittest.TestCase):
         adapter = self.source/'infra/hermes-agent'; adapter.mkdir(parents=True)
         for name in (*install.UNIT_NAMES, 'task_agent.py', 'task_runtime.py', 'host_broker.py'):
             (adapter/name).write_text('fixture new resource')
+        install.copy_resources(Path(__file__).resolve().parent/'science-references', adapter/'science-references')
         skills = self.source/'.agents/skills'; skills.mkdir(parents=True)
         for name in install.ART_SKILLS:
             (skills/name).mkdir(); (skills/name/'SKILL.md').write_text('fixture art resource')

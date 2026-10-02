@@ -15,10 +15,14 @@ from unittest.mock import patch
 class NativeSkillFeedbackTests(unittest.TestCase):
     def test_actual_native_loop_corrects_unknown_namespace_and_reads_full_reference(self):
         with tempfile.TemporaryDirectory(prefix='native-skill-feedback-', dir=Path.cwd()) as directory:
-            home=Path(directory);skill=home/'skills'/'science'/'paper-method'
-            (skill/'references').mkdir(parents=True)
-            (skill/'SKILL.md').write_text('---\nname: paper-method\ndescription: Check quantities at their stated positions.\n---\nRead references/positions.md for the complete method.')
-            (skill/'references'/'positions.md').write_text('Material-edge and centre quantities must retain their respective positions.')
+            from install import write_science_skills
+            home=Path(directory)
+            source=Path(__file__).resolve().parents[2]
+            write_science_skills(source,home/'skills',{'version':'fixture',
+                'instructions':'Check quantities at their stated positions.',
+                'sourceReviewInstructions':'Review the retained candidate against the original paper.'})
+            reference='upstream/references/logical_fallacies.md'
+            reference_text=(home/'skills'/'science'/'scientific-critical-thinking'/reference).read_text()
             environment={'HERMES_HOME':str(home),'HOME':str(home),'PATH':'/usr/bin:/bin',
                          'HERMES_TELEMETRY_ENABLED':'false','HERMES_NO_AUTO_UPDATE':'1'}
             calls=[];authorized=[];quiet=io.StringIO()
@@ -31,9 +35,9 @@ class NativeSkillFeedbackTests(unittest.TestCase):
                 from task_agent import SkillScope, create_task_agent_class, guard_registered_tools
                 allowed={'skills_list','skill_view'}
                 create_custom_toolset('openscience-feedback-test','Private native skill feedback test',tools=sorted(allowed))
-                sequence=[('skill_view',{'name':'science:paper-method'}),('skills_list',{}),
-                          ('skill_view',{'name':'paper-method'}),
-                          ('skill_view',{'name':'paper-method','file_path':'references/positions.md'})]
+                sequence=[('skill_view',{'name':'science:scientific-critical-thinking'}),('skills_list',{}),
+                          ('skill_view',{'name':'scientific-critical-thinking'}),
+                          ('skill_view',{'name':'scientific-critical-thinking','file_path':reference})]
                 def response(request):
                     body=json.loads(request.content);ordinal=len(calls);calls.append(body)
                     if ordinal<len(sequence):
@@ -64,8 +68,15 @@ class NativeSkillFeedbackTests(unittest.TestCase):
                 results=[m for m in calls[-1]['messages'] if m.get('role')=='tool']
                 self.assertFalse(json.loads(results[0]['content'])['success'])
                 self.assertIn('skills_list',results[0]['content'])
-                self.assertIn('references/positions.md',results[2]['content'])
-                self.assertIn('respective positions',results[3]['content'])
+                self.assertIn(reference,results[2]['content'])
+                def strings(value):
+                    if isinstance(value,str):yield value
+                    elif isinstance(value,dict):
+                        for child in value.values():yield from strings(child)
+                    elif isinstance(value,list):
+                        for child in value:yield from strings(child)
+                self.assertGreater(len(reference_text),10_000)
+                self.assertTrue(any(reference_text in value for value in strings(json.loads(results[3]['content']))))
 
 
 if __name__=='__main__':unittest.main()
