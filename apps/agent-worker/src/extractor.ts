@@ -2994,8 +2994,10 @@ function nativeReviewShapeFeedback(value: unknown): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
   const root = value as Record<string, unknown>;
   const feedback: string[] = [];
-  if (Object.keys(root).some(key => !['fields', 'needsMoreEvidence', 'claimSuggestions'].includes(key))) {
-    feedback.push('根对象只使用fields、needsMoreEvidence、claimSuggestions；六字段放在fields内，主张属性放在claimSuggestions的对应项内。');
+  const compact = Object.hasOwn(root, 'draftToolCallId');
+  const rootKeys = [...(compact ? ['draftToolCallId'] : []), 'fields', 'needsMoreEvidence', 'claimSuggestions'];
+  if (Object.keys(root).some(key => !rootKeys.includes(key))) {
+    feedback.push(`根对象只使用${rootKeys.join('、')}；六字段放在fields内，主张属性放在claimSuggestions的对应项内。`);
   }
   if (!Object.hasOwn(root, 'needsMoreEvidence')) feedback.push('缺少根对象.needsMoreEvidence；该数组放在根对象，不能放在fields内。');
   const fields = root.fields && typeof root.fields === 'object' && !Array.isArray(root.fields)
@@ -3012,6 +3014,28 @@ function nativeReviewShapeFeedback(value: unknown): string {
 export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[]) {
   let candidate: ScientificCompositionResponse | undefined;
   let candidateOrder = -1;
+  let candidateToolCallId: string | undefined;
+  const expandReview = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'draftToolCallId')) return value;
+    const review = value as Record<string, unknown>;
+    if (!candidate || typeof review.draftToolCallId !== 'string' || review.draftToolCallId !== candidateToolCallId)
+      throw new Error('[blocked] Native review draftToolCallId does not select the current real candidate');
+    const body = { ...review }; delete body.draftToolCallId;
+    if (!Object.hasOwn(body, 'claimSuggestions') || (body.claimSuggestions !== 'unchanged' && !Array.isArray(body.claimSuggestions)))
+      throw new Error('[blocked] Native compact review must explicitly choose claimSuggestions: unchanged or a complete replacement array');
+    if (!body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields)) return body;
+    const fields = structuredClone(body.fields) as Record<string, unknown>;
+    for (const field of SDF_CORE_FIELDS) {
+      const decision = fields[field];
+      if (!decision || typeof decision !== 'object' || Array.isArray(decision)) continue;
+      const patch = decision as Record<string, unknown>;
+      if (patch.verdict === 'accepted') {
+        if (Object.keys(patch).length !== 1) throw new Error(`[blocked] Native compact ${field}: accepted selects the draft; use revised with full replacement for changes`);
+        fields[field] = { ...structuredClone(candidate.fields[field]), verdict: 'accepted', issues: [] };
+      }
+    }
+    return { ...body, fields, claimSuggestions: body.claimSuggestions === 'unchanged' ? structuredClone(candidate.draftClaims) : body.claimSuggestions };
+  };
   const passages = () => { const read = new Set(readPassageIds()); return canonicalPassages(sourceMap).filter(p => read.has(p.id)); };
   const fieldProposal = (field: ScientificReviewField, provided: readonly CanonicalPassage[]): ExtractedFieldProposal => {
     const segments = segmentsForPassages(sourceMap, field.sourcePassageIds, new Map(provided.map(p => [p.id, p])), true);
@@ -3019,20 +3043,23 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       verifiedSegments: segments, needsMoreInformation: field.verdict === 'blocked' };
   };
   return {
-    draft(value: unknown, order = candidateOrder + 1): Record<string, unknown> {
+    draft(value: unknown, order = candidateOrder + 1, toolCallId?: string): Record<string, unknown> {
       const validation = scientificCompositionValidation(sourceMap, passages());
       if (!validation.guard(value)) return { status: 'invalid_draft', feedback: validation.feedback(value) };
-      if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; }
+      if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; candidateToolCallId = toolCallId; }
       return { status: 'draft_ready',
-        guidance: 'The complete private candidate is retained in this task and your actual tool-call history; it is not scientific approval. Treat it as a proposition to check, not as evidence. Use the appropriate scientific method references to check central claims against direct source text and actual pages: objects, case, quantity definition, conditions, inference and contrary material. Scrutinize maxima, universal or missing-information statements and causal implications. Use the bound paper tools where a check needs further evidence; narrow unsupported secondary claims. Revise the candidate when needed, then use paper_review. Do not merely copy the draft into accepted fields.' };
+        ...(toolCallId ? { draftToolCallId: toolCallId } : {}),
+        guidance: 'The full private draft is retained, not approved. Check its core mechanism, representative result, conditions and contrary material against original sources. Review this exact draft with explicit field decisions; accepted selects its existing text, revised supplies your actual correction. Choose only Claims needed to explain the contribution.' };
     },
     review(value: unknown): Record<string, unknown> {
       try {
         this.finish(JSON.stringify(value));
-        return { status: 'review_ready', guidance: 'The source/Claims structure is valid, not scientific judgment or approval. Structural validation does not freeze the content. Recheck the actual science; if you find a problem, revise the candidate and its review under the existing accepted/revised rules and check the changed JSON again before your final answer.' };
+        return { status: 'review_ready', guidance: 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, finish with {"reviewToolCallId":"the exact ID of this paper_review call"}; do not regenerate the full review.' };
       } catch (error) {
         const shape = nativeReviewShapeFeedback(value);
-        return { status: 'invalid_review', feedback: [shape, error instanceof Error ? error.message : 'Invalid scientific review structure'].filter(Boolean).join('\n') };
+        const compact = value && typeof value === 'object' && Object.hasOwn(value, 'draftToolCallId');
+        const format = compact ? '以上科学诊断针对展开后的记录。重试本工具时保留draftToolCallId；accepted只写verdict，revised/blocked提供完整字段；claimSuggestions明确选unchanged或完整数组，不必重写未变正文。' : '';
+        return { status: 'invalid_review', feedback: [shape, error instanceof Error ? error.message : 'Invalid scientific review structure', format].filter(Boolean).join('\n') };
       }
     },
     finish(text: string): ExtractionResult {
@@ -3040,7 +3067,7 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       const provided = passages(); const normalized = normalizeScientificComposition(candidate);
       const proposal = { schemaVersion: SDF_CORE_VERSION, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field =>
         [field, fieldProposal(normalized.fields[field], provided)])) as ExtractedProposal['fields'] };
-      const value: unknown = parseStructuredJson(text);
+      const value: unknown = expandReview(parseStructuredJson(text));
       const validation = completeScientificReviewValidation(sourceMap, provided, proposal, { requireReviewedClaims: true });
       if (!validation.completeReviewGuard(value)) throw new Error('[blocked] Native science contract: ' + validation.reviewValidationFeedback());
       const awaiting = fieldsAffectedByReviewEvidence(value);

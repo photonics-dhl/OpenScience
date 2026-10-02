@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { createNativeScientificMaterializer } from '../src/extractor';
-import { nativeSkillReads, restoreNativePaperDraft } from '../src/native-agent/paper-task';
+import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft } from '../src/native-agent/paper-task';
 import type { ChatMessage } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 const parser = { name: 'fixture', version: '1' };
@@ -14,6 +14,98 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 describe('actual native Agent scientific materializer', () => {
+  const reviewedHistory = (): ChatMessage[] => [
+    { role: 'assistant', content: '', toolCalls: [{ id: 'draft-a', type: 'function', function: { name: 'paper_draft', arguments: JSON.stringify(draft()) } }] },
+    { role: 'tool', toolCallId: 'draft-a', content: JSON.stringify({ status: 'draft_ready' }) },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'review-a', type: 'function', function: { name: 'paper_review', arguments: JSON.stringify(review()) } }] },
+    { role: 'tool', toolCallId: 'review-a', content: JSON.stringify({ status: 'review_ready' }) },
+  ];
+  it('materializes the exact checked review selected by a short final response without another full-body generation', () => {
+    const result = finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), reviewedHistory(),
+      JSON.stringify({ reviewToolCallId: 'review-a' }));
+    expect(result.core.insight).toBe(source);
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+    expect(result.evidenceSegments?.method[0]?.quote).toBe(source);
+  });
+  it.each(['unknown', 'failed', 'ambiguous', 'older_review', 'newer_draft', 'malformed', 'extra_keys', 'foreign_source'])('refuses a short selection with %s', change => {
+    const messages = reviewedHistory(); let selected = 'review-a';
+    if (change === 'unknown') selected = 'absent';
+    if (change === 'failed') messages[3]!.content = JSON.stringify({ status: 'invalid_review' });
+    if (change === 'ambiguous') messages.push(structuredClone(messages[3]!));
+    if (change === 'older_review') messages.push({ role: 'assistant', content: '', toolCalls: [{ id: 'review-b', type: 'function',
+      function: { name: 'paper_review', arguments: JSON.stringify(review()) } }] },
+    { role: 'tool', toolCallId: 'review-b', content: JSON.stringify({ status: 'invalid_review' }) });
+    if (change === 'newer_draft') messages.push({ role: 'assistant', content: '', toolCalls: [{ id: 'draft-b', type: 'function',
+      function: { name: 'paper_draft', arguments: JSON.stringify(draft()) } }] },
+    { role: 'tool', toolCallId: 'draft-b', content: JSON.stringify({ status: 'draft_ready' }) });
+    if (change === 'malformed') messages[3]!.content = 'invalid metadata';
+    if (change === 'foreign_source') {
+      const changed = review(); changed.claimSuggestions[0]!.sourceBindings[0]!.sourcePassageId = 'P99999';
+      messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(changed);
+    }
+    const final = JSON.stringify({ reviewToolCallId: selected, ...(change === 'extra_keys' ? { fields: review().fields } : {}) });
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, final)).toThrow();
+  });
+  it('retains full-JSON completion for historical Native replies', () => {
+    expect(finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), reviewedHistory(), JSON.stringify(review())).core.results).toBe(source);
+  });
+  const compactReview = () => ({ draftToolCallId: 'draft-a', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+    needsMoreEvidence: [], claimSuggestions: 'unchanged' });
+  it('consumes a short final selection of the actual compact review and reconstructs the bound draft after restart', () => {
+    const messages = reviewedHistory(); messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(compactReview());
+    const result = finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, JSON.stringify({ reviewToolCallId: 'review-a' }));
+    expect(result.core.results).toBe(source);
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+  });
+  it('preserves an explicit complete scientific correction in a compact review', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const changed = { ...compactReview(), fields: { ...compactReview().fields, method: { verdict: 'revised', summary: 'The paper reports: ' + source,
+      sourcePassageIds: ['P00001'], issues: [{ code: 'QUALIFIER_LOSS', problem: 'Identify this relation as the reported result.', sourcePassageIds: ['P00001'] }] } } };
+    expect(worker.review(changed)).toHaveProperty('status', 'review_ready');
+    expect(worker.finish(JSON.stringify(changed)).core.method).toBe('The paper reports: ' + source);
+  });
+  it('checks explicit compact decisions against the bound real draft and retains complete science and Claims', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    expect(worker.review(compactReview())).toHaveProperty('status', 'review_ready');
+    const result = worker.finish(JSON.stringify(compactReview()));
+    expect(result.core.method).toBe(source);
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+    expect(result.nativeScientificFields?.results).toMatchObject({ verdict: 'accepted', summary: source, sourcePassageIds: ['P00001'], issues: [] });
+  });
+  it('does not rebind an earlier compact science decision to a later draft even when text is unchanged', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    expect(worker.review(compactReview())).toHaveProperty('status', 'review_ready');
+    worker.draft(draft(), 2, 'draft-b');
+    expect(worker.review(compactReview())).toHaveProperty('status', 'invalid_review');
+    expect(() => worker.finish(JSON.stringify(compactReview()))).toThrow();
+  });
+  it.each(['missing_verdict', 'missing_claim_decision', 'extra_accepted_content', 'wrong_candidate', 'foreign_claim', 'false_revision'])('rejects a compact review with %s through the original science guard', change => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const value = compactReview() as { draftToolCallId?: string; fields: Record<string, Record<string, unknown>>; needsMoreEvidence: unknown[]; claimSuggestions?: unknown };
+    if (change === 'missing_verdict') delete value.fields.method;
+    if (change === 'missing_claim_decision') delete value.claimSuggestions;
+    if (change === 'extra_accepted_content') value.fields.method.summary = 'Invented replacement';
+    if (change === 'wrong_candidate') value.draftToolCallId = 'other-draft';
+    if (change === 'foreign_claim') { const claims = review().claimSuggestions; claims[0]!.sourceBindings[0]!.sourcePassageId = 'P99999'; value.claimSuggestions = claims; }
+    if (change === 'false_revision') value.fields.method = { ...review().fields.method, verdict: 'revised', issues: [] };
+    expect(worker.review(value)).toHaveProperty('status', 'invalid_review');
+    expect(() => worker.finish(JSON.stringify(value))).toThrow();
+  });
+  it.each([undefined, null, 'arbitrary', false])('requires an explicit compact Claims decision even when evidence is pending: %s', decision => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const value = { ...compactReview(),
+    needsMoreEvidence: [{ affectedFields: ['method'], question: 'What condition applies?', requestedContext: 'The original model condition.' }], claimSuggestions: decision };
+    expect(worker.review({ ...value, claimSuggestions: 'unchanged' })).toEqual(expect.objectContaining({ status: 'review_ready' }));
+    expect(worker.review(value)).toHaveProperty('status', 'invalid_review');
+  });
+  it('gives compact-specific correction feedback without directing the Agent to remove its candidate binding', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
+    const value = { ...compactReview(), draftToolCallId: 'wrong-draft' }; const feedback = worker.review(value).feedback as string;
+    expect(feedback).toContain('draftToolCallId');
+    expect(feedback).not.toMatch(/根对象只使用fields[,、]/);
+    const extra = worker.review({ ...compactReview(), unexpected: true }).feedback as string;
+    expect(extra).toContain('根对象只使用draftToolCallId、fields、needsMoreEvidence、claimSuggestions');
+  });
   it('keeps the full candidate usable without echoing its long body into draft feedback', () => {
     const candidate = draft();
     for (const field of SDF_CORE_FIELDS) candidate.fields[field]!.summary = source.repeat(5);

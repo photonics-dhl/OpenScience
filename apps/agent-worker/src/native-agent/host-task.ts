@@ -34,7 +34,7 @@ export async function runHostedNativeTask(input: {
   inboxRoot: string; executionAttempt: number; config: Config; deadlineAt: number; maxInputBytes: number;
   session: ReturnType<typeof createNativeAgentSession>; store: NativeAgentSessionStore;
   authorize: () => Promise<void>; paper: Omit<ReturnType<typeof createNativePaperTools>, 'call'> & {
-    call(name: string, args: unknown, sequence?: number): Promise<unknown> };
+    call(name: string, args: unknown, sequence?: number, callId?: string): Promise<unknown> };
   onStopped?: (error: unknown) => void;
 }): Promise<{ finalResponse: string; observedPassageIds: string[] }> {
   if (!uuid.test(input.config.taskId) || !Number.isSafeInteger(input.executionAttempt) || input.executionAttempt < 1) blocked();
@@ -90,7 +90,7 @@ export async function runHostedNativeTask(input: {
       if (req.url === '/task/tools/call') {
         const slot = slots.find(s => s.authorized && !s.called && s.name.startsWith('paper_') && s.name === value.name && isDeepStrictEqual(s.args, value.arguments));
         if (!slot) blocked(); slot.called = true;
-        slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence);
+        slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence, slot.id);
         return respond(res, 200, slot.result);
       }
       if (req.url === '/task/tools/images') {

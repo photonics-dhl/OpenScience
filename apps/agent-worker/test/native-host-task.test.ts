@@ -39,14 +39,16 @@ async function fixture(finalText = 'final') {
   const parser = { name: 'fixture', version: '1' };
   const paper = createNativePaperTools({ artifactId: 'paper', contentHash: 'a'.repeat(64), parser, pages: [{ page: 1, width: 100, height: 100,
     blocks: [{ id: 'one', kind: 'paragraph', text: 'Original evidence.', boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] }, async () => []);
+  const sourceCalls: Array<{ name: string; sequence?: number; callId?: string }> = [];
   const final = runHostedNativeTask({ inboxRoot: root, executionAttempt: 1, config: { ...binding, goal: 'Read', instructions: 'Read', sourceTools: NATIVE_PAPER_TOOLS },
-    deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize: async () => undefined, paper });
+    deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize: async () => undefined,
+    paper: { ...paper, call: async (name, args, sequence, callId) => { sourceCalls.push({ name, sequence, callId }); return paper.call(name, args); } } });
   void final.catch(() => undefined);
   const socketPath = join(root, `${taskId}-1`, 'worker.sock');
   for (let i = 0; i < 100; i++) { try { await access(join(root, `${taskId}-1`, 'request.json')); break; } catch { await new Promise(r => setTimeout(r, 10)); } }
   const sdk = { model: binding.model, max_tokens: 100, messages: [{ role: 'system', content: 'fixed' }, { role: 'user', content: 'Read' }],
     tools: NATIVE_PAPER_TOOLS.map(tool => ({ type: 'function', function: tool })) };
-  return { socketPath, sdk, final, bodySizes, get state() { return state!; }, get providerCalls() { return providerCalls; },
+  return { socketPath, sdk, final, bodySizes, sourceCalls, get state() { return state!; }, get providerCalls() { return providerCalls; },
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
@@ -61,6 +63,7 @@ describe.skipIf(process.platform === 'win32')('private native Unix socket router
       const args = { passageIds: ['P00001'] };
       await post(f.socketPath, '/task/tools/authorize', { name: 'paper_read', arguments: args });
       const read = await post(f.socketPath, '/task/tools/call', { name: 'paper_read', arguments: args });
+      expect(f.sourceCalls).toEqual([{ name: 'paper_read', sequence: 0, callId: 'read-1' }]);
       const message = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
       await post(f.socketPath, '/v1/chat/completions', { ...f.sdk, messages: [...f.sdk.messages, message,
         { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(read.body) }] });
