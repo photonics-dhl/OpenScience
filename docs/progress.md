@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-10-02用户最新范围收敛到生图前的物理核源、叙事、完整指示词、构图/风格；本轮不调用旧图片通道，新的生成方式待后续决定。共享分镜科学物化器提取候选184/184、TC/独立High GO，0新增lint，尚无Native规划caller。上游Native发布/真实科学验证继续，候选和实际状态见CURRENT。
+10-02用户范围止于生图前：已准备人工核源的完整prompt、两种风格/构图及原文页依据，独立复核两P2已修，不冒充Hermes自动成功，不调用旧生图。app267正常发布/CI通过/public200，Native激活安装前snapshot180s超时，pair029保持、v7未建；共享分镜科学物化器a1 CI通过但未发布/无Native caller。准确状态与下一步见CURRENT。
 
 - 10-02核源候选CI通过后发布回退，线上3b完整恢复；未激活方法目录/未发新模型，v6科学NO-GO仍保持。已补现有Web HTTP readiness与安全验收诊断，定向43pass/5Windows skip/独立High GO；旧3静态断言漂移已基线证实并校正，Linux CI已接。核源输入/原六步Native方法原GO保持，源文件/paid历史与论文/认可图保留；失败发布树已归档并移除。新候选待精确CI/发布及真正科学核查，精确身份和证据见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 10-02 UI：用户确认第三张作为指南方向，可编辑Figma已实看，指南/桌面/研究工作区/身份/期刊/开发文档候选及GSAP/Canvas已落地；49项定向检查、TC/lint/样式和独立High增量复审通过。整站艺术质量与真实交互尚未验收，浏览器权限核验仍阻塞，本轮未合入交付或部署；既有公司Word不冒称包含此候选。版本、证据与具体下一步只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。

@@ -91,3 +91,5 @@ Native安装器优先用科学Skill的nativeInstructions/nativeSourceReviewInstr
 核源候选精确CI通过，但正常发布公网阶段失败并完整自动回退，方法目录未安装激活、没有新科研任务。源码和实际容器均证web没有HTTP healthcheck；Compose wait仅证明容器running。切换期间root出现502，后来恢复200；原验收没记录actual，保留唯一失败探针及公网因素的不确定性。补到既有web healthcheck：Node对内部首页精确200、manual redirect和有限超时，沿原Compose等待上限，不增业务Gate或endpoint。公网helpers保持单次200/exactSHA合同，失败打印观测状态/curl code，正文只显示合法SHA或长度。
 
 三条已有静态断言因API embedding网络、显式Windows SSH/3–5参数、quiesced回退提前phase标记而漂移，原SHA同源基线复现；只校正断言，保留隔离、FD9/锁、布尔标志和切换/镜像检查。actualHTTP/实际shell新回归各见红绿，全套和High工程GO；Linux CI新增既有文件命令及双路径。MJS为既有ESLint忽略项，不声称已lint。BGE init/启动/发布重复全模型校验另属部署债，不冒称论文理解慢或为省时跳过。新精确CI/发布/Native消费及科学结果保持未完成，任务、费用、原文、图片和回退不变。
+
+10-02实际检查点：上游应用已正常发布，Native新方法在安装前runtime-snapshot超时，未创建新bundle或v7；保持旧配对。用户最新生图前内容已先人工按原文准备完整可迁移brief，独立复核修正S(z)宽度与结构成缝措辞，不据此宣称Hermes自动改善。共享科学物化器候选精确CI通过、尚无Native caller。安装性能需保留原完整校验定位，不能用新的模型任务绕过；精确线上与证据只见CURRENT。
