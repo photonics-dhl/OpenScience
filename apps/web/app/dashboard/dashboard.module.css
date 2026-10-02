@@ -1,6 +1,6 @@
 /* Research occupies the paper; task state and its action share the lower edge. */
 .desk {
-  --os-canvas-warm: #f5f8f9;
+  --os-canvas-warm: #f3f7f8;
   --os-paper-strong: var(--craft-surface, #fff);
   --os-ink: var(--craft-ink, #182f35);
   --os-muted-paper: var(--craft-muted, #51666c);
@@ -44,7 +44,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.5rem;
-  margin-bottom: 2.25rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--os-rule-paper);
 }
 
 .heading > div { min-width: 0; }
@@ -52,20 +54,20 @@
 .eyebrow,
 .sectionLabel {
   margin: 0;
-  font: 500 0.875rem/1.6 var(--font-ui);
-  letter-spacing: 0;
+  font: 600 0.8125rem/1.6 var(--font-ui);
+  letter-spacing: 0.025em;
 }
 
 .eyebrow { color: var(--os-muted-paper); }
 .sectionLabel { color: var(--os-vermilion-ink); }
 
-.desk h1.title {
+.desk :is(.heading, .stateSurface) h1.title {
   margin: 0.375rem 0 0;
   color: var(--os-ink);
-  font-family: var(--font-ui);
-  font-size: clamp(1.625rem, 2.2vw, 2rem);
-  font-weight: 600;
-  line-height: 1.4;
+  font-family: var(--font-reading-serif, Georgia, serif);
+  font-size: clamp(1.875rem, 2.6vw, 2.375rem);
+  font-weight: 500;
+  line-height: 1.35;
   letter-spacing: -0.02em;
   text-wrap: balance;
   overflow-wrap: anywhere;
@@ -127,8 +129,8 @@
   gap: 0.375rem;
   width: min(18rem, calc(100vw - 2rem));
   padding: 0.75rem;
-  border: 0;
-  border-radius: 0.75rem;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 0.375rem;
   background: var(--os-paper-strong);
   box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065));
 }
@@ -151,13 +153,13 @@
 }
 
 .continueResearch {
-  --continuation-padding: clamp(1.75rem, 3vw, 2.5rem);
+  --continuation-padding: clamp(1.75rem, 3vw, 2.25rem);
   min-width: 0;
   padding: 0;
-  border: 0;
-  border-radius: 0.875rem;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 0.375rem;
   background: var(--os-paper-strong);
-  box-shadow: 0 3px 8px rgb(24 47 53 / .035), 0 20px 44px rgb(24 47 53 / .075);
+  box-shadow: 0 2px 4px rgb(24 47 53 / .025), 0 18px 40px rgb(24 47 53 / .065);
 }
 
 .continuation {
@@ -184,14 +186,16 @@
   margin: 0.75rem 0 1.5rem;
   color: var(--os-ink);
   font-family: var(--font-reading-serif, Georgia, serif);
-  font-size: clamp(2rem, 3.2vw, 2.625rem);
-  font-weight: 400;
+  font-size: clamp(2rem, 3.4vw, 2.875rem);
+  font-weight: 500;
   font-optical-sizing: auto;
-  line-height: 1.4;
+  line-height: 1.3;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
+
+.desk .continuation[data-surface-state='empty'] .researchTitle { font-size: clamp(1.875rem, 3vw, 2.5rem); }
 
 .researchMeta,
 .entryMeta {
@@ -222,10 +226,11 @@
   gap: 1rem 1.5rem;
   width: 100%;
   min-width: 0;
-  padding: 1.5rem var(--continuation-padding);
+  min-height: 88px;
+  padding: 1.25rem var(--continuation-padding);
   border-top: 1px solid var(--os-rule-paper);
-  border-radius: 0 0 0.875rem 0.875rem;
-  background: #eaf3f2;
+  border-radius: 0 0 0.375rem 0.375rem;
+  background: var(--craft-tint, #edf4f3);
 }
 
 .continuationTask {
@@ -254,6 +259,7 @@
 }
 
 .continuationNext[data-task-state='needs_review'] .taskStatus::before { background: currentColor; }
+.continuationNext[data-task-state^='failed_'] { background: #faf3e9; }
 .continuationNext[data-task-state^='failed_'] .taskStatus { color: #855014; }
 
 .attention {
@@ -318,8 +324,8 @@
 .desk .continuationActions .continueAction {
   min-height: 48px;
   padding-inline: 1.25rem;
-  border-color: var(--os-ink);
-  background: var(--os-ink);
+  border-color: var(--os-vermilion-ink);
+  background: var(--os-vermilion-ink);
   color: #fff;
   box-shadow: var(--craft-shadow-control, 0 2px 4px rgb(24 47 53 / .1));
 }
@@ -346,7 +352,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: 1.75rem 0 1.5rem 2rem;
+  padding: 1.25rem 0 1.5rem 2rem;
   border-left: 1px solid var(--os-rule-paper);
 }
 
@@ -501,10 +507,10 @@
 
 .researchLibrary { padding-block: 2.75rem 0; }
 
-.desk h2.libraryTitle {
+.desk .researchLibrary h2.libraryTitle {
   margin: 0;
   color: var(--os-ink);
-  font: 600 1.25rem/1.5 var(--font-ui);
+  font: 500 1.5rem/1.5 var(--font-reading-serif, Georgia, serif);
 }
 
 .libraryHeading {
@@ -595,20 +601,27 @@
   line-height: 1.7;
 }
 
+.researchLibrary[data-surface-state='error'] .searchFeedback {
+  padding: 0.5rem 0.875rem;
+  border-left: 2px solid var(--state-danger, #a52c36);
+  color: var(--state-danger, #a52c36);
+  background: #fcf0f1;
+}
+
 .libraryEmpty {
   margin: 1.25rem 0 0;
-  padding: 1.5rem 0;
+  padding: 1.75rem 1.25rem;
   border-block: 1px solid var(--os-rule-paper);
   color: var(--os-muted-paper);
   font-size: 0.875rem;
   line-height: 1.7;
+  background: var(--os-paper-strong);
 }
 
 .researchEntries {
   margin: 1.25rem 0 0;
   padding: 0;
-  border: 1px solid var(--os-rule-paper);
-  border-radius: 0.75rem;
+  border-block: 1px solid var(--os-rule-paper);
   background: var(--os-paper-strong);
   list-style: none;
 }
@@ -621,17 +634,18 @@
 }
 
 .researchEntry + .researchEntry { border-top: 1px solid var(--os-rule-paper); }
+.researchEntry:focus-within { background: var(--craft-tint, #edf4f3); }
 
 .researchLink {
   display: grid;
   flex: 1;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
   min-width: 0;
-  min-height: 96px;
+  min-height: 88px;
   padding: 1.25rem 0.75rem;
-  border-radius: 0.375rem;
+  border-radius: 0.125rem;
   text-decoration: none;
 }
 
@@ -641,7 +655,7 @@
   display: block;
   color: var(--os-ink);
   max-width: 54ch;
-  font: 500 1.25rem/1.6 var(--font-reading-serif, Georgia, serif);
+  font: 500 1.375rem/1.5 var(--font-reading-serif, Georgia, serif);
   font-optical-sizing: auto;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
@@ -650,16 +664,16 @@
 .entryMeta { margin-top: 0.375rem; }
 
 .entryStatus {
-  max-width: 10ch;
-  padding: 0.25rem 0.625rem;
-  border-radius: 0.25rem;
-  background: #f0f4f5;
+  width: 7rem;
+  max-width: 100%;
+  padding-left: 1rem;
+  border-left: 1px solid var(--os-rule-paper);
   color: var(--os-muted-paper);
-  font: 400 0.8125rem/1.6 var(--font-ui);
+  font: 500 0.8125rem/1.6 var(--font-ui);
   overflow-wrap: anywhere;
 }
 
-.entryArrow { color: var(--os-muted-paper); transition: transform var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
+.entryArrow { flex: none; color: var(--os-vermilion-ink); transition: transform var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
 
 .researchEntryAction { flex: none; }
 
@@ -676,15 +690,15 @@
 .stateSurface {
   max-width: 44rem;
   padding: 1.75rem;
-  border: 0;
-  border-radius: 0.75rem;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 0.375rem;
   background: var(--os-paper-strong);
   box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065));
 }
 
 .stateSurface[aria-labelledby='dashboard-error-title'] .stateMessage { color: var(--state-danger, #a52c36); }
 
-.desk .stateSurface .title { margin: 0; }
+.desk .stateSurface h1.title { margin: 0; }
 
 .stateMessage {
   margin: 0.75rem 0 0;
@@ -717,7 +731,7 @@
 @media (hover: hover) and (pointer: fine) {
   .desk .primaryAction:hover { background: #0d4850; border-color: #0d4850; }
   .desk .hermesConversation .primaryAction:hover { background: #0d4850; border-color: #0d4850; }
-  .desk .continuationActions .continueAction:hover { background: #28464d; border-color: #28464d; }
+  .desk .continuationActions .continueAction:hover { background: #0d4850; border-color: #0d4850; }
   .desk .createAction:hover { border-color: var(--os-vermilion-ink); background: #f0f6f5; }
   .desk .textAction:hover { color: #0d4850; }
   .deskTools > summary:hover,
@@ -736,7 +750,7 @@
 .researchLink:focus-visible .researchEntryTitle { color: var(--os-vermilion-ink); }
 
 .desk :is(.primaryAction, .continueAction):not(:disabled):active { transform: translateY(1px); }
-.desk .continuationActions .continueAction:active { background: #172f35; border-color: #172f35; }
+.desk .continuationActions .continueAction:active { background: #093c43; border-color: #093c43; }
 .desk :is(.createAction, .textAction):active { background: #e5efee; transition-duration: 0ms; }
 .desk .hermesConversation .primaryAction:active { background: #093c43; border-color: #093c43; transition-duration: 0ms; }
 .researchLink:active,
@@ -759,9 +773,9 @@
   .desk .main { padding: 1.25rem 1rem 2.5rem; }
   .heading { flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 1.25rem; }
   .deskTools > summary { padding-inline: 0.5rem; }
-  .continueResearch { --continuation-padding: 1.375rem; border-radius: 0.75rem; }
+  .continueResearch { --continuation-padding: 1.375rem; }
   .desk .continuation .researchTitle { font-size: 1.875rem; line-height: 1.45; }
-  .continuationNext { padding-block: 1rem; border-radius: 0 0 0.75rem 0.75rem; }
+  .continuationNext { padding-block: 1rem; }
   .continuationTask { flex-basis: 100%; }
   .continuationActions { gap: 0.5rem; width: 100%; }
   .continuationActions > a { width: 100%; }
@@ -778,7 +792,7 @@
   .researchEntry { gap: 0.5rem; }
   .researchLink { grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; padding: 1rem 0.25rem; }
   .researchEntryTitle { font-size: 1.125rem; }
-  .entryStatus { grid-column: 1; grid-row: 2; max-width: none; }
+  .entryStatus { grid-column: 1; grid-row: 2; width: auto; padding-left: 0; border-left: 0; }
   .entryArrow { grid-column: 2; grid-row: 1 / 3; }
   .researchEntryAction > button { padding-inline: 0.5rem; }
   .entryMeta { gap: 0.125rem 0.75rem; }
@@ -788,6 +802,8 @@
 }
 
 .desk :is(h1.title, .researchTitle, .researchEntryTitle):lang(zh) { letter-spacing: 0; }
+.desk :is(.heading, .stateSurface) h1.title:lang(zh) { letter-spacing: 0; }
+.desk :is(.eyebrow, .sectionLabel):lang(zh) { letter-spacing: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   :is(.layout, .stateSurface) :is(a, button, summary, select, input) { transition: none; }

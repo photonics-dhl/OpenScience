@@ -9,9 +9,11 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof React>();
-  return { ...actual, useEffect: (effect: () => void | (() => void)) => effects.push(effect) };
+  // This server-rendering harness exposes window only for request timers.
+  return { ...actual, useLayoutEffect: actual.useEffect, useEffect: (effect: () => void | (() => void)) => effects.push(effect) };
 });
 vi.mock('@/lib/api', () => api);
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 
 beforeEach(() => {
