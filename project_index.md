@@ -10,7 +10,7 @@
 
 | 路径 | 用途 | 状态 |
 |---|---|---|
-| `docs/handoff/2026-09-30-vendor-evaluation.md` | 公司固定代码包、PDF21项问题核查修正与上线运维回复证据 | 评估与修正收据；运行锚点仍见Hermes CURRENT |
+| `docs/handoff/2026-09-30-vendor-evaluation.md` | 公司固定代码包、PDF21项核查、10-02 UI发布与Word上线运维回复证据 | 评估与修正收据；运行锚点仍见Hermes CURRENT |
 
 云视频试镜定位：`packages/ai-gateway/src/minimax-video.ts`收口H3调用，`minimax-video-download.ts`负责有界下载与MP4容器检查；`infra/codex-image-runner/minimax-video-pilot.mjs`维护原品牌单次任务及显式论文参考镜头，复用原预留/续查/取片。用例与发布分支检查在相邻test及`.github/workflows/hermes-video.yml`；操作见[视频runbook](docs/runbooks/science-video-demo.md#minimax-paper-reference-video)，实际调用、产物、用户反馈与RO接线差额只见CURRENT。
 

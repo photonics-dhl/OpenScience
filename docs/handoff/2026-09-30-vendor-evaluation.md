@@ -2,7 +2,7 @@
 
 > 一次性对外评估证据，不是第二份运行 CURRENT。后续应用/回退/功能状态仍从 [Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md) 读取。
 >
-> 10-01用户已否定后续UI候选的叙事与审美，要求先研究成熟产品；已确认的公开探索／私有桌面分工保留。新账号讨论已续接，具体设计研究、候选与后续交付只见Hermes CURRENT。现有Word回复的线上验收仍是下文历史修正，本轮未发布新版UI；完成新版后原地更新《OpenScience 上线评估问题核查回复》，不得提前把讨论稿写成线上结果。
+> 10-02用户已授权整轮UI发布与公司Word更新；新版应用已正常构建发布，精确CI、版本/容器/HTTP证据已取得，真实画面浏览器因保存权限核验不可用未完成。本轮更新见文末；旧10-01真实入口验收仅是当时修正证据。当前产品目标与运行版本只见Hermes CURRENT。
 
 ## 用户范围与交接边界
 
@@ -55,3 +55,11 @@
 - 原PDF/text/server-before保留在canonical `tmp/vendor-findings-20260930/`；全部新证据、生产截图及6页Word回复已归档到其`verification-20261001/`，临时生产者已结束，生成脚本按自身目录读取资料。生产实证：公网/源站精确版本一致，API/Web/Worker restart0/OOM false，各healthcheck服务healthy；登录后工作台→设置→个人主页可用，余额/500发放额及低额提示显示且free隐藏，auth/me从2降1，两个ingestion为不同scope均200；安装后的API扫描factory clean接受/EICAR阻断，路由307/指南200/404/匿名401/管理302及nosniff通过。首次HTTP脚本尾部Windows管道CR导致exit127，仅本地脚本问题，改用Git Bash原生管道后exit0；未改业务状态。09:40北京时间复查时应用运行约11分钟，各healthcheck服务healthy、主应用restart0/OOM false；六维全空材料从站内进入后提示清楚且采用按钮禁用，无业务写入或新AgentTask。Word经本机现有Word渲染及6页全检，21项齐全。
 
 - 修正已合入canonical并推送，合并代码d41a3893的CI36802074205 success；服务器仍为CURRENT所记修正版本，未发布并行原生审校新增代码。Root main干净；本任务隔离树已由Codex archive归档，所需ignored证据已先迁移，已合并本地任务分支随后删除；canonical另会话仍在编辑原生来源审校相关源码，未删除、暂存或混入本任务的最终说明提交。资料可交用户发送公司，测试环境、对象备份恢复、SLA与科研质量按上方边界继续。
+
+## 2026-10-02 UI 发布与公司回复更新
+
+- 用户授权发布全部UI修改并交Word，报价范围仍为正式上线与年度运维，功能/科研质量由我方负责；保留ECS、独立测试环境、每周发版、12430020紧急审批、日期待定。
+- 整轮UI已合入交付线；软键盘Hermes位置P2修正通过独立High，215相关Web检查、55几何检查、lint/typecheck通过。首轮CI旧入口/不完整账户fixture失败已修，精确发布CI通过且含33模拟浏览器流程；实际source/release只从Hermes CURRENT定锚。
+- 11:18正常构建发布exit0，无迁移或新Native目录安装，无模型/业务写入；公开与源站版本、3主应用挂载同源，12路径×两链路预期HTTP，API/Worker healthy、Web running、restart0/OOM false、事务journal清除。11:26约8分钟复查仍restart0/OOM false且版本/指南/登录/公开探索200；真实逐页/手机/嘴部气泡/角色浏览器因saved permissions核验故障未完成，不用模拟流程或HTTP代称视觉验收。
+- 最新服务器事实与完整日志归ignored `tmp/ui-release-20261002/`：16逻辑核、Linux4.0.4；发布后RAM总30.07/已用22.22/available7.85GiB、盘67%/余47.83GiB。11:07主库133.23MiB，55 blobs逻辑138.33MiB/对象卷物理1.09GiB，artifact106/未删104，1 active期刊但homepage未发布。每日03:00双库备份7组；对象备份、异地副本、恢复演练与SLA/RPO/RTO仍待交付。
+- 正式Word `tmp/vendor-delivery-20261002/OpenScience 上线评估问题核查回复.docx` 已完成，9页/21项/7比较表；作者核查和权威qa/final目录9页PNG全检通过，无草稿占位/溢出/重叠；主线程也核了内容与首末页。原PDF/旧Word保留，记录本轮上线、观察、科研研发和运维责任边界；11:26短时复查单独归项目收据。首轮90da固定代码包是历史评估源，不冒称新版代码；本轮不授予GitHub/服务器账号，不发送报价商。canonical另会话仍在编辑原生来源审阅5个文件，未删除、暂存或混入本轮提交；UI树同源干净，暂保留用于受阻的真实视觉QA，下一次UI成功发布后清理。
