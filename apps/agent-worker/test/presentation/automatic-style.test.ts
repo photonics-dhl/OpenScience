@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { AiGateway, TextProviderError, type CompleteOptions, type Provider } from '@openscience/ai-gateway';
-import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
+import { clarifyIllustrationLabels, generateIllustrationStoryboard, materializeIllustrationScience, type StoryboardScienceRejectionReceipt } from '../../src/presentation/illustration-planner';
 import { reviewIllustrationStoryboard } from '../../src/presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
 import { renderStoryboard } from '../../src/presentation/storyboard';
@@ -34,6 +34,28 @@ function mockGateway(treatment: string, styleId?: string) {
   });
   return { gateway: { completeStructured } as never, calls };
 }
+
+describe('native callers using the existing scientific materializer', () => {
+  const settings = { locale: 'en' as const, style: 'aged-academia', instruction: 'Explain the supported relation.', output: 'image' as const };
+  it('binds a complete source record to the scene without a provider call', () => {
+    const result = materializeIllustrationScience(science, claims, settings);
+    expect(result.scenes[0]!.illustration.subjects[0]!.basis).toEqual({
+      claimId: claims[0]!.id, evidenceId: claims[0]!.sourcePassages![0]!.evidenceId,
+      quote: claims[0]!.sourcePassages![0]!.text,
+    });
+    expect(result.scenes[0]!.illustration.labels).toEqual(science.scenes[0]!.labels);
+  });
+  it.each(['unknown-source', 'counter-source', 'unsupported-number', 'outside-label'] as const)('retains the %s denial for tool-produced science', failure => {
+      const candidate = structuredClone(science), boundClaims = structuredClone(claims);
+      if (failure === 'unknown-source') candidate.scenes[0]!.subjects[0]!.basis.sourceId = 'foreign';
+      if (failure === 'counter-source') boundClaims[0]!.sourcePassages![0]!.relation = 'contradicts';
+      if (failure === 'unsupported-number') candidate.scenes[0]!.labels = ['999 nm'];
+      if (failure === 'outside-label') candidate.scenes[0]!.encoding = 'A relation for subject 0 and label 9.';
+      const expected = { 'unknown-source': /unknown_original_source/u, 'counter-source': /subject_requires_supporting_evidence/u,
+        'unsupported-number': /unbound_numeric/u, 'outside-label': /label_reference_out_of_range/u };
+      expect(() => materializeIllustrationScience(candidate, boundClaims, settings)).toThrow(expected[failure]);
+    });
+});
 
 describe('revalidating an authorized original science candidate', () => {
   const settings = { locale: 'en' as const, style: 'aged-academia', instruction: 'Explain one supported relation.', output: 'image' as const };

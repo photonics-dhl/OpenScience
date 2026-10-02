@@ -415,6 +415,81 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
   };
 }
 
+/** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map()): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+  const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
+  const subjectLimit = 4;
+  const { sourceLookup } = illustrationSources(claims);
+  const claimIds = claims.map(claim => claim.id);
+  const eligibleFigures = eligibleFiguresFor(settings.figurePlan);
+  const paperOriginalScenes = (settings.figurePlan?.figures ?? []).flatMap(figure => {
+    const ref = figure.decision === 'reuse' ? paperOriginals.get(figure.id) : undefined;
+    return ref ? [buildPaperOriginalScene(figure, ref)] : [];
+  });
+  const input = object(value);
+  // A complete single scene is the same content as a one-entry storyboard.
+  // Normalize only that exact key set; never discard unknown fields or repair science.
+  const inputKeys = Object.keys(input);
+  const root = inputKeys.length === SCIENCE_SCENE_KEYS.length && SCIENCE_SCENE_KEYS.every(key => inputKeys.includes(key))
+    ? { title: input.title, scenes: [input] } : input;
+  keys(root, settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
+  let narrative: StoryboardDocument['narrative'];
+  if (settings.narrative) {
+    const n = object(root.narrative); keys(n, ['mainMessage', 'audience'], 'narrative');
+    narrative = { mainMessage: text(n.mainMessage, 240, 'main_message'), audience: text(n.audience, 160, 'audience') };
+  }
+  // Output image plans require at least one scene in total. When every figure in
+  // the figurePlan is a paper-original reuse (paperOriginalScenes.length > 0) we
+  // accept an empty LLM output and will fill in the paper-original scenes locally.
+  const minScenes = paperOriginalScenes.length > 0 ? 0 : 1;
+  if (!Array.isArray(root.scenes) || root.scenes.length < minScenes || root.scenes.length > sceneLimit) throw new Error(`scene_count_1_to_${sceneLimit}`);
+  if (eligibleFigures && root.scenes.length !== eligibleFigures.length) {
+    // One scene per eligible figure; trust the order supplied by the model after
+    // the validation feedback loop retries. Diagnostic names the expected vs actual
+    // count so the next attempt can repair the count without changing semantics.
+    throw new Error(`figure_plan_scene_count_expected_${eligibleFigures.length}_actual_${root.scenes.length}`);
+  }
+  const scenes = root.scenes.map(raw => {
+    const scene = object(raw); keys(scene, settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
+    if (!Array.isArray(scene.subjects) || scene.subjects.length < 1 || scene.subjects.length > subjectLimit) throw new Error('subject_count');
+    if (!Array.isArray(scene.labels)) throw new Error('labels:array_required');
+    if (!Array.isArray(scene.constraints) || scene.constraints.length > 2) throw new Error('constraint_count');
+    const subjects = scene.subjects.map(rawSubject => {
+      const subject = object(rawSubject); keys(subject, ['description', 'basis'], 'science_subject');
+      const basis = object(subject.basis); keys(basis, ['sourceId'], 'science_subject_basis');
+      const original = typeof basis.sourceId === 'string' ? sourceLookup.get(basis.sourceId) : undefined;
+      if (!original) throw new Error('unknown_original_source');
+      if (original.relation !== 'supports') throw new Error('subject_requires_supporting_evidence');
+      return { description: subject.description, basis: { claimId: original.claimId, evidenceId: original.evidenceId, quote: original.text } };
+    });
+    const original = settings.narrative && scene.paperOriginalAssetId !== null
+      ? [...paperOriginals.values()].find(ref => ref.assetId === scene.paperOriginalAssetId) : undefined;
+    if (settings.narrative && scene.paperOriginalAssetId !== null && (!original
+      || !subjects.some(subject => subject.basis.claimId === original.sourceClaimId))) throw new Error('paper_original_requires_available_asset_and_matching_claim');
+    const illustration = parseIllustrationBrief({ schemaVersion: 2, message: scene.message, domain: scene.domain, subjects,
+      labels: scene.labels, constraints: scene.constraints, encoding: text(scene.encoding, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'encoding'),
+      composition: original ? 'Preserve the original figure geometry; explain its role in the reader caption.' : 'Art direction pending',
+      treatment: original ? 'Copy the approved source image unchanged; this is source material, not a newly designed illustration.' : 'Art direction pending' }, claimIds);
+    if (illustration.schemaVersion !== 2) throw new Error('structured_encoding_required');
+    requireLabelReferencesInRange(illustration);
+    requireIllustrationSourceSupport(illustration, claims);
+    requireBoundNumericalResults([['title', String(scene.title)], ['narration', String(scene.narration)],
+      ['message', illustration.message], ['encoding', illustration.encoding],
+      ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
+      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
+    illustration.subjects);
+    // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
+    compileIllustrationImagePrompt(illustration);
+    return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
+      ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
+      sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
+  });
+  requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
+    [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects));
+  if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
+  return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
+}
+
 /** Select scientific meaning before exposing it to composition/style guidance. */
 export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'completeStructured'>, claims: readonly PresentationClaim[], settings: StoryboardRequest, base?: StoryboardView, paperOriginals: Map<string, PaperOriginalRef> = new Map(), narrativeSource?: VisualNarrativeSource, reviewFeedback?: { summary: string; issues: readonly IllustrationReviewIssue[] }, scienceRecovery?: 'initial_science_thinking_exhausted' | 'initial_science_schema_exhausted', persistence?: StoryboardPlanningPersistence, onScienceRejected?: (receipt: StoryboardScienceRejectionReceipt, candidate: StoryboardScienceRejectedCandidate) => Promise<void>) {
   const rejectedScience = persistence?.rejectedScienceCandidate;
@@ -560,70 +635,7 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
 Return exactly ${scienceShape}. title is a nonempty single-line string<=120 characters; message is a nonempty single-line string within the shared brief budget; narration<=${settings.narrative ? 600 : 120}. ${settings.narrative ? 'narrative.mainMessage (<=240 characters) expresses the main contribution; narrative.audience (<=160) follows the user instruction or defaults to readers with basic field knowledge who have not read this paper. Each title and narration must explain why this step matters, define essential terms and conditions, and connect it to the overall argument using only the selected supported subjects. Only labels are visible text in the rendered image: include a short, source-supported visible statement of this scene\'s main point or contribution that the target reader can understand. Retain the axis letters, mathematical symbols and conditions needed to read the scene; do not omit them to make room for prose. Keep detailed explanations in narration; if the main point and essential conditions cannot fit, narrow the relationship or split scenes within the existing scene limit. paperOriginalAssetId is null for a new illustration, or an exact availablePaperOriginals assetId when an unchanged source image genuinely serves this step. Source images may appear anywhere in reading order; do not lead with them by default or call copying a reader-oriented redesign. For a source image, describe only its evidenced meaning and preserve its content; explanatory prose belongs in narration.' : ''} domain: real-space|wavevector-space|time|frequency|parameter-space|conceptual. Each scene has 1–${subjectLimit} subjects {description:nonempty single-line string,basis:{sourceId}}. Every basis.sourceId must be an exact planning.supportingSourceIds value from upstream.sourcePassages with relation supports; paper.sourceContext excerpt IDs and Claim IDs are not valid bindings. Select complete supplied original records supporting the FULL description including qualifiers. Each subject must be supported in full by its one bound complete source record. If a description needs multiple records, split it into atomic subjects, each with its own single supporting sourceId, within planning.perScene.subjects.max, the existing scene allowance and shared brief budget; never merge independently sourced claims under one basis. Only supports evidence can establish a subject. Other evidence remains context for limits or conflicts. Copy an exact short sourceId (such as s0) from this request; never emit database identifiers or quote text. Prefer a narrow supported statement over loosely related facts. labels: an array containing every intended visible text string, each<=80 characters, with no independent count limit. Include axis letters, mathematical symbols, definitions and required conditions wherever they must be visible, as well as headings and callouts. Give each intended annotation its own entry; do not concatenate unrelated annotations or leave text implicit in encoding/composition to hide unlisted labels. constraints: 1–2 nonempty single-line strings giving essential applicability or limits. encoding is a nonempty single-line string describing ONLY what sourced relationship each necessary mark/region/axis/arrow represents in this domain, referring only to subject indices present in this scene (0–${subjectLimit - 1}) and label indices. An analytic formula, integral kernel or closed form supports symbolic dependencies, not an invented function shape, extrema or curve extent. Without a bound original plot or supplied data-rendered graphic, use explicitly non-scaled conceptual comparisons with source-supported numeric labels where needed; do not invent quantitative or proportional lengths, areas, distances or bar geometry. When exact quantitative geometry is essential, use a bound original or data-rendered graphic. Conditions governing a boundary or category must appear in its subject or constraints; every reader-essential variable, threshold or condition that must be shown also needs its exact visible text in labels. If they do not fit, narrow the relationship or split scenes within the allowed count. No unsupported mapping between domains. A logical dependency is not a physical trajectory. Title and narration may only restate the selected message/subjects. Every scientific term and condition in labels/encoding/message must be supported by a subject's basis. Use readable Unicode notation for short mathematical labels; do not emit unescaped TeX backslashes in JSON. No new mathematical inference, formula normalization, extrema, numbers, or apparatus geometry beyond those sources. Source conflicts must not be silently resolved. The complete scientific and artistic brief shares ${ILLUSTRATION_BRIEF_MAX_CHARACTERS} UTF-16 code units, including its field headings and separators. Internal message, descriptions, encoding, constraints, composition and treatment each use this same maximum, not separate short allocations. Preserve complete scientific meaning and leave necessary space for later art direction. Remove redundant prose rather than mechanically truncating claims or dropping conditions. Detailed reader explanation belongs in narration, which is not drawn.${eligibleFigures ? `\n\nFigurePlan rules (overrides the "one atomic relationship" default). The user supplied figurePlan; eligibleFigures are the figures whose decision is re-render or abstract, in the order they appear in the original figurePlan. Skip and reuse figures are NOT in this list and produce no scene. The scenes array MUST contain EXACTLY ${eligibleFigures.length} entries, in the same order as eligibleFigures, one scene per eligible figure. Each scene's title MUST start with the figure's id (e.g. "Fig. 1: …") so the audit trail maps scene back to figure. Each scene's scientific relationship MUST be grounded in that figure's caption; do not invent a different relationship. Per-figure styleId is provided to the art stage, not to plan a different science — do not change the relationship to fit a style. If a figure's caption is too thin to support any supported relationship, return a scene whose only justification is the figure id and a short message saying it defers to the paper figure (do not invent data).` : ''}\n${scienceSkills.instructions}` },
       { role: 'user' as const, content: sourceInput }];
     }
-    function materializeScience(value: unknown): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
-      const input = object(value);
-      // A complete single scene is the same content as a one-entry storyboard.
-      // Normalize only that exact key set; never discard unknown fields or repair science.
-      const inputKeys = Object.keys(input);
-      const root = inputKeys.length === SCIENCE_SCENE_KEYS.length && SCIENCE_SCENE_KEYS.every(key => inputKeys.includes(key))
-        ? { title: input.title, scenes: [input] } : input;
-      keys(root, settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
-      let narrative: StoryboardDocument['narrative'];
-      if (settings.narrative) {
-        const n = object(root.narrative); keys(n, ['mainMessage', 'audience'], 'narrative');
-        narrative = { mainMessage: text(n.mainMessage, 240, 'main_message'), audience: text(n.audience, 160, 'audience') };
-      }
-      // Output image plans require at least one scene in total. When every figure in
-      // the figurePlan is a paper-original reuse (paperOriginalScenes.length > 0) we
-      // accept an empty LLM output and will fill in the paper-original scenes locally.
-      const minScenes = paperOriginalScenes.length > 0 ? 0 : 1;
-      if (!Array.isArray(root.scenes) || root.scenes.length < minScenes || root.scenes.length > sceneLimit) throw new Error(`scene_count_1_to_${sceneLimit}`);
-      if (eligibleFigures && root.scenes.length !== eligibleFigures.length) {
-        // One scene per eligible figure; trust the order supplied by the model after
-        // the validation feedback loop retries. Diagnostic names the expected vs actual
-        // count so the next attempt can repair the count without changing semantics.
-        throw new Error(`figure_plan_scene_count_expected_${eligibleFigures.length}_actual_${root.scenes.length}`);
-      }
-      const scenes = root.scenes.map(raw => {
-        const scene = object(raw); keys(scene, settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
-        if (!Array.isArray(scene.subjects) || scene.subjects.length < 1 || scene.subjects.length > subjectLimit) throw new Error('subject_count');
-        if (!Array.isArray(scene.labels)) throw new Error('labels:array_required');
-        if (!Array.isArray(scene.constraints) || scene.constraints.length > 2) throw new Error('constraint_count');
-        const subjects = scene.subjects.map(rawSubject => {
-          const subject = object(rawSubject); keys(subject, ['description', 'basis'], 'science_subject');
-          const basis = object(subject.basis); keys(basis, ['sourceId'], 'science_subject_basis');
-          const original = typeof basis.sourceId === 'string' ? sourceLookup.get(basis.sourceId) : undefined;
-          if (!original) throw new Error('unknown_original_source');
-          if (original.relation !== 'supports') throw new Error('subject_requires_supporting_evidence');
-          return { description: subject.description, basis: { claimId: original.claimId, evidenceId: original.evidenceId, quote: original.text } };
-        });
-        const original = settings.narrative && scene.paperOriginalAssetId !== null
-          ? [...paperOriginals.values()].find(ref => ref.assetId === scene.paperOriginalAssetId) : undefined;
-        if (settings.narrative && scene.paperOriginalAssetId !== null && (!original
-          || !subjects.some(subject => subject.basis.claimId === original.sourceClaimId))) throw new Error('paper_original_requires_available_asset_and_matching_claim');
-        const illustration = parseIllustrationBrief({ schemaVersion: 2, message: scene.message, domain: scene.domain, subjects,
-          labels: scene.labels, constraints: scene.constraints, encoding: text(scene.encoding, ILLUSTRATION_BRIEF_MAX_CHARACTERS, 'encoding'),
-          composition: original ? 'Preserve the original figure geometry; explain its role in the reader caption.' : 'Art direction pending',
-          treatment: original ? 'Copy the approved source image unchanged; this is source material, not a newly designed illustration.' : 'Art direction pending' }, claimIds);
-        if (illustration.schemaVersion !== 2) throw new Error('structured_encoding_required');
-        requireLabelReferencesInRange(illustration);
-        requireIllustrationSourceSupport(illustration, claims);
-        requireBoundNumericalResults([['title', String(scene.title)], ['narration', String(scene.narration)],
-          ['message', illustration.message], ['encoding', illustration.encoding],
-          ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
-          ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
-        illustration.subjects);
-        // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
-        compileIllustrationImagePrompt(illustration);
-        return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
-          ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
-          sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
-      });
-      requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
-        [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects));
-      if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
-      return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
-    }
+    const materializeScience = (value: unknown) => materializeIllustrationScience(value, claims, settings, paperOriginals);
     if (persistence?.science) {
       const saved = persistence.science;
       const restored = materializeScience({ title: saved.intent.title, ...(saved.intent.narrative ? { narrative: saved.intent.narrative } : {}),
