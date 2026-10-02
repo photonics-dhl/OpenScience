@@ -512,19 +512,19 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     }
     let frame = 0;
     const measure = () => {
-      const signature = `${bubble.offsetWidth}:${bubble.offsetHeight}`;
-      if (!guideBubbleLayoutSizeRef.current) {
+        const signature = `${bubble.offsetWidth}:${bubble.offsetHeight}`;
+        if (!guideBubbleLayoutSizeRef.current) {
+          guideBubbleLayoutSizeRef.current = signature;
+          return;
+        }
+        if (guideBubbleLayoutPhaseRef.current === 'awaiting-measure') {
+          guideBubbleLayoutPhaseRef.current = 'measured';
+          guideBubbleLayoutSizeRef.current = signature;
+          setGuideBubbleSizeVersion((version) => version + 1);
+          return;
+        }
+        if (guideBubbleLayoutSizeRef.current === signature) return;
         guideBubbleLayoutSizeRef.current = signature;
-        return;
-      }
-      if (guideBubbleLayoutPhaseRef.current === 'awaiting-measure') {
-        guideBubbleLayoutPhaseRef.current = 'measured';
-        guideBubbleLayoutSizeRef.current = signature;
-        setGuideBubbleSizeVersion((version) => version + 1);
-        return;
-      }
-      if (guideBubbleLayoutSizeRef.current === signature) return;
-      guideBubbleLayoutSizeRef.current = signature;
     };
     const sync = () => {
       window.cancelAnimationFrame(frame);
@@ -748,16 +748,20 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [customDock, dockStored, guideTarget, speech.cue]);
 
   useClientLayoutEffect(() => {
-    if (!speech.cue || guideTarget) {
+    if ((!speech.cue && !(menuFeedback && menuSpeechVisible)) || guideTarget) {
       setBubblePlacement(null);
       return;
     }
     const stage = stageRef.current;
-    const bubble = bubbleRef.current;
+    const bubble = speech.cue ? bubbleRef.current : stage?.querySelector<HTMLElement>('[data-hermes-menu-feedback="true"]');
     const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
-    if (!stage || !bubble || !actor) return;
+    const hatAnchor = stage?.querySelector<HTMLElement>('[data-hermes-visible-hat-anchor="true"]');
+    if (!stage || !bubble || !actor || !hatAnchor) return;
+    const measure = () => {
+    const hat = hatAnchor.getBoundingClientRect();
     const placement = resolveHermesBubblePlacement({
       actor: expandHermesRectForMotion(actor.getBoundingClientRect(), visualAction),
+      hat: { x: hat.left + hat.width / 2, y: hat.top + hat.height / 2 },
       bubble: { height: bubble.offsetHeight, width: bubble.offsetWidth },
       obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
         .map((element) => element.getBoundingClientRect())
@@ -766,12 +770,20 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       viewport: viewportSize,
     });
     const stageBounds = stage.getBoundingClientRect();
-    setBubblePlacement(placement ? {
+    const next = placement ? {
       ...placement,
       stageLeft: placement.bounds.left - stageBounds.left,
       stageTop: placement.bounds.top - stageBounds.top,
-    } : null);
-  }, [anchorRect, guideTarget, position, protectedGeometryVersion, speech.cue, stageMotionVersion, viewportSize, visualAction]);
+    } : null;
+    setBubblePlacement((current) => current?.stageLeft === next?.stageLeft
+      && current?.stageTop === next?.stageTop && current?.tailRatio === next?.tailRatio
+      && current?.bounds.bottom === next?.bounds.bottom && current?.bounds.right === next?.bounds.right ? current : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bubble);
+    return () => observer.disconnect();
+  }, [anchorRect, guideTarget, menuFeedback, menuSpeechVisible, position, protectedGeometryVersion, speech.cue, stageMotionVersion, viewportSize, visualAction]);
 
   const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
   const activeSuggestion = presentation?.suggestion ?? neutralSuggestion;
@@ -1442,6 +1454,9 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
           }, 4200);
         }}
         menuFeedback={menuSpeechVisible ? menuFeedback : null}
+        menuFeedbackStyle={bubblePlacement ? { bottom: 'auto', left: bubblePlacement.stageLeft, right: 'auto', top: bubblePlacement.stageTop } : undefined}
+        menuFeedbackTailRatio={bubblePlacement?.tailRatio}
+        menuFeedbackVisible={Boolean(bubblePlacement)}
         navigationOnly={navigationOnly}
         onRuntimeStatus={(status) => {
           if (status.phase === 'fallback' && status.reason === 'context-lost' && contextLossRecoveriesRef.current < 1) {
@@ -1462,13 +1477,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         <HermesPerformanceBubble
           cue={speech.cue}
           ref={bubbleRef}
-          style={!anchored && bubblePlacement ? {
+          tailRatio={bubblePlacement?.tailRatio}
+          style={bubblePlacement ? {
             bottom: 'auto',
             left: bubblePlacement.stageLeft,
             right: 'auto',
             top: bubblePlacement.stageTop,
           } : undefined}
-          visible={anchored || Boolean(bubblePlacement)}
+          visible={Boolean(bubblePlacement)}
         />
       ) : null}
       {reducedMotion !== null && motionControl.action !== 'retry' ? <button

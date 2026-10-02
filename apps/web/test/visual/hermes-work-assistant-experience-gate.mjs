@@ -493,7 +493,7 @@ try {
       };
     });
     assert.equal(await bubble.getAttribute('data-hermes-bubble-material'), 'warm-paper', label + ' speech must use warm paper');
-    assert.equal(await bubble.getAttribute('data-hermes-speech-origin'), 'mouth', label + ' speech must originate at the mouth');
+    assert.equal(await bubble.getAttribute('data-hermes-speech-origin'), 'hat-upper-left', label + ' speech must originate at the hat');
     assert.equal(bubbleStyle.controlCount, 0, label + ' one-sentence speech must not render a detached control');
     assert.ok(Number.parseFloat(bubbleStyle.width) <= 224, label + ' speech silhouette must remain compact');
     assert.equal(bubbleStyle.contourCount, 1, label + ' speech paper and tail must share one SVG contour');
@@ -511,7 +511,7 @@ try {
     }
     const bubbleBox = bubbleVisible ? await bubble.boundingBox() : null;
     const bubblePointer = bubbleBox ? await bubble.evaluate((node) => {
-      const mouth = document.querySelector('[data-hermes-visible-mouth-anchor="true"]')?.getBoundingClientRect();
+      const mouth = document.querySelector('[data-hermes-visible-hat-anchor="true"]')?.getBoundingClientRect();
       const tail = node.querySelector('[data-hermes-speech-tip="true"]')?.getBoundingClientRect();
       const tailTip = {
         x: tail ? tail.left + tail.width / 2 : Number.NaN,
@@ -519,12 +519,12 @@ try {
       };
       return mouth ? {
         mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
-        mouthDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
+        hatDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
         tailTip,
       } : null;
     }) : null;
-    assert.ok(bubblePointer && bubblePointer.mouthDistance <= 8,
-      `${label} companion speech tail must terminate at the mouth: ${JSON.stringify(bubblePointer)}`);
+    assert.ok(bubblePointer && bubblePointer.hatDistance <= 8,
+      `${label} companion speech tail must terminate at the hat upper-left: ${JSON.stringify(bubblePointer)}`);
     assert.equal(final.protectedRegions.some((region) => bubbleBox && overlaps(bubbleBox, region)), false,
       `${label} companion speech must not cover a protected surface`);
     assert.ok(final.actor.width * final.actor.height / (viewport.width * viewport.height) < .15,

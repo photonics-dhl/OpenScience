@@ -2799,10 +2799,10 @@ body {
   transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
 }
 
-.hermes-visible-mouth-anchor {
+.hermes-visible-hat-anchor {
   position: absolute;
-  top: 34%;
-  left: 50%;
+  top: 13%;
+  left: 30%;
   width: 2px;
   height: 2px;
   pointer-events: none;
@@ -3138,76 +3138,6 @@ body {
   bottom: auto;
 }
 
-/* Performance speech keeps a triangular mouth pointer after the functional
-   guide-bubble placement rules above have selected its safe side. */
-.hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-performance-bubble::after {
-  right: 2.75rem;
-  left: auto;
-  width: 2.2rem;
-  height: 2.75rem;
-  transform: none;
-  transform-origin: center;
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='center'] .hermes-performance-bubble::after {
-  right: auto;
-  left: 50%;
-  width: 2.2rem;
-  height: 2.75rem;
-  transform: translateX(-50%);
-  transform-origin: center;
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='left'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after {
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  border: 0;
-  border-right: 1px solid var(--os-ink);
-  border-bottom: 1px solid var(--os-ink);
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='right'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after {
-  right: auto;
-  left: 2.75rem;
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-  border: 0;
-  border-bottom: 1px solid var(--os-ink);
-  border-left: 1px solid var(--os-ink);
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='left'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
-  top: -2.7rem;
-  bottom: auto;
-  clip-path: polygon(0 100%, 100% 100%, 100% 0);
-  border: 0;
-  border-top: 1px solid var(--os-ink);
-  border-right: 1px solid var(--os-ink);
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='right'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
-  top: -2.7rem;
-  right: auto;
-  bottom: auto;
-  left: 2.75rem;
-  clip-path: polygon(0 0, 0 100%, 100% 100%);
-  border: 0;
-  border-top: 1px solid var(--os-ink);
-  border-left: 1px solid var(--os-ink);
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='center'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after {
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  border: 0;
-  border-bottom: 1px solid var(--os-ink);
-}
-
-.hermes-workspace-stage[data-hermes-bubble-horizontal='center'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
-  top: -2.7rem;
-  bottom: auto;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  border: 0;
-  border-top: 1px solid var(--os-ink);
-}
-
 .hermes-workspace-stage[data-hermes-motion-preference='reduced'] .hermes-menu-feedback {
   animation: none;
 }
@@ -3220,7 +3150,7 @@ body {
     translate: none;
   }
 
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-companion-bubble {
+  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-companion-bubble:not(.hermes-performance-bubble) {
     right: .5rem;
     width: min(12rem, calc(100vw - 1rem));
     padding: .55rem 2.35rem .58rem .68rem;
@@ -3228,48 +3158,11 @@ body {
     line-height: 1.34;
   }
 
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-performance-bubble,
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback {
-    top: .35rem;
-    bottom: auto;
-    right: auto;
-    left: .25rem;
-    width: 12rem;
-    max-width: calc(100vw - .75rem);
-    padding: .7rem .8rem .75rem;
-    font-size: .875rem;
-    line-height: 1.42;
-  }
-
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback {
-    top: -1.4rem;
-    bottom: auto;
-    left: -1.75rem;
-    width: 10rem;
-    height: 6.7rem;
-    padding: 0;
-  }
-
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-menu-feedback-copy {
-    top: 1rem;
-    left: .55rem;
-    width: 8.9rem;
-  }
-
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-visible-mouth-anchor {
-    top: 38%;
-  }
-
   .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-visible-crown-anchor {
     top: 17%;
   }
 
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {
-    top: -1.85rem;
-    bottom: auto;
-  }
-
-  .hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+.hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
     right: auto;
     left: .5rem;
   }

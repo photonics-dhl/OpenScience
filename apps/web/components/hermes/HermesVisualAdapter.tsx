@@ -66,6 +66,9 @@ export interface HermesVisualAdapterProps {
   onInvoke: () => void;
   onMenuAction?: (feedback: HermesMenuFeedback) => void;
   menuFeedback?: HermesMenuFeedback | null;
+  menuFeedbackStyle?: React.CSSProperties;
+  menuFeedbackTailRatio?: number;
+  menuFeedbackVisible?: boolean;
   onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
   promptSuppressed?: boolean;
   protectedGeometryVersion: number;
@@ -88,7 +91,7 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const tn = useTranslations('productNavigation');
   const locale = useLocale();
@@ -698,7 +701,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               state={state}
             />
             <span aria-hidden="true" className="hermes-visible-crown-anchor" data-hermes-visible-crown-anchor="true" />
-            <span aria-hidden="true" className="hermes-visible-mouth-anchor" data-hermes-visible-mouth-anchor="true" />
+            <span aria-hidden="true" className="hermes-visible-hat-anchor" data-hermes-visible-hat-anchor="true" />
           </span>
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
         </button>
@@ -794,7 +797,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       </ContextMenuContent>
     </ContextMenu>
     {menuFeedback && !menuOpen ? (
-      <HermesSpeechBalloon action={menuFeedback.action} compact={compactMenu}>
+      <HermesSpeechBalloon action={menuFeedback.action} compact={compactMenu}
+        style={menuFeedbackStyle} tailRatio={menuFeedbackTailRatio} visible={menuFeedbackVisible}>
         {t(menuFeedback.messageKey)}
       </HermesSpeechBalloon>
     ) : null}

@@ -67,7 +67,7 @@ describe('global companion SSR ownership', () => {
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
 
-  it.each(['/', '/guide', '/explore', '/auth/login', '/me', '/journals/example', '/dashboard', '/research-objects/object/edit'])('renders exactly one Wanko on %s', (pathname) => {
+  it.each(['/guide', '/explore', '/auth/login', '/me', '/journals/example', '/dashboard', '/research-objects/object/edit'])('renders exactly one Wanko on %s', (pathname) => {
     navigation.pathname = pathname;
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><main>Research content</main></HermesWorkspaceStageProvider>);
     expect(markup.match(/data-hermes-workspace-stage="true"/g)).toHaveLength(1);
@@ -80,7 +80,7 @@ describe('global companion SSR ownership', () => {
     expect(markup).toContain('data-hermes-stage-size="360"');
   });
 
-  it.each(['/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('leaves %s to its own harness', (pathname) => {
+  it.each(['/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {
     navigation.pathname = pathname;
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><main>Harness</main></HermesWorkspaceStageProvider>);
     expect(markup).not.toContain('data-hermes-workspace-stage');

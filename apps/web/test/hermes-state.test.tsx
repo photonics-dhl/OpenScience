@@ -218,13 +218,13 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-menu-feedback="true"');
     expect(markup).toContain('data-hermes-feedback-action="read"');
     expect(markup).toContain('data-hermes-speech-copy="single"');
-    expect(markup).toContain('data-hermes-speech-origin="mouth"');
+    expect(markup).toContain('data-hermes-speech-origin="hat-upper-left"');
     expect(markup).toContain('data-hermes-speech-silhouette="true"');
     expect(markup.match(/data-hermes-speech-contour=/g) ?? []).toHaveLength(1);
     expect(markup).toContain('data-hermes-speech-contour="single"');
-    expect(markup).toContain('data-hermes-speech-tail-profile="slender"');
+    expect(markup).toContain('data-hermes-speech-tail-profile="short"');
     expect(markup).toContain('data-hermes-speech-tip="true"');
-    expect(markup).toContain('data-hermes-visible-mouth-anchor="true"');
+    expect(markup).toContain('data-hermes-visible-hat-anchor="true"');
     expect(markup).toContain('data-hermes-visible-crown-anchor="true"');
     expect(markup).toContain('guide.menu.actions.read-together.feedback');
     expect(markup).not.toContain('<span>guide.menu.companion</span>');

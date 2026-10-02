@@ -8,7 +8,7 @@ import {
 
 describe('global Hermes product routes', () => {
   it.each([
-    '/', '/guide', '/guide/', '/explore', '/research/OSR-2026-000023',
+    '/guide', '/guide/', '/explore', '/research/OSR-2026-000023',
     '/research/OSR-2026-000023/v/1', '/collections/optics',
     '/auth/login', '/auth/register', '/me', '/settings', '/developers', '/trash',
     '/journals', '/journals/example', '/journals/apply', '/journals/apply/application',
@@ -29,7 +29,7 @@ describe('global Hermes product routes', () => {
   });
 
   it.each([
-    '/_visual/hermes-live2d', '/%5Fvisual/hermes-live2d', '/%5fvisual/research-workbench',
+    '/', '/_visual/hermes-live2d', '/%5Fvisual/hermes-live2d', '/%5fvisual/research-workbench',
     '/visual-public-reading', '/visual-public-reading/example', '/api/research', '/_next/data',
     '/dashboard-preview', '/research-objects-old/object/edit', '/unknown',
   ])('leaves the harness or non-product path %s without a global owner', (pathname) => {

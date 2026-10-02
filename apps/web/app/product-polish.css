@@ -73,6 +73,22 @@
 .surface-product-app [data-hermes-review-page] > header h1 { font: 400 clamp(30px, 3.2vw, 40px)/1.35 var(--font-reading-serif); }
 .surface-product-app [data-hermes-review-page] > header p { max-width: 65ch; line-height: 1.8; }
 .surface-product-app [data-hermes-review-page] [data-hermes-review-field] { padding: 16px; border-color: var(--craft-rule); font-size: 16px; line-height: 1.85; }
+/* Publication, collaboration, history and sandbox share the reading sheet.
+   Their working content has a quieter rhythm than the editor and dashboard. */
+.research-reading-surface[data-research-surface] [data-workspace-plane='56'] :is(header, .collab-page > header) { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--craft-rule); }
+.research-reading-surface[data-research-surface] [data-workspace-plane='56'] h1 { max-width: 24ch; margin-top: 0; font: 400 clamp(28px, 3vw, 38px)/1.35 var(--font-reading-serif); letter-spacing: -.02em; }
+:lang(zh) .research-reading-surface[data-research-surface] [data-workspace-plane='56'] h1 { letter-spacing: 0; }
+.research-reading-surface[data-research-surface] [data-workspace-plane='56'] header > p { max-width: 65ch; line-height: 1.8; }
+.research-reading-surface[data-research-surface] :is(fieldset, [data-version-diff]) { min-width: 0; }
+.research-reading-surface[data-research-surface] fieldset legend { font-weight: 600; line-height: 1.5; }
+.research-reading-surface[data-research-surface] :is(table, time, .collab-row-meta) { font-variant-numeric: tabular-nums; }
+.research-reading-surface[data-research-surface] .collab-list { margin-block: 24px 0; }
+.research-reading-surface[data-research-surface] .collab-row { gap: 12px 24px; padding-block: 18px; border-color: var(--craft-rule); }
+.research-reading-surface[data-research-surface] .collab-row-title { color: var(--craft-ink); font-weight: 600; }
+.research-reading-surface[data-research-surface] .collab-row-meta { color: var(--craft-muted); font-size: 13px; }
+.research-reading-surface[data-research-surface] [data-version-diff] { border: 0; border-top: 1px solid var(--craft-rule); padding: 24px 0 0; }
+.research-reading-surface[data-research-surface] [data-version-diff] pre { padding: 16px; border-radius: 8px; background: var(--craft-tint); color: var(--craft-ink); font-size: 13px; line-height: 1.75; }
+.research-reading-surface[data-research-surface='sandbox'] #sandbox-script { background: var(--craft-surface); padding: 20px; font-family: var(--font-data), monospace; line-height: 1.75; }
 @media(hover:hover) and (pointer:fine) {
   .surface-product-app [data-evidence-dropzone]:hover { border-color: var(--craft-accent); }
   .surface-product-app [data-evidence-dropzone] button:not(:disabled):hover { background: #0d4d55; }

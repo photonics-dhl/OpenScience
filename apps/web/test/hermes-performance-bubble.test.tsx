@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => `translated:${key}` }));
 
 import { HermesPerformanceBubble } from '@/components/hermes/HermesPerformanceBubble';
+import { HermesSpeechBalloon } from '@/components/hermes/HermesSpeechBalloon';
 import type { HermesSpeechCue } from '@/lib/hermes/performance-beat';
 
 const cue: HermesSpeechCue = {
@@ -18,10 +19,6 @@ const cue: HermesSpeechCue = {
 
 const globals = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
 
-function cssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return globals.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`, 'u'))?.[1] ?? '';
-}
 
 describe('Hermes performance bubble', () => {
   it('renders one synchronized polite annotation for the active performance beat', () => {
@@ -36,7 +33,7 @@ describe('Hermes performance bubble', () => {
     expect(html).toContain('data-hermes-performance-beat="cap-check:42000"');
     expect(html).toContain('data-hermes-speech-cue="performance.capCheck.one"');
     expect(html).toContain('data-hermes-speech-copy="single"');
-    expect(html).toContain('data-hermes-speech-origin="mouth"');
+    expect(html).toContain('data-hermes-speech-origin="hat-upper-left"');
     expect(html).toContain('translated:performance.capCheck.one');
     expect(html).not.toContain('translated:performance.tones.focused');
     expect(html).not.toContain('translated:dismissSpeech');
@@ -53,43 +50,31 @@ describe('Hermes performance bubble', () => {
     expect(html).not.toContain('tabindex=');
   });
 
-  it('uses a compact warm-paper speech oval with a mouth-pointing tail', () => {
-    const bubble = cssRule('.hermes-performance-bubble');
-    const tail = cssRule('.hermes-performance-bubble::after');
-    const leftBelow = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
-    const mobileBelow = cssRule(".hermes-workspace-stage:is([data-hermes-stage-size='168'], [data-hermes-stage-size='200'])[data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
-    const rightAbove = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='right'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after");
-    const reducedFeedback = cssRule(".hermes-workspace-stage[data-hermes-motion-preference='reduced'] .hermes-menu-feedback");
-    const speakingFooter = cssRule(".hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label");
-    const visibleCta = cssRule(".hermes-workspace-stage[data-hermes-anchored='true'][data-hermes-speech-visible='false'] .hermes-visible-invoke-cta");
-
-    expect(bubble).toContain('max-width: 13.25rem;');
-    expect(bubble).toContain('border-radius: 50% 47% 52% 46% / 55% 51% 49% 45%;');
-    expect(bubble).toContain('background: var(--os-paper-strong);');
-    expect(bubble).toContain('font-size: .9375rem;');
-    expect(bubble).not.toMatch(/gradient|blur/iu);
-    expect(tail).toContain('clip-path: polygon(0 0, 100% 0, 100% 100%);');
-    expect(tail).toContain('background: var(--os-paper-strong);');
-    expect(tail).toContain('border-right: 1px solid var(--os-ink);');
-    expect(globals).toContain("[data-hermes-bubble-horizontal='left'] .hermes-performance-bubble::after");
-    expect(leftBelow).toContain('clip-path: polygon(0 100%, 100% 100%, 100% 0);');
-    expect(leftBelow).toContain('top: -2.7rem;');
-    expect(mobileBelow).toContain('top: -1.85rem;');
-    expect(mobileBelow).toContain('bottom: auto;');
-    expect(rightAbove).toContain('clip-path: polygon(0 0, 100% 0, 0 100%);');
-    expect(reducedFeedback).toContain('animation: none;');
-    expect(speakingFooter).toContain('display: none;');
-    expect(visibleCta).toContain('pointer-events: auto;');
-    expect(globals).toContain(":is([data-hermes-stage-size='168'], [data-hermes-stage-size='200']) .hermes-performance-bubble");
-    expect(globals).not.toContain("[data-hermes-stage-size='176']");
+  it('preserves a single accessible feedback region when visual speech cannot fit', () => {
+    for (const content of [
+      <HermesPerformanceBubble cue={cue} visible={false} />,
+      <HermesSpeechBalloon action="read" compact={false} visible={false}>Still here.</HermesSpeechBalloon>,
+    ]) {
+      const html = renderToStaticMarkup(content);
+      expect(html).toContain('aria-hidden="true"');
+      expect(html.match(/role="status"/gu)).toHaveLength(1);
+      expect(html).toContain('class="sr-only" role="status"');
+      expect(html).not.toContain('aria-live="polite"');
+    }
   });
 
+  it('uses one short hat speech contour, shared with menu feedback', () => {
+    const html = renderToStaticMarkup(<HermesPerformanceBubble cue={cue} visible />);
+    expect(html.match(/data-hermes-speech-contour=/gu)).toHaveLength(1);
+    expect(html).toContain('data-hermes-speech-tail-profile="short"');
+    expect(html).toContain('data-hermes-speech-tip="true"');
+  });
   it('renders one short sentence without a mobile action toolbar', () => {
     const html = renderToStaticMarkup(
       <HermesPerformanceBubble cue={cue} visible />,
     );
 
-    expect(html.match(/<p>/gu)).toHaveLength(1);
+    expect(html.match(/<p\b/gu)).toHaveLength(1);
     expect(html).not.toContain('hermes-companion-actions');
     expect(html).not.toContain('hermes-companion-take-me');
   });

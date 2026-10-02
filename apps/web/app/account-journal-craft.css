@@ -1,6 +1,7 @@
 /* Route-owned craft. Imported after product styles by the integration owner.
    Each selector starts inside an owned main; shared navigation stays untouched. */
 :is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) {
+  --craft-shadow-sheet: 0 2px 6px rgb(24 47 53 / .035), 0 16px 40px rgb(24 47 53 / .055);
   box-sizing: border-box;
   min-width: 0;
   font-size: 1rem;
@@ -9,6 +10,8 @@
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
+
+:is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) p { text-wrap: pretty; }
 
 :is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) ::selection {
   background: #d3e9e8;
@@ -41,13 +44,14 @@
   min-height: 44px;
   font-size: 0.875rem;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), border-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), box-shadow var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), transform var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1));
 }
 
-:is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) button:not(:disabled):active { transform: translateY(1px); }
+:is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) button:not(:disabled):active { transform: translateY(1px); box-shadow: none; }
 
 :is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) button:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: default;
 }
 
@@ -69,8 +73,10 @@
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--craft-surface, #fff);
-  transition: border-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1));
+  transition: border-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1));
 }
+
+:is(.craft-account, .craft-journal, .craft-editorial, .craft-developers) :is(input, textarea, select):focus-visible { border-color: var(--craft-accent, #125d66); }
 
 :is(.craft-account, .craft-journal, .craft-editorial, .craft-developers) :is(input, textarea)::placeholder { color: var(--craft-muted, #51666c); opacity: 1; }
 :is(.craft-account, .craft-journal, .craft-editorial, .craft-developers) :is(input, textarea, select):disabled { background: #f3f6f7; }
@@ -98,28 +104,28 @@
 .craft-account .account-heading h1 { margin: 0 0 12px; font: 600 clamp(1.875rem, 2.8vw, 2.5rem)/1.2 var(--font-ui); }
 .craft-account .account-heading p { max-width: 65ch; font-size: 1rem; line-height: 1.75; }
 .craft-account .account-heading [data-reading-role='caption'] { margin-bottom: 10px; font-size: 0.875rem; }
-.craft-account .account-grid { grid-template-columns: 240px minmax(0, 1fr); gap: 40px 48px; }
+.craft-account .account-grid { grid-template-columns: 232px minmax(0, 1fr); gap: 40px clamp(28px, 3.5vw, 48px); }
 .craft-account .surface-folio-sheet { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .craft-account .account-summary { padding: 0 20px 24px 0; border-right: 1px solid var(--craft-rule, #dce5e5); }
 .craft-account .account-summary .account-monogram { width: 48px; height: 48px; margin-bottom: 20px; border-radius: 12px; background: var(--craft-tint, #edf4f3); }
 .craft-account .account-summary dl { margin-block: 20px 24px; }
 .craft-account .account-summary dd { font-size: 1rem; line-height: 1.6; }
 .craft-account .account-shortcuts { gap: 6px; }
-.craft-account .account-shortcuts a { padding: 10px 12px; background: transparent; border-radius: 8px; }
+.craft-account .account-shortcuts a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 12px; background: transparent; border-radius: 8px; }
 .craft-account .account-shortcuts a:first-child { justify-content: center; background: var(--craft-accent, #125d66); color: #fff; font-weight: 600; box-shadow: var(--craft-shadow-control, 0 2px 4px rgb(24 47 53 / .1)); }
 .craft-account .account-identity { padding-top: 28px; border-top: 1px solid var(--craft-rule, #dce5e5); }
-.craft-account .account-research { grid-column: 2; padding: clamp(24px, 3vw, 36px); background: var(--craft-surface, #fff); border-radius: 12px; box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-account .account-research { grid-column: 2; padding: clamp(24px, 3vw, 36px); }
 .craft-account h2 { font-size: 1.25rem; font-weight: 600; }
 .craft-account [data-research-profile-fields] legend { font-size: 1.0625rem; font-weight: 600; }
 .craft-account .account-projects > p { margin-block: 8px 20px; max-width: 65ch; }
-.craft-account .project-row { padding-block: 12px; border-radius: 8px; }
+.craft-account .project-row { padding-block: 16px; border-radius: 8px; transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
 .craft-account .project-actions { margin-top: 16px; }
-.craft-account .settings-grid { grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr); gap: 32px 48px; }
+.craft-account .settings-grid { grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr); gap: 32px clamp(28px, 3.5vw, 48px); }
 .craft-account .settings-grid > section { border-top: 1px solid var(--craft-rule, #dce5e5); padding-top: 24px; }
 .craft-account .settings-grid > section:first-child { grid-column: 1; grid-row: 1; }
 .craft-account .settings-grid > [data-usage-balance] { grid-column: 2; grid-row: 1 / span 2; padding: 28px; background: var(--craft-tint, #edf4f3); border: 0; border-radius: 12px; }
 .craft-account .settings-grid > [data-usage-balance] dl { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-block: 24px; }
-.craft-account .settings-grid > section:last-child { grid-column: 1; padding: 28px; border: 0; border-radius: 12px; background: var(--craft-surface, #fff); box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-account .settings-grid > section:last-child { grid-column: 1; padding: 28px; border: 0; }
 .craft-account .settings-grid > section:first-child dl { margin-block: 20px 8px; }
 .craft-account [data-academic-identity] > ol { gap: 8px 16px; }
 .craft-account [data-academic-identity] > ol svg { flex-shrink: 0; }
@@ -127,8 +133,9 @@
 .craft-account [data-research-profile-fields] { gap: 24px; }
 .craft-account [data-research-profile-fields] > p { max-width: 70ch; }
 .craft-account [data-research-profile-fields] > div > div { flex-wrap: wrap; gap: 4px 12px; }
-.craft-account [data-research-profile-fields] > div > div:has(input:checked) { border-color: #adcbcb; }
+.craft-account [data-research-profile-fields] > div > div:has(input:checked) { border-color: #adcbcb; background: var(--craft-tint, #edf4f3); }
 .craft-account :is(.account-identity, .account-research) { scroll-margin-top: 28px; }
+.craft-account :is(.account-identity, .account-research):target h2 { color: var(--craft-accent, #125d66); }
 .craft-account .account-preference-row, .craft-account .account-signal-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
 .craft-account .account-signal-row > span { flex: 1; min-width: 0; }
 .craft-account .account-signal-row > button { flex-shrink: 0; }
@@ -143,7 +150,7 @@
 .craft-journal-public h1 { max-width: 30ch; margin-block: 0 16px; font-family: var(--font-reading-serif); font-size: clamp(2.5rem, 4.2vw, 3.5rem); font-weight: 400; line-height: 1.16; letter-spacing: -0.025em; }
 .craft-journal-public h2 { font-size: 1.375rem; line-height: 1.4; }
 .craft-journal-public p { max-width: 70ch; }
-.craft-journal-public [data-journal-masthead] { display: grid; grid-template-columns: minmax(0, 1fr) 256px; gap: 32px 48px; margin-top: 20px; padding: clamp(24px, 3.5vw, 40px); background: var(--craft-surface, #fff); border-radius: 12px; box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-journal-public [data-journal-masthead] { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: 32px clamp(28px, 3.5vw, 48px); margin-top: 20px; padding: clamp(24px, 3.5vw, 40px); }
 .craft-journal-public [data-journal-masthead] h1 { margin: 0 0 16px; }
 .craft-journal-public [data-journal-details] { border-left: 1px solid var(--craft-rule, #dce5e5); padding-left: 24px; font-size: 0.875rem; }
 .craft-journal-public [data-journal-details] p { margin-block: 0 16px; }
@@ -154,7 +161,7 @@
 .craft-journal-public [data-journal-paper] h3 { max-width: 50ch; margin-block: 8px 12px; font: 400 clamp(1.5rem, 2.4vw, 1.875rem)/1.4 var(--font-reading-serif); }
 .craft-journal-public [data-journal-paper] a { display: inline-flex; align-items: center; min-height: 44px; color: var(--craft-accent, #125d66); }
 .craft-journal-public [data-journal-paper] h3 a { display: block; min-height: 0; color: var(--craft-ink, #182f35); text-decoration: none; padding-block: 6px; }
-.craft-journal-public [data-journal-paper] > p { margin-block: 6px; }
+.craft-journal-public [data-journal-paper] > p { margin-block: 6px; line-height: 1.8; }
 .craft-journal-public [data-journal-paper] > div { gap: 4px 24px; }
 .craft-journal-public [data-journal-papers] > nav a { min-height: 44px; display: inline-flex; align-items: center; }
 
@@ -164,7 +171,7 @@
 .craft-journal-public [data-journal-directory] [data-journal-resources] { margin-block: 8px 28px; gap: 4px 24px; }
 .craft-journal-public [data-journal-directory] [data-journal-resources] a { display: inline-flex; align-items: center; min-height: 44px; color: var(--craft-muted, #51666c); }
 .craft-journal-public [data-journal-directory] [data-journal-entries] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; border-top: 1px solid var(--craft-rule, #dce5e5); background: transparent; }
-.craft-journal-public [data-journal-directory] [data-journal-entry] { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 28px 12px; border-bottom: 1px solid var(--craft-rule, #dce5e5); background: transparent; }
+.craft-journal-public [data-journal-directory] [data-journal-entry] { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 28px 12px; border-bottom: 1px solid var(--craft-rule, #dce5e5); background: transparent; transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
 .craft-journal-public [data-journal-directory] [data-journal-entry] h2 { max-width: 36ch; margin: 0 0 12px; font: 400 clamp(1.5rem, 2.5vw, 1.875rem)/1.35 var(--font-reading-serif); text-decoration-thickness: 1px; text-underline-offset: .18em; }
 .craft-journal-public [data-journal-directory] [data-journal-entry] p { margin: 4px 0; font-size: 0.875rem; line-height: 1.6; }
 .craft-journal-public [data-journal-directory] [data-journal-entry] [data-journal-count] { margin-top: auto; padding-top: 20px; color: var(--craft-muted, #51666c); font-variant-numeric: tabular-nums; }
@@ -203,13 +210,14 @@
 .craft-journal-manage [data-journal-processing] details { padding: 8px 16px; background: var(--craft-tint, #edf4f3); border-radius: 8px; }
 .craft-journal-manage [data-journal-processing] summary { display: list-item; }
 .craft-journal-manage details[open] > summary { margin-bottom: 12px; color: var(--craft-accent, #125d66); }
+.craft-journal-manage summary::marker { color: var(--craft-accent, #125d66); }
 .craft-journal-manage [data-journal-services] > section { padding-top: 24px; border-top: 1px solid var(--craft-rule, #dce5e5); }
 .craft-journal-manage [data-journal-services] > [data-journal-stats] { border: 0; padding-top: 0; }
 .craft-journal-manage [data-journal-services] label:has(> input[type='radio']) { border: 0; border-bottom: 1px solid var(--craft-rule, #dce5e5); border-radius: 0; padding: 16px 12px; }
 .craft-journal-form legend { font-size: 1.125rem; font-weight: 600; }
 .craft-journal-form #journal-application-form > fieldset > fieldset { border-top: 1px solid var(--craft-rule, #dce5e5); padding-top: 20px; }
 .craft-journal-form #journal-application-form legend { padding-right: 12px; }
-.craft-journal-form #journal-application-form { margin-top: 32px; padding: clamp(20px, 3vw, 32px); background: var(--craft-surface, #fff); border-radius: 12px; box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-journal-form #journal-application-form { margin-top: 32px; padding: clamp(20px, 3vw, 32px); }
 .craft-journal-form button[type='submit'] { background: var(--craft-accent, #125d66); border-color: transparent; color: #fff; font-weight: 600; box-shadow: var(--craft-shadow-control, 0 2px 4px rgb(24 47 53 / .1)); }
 .craft-journal-manage table { min-width: 560px; width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left; }
 .craft-journal-manage :is(th, td) { padding: 12px 16px; vertical-align: top; border-bottom: 1px solid var(--craft-rule, #dce5e5); }
@@ -221,7 +229,7 @@
 .craft-journal .journal-work-heading p { max-width: 70ch; }
 .craft-journal-manage .journal-managed-list { list-style: none; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--craft-rule, #dce5e5); }
 .craft-journal-manage .journal-managed-list li { border-bottom: 1px solid var(--craft-rule, #dce5e5); }
-.craft-journal-manage .journal-managed-list a { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; min-height: 44px; padding: 28px 12px; text-decoration: none; }
+.craft-journal-manage .journal-managed-list a { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; min-height: 44px; padding: 28px 12px; border-radius: 8px; text-decoration: none; }
 .craft-journal-manage .journal-managed-list a > div { flex: 1; min-width: min(100%, 240px); }
 .craft-journal-manage .journal-managed-list h2 { margin: 0; font: 400 1.5rem/1.4 var(--font-reading-serif); }
 .craft-journal-manage .journal-managed-list p { margin: 8px 0 0; font-size: 0.875rem; }
@@ -245,7 +253,7 @@
 .craft-collection [data-editorial-collection] aside a { display: inline-flex; align-items: center; min-height: 44px; }
 .craft-collection [data-editorial-collection] h1 { max-width: 24ch; font-size: clamp(2.5rem, 4.2vw, 3.5rem); line-height: 1.16; letter-spacing: -0.025em; }
 .craft-collection [data-editorial-collection] header { padding-block: 32px 40px; }
-.craft-collection [data-editorial-collection] header > p { max-width: 45ch; font-size: 1.0625rem; line-height: 1.8; }
+.craft-collection [data-editorial-collection] header > p { max-width: 58ch; font-size: 1.0625rem; line-height: 1.8; }
 .craft-collection [data-editorial-collection] figure { border: 0; padding: 0; background: transparent; }
 .craft-collection [data-editorial-collection] :is(img, video) { object-fit: contain; background: #fff; }
 .craft-collection [data-editorial-collection] figcaption { padding: 12px 0; font: 400 0.875rem/1.65 var(--font-ui); }
@@ -260,13 +268,13 @@
 .craft-editorial h2 { font: 600 1.25rem/1.5 var(--font-ui); }
 .craft-editorial header { border-color: var(--craft-rule, #dce5e5); }
 .craft-editorial :is(form, section, fieldset, li) { border-color: var(--craft-rule, #dce5e5); }
-.craft-editorial .editorial-layout { display: grid; grid-template-columns: minmax(0, 348px) minmax(0, 1fr); gap: 48px; padding-block: 36px; align-items: start; }
-.craft-editorial .editorial-layout > form { padding: 28px; border: 0; border-radius: 12px; background: var(--craft-surface, #fff); box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-editorial .editorial-layout { display: grid; grid-template-columns: minmax(0, 332px) minmax(0, 1fr); gap: clamp(32px, 4vw, 48px); padding-block: 36px; align-items: start; }
+.craft-editorial .editorial-layout > form { padding: 28px; border: 0; }
 .craft-editorial .editorial-fields { border: 0; padding: 0; margin: 0; }
 .craft-editorial .editorial-fields > fieldset { margin-top: 28px; border-inline: 0; border-bottom: 0; padding-inline: 0; }
 .craft-editorial .editorial-fields > label { margin-top: 24px; }
 .craft-editorial .editorial-queue-entry { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 8px 16px; border-bottom: 1px solid var(--craft-rule, #dce5e5); }
-.craft-editorial .editorial-queue-entry > div:last-child { grid-column: 2; justify-content: flex-start; }
+.craft-editorial .editorial-queue-entry > div:last-child { grid-column: 2; justify-content: flex-start; margin-top: 8px; }
 .craft-editorial .editorial-queue-entry > span { padding-top: 4px; font-variant-numeric: tabular-nums; color: var(--craft-muted, #51666c); }
 .craft-editorial .editorial-queue-entry h2 { max-width: 45ch; margin: 0; font: 400 1.625rem/1.4 var(--font-reading-serif); }
 .craft-editorial .editorial-queue-entry p { max-width: 70ch; }
@@ -282,7 +290,7 @@
 .craft-trash > div { max-width: 960px; }
 .craft-trash h1 { margin-block: 16px 12px; font: 600 clamp(1.875rem, 3vw, 2.5rem)/1.2 var(--font-ui); }
 .craft-trash > div > p { max-width: 65ch; }
-.craft-trash li { padding-block: 24px; gap: 16px 32px; }
+.craft-trash li { padding-block: 24px; gap: 16px 32px; align-items: start; }
 .craft-trash li small { margin-top: 6px; font-size: 0.875rem; color: var(--craft-muted, #51666c); font-variant-numeric: tabular-nums; }
 .craft-trash li strong { font-size: 1.0625rem; font-weight: 600; line-height: 1.5; }
 .craft-trash .trash-entry-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -291,15 +299,33 @@
 .craft-trash .trash-entry-actions > button:first-of-type { color: var(--craft-accent, #125d66); background: var(--craft-tint, #edf4f3); }
 .craft-trash .trash-entry-actions > button:nth-of-type(2) { color: var(--craft-muted, #51666c); background: transparent; }
 .craft-trash [data-trash-entry] strong { display: block; overflow: visible; -webkit-line-clamp: unset; }
-.craft-trash dialog { box-sizing: border-box; padding: clamp(24px, 4vw, 36px); border: 0; border-radius: 12px; background: var(--craft-surface, #fff); color: var(--craft-ink, #182f35); box-shadow: var(--craft-shadow-sheet, 0 16px 48px rgb(24 47 53 / .065)); }
+.craft-trash dialog { box-sizing: border-box; width: min(480px, calc(100% - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; padding: clamp(24px, 4vw, 36px); border: 0; color: var(--craft-ink, #182f35); }
 .craft-trash dialog h2 { margin-block: 0 12px; font: 600 1.5rem/1.4 var(--font-ui); }
+.craft-trash dialog::backdrop { background: rgb(24 47 53 / .3); }
+
+/* One paper elevation for existing working sheets; lists remain open and ruled. */
+.craft-account .account-research,
+.craft-account .settings-grid > section:last-child,
+.craft-journal-public [data-journal-masthead],
+.craft-journal-form #journal-application-form,
+.craft-editorial .editorial-layout > form,
+.craft-trash dialog { background: var(--craft-surface, #fff); border-radius: 12px; box-shadow: var(--craft-shadow-sheet); }
+
+/* The API contents rail and examples keep the same continuous reading surface. */
+.craft-developers > article > div > nav { gap: 6px; }
+.craft-developers > article > div > nav a { transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
+.craft-developers section[id] { scroll-margin-top: 40px; }
+.craft-developers pre code { line-height: 1.8; }
+.craft-developers :is(pre, [role='region']) { scrollbar-width: thin; scrollbar-color: #8daeb1 transparent; }
+.craft-developers :is(pre, [role='region']):focus-visible { outline: 2px solid var(--craft-accent, #125d66); outline-offset: 3px; }
+.craft-developers :is(th, td) { padding: 16px 18px; font-variant-numeric: tabular-nums; }
 
 .craft-account .account-shortcuts a:first-child, .craft-journal .journal-primary-link { transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)), transform var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1)); }
-.craft-account .account-shortcuts a:first-child:active, .craft-journal .journal-primary-link:active { transform: translateY(1px); }
+.craft-account .account-shortcuts a:first-child:active, .craft-journal .journal-primary-link:active { transform: translateY(1px); box-shadow: none; }
 
 @media (hover: hover) and (pointer: fine) {
   :is(.craft-account, .craft-journal, .craft-editorial) button.border:not(:disabled):not(.bg-accent-primary-strong):hover { background-color: var(--craft-tint, #edf4f3); }
-  :is(.craft-account, .craft-journal, .craft-editorial) :is(input, textarea, select):not(:disabled):not([readonly]):not([aria-invalid='true']):hover { border-color: #8daeb1; }
+  :is(.craft-account, .craft-journal, .craft-editorial, .craft-developers) :is(input, textarea, select):not(:disabled):not([readonly]):not([aria-invalid='true']):not(:focus-visible):hover { border-color: #8daeb1; }
   .craft-account :is(.account-shortcuts a, .project-row):hover { background: var(--craft-tint, #edf4f3); }
   .craft-account .account-shortcuts a:first-child:hover,
   .craft-journal .journal-primary-link:hover,
@@ -311,10 +337,12 @@
   .craft-journal-public [data-journal-paper] h3 a:hover { color: var(--craft-accent, #125d66); text-decoration: underline; }
   .craft-journal-manage .journal-managed-list a:hover { background: var(--craft-tint, #edf4f3); }
   .craft-journal-manage [data-journal-workbench] > header nav a:hover { background: var(--craft-tint, #edf4f3); }
+  .craft-journal-manage summary:hover { color: var(--craft-accent, #125d66); }
   .craft-editorial ol li button:not(:disabled):hover { background: var(--craft-tint, #edf4f3); border-color: #adcbcb; }
   .craft-collection [data-editorial-collection] ol > li > a:hover { background: var(--craft-tint, #edf4f3); }
   .craft-trash .trash-entry-actions > button:first-of-type:not(:disabled):hover { background: #d9eae8; }
   .craft-trash .trash-entry-actions > button:nth-of-type(2):not(:disabled):hover { background: #fbf0f0; color: #9b3038; }
+  .craft-developers > article > div > nav a:hover { background: var(--craft-tint, #edf4f3); }
 }
 
 @media (max-width: 1100px) {
@@ -346,11 +374,15 @@
   .craft-journal-public > :is(section, article), .craft-journal-form > :is(section, div) { padding-top: 12px; }
   .craft-account .account-heading h1, :is(.craft-journal-manage, .craft-journal-form, .craft-trash, .craft-editorial) h1 { font-size: 1.875rem; }
   .craft-journal-manage [data-journal-stats] { gap: 16px 24px; }
+  .craft-trash li { flex-wrap: wrap; }
+  .craft-trash li > div:first-child { flex-basis: 100%; }
+  .craft-trash .trash-entry-actions { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) :is(a, button, summary, input, textarea, select) { transition: none; }
   .craft-account .account-shortcuts a:first-child, .craft-journal .journal-primary-link { transition: none; }
+  .craft-account .project-row, .craft-journal-public [data-journal-directory] [data-journal-entry] { transition: none; }
   :is(.craft-account, .craft-journal, .craft-trash, .craft-editorial, .craft-collection, .craft-developers) button:not(:disabled):active,
   .craft-account .account-shortcuts a:first-child:active, .craft-journal .journal-primary-link:active { transform: none; }
 }

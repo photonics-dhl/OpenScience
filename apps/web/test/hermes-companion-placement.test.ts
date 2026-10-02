@@ -159,4 +159,30 @@ describe('Hermes companion placement', () => {
       viewport: rect(0, 0, 390, 844),
     })).toBeNull();
   });
+
+  it.each([
+    { viewport: rect(0, 0, 1440, 900), hat: { x: 1190, y: 500 } },
+    { viewport: rect(0, 0, 390, 844), hat: { x: 110, y: 430 } },
+    { viewport: rect(0, 180, 390, 320), hat: { x: 110, y: 360 } },
+  ])('ends the short tail at the hat within the visible viewport', ({ viewport, hat }) => {
+    const placement = resolveHermesBubblePlacement({
+      actor: rect(hat.x - 70, hat.y - 40, 328, 328), hat,
+      bubble: { height: 114, width: 224 }, obstacles: [], viewport,
+    });
+    expect(placement).not.toBeNull();
+    const { bounds, tailRatio } = placement!;
+    expect(bounds.left + 224 * tailRatio!).toBeCloseTo(hat.x);
+    expect(bounds.top + 114 * 112 / 114).toBeCloseTo(hat.y);
+    expect(bounds.left).toBeGreaterThanOrEqual(viewport.left);
+    expect(bounds.right).toBeLessThanOrEqual(viewport.right);
+    expect(bounds.top).toBeGreaterThanOrEqual(viewport.top);
+    expect(bounds.bottom).toBeLessThanOrEqual(viewport.bottom);
+  });
+
+  it('suppresses decorative speech when it would cover reading or cross the hat from below', () => {
+    const input = { actor: rect(100, 180, 328, 328), hat: { x: 198, y: 224 },
+      bubble: { height: 114, width: 224 }, viewport: rect(0, 0, 390, 844) };
+    expect(resolveHermesBubblePlacement({ ...input, obstacles: [rect(0, 80, 390, 120)] })).toBeNull();
+    expect(resolveHermesBubblePlacement({ ...input, hat: { x: 198, y: 80 }, obstacles: [] })).toBeNull();
+  });
 });

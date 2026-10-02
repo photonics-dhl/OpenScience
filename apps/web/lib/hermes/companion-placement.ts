@@ -14,6 +14,7 @@ export type HermesBubblePlacement = {
   horizontal: 'center' | 'left' | 'right';
   vertical: 'above' | 'below';
   bounds: RectLike;
+  tailRatio?: number;
 };
 
 export type HermesMotionEnvelope = { bottom: number; left: number; right: number; top: number };
@@ -116,10 +117,26 @@ export function resolveHermesSettledDock(input: {
 
 export function resolveHermesBubblePlacement(input: {
   actor: RectLike;
+  hat?: Point;
   bubble: { height: number; width: number };
   obstacles: RectLike[];
   viewport: RectLike;
 }): HermesBubblePlacement | null {
+  if (input.hat) {
+    // Speech ends at the hat's upper-left edge. Keep the whole short tail in
+    // these bounds, rather than selecting an unrelated corner of the actor.
+    const width = input.bubble.width;
+    const height = input.bubble.height;
+    if (width > input.viewport.right - input.viewport.left || height <= 0) return null;
+    const left = clamp(input.hat.x - width * .8, input.viewport.left, input.viewport.right - width);
+    const top = input.hat.y - height * 112 / 114;
+    const bounds = { left, top, right: left + width, bottom: top + height };
+    const tailX = input.hat.x - left;
+    if (top < input.viewport.top || bounds.bottom > input.viewport.bottom
+      || tailX < 24 || tailX > width - 24
+      || input.obstacles.some((obstacle) => overlaps(bounds, obstacle))) return null;
+    return { bounds, horizontal: 'left', vertical: 'above', tailRatio: tailX / width };
+  }
   const actorX = (input.actor.left + input.actor.right) / 2;
   const actorY = (input.actor.top + input.actor.bottom) / 2;
   const horizontal = actorX < (input.viewport.left + input.viewport.right) / 2

@@ -173,7 +173,7 @@ try {
     };
   });
   assert.equal(await performanceBubble.getAttribute('data-hermes-bubble-material'), 'warm-paper');
-  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-origin'), 'mouth');
+  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-origin'), 'hat-upper-left');
   assert.equal(await performanceBubble.getAttribute('data-hermes-speech-copy'), 'single');
   assert.equal(bubbleMaterial.backdropFilter, 'none');
   assert.equal(bubbleMaterial.backgroundImage, 'none');

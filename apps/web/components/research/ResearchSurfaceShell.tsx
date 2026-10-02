@@ -46,6 +46,7 @@ export function ResearchSurfaceShell({
   return (
     <WorkspaceShell
       className={["research-reading-surface", className].filter(Boolean).join(" ")}
+      data-research-surface={active}
       activeMobilePlane="main"
       leftRail={
         <div>
@@ -95,6 +96,8 @@ export function ResearchSurfaceStateShell({ active, detail, kind, objectId, titl
 }) {
   const t = useTranslations('productSurfaces');
   return <WorkspaceShell
+    className="research-reading-surface"
+    data-research-surface={active}
     leftRail={<div><p data-reading-role="caption" className="text-os-muted-paper">{t('objectMap')}</p><p className="mt-4 break-all font-data text-xs text-os-muted-paper">{objectId}</p></div>}
     navigationLabel={t('navigation')}
     objectHeader={<div className="min-w-0"><span data-reading-role="caption" className="text-os-muted-paper">Research Object</span><strong className="ml-3 truncate text-sm text-os-ink">{title}</strong></div>}

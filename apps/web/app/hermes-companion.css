@@ -11,27 +11,50 @@
   inset: var(--hermes-actor-inset);
 }
 
-[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-menu-feedback {
-  --hermes-feedback-width: min(13rem, calc(var(--hermes-stage-size) * .62));
-  /* The mouth lies 34% down the inset actor; .32 accounts for both insets. */
-  top: calc(34% + var(--hermes-actor-inset) * .32 - var(--hermes-feedback-height) * 186 / 188);
-  right: auto;
-  bottom: auto;
-  left: calc(50% - var(--hermes-feedback-width) * 180 / 224);
-  width: var(--hermes-feedback-width);
-  height: var(--hermes-feedback-height);
+.hermes-workspace-stage :is(.hermes-menu-feedback, .hermes-performance-bubble) {
+  width: min(14rem, calc(var(--hermes-stage-size) * .72));
+  max-width: calc(100vw - 1.5rem);
+  min-height: 6.25rem;
+  height: auto;
+  margin: 0;
+  border: 0;
   padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--os-ink);
+  font-size: .9375rem;
+  line-height: 1.5;
+  pointer-events: none;
+  transform: none;
+  animation: none;
 }
 
-[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-menu-feedback-copy {
-  top: 1.2rem;
-  right: .9rem;
-  left: .9rem;
+.hermes-workspace-stage .hermes-menu-feedback-copy {
+  position: relative;
+  inset: auto;
+  display: block;
   width: auto;
+  margin: 0;
+  padding: 1.125rem 1.375rem 2rem;
+  text-align: center;
+  text-wrap: balance;
 }
 
-[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-visible-mouth-anchor {
-  top: 34%;
+.hermes-workspace-stage .hermes-menu-feedback-tip {
+  top: calc(112 / 114 * 100%);
+}
+
+.hermes-workspace-stage .hermes-menu-feedback-silhouette {
+  filter: drop-shadow(0 3px 4px rgb(24 47 53 / .1));
+}
+
+.hermes-workspace-stage .hermes-performance-bubble::after { content: none; }
+
+.hermes-workspace-stage [data-hermes-speech-visible='false'] { visibility: hidden; }
+
+[data-hermes-global-companion='true'] .hermes-visible-hat-anchor {
+  top: 13%;
+  left: 30%;
 }
 
 [data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-visible-crown-anchor {
