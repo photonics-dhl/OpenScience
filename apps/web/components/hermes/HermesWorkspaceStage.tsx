@@ -361,7 +361,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     phase: 'idle', routeStart: null, settledSource: null, timelineCount: 0,
   });
   const hasUsableAnchor = anchorRect !== null && hermesPresentationCanDock(presentation);
-  const stageSize = resolveHermesFloatingSize(viewportSize.width);
+  const stageSize = resolveHermesFloatingSize(viewportSize.width, viewportSize.height);
   const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });
   const visualAction = menuFeedback?.action ?? autonomousAction;
   const guidePlanCountRef = useRef(0);
@@ -1353,16 +1353,19 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const bubbleVertical = guideTarget
     ? guidePlanState.placement?.vertical ?? fallbackBubbleVertical
     : bubblePlacement?.vertical ?? fallbackBubbleVertical;
-  const style: React.CSSProperties = anchored ? {
+  const sizeStyle = {
     height: stageSize,
-    transition: settlingNewDock ? 'none' : undefined,
     width: stageSize,
+    '--hermes-stage-size': `${stageSize}px`,
+  };
+  const style: React.CSSProperties = anchored ? {
+    ...sizeStyle,
+    transition: settlingNewDock ? 'none' : undefined,
   } : {
-    height: stageSize,
+    ...sizeStyle,
     left: stageCenterX - stageSize / 2,
     top: stageCenterY - stageSize / 2,
     transition: settlingNewDock ? 'none' : undefined,
-    width: stageSize,
   };
   const visualActionStartedAtMs = menuFeedback?.startedAtMs ?? behavior.startedAtMs;
   const ageMs = Math.max(0, Date.now() - visualActionStartedAtMs);

@@ -3,8 +3,39 @@
   visibility: hidden;
 }
 
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] {
+  --hermes-actor-inset: 1rem;
+}
+
 [data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-companion-actor {
-  inset: 1rem;
+  inset: var(--hermes-actor-inset);
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-menu-feedback {
+  --hermes-feedback-width: min(13rem, calc(var(--hermes-stage-size) * .62));
+  /* The mouth lies 34% down the inset actor; .32 accounts for both insets. */
+  top: calc(34% + var(--hermes-actor-inset) * .32 - var(--hermes-feedback-height) * 186 / 188);
+  right: auto;
+  bottom: auto;
+  left: calc(50% - var(--hermes-feedback-width) * 180 / 224);
+  width: var(--hermes-feedback-width);
+  height: var(--hermes-feedback-height);
+  padding: 0;
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-menu-feedback-copy {
+  top: 1.2rem;
+  right: .9rem;
+  left: .9rem;
+  width: auto;
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-visible-mouth-anchor {
+  top: 34%;
+}
+
+[data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-visible-crown-anchor {
+  top: 13%;
 }
 
 [data-hermes-global-companion='true'] .hermes-pet-menu-button {
@@ -50,10 +81,6 @@
   outline-offset: 3px;
 }
 
-@media (max-width: 640px) {
-  .hermes-workspace-stage-loading { width: 10.5rem; height: 10.5rem; }
-}
-
 [data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-motion-enable {
   top: auto;
   right: 3.25rem;
@@ -70,8 +97,8 @@
 }
 
 @media (max-width: 640px) {
-  [data-hermes-global-companion='true'][data-hermes-placement='detached']:not([data-hermes-guide-target]) .hermes-companion-actor {
-    inset: 1.75rem;
+  [data-hermes-global-companion='true'][data-hermes-placement='detached']:not([data-hermes-guide-target]) {
+    --hermes-actor-inset: 1.75rem;
   }
 }
 

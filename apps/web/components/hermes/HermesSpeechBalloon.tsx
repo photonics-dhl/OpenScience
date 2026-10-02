@@ -27,10 +27,10 @@ export function HermesSpeechBalloon({ action, children, compact }: HermesSpeechB
         className="hermes-menu-feedback-silhouette"
         data-hermes-speech-silhouette="true"
         preserveAspectRatio="none"
-        viewBox="0 0 224 148"
+        viewBox="0 0 224 188"
       >
         <path
-          d="M18 5 C61 -2 145 0 195 13 C213 18 222 32 221 49 C220 67 206 82 181 88 C174 90 168 91 162 92 C163 108 169 132 180 146 C168 136 158 113 155 96 C108 99 59 95 28 83 C8 75 0 59 3 42 C5 25 9 13 18 5 Z"
+          d="M18 5 C61 -2 145 0 195 13 C213 18 222 32 221 49 C220 67 206 82 181 88 C174 90 168 91 162 92 C163 120 173 163 180 186 C164 165 157 121 155 96 C108 99 59 95 28 83 C8 75 0 59 3 42 C5 25 9 13 18 5 Z"
           data-hermes-speech-contour="single"
           data-hermes-speech-tail-profile="slender"
           vectorEffect="non-scaling-stroke"

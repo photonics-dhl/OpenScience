@@ -343,7 +343,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       if (actorTopAfterLayout === undefined) return;
       if (compactMenu && anchored) {
         // The compact sheet reserves document flow below the long-press point.
-        // Counter-scroll that reflow so the 200 px actor stays under the finger.
+        // Counter-scroll that reflow so the actor stays under the finger.
         window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
         alignMenuToCrown();
         menuFrame = window.requestAnimationFrame(alignMenuToCrown);

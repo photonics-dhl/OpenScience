@@ -1034,7 +1034,7 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
     const tip = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const mouthPoint = { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
     const tipPoint = { x: tip.left + tip.width / 2, y: tip.top + tip.height / 2 };
-    const bodyBottom = feedback.top + feedback.height * (92 / 148);
+    const bodyBottom = feedback.top + feedback.height * (99 / 188);
     return {
       bodyClearance: crown.top + crown.height / 2 - bodyBottom,
       distance: Math.hypot(tipPoint.x - mouthPoint.x, tipPoint.y - mouthPoint.y),
@@ -1059,7 +1059,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(presence).toHaveCount(0);
   await expect(stage).toHaveAttribute('data-hermes-size-mode', 'automatic');
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
 
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
@@ -1093,7 +1093,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const overlaps = (first: DOMRect, second: DOMRect) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
     return {
       actorVisible: actor.width > 0 && actor.height > 0,
-      bodyClearance: crown.top + crown.height / 2 - (feedback.top + feedback.height * (92 / 148)),
+      bodyClearance: crown.top + crown.height / 2 - (feedback.top + feedback.height * (99 / 188)),
       contained: feedback.left >= margin.left && feedback.right <= margin.right && feedback.top >= margin.top && feedback.bottom <= margin.bottom,
       excess: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
