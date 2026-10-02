@@ -11,7 +11,7 @@ async function setup(page: Page, loseResponse = false) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === 'POST') writes.push({ path, key: request.headers()['idempotency-key'], body: path.endsWith('/ingest') ? null : request.postDataJSON() });
-    if (path === '/api/auth/me') return route.fulfill({ json: { userId: 'owner', displayName: 'Researcher', status: 'email_verified', level: 'free' } });
+    if (path === '/api/auth/me') return route.fulfill({ json: { userId: 'owner', email: 'author@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' } });
     if (path === '/api/auth/csrf') return route.fulfill({ json: { csrfToken: 'fixture-token', token: 'fixture-token' } });
     if (path === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal research', role: 'owner' }] } });
     if (path === '/api/research-objects') return route.fulfill({ json: request.method() === 'POST' ? { researchObject: ro } : { researchObjects: [ro] } });
@@ -31,8 +31,8 @@ async function setup(page: Page, loseResponse = false) {
     return route.fulfill({ json: { tasks: [], claims: [], evidence: [], user: null } });
   });
   await page.goto('/dashboard');
-  await page.getByRole('link', { name: '新建研究', exact: true }).click();
-  await expect(page).toHaveURL(/research-objects\/new$/);
+  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
+  await expect(page).toHaveURL(/research-objects\/new\?mode=import$/);
   return { writes };
 }
 

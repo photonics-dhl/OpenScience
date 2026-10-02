@@ -24,7 +24,7 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
   await page.route('**/api/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    if (path === '/api/auth/me') return json({ userId: 'author', platformRole: 'user', status: 'email_verified', level: 'free' });
+    if (path === '/api/auth/me') return json({ userId: 'author', email: 'author@example.invalid', displayName: 'Researcher', platformRole: 'user', status: 'email_verified', level: 'free' });
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/workspaces') return json({ workspaces: [{ id: 'workspace', name: 'Research', type: 'team', role: 'author', status: 'active', createdAt: run.createdAt }] });
     if (path === `/api/research-objects/${ro}`) return json({ researchObject: { id: ro, workspaceId: 'workspace', title: 'Saved source review', version: 1, status: 'draft', visibility: 'private', sdf: { core: {}, nodes: [] } } });
@@ -103,7 +103,7 @@ test(`parser recovery preserves only uncertain submitted requests: ${outcome}`, 
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path === '/api/auth/me') {
       if (holdIdentity) { identityPending = true; await identityReleased; }
-      return json({ userId: 'author', platformRole: 'user', status: 'email_verified', level: 'free' });
+      return json({ userId: 'author', email: 'author@example.invalid', displayName: 'Researcher', platformRole: 'user', status: 'email_verified', level: 'free' });
     }
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/workspaces') return json({ workspaces: [{ id: 'workspace', name: 'Research', type: 'team', role: 'author', status: 'active', createdAt: run.createdAt }] });

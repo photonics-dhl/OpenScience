@@ -147,7 +147,7 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
 
 test('saved PNG review-only recovers a failed render without generating or approving again', async ({ page }) => {
   await fixtures(page);
-  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', email: 'presentation@example.invalid', displayName: 'Researcher', level: 'free', platformRole: 'platform_admin', status: 'email_verified' }));
   const saved = { ...asset, id: 'saved-png', kind: 'image', canTransition: true, canApprove: false,
     sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
   let reads = 0;
@@ -192,7 +192,7 @@ test('saved PNG review-only hides recovered originals and accepted images, prese
     sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
   const copy = { ...original, id: '2943e5cc-75c5-4f1e-a1a8-c78a3be6ec1f' };
   const accepted = { ...original, id: '2cc5003f-e5c4-40c7-8c5a-43de202aec4f', contentHash: 'b'.repeat(64), canApprove: true };
-  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', email: 'presentation@example.invalid', displayName: 'Researcher', level: 'free', platformRole: 'platform_admin', status: 'email_verified' }));
   await page.route('**/versions/version-2/presentation-assets', route => json(route, { assets: [original, copy, accepted] }));
   await page.route('**/presentation-tasks/*', route => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
@@ -215,7 +215,7 @@ test('saved PNG review-only requires platform admin as well as a writable versio
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2`);
   await expect(page.locator('[data-media-asset-actions="saved-png"]')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review saved image only', exact: true })).toHaveCount(0);
-  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', email: 'presentation@example.invalid', displayName: 'Researcher', level: 'free', platformRole: 'platform_admin', status: 'email_verified' }));
   await page.route(`**/api/research-objects/${ro.id}/versions`, route => json(route, { versions: versions.map(version => ({ ...version, status: 'published' })) }));
   await page.reload();
   await expect(page.locator('[data-media-asset-actions="saved-png"]')).toBeVisible();
@@ -224,7 +224,7 @@ test('saved PNG review-only requires platform admin as well as a writable versio
 
 test('saved PNG review-only isolates A-B-A requests and reuses the key after response loss', async ({ page }) => {
   await fixtures(page, { versionStates: versions.map(version => ({ ...version, status: 'draft' })) });
-  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', email: 'presentation@example.invalid', displayName: 'Researcher', level: 'free', platformRole: 'platform_admin', status: 'email_verified' }));
   await page.route('**/versions/*/presentation-assets', route => {
     const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
     return json(route, { assets: [{ ...asset, id: `saved-${versionId}`, versionId, kind: 'image', canTransition: true, canApprove: false,
@@ -275,7 +275,7 @@ test('saved PNG review-only isolates A-B-A requests and reuses the key after res
 
 test('saved PNG review-only recovers the same receipt after a committed copy loses its response', async ({ page }) => {
   await fixtures(page);
-  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', platformRole: 'platform_admin', status: 'email_verified' }));
+  await page.route('**/api/auth/me', route => json(route, { userId: 'user-presentation', email: 'presentation@example.invalid', displayName: 'Researcher', level: 'free', platformRole: 'platform_admin', status: 'email_verified' }));
   const original = { ...asset, id: 'original-png', kind: 'image', canTransition: true, canApprove: false,
     sceneImage: { storyboardAssetId: 'plan', sceneIndex: 0 } };
   const copy = { ...original, id: 'persisted-review-copy' };

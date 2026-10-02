@@ -39,7 +39,7 @@ async function setup(page: Page, loseResponse = false, staleVersion = false, opt
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (path === '/api/auth/me') return json({ userId: actor, platformRole: options.platformRole ?? 'user', status: 'email_verified', level: 'free' });
+    if (path === '/api/auth/me') return json({ userId: actor, email: 'author@example.invalid', displayName: 'Researcher', platformRole: options.platformRole ?? 'user', status: 'email_verified', level: 'free' });
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/workspaces') return json({ workspaces: [{ id: 'workspace', name: 'Research', type: 'team', role: options.role ?? 'author', status: 'active', createdAt: shared.createdAt }] });
     if (path === `/api/research-objects/${ids.ro}`) return json({ researchObject: { id: ids.ro, workspaceId: 'workspace',
