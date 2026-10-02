@@ -31,7 +31,7 @@ export const NATIVE_PAPER_DRAFT_TOOL = { name: 'paper_draft',
   } },
 };
 export const NATIVE_PAPER_REVIEW_TOOL = { name: 'paper_review',
-  description: 'Review the exact saved draftToolCallId. Explicitly decide every field: accepted uses only verdict and selects its unchanged draft text; revised/blocked supply the full field and issues. Choose Claims unchanged or provide complete replacements. This checks structure, not science or approval. Finish by copying reviewToolCallId from this successful tool response; do not select draftToolCallId or rewrite the full body.',
+  description: 'Optional structure feedback for your scientific review of the exact saved draftToolCallId. A complete review may instead be returned directly as your final JSON with draftToolCallId, fields, needsMoreEvidence and claimSuggestions; this tool is not required. Explicitly decide every field: accepted uses only verdict and selects its unchanged draft text; revised/blocked supply the full field and issues. Choose Claims unchanged or provide complete replacements. This checks structure, not science or approval. If you use this tool successfully, finish by copying its reviewToolCallId without rewriting the body.',
   parameters: { type: 'object', additionalProperties: false, required: ['draftToolCallId', 'fields', 'needsMoreEvidence', 'claimSuggestions'], properties: {
     draftToolCallId: { type: 'string' },
     fields: { type: 'object', additionalProperties: false, required: SDF_CORE_FIELDS, properties: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field,
@@ -136,7 +136,7 @@ const INSTRUCTIONS = [
   'paper_search 只定位，引用前用 paper_read 读取完整段落；几何、坐标方向、量纲、时间关系、阈值位置及图形结论用 paper_view 查看实际原页。用原页区分文献/式编号与数学指数，核对同一量在正文、图注和附录中的表达；原文不一致时标明冲突，不自行选式或拼式。解析/工具/额度失败不是论文没有报告。区分仿真、算例、实验与推测；保留核心关系成立的条件、量的空间位置与比较范围。',
   '拟保留跨算例极值、必要性、因果或条件移用时，实际通过skill_view读取scientific-critical-thinking的upstream/critical-thinking-method.md及适用的upstream/references/logical_fallacies.md或upstream/references/scientific_method.md，按原方法固定量、对象与比较范围，再回查支持与相反来源。方法用于核对保留主张，不替代原文或扩展为整库阅读。',
   '用paper_draft保存简洁六维和解释主线所需的主张，不按六字段凑主张数量。草稿后针对会改变核心解释的机制、算例、条件及平均或叠加操作实际回查原文与原页，再给review决定；格式修复沿原稿定位，科学修订由实际来源驱动。补证围绕保留的主张：未声称完整复现或工程可实现时，未取得代码、网格等资料只限定相应披露层级；仍影响机制、数量、条件或代表结果的缺口必须处理。',
-  'paper_draft的problem、method、results、insight、limitations、reproducibility全部放在fields内。格式纠错按反馈定位修复现有内容；新增或重写科学断言须来自实际回读。paper_review绑定已保存的draftToolCallId，六字段都明确给verdict：accepted只写verdict，不重复原摘要或来源；revised提供实际修改后的完整summary、sourcePassageIds与有来源的issues；blocked沿空摘要/来源及问题或补证规则。claimSuggestions明确选unchanged或给完整替换数组，不能默认接受。最终只返回{"reviewToolCallId":"成功paper_review返回的reviewToolCallId值"}，逐字复制，勿使用draftToolCallId；平台从真实私有历史保存该稿，不再转写全文。',
+  'paper_draft的problem、method、results、insight、limitations、reproducibility全部放在fields内。格式纠错按反馈定位修复现有内容；新增或重写科学断言须来自实际回读。完成科学复核后直接返回完整JSON终稿，根对象只含draftToolCallId、fields、needsMoreEvidence、claimSuggestions。draftToolCallId逐字选择实际已保存的当前草稿；六字段都明确给verdict：accepted只写verdict，不重复原摘要或来源；revised提供实际修改后的完整summary、sourcePassageIds与有来源的issues；blocked沿空摘要/来源及问题或补证规则。claimSuggestions明确选unchanged或给完整替换数组，不能默认接受。不要返回未完成的JSON或仅draftToolCallId；平台按这些明确决定从真实私有历史还原内容，并应用相同的科学和来源检查。paper_review仅在需要结构反馈时选用，不是必须调用的额外审阅步骤；若已成功调用且稿件未再改变，也可只返回{"reviewToolCallId":"该成功工具返回的真实值"}。',
   'issues每项只含code、problem、sourcePassageIds；code限RELATION_MISMATCH、EVIDENCE_TYPE_OVERCLAIM、FIELD_MISPLACED、QUALIFIER_LOSS、PHYSICS_MISINTERPRETATION。needsMoreEvidence沿paper_draft同一结构。替换的claimSuggestions数组沿draftClaims结构；核心主张不设parentClientKey，其他项须引用本批真实父项。来源只取实际完整读过的P编号，属于相应字段来源，至少一条supports；P编号只放来源数组，不写在用户摘要中。',
 ].join('\n');
 

@@ -40,7 +40,7 @@ export const SCIENTIFIC_CRITICAL_THINKING_SKILL = {
   nativeSourceReviewInstructions: [
     '对已保存的 paper_draft 执行 scientific-critical-thinking 的 Appraisal Workflow，保持既定研究主线。候选内容和其来源选择都需要核验；它们不是审核结论。',
     '从 draft_ready.reviewContext 的字段/主张映射与完整原段落开始逐条比较。该上下文只含此稿已选来源，不能证明已覆盖相邻定义、反例或必要的补充材料；发现对象、比较、条件或推断有疑问时，用 paper_search、paper_read、paper_view 找到并实际读取有关原文或原页，再作判断。',
-    '给 paper_review 的 accepted/revised/blocked 和 Claim 决定须来自上述比较。实质差异用现有 issues 记录候选位置、原文依据、影响与必要修订；格式纠错沿原稿定位。没有科学问题可保留，不能因来源数组存在或工具通过就默认全部 accepted/unchanged。只提交工具规定结构，分析过程留在内部，不写进用户正文。',
+    '审阅终稿中的 accepted/revised/blocked 和 Claim 决定须来自上述比较。实质差异用现有 issues 记录候选位置、原文依据、影响与必要修订；格式纠错沿原稿定位。没有科学问题可保留，不能因来源数组存在或工具通过就默认全部 accepted/unchanged。按任务规定的同一审阅结构直接返回完整终稿；paper_review仅供需要时取得结构反馈，并非额外科学审阅者。分析过程留在内部，不写进用户正文。',
   ].join('\n'),
   instructions: [
     scientificReconstructionRule,

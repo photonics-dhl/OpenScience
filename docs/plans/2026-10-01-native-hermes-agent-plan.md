@@ -113,3 +113,9 @@ v8实际paid回复stop_reason=tool_use但只有thinking/text，没有tool_use块
 v9的两页图片编码被已安装Native rough estimator当普通文字，887765估量超过512k上下文的50%阈值；去图片编码仅64579。短历史控制没有进入preflight，实际26消息大图离线重现compression改变原prefix而被Worker拒收。薄适配器沿已有_interruptible_api_call与_compress_context虚方法，仅对同一次缺工具回复、完整历史加固定hint且实际cached system相同的首次API前续行，用供应商明确三个合法usage字段之和加末assistant（含opaque）/hint的UTF8序列化字节作保守增量估量；不称精确token上界。已知总数通过private SDK extra传递，原计费Usage不变；缺失/非法/历史变更或真正超阈值走原compressor，首次API及finally清暂态。原压缩器、阈值、paidCP和权限/预算保持，不新建审批或恢复grant。
 
 元数据依据为[MiniMax官方缓存说明](https://platform.minimax.io/docs/api-reference/text-prompt-caching)。新增native tools/adapter边界回归，tracked offline_host新增missing-tool-after-image及repeated-missing-tool-after-image，保留真实像素/长历史/崩溃重放。实际安装Agent离线已RED→GREEN、零真实Provider；科学未通过，v9保留终态。运行版本、最终审查及真实续作只见CURRENT。
+
+## 直接审阅终稿与可选格式反馈（10-03）
+
+v10在真实draft_ready后连续两次tool_use但无结构化调用，只留下未闭合draftToolCallId JSON；不能将其当作科学审阅、补造字段或增加重试。既有finishNativePaperReview已可从真实paid历史还原最新草稿，并对直接完整紧凑终稿执行同一expandReview/完整科学、来源和Claims物化。候选只把新任务INSTRUCTIONS、review工具说明和nativeSourceReviewInstructions对齐现有入口，明确六字段决定、Claims选择及精确草稿ID；paper_review成为可选结构反馈，实际成功时仍支持原reviewToolCallId终稿。旧paid系统prompt和工具定义继续原样恢复，Host/Store/权限/预算/来源守卫不改。
+
+新增真保存notes无review调用的终稿测试核对实际修订、科学字段与原文证据保真，反例覆盖截断、无/失败/被取代草稿、缺少Claims决定、外来来源和accepted中夹带修改。该检查证明既有通路可用，不是供应商异常的red-green或科学正确性证据；工具schema导致截断仍未经证实。最终工程/真实验收状态见CURRENT。

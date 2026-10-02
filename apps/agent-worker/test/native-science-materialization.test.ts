@@ -198,6 +198,43 @@ describe('actual native Agent scientific materializer', () => {
   });
   const compactReview = () => ({ draftToolCallId: 'draft-a', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
     needsMoreEvidence: [], claimSuggestions: 'unchanged' });
+  it('consumes a complete compact final review directly from saved notes without a review tool round trip', () => {
+    const notes = SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, type: 'function' as const,
+      function: { name: 'paper_field', arguments: JSON.stringify({ field, ...draft().fields[field] }) } }));
+    notes.push({ id: 'claim-core', type: 'function', function: { name: 'paper_claim', arguments: JSON.stringify(draft().draftClaims[0]) } });
+    const messages: ChatMessage[] = [{ role: 'assistant', content: '', toolCalls: notes },
+      ...notes.map(call => ({ role: 'tool' as const, toolCallId: call.id,
+        content: JSON.stringify({ status: call.function.name === 'paper_field' ? 'field_saved' : 'claim_saved' }) })),
+      { role: 'assistant', content: '', toolCalls: [{ id: 'draft-a', type: 'function',
+        function: { name: 'paper_draft', arguments: JSON.stringify(selectedNotes()) } }] },
+      { role: 'tool', toolCallId: 'draft-a', content: JSON.stringify({ status: 'draft_ready' }) }];
+    const final = { ...compactReview(), fields: { ...compactReview().fields, limitations: {
+      verdict: 'revised', summary: 'This numerical prediction applies to the stated geometry.', sourcePassageIds: ['P00001'],
+      issues: [{ code: 'QUALIFIER_LOSS', problem: 'Keep the numerical model and geometry condition explicit.', sourcePassageIds: ['P00001'] }],
+    } } };
+    const result = finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, JSON.stringify(final));
+    expect(result.core.method).toBe(source);
+    expect(result.core.limitations).toBe(final.fields.limitations.summary);
+    expect(result.nativeScientificFields?.limitations.verdict).toBe('revised');
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+    expect(result.evidenceSegments?.limitations[0]?.quote).toBe(source);
+  });
+  it.each(['truncated', 'no_draft', 'failed_draft', 'stale_draft', 'missing_decision', 'foreign_claim', 'changed_accepted'])(
+    'keeps source and review requirements for a direct compact final with %s', change => {
+    const messages = reviewedHistory().slice(0, 2);
+    const value = compactReview() as { draftToolCallId: string; fields: Record<string, Record<string, unknown>>;
+      needsMoreEvidence: unknown[]; claimSuggestions?: unknown };
+    if (change === 'no_draft') messages.length = 0;
+    if (change === 'failed_draft') messages[1]!.content = JSON.stringify({ status: 'invalid_draft' });
+    if (change === 'stale_draft') messages.push({ role: 'assistant', content: '', toolCalls: [{ id: 'draft-b', type: 'function',
+      function: { name: 'paper_draft', arguments: JSON.stringify(draft()) } }] },
+    { role: 'tool', toolCallId: 'draft-b', content: JSON.stringify({ status: 'draft_ready' }) });
+    if (change === 'missing_decision') delete value.claimSuggestions;
+    if (change === 'foreign_claim') { const claims = draft().draftClaims; claims[0]!.sourceBindings[0]!.sourcePassageId = 'P99999'; value.claimSuggestions = claims; }
+    if (change === 'changed_accepted') value.fields.method!.summary = 'An invented replacement';
+    const final = change === 'truncated' ? '{"draftToolCallId":"draft-a"' : JSON.stringify(value);
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, final)).toThrow();
+  });
   it('returns the actual successful review ID for final selection and keeps the draft ID unusable as a review', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001']); worker.draft(draft(), 1, 'draft-a');
     const receipt = worker.review(compactReview(), 'review-a');
