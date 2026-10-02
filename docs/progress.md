@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-02 UI：Landing移除浮动Hermes，其余页默认360px/帽沿短尾，继续细化各页阅读与控件质感并修复390px版本控件溢出；132定向检查、独立High和精确CI通过，已发布并完成HTTPS/容器短时复查，公司Word9页21项全页渲染核对。真实逐页画面与角色交互仍受浏览器权限核验故障阻塞；版本/证据/下一步只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 10-02 UI：既有360px/帽沿短尾、Landing边界与窄屏修正已发布，公司Word已渲染交付；用户仍未认可整站质感。已安装官方Product Design，结合四组参考与原Figma做三张独立概念；GSAP/Canvas候选已核官方源与兼容路径，待选定视觉目标再实施。真实逐页画面与角色交互仍受浏览器权限核验故障阻塞；版本/证据/下一步只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。
 
