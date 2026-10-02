@@ -2185,6 +2185,22 @@ function scientificCompositionGuard(value: unknown, allowedIds: ReadonlySet<stri
     && areSourceCompositionDraftClaimsValid(root.draftClaims, [...allowedIds]);
 }
 
+function scientificCompositionFieldIssue(field: string, item: unknown, allowedIds: ReadonlySet<string>): { diagnostic: string; feedback: string } | undefined {
+  const fail = (suffix: string, feedback: string) => ({ diagnostic: field + '_' + suffix, feedback });
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return fail('type', `fields.${field}必须为对象。`);
+  const candidate = item as Record<string, unknown>;
+  if (Object.keys(candidate).sort().join(',') !== 'sourcePassageIds,summary') return fail('keys', `fields.${field}必须且只能有summary和sourcePassageIds。`);
+  if (typeof candidate.summary !== 'string') return fail('summary_type', `fields.${field}.summary必须为字符串。`);
+  if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS)
+    return fail('summary_length', `fields.${field}.summary当前为${candidate.summary.length}个文本容量单位，科学字段容量${MAX_CANONICAL_CORE_CHARS}；减少完整的次要断言，不裁掉保留关系的条件。`);
+  if (/\bP\s*\d{5}\b/iu.test(candidate.summary)) return fail('summary_source_label', `fields.${field}.summary不能包含P编号；编号只放sourcePassageIds。`);
+  const ids = candidate.sourcePassageIds;
+  if (!Array.isArray(ids) || ids.length > MAX_SOURCE_PASSAGE_IDS || new Set(ids).size !== ids.length
+    || ids.some(id => typeof id !== 'string' || !allowedIds.has(id))
+    || (candidate.summary.trim() ? ids.length === 0 : ids.length !== 0))
+    return fail('source_ids', `fields.${field}.sourcePassageIds须为本轮真实P编号的无重复数组，非空summary必须有来源，空summary必须无来源。`);
+}
+
 /** Diagnose the existing composition contract; acceptance remains owned by its guard. */
 function scientificCompositionIssue(value: unknown, allowedIds: ReadonlySet<string>): { diagnostic: string; feedback: string } {
   const fail = (path: string, feedback: string) => ({ diagnostic: 'composition_' + path, feedback });
@@ -2197,20 +2213,8 @@ function scientificCompositionIssue(value: unknown, allowedIds: ReadonlySet<stri
   if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(','))
     return fail('fields_keys', 'fields必须且只能有六个固定字段。');
   for (const field of SDF_CORE_FIELDS) {
-    const item = fields[field];
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return fail(field + '_type', `fields.${field}必须为对象。`);
-    const candidate = item as Record<string, unknown>;
-    if (Object.keys(candidate).sort().join(',') !== 'sourcePassageIds,summary')
-      return fail(field + '_keys', `fields.${field}必须且只能有summary和sourcePassageIds。`);
-    if (typeof candidate.summary !== 'string') return fail(field + '_summary_type', `fields.${field}.summary必须为字符串。`);
-    const length = candidate.summary.length;
-    if (candidate.summary.length > MAX_CANONICAL_CORE_CHARS) return fail(field + '_summary_length', `fields.${field}.summary当前为${length}个文本容量单位，科学字段容量${MAX_CANONICAL_CORE_CHARS}；减少完整的次要断言，不裁掉保留关系的条件。`);
-    if (/\bP\s*\d{5}\b/iu.test(candidate.summary)) return fail(field + '_summary_source_label', `fields.${field}.summary不能包含P编号；编号只放sourcePassageIds。`);
-    const ids = candidate.sourcePassageIds;
-    if (!Array.isArray(ids) || ids.length > MAX_SOURCE_PASSAGE_IDS || new Set(ids).size !== ids.length
-      || ids.some(id => typeof id !== 'string' || !allowedIds.has(id))
-      || (candidate.summary.trim() ? ids.length === 0 : ids.length !== 0))
-      return fail(field + '_source_ids', `fields.${field}.sourcePassageIds须为本轮真实P编号的无重复数组，非空summary必须有来源，空summary必须无来源。`);
+    const issue = scientificCompositionFieldIssue(field, fields[field], allowedIds);
+    if (issue) return fail(issue.diagnostic, issue.feedback);
   }
   const normalized = normalizeScientificComposition(value as ScientificCompositionResponse);
   if (!scientificReviewGuard(normalized, allowedIds))
@@ -3015,6 +3019,39 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
   let candidate: ScientificCompositionResponse | undefined;
   let candidateOrder = -1;
   let candidateToolCallId: string | undefined;
+  type Note = { kind: 'field' | 'claim'; value: Record<string, unknown>; order: number };
+  const notes = new Map<string, Note | null>();
+  const saveNote = (kind: Note['kind'], value: Record<string, unknown>, order: number, id: string) => {
+    if (!id || !Number.isSafeInteger(order) || order < 0 || notes.has(id)) {
+      if (id && notes.has(id)) notes.set(id, null);
+      return { status: `invalid_${kind}`, feedback: 'A saved item needs its unique real tool call ID and original call order.' };
+    }
+    notes.set(id, { kind, value: structuredClone(value), order });
+    return { status: `${kind}_saved`, [`${kind}ToolCallId`]: id,
+      guidance: 'Private item saved, not scientific approval. Select this returned ID in paper_draft; correct only the affected item when needed.' };
+  };
+  const resolveDraft = (value: unknown, order: number): unknown => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'fieldToolCallIds')) return value;
+    const input = value as Record<string, unknown>;
+    if (Object.keys(input).sort().join(',') !== 'claimToolCallIds,fieldToolCallIds,needsMoreEvidence'
+      || !input.fieldToolCallIds || typeof input.fieldToolCallIds !== 'object' || Array.isArray(input.fieldToolCallIds)
+      || !Array.isArray(input.claimToolCallIds) || input.claimToolCallIds.length > MAX_INGESTION_CLAIMS
+      || new Set(input.claimToolCallIds).size !== input.claimToolCallIds.length)
+      throw new Error('Select exactly fieldToolCallIds, claimToolCallIds and needsMoreEvidence; do not copy field or Claim bodies into this call.');
+    const fields = input.fieldToolCallIds as Record<string, unknown>;
+    if (Object.keys(fields).sort().join(',') !== [...SDF_CORE_FIELDS].sort().join(',')) throw new Error('Select all six exact field IDs.');
+    const select = (id: unknown, kind: Note['kind']) => {
+      const note = typeof id === 'string' ? notes.get(id) : undefined;
+      if (!note || note.kind !== kind || !Number.isSafeInteger(order) || note.order >= order)
+        throw new Error('Selected item is missing, failed, ambiguous, of another type or from a later call.');
+      return structuredClone(note.value);
+    };
+    return { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => {
+      const item = select(fields[field], 'field');
+      if (item.field !== field) throw new Error('Selected field ID belongs to a different field.');
+      delete item.field; return [field, item];
+    })), draftClaims: input.claimToolCallIds.map(id => select(id, 'claim')), needsMoreEvidence: input.needsMoreEvidence };
+  };
   const expandReview = (value: unknown): unknown => {
     if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'draftToolCallId')) return value;
     const review = value as Record<string, unknown>;
@@ -3043,7 +3080,41 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       verifiedSegments: segments, needsMoreInformation: field.verdict === 'blocked' };
   };
   return {
+    /** Trusted replay rebuilds these data from authenticated paid calls, never from saved feedback bodies. */
+    resetForReplay() { candidate = undefined; candidateOrder = -1; candidateToolCallId = undefined; notes.clear(); },
+    field(value: unknown, order: number, toolCallId: string): Record<string, unknown> {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return { status: 'invalid_field', feedback: 'Save one field object.' };
+      const input = value as Record<string, unknown>; const { field, ...item } = input;
+      if (Object.keys(input).sort().join(',') !== 'field,sourcePassageIds,summary' || !SDF_CORE_FIELDS.includes(field as typeof SDF_CORE_FIELDS[number]))
+        return { status: 'invalid_field', feedback: 'Use only field, summary and sourcePassageIds for one actual field.' };
+      const issue = scientificCompositionFieldIssue(String(field), item, new Set(readPassageIds()));
+      return issue ? { status: 'invalid_field', feedback: issue.feedback } : saveNote('field', input, order, toolCallId);
+    },
+    claim(value: unknown, order: number, toolCallId: string): Record<string, unknown> {
+      const invalid = { status: 'invalid_claim', feedback: 'Save one exact Claim: clientKey, sourceField, kind, statement, conditions, limitations, sourceBindings and parentClientKey for non-core. Bindings use read source IDs with at least one supports. Parent graph and total limits are checked by paper_draft.' };
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid;
+      const input = value as Record<string, unknown>; const expected = ['clientKey', 'sourceField', 'kind', 'statement', 'conditions', 'limitations', 'sourceBindings'];
+      if (input.parentClientKey !== undefined) expected.push('parentClientKey');
+      const text = (s: unknown, max: number): s is string => typeof s === 'string' && !!s.trim() && s.length <= max;
+      const strings = (v: unknown) => Array.isArray(v) && v.length <= 100 && v.every(s => text(s, 500));
+      if (Object.keys(input).sort().join(',') !== expected.sort().join(',') || !text(input.clientKey, 100)
+        || !SDF_CORE_FIELDS.includes(input.sourceField as typeof SDF_CORE_FIELDS[number]) || !CLAIM_KINDS.includes(input.kind as typeof CLAIM_KINDS[number])
+        || !text(input.statement, 4_000) || !strings(input.conditions) || !strings(input.limitations)
+        || (input.kind === 'core' ? input.parentClientKey !== undefined : !text(input.parentClientKey, 100))
+        || !Array.isArray(input.sourceBindings) || !input.sourceBindings.length || input.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return invalid;
+      const known = new Set(readPassageIds()); const seen = new Set<string>(); let supports = false;
+      for (const raw of input.sourceBindings) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid;
+        const binding = raw as Record<string, unknown>;
+        if (Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId' || typeof binding.sourcePassageId !== 'string'
+          || !known.has(binding.sourcePassageId) || seen.has(binding.sourcePassageId) || !CLAIM_RELATIONS.includes(binding.relation as ClaimRelation)) return invalid;
+        seen.add(binding.sourcePassageId); supports ||= binding.relation === 'supports';
+      }
+      return supports ? saveNote('claim', input, order, toolCallId) : invalid;
+    },
     draft(value: unknown, order = candidateOrder + 1, toolCallId?: string): Record<string, unknown> {
+      try { value = resolveDraft(value, order); }
+      catch (error) { return { status: 'invalid_draft', feedback: error instanceof Error ? error.message : 'Invalid item selection' }; }
       const provided = passages(); const validation = scientificCompositionValidation(sourceMap, provided);
       if (!validation.guard(value)) {
         const known = new Set(provided.map(p => p.id));

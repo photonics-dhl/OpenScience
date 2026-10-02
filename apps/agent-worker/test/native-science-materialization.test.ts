@@ -15,6 +15,101 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 describe('actual native Agent scientific materializer', () => {
+  const selectedNotes = () => ({ fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
+    claimToolCallIds: ['claim-core'], needsMoreEvidence: [] });
+  function saveNotes(worker: ReturnType<typeof createNativeScientificMaterializer>) {
+    SDF_CORE_FIELDS.forEach((field, order) => worker.field({ field, ...draft().fields[field] }, order, `field-${field}`));
+    worker.claim(draft().draftClaims[0], 6, 'claim-core');
+  }
+  it('saves small exact field and Claim calls, then selects them without re-emitting the full paper', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
+    const receipt = worker.draft(selectedNotes(), 7, 'draft-notes');
+    expect(receipt).toMatchObject({ status: 'draft_ready', draftToolCallId: 'draft-notes' });
+    const checked = { ...compactReview(), draftToolCallId: 'draft-notes' };
+    expect(worker.review(checked, 'review-notes').status).toBe('review_ready');
+    const result = worker.finish(JSON.stringify(checked));
+    expect(result.core).toMatchObject(Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, source])));
+    expect(result.reviewedClaimSuggestions?.[0]).toMatchObject({ statement: source, sourceBindings: [{ sourceIndex: 0, relation: 'supports' }] });
+    expect(JSON.stringify(selectedNotes()).length).toBeLessThan(JSON.stringify(draft()).length / 2);
+  });
+  it('corrects one recorded field and preserves the other explicit selections and Claims', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
+    worker.draft(selectedNotes(), 7, 'draft-original');
+    const revised = { field: 'limitations', summary: 'This prediction applies to the stated geometry.', sourcePassageIds: ['P00001'] };
+    expect(worker.field(revised, 8, 'field-limits-new')).toMatchObject({ status: 'field_saved', fieldToolCallId: 'field-limits-new' });
+    const selected = selectedNotes(); selected.fieldToolCallIds.limitations = 'field-limits-new';
+    expect(worker.draft(selected, 9, 'draft-corrected').status).toBe('draft_ready');
+    expect(worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'draft-corrected' })).core.limitations).toBe(revised.summary);
+    expect(worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'draft-corrected' })).core.method).toBe(source);
+    expect(worker.review({ ...compactReview(), draftToolCallId: 'draft-original' }).status).toBe('invalid_review');
+  });
+  it.each(['unknown_id', 'wrong_field', 'wrong_tool', 'duplicate_claim', 'future_note', 'extra_root'])('refuses a recorded draft with %s', change => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
+    const selected = selectedNotes(); let order = 7;
+    if (change === 'unknown_id') selected.fieldToolCallIds.method = 'other-task';
+    if (change === 'wrong_field') selected.fieldToolCallIds.method = 'field-results';
+    if (change === 'wrong_tool') selected.fieldToolCallIds.method = 'claim-core';
+    if (change === 'duplicate_claim') selected.claimToolCallIds.push('claim-core');
+    if (change === 'future_note') order = 3;
+    const value = change === 'extra_root' ? { ...selected, item: draft().draftClaims[0] } : selected;
+    expect(worker.draft(value, order, 'draft-bad').status).toBe('invalid_draft');
+  });
+  it('rejects a leaked Claim root locally without losing already saved fields', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']);
+    const bad = { ...draft().draftClaims[0], item: draft().draftClaims[0] };
+    expect(worker.claim(bad, 0, 'claim-malformed').status).toBe('invalid_claim');
+    saveNotes(worker);
+    expect(worker.draft(selectedNotes(), 7, 'draft-good').status).toBe('draft_ready');
+  });
+  it('keeps saved arguments immutable and refuses reused trusted IDs', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
+    const item = { field: 'method', summary: source, sourcePassageIds: ['P00001'] };
+    worker.field(item, 7, 'field-method-new'); item.summary = 'Invented change'; item.sourcePassageIds.length = 0;
+    const selected = selectedNotes(); selected.fieldToolCallIds.method = 'field-method-new';
+    expect(worker.draft(selected, 8, 'draft-copy').status).toBe('draft_ready');
+    expect(worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'draft-copy' })).core.method).toBe(source);
+    expect(worker.field({ field: 'method', ...draft().fields.method }, 9, 'field-method-new').status).toBe('invalid_field');
+    expect(worker.draft(selected, 10, 'draft-reused').status).toBe('invalid_draft');
+  });
+  it('does not promote a failed unread note after more source text is read', () => {
+    let read: string[] = []; const worker = createNativeScientificMaterializer(map, () => read);
+    expect(worker.field({ field: 'method', ...draft().fields.method }, 0, 'field-unread').status).toBe('invalid_field');
+    read = ['P00001']; saveNotes(worker);
+    const selected = selectedNotes(); selected.fieldToolCallIds.method = 'field-unread';
+    expect(worker.draft(selected, 8, 'draft-unread').status).toBe('invalid_draft');
+    expect(worker.draft(selectedNotes(), 8, 'draft-read').status).toBe('draft_ready');
+  });
+  it.each(['dangling_parent', 'duplicate_key', 'total_claim_size'])('still applies the existing complete Claim guard to selected notes: %s', change => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
+    const claim = { ...draft().draftClaims[0]!, clientKey: 'child', kind: 'supporting', parentClientKey: 'core-a' };
+    if (change === 'dangling_parent') claim.parentClientKey = 'missing';
+    if (change === 'duplicate_key') { claim.kind = 'core'; claim.clientKey = 'core-a'; delete (claim as { parentClientKey?: string }).parentClientKey; }
+    if (change === 'total_claim_size') claim.statement = source.repeat(20);
+    expect(worker.claim(claim, 7, 'claim-child').status).toBe('claim_saved');
+    const selected = selectedNotes(); selected.claimToolCallIds.push('claim-child');
+    if (change === 'total_claim_size') {
+      const extra = { ...claim, clientKey: 'child-extra' }; worker.claim(extra, 8, 'claim-extra'); selected.claimToolCallIds.push('claim-extra');
+      const last = { ...claim, clientKey: 'child-last' }; worker.claim(last, 9, 'claim-last'); selected.claimToolCallIds.push('claim-last');
+    }
+    expect(worker.draft(selected, 10, 'draft-bad-claims').status).toBe('invalid_draft');
+  });
+  it('replays exact successful notes in paid call order before resolving the selected draft and review', () => {
+    const notes = SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, type: 'function' as const,
+      function: { name: 'paper_field', arguments: JSON.stringify({ field, ...draft().fields[field] }) } }));
+    notes.push({ id: 'claim-core', type: 'function', function: { name: 'paper_claim', arguments: JSON.stringify(draft().draftClaims[0]) } });
+    const messages: ChatMessage[] = [{ role: 'assistant', content: '', toolCalls: notes },
+      ...notes.slice().reverse().map(call => ({ role: 'tool' as const, toolCallId: call.id,
+        content: JSON.stringify({ status: call.function.name === 'paper_field' ? 'field_saved' : 'claim_saved' }) })),
+      { role: 'assistant', content: '', toolCalls: [{ id: 'draft-notes', type: 'function', function: { name: 'paper_draft', arguments: JSON.stringify(selectedNotes()) } }] },
+      { role: 'tool', toolCallId: 'draft-notes', content: JSON.stringify({ status: 'draft_ready' }) },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'review-notes', type: 'function', function: { name: 'paper_review', arguments: JSON.stringify({ ...compactReview(), draftToolCallId: 'draft-notes' }) } }] },
+      { role: 'tool', toolCallId: 'review-notes', content: JSON.stringify({ status: 'review_ready' }) }];
+    expect(finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages,
+      JSON.stringify({ reviewToolCallId: 'review-notes' })).core.method).toBe(source);
+    messages.splice(1, 0, { ...messages[1]! });
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages,
+      JSON.stringify({ reviewToolCallId: 'review-notes' }))).toThrow();
+  });
   const reviewedHistory = (): ChatMessage[] => [
     { role: 'assistant', content: '', toolCalls: [{ id: 'draft-a', type: 'function', function: { name: 'paper_draft', arguments: JSON.stringify(draft()) } }] },
     { role: 'tool', toolCallId: 'draft-a', content: JSON.stringify({ status: 'draft_ready' }) },
