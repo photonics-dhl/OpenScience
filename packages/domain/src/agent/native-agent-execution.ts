@@ -4,6 +4,9 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { AgentError } from './errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { lockTrashReferences } from '../trash/trash';
+import { parsePresentationGenerationPayload, requirePresentationWriteScope } from '../assets/presentation-asset';
+import { requireHermesPresentationTaskAuthority } from './research-run';
+import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -22,7 +25,7 @@ export interface NativeAgentCheckpointReference {
   responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
 }
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
-  kind: 'hermes-agent'; profile: 'paper-understanding'; checkpoint?: NativeAgentCheckpointReference;
+  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-illustration'; checkpoint?: NativeAgentCheckpointReference;
 }
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
@@ -36,6 +39,26 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   const marker = readNativeAgentExecution(task?.result);
   const payload = task?.payload;
+  if (marker?.profile === 'paper-illustration') {
+    if (!task || task.deletedAt || task.status !== 'running' || task.kind !== 'presentation.generate'
+      || task.executionAttempt !== input.executionAttempt || task.session.deletedAt || task.session.status !== 'active') blocked();
+    const planned = parsePresentationGenerationPayload(payload);
+    if (!supportsNativeIllustration(planned) || planned.researchObjectId !== task.session.researchObjectId) blocked();
+    await requirePresentationWriteScope(tx, { userId: task.session.userId, researchObjectId: planned.researchObjectId, versionId: planned.versionId });
+    if (planned.hermesRunAuthority) await requireHermesPresentationTaskAuthority(tx, {
+      taskId: task.id, actorId: task.session.userId, payload: planned, authority: planned.hermesRunAuthority });
+    const ro = await tx.researchObject.findUnique({ where: { id: planned.researchObjectId } });
+    if (!ro || ro.deletedAt) blocked();
+    const { workspace } = await requireActiveMembership(tx, ro.workspaceId, task.session.userId);
+    const reference = record(task.result) && task.result.sourceMapRef !== undefined ? parseDocumentSourceMapReference(task.result.sourceMapRef) : undefined;
+    if (marker.checkpoint && !reference) blocked();
+    const artifact = reference ? await tx.artifact.findUnique({ where: { id: reference.artifactId } }) : null;
+    if (reference && (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || artifact.workspaceId !== ro.workspaceId
+      || artifact.blobSha256 !== reference.contentHash || reference.parserStatus !== 'succeeded'
+      || (marker.checkpoint && (marker.checkpoint.artifactId !== reference.artifactId || marker.checkpoint.documentSha256 !== reference.contentHash
+        || marker.checkpoint.sourceMapHash !== reference.serializedSha256)))) blocked();
+    return { task, marker, artifact, researchObject: ro, workspace };
+  }
   if (!task || task.deletedAt || task.status !== 'running' || task.kind !== 'sdf.extract' || task.executionAttempt !== input.executionAttempt
     || !marker || task.session.deletedAt || task.session.status !== 'active' || !task.session.researchObjectId || !record(payload)
     || !exact(payload, ['artifactId', 'researchObjectId']) || payload.researchObjectId !== task.session.researchObjectId || !text(payload.artifactId)) blocked();
@@ -64,9 +87,9 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
 }
 
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */
-export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined): { nativeAgentExecution: NativeAgentExecution } | undefined {
+export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding'): { nativeAgentExecution: NativeAgentExecution } | undefined {
   if (!runtime) return undefined;
-  const result = { nativeAgentExecution: { ...runtime, kind: 'hermes-agent' as const, profile: 'paper-understanding' as const } };
+  const result = { nativeAgentExecution: { ...runtime, kind: 'hermes-agent' as const, profile } };
   readNativeAgentExecution(result); return result;
 }
 
@@ -75,7 +98,7 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
   if (!record(result) || !Object.hasOwn(result, 'nativeAgentExecution')) return undefined;
   const marker = result.nativeAgentExecution;
   if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
-    || marker.kind !== 'hermes-agent' || marker.profile !== 'paper-understanding'
+    || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-illustration'].includes(String(marker.profile))
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
   if (Object.hasOwn(marker, 'checkpoint')) {
     const cp = marker.checkpoint;
@@ -101,7 +124,7 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
-  if (!task || task.deletedAt || task.kind !== 'sdf.extract' || !marker || input.next.taskId !== task.id
+  if (!task || task.deletedAt || !marker || task.kind !== (marker.profile === 'paper-understanding' ? 'sdf.extract' : 'presentation.generate') || input.next.taskId !== task.id
     || !isDeepStrictEqual(marker.checkpoint, input.expected)) blocked();
   const priorObjects = record(task.result) && Array.isArray(task.result.nativeAgentObjects) ? task.result.nativeAgentObjects : [];
   const oldObject = marker.checkpoint?.objectKey;
@@ -130,27 +153,72 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
   if (changed.count !== 1) blocked();
 }
 
+/** Final task adoption shares the same source readers used before each Worker call and asset write. */
+export async function requireNativeIllustrationTerminalSource(tx: Prisma.TransactionClient, task: AgentTask): Promise<void> {
+  if (readNativeAgentExecution(task.result)?.profile !== 'paper-illustration') return;
+  const result = record(task.result) ? task.result : {};
+  const context = record(result.nativeIllustrationContext) ? result.nativeIllustrationContext : undefined;
+  const payload = parsePresentationGenerationPayload(task.payload);
+  const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
+  const ro = await tx.researchObject.findUnique({ where: { id: payload.researchObjectId } });
+  if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload) || context.baseIdentity !== null) blocked();
+  const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+    researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+  const lineage = payload.hermesRunAuthority ? new Map(claims.map(claim => {
+    const origin = record(claim.provenance) ? claim.provenance : {};
+    return [claim.id, origin.sourceTaskLineage ?? origin.sourceTaskId];
+  })) : undefined;
+  const evidence = await readReviewedPresentationEvidence(tx, payload, lineage);
+  const source = await readVisualNarrativeSource(tx, { userId: session.userId, workspaceId: ro.workspaceId,
+    researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds });
+  if (claims.length !== payload.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')
+    || presentationClaimContent(claims) !== context.claimContent || presentationEvidenceIdentity(evidence) !== context.sourceEvidenceIdentity
+    || source.identity !== context.narrativeSourceIdentity || !isDeepStrictEqual(source.reference, result.sourceMapRef)) blocked();
+}
+
 /** Adopt only the last actual native response, never a guessed or historical self-check receipt. */
 export function nativeAgentTerminalResult(task: AgentTask, status: string, incoming: unknown): unknown {
   const marker = readNativeAgentExecution(task.result);
   if (!marker) { if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution')) blocked(); return incoming; }
   if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution') && !isDeepStrictEqual(incoming.nativeAgentExecution, marker)) blocked();
+  const privatePlan: Record<string, unknown> = {};
+  if (marker.profile === 'paper-illustration') {
+    const stored = record(task.result) ? task.result : {};
+    for (const key of ['nativeIllustrationContext', 'storyboardCheckpoint', 'storyboardReview', 'nativeIllustration', 'illustrationPrompts']) {
+      if (record(incoming) && Object.hasOwn(incoming, key) && !isDeepStrictEqual(incoming[key], stored[key])) blocked();
+      if (Object.hasOwn(stored, key)) privatePlan[key] = stored[key];
+    }
+  }
   if (status === 'succeeded') {
-    if (!marker.checkpoint && record(incoming) && incoming.status === 'needs_review' && typeof incoming.reason === 'string'
+    if (marker.profile === 'paper-understanding' && task.kind !== 'sdf.extract') blocked();
+    if (marker.profile === 'paper-understanding' && !marker.checkpoint && record(incoming) && incoming.status === 'needs_review' && typeof incoming.reason === 'string'
       && exact(incoming, ['status', 'reason', 'format', 'sourceMapRef'])) {
       const reference = parseDocumentSourceMapReference(incoming.sourceMapRef);
       if (!record(task.payload) || reference.artifactId !== task.payload.artifactId) blocked();
       return { ...incoming, nativeAgentExecution: marker };
     }
     const cp = marker.checkpoint;
-    if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || !record(incoming) || !record(incoming.scientificReview)) blocked();
-    const receipt = incoming.scientificReview;
-    if (receipt.kind !== 'hermes_agent_review' || ['provider', 'model', 'promptHash'].some(k => receipt[k] !== cp.target[k as keyof typeof cp.target])
-      || receipt.responseHash !== cp.responseHash || receipt.runtimeId !== marker.runtimeId || receipt.skillCatalogueId !== marker.skillCatalogueId) blocked();
+    if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || !record(incoming)) blocked();
+    const receipt = marker.profile === 'paper-understanding' ? incoming.scientificReview : incoming.storyboardReview;
+    if (!record(receipt) || ['provider', 'model', 'promptHash'].some(k => receipt[k] !== cp.target[k as keyof typeof cp.target])
+      || receipt.responseHash !== cp.responseHash) blocked();
+    if (marker.profile === 'paper-understanding') {
+      if (receipt.kind !== 'hermes_agent_review' || receipt.runtimeId !== marker.runtimeId || receipt.skillCatalogueId !== marker.skillCatalogueId) blocked();
+    } else if (task.kind !== 'presentation.generate' || incoming.assetId !== task.id || receipt.stage !== 'final-brief'
+      || receipt.requestId !== task.id || receipt.decision !== 'accepted' || !record(task.result)
+      || !isDeepStrictEqual(receipt, task.result.storyboardReview)) blocked();
     const source = parseDocumentSourceMapReference(incoming.sourceMapRef);
     if (source.parserStatus !== 'succeeded' || source.artifactId !== cp.artifactId || source.contentHash !== cp.documentSha256 || source.serializedSha256 !== cp.sourceMapHash) blocked();
   }
-  return { ...(record(incoming) ? incoming : {}), nativeAgentExecution: marker,
+  return { ...(record(incoming) ? incoming : {}), ...privatePlan, nativeAgentExecution: marker,
     ...(record(task.result) && task.result.sourceMapRef ? { sourceMapRef: task.result.sourceMapRef } : {}),
     ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
+}
+
+/** Only fresh single-paper narrative planning is supported; existing revisions retain their original engine. */
+export function supportsNativeIllustration(payload: unknown): boolean {
+  if (!record(payload) || payload.kind !== 'interactive_html' || !record(payload.storyboard)) return false;
+  const settings = payload.storyboard;
+  return settings.output === 'image' && settings.narrative === true
+    && !['baseAssetId', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined);
 }

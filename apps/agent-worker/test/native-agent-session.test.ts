@@ -15,6 +15,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
   let state: NativeAgentSessionState | null = null;
   let calls = 0; let authorized = true; let loseAnswer = false; let lease = true; let loseLeaseAfterStart = false; let revokeAfterHTTP = false; let reportedModel = completion.model;
   let outputTokens = completion.usage.outputTokens; const requestedAllowances: (number | undefined)[] = [];
+  let finishReason = completion.finishReason;
   const preflight = new AnthropicCompatProvider('minimax', { baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async () => { throw new Error('Preflight sent HTTP'); });
   const provider: TextProvider = { name: 'minimax', model: 'MiniMax-M3', preflightNativeTools: opts => preflight.preflightNativeTools(opts), async complete(options) {
     calls++; if (loseAnswer) throw new Error('unknown transport outcome');
@@ -25,7 +26,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
       toolCalls: [{ id: `read-${calls}`, type: 'function', function: { name: 'paper_read', arguments: JSON.stringify(toolInput) } }],
       providerContent: { provider: 'minimax', model: 'MiniMax-M3', content: [
         { type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'tool_use', id: `read-${calls}`, name: 'paper_read', input: toolInput }] } };
-    return { ...output, model: reportedModel };
+    return { ...output, model: reportedModel, finishReason };
   } };
   const gateway = new AiGateway({ providers: [provider] });
   const store = { async read() { return structuredClone(state); }, async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
@@ -43,6 +44,7 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     authorize: async () => { if (!authorized || !lease) throw new Error('authority revoked'); } });
   return { create, get calls() { return calls; }, get state() { return state; }, get requestedAllowances() { return requestedAllowances; },
     reportOutputTokens: (tokens: number) => { outputTokens = tokens; },
+    reportFinishReason: (value: GatewayCompletion['finishReason']) => { finishReason = value; },
     revoke: () => { authorized = false; }, changeLease: () => { lease = false; },
     loseLeaseAfterStart: () => { loseLeaseAfterStart = true; },
     revokeAfterHTTP: () => { revokeAfterHTTP = true; },
@@ -50,6 +52,14 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it.each(['other', 'unknown', undefined] as const)('preserves a paid unsupported stop (%s), gives an accurate response error and never resubmits it', async reason => {
+    const f = fixture(); f.reportFinishReason(reason);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(f.create().complete(request)).rejects.toThrow('provider response has no valid completion or tool call');
+      expect(f.state?.turns.at(-1)).toMatchObject({ state: 'completed', response: { text: completion.text } });
+      expect(f.calls).toBe(1);
+    }
+  });
   it('replays an original paid session when its permission order differs from SDK tool order without another submission', async () => {
     const f = fixture();
     const originalPermissions = ['skills_list', 'skill_view', 'paper_read', 'paper_review'];

@@ -137,6 +137,8 @@ export interface ProviderResult {
   model: string;
   /** Provider-controlled stop reason normalized before it reaches logs. */
   finishReason?: 'stop' | 'length' | 'other' | 'unknown';
+  /** Private native-turn diagnostic; arbitrary provider strings are never retained here. */
+  providerStopReason?: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'pause_turn' | 'refusal' | 'unrecognized' | 'missing';
   toolCalls?: readonly ChatToolCall[];
   providerContent?: ProviderAssistantContent;
 }
@@ -205,6 +207,13 @@ function finishReason(value: unknown): ProviderResult['finishReason'] {
   if (value === 'stop' || value === 'end_turn') return 'stop';
   if (value === 'length' || value === 'max_tokens') return 'length';
   return typeof value === 'string' && value ? 'other' : 'unknown';
+}
+
+function nativeProviderStopReason(value: unknown): ProviderResult['providerStopReason'] {
+  switch (value) {
+    case 'end_turn': case 'max_tokens': case 'tool_use': case 'stop_sequence': case 'pause_turn': case 'refusal': return value;
+    default: return value == null ? 'missing' : 'unrecognized';
+  }
 }
 
 export interface ProviderConfig {
@@ -440,6 +449,7 @@ export class AnthropicCompatProvider implements Provider {
         text,
         ...(toolCalls ? { toolCalls } : {}),
         ...(providerContent ? { providerContent } : {}),
+        ...(tools ? { providerStopReason: nativeProviderStopReason(data.stop_reason) } : {}),
         usage: {
           inputTokens: data.usage?.input_tokens ?? 0,
           outputTokens: data.usage?.output_tokens ?? 0,

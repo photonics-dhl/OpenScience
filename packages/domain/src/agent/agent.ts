@@ -30,7 +30,7 @@ import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVE
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
-import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, type NativeAgentRuntimeConfig } from './native-agent-execution';
+import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, requireNativeIllustrationTerminalSource, supportsNativeIllustration, type NativeAgentRuntimeConfig } from './native-agent-execution';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -590,7 +590,9 @@ async function persistAgentTaskCoreInTransaction(
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
-    ? initialNativeAgentExecution(deps.nativeAgentRuntime) : undefined;
+    ? initialNativeAgentExecution(deps.nativeAgentRuntime)
+    : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
+      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
   try {
     task = await tx.agentTask.create({
       data: {
@@ -1138,8 +1140,10 @@ async function markTaskProgressOnce(
       if (execution.mode !== 'model' || !execution.nativeSourceReview)
         throw new AgentError('ILLEGAL_TRANSITION', 'Native source review authority changed');
     }
-    if (input.status === 'succeeded' && readNativeAgentExecution(current.result))
+    if (input.status === 'succeeded' && readNativeAgentExecution(current.result)) {
       await requireNativeAgentExecutionAuthority(tx, { taskId: current.id, executionAttempt: current.executionAttempt });
+      await requireNativeIllustrationTerminalSource(tx, current);
+    }
     const result = nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
       await nativeImageReviewTerminalResult(tx, current, input.status, input.result)));
     const changed = await tx.agentTask.updateMany({
@@ -1163,7 +1167,7 @@ async function markTaskProgressOnce(
     const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
-  });
+  }, readNativeAgentExecution(task.result)?.profile === 'paper-illustration' ? { isolationLevel: 'Serializable' } : undefined);
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
 }
@@ -1314,6 +1318,9 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.nativeImageReview;
   delete publicResult.nativeSourceReview;
   delete publicResult.nativeAgentExecution;
+  delete publicResult.nativeIllustrationContext;
+  delete publicResult.nativeIllustration;
+  delete publicResult.illustrationPrompts;
   delete publicResult.nativeAgentObjects;
   if (sourceMapRef === undefined && Object.keys(publicResult).length === 0
     && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview') || Object.hasOwn(rawResult, 'nativeAgentExecution'))) return null;

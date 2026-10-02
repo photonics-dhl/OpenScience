@@ -23,8 +23,8 @@ ART_SKILLS = ('openscience-research-illustration', 'openscience-scientific-visua
               'baoyu-article-illustrator', 'baoyu-cover-image', 'baoyu-infographic')
 
 
-def command(argv, check=True):
-    return subprocess.run(argv, check=check, capture_output=True, text=True, timeout=120,
+def command(argv, check=True, timeout=120):
+    return subprocess.run(argv, check=check, capture_output=True, text=True, timeout=timeout,
                           env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'})
 
 
@@ -105,13 +105,15 @@ def install(source, runtime_snapshot, defer_timer=True):
     sha = source.name
     if not re.fullmatch('[a-f0-9]{40}', sha) or source != RELEASES/sha:
         raise ValueError('Native installation requires the exact immutable application release')
-    command(['node', str(source/'scripts/release-input-manifest.mjs'), 'verify', '--root', str(source), '--sha', sha])
+    # Full source/runtime verification traverses the installed dependency graph. The active release's
+    # source-only check exceeded the ordinary 120-second command budget; keep a separate finite limit.
+    command(['node', str(source/'scripts/release-input-manifest.mjs'), 'verify', '--root', str(source), '--sha', sha], timeout=900)
     if not defer_timer:
         raise ValueError('Native installation is staged; activate the timer only after the matching application is ready')
     if runtime_snapshot.is_symlink() or not runtime_snapshot.is_file() or runtime_snapshot.stat().st_uid != 0 or runtime_snapshot.stat().st_mode & 0o022:
         raise ValueError('Expected application runtime snapshot is not protected')
     command(['node', str(source/'scripts/release-input-manifest.mjs'), 'runtime-verify', '--root', str(source),
-             '--sha', sha, '--snapshot', str(runtime_snapshot)])
+             '--sha', sha, '--snapshot', str(runtime_snapshot)], timeout=900)
     ROOT.mkdir(mode=0o755, exist_ok=True)
     if ROOT.is_symlink() or ROOT.stat().st_uid != 0 or ROOT.stat().st_mode & 0o022:
         raise ValueError('Native installation root changed')

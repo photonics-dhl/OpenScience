@@ -12,11 +12,42 @@ import test from 'node:test';
 import {
   classifyPnpmWorkspaceCatalogSymlink,
   createReleaseRuntimeSnapshot,
+  runtimeIdentityBatches,
   findUncoveredDirectorySymlinkDescendant,
   normalizeReleaseRuntimePermissions,
   normalizedRuntimeMode,
   verifyReleaseRuntimeSnapshot,
 } from './release-input-manifest.mjs';
+
+test('runtime identity reads overlap at most eight entries and retain serial digest order', async () => {
+  const entries = Array.from({ length: 25 }, (_, i) => i);
+  let active = 0, peak = 0;
+  const observed = [];
+  for await (const identity of runtimeIdentityBatches(entries, async value => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 2 + (7 - value % 8)));
+    active--;
+    return { path: String(value), type: 'file', sha256: String(value).padStart(64, '0'), mode: 292, uid: 0, gid: 0 };
+  })) observed.push(identity);
+  const serial = entries.map(value => ({ path: String(value), type: 'file', sha256: String(value).padStart(64, '0'), mode: 292, uid: 0, gid: 0 }));
+  assert.equal(JSON.stringify(observed), JSON.stringify(serial));
+  assert.equal(peak, 8); assert.equal(active, 0);
+});
+
+test('runtime batch drains reads before rejecting the first error in source order', async () => {
+  let active = 0; const started = [];
+  await assert.rejects(async () => {
+    for await (const _ of runtimeIdentityBatches(Array.from({ length: 20 }, (_, i) => i), async value => {
+      started.push(value); active++;
+      try {
+        await new Promise(resolve => setTimeout(resolve, value === 1 ? 12 : 2));
+        if (value === 1 || value === 4) throw new Error(`invalid-${value}`);
+        return value;
+      } finally { active--; }
+    })) { /* Consume the real batch iterator. */ }
+  }, /invalid-1/u);
+  assert.equal(active, 0); assert.deepEqual(started, [0, 1, 2, 3, 4, 5, 6, 7]);
+});
 import { buildReleaseMaterializeCommand } from './release-sync-command.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));

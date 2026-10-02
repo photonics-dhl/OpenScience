@@ -37,6 +37,15 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
+  it.each(['en', 'zh'])('shows the prepared plan without claiming image production is running (%s)', locale => {
+    translations.locale = locale;
+    const run = sourceRun(); run.status = 'awaiting_storyboard_review'; run.error = null; run.versionId = 'version-1';
+    run.generationHold = 'image-api-pending';
+    const html = renderRun(run);
+    expect(html).toContain(locale === 'zh' ? '图解方案已就绪' : 'Illustration plan ready');
+    expect(html).toContain(locale === 'zh' ? '生图服务接入后继续制作图片' : 'Image production will continue when the image service is connected');
+    expect(html).not.toContain((locale === 'zh' ? zh : en).hermesRun.narrative.runningDescription);
+  });
   it.each(['en', 'zh'])('discloses reservation reuse while retaining subscription usage for technical continuation (%s)', locale => {
     translations.locale = locale;
     const run = sourceRun();

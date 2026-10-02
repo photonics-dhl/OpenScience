@@ -40,6 +40,7 @@ class InstallLifecycleTests(unittest.TestCase):
         self.patches = [patch.object(install, k, v) for k,v in {'ROOT':self.root,'NATIVE':self.native,'RELEASES':self.releases,'SYSTEMD_UNITS':self.units}.items()]
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
+        self.verification_seconds = 0
 
     def tearDown(self):
         self.command_patch.stop()
@@ -52,10 +53,12 @@ class InstallLifecycleTests(unittest.TestCase):
                 if not file.is_symlink(): file.chmod(0o600)
         self.temp.cleanup()
 
-    def command(self, argv, check=True):
+    def command(self, argv, check=True, timeout=120):
         self.events.append(tuple(argv))
         output = ''
         if argv[0] == 'node':
+            if any(action in argv for action in ('verify', 'runtime-verify')) and self.verification_seconds > timeout:
+                raise subprocess.TimeoutExpired(argv, timeout)
             if '-e' in argv:
                 output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review','version':5})
         elif argv[1] == 'is-active':
@@ -74,6 +77,21 @@ class InstallLifecycleTests(unittest.TestCase):
     def assert_old_files(self):
         for name in install.UNIT_NAMES: self.assertEqual((self.units/name).read_text(), 'old '+name)
         self.assertEqual((self.root/'runtime.env').read_text(), 'old nonsecret configuration')
+
+    def test_full_source_and_runtime_verification_can_finish_beyond_command_default(self):
+        self.verification_seconds = 200
+        receipt = install.install(self.source, self.snapshot)
+        self.assertTrue(receipt['timerDeferred'])
+        self.assertFalse(self.active)
+
+    def test_verifier_timeout_remains_bounded_and_precedes_install_mutations(self):
+        self.verification_seconds = 1000
+        with self.assertRaises(subprocess.TimeoutExpired):
+            install.install(self.source, self.snapshot)
+        self.assert_old_files()
+        self.assertTrue(self.active)
+        self.assertFalse((self.root/'releases').exists())
+        self.assertFalse(any(event[0] == 'systemctl' for event in self.events))
 
     def test_failure_after_permanent_enable_restores_runtime_enable_then_active(self):
         original = Path.write_text

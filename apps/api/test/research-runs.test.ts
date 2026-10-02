@@ -28,6 +28,26 @@ async function fixture(role = 'author') {
 }
 
 describe('Hermes research run API contract', () => {
+  it('projects the pending image-service handoff from the server-owned Native plan without exposing its private context', async () => {
+    const { app, db, cookies } = await fixture();
+    const response = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+      headers: { 'idempotency-key': 'native-plan-handoff' }, payload: { ingestionTaskIds: [INGESTION_ID] } });
+    const run = db.hermesResearchRuns[0];
+    Object.assign(run, { profile: 'visual-narrative-v1', status: 'awaiting_storyboard_review', maxAgentTasks: 9,
+      generationSettings: { locale: 'en', style: 'aged-academia', instruction: 'Explain the paper.' } });
+    db.agentTasks.push({ id: 'native-plan', kind: 'presentation.generate', status: 'succeeded', result: {
+      nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration', runtimeId: 'installed', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' },
+      nativeIllustrationContext: { private: 'source-context' }, illustrationPrompts: [{ prompt: 'private-image-prompt' }],
+    } });
+    db.hermesResearchSteps.push({ id: 'plan-step', runId: run.id, stage: 'storyboard', ordinal: 0,
+      status: 'awaiting_approval', agentTaskId: 'native-plan', presentationAssetId: 'native-plan' });
+    const read = await app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs/${response.json().run.id}`, cookies });
+    expect(read.statusCode, read.body).toBe(200);
+    expect(read.json().run).toMatchObject({ status: 'awaiting_storyboard_review', generationHold: 'image-api-pending', canRetryGeneration: false });
+    expect(read.body).not.toMatch(/source-context|private-image-prompt|nativeAgentExecution/);
+    db.memberships.length = 0;
+    expect((await app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs/${run.id}`, cookies })).statusCode).toBe(404);
+  });
   it('requires a strict attach-existing-ingestion request and idempotency key', async () => {
     const { app, cookies } = await fixture();
     const missingKey = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies, payload: { ingestionTaskIds: [INGESTION_ID] } });

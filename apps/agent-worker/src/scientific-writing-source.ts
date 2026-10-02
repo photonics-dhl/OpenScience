@@ -1,8 +1,11 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { hasSingleReviewedVisualSource, readVisualNarrativeSource } from '@openscience/domain';
+export { hasSingleReviewedVisualSource, readVisualNarrativeSource };
+type NarrativeReader = Parameters<typeof readVisualNarrativeSource>[0];
+type NarrativeScope = Parameters<typeof readVisualNarrativeSource>[1];
+import type { PrismaClient } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import {
   loadDocumentSourceMapReference,
-  INGESTION_BRIDGE_FIELDS,
   parseDocumentSourceMapReference,
   resolveSourceLocator,
   validateSourceLocator,
@@ -39,68 +42,6 @@ export function projectVisualNarrativeSource(source: VisualNarrativeSource) {
   };
 }
 
-type NarrativeScope = { userId: string; workspaceId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[] };
-type NarrativeReader = Pick<Prisma.TransactionClient, 'version' | 'claimNode' | 'ingestionTask'>;
-
-function reviewedSourceLineage(claim: { provenance?: unknown }): string | undefined {
-  const provenance = record(claim.provenance);
-  const lineage = provenance.sourceTaskLineage ?? (provenance.source === 'reviewed_ingestion' ? provenance.sourceTaskId : undefined);
-  return typeof lineage === 'string' && lineage.trim() ? lineage : undefined;
-}
-
-/** Eligibility is not authorization: an eligible source must still pass all version/owner/review checks below. */
-export function hasSingleReviewedVisualSource(claims: readonly { extractionStatus: string; provenance?: unknown }[],
-  evidence: readonly { artifactId: string }[] = []): boolean {
-  const lineages = claims.map(reviewedSourceLineage);
-  return claims.length > 0 && claims.every(claim => claim.extractionStatus === 'succeeded')
-    && lineages.every(lineage => lineage !== undefined) && new Set(lineages).size === 1
-    && new Set(evidence.map(row => row.artifactId)).size <= 1;
-}
-
-/** Resolve the paper through this version's reviewed Claims, never the newest document in the workspace. */
-export async function readVisualNarrativeSource(prisma: NarrativeReader, scope: NarrativeScope) {
-  const [version, claims] = await Promise.all([
-    prisma.version.findFirst({ where: { id: scope.versionId, researchObjectId: scope.researchObjectId },
-      include: { manifest: { include: { entries: true } } } }),
-    prisma.claimNode.findMany({ where: { id: { in: scope.sourceClaimIds }, versionId: scope.versionId, researchObjectId: scope.researchObjectId } }),
-  ]);
-  const lineages = claims.map(reviewedSourceLineage);
-  if (!version?.manifest || claims.length !== scope.sourceClaimIds.length
-    || !hasSingleReviewedVisualSource(claims)) {
-    throw new Error('[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version');
-  }
-  const ingestion = await prisma.ingestionTask.findUnique({ where: { id: lineages[0] as string },
-    include: { batch: true, artifact: true, agentTask: { include: { session: true } } } });
-  const task = ingestion?.agentTask;
-  if (!ingestion || ingestion.batch.userId !== scope.userId || ingestion.batch.researchObjectId !== scope.researchObjectId
-    || ingestion.state !== 'confirmed' || ingestion.artifact.workspaceId !== scope.workspaceId
-    || ingestion.artifact.deletedAt || ingestion.artifact.bytesPurgedAt
-    || !task || task.deletedAt || task.session.deletedAt || task.session.userId !== scope.userId
-    || task.session.researchObjectId !== scope.researchObjectId || task.kind !== 'sdf.extract' || task.status !== 'succeeded'
-    || !version.manifest.entries.some(entry => entry.artifactId === ingestion.artifactId && entry.blobSha256 === ingestion.artifact.blobSha256)) {
-    throw new Error('[blocked] Whole-paper narrative source is unavailable in this version');
-  }
-  const result = record(task.result);
-  const review = record(result.scientificReview);
-  const core = record(result.core);
-  if (review.status !== 'review_received' || !['4', '5'].includes(String(review.contractVersion))
-    || typeof review.responseHash !== 'string' || !/^[a-f0-9]{64}$/u.test(review.responseHash)
-    || result.reason || Object.keys(record(result.fieldDiagnostics)).length
-    || INGESTION_BRIDGE_FIELDS.some(field => typeof core[field] !== 'string')) {
-    throw new Error('[blocked] Whole-paper narrative requires a completed internal scientific review; partial analysis is not a whole-paper source');
-  }
-  const reference = parseDocumentSourceMapReference(result.sourceMapRef);
-  if (reference.parserStatus !== 'succeeded' || reference.artifactId !== ingestion.artifactId
-    || reference.contentHash !== ingestion.artifact.blobSha256) throw new Error('[blocked] Whole-paper narrative SourceMap changed');
-  return {
-    // Reuse stored source identities and version content; no additional source hash or analysis stage.
-    identity: JSON.stringify({ versionId: version.id, manifestId: version.manifest.id, core: version.manifest.coreJson,
-      ingestionTaskId: ingestion.id, sourceTaskId: task.id, sourceUpdatedAt: task.updatedAt,
-      reviewResponseHash: review.responseHash, sourceMapRef: reference }),
-    reference, result, versionSdf: record(version.manifest.coreJson), reviewedAnalysis: core,
-    scientificReview: { status: String(review.status), fieldReviews: review.fieldReviews ?? null, needsMoreEvidence: review.needsMoreEvidence ?? [] },
-  };
-}
 
 type VisualSourceEvidence = { artifactId: string; contentHash: string; locator: unknown };
 
@@ -195,7 +136,7 @@ export async function resolveVisualNarrativeSource(deps: { prisma: NarrativeRead
     versionSdf: source.versionSdf, reviewedAnalysis: source.reviewedAnalysis, scientificReview: source.scientificReview,
     sourceContext: selectVisualSourceContext(sourceMap, source.result, evidence),
   };
-  return { identity: source.identity, context };
+  return { identity: source.identity, context, reference: source.reference, sourceMap };
 }
 
 interface ResolveWritingSourceInput {

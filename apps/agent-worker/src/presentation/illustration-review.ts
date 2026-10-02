@@ -205,6 +205,13 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     ...(response.model ? { model: response.model } : {}), ...(issues ? { issues } : {}) } };
 }
 
+/** The native workflow uses the existing complete, verdict-only scientific review rules. */
+export function materializeIllustrationReview(value: unknown, candidate: StoryboardDocument,
+  claims: readonly PresentationClaim[], settings: StoryboardRequest) {
+  const sources = claims.flatMap(claim => (claim.sourcePassages ?? []).map(source => ({ claimId: claim.id, evidenceId: source.evidenceId })));
+  return parseIllustrationReview(value, candidate, claims, sources, storyboardSceneStyles(settings, candidate.scenes), true, true);
+}
+
 function parseIllustrationReview(value: unknown, candidate: StoryboardDocument, claims: readonly PresentationClaim[],
   sources: readonly { claimId: string; evidenceId: string }[], perSceneStyle: readonly string[], structuredIssues?: boolean, verdictOnly = Boolean(candidate.narrative)) {
   const review = object(value);

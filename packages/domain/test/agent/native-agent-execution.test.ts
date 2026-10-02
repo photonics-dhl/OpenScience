@@ -24,6 +24,38 @@ function fixture() {
   return { task, tx: tx as never };
 }
 describe('native Agent server-owned execution receipts', () => {
+  it.each(['nativeIllustrationContext', 'storyboardCheckpoint', 'storyboardReview', 'nativeIllustration', 'illustrationPrompts'])('retains server-owned %s on failure and rejects a substituted incoming value', key => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    Object.assign(f.task.result, initialNativeAgentExecution(runtime, 'paper-illustration'), { [key]: { saved: true } });
+    expect(nativeAgentTerminalResult(f.task as never, 'failed', undefined)).toMatchObject({ [key]: { saved: true } });
+    expect(() => nativeAgentTerminalResult(f.task as never, 'failed', { [key]: { saved: false } })).toThrow();
+  });
+  it('initializes an illustration profile without changing the original paper profile', () => {
+    expect(readNativeAgentExecution(initialNativeAgentExecution(runtime, 'paper-illustration'))?.profile).toBe('paper-illustration');
+    expect(readNativeAgentExecution(initialNativeAgentExecution(runtime))?.profile).toBe('paper-understanding');
+  });
+  it('uses the same original started/completed CAS for a native illustration task', async () => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    Object.assign(f.task.result, initialNativeAgentExecution(runtime, 'paper-illustration'));
+    await compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: undefined, next: reference('started'), paidCompletion: false });
+    await compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: reference('started'), next: reference('completed'), paidCompletion: true });
+    expect(readNativeAgentExecution(f.task.result)?.checkpoint?.responseHash).toBe(reference('completed').responseHash);
+    expect(f.task.result.sourceMapRef).toEqual(map);
+  });
+  it.each(['valid', 'receipt-changed', 'wrong-task', 'wrong-response', 'source-profile'] as const)('binds illustration terminal proof: %s', mode => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    Object.assign(f.task.result, initialNativeAgentExecution(runtime, mode === 'source-profile' ? 'paper-understanding' : 'paper-illustration'));
+    f.task.result.nativeAgentExecution!.checkpoint = reference('completed');
+    const review = { stage: 'final-brief', requestId: 'task', decision: 'accepted', summary: 'Supported',
+      candidateHash: '1'.repeat(64), sourceEvidenceIdentity: 'bound-existing-source',
+      ...reference('completed').target, responseHash: reference('completed').responseHash };
+    Object.assign(f.task.result, { storyboardReview: review });
+    const incoming = { assetId: mode === 'wrong-task' ? 'foreign' : 'task', sourceMapRef: map, storyboardReview: { ...review,
+      ...(mode === 'receipt-changed' ? { candidateHash: '2'.repeat(64) } : {}),
+      ...(mode === 'wrong-response' ? { responseHash: '3'.repeat(64) } : {}) } };
+    if (mode === 'valid') expect(nativeAgentTerminalResult(f.task as never, 'succeeded', incoming)).toMatchObject(incoming);
+    else expect(() => nativeAgentTerminalResult(f.task as never, 'succeeded', incoming)).toThrow('binding');
+  });
   it.each(['unchanged', 'membership', 'session', 'artifact', 'map', 'map_missing', 'map_partial', 'source', 'run'] as const)(
     'rebinds current authority inside actual markTaskProgress after a paid completion (%s)', async change => {
       const f = sourceFixture(); Object.assign(f.prisma, { trashEntry: { findFirst: async () => null } });

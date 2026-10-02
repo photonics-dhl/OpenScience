@@ -425,7 +425,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const legacyGrantNeedsUpgrade = Boolean(run
     && ['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
     && run.profile === 'onchip-field-sampling-v1' && run.maxAgentTasks === 7);
-  const narrativeStage = sourceParsing ? 'parsingIncomplete' : terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
+  const narrativeStage = run?.generationHold === 'image-api-pending' ? 'planReady' : sourceParsing ? 'parsingIncomplete' : terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
     : ['generating_storyboard', 'awaiting_storyboard_review'].includes(run?.status ?? '') ? 'planning'
       : run?.status === 'generating_scene_images' ? 'illustrating'
         : ['awaiting_scene_images_review', 'generating_video', 'awaiting_video_review'].includes(run?.status ?? '') ? 'reviewing' : 'understanding';
@@ -455,7 +455,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     {guideTaskId && !guided && !guideLoading && error ? <button type="button" onClick={() => setGuideRetry(value => value + 1)} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {run && narrative ? <div className="mt-4 border-t border-os-rule-paper pt-4">
       <p className="font-semibold text-os-ink" role="status">{t(`narrative.status.${narrativeStage}`)}</p>
-      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(sourceParsing ? 'sourceParsingDescription' : terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
+      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(run.generationHold === 'image-api-pending' ? 'narrative.planReadyDescription' : sourceParsing ? 'sourceParsingDescription' : terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
       {sourceParsing?.unresolvedPageNumbers?.length ? <p className="mt-2 text-sm text-os-muted-paper">{t('sourceParsingPages', { pages: sourceParsing.unresolvedPageNumbers.join(', ') })}</p> : null}
       {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {showSourceReanalysis ? <div className="mt-4">

@@ -467,3 +467,5 @@ export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllu
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
 export { initialNativeAgentExecution, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority,
   type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
+
+export { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, hasSingleReviewedVisualSource, readVisualNarrativeSource } from './assets/illustration-source';

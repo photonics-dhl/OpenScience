@@ -3,7 +3,7 @@ import { chmod, mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { nativeAgentSdkRequest } from '@openscience/ai-gateway';
-import type { createNativeAgentSession, NativeAgentSessionStore } from './session';
+import { NativeAgentSessionError, type createNativeAgentSession, type NativeAgentSessionStore } from './session';
 import type { createNativePaperTools } from './paper-tools';
 
 type Config = { taskId: string; runtimeId: string; skillCatalogueId: string; model: string;
@@ -115,7 +115,7 @@ export async function runHostedNativeTask(input: {
     } catch (error) {
       input.onStopped?.(error);
       respond(res, 409, { error: { code: 'NATIVE_TASK_STOPPED', message: 'Native task cannot continue in this scope.' } });
-      stop('[blocked] Native task transport stopped; original receipts retained');
+      stop(error instanceof NativeAgentSessionError ? error.message : '[blocked] Native task transport stopped; original receipts retained');
     }
   });
   server.requestTimeout = 10_000;

@@ -417,6 +417,17 @@ function validateRuntimeSnapshot(value, sourceSha) {
   return value;
 }
 
+/** Bound open files while keeping the original serialized identity order and failure selection. */
+export async function* runtimeIdentityBatches(entries, identify) {
+  for (let offset = 0; offset < entries.length; offset += 8) {
+    const batch = await Promise.allSettled(entries.slice(offset, offset + 8).map(identify));
+    for (const item of batch) {
+      if (item.status === 'rejected') throw item.reason;
+      yield item.value;
+    }
+  }
+}
+
 export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
   if (!SHA_PATTERN.test(sourceSha)) throw new Error('source SHA must be a full Git commit SHA');
   const canonical = await canonicalRoot(root);
@@ -446,7 +457,7 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
     ...runtimeLeaves,
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   const aggregate = createHash('sha256');
-  for (const item of runtimeEntries) {
+  for await (const identity of runtimeIdentityBatches(runtimeEntries, async (item) => {
     let identity;
     if (item.type === 'file') {
       identity = {
@@ -466,6 +477,8 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
     } else {
       throw new Error(`unsupported generated runtime entry: ${item.path}`);
     }
+    return identity;
+  })) {
     aggregate.update(`${JSON.stringify(identity)}\n`);
   }
   return {

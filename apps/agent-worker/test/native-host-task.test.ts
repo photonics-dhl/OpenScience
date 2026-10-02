@@ -18,7 +18,7 @@ function post(socketPath: string, path: string, value: unknown) {
     request.on('error', reject); request.end(JSON.stringify(value));
   });
 }
-async function fixture(finalText = 'final') {
+async function fixture(finalText = 'final', stopReason = 'end_turn') {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
   let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
   const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, options) => {
@@ -27,7 +27,7 @@ async function fixture(finalText = 'final') {
     return new Response(JSON.stringify({ model: 'MiniMax-M3', content: first ? [
       { type: 'thinking', thinking: 'x'.repeat(3000), signature: 'private' }, { type: 'text', text: 'x'.repeat(3000) },
       { type: 'tool_use', id: 'read-1', name: 'paper_read', input: { passageIds: ['P00001'] } },
-    ] : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : 'end_turn', usage: { input_tokens: 5, output_tokens: 5 } }));
+    ] : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : stopReason, usage: { input_tokens: 5, output_tokens: 5 } }));
   });
   const binding = { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
     runtimeId: 'fixture', skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
@@ -52,6 +52,23 @@ async function fixture(finalText = 'final') {
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
+  it('reports an unsupported paid response without flattening it into a transport error or submitting again', async () => {
+    const f = await fixture('Incomplete review {', 'tool_use');
+    try {
+      const first = await post(f.socketPath, '/v1/chat/completions', f.sdk);
+      const args = { passageIds: ['P00001'] };
+      await post(f.socketPath, '/task/tools/authorize', { name: 'paper_read', arguments: args });
+      const read = await post(f.socketPath, '/task/tools/call', { name: 'paper_read', arguments: args });
+      const message = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
+      const rejected = await post(f.socketPath, '/v1/chat/completions', { ...f.sdk, messages: [...f.sdk.messages, message,
+        { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(read.body) }] });
+      expect(rejected.status).toBe(409);
+      await expect(f.final).rejects.toThrow('provider response has no valid completion or tool call');
+      expect(f.state.turns.at(-1)).toMatchObject({ state: 'completed', response: {
+        text: 'Incomplete review {', providerStopReason: 'tool_use' } });
+      expect(f.providerCalls).toBe(2);
+    } finally { await f.cleanup(); }
+  });
   it.each([
     { raw: ' \nfinal \n', normalized: 'final', accepted: true },
     { raw: 'final', normalized: 'changed', accepted: false },

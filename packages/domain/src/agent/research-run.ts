@@ -21,6 +21,7 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
 import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
+import { readNativeAgentExecution } from './native-agent-execution';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -94,6 +95,7 @@ export interface HermesResearchRunView {
   profile: GenerationProfile | null;
   maxAgentTasks: number | null;
   generationSettings?: HermesNarrativeSettings | null;
+  generationHold?: 'image-api-pending';
   sourceClaimIds: string[];
   status: HermesResearchRunStatus;
   version: number;
@@ -330,6 +332,13 @@ export async function getHermesResearchRun(
   if (!ro) throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
+  if (run.status === 'awaiting_storyboard_review') {
+    for (const step of run.steps.filter(item => item.stage === 'storyboard' && item.status === 'awaiting_approval')) {
+      const task = step.agentTaskId ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
+      if (task?.status === 'succeeded' && !task.deletedAt && readNativeAgentExecution(task.result)?.profile === 'paper-illustration')
+        return { ...toView(run), generationHold: 'image-api-pending', canRetryGeneration: false };
+    }
+  }
   if (run.maxAgentTasks === 2) return { ...toView(run), canRetryGeneration: false,
     artStyleContinuation: WRITE_ROLES.has(authority.membership.role)
       ? await getHermesArtStyleContinuationCapability(deps.prisma, run) : { eligibleImages: [], maxAgentTasks: 2 } };
@@ -2225,6 +2234,11 @@ async function advanceAutomaticSources(deps: HermesResearchRunDeps, run: RunRow)
 async function advanceAutomaticAssetReviews(deps: HermesResearchRunDeps, run: RunRow): Promise<void> {
   const stage = run.status === 'awaiting_storyboard_review' ? 'storyboard' : 'scene_image';
   for (const step of run.steps.filter(item => item.stage === stage && item.status === 'awaiting_approval')) {
+    const task = stage === 'storyboard' && step.agentTaskId
+      ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
+    // Native plans are the handoff to the replacement image API. Preserve the private
+    // plan at the existing review boundary until that renderer is connected.
+    if (readNativeAgentExecution(task?.result)?.profile === 'paper-illustration') continue;
     if (step.presentationAssetId) await transitionHermesPresentationAsset(deps, { runId: run.id, assetId: step.presentationAssetId });
   }
 }
@@ -3437,6 +3451,14 @@ export async function reconcileHermesResearchRuns(
             }
             const waiting = stage === 'storyboard' ? 'awaiting_storyboard_review' : stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_video_review';
             return moveRun(deps, tx, run, waiting, ro.workspaceId);
+          }
+          if (run.status === 'awaiting_storyboard_review'
+            && steps.some(step => readNativeAgentExecution(step.agentTask?.result)?.profile === 'paper-illustration')) {
+            // Even an explicit approval cannot dispatch the retired renderer for a new
+            // Native plan. This also precedes adoption of an approved revision.
+            await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version },
+              data: { lastReconciledAt: now(deps) } });
+            return null;
           }
           if (run.status === 'awaiting_storyboard_review' && run.versionId && steps.length === 1) {
             const step = steps[0]!;

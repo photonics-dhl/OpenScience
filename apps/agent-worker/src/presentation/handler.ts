@@ -1,4 +1,9 @@
+import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity } from '@openscience/domain';
 import { planSceneImagePrompt } from './scene-image';
+import { getBlobStorageKey } from '@openscience/storage';
+import { readNativeAgentExecution, requireNativeAgentExecutionAuthority } from '@openscience/domain';
+import { runNativeIllustrationTask } from '../native-agent/illustration-task';
+import type { NativePaperImage } from '../native-agent/paper-tools';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, generatedSceneImageRequiresPixelReview, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
@@ -23,11 +28,6 @@ import { clarifyIllustrationLabels, generateIllustrationStoryboard, type Storybo
 import { hasSingleReviewedVisualSource, readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
 import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
-function presentationClaimContent(claims: readonly PresentationClaim[]): string {
-  return JSON.stringify(canonicalPresentationClaims(claims).map(({ id, parentClaimId, kind, statement, assessment, conditions, limitations, extractionStatus }) => ({
-    id, parentClaimId, kind, statement, assessment, conditions, limitations, extractionStatus,
-  })));
-}
 
 type StoryboardPlan = Awaited<ReturnType<typeof generateStoryboard>> & { reviewFormat?: 2 };
 // Match task claim/completion and asset persistence: retry only rolled-back database conflicts.
@@ -87,7 +87,8 @@ type StoryboardArtCorrection = {
 
 function privateStoryboardResult(result: unknown): Record<string, unknown> {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return {};
-  return Object.fromEntries(['storyboardCheckpoint', 'storyboardPlanningCheckpoint', 'storyboardReview', 'storyboardAcceptanceCheckpoint', 'storyboardArtCorrection']
+  return Object.fromEntries(['storyboardCheckpoint', 'storyboardPlanningCheckpoint', 'storyboardReview', 'storyboardAcceptanceCheckpoint', 'storyboardArtCorrection',
+    'sourceMapRef', 'nativeIllustrationContext', 'nativeIllustration', 'illustrationPrompts']
     .filter(key => Object.hasOwn(result, key)).map(key => [key, (result as Record<string, unknown>)[key]]));
 }
 
@@ -349,32 +350,6 @@ async function readStoryboardPlanningContext(
       : revision ? JSON.stringify({ revision: revision.identity, base: revisionContext?.identity ?? null }) : base?.identity ?? null };
 }
 
-async function readReviewedPresentationEvidence(
-  prisma: Pick<Prisma.TransactionClient, 'evidenceRecord'>,
-  scope: { researchObjectId: string; versionId: string; sourceClaimIds: string[] },
-  lineageByClaim?: ReadonlyMap<string, unknown>,
-) {
-  const candidates = await prisma.evidenceRecord.findMany({ where: {
-    researchObjectId: scope.researchObjectId, versionId: scope.versionId,
-    claimId: { in: scope.sourceClaimIds }, extractionStatus: 'succeeded', exactQuote: { not: null },
-  }, orderBy: [{ claimId: 'asc' }, { id: 'asc' }] });
-  const rows = lineageByClaim ? candidates.filter((row) => {
-    const origin = row.provenance as Record<string, unknown> | null;
-    const lineage = lineageByClaim.get(row.claimId);
-    return typeof lineage === 'string' && origin?.source === 'reviewed_ingestion' && origin.sourceTaskId === lineage;
-  }) : candidates;
-  if (scope.sourceClaimIds.some((id) => !rows.some((row) => row.claimId === id && row.exactQuote?.trim()))) {
-    throw new Error('[blocked] Each source Claim needs reviewed original evidence before scientific media planning');
-  }
-  return rows;
-}
-
-function presentationEvidenceIdentity(rows: Awaited<ReturnType<typeof readReviewedPresentationEvidence>>): string {
-  return createHash('sha256').update(JSON.stringify(rows.map(({ id, claimId, artifactId, contentHash,
-    exactQuote, relation, locator, extractionStatus, updatedAt, provenance }) => ({
-    id, claimId, artifactId, contentHash, exactQuote, relation, locator, extractionStatus, updatedAt, provenance,
-  })))).digest('hex');
-}
 
 function requireStoryboardSourceSupport(document: StoryboardDocument, claims: readonly PresentationClaim[],
   paperOriginals?: ReadonlyMap<string, { assetId: string; objectKey: string; contentHash: string }>): void {
@@ -581,7 +556,42 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool } = {}): TaskHandler {
+async function resolveStoryboardOriginals(deps: Parameters<TaskHandler>[0], payload: PresentationGenerationPayload) {
+  if (!payload.storyboard || !deps.storage) throw new Error('[blocked] Storyboard source scope is unavailable');
+  let originalSelection = payload.storyboard.figurePlan;
+  if (payload.storyboard.narrative) {
+    const originals = await deps.prisma.presentationAsset.findMany({ where: {
+      researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: 'image',
+      status: 'approved', deletedAt: null, provenance: { path: ['subtype'], equals: 'paper_original_figure' },
+    }, select: { provenance: true } });
+    const ids = originals.flatMap(asset => {
+      const p = asset.provenance as Record<string, unknown> | null;
+      return typeof p?.figureId === 'string' && typeof p.sourceClaimId === 'string'
+        && payload.sourceClaimIds.includes(p.sourceClaimId) ? [p.figureId] : [];
+    });
+    originalSelection = { figures: [...new Set(ids)].map(id => ({ id, decision: 'reuse' as const })) };
+  }
+  const paperOriginals = await findPaperOriginalAssets(deps.prisma, {
+    researchObjectId: payload.researchObjectId,
+    versionId: payload.versionId,
+    figurePlan: originalSelection,
+  });
+  if (payload.storyboard.narrative) {
+    for (const [figureId, original] of paperOriginals) {
+      // Read and verify the full immutable source before excluding a known size
+      // mismatch. Missing/corrupt storage is an error, never an absent figure.
+      const originalBytes = await readPresentationInput(deps.storage, original.objectKey, original.contentHash, 32 * 1024 * 1024);
+      const { width, height } = encodedImageDimensions('image/png', originalBytes);
+      if (originalBytes.length > ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES
+        || width > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE || height > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE
+        || width * height > ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS) paperOriginals.delete(figureId);
+    }
+  } else requirePaperOriginalsForReuse(paperOriginals, payload.storyboard.figurePlan);
+  return paperOriginals;
+}
+
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool;
+  nativeAgent?: { gateway: AiGateway; inboxRoot: string; renderPages(input: { artifactId: string; contentHash: string; content: Buffer; mediaType: 'application/pdf' }, pages: number[]): Promise<NativePaperImage[]> } } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -594,6 +604,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       || owner.session.userId == null || researchObject.id !== payload.researchObjectId
       || researchObject.workspace.status !== 'active') throw new Error('[blocked] presentation task authority is invalid');
     const scope = { userId: owner.session.userId, researchObjectId: payload.researchObjectId, versionId: payload.versionId };
+    const nativeExecution = readNativeAgentExecution(owner.result);
+    if (nativeExecution && (nativeExecution.profile !== 'paper-illustration' || !options.nativeAgent || !payload.storyboard?.narrative))
+      throw new Error('[blocked] Native illustration runtime is unavailable');
     await requirePresentationWriteScope(deps.prisma, scope);
     const requireHermesAuthority = async (prisma: Parameters<typeof requireHermesPresentationTaskAuthority>[0]) => {
       if (!payload.hermesRunAuthority) return false;
@@ -880,6 +893,71 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     let artCorrection: StoryboardArtCorrection | undefined;
     let artCorrectionIdentity: StoryboardCheckpointIdentity | undefined;
     let successfulPrivateResult: Record<string, unknown> | undefined;
+    let nativeIllustration: Awaited<ReturnType<typeof runNativeIllustrationTask>> | undefined;
+    let requireNativeIllustrationUnchanged: ((tx: Prisma.TransactionClient) => Promise<void>) | undefined;
+    const prepareNativeIllustration = async () => {
+      if (!nativeExecution || !options.nativeAgent || !narrativeSource || !payload.storyboard || !sourceMetadata)
+        throw new Error('[blocked] Native illustration requires its reviewed paper and installed host');
+      const identity: StoryboardCheckpointIdentity = { payload, sourceEvidenceIdentity, claimContent: presentationClaimContent(claims),
+        baseIdentity: planningContext.identity, narrativeSourceIdentity: narrativeSource.identity };
+      requireNativeIllustrationUnchanged = async tx => {
+        await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
+        const current = await requireIllustrationReviewAuthority(tx, { taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId });
+        const result = current.owner.result as Record<string, unknown> | null;
+        const currentClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+        if (current.owner.executionAttempt !== task.executionAttempt || !isDeepStrictEqual(current.owner.payload, owner.payload)
+          || currentClaims.length !== claims.length || currentClaims.some(claim => claim.extractionStatus !== 'succeeded')
+          || presentationClaimContent(currentClaims as PresentationClaim[]) !== identity.claimContent
+          || (result?.nativeIllustrationContext !== undefined && !isDeepStrictEqual(result.nativeIllustrationContext, identity))
+          || (result?.sourceMapRef !== undefined && !isDeepStrictEqual(result.sourceMapRef, narrativeSource.reference))
+          || (readNativeAgentExecution(result)?.checkpoint && (!result?.nativeIllustrationContext || !result?.sourceMapRef)))
+          throw new Error('[blocked] Native illustration source or task scope changed');
+        await requireUnchangedEvidence(tx); await requireUnchangedStyleReference(tx);
+        await requireIllustrationOriginalArtifacts(tx, sourceEvidence, researchObject.workspaceId);
+        if ((await readStoryboardPlanningContext(tx, payload, scope.userId)).identity !== identity.baseIdentity)
+          throw new Error('[blocked] Native illustration base changed');
+      };
+      await deps.prisma.$transaction(async tx => {
+        await requireNativeIllustrationUnchanged!(tx);
+        const current = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+        const result = current.result as Record<string, unknown>;
+        if (result.nativeIllustrationContext !== undefined) return;
+        const changed = await tx.agentTask.updateMany({ where: { id: task.id, status: 'running', deletedAt: null,
+          executionAttempt: task.executionAttempt, result: { equals: current.result! } },
+          data: { result: { ...result, nativeIllustrationContext: identity, sourceMapRef: narrativeSource.reference } as unknown as Prisma.InputJsonObject } });
+        if (changed.count !== 1) throw new Error('[blocked] Native illustration initial context changed');
+      }, { isolationLevel: 'Serializable' });
+      const paperOriginals = await resolveStoryboardOriginals(deps, payload);
+      let sourceBytes: Buffer | undefined;
+      const latest = await deps.prisma.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+      nativeIllustration = await runNativeIllustrationTask({ gateway: options.nativeAgent.gateway, deps: { ...deps, storage: deps.storage! },
+        task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap: narrativeSource.sourceMap,
+        sourceMapRef: narrativeSource.reference, sourceEvidenceIdentity, claims, settings: payload.storyboard, paperOriginals,
+        narrativeSource: narrativeSource.context, inboxRoot: options.nativeAgent.inboxRoot, authorize: requireNativeIllustrationUnchanged,
+        renderPages: async pages => {
+          sourceBytes ??= await readPresentationInput(deps.storage!, getBlobStorageKey(narrativeSource.reference.contentHash), narrativeSource.reference.contentHash, 100 * 1024 * 1024);
+          return options.nativeAgent!.renderPages({ artifactId: narrativeSource.reference.artifactId, contentHash: narrativeSource.reference.contentHash,
+            content: sourceBytes, mediaType: 'application/pdf' }, pages);
+        } });
+      const result = nativeIllustration;
+      await deps.prisma.$transaction(async tx => {
+        await requireNativeIllustrationUnchanged!(tx);
+        const current = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+        const stored = current.result as Record<string, unknown>;
+        const cp = readNativeAgentExecution(stored)?.checkpoint;
+        if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || cp.responseHash !== result.review.responseHash
+          || cp.target.promptHash !== result.review.promptHash || cp.target.provider !== result.review.provider || cp.target.model !== result.review.model)
+          throw new Error('[blocked] Native illustration paid completion changed');
+        const planned = { document: result.document, promptHash: result.promptHash, designSkills: result.designSkills, reviewFormat: 2 };
+        const changed = await tx.agentTask.updateMany({ where: { id: task.id, status: 'running', deletedAt: null, executionAttempt: task.executionAttempt,
+          result: { equals: current.result! } }, data: { result: { ...stored,
+          storyboardCheckpoint: { ...identity, planned, executionAttempt: task.executionAttempt }, storyboardReview: result.review,
+          nativeIllustration: result.nativeAgent, illustrationPrompts: result.prompts } as unknown as Prisma.InputJsonObject } });
+        if (changed.count !== 1) throw new Error('[blocked] Native illustration completion context changed');
+      }, { isolationLevel: 'Serializable' });
+      if (result.review.decision !== 'accepted') throw new Error('[blocked] Native illustration needs source-grounded revision: ' + result.review.summary.slice(0, 300));
+      storyboardDocument = result.document; illustrationReview = result.review; designSkills = result.designSkills; promptHash = result.promptHash;
+    };
     if (payload.video && videoParents) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
       if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] isolated video generation is unavailable');
@@ -970,6 +1048,9 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;
       }
     } else if (payload.storyboard) {
+      if (nativeExecution) {
+        await prepareNativeIllustration();
+      } else {
       if (!options.gateway) throw new Error('[blocked] storyboard planner unavailable');
       let planned: StoryboardPlan;
       let acceptance: StoryboardAcceptance | undefined;
@@ -988,35 +1069,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         // user-actionable error rather than silently dropping the scene.
         // Narrative scenes choose source images by explanatory role in reading order.
         // This lookup never imposes the legacy figurePlan reuse-first sequence.
-        let originalSelection = payload.storyboard.figurePlan;
-        if (payload.storyboard.narrative) {
-          const originals = await deps.prisma.presentationAsset.findMany({ where: {
-            researchObjectId: payload.researchObjectId, versionId: payload.versionId, kind: 'image',
-            status: 'approved', deletedAt: null, provenance: { path: ['subtype'], equals: 'paper_original_figure' },
-          }, select: { provenance: true } });
-          const ids = originals.flatMap(asset => {
-            const p = asset.provenance as Record<string, unknown> | null;
-            return typeof p?.figureId === 'string' && typeof p.sourceClaimId === 'string'
-              && payload.sourceClaimIds.includes(p.sourceClaimId) ? [p.figureId] : [];
-          });
-          originalSelection = { figures: [...new Set(ids)].map(id => ({ id, decision: 'reuse' as const })) };
-        }
-        const paperOriginals = await findPaperOriginalAssets(deps.prisma, {
-          researchObjectId: payload.researchObjectId,
-          versionId: payload.versionId,
-          figurePlan: originalSelection,
-        });
-        if (payload.storyboard.narrative) {
-          for (const [figureId, original] of paperOriginals) {
-            // Read and verify the full immutable source before excluding a known size
-            // mismatch. Missing/corrupt storage is an error, never an absent figure.
-            const originalBytes = await readPresentationInput(deps.storage, original.objectKey, original.contentHash, 32 * 1024 * 1024);
-            const { width, height } = encodedImageDimensions('image/png', originalBytes);
-            if (originalBytes.length > ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES
-              || width > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE || height > ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE
-              || width * height > ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS) paperOriginals.delete(figureId);
-          }
-        } else requirePaperOriginalsForReuse(paperOriginals, payload.storyboard.figurePlan);
+        const paperOriginals = await resolveStoryboardOriginals(deps, payload);
         const identity: StoryboardCheckpointIdentity = {
           payload, sourceEvidenceIdentity, claimContent: presentationClaimContent(claims), baseIdentity: planningContext.identity,
           ...(narrativeSource ? { narrativeSourceIdentity: narrativeSource.identity } : {}),
@@ -1470,7 +1523,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         storyboardDocument = reviewed.document; illustrationReview = reviewed.provenance;
         designSkills = mergeDesignSkillUsage(designSkills, reviewed.designSkills);
       }
-      bytes = renderStoryboard(storyboardDocument, payload.storyboard); extension = 'html'; contentType = 'text/html; charset=utf-8';
+      }
+      bytes = renderStoryboard(storyboardDocument!, payload.storyboard); extension = 'html'; contentType = 'text/html; charset=utf-8';
       generator = 'OpenScience Hermes storyboard planner'; generatorVersion = '1';
     } else if (payload.kind === 'chart') {
       bytes = generateClaimChartSvg(claims); extension = 'svg'; contentType = 'image/svg+xml';
@@ -1542,6 +1596,16 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
             || !isDeepStrictEqual(accepted.document, storyboardDocument))
             throw new Error('[blocked] Final storyboard acceptance changed before completion');
         }
+      }
+      if (nativeIllustration) {
+        await requireNativeIllustrationUnchanged!(tx);
+        const saved = currentTask.result as Record<string, unknown>;
+        const cp = readNativeAgentExecution(saved)?.checkpoint;
+        if (cp?.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || cp.responseHash !== nativeIllustration.review.responseHash
+          || !isDeepStrictEqual(saved.storyboardReview, nativeIllustration.review)
+          || !isDeepStrictEqual(saved.nativeIllustration, nativeIllustration.nativeAgent)
+          || !isDeepStrictEqual(saved.illustrationPrompts, nativeIllustration.prompts))
+          throw new Error('[blocked] Native illustration proof changed before asset write');
       }
       successfulPrivateResult = privateStoryboardResult(currentTask.result);
       // withPresentationAssetWrite holds the shared storage-reference lock through upload and row creation.

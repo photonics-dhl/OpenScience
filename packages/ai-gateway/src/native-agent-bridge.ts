@@ -70,7 +70,8 @@ export function nativeAgentSdkRequest(value: unknown, expectedModel: string): { 
 
 /** SDK extra field is preserved by the installed native _build_assistant_message; no extracted thinking text is needed. */
 export function nativeAgentSdkResponse(completion: GatewayCompletion, requestId: string) {
-  if (!completion.toolCalls && completion.finishReason !== 'stop' && completion.finishReason !== 'length') return invalid();
+  if (!completion.toolCalls && completion.finishReason !== 'stop' && completion.finishReason !== 'length')
+    throw new TextProviderError('provider_response_shape', 'Unsupported native agent SDK response');
   return {
     id: requestId, object: 'chat.completion', created: 0, model: completion.model,
     choices: [{ index: 0, finish_reason: completion.finishReason === 'length' ? 'length' : completion.toolCalls ? 'tool_calls' : 'stop',

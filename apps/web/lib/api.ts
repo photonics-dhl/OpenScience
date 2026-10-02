@@ -486,6 +486,7 @@ export interface HermesResearchRun {
   versionId: string | null;
   profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | 'visual-narrative-v1' | null;
   generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction'> | null;
+  generationHold?: 'image-api-pending';
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
   canAuthorizeNarrativeCorrection?: boolean;

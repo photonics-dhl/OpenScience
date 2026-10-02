@@ -93,3 +93,11 @@ Native安装器优先用科学Skill的nativeInstructions/nativeSourceReviewInstr
 三条已有静态断言因API embedding网络、显式Windows SSH/3–5参数、quiesced回退提前phase标记而漂移，原SHA同源基线复现；只校正断言，保留隔离、FD9/锁、布尔标志和切换/镜像检查。actualHTTP/实际shell新回归各见红绿，全套和High工程GO；Linux CI新增既有文件命令及双路径。MJS为既有ESLint忽略项，不声称已lint。BGE init/启动/发布重复全模型校验另属部署债，不冒称论文理解慢或为省时跳过。新精确CI/发布/Native消费及科学结果保持未完成，任务、费用、原文、图片和回退不变。
 
 10-02实际检查点：上游应用已正常发布，Native新方法在安装前runtime-snapshot超时，未创建新bundle或v7；保持旧配对。用户最新生图前内容已先人工按原文准备完整可迁移brief，独立复核修正S(z)宽度与结构成缝措辞，不据此宣称Hermes自动改善。共享科学物化器候选精确CI通过、尚无Native caller。安装性能需保留原完整校验定位，不能用新的模型任务绕过；精确线上与证据只见CURRENT。
+
+## 10-02 自动生图前候选（实施中）
+
+用户明确要求原生自动链路到生图前可用，再提供新API。本次给现有新presentation.generate的同源单论文narrative限定paper-illustration profile；继承普通用户计费/幂等、draft版本、SourceMap和Claims。Native复用原host/session/store，自己阅读原文/原页/完整Skills，通过确定性science/art/review工具物化现有StoryboardDocument，不再调用旧固定模型三阶段。工具记录与终答由真实paid历史选择；所有SDK、工具、最终写资产重核权限/原来源/租约和规划输入，started未知不重发，保留CP及完整可迁移prompt。资产私有draft，standalone不自动approve或调用图像；实际run已有自动审批消费者仍须按用户本轮范围避免进入。
+
+运行校验瓶颈实测是100929项walk/文件hash与浏览器cgroup触顶造成的共享磁盘竞争，closure扫描不是瓶颈。每批8个异步identity按原序归并，所有文件/链接/权限/目录闭包范围保持；拒绝前排空本批。旧串行900s未完成、候选740s完成，环境负载不同，暂不作等价实时digest或稳定性能主张。浏览器8→10GiB同容器在线有界缓解经High条件GO，保留无swap/4CPU/只读/无特权/网络none/原profile，无重启/闭页；未知页面不得清理。installer两条全量verify改900s，其他命令120s；Linux验证与真实安装仍待完成。完成证据与运行身份只记录CURRENT。
+
+- 10-02收敛：自动run使用Native私有图解规划，审批和图片派发前都暂停；GET/UI以image-api-pending显示方案就绪。High发现并修复失败结果私有字段丢失、终态来源并发快照和自动旧通道派发三处问题。新增诊断有限记录stop reason，错误不再笼统归为传输问题，未知提交仍拒收且不重发。代码High GO；一次新合法私有任务须待精确CI/部署，用于真实质量和完整诊断，不能证明v7异常已修复；失败不盲重开，图片仍停用。

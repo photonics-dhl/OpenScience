@@ -27,7 +27,7 @@ export interface NativeAgentSessionStore {
   /** Revalidate the committed started receipt and live lease immediately around actual publication. */
   publish<T>(started: NativeAgentSessionState, submit: () => Promise<T>): Promise<T>;
 }
-class NativeAgentSessionError extends Error {}
+export class NativeAgentSessionError extends Error {}
 function blocked(reason: string): never { throw new NativeAgentSessionError(`[blocked] Native Agent ${reason}`); }
 const semanticCalls = (calls: GatewayCompletion['toolCalls']) => (calls ?? []).map(call => ({ id: call.id,
   type: call.type, name: call.function.name, input: JSON.parse(call.function.arguments) }));
@@ -134,6 +134,8 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       if (result.model !== binding.model) blocked('provider reported a different model');
       if (result.usage.outputTokens > boundedOptions.maxTokens) blocked('provider exceeded reserved output budget');
       if (result.finishReason === 'length') blocked('output truncated; no automatic paid correction');
+      if (!result.toolCalls?.length && result.finishReason !== 'stop')
+        blocked('provider response has no valid completion or tool call; original paid response retained');
       cursor++;
       return nativeAgentSdkResponse(result, `${binding.taskId}:native-turn:${cursor}`);
   }

@@ -15,6 +15,16 @@ const controls = () => ({ beforeProviderAttempt: vi.fn(async () => undefined),
   submitProvider: vi.fn(async (_target: unknown, submit: () => Promise<unknown>) => submit()) });
 
 describe('native Hermes tool round trips through Gateway', () => {
+  it.each(['end_turn', 'max_tokens', 'tool_use', 'stop_sequence', 'pause_turn', 'refusal', 'unexpected-private-value'])(
+    'retains only a whitelisted native provider stop reason: %s', async reason => {
+      const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('m3', config,
+        async () => response([{ type: 'thinking', thinking: 'opaque-private', signature: 'private-signature' },
+          { type: 'text', text: 'Incomplete review {' }], reason))] });
+      const result = await gateway.nativeAgentComplete([{ role: 'user', content: 'Read.' }], { tools: [tool] }, controls());
+      expect(result.providerStopReason).toBe(reason === 'unexpected-private-value' ? 'unrecognized' : reason);
+      expect(result.toolCalls).toBeUndefined();
+      expect(result.text).toBe('Incomplete review {');
+    });
   it.each(['anthropic', 'openai'] as const)('enforces native task bytes on the actual %s HTTP body before checkpoint', async family => {
     const bodies: string[] = [];
     const fetcher = vi.fn(async (_url, options) => {
