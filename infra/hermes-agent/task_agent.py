@@ -1,5 +1,6 @@
 """Thin adapter for the installed Nous AIAgent. The upstream agent owns its loop."""
 from pathlib import Path, PurePosixPath
+from copy import deepcopy
 import json
 import stat
 
@@ -87,19 +88,53 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
                 raise NativeTaskStopped('Native incomplete tool response cannot continue in this scope')
             original_limit = self.max_iterations
             self.max_iterations = original_limit - spent
+            hint = ('Your last response indicated tool use but supplied no tool call. No tool ran for that response. '
+                'Continue from the saved results above and issue the intended call using its tool schema. '
+                'Do not restart the task or save unchanged fields again. Re-read sources as needed for the remaining checks. '
+                'Finish only after the required tools succeed.')
+            added = [result['messages'][-1], {'role': 'user', 'content': hint}]
+            known_tokens = getattr(self, '_native_last_context_tokens', None)
+            self._native_format_context = None
+            if type(known_tokens) is int and known_tokens > 0 and isinstance(getattr(self, '_cached_system_prompt', None), str):
+                self._native_format_context = {
+                    'messages': deepcopy([*result['messages'], added[-1]]), 'instructions': system_message,
+                    'system': self._cached_system_prompt,
+                    # Conservative added-byte estimate, not a model-specific exact token bound.
+                    'tokens': known_tokens + len(json.dumps(added, ensure_ascii=False).encode('utf-8')),
+                }
             try:
                 continued = super().run_conversation(
-                    'Your last response indicated tool use but supplied no tool call. No tool ran for that response. '
-                    'Continue from the saved results above and issue the intended call using its tool schema. '
-                    'Do not restart the task or save unchanged fields again. Re-read sources as needed for the remaining checks. '
-                    'Finish only after the required tools succeed.',
+                    hint,
                     system_message=system_message, conversation_history=result['messages'], task_id=task_id, **kwargs)
                 if missing_call(continued):
                     raise NativeTaskStopped('Native provider omitted a tool call again')
                 continued['api_calls'] = spent + continued.get('api_calls', 0)
                 return continued
             finally:
+                self._native_format_context = None
                 self.max_iterations = original_limit
+
+        def _interruptible_api_call(self, api_kwargs):
+            # The override only measures the already-received response; native owns the call.
+            self._native_format_context = None
+            self._native_last_context_tokens = None
+            response = super()._interruptible_api_call(api_kwargs)
+            tokens = getattr(getattr(response, 'usage', None), 'openscience_context_input_tokens', None)
+            if type(tokens) is int and 0 <= tokens <= 9007199254740991:
+                self._native_last_context_tokens = tokens
+            return response
+
+        def _compress_context(self, messages, system_message, **kwargs):
+            context = getattr(self, '_native_format_context', None)
+            self._native_format_context = None
+            if context and messages == context['messages'] and system_message == context['instructions'] \
+                    and self._cached_system_prompt == context['system']:
+                # Existing inline images were included in actual prompt usage. Counting
+                # their base64 as fresh text here would spuriously compress this prefix.
+                if context['tokens'] < self.context_compressor.threshold_tokens:
+                    return messages, self._cached_system_prompt
+                kwargs['approx_tokens'] = context['tokens']
+            return super()._compress_context(messages, system_message, **kwargs)
 
         def _create_openai_client(self, client_kwargs, *, reason, shared):
             import httpx

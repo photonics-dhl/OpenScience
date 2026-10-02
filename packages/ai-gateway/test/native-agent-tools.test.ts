@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiGateway } from '../src/gateway';
+import { nativeAgentSdkResponse } from '../src/native-agent-bridge';
 import { AnthropicCompatProvider, OpenAiCompatProvider, type ChatMessage } from '../src/provider';
 
 const tool = { type: 'function' as const, function: { name: 'paper_read', description: 'Read exact source passages.',
@@ -15,6 +16,25 @@ const controls = () => ({ beforeProviderAttempt: vi.fn(async () => undefined),
   submitProvider: vi.fn(async (_target: unknown, submit: () => Promise<unknown>) => submit()) });
 
 describe('native Hermes tool round trips through Gateway', () => {
+  it.each([
+    [{ input_tokens: 31, cache_read_input_tokens: 4000, cache_creation_input_tokens: 120 }, 4151],
+    [{ input_tokens: 31, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, 31],
+    [{ input_tokens: 31, cache_read_input_tokens: 4000 }, undefined],
+    [{ input_tokens: 31, cache_read_input_tokens: -1, cache_creation_input_tokens: 0 }, undefined],
+    [{ input_tokens: 31, cache_read_input_tokens: 1.5, cache_creation_input_tokens: 0 }, undefined],
+    [{ input_tokens: 31, cache_read_input_tokens: '4000', cache_creation_input_tokens: 0 }, undefined],
+    [{ input_tokens: 31, cache_read_input_tokens: Number.MAX_SAFE_INTEGER, cache_creation_input_tokens: 0 }, undefined],
+  ])('reports known complete native context separately from existing usage: %j', async (usage, expected) => {
+    const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('m3', config,
+      async () => new Response(JSON.stringify({ model: config.model, content: blocks, stop_reason: 'tool_use',
+        usage: { ...usage, output_tokens: 8 } })))] });
+    const result = await gateway.nativeAgentComplete([{ role: 'user', content: 'Read.' }], { tools: [tool] }, controls());
+    expect(result.usage).toEqual({ inputTokens: 31, outputTokens: 8 });
+    expect(result.contextInputTokens).toBe(expected);
+    const sdk = nativeAgentSdkResponse(result, 'context-turn');
+    expect(sdk.usage.prompt_tokens).toBe(expected ?? 31);
+    expect(sdk.usage.openscience_context_input_tokens).toBe(expected);
+  });
   it.each(['end_turn', 'max_tokens', 'tool_use', 'stop_sequence', 'pause_turn', 'refusal', 'unexpected-private-value'])(
     'retains only a whitelisted native provider stop reason: %s', async reason => {
       const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('m3', config,

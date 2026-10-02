@@ -9,18 +9,22 @@ const { runHostedNativeTask } = require('./worker-dist/host-task.js');
 async function main() {
   const directory = process.env.OFFLINE_NATIVE_ROOT;
   if (!directory || !path.isAbsolute(directory)) throw new Error('Missing owned offline fixture directory');
-  const missingTool = process.env.OFFLINE_NATIVE_SCENARIO === 'missing-tool';
-  const repeatedMissingTool = process.env.OFFLINE_NATIVE_SCENARIO === 'repeated-missing-tool';
+  const scenario = process.env.OFFLINE_NATIVE_SCENARIO;
+  const largeImage = scenario === 'missing-tool-after-image' || scenario === 'repeated-missing-tool-after-image';
+  const missingTool = scenario === 'missing-tool' || scenario === 'missing-tool-after-image';
+  const repeatedMissingTool = scenario === 'repeated-missing-tool' || scenario === 'repeated-missing-tool-after-image';
   const hasMissingTool = missingTool || repeatedMissingTool;
   const crashAfter = hasMissingTool ? 5 : 3;
   const taskId = 'af36958a-d6d0-4666-a69c-e3c60170b17f';
   const png = fs.readFileSync(path.join(directory, 'fixture.png')).toString('base64');
+  if (largeImage && png.length < 1_048_576) throw new Error('Large-image fixture must exercise native preflight estimation');
+  const maxInputBytes = largeImage ? 8_000_000 : 1_000_000;
   const source = { artifactId: 'offline-paper', documentSha256: 'a'.repeat(64) };
   const stateFile = path.join(directory, 'private-state.json');
   const sequence = [['skills_list', {}], ['skill_view', { name: 'paper-method' }],
     ['skill_view', { name: 'paper-method', file_path: 'references/geometry.md' }],
-    ['paper_read', { passageIds: ['P00021'] }], ['paper_view', { pages: [2] }]];
-  let calls = 0; let pagePixelsSeen = false; let SDKRequests = 0;
+    ['paper_read', { passageIds: ['P00021'] }], largeImage ? ['paper_read', { passageIds: ['P00021'] }] : ['paper_view', { pages: [2] }]];
+  let calls = 0; let pagePixelsSeen = false; let SDKRequests = 0; let correctionHistoryMessages = 0;
   const read = () => fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null;
   const write = (expected, next) => {
     if (!util.isDeepStrictEqual(read(), expected)) throw new Error('Offline checkpoint CAS lost');
@@ -38,7 +42,7 @@ async function main() {
     }
     const omitted = hasMissingTool && (ordinal === 4 || repeatedMissingTool && ordinal === 5);
     const sequenceIndex = hasMissingTool && ordinal > 4 ? ordinal - 1 : ordinal;
-    if (!omitted && sequenceIndex === sequence.length) {
+    if ((largeImage && ordinal === 5) || (!omitted && sequenceIndex === sequence.length)) {
       const images = body.messages.flatMap(m => Array.isArray(m.content) ? m.content : []).filter(p => p.type === 'image');
       if (images.length !== 1 || images[0].source.data !== png) throw new Error('Actual paper pixels did not reach Anthropic HTTP');
       pagePixelsSeen = true;
@@ -47,7 +51,14 @@ async function main() {
     if (omitted) content.push({ type: 'text', text: 'Preparing the next source tool.' });
     else if (sequenceIndex < sequence.length) content.push({ type: 'tool_use', id: `native-${ordinal}`, name: sequence[sequenceIndex][0], input: sequence[sequenceIndex][1] });
     else content.push({ type: 'text', text: 'Offline native source and actual page pixels received.' });
-    return new Response(JSON.stringify({ model: 'MiniMax-M3', content, stop_reason: omitted || sequenceIndex < sequence.length ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } }));
+    if (largeImage && ordinal === 3) {
+      // More than protect_first_n + protect_last_n + 1 messages, with real inline
+      // pixels already in history when the incomplete tool response arrives.
+      for (let extra = 0; extra < 13; extra++) content.push({ type: 'tool_use', id: `extra-${extra}`, name: 'paper_read', input: { passageIds: ['P00021'] } });
+      content.push({ type: 'tool_use', id: 'large-page', name: 'paper_view', input: { pages: [2] } });
+    }
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content, stop_reason: omitted || sequenceIndex < sequence.length ? 'tool_use' : 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 5, ...(largeImage ? { cache_read_input_tokens: 20000, cache_creation_input_tokens: 0 } : {}) } }));
   });
   const gateway = new AiGateway({ providers: [provider] });
   const sourceTools = [
@@ -57,7 +68,7 @@ async function main() {
   const deadlineAt = Date.now() + 180_000;
   const binding = { taskId, ...source, sourceMapHash: 'b'.repeat(64), runtimeId: 'offline-installed-native-0.10', skillCatalogueId: 'offline-full-science-skill',
     model: 'MiniMax-M3', allowedTools: ['skills_list', 'skill_view', 'paper_read', 'paper_view'], maxTurns: 8,
-    maxOutputTokens: 512, maxTotalOutputTokens: 4096, maxInputBytes: 1_000_000, deadlineAt };
+    maxOutputTokens: 512, maxTotalOutputTokens: 4096, maxInputBytes, deadlineAt, ...(largeImage ? { contextWindowTokens: 512_000 } : {}) };
   for (const attempt of [1, 2]) {
     const session = createNativeAgentSession({ gateway, binding, store, authorize: async () => undefined });
     const original = session.complete;
@@ -65,6 +76,13 @@ async function main() {
     session.complete = async request => {
       // Crash between completed turns, not after starting a new paid request.
       if (attempt === 1 && thisRunRequests === crashAfter) throw new Error('Offline interrupted native process');
+      if (largeImage && thisRunRequests === crashAfter) {
+        const messages = nativeAgentSdkRequest(request, binding.model).messages;
+        correctionHistoryMessages = messages.filter(message => message.role !== 'system').length;
+        const images = messages.flatMap(message => message.images ?? []);
+        if (correctionHistoryMessages <= 24 || images.length !== 1 || images[0].data !== png)
+          throw new Error('Correction did not preserve the actual long history and original page pixels');
+      }
       thisRunRequests++; SDKRequests++;
       try { return await original(request); }
       catch (error) {
@@ -89,10 +107,11 @@ async function main() {
       return { content: [{ type: 'text', text: `Original paper ${source.documentSha256}; page 2.` }, { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } }] };
     } };
     try {
-      const result = await runHostedNativeTask({ inboxRoot: path.join(directory, 'inbox'), executionAttempt: attempt, deadlineAt, maxInputBytes: 1_000_000,
+      const result = await runHostedNativeTask({ inboxRoot: path.join(directory, 'inbox'), executionAttempt: attempt, deadlineAt, maxInputBytes,
         config: { taskId, runtimeId: binding.runtimeId, skillCatalogueId: binding.skillCatalogueId, model: binding.model,
           goal: 'Use native Skills including the full geometry reference, read the bound paper, inspect actual page 2, then report completion.',
-          instructions: 'Use only the supplied native Skills and bound paper tools.', maxTurns: 8, maxOutputTokens: 512, sourceTools }, session, store, authorize: async () => undefined, paper,
+          instructions: 'Use only the supplied native Skills and bound paper tools.', maxTurns: 8, maxOutputTokens: 512, sourceTools,
+          ...(largeImage ? { contextWindowTokens: 512_000 } : {}) }, session, store, authorize: async () => undefined, paper,
         onStopped: error => process.stderr.write(`Fixture transport stopped: ${error.name}: ${error.message}\n`) });
       if (repeatedMissingTool || attempt !== 2 || result.finalResponse !== 'Offline native source and actual page pixels received.') throw new Error('Unexpected offline final response');
     } catch (error) {
@@ -101,12 +120,13 @@ async function main() {
     }
   }
   const expectedCalls = missingTool ? 7 : 6;
-  if (calls !== expectedCalls || SDKRequests !== crashAfter + expectedCalls || pagePixelsSeen !== !repeatedMissingTool)
+  if (calls !== expectedCalls || SDKRequests !== crashAfter + expectedCalls || pagePixelsSeen !== (largeImage || !repeatedMissingTool))
     throw new Error('Offline replay submitted duplicate model calls');
   process.stdout.write(JSON.stringify({ actualNativeProcess: true, isolatedTaskAttempts: 2, completedResponsesReplayed: crashAfter,
     mockGatewaySubmissions: calls, nativeSDKRequests: SDKRequests, actualPagePixelsInAnthropicHTTP: pagePixelsSeen,
     ...(hasMissingTool ? { missingToolResponsePreserved: read().turns[4].response.providerStopReason === 'tool_use',
       nativeFormatCorrectionCompleted: missingTool, repeatedMissingToolStopped: repeatedMissingTool } : {}),
+    largeImageContinuation: largeImage, ...(largeImage ? { correctionHistoryMessages } : {}),
     completeProviderContinuation: true, externalProviderCalls: 0, scientificQualityValidated: false }));
 }
 main().catch(error => { process.stderr.write(`Offline native host fixture failed: ${error.message}\n`); process.exitCode = 1; });

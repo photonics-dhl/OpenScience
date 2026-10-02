@@ -139,6 +139,8 @@ export interface ProviderResult {
   finishReason?: 'stop' | 'length' | 'other' | 'unknown';
   /** Private native-turn diagnostic; arbitrary provider strings are never retained here. */
   providerStopReason?: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'pause_turn' | 'refusal' | 'unrecognized' | 'missing';
+  /** Private native context accounting, including reported cache tokens; existing billing usage is unchanged. */
+  contextInputTokens?: number;
   toolCalls?: readonly ChatToolCall[];
   providerContent?: ProviderAssistantContent;
 }
@@ -201,6 +203,13 @@ export class TextProviderError extends Error {
 
 function reportedTokens(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function nativeContextInputTokens(usage: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined): number | undefined {
+  const buckets = [usage?.input_tokens, usage?.cache_read_input_tokens, usage?.cache_creation_input_tokens].map(reportedTokens);
+  if (buckets.some(value => value === null)) return undefined;
+  const total = buckets.reduce<number>((sum, value) => sum + value!, 0);
+  return Number.isSafeInteger(total) ? total : undefined;
 }
 
 function finishReason(value: unknown): ProviderResult['finishReason'] {
@@ -411,7 +420,7 @@ export class AnthropicCompatProvider implements Provider {
       if (!res.ok) throw new TextProviderError('provider_http', `Provider ${this.name} HTTP ${res.status}`, res.status);
       let data: {
         content?: Array<Record<string, unknown>>;
-        usage?: { input_tokens?: number; output_tokens?: number };
+        usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
         model?: string;
         stop_reason?: unknown;
       };
@@ -449,7 +458,7 @@ export class AnthropicCompatProvider implements Provider {
         text,
         ...(toolCalls ? { toolCalls } : {}),
         ...(providerContent ? { providerContent } : {}),
-        ...(tools ? { providerStopReason: nativeProviderStopReason(data.stop_reason) } : {}),
+        ...(tools ? { providerStopReason: nativeProviderStopReason(data.stop_reason), contextInputTokens: nativeContextInputTokens(data.usage) } : {}),
         usage: {
           inputTokens: data.usage?.input_tokens ?? 0,
           outputTokens: data.usage?.output_tokens ?? 0,

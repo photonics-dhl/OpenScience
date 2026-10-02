@@ -16,6 +16,64 @@ class NativeStub:
 
 
 class AdapterTests(unittest.TestCase):
+    def continuation_fixture(self, context_tokens=1000, mutation=None, threshold=256000, fail=False):
+        history=[{'role':'user','content':'Original goal'}, {'role':'assistant','content':'Preparing review.',
+            'finish_reason':'tool_calls','reasoning_details':[{'opaque':'unchanged'}]}]
+        compressed=[];observed=[]
+        class NativeConversation:
+            def __init__(self):
+                self.max_iterations=8;self._cached_system_prompt='Actual original system'
+                self.context_compressor=SimpleNamespace(threshold_tokens=threshold);self.runs=0
+            def _interruptible_api_call(self, request):
+                observed.append(getattr(self,'_native_format_context',None))
+                if fail and self.runs==2:raise RuntimeError('transport stopped')
+                return SimpleNamespace(usage=SimpleNamespace(openscience_context_input_tokens=context_tokens))
+            def _compress_context(self,messages,system_message,**kwargs):
+                compressed.append(kwargs.get('approx_tokens'))
+                return messages,'Compressed system'
+            def run_conversation(self,user_message,system_message=None,conversation_history=None,task_id=None,**kwargs):
+                self.runs+=1
+                if self.runs==1:
+                    self._interruptible_api_call({})
+                    return {'messages':history,'final_response':'Preparing review.','api_calls':3,'completed':True}
+                messages=[*conversation_history,{'role':'user','content':user_message}]
+                if mutation=='history':messages[0]={'role':'user','content':'Changed goal'}
+                if mutation=='cached-system':self._cached_system_prompt='Changed actual system'
+                result=self._compress_context(messages,system_message,approx_tokens=900000,task_id=task_id)
+                observed.append(result[1])
+                self._interruptible_api_call({})
+                return {'messages':messages,'final_response':'Done.','api_calls':1,'completed':True}
+        cls=create_task_agent_class(NativeConversation,lambda:None,{'paper_read'})
+        return cls(),compressed,observed
+
+    def test_continuation_uses_known_context_without_counting_existing_image_base64_again(self):
+        agent,compressed,observed=self.continuation_fixture()
+        agent.run_conversation('Original goal',system_message='Instructions',task_id='same-task')
+        self.assertEqual(compressed,[])
+        self.assertIn('Actual original system',observed)
+        self.assertIsNone(observed[-1])
+        self.assertIsNone(getattr(agent,'_native_format_context',None))
+
+    def test_continuation_missing_invalid_or_changed_context_uses_original_compressor(self):
+        for tokens,mutation in [(None,None),(-1,None),(1.5,None),(True,None),(1000,'history'),(1000,'cached-system')]:
+            with self.subTest(tokens=tokens,mutation=mutation):
+                agent,compressed,_=self.continuation_fixture(context_tokens=tokens,mutation=mutation)
+                agent.run_conversation('Original goal',system_message='Instructions',task_id='same-task')
+                self.assertEqual(compressed,[900000])
+
+    def test_continuation_over_threshold_uses_compressor_and_does_not_leak_into_later_calls(self):
+        agent,compressed,_=self.continuation_fixture(context_tokens=256000)
+        agent.run_conversation('Original goal',system_message='Instructions',task_id='same-task')
+        self.assertGreater(compressed[0],256000)
+        agent._compress_context([], 'Instructions', approx_tokens=700000)
+        self.assertEqual(compressed[-1],700000)
+
+    def test_continuation_exception_clears_context_and_restores_iteration_limit(self):
+        agent,_,_=self.continuation_fixture(fail=True)
+        with self.assertRaises(RuntimeError):agent.run_conversation('Original goal',system_message='Instructions',task_id='same-task')
+        self.assertIsNone(getattr(agent,'_native_format_context',None))
+        self.assertEqual(agent.max_iterations,8)
+
     def test_missing_call_never_reopens_exhausted_errored_or_interrupted_native_results(self):
         for patch in [{'api_calls':8},{'api_calls':0},{'error':'failed'},{'interrupted':True},{'partial':True}]:
             with self.subTest(patch=patch):

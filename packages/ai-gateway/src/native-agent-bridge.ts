@@ -88,7 +88,8 @@ export function nativeAgentSdkResponse(completion: GatewayCompletion, requestId:
         ...(completion.toolCalls ? { tool_calls: completion.toolCalls } : {}),
         ...(completion.providerContent ? { reasoning_details: [{ type: 'openscience-provider-content', provider_content: completion.providerContent }] } : {}),
       } }],
-    usage: { prompt_tokens: completion.usage.inputTokens, completion_tokens: completion.usage.outputTokens,
-      total_tokens: completion.usage.inputTokens + completion.usage.outputTokens },
+    usage: { prompt_tokens: completion.contextInputTokens ?? completion.usage.inputTokens, completion_tokens: completion.usage.outputTokens,
+      total_tokens: (completion.contextInputTokens ?? completion.usage.inputTokens) + completion.usage.outputTokens,
+      ...(completion.contextInputTokens === undefined ? {} : { openscience_context_input_tokens: completion.contextInputTokens }) },
   };
 }

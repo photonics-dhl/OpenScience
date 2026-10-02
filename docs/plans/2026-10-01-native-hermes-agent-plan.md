@@ -107,3 +107,9 @@ Native安装器优先用科学Skill的nativeInstructions/nativeSourceReviewInstr
 v8实际paid回复stop_reason=tool_use但只有thinking/text，没有tool_use块；不是未知发送或GPT网络故障。保持原CP的other与完整不透明内容，SDK如实标tool_calls而不造调用或标stop。TaskAgent只对这个完整响应沿原AIAgent.run_conversation继续一次，携带完整历史、同task/system并减去已用迭代；原Worker总输出/turn/deadline不变，已付prefix计数保证重放不能增加纠正次数。第二次同类异常保存后拒绝，length/未知started/权限撤回不继续。提示允许为科学核对回读，不重启任务或重复保存未变化字段。最终host仍要求真实终答与原科学物化。
 
 独立High最终GO；Gateway47、Worker35、Python12+1Windows skip、UI24及build/TC/scopedlint通过。真实安装Agent的隔离LinuxUDS离线运行证明首次异常后进程中断、重放5回答、正确后续工具/像素/终答；重复异常零采用，零外呼。该证据不证明真实科学质量。新说明去掉新来源分析入口的旧ChatGPT订阅提示，历史Web任务身份不变。精确CI/配对发布和新的真实论文验证见CURRENT；旧v8不重开。
+
+## 大图片与长历史续行的上下文估量
+
+v9的两页图片编码被已安装Native rough estimator当普通文字，887765估量超过512k上下文的50%阈值；去图片编码仅64579。短历史控制没有进入preflight，实际26消息大图离线重现compression改变原prefix而被Worker拒收。薄适配器沿已有_interruptible_api_call与_compress_context虚方法，仅对同一次缺工具回复、完整历史加固定hint且实际cached system相同的首次API前续行，用供应商明确三个合法usage字段之和加末assistant（含opaque）/hint的UTF8序列化字节作保守增量估量；不称精确token上界。已知总数通过private SDK extra传递，原计费Usage不变；缺失/非法/历史变更或真正超阈值走原compressor，首次API及finally清暂态。原压缩器、阈值、paidCP和权限/预算保持，不新建审批或恢复grant。
+
+元数据依据为[MiniMax官方缓存说明](https://platform.minimax.io/docs/api-reference/text-prompt-caching)。新增native tools/adapter边界回归，tracked offline_host新增missing-tool-after-image及repeated-missing-tool-after-image，保留真实像素/长历史/崩溃重放。实际安装Agent离线已RED→GREEN、零真实Provider；科学未通过，v9保留终态。运行版本、最终审查及真实续作只见CURRENT。
