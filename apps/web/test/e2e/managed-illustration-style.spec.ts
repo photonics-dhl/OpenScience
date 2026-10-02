@@ -109,6 +109,13 @@ test('ordinary author switches only displayed scene 2 and follows the managed ch
   await choices.scrollIntoViewIfNeeded();
   await page.screenshot({ path: resolve(evidence, 'managed-style-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => {
+    const excess = document.documentElement.scrollWidth - innerWidth;
+    if (excess <= 0) return [];
+    return Array.from(document.querySelectorAll<HTMLElement>('[data-managed-style-image], [data-managed-style-image] *'))
+      .filter(element => element.getBoundingClientRect().right > innerWidth)
+      .map(element => ({ tag: element.tagName, className: element.className, right: Math.round(element.getBoundingClientRect().right) }));
+  })).toEqual([]);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(choices.getByRole('button', { name: 'Use this style and generate a new image', exact: true })).toBeVisible();
   await page.screenshot({ path: resolve(evidence, 'managed-style-mobile-390.png'), fullPage: true });

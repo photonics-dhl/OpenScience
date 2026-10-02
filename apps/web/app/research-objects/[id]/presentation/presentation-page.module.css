@@ -76,6 +76,9 @@
 }
 .content [data-presentation-workbench] > header p { max-width: 65ch; font-size: 13px; line-height: 1.7; }
 .content [data-presentation-result] { min-width: 0; }
+.content [data-managed-style-image] ul { list-style: none; padding-inline-start: 0; }
+.content [data-managed-style-image] :is(ul, li, button) { box-sizing: border-box; min-width: 0; }
+.content [data-managed-style-image] button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .content [data-presentation-result] + [data-presentation-result] { padding-top: 32px; border-top: 1px solid var(--craft-rule, #dce5e5); }
 .content [data-presentation-result] h3 { max-width: 46ch; font: 500 22px/1.5 var(--font-reading-serif, Georgia, serif); letter-spacing: -.01em; text-wrap: balance; overflow-wrap: anywhere; }
 .content [data-presentation-result] figure > div { border-radius: 6px; background: #f4f7f8; }
