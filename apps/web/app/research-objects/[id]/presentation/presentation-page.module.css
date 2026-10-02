@@ -25,6 +25,8 @@
   box-shadow: 0 3px 8px rgb(24 47 53 / .035), 0 20px 48px rgb(24 47 53 / .07);
 }
 .layout > .content > div:has(> label > select) { gap: 16px 24px; padding: 20px 0; }
+.layout > .content > div:has(> label > select) > label { min-width: 0; max-width: 100%; }
+.layout > .content > div:has(> label > select) > label > select { flex: 1 1 auto; min-width: 0; }
 .content select { max-width: 100%; min-height: 44px; padding-block: 8px; font: 400 14px/1.6 var(--font-ui); }
 
 .start {
