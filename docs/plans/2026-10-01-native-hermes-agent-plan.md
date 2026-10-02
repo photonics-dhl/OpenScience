@@ -75,3 +75,15 @@ Native-only ffe4激活后，普通确认来源的新私有cdaafe20复用原PDF/M
 真实v6减少整稿重写并缩短用时，但复核仅返回全accepted/Claims unchanged，未处理来源中的对象、算例和适用条件差异。补接同一次成功draft工具收据：用该调用实际已选的原始完整段落、页位置及字段/Claims映射提供比较资料；不截断段落、不引入旧Web61440限制，不加入支持判断、模型步骤或审批。失败或未读段落不进入收据，并发旧调用不取较新全局候选。旧付费工具定义和反馈保持，新任务才采用该方法输入。
 
 Native安装器优先用科学Skill的nativeInstructions/nativeSourceReviewInstructions；主入口为原Appraisal Workflow的六步适配：固定问题与比较单位、证据先行、方法假设、适用研究框架、范围内凝练、可追溯差异。完整上游原方法及引用仍按需读取；旧静态v5理解/审校/配图投影未变，不把入口读取冒称全部原方法消费。已选资料不能覆盖未选的相反材料，Hermes仍须按主张实际补读。工程验证只证资料与入口组织正确，科学质量须由真实任务及独立原文评估证明。候选、High/CI、发布/安装和实际结果均只见CURRENT；不重开历史任务。
+
+## 原生分镜与像素接续位置
+
+有界只读合同定位已完成，源科学质量通过后先接单论文同源visual-narrative-v1：任务仍由research-run.createPresentationSteps与既有presentation.generate计费/幂等产生。readVisualNarrativeSource已有同版本/同论文的confirmed ingestion、已审core与完整SourceMap reference；不用18k摘要包冒充完整Map，不重新全文分析。Worker Native adapter复用illustration-planner.materializeScience/combineArt的纯校验及parseIllustrationReview，输出仍为现有StoryboardDocument，保留数值、来源、布局、brief和艺术资源检查。requireHermesPresentationTaskAuthority/requireIllustrationReviewAuthority/withPresentationAssetWrite继续限定现有版本、Claim、base、source与style，私有资产沿原审批消费者。
+
+当前reviewGeneratedImage仍为固定模型调用，须接实际保存图片+approved parent brief+Claim/Evidence的Native loop；保持decision/summary/repairInstruction，但readStoredGeneratedImageReview须识别真正Agent CP，不能冒称旧单次模型回执。native-agent-execution目前只允许sdf.extract/paper-understanding，需窄扩展creation/authority/terminal/store与Worker adapter；复用动态paper工具注册和完整艺术catalogue，SDK不重写。旧任务解释保持，GPT只生Images2.5。以上是接续位置，不是候选代码、部署或图文质量通过。
+
+## 核源发布回退与 Web readiness
+
+核源候选精确CI通过，但正常发布公网阶段失败并完整自动回退，方法目录未安装激活、没有新科研任务。源码和实际容器均证web没有HTTP healthcheck；Compose wait仅证明容器running。切换期间root出现502，后来恢复200；原验收没记录actual，保留唯一失败探针及公网因素的不确定性。补到既有web healthcheck：Node对内部首页精确200、manual redirect和有限超时，沿原Compose等待上限，不增业务Gate或endpoint。公网helpers保持单次200/exactSHA合同，失败打印观测状态/curl code，正文只显示合法SHA或长度。
+
+三条已有静态断言因API embedding网络、显式Windows SSH/3–5参数、quiesced回退提前phase标记而漂移，原SHA同源基线复现；只校正断言，保留隔离、FD9/锁、布尔标志和切换/镜像检查。actualHTTP/实际shell新回归各见红绿，全套和High工程GO；Linux CI新增既有文件命令及双路径。MJS为既有ESLint忽略项，不声称已lint。BGE init/启动/发布重复全模型校验另属部署债，不冒称论文理解慢或为省时跳过。新精确CI/发布/Native消费及科学结果保持未完成，任务、费用、原文、图片和回退不变。

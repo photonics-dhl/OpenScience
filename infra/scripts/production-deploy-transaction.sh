@@ -150,12 +150,12 @@ wait_for_healthy() {
 
 expect_http_status() {
   local url="$1" expected="$2"
-  run_remote "actual=\$(curl -sS -o /dev/null -w '%{http_code}' '$url'); test \"\$actual\" = '$expected'"
+  run_remote "curl_status=0; actual=\$(curl -sS -o /dev/null -w '%{http_code}' '$url') || curl_status=\$?; if [ \"\$curl_status\" -ne 0 ] || [ \"\$actual\" != '$expected' ]; then printf 'PUBLIC_STATUS_MISMATCH url=%s observed=%s expected=%s curl_exit=%s\n' '$url' \"\$actual\" '$expected' \"\$curl_status\" >&2; exit 1; fi"
 }
 
 expect_http_body() {
   local url="$1" expected="$2"
-  run_remote "actual=\$(curl -fsS '$url'); test \"\$actual\" = '$expected'"
+  run_remote "curl_status=0; actual=\$(curl -fsS '$url') || curl_status=\$?; if [ \"\$curl_status\" -ne 0 ] || [ \"\$actual\" != '$expected' ]; then observed=not-sha; if [[ \"\$actual\" =~ ^[a-f0-9]{40}$ ]]; then observed=\"\$actual\"; fi; printf 'PUBLIC_BODY_MISMATCH url=%s observed=%s expected=%s body_chars=%s curl_exit=%s\n' '$url' \"\$observed\" '$expected' \"\${#actual}\" \"\$curl_status\" >&2; exit 1; fi"
 }
 
 log() { printf '%s\n' "$*"; }

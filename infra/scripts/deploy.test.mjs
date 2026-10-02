@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:http';
+import { runInNewContext } from 'node:vm';
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
@@ -41,6 +43,97 @@ const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfil
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
 const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.yml', import.meta.url), 'utf8');
 const developmentCompose = readFileSync(new URL('../compose/docker-compose.dev.yml', import.meta.url), 'utf8');
+
+function webReadinessCode() {
+  const web = productionCompose.split('\n  web:')[1]?.split('\nnetworks:')[0] ?? '';
+  const check = web.match(/test:\s*(\[.*\])/u)?.[1];
+  assert.ok(check, 'Compose wait must check actual Web HTTP readiness');
+  const [kind, executable, option, code] = JSON.parse(check);
+  assert.deepEqual([kind, executable, option], ['CMD', 'node', '-e']);
+  return code;
+}
+
+test('public status acceptance reports the observed status and transport outcome while still denying failure', () => {
+  const run = (status, curlExit) => spawnSync(bash, ['-c', [
+    `curl() { printf '%s' '${status}'; return ${curlExit}; }; export -f curl`,
+    deploymentFunction('run_remote'), deploymentFunction('expect_http_status'),
+    "expect_http_status 'https://public.invalid/' '200'",
+  ].join('\n')], { encoding: 'utf8' });
+  assert.equal(run(200, 0).status, 0);
+  const mismatch = run(502, 0); assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stderr, /url=https:\/\/public\.invalid\/ observed=502 expected=200 curl_exit=0/u);
+  const unavailable = run('000', 28); assert.notEqual(unavailable.status, 0);
+  assert.match(unavailable.stderr, /observed=000 expected=200 curl_exit=28/u);
+});
+
+test('exact public release acceptance reports only an observed SHA or length, never the response body', () => {
+  const expected = 'a'.repeat(40);
+  const run = body => spawnSync(bash, ['-c', [
+    `curl() { printf '%s' '${body}'; }; export -f curl`,
+    deploymentFunction('run_remote'), deploymentFunction('expect_http_body'),
+    `expect_http_body 'https://public.invalid/__release' '${expected}'`,
+  ].join('\n')], { encoding: 'utf8' });
+  assert.equal(run(expected).status, 0);
+  const different = run('b'.repeat(40)); assert.notEqual(different.status, 0);
+  assert.match(different.stderr, new RegExp(`observed=${'b'.repeat(40)} expected=${expected}`, 'u'));
+  const unexpected = run('UNEXPECTED_RESPONSE_CONTENT'); assert.notEqual(unexpected.status, 0);
+  assert.match(unexpected.stderr, /observed=not-sha/u);
+  assert.doesNotMatch(unexpected.stderr, /UNEXPECTED_RESPONSE_CONTENT/u);
+});
+
+async function runWebReadiness(origin, options = {}) {
+  const calls = [];
+  const outcome = new Promise(resolve => {
+    runInNewContext(webReadinessCode(), {
+      fetch: (url, init) => {
+        const requested = new URL(url);
+        assert.equal(requested.origin, 'http://127.0.0.1:3000');
+        assert.equal(requested.pathname, '/');
+        calls.push({ url, init });
+        return fetch(origin + requested.pathname, init);
+      },
+      AbortSignal: options.signal ?? AbortSignal,
+      process: { exit: resolve },
+    });
+  });
+  return { exit: await outcome, calls };
+}
+
+test('Web readiness rejects an HTTP server that is running but not ready, then accepts its actual homepage', async t => {
+  let status = 503;
+  const server = createServer((_request, response) => { response.writeHead(status); response.end(); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await runWebReadiness(origin)).exit, 1);
+  status = 200;
+  assert.equal((await runWebReadiness(origin)).exit, 0);
+});
+
+test('Web readiness does not hide a redirect behind a successful destination', async t => {
+  const routes = [];
+  const server = createServer((request, response) => {
+    routes.push(request.url);
+    response.writeHead(request.url === '/' ? 302 : 200, request.url === '/' ? { location: '/ready' } : {}); response.end();
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  assert.equal((await runWebReadiness(`http://127.0.0.1:${server.address().port}`)).exit, 1);
+  assert.deepEqual(routes, ['/']);
+});
+
+test('Web readiness bounds an unresponsive HTTP request and denies connection failure', async t => {
+  const server = createServer(() => {}); server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const result = await runWebReadiness(origin, { signal: { timeout: ms => {
+    assert.ok(ms > 0 && ms < 5000, 'native request deadline must fit the healthcheck timeout');
+    return AbortSignal.timeout(10);
+  } } });
+  assert.equal(result.exit, 1);
+  server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+  assert.equal((await runWebReadiness(origin)).exit, 1);
+});
 const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.meta.url), 'utf8');
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
 const backup = readFileSync(new URL('./backup.sh', import.meta.url), 'utf8');
@@ -285,20 +378,22 @@ test('production search runtime is isolated, bounded and source locked', () => {
     embeddingInit + embeddingWorker,
     /bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:\/models\/bge-m3/,
   );
-  assert.doesNotMatch(api, /embedding_net/);
+  assert.match(api, /EMBEDDING_WORKER_URL: http:\/\/embedding-worker:8080/u);
+  assert.match(api, /networks:[\s\S]*- embedding_net/u);
   assert.doesNotMatch(agentWorker, /embedding-worker:\s*\n\s*condition:/);
   assert.match(productionCompose, /embedding_net:[\s\S]*internal: true/);
   assert.match(source, /build agent-worker document-parser/);
   assert.match(source, /EMBEDDING_DEPLOY=/);
   assert.match(source, /--profile embedding/);
   assert.match(source, /if \[ "\$EMBEDDING_DEPLOY" -eq 1 \]/);
-  assert.match(source, /search migration status=2\/2/);
+  assert.match(transactionSource, /migrate status --schema \/opt\/openscience\/infra\/search\/schema\.prisma/u);
   assert.match(source, /scripts\/register-search-model\.mjs/);
   assert.ok(
     source.indexOf('scripts/register-search-model.mjs') < source.indexOf('初始化并验证 BGE-M3 模型卷'),
     'the exact search model identity must be registered before the embedding worker switch',
   );
-  assert.match(source, /embedding model manifest and runtime identity verified/);
+  assert.match(transactionSource, /node scripts\/verify-embedding-runtime\.mjs/u);
+  assert.match(transactionSource, /model-init\.py --validate --seed \/opt\/bge-m3-seed --target \/models\/bge-m3/u);
 });
 
 test('embedding Python supply chain is complete, immutable and hash enforced', () => {
@@ -522,7 +617,7 @@ test('release materialization is write-once and cleans only a failed stage', asy
   assert.doesNotMatch(command, /active_release/);
   assert.match(command, /if \[ -d '[^']+' \]; then tar -tzf - >\/dev\/null; test[^\n]+release-input-manifest\.mjs' verify[^\n]+exit 0; fi/);
   assert.doesNotMatch(command, new RegExp(`rm -rf -- '${releaseRoot.replaceAll('/', '\\/')}'`));
-  const parsed = spawnSync('bash', ['-n', '-c', command], { encoding: 'utf8' });
+  const parsed = spawnSync(bash, ['-n', '-c', command], { encoding: 'utf8' });
   assert.equal(parsed.status, 0, parsed.stderr);
   assert.throws(() => buildReleaseMaterializeCommand('/tmp/not-production', 'a'.repeat(40)));
 });
@@ -578,7 +673,8 @@ test('confirmed deployment materializes only an immutable candidate before the l
 
 test('one foreground SSH runs the complete transaction under its own inherited FD9', () => {
   const runRemote = transactionSource.match(/run_remote\(\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
-  assert.equal((launcherSource.match(/^ssh /gm) ?? []).length, 1);
+  assert.equal((launcherSource.match(/^"\$SSH_EXECUTABLE" /gm) ?? []).length, 1);
+  assert.match(launcherSource, /System32\/OpenSSH\/ssh\.exe/u);
   assert.match(launcherSource, /exec \/bin\/bash '\$REMOTE_TRANSACTION_RUNNER'[^\n]+<\/dev\/null/);
   assert.doesNotMatch(launcherSource, /\| ssh |bash -s/);
   assert.match(transactionSource, /exec 9<>/);
@@ -587,7 +683,11 @@ test('one foreground SSH runs the complete transaction under its own inherited F
   assert.doesNotMatch(runRemote, /\bssh\b/);
   assert.doesNotMatch(source, /coproc|DEPLOY_LOCK_ASSERT_COMMAND|lock-command|assert-command/);
   assert.doesNotMatch(transactionSource, /release-contract-test|TRANSACTION_TEST|XGS_TEST/);
-  assert.match(transactionSource, /\[ "\$#" -eq 3 \]/);
+  assert.match(transactionSource, /\[ "\$#" -ge 3 \] && \[ "\$#" -le 5 \]/u);
+  assert.match(transactionSource, /NO_TESTS="\$\{4:-0\}"/u);
+  assert.match(transactionSource, /REUSE_UNCHANGED_CAPABILITY_IMAGES="\$\{5:-0\}"/u);
+  assert.match(transactionSource, /\[\[ "\$NO_TESTS" =~ \^\[01\]\$ \]\]/u);
+  assert.match(transactionSource, /\[\[ "\$REUSE_UNCHANGED_CAPABILITY_IMAGES" =~ \^\[01\]\$ \]\]/u);
   assert.doesNotMatch(transactionStateSource, /release-contract-test|TRANSACTION_TEST|XGS_TEST|^\s*\[ "\$#"/m);
   const manifestVerify = transactionSource.indexOf('release-input-manifest.mjs" verify');
   const stateSource = transactionSource.indexOf('source "$SCRIPT_DIR/production-deploy-transaction-state.sh"');
@@ -1133,8 +1233,8 @@ test('production rebuild restores the accepted runtime permissions before image 
 
 test('deployment revalidates active source, report and mutable image tags after migrations and checks started container image IDs', () => {
   const migration = transactionSource.indexOf('seed-quota.mjs --confirm');
-  const preSwitch = transactionSource.indexOf('verify_candidate_switch_contract', migration);
-  const switchBoundary = transactionSource.indexOf('transaction_mark_phase switching', migration);
+  const preSwitch = transactionSource.indexOf('verify_candidate_switch_contract pre-switch', migration);
+  const switchBoundary = transactionSource.indexOf('transaction_mark_phase switching', preSwitch);
   const parserUp = transactionSource.indexOf('document-parser"', switchBoundary);
   const parserImage = transactionSource.indexOf('verify_running_container_image document-parser', parserUp);
   const workerUp = transactionSource.indexOf('api web agent-worker"', parserImage);

@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 10-02核源候选：成功草稿向原生Hermes返回完整已选原段落与字段/主张映射，Native方法主入口采用原六步Appraisal Workflow；旧付费schema、权限顺序、反馈和静态投影保持。160项定向测试/TC/ESLint、实际v6零Provider保真及独立High工程GO；资源函数选择红绿通过。Linux安装、精确CI、真实方法消费和科学质量待验证；v6仍不采用/出图，版本与下一步只见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+- 10-02核源候选CI通过后发布回退，线上3b完整恢复；未激活方法目录/未发新模型，v6科学NO-GO仍保持。已补现有Web HTTP readiness与安全验收诊断，定向43pass/5Windows skip/独立High GO；旧3静态断言漂移已基线证实并校正，Linux CI已接。核源输入/原六步Native方法原GO保持，源文件/paid历史与论文/认可图保留；失败发布树已归档并移除。新候选待精确CI/发布及真正科学核查，精确身份和证据见[CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 - 10-02 UI：用户确认第三张作为指南方向，可编辑Figma已实看，指南/桌面/研究工作区/身份/期刊/开发文档候选及GSAP/Canvas已落地；49项定向检查、TC/lint/样式和独立High增量复审通过。整站艺术质量与真实交互尚未验收，浏览器权限核验仍阻塞，本轮未合入交付或部署；既有公司Word不冒称包含此候选。版本、证据与具体下一步只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 - 10-01公司PDF21项已核查，权限/扫描/账户取数/UI等修正经High与精确CI通过、无迁移发布；公网精确版本、登录工作台/账户/额度与安装后的干净/EICAR扫描通过，11分钟复查无重启/OOM，6页逐项回复和证据已归档；修正已合入交付分支，其合并CI也通过。核查/用户决定/证据与剩余项见[评估交接](handoff/2026-09-30-vendor-evaluation.md)；运行锚点仍由Hermes CURRENT维护。

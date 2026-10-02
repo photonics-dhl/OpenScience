@@ -62,6 +62,8 @@ on:
       - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
+      - 'infra/scripts/production-deploy-transaction.sh'
+      - 'infra/scripts/deploy.test.mjs'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
       - 'packages/ai-gateway/src/native-tool-protocol.ts'
@@ -224,6 +226,8 @@ on:
       - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
+      - 'infra/scripts/production-deploy-transaction.sh'
+      - 'infra/scripts/deploy.test.mjs'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
       - 'packages/ai-gateway/src/native-tool-protocol.ts'
@@ -350,6 +354,7 @@ jobs:
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_host_broker.py
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_install_lifecycle.py
       - run: node --check infra/hermes-agent/offline_host.cjs
+      - run: node --test infra/scripts/deploy.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts

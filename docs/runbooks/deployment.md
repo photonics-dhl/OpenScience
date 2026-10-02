@@ -2663,3 +2663,9 @@ Canonical build/parser16/core36/search2/BGE/ScanSci/container health passed; pub
 API 使用组 11000 只读挂载 `/opt/openscience-codex/inbox` 与 `results`，仅核对候选任务的提交记录是否存在；不挂载运行器 private/state/auth，也不获得写入或执行图片权限。恢复接口必须先确认所有候选均无提交记录，才在事务内创建付费替代任务；Worker 执行前再次核对并消费一次性恢复标记。其他 Provider 缺少该能力时拒绝这类恢复。
 
 部署仍走既有 `deploy.sh --confirm --no-tests --rollback-ref <当前版本> <候选版本>`，应用构建和服务启动完成后使用正常用户界面的“继续未完成生成”。来源、资产、余额或版本发生变化时由接口拒绝；不得直接改任务状态。若回滚应用，使用记录的前一 release 及其 compose；本次不新增迁移，不清理已有图片和提交记录。
+
+## Web HTTP readiness 补接
+
+候选改动与实际执行状态只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。一次正常发布在公网验收失败后完整回退，web未定义HTTP healthcheck，Compose wait不证明Next已能服务；切换时root502后来200，但旧helper未记录观测值，不能据此断言唯一根因。
+
+前置：干净已推送SHA、精确CI与当前rollback身份，现有release/source/lock/journal合同保持。候选在现有web healthcheck用Node检查http://127.0.0.1:3000/精确200，有限请求超时且不跟随重定向；现有Compose等待上限和公网单次200/exactSHA验收保持。失败诊断仅URL/状态/curl exit及合法SHA或正文长度，不输出完整响应。执行仍按正常deploy.sh及现有Native defer激活次序；未正常发布不得激活或发新研究任务。失败沿原事务自动回退，完成后核真实容器、root200、exact旧SHA与journal清除，不盲重跑。定向actualHTTP/shell回归通过不能替代真实生产观察。
