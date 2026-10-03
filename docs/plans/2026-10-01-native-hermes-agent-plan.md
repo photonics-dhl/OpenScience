@@ -2,6 +2,16 @@
 
 > 接入设计与历史实施记录：原生论文及自动规划入口已部署，真实科学质量仍待验收；当前版本、任务、断点与下一步只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。下方阶段性准备状态不得作为重新接入或重新付费的指令。
 
+## 尚未实现的独立原生核源接续
+
+当前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判；不能把问题归为缺源或宣称独立上下文必然改善。
+
+合同定位经独立High只读审查：可复用现有source_review阶段，仅为新任务建立真正原生审阅角色。该角色需绑定实际作者候选，独立Agent/store而不继承作者对话，按保留主张渐进回查原SourceMap并复用完整科学物化；原canonical source、run/step、每轮租约/权限/外部处理授权及最终paid回执仍须一致。新角色必要性是现有固定请求签名与1/2次检查点不能授权多轮Agent；不能把旧收据转换为新执行或伪造semanticStage。仍占原run槽位和一次普通任务扣费，保留replay-before-debit/max9/CAS/unknown不重发。此段是接续边界，尚非候选实现或科学验收；实际下一动作只见CURRENT。
+
+## 已结束的接入和局部修复记录
+
+下文保存历史设计与执行证据。旧“候选/实施中/下一步”均是当时状态；不得据此重新安装、重新付费或恢复旧GPT来源审阅。
+
 10-02最新用户范围：本轮先交付生图前的正确物理事实、画面叙事、完整指示词、构图和艺术风格及原文依据；用户将更换生图方式。原生理解与规划继续，暂停本轮旧图片通道调用、新图像receiver及生成后像素接线；后续生成方式待用户决定。旧任务、收费、认可图片和公开版本保持，原未完成的其他需求不据此宣称已交付。实际候选、线上及质量只见CURRENT。
 
 10-02历史规划准备（当时记录）：已有generateIllustrationStoryboard内科学物化原样提取为materializeIllustrationScience，旧入口薄委托；从同Claims/settings/原图映射重建原lookup与场景上限，数字、标签和来源守卫不变。当时原生caller尚未接入（现已部署，见CURRENT）；这只是当时复用准备，无新模型、收费、权限或Prompt。RED5→184/184、WorkerTC0及2文件独立High GO，整文件7条旧lint与918d逐项相同、0新增；不能据此宣称Native规划或科学/艺术正确。

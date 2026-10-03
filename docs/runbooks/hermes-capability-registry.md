@@ -4,13 +4,15 @@
 
 新论文任务由NousResearch AIAgent/MiniMax-M3通过Worker native-agent/paper-task.ts执行；复用SourceMap、paper_read/search/view和原科学物化。科学理解/核查由Hermes负责，服务器GPT来源审阅只保留历史绑定任务，不是当前方向。版本/任务/真实验收统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 
-scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专项引用通过skill_view按需读取。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选来源reviewContext，终稿复用原科学/Claims/来源守卫，paper_review只是可选结构反馈。安装、注入、实际调用和科学正确是四个不同事实。
+scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专项引用通过skill_view按需读取。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选稿、Claims及原来源reviewContext。新任务用paper_review提交完整终审数据，最后普通回复不重复JSON；旧paid任务保持原可选反馈和严格JSON规则。安装、注入、实际调用和科学正确是四个不同事实。
 
 原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。当前断点是终稿提交可靠性与科学核对实际效果，不能再靠加指令后连续请求；准确任务及来源依据只见CURRENT。
 
 原生paper-illustration复用同源已审Claims/原页/设计资源和共享科学艺术物化，自动保存完整私有prompt；原自动run的审批及旧图片派发前有image-api-pending暂停。新生图API待提供，新原生科学合格稿到计划的真实路径尚未完成，人工brief不能冒充自动成果。
 
-工具提交候选仅对新精确description采用现成paper_review回执作为终审数据入口；末轮解释不承担复制JSON，所有旧paid接口不变。重建真实稿并重跑原完整科学检查，不允许后续改稿/失败提交后退用旧成功。新字段来源容量与已有notebook一致，issues与旧schema保持；此候选解决数据提交责任，不证明嵌套模型工具调用可靠或科学质量改善。工程/部署身份只见CURRENT。
+工具提交已部署，仅对新精确description采用现成paper_review回执作为终审数据入口；重建真实稿并重跑原完整科学检查，不允许后续改稿/失败提交后退用旧成功。新字段来源容量与已有notebook一致，issues与旧schema保持。132定向/TC/lint/High及精确CI通过，未新发科学验证；工程通过只证明提交守卫与旧任务兼容，不证明真实模型会正确完成或科学正确。部署复用未变的Native运行时与Skill目录，身份只见CURRENT。
+
+当前完整来源稿由同一作者会话自评；automatic-review.ts据其contract5结果直接ready。已有source_review阶段仍是model-native固定请求，并非独立原生Agent。后续可仅对新任务替换该角色：绑定实际作者候选、独立Agent/store、原SourceMap及完整科学物化，保留阶段签名、每轮权限、一次普通扣费/max9及旧paid回放。合同定位已独立审查，尚未实现；独立上下文能否改善核源仍待真实质量证明，不能靠新任务数量替代。
 
 旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
 

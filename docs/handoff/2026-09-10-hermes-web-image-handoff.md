@@ -10,23 +10,17 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
 
 ## 当前锚点
-- 10-03发布后实核：app `28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`；rollback `2db4cfa2cf44664b07128e8349e6a2c3ef11e1ac`。API/Worker running、OOM=false；两者Native runtime/catalogue均同28d完整SHA、MiniMax-M3，broker timer enabled/active，采样时无活动Native实例（随后创建下方v13）。证据 `tmp/hermes-cleanup-20261003/paired-runtime-after.json`。
-- 本轮起点HEAD `ce513eba57261d368756ddf8ce0ca75243adb90a`，干净；同分支新增候选见下行，文档提交不代表部署。
-- c6精确CI37038196528 success、正常app发布和Native安装激活exit0。直接紧凑审阅终稿已接通，paper_review仅作可选格式反馈；107定向pass/8Windows UDSskip、TC/lint/High GO。工程通过与科学质量分开。
-- 原生科学分镜caller已部署：复用已审科学来源、原文/图页、设计Skill和共享科学艺术物化，保存私有完整prompt；自动run在旧审批和图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图，GET/UI明确image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
+- 分支release/onchip-production-line；10-03已发布源代码提交/app `ba52f5b26b8c70ef17488b3792863b06751f3990`，rollback `28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`。最后文档同步提交按Git读取，不代表另一轮部署。
+- 精确CI37099109789 success；正常app发布exit0，公网/exact release及原部署事务通过。API/Worker running、OOM=false；两者均使用`installed-native-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`及`project-catalogue-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`、MiniMax-M3，timer enabled/active、实核无活动实例。adapter/资源未变，经High兼容GO复用该安装，未堆新副本。证据 `tmp/hermes-cleanup-20261003/tool-submission-{ci-result.json,deploy.log,runtime-after.json}`。
+- 已发布工具提交：新任务用paper_review保存完整终审数据，普通末回复不再抄JSON。仅精确新description启用；旧paid工具/schema/feedback/system/goal及严格JSON回放不变。选择最新真实review调用，重建真实稿并重跑原完整科学检查；后续改稿/失败review不退用旧成功。字段来源对齐既有64、旧schema和issues仍12；stop/provider/model/authority与实际responseHash不改，无新阶段/额度/审批/hash。真RED、132/TC/四文件lint/High及精确CI通过；没有新科学调用。
+- 原生科学分镜caller已部署：同源已审Claims、原文/图页、设计Skill及共享物化保存私有完整prompt。自动run在审批及旧图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图；GET/UI为image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
 
-## 当前科学断点
-- 历史私有v11：ingestion `02c1e0f9-68dd-4b9b-beb9-7a3224b26b41`，task `8e184f93-937c-4022-9247-9616fde89b0c`，key `native-hermes-paper-20261003-cds-v11`。复用原26页/85段SourceMap；3分42秒/12paid回复后failed，完整end_turn终稿存在，未采用/规划/生图。
-- 格式拒收：accepted附重复正文和来源；五字段逐字同稿，results只删五处换行。现有accepted必须选择原稿，不能把修改伪装为接受；仅修格式不能消除科学错误。
-- 独立科学NO-GO：材料内边缘损伤阈值错放狭缝中心、正文/附录公式冲突未披露、10cm算例条件泛化、背景跨方法因果外推、复现强断言。完整审查见 `tmp/ro-journey-20260929/native-real-paper-v11-scientific-acceptance.md`。
-- 真实Skill使用：读取scientific-critical-thinking及完整原方法，读P00001–35/85并看原页6/7；没有paper_search、source-review Skill或draft后回读，关键p24/P00076未读。overview已包含附录标题，不能归罪于缺源或未安装Skill。
-- 本轮已部署：把现有openscience-source-review明确放到draft_ready后的任务指令及现有Skill方法，方法按保留结论的对象/量/条件/算例渐进核源，说明来源冲突和accepted选择原稿。没有新模型阶段、额度、门禁或科学答案注入；守卫及原paid工具description/schema不改。72项科学物化、WorkerTC、三文件lint、文档audit/lint通过；High指出历史draft反馈不可变，已保留原反馈。最终High GO，精确CI37087580638 success，正常app发布及Native安装激活exit0，两运行时/方法目录配对；证据 `tmp/hermes-cleanup-20261003/{ci-result.json,deploy.log,native-activation.log}`，不能声称Hermes已实际遵循或科学改善。
-- 单一新私有验证v12：ingestion `d9cafbd9-ff1c-415e-ae17-42e455bd904b`，task `ac817822-4a03-4b92-a903-aa7f584ac985`，key `native-hermes-paper-20261003-cds-v12`；正常有费用重分析，复用原PDF/SourceMap，不重新OCR，不重开v11。已failed（02:14:36.994Z，3分27.399秒/11paid）；accepted-only表示正确，但C2的真实P8/P9未归入method字段来源，最终守卫拒收。独立科学NO-GO：近垂直被写成对头、单电子/电子束运算混用、10cm传播算例写成必要门槛；未采用/规划/生图，不重开或追加连续新分析。科学记录 `tmp/hermes-cleanup-20261003/real-paper-science-v12.md`；创建/进度/原答证据在 `tmp/hermes-cleanup-20261003/real-paper-*-v12.*`。
-- 新对照输入已部署：草稿回执配对本次实际选中的summary和完整Claim及完整原P，复用原field-Claim诊断提前提示现有绑定错误；历史无context/旧context/新rich描述精确区分，旧paid工具/反馈/属性顺序不变。113定向pass、WorkerTC/四文件lint0、独立High GO；旧源码两项真实回归RED，原v12真实notes离线捕获1/1、零provider。精确CI37092238580 success，正常app发布及Native配对exit0；证据 `tmp/hermes-cleanup-20261003/paired-*`。无新模型阶段/额度/门禁/Domain或API变化，不能据部署证明科学改善。
-- 新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`；复用原Map，5分13.871秒/9paid回复，正常stop但只给普通解释、无JSON，原守卫拒收。实际最后请求已有完整草稿/Claims/原P及两绑定诊断；离线1/1证明本次配对与原P一致、零provider、控制提示初末不变，排除这些候选的丢传/投影错误，不能推断模型为何误判。
-- v13独立科学NO-GO：保存稿把近垂直误写近正碰，终答把0.4THz的10cm示例泛化，棱镜直径跨算例移用；材料内缘阈值表述局部改善。两个Skill在稿前已读，未调用原页/专项引用/稿后核源。未采用/规划/生图，不重开或发v14。原文依据与完整记录 `tmp/hermes-cleanup-20261003/real-paper-science-v13.md`。
-- 工具提交候选：新任务用现成paper_review保存完整终审对象，普通末回复不再复制科学JSON；仅精确新description启用，旧工具/feedback/system/goal及严格JSON回放保持。重新校验最新唯一成功回执、真实draft及全部原科学守卫；后续写入/失败review不退回旧成功。stop/provider/model/authority与实际responseHash不改，无自动重试/新模型阶段/额度/审批/hash。新字段来源容量对齐现有64，旧schema和issues仍12；已观察17来源真回归RED，132/TC/四文件lint通过，最终High GO，待精确CI及app发布，未新call。证据 `tmp/hermes-cleanup-20261003/tool-submission-*`。
-- 下一步：收敛工具提交候选High、精确CI并正常app发布，兼容复用现有immutable28d Native（adapter/科学资源未变，不新增安装副本）；随后解决实际科学核源效果，真实科学通过才验证自动计划。v13及其科学NO-GO保持，无依据不发v14、不升预算/补普通正文。GitHub最新structured plugin/grounded-citations不在当前安装；delegate文件存在不代表当前transport可调用，实核 `native-completion-capabilities.json`，不盲升级/叠Skill。
+## 当前科学断点与下一步
+- 最新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`。原26页/85段Map未变；5分13.871秒/9paid回复，一次普通平台任务收费，正常stop但只有普通解释/无JSON，原守卫拒收。未采用/规划/生图，不重开或发v14。
+- 实际最后请求已有完整所选稿、7Claim、原P和两条绑定诊断；离线1/1匹配实际调用与未变来源、零provider，控制提示初末不变，排除该候选丢传/投影错误，不能据此解释模型为何误判。两个Skill在稿前读取，未调用原页/专项引用/稿后来源工具；这不证明完全未作内部比较。
+- 独立科学NO-GO：保存稿把近垂直误写近正碰，普通终答把0.4THz的10cm示例泛化，棱镜直径跨算例移用。材料内缘阈值表述局部改善；格式或来源ID合法不能视为科学正确。原文与完整评估 `tmp/hermes-cleanup-20261003/real-paper-science-v13.md`；真实输入证据 `real-paper-trace-v13.json`、`paired-v13-context.json`、`paired-v13-capture.log`。
+- 当前完整稿仍由同一作者会话自评；已有source_review阶段是model-native固定请求。独立High只读确认可仅对新任务替换为独立原生Hermes角色，绑定实际作者候选、独立会话及原Map，保持既有阶段/权限/扣费/max9/旧paid解释；边界见[原生计划](../plans/2026-10-01-native-hermes-agent-plan.md)。尚未实现，效果未知；下一步落实该角色的精确创建、执行和终态绑定，再验证实际核源，科学通过后才验证自动计划。
+- 历史v11/v12及来源配对修复已结束：失败任务与全部paid/原文/High证据保持，按Git `ba52f5b` 的本页及 `tmp/ro-journey-20260929/`、`tmp/hermes-cleanup-20261003/` 定向读，不再作为当前重试/安装步骤。安装0.10.0缺最新structured plugin/grounded-citations；delegate文件存在不代表当前transport可调用，不盲升级/叠Skill。
 
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |
