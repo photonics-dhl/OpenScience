@@ -230,5 +230,141 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(scope.resolve("a/same"), root / "a" / "same" / "SKILL.md")
 
 
+class PaperReceiptTests(unittest.TestCase):
+    """Native budget behavior is stubbed here; captured native methods have a separate offline replay."""
+    @staticmethod
+    def receipt(size):
+        return json.dumps({'text': 'x' * (size - len(json.dumps({'text': ''})))})
+
+    @staticmethod
+    def call(call_id='paper-1', name='paper_read', args=None):
+        return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=json.dumps(args or {})))
+
+    def fixture(self, calls, originals, fault=None, prior=None, page_images=None):
+        native_observed = []
+        class NativeBudget:
+            def __init__(self):
+                self.tool_complete_callback = prior
+            def _execute_tool_calls(self, message, messages, task_id, api_call_count=0):
+                start = len(messages)
+                for call in message.tool_calls:
+                    value = originals[call.id]
+                    event = [call.id, call.function.name, json.loads(call.function.arguments), value]
+                    if fault == 'unknown-id': event[0] = 'unknown'
+                    if fault == 'wrong-name': event[1] = 'paper_other'
+                    if fault == 'skill-name': event[1] = 'skill_view'
+                    if fault == 'wrong-args': event[2] = {'page': 2}
+                    if fault == 'bool-for-number': event[2] = {'page': True}
+                    if fault == 'non-string': event[3] = {'error': 'not a receipt string'}
+                    if self.tool_complete_callback and fault != 'missing-callback':
+                        for _ in range(2 if fault == 'duplicate-callback' else 1):
+                            try:
+                                self.tool_complete_callback(*event)
+                            except Exception:
+                                pass  # The installed native runtime swallows callback exceptions.
+                    if fault == 'native-error': raise RuntimeError('native stopped')
+                    if fault != 'missing-message':
+                        item = {'role': 'tool', 'tool_call_id': call.id,
+                            'content': value if len(value) <= 100_000 else 'NATIVE_PERSISTED_PREVIEW'}
+                        messages.append(item)
+                        if fault == 'duplicate-message': messages.append(dict(item))
+                        if fault == 'unknown-message': messages.append({**item, 'tool_call_id': 'unknown'})
+                current = messages[start:]
+                if sum(len(item['content']) for item in current) > 200_000:
+                    max(current, key=lambda item: len(item['content']))['content'] = 'NATIVE_AGGREGATE_PREVIEW'
+                native_observed.extend(dict(item) for item in current)
+                return 'native-return'
+        cls = create_task_agent_class(NativeBudget, lambda: None, {'paper_read', 'paper_view', 'skill_view'}, page_images)
+        return cls(), SimpleNamespace(tool_calls=calls), native_observed
+
+    def test_exact_102278_character_receipt_survives_native_per_result_persistence(self):
+        original = self.receipt(102278)
+        agent, turn, observed = self.fixture([self.call()], {'paper-1': original})
+        messages = []
+        self.assertEqual(agent._execute_tool_calls(turn, messages, 'task'), 'native-return')
+        self.assertEqual(observed[0]['content'], 'NATIVE_PERSISTED_PREVIEW')
+        self.assertEqual(messages[0]['content'], original)
+
+    def test_aggregate_over_200000_preserves_current_paper_receipts_and_old_history(self):
+        calls = [self.call(str(i)) for i in range(3)]
+        originals = {call.id: self.receipt(90000) for call in calls}
+        agent, turn, observed = self.fixture(calls, originals)
+        old = {'role': 'tool', 'tool_call_id': 'old', 'content': 'original earlier receipt'}
+        messages = [dict(old)]
+        agent._execute_tool_calls(turn, messages, 'task')
+        self.assertIn('NATIVE_AGGREGATE_PREVIEW', [item['content'] for item in observed])
+        self.assertEqual(messages[0], old)
+        self.assertEqual([item['content'] for item in messages[1:]], list(originals.values()))
+
+    def test_skill_result_keeps_native_per_result_budget(self):
+        calls = [self.call(), self.call('skill', 'skill_view')]
+        original = self.receipt(102278)
+        agent, turn, _ = self.fixture(calls, {'paper-1': original, 'skill': original})
+        messages = []
+        agent._execute_tool_calls(turn, messages, 'task')
+        self.assertEqual(messages[0]['content'], original)
+        self.assertEqual(messages[1]['content'], 'NATIVE_PERSISTED_PREVIEW')
+
+    def test_error_receipts_are_exact_and_prior_callback_is_chained_and_restored(self):
+        for original in [' { "status": "error", "error": "source unavailable" }\n', 'Error executing tool: original failure']:
+            with self.subTest(original=original):
+                seen = []
+                def previous(*args):
+                    seen.append(args)
+                    raise ValueError('native already ignores callback exceptions')
+                agent, turn, _ = self.fixture([self.call()], {'paper-1': original}, prior=previous)
+                messages = []
+                agent._execute_tool_calls(turn, messages, 'task')
+                self.assertEqual(seen, [('paper-1', 'paper_read', {}, original)])
+                self.assertEqual(messages[0]['content'], original)
+                self.assertIs(agent.tool_complete_callback, previous)
+
+    def test_page_images_receive_the_restored_result_after_all_tool_messages(self):
+        original = json.dumps({'status': 'page_view_ready', 'text': 'x' * 102278})
+        seen = []
+        def images(call_id, args, result):
+            seen.append((call_id, args, result))
+            return [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,fixture'}}]
+        agent, turn, _ = self.fixture([self.call(name='paper_view')], {'paper-1': original}, page_images=images)
+        messages = []
+        agent._execute_tool_calls(turn, messages, 'task')
+        self.assertEqual(seen, [('paper-1', {}, json.loads(original))])
+        self.assertEqual([item['role'] for item in messages], ['tool', 'user'])
+        self.assertEqual(messages[0]['content'], original)
+
+    def test_mismatched_or_missing_current_receipts_stop_even_if_native_swallows_callback_errors(self):
+        faults = ['unknown-id', 'wrong-name', 'skill-name', 'wrong-args', 'bool-for-number', 'non-string',
+            'missing-callback', 'duplicate-callback', 'missing-message', 'duplicate-message', 'unknown-message']
+        for fault in faults:
+            with self.subTest(fault=fault):
+                previous = lambda *args: None
+                agent, turn, _ = self.fixture([self.call(args={'page': 1})], {'paper-1': '{}'}, fault=fault, prior=previous)
+                with self.assertRaises(NativeTaskStopped):
+                    agent._execute_tool_calls(turn, [], 'task')
+                self.assertIs(agent.tool_complete_callback, previous)
+
+    def test_duplicate_current_call_id_is_rejected_before_native_execution(self):
+        agent, turn, observed = self.fixture([self.call(), self.call(name='skill_view')], {'paper-1': '{}'})
+        with self.assertRaises(NativeTaskStopped): agent._execute_tool_calls(turn, [], 'task')
+        self.assertEqual(observed, [])
+
+    def test_native_failure_restores_the_previous_callback(self):
+        previous = lambda *args: None
+        agent, turn, _ = self.fixture([self.call()], {'paper-1': '{}'}, fault='native-error', prior=previous)
+        with self.assertRaisesRegex(RuntimeError, 'native stopped'):
+            agent._execute_tool_calls(turn, [], 'task')
+        self.assertIs(agent.tool_complete_callback, previous)
+
+    def test_next_turn_cannot_reuse_an_earlier_captured_result(self):
+        originals = {'paper-1': self.receipt(102278)}
+        agent, turn, _ = self.fixture([self.call()], originals)
+        messages = []
+        agent._execute_tool_calls(turn, messages, 'task')
+        originals['paper-1'] = 'Error executing tool: second turn'
+        agent._execute_tool_calls(turn, messages, 'task')
+        self.assertEqual(messages[0]['content'], self.receipt(102278))
+        self.assertEqual(messages[1]['content'], originals['paper-1'])
+
+
 if __name__ == "__main__":
     unittest.main()

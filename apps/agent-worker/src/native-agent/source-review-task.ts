@@ -19,7 +19,7 @@ void _draftId;
 export const NATIVE_SOURCE_REVIEW_TOOLS = [...NATIVE_PAPER_TOOLS,
   { name: 'paper_candidate', description: 'Read the actual saved author candidate, its Claims and complete selected original passages. This is the independent review baseline, not scientific approval. Follow additional definitions, figures or conditions using the bound paper tools.',
     parameters: { type: 'object', properties: {}, additionalProperties: false } },
-  { name: 'paper_review', description: 'Submit your independent scientific review of the exact sourceAgentTaskId returned by paper_candidate. accepted selects unchanged author text; revised/blocked provides complete replacements and source-grounded issues. Explicitly choose Claims unchanged or supply full replacements. Correct only through this review; the author baseline cannot be rewritten. After review_ready finish normally without another JSON copy. Only the latest successful review submission can be used; this does not publish anything.',
+  { name: 'paper_review', description: 'Submit your independent scientific review of the exact sourceAgentTaskId returned by paper_candidate. accepted selects unchanged author text; revised/blocked provides complete replacements and source-grounded issues. Explicitly choose Claims unchanged or supply full replacements. Correct only through this review; the author baseline cannot be rewritten. After review_ready inspect the returned merged reviewedCandidate for corrections that also affect retained fields or Claims; correct through this tool if needed, then finish normally without another JSON copy. Only the latest successful review submission can be used; this does not publish anything.',
     parameters: { ...NATIVE_PAPER_COMMITTED_REVIEW_TOOL.parameters,
       required: ['sourceAgentTaskId', 'fields', 'needsMoreEvidence', 'claimSuggestions'],
       properties: { sourceAgentTaskId: { type: 'string' }, ...reviewProperties } } },
@@ -70,8 +70,9 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
   const passageIds = [...new Set(Object.values(fields).flatMap(field => field.sourcePassageIds as string[]))];
   let candidateResult: Record<string, unknown> | undefined;
   function selectedReview(value: unknown) {
-    if (!record(value) || Object.keys(value).sort().join(',') !== 'claimSuggestions,fields,needsMoreEvidence,sourceAgentTaskId'
-      || value.sourceAgentTaskId !== input.sourceAgentTaskId) throw new Error('[blocked] Native review must select its exact saved author task');
+    if (!record(value) || Object.keys(value).sort().join(',') !== 'claimSuggestions,fields,needsMoreEvidence,sourceAgentTaskId')
+      throw new Error('[blocked] Native review requires only sourceAgentTaskId, fields, needsMoreEvidence and claimSuggestions at the root; put all six field decisions inside fields.');
+    if (value.sourceAgentTaskId !== input.sourceAgentTaskId) throw new Error('[blocked] Native review must select its exact saved author task');
     const { sourceAgentTaskId, ...review } = value;
     return { ...review, draftToolCallId: sourceAgentTaskId };
   }
@@ -127,7 +128,7 @@ const REVIEW_INSTRUCTIONS = [
   '逐项核对保留断言的对象、方向、量的定义、单位、空间位置、算例和成立条件。区分仿真/实验、单体/集合、示例/普遍规律；需要时沿定义、图注和附录渐进溯源，不能把一种工况参数移到另一工况。',
   'paper_search定位后用paper_read读完整来源；涉及几何、坐标、公式和图形解释时用paper_view看实际原页。新增证据应针对保留断言或相反证据，不重做全文六维提取。来源冲突必须披露，无法确认就blocked或needsMoreEvidence，不能猜补。',
   '使用paper_review选择paper_candidate提供的sourceAgentTaskId并提交完整判断。accepted只选原文；revised/blocked提供完整字段和有依据的issues；Claims明确unchanged或完整替换，必须与字段来源一致。不能以先另写草稿来改变被审基准。工具反馈仅校验结构和来源，科学判断由你负责。',
-  '最新review_ready后正常结束即可；最终回复不重复JSON，也不能声称完成了未实际提交的修正。后一次review若被拒绝，必须修正同一提交后才能完成。结果是私有科学稿，不授权公开或生图。',
+  'paper_review返回review_ready后，阅读reviewedCandidate中的实际合并稿，按所用科学方法核对同一事实在六字段和Claims中的所有保留表述；accepted仍是原文，改一处不会自动改其他处。若有遗漏，通过同一工具修正受影响项，再确认最新合并稿。完成后正常结束，不重复JSON或声称未实际保存的修正。后一次review被拒绝时不能退用旧成功。结果是私有科学稿，不授权公开或生图。',
 ].join('\n');
 
 export async function runNativeSourceReviewTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };

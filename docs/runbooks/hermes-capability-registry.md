@@ -8,11 +8,11 @@ scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专
 
 原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。这些是历史故障证据；最新作者已正常工具提交，当前状态以下文及CURRENT为准，不能据旧问题连续请求；准确任务及来源依据只见CURRENT。
 
-原生paper-illustration复用同源已审Claims/原页/设计资源和共享科学艺术物化，自动保存完整私有prompt；原自动run的审批及旧图片派发前有image-api-pending暂停。新生图API待提供，新原生科学合格稿到计划的真实路径尚未完成，人工brief不能冒充自动成果。
+原生paper-illustration复用同源已审Claims/原页/设计资源和共享科学艺术物化，自动保存完整私有prompt；原自动run的审批及旧图片派发前有image-api-pending暂停。新生图API待提供。实际自动进入原生分镜后首轮工具往返因transport停止，未得方案；已证实原生SDK将126001字符的结构化context变成预览，导致现有完整JSON校验拒绝。候选沿原TaskAgent回调保存并恢复本轮精确paper工具结果，保留原生Skills/压缩及平台大小、来源、权限检查；未上线、不据此重发。新原生科学合格稿到计划的真实路径尚未完成，人工brief不能冒充自动成果。
 
 工具提交已部署，仅对新精确description采用现成paper_review回执作为终审数据入口；重建真实稿并重跑原完整科学检查，不允许后续改稿/失败提交后退用旧成功。新字段来源容量与已有notebook一致，issues与旧schema保持。132定向/TC/lint/High及精确CI通过，未新发科学验证；工程通过只证明提交守卫与旧任务兼容，不证明真实模型会正确完成或科学正确。部署复用未变的Native运行时与Skill目录，身份只见CURRENT。
 
-独立原生审阅已部署：新paper-author仍复用现有作者能力但不再直接成为自动采用结果；既有source_review阶段选paper-source-review，paper_candidate提供实际最终作者稿/Claims和所选完整原文，审阅者保留按需搜索、看原页、完整Skill方法，paper_review提交修订。复用原Session/store及科学物化，私有绑定原作者/既有CP/实际稿，逐次重验来源/权限，SDK配置不含私有绑定。旧paper-understanding及历史fixed/web paid路线保持；阶段、一次普通扣费/max9不扩张。工程与High已通过；真实作者成功并调用原页/科学Skill，Worker启动deps漏runtime已修复部署，原run恢复已创建独立审阅；新断点是保存的PDF定位框末位浮点差异被重建比较误拒，发生在模型提交前。候选复用现有来源定位器处理精度差异，继续保留内容与引用严格校验；同task原预留恢复待审，身份/回执只见CURRENT；独立上下文的真实科学改善尚未证明。
+独立原生审阅已部署：新paper-author仍复用现有作者能力但不再直接成为自动采用结果；既有source_review阶段选paper-source-review，paper_candidate提供实际最终作者稿/Claims和所选完整原文，审阅者保留按需搜索、看原页、完整Skill方法，paper_review提交修订。复用原Session/store及科学物化，私有绑定原作者/既有CP/实际稿，逐次重验来源/权限，SDK配置不含私有绑定。旧paper-understanding及历史fixed/web paid路线保持；阶段、一次普通扣费/max9不扩张。工程与High已通过；真实作者成功并调用原页/科学Skill，Worker启动deps漏runtime已修复部署，原run恢复已创建独立审阅；保存的PDF定位框末位浮点差异曾在模型提交前被重建比较误拒；已发布修复复用现有来源定位器处理精度差异，继续严格校验内容与引用。原task沿原预留已恢复且完成，实际加载两科学Skill并回读原页，但独立核源发现修订未传播到其他字段及主张，科学NO-GO。工具只返成功未返合并稿、原生Skill仍含旧提交协议的缺口已定位并形成候选；新资源未安装，身份/回执和下一动作只见CURRENT。
 
 旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
 
@@ -118,16 +118,16 @@ Hermes技能与学习消费审计（2026-09-22）：82/606实际checkpoint记录
 
 分阶段保存断点：第三篇40026425历史science成功后art三次json_parse失败，result仍NULL；旧planner只在science/art均完成时返回，handler才保存完整方案，Gateway拒收回调也未覆盖json_parse。现沿原任务私有result/CAS保存science，Gateway在每次实际art调用前记录提交、异步保存有界无效返回，原retry-generation按实际阶段续接。没有保存的历史science仍只能完整planning restart；合法science配合明确拒收可art-only，已知末次art provider_timeout可显式新art执行并保留未知结果记录，其他unknown不自动重发。旧完整checkpoint仍走原末审。已部署，真实消费与恢复效果见CURRENT，不从上线推断能力稳定。原文补接优先同SourceMap确定性邻近回读，暂不扩建检索协议或新MCP。
 
-原图视觉理解缺口：`provider.ts`普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
+历史原图视觉理解缺口（后续原生paper_view/像素接线已取代，未完成项见本页首节）：`provider.ts`当时普通ChatMessage仅文本；`figure-list.ts`是文字引用提取，`figure-audit.ts`只向`figure-auditor.ts`提供id/caption/role，且Evidence读取把pageStart固定为1，不能当作原图页定位。SourceMap的figure/caption块有bbox/文本但没有图像语义。现有MiniMax VLM经`ocr.ts`固定转录提示、`llm-ocr-fallback.ts`低质量页路径调用，外部处理权限仅允许sdf.extract；既不是普遍看过原图，也不提供坐标/拓扑解释。拟沿既有figure-audit按需绑定当前原文页、复用隔离renderPages与VLM传输，另设窄的视觉观察语义和presentation权限，观察只作上下文不自动成为Evidence；尚未实现。若页定位不唯一，不猜页或绕过权限。比例尺、条件分组等现有文字足够发现的问题不归因于缺视觉输入。
 
 历史核对（2026-09-22；当时纯文本消息状态已被后续native页图接线取代）：[MiniMax官方Anthropic接口文档](https://platform.minimax.io/docs/api-reference/text-anthropic-api)与Provider能力须按实际版本分别判断。当前已在真实M3请求提供原页像素；这不证明原生Hermes工具循环或MCP已接入。OCR转录、原页视觉理解、科学正确性仍分别验收，不绕过原图外发权限。旧定向核对未发模型请求、安装或改变路由，后续实际质量见CURRENT。
 
-独立Hermes Agent的[Skill机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)和[MCP机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/)支持按需加载方法、工具发现和经验保存；这是上游运行时能力，不代表本产品的Worker已接入。后续补接优先复用现有全文/证据/选定页/审阅记录，通过当前权限边界传递工具结果；核实后的科学纠错与用户审美偏好分别限定适用范围。用户10-01已明确必须接入已安装的原生Hermes Agent；不另建全文分析器，不以存有日志冒称跨任务学习，也不假定模型意见必然正确。
+2026-10-01接入前调研记录（接入与实际消费已由本页首节取代）：独立Hermes Agent的[Skill机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills/)和[MCP机制](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/)支持按需加载方法、工具发现和经验保存；这是上游运行时能力，不代表本产品的Worker已接入。后续补接优先复用现有全文/证据/选定页/审阅记录，通过当前权限边界传递工具结果；核实后的科学纠错与用户审美偏好分别限定适用范围。用户10-01已明确必须接入已安装的原生Hermes Agent；不另建全文分析器，不以存有日志冒称跨任务学习，也不假定模型意见必然正确。
 
-运行时实查：服务器`/opt/hermes-agent`已安装hermes-agent0.10.0/Python3.11.6，实际入口AIAgent.run_conversation，原生skills_list/skill_view支持完整资源读取；源码无Git身份。候选把现有运行时和79个源Skill复制为排除秘密的独立只读快照，加入实际科学方法/完整艺术资源，并沿原source任务直接调用Agent，平台保留来源/权限/租约/费用/正式物化。真实原生冻结副本及私有Store/科学物化11轮零外呼整合已通过，原页像素与完整Skill引用确实消费；不是生产模型或科学质量证明。固定隔离/退出清理/安装回滚候选High工程GO，尚未生产安装；原生分镜/成图复核与真实论文质量未完成。压缩器保持启用，超出严格历史兼容时停止；不能冒称完整Agent功能已交付。详情见CURRENT及接入计划。
+2026-10-01安装前实查（以下候选/未安装是当时状态，不是当前操作）：服务器`/opt/hermes-agent`已安装hermes-agent0.10.0/Python3.11.6，实际入口AIAgent.run_conversation，原生skills_list/skill_view支持完整资源读取；源码无Git身份。候选把现有运行时和79个源Skill复制为排除秘密的独立只读快照，加入实际科学方法/完整艺术资源，并沿原source任务直接调用Agent，平台保留来源/权限/租约/费用/正式物化。真实原生冻结副本及私有Store/科学物化11轮零外呼整合已通过，原页像素与完整Skill引用确实消费；不是生产模型或科学质量证明。固定隔离/退出清理/安装回滚候选High工程GO，尚未生产安装；原生分镜/成图复核与真实论文质量未完成。压缩器保持启用，超出严格历史兼容时停止；不能冒称完整Agent功能已交付。详情见CURRENT及接入计划。
 
 2026-10-01处理方式纠正（用户已明确原生Agent接入必做；以下调研约束用于实施，不再等待是否接入的选择）：
-- 现有生产论文路径（待替换Agent控制层）为Worker固定调用M3：18k字符阅读窗口、至多两路并行观察提取、语义归约、六字段/候选Claims、native来源审校，再进入分镜。科学Skill主要是项目改写的TS提示词投影，未消费原生Hermes的skills_list/skill_view和按问题选工具循环；媒体风格资源加载另行核对。安装与注入不能证明科学方法执行可靠。
+- 当时生产论文路径（已由Native入口取代；历史兼容消费者保留）为Worker固定调用M3：18k字符阅读窗口、至多两路并行观察提取、语义归约、六字段/候选Claims、native来源审校，再进入分镜。科学Skill主要是项目改写的TS提示词投影，未消费原生Hermes的skills_list/skill_view和按问题选工具循环；媒体风格资源加载另行核对。安装与注入不能证明科学方法执行可靠。
 - 上游[Hermes Skill机制](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/skills.md)按目录/正文/引用文件逐步加载；[文档抽取](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/document-extraction.md)支持读取窗口、识别缺口、必要页视觉与OCR。[PaperQA](https://github.com/Future-House/paper-qa)围绕问题召回/评价证据后回答，并分存媒体与生成图注；其检索也可能漏图，不可照搬纯TopK。
 - [Anthropic上下文工程](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)支持按需或混合读取，也指出运行时探索可能增加延迟。[K-Dense peer-review](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/peer-review/SKILL.md)先掌握中性全局再优先核中央主张，脚本只检结构/声明，不证明科学正确。QMD是可用上游MCP范例，本项目已有检索，不据此新装第二套索引；不把上游示例/基准成绩视为本链速度或准确率证据。
 - 倾向混合渐进：保留完整原PDF与可复用SourceMap；整体阅读正文/图注/表格/补充材料及缺口后，围绕读者需要的核心问题深读支持、限定、反证和跨引用，按需加载原页/方法参考，再凝练六字段/Claims并进入既有图文链。全文概览不得退化为目录/摘要扫描；初始问题可被原文推翻。完整复现实验/逐式审计可按需，已使用结论依赖的几何、量定义、位置、材料、工况、假设和边界不可省略。

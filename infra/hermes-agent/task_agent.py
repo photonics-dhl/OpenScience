@@ -147,14 +147,71 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
             return OpenAI(**kwargs)
 
         def _execute_tool_calls(self, assistant_message, messages, effective_task_id, api_call_count=0):
-            for call in assistant_message.tool_calls or []:
+            calls = assistant_message.tool_calls or []
+            paper_calls = {}
+            call_ids = [getattr(call, 'id', None) for call in calls]
+            def exact_args(args):
+                if not isinstance(args, dict):
+                    raise ValueError('Source tool arguments must be an object')
+                return json.dumps(args, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+            for call in calls:
                 if call.function.name not in allowed:
                     raise NativeTaskStopped("Native task attempted a tool outside its advertised scope")
+                if call.function.name.startswith('paper_'):
+                    if not isinstance(call.id, str) or not call.id or call_ids.count(call.id) != 1:
+                        raise NativeTaskStopped('Native source tool call identity changed')
+                    try:
+                        paper_calls[call.id] = (call.function.name, exact_args(json.loads(call.function.arguments)))
+                    except (TypeError, ValueError) as error:
+                        raise NativeTaskStopped('Native source tool arguments changed') from error
             start = len(messages)
-            result = super()._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
-            if page_images is not None:
-                append_bound_page_images(assistant_message.tool_calls, messages[start:], messages, page_images)
-            return result
+            previous_callback = getattr(self, 'tool_complete_callback', None)
+            captured = {}
+            capture_invalid = False
+            def capture(call_id, name, args, content):
+                nonlocal capture_invalid
+                try:
+                    if call_id in paper_calls or isinstance(name, str) and name.startswith('paper_'):
+                        if (call_id not in paper_calls or paper_calls[call_id] != (name, exact_args(args))
+                                or call_id in captured or not isinstance(content, str)):
+                            capture_invalid = True
+                        else:
+                            captured[call_id] = content
+                except (TypeError, ValueError):
+                    capture_invalid = True
+                if previous_callback is not None:
+                    previous_callback(call_id, name, args, content)
+            self.tool_complete_callback = capture
+            try:
+                result = super()._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
+                # Native catches callback exceptions. Check recorded mismatches outside that catch,
+                # and require a unique actual result message; never fabricate a missing receipt.
+                if capture_invalid or captured.keys() != paper_calls.keys():
+                    raise NativeTaskStopped('Native source tool receipt changed')
+                selected = {}
+                for message in messages[start:]:
+                    if not paper_calls or not isinstance(message, dict) or message.get('role') != 'tool':
+                        continue
+                    call_id = message.get('tool_call_id')
+                    if not isinstance(call_id, str) or call_id not in call_ids:
+                        raise NativeTaskStopped('Native source tool result identity changed')
+                    if call_id in paper_calls:
+                        if (call_id in selected or not isinstance(message.get('content'), str)
+                                or message.get('name', paper_calls[call_id][0]) != paper_calls[call_id][0]):
+                            raise NativeTaskStopped('Native source tool result identity changed')
+                        selected[call_id] = message
+                if selected.keys() != paper_calls.keys():
+                    raise NativeTaskStopped('Native source tool result is missing')
+                # Worker binds exact JSON receipts. Restore only this turn's bound source results
+                # after native per-result/aggregate previews; Skills and native compression stay native.
+                for call_id, message in selected.items():
+                    message['content'] = captured[call_id]
+                if page_images is not None:
+                    append_bound_page_images(calls, messages[start:], messages, page_images)
+                return result
+            finally:
+                self.tool_complete_callback = previous_callback
+                captured.clear()
 
         @staticmethod
         def _deduplicate_tool_calls(tool_calls):

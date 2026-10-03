@@ -101,6 +101,10 @@ describe('independent native source review using the existing scientific materia
       boundDraft: { fields: { method: { summary: text } }, draftClaims: [{ statement: text }] } });
     expect(saved?.initialMessages.some(m => m.content.includes(text))).toBe(false);
     expect(saved?.turns.at(-1)?.request.messages.some(m => m.role === 'tool' && m.content.includes(text))).toBe(true);
+    const committed = saved?.turns.at(-1)?.request.messages.find(m => m.role === 'tool' && m.toolCallId === 'call-2');
+    expect(JSON.parse(committed!.content)).toMatchObject({ reviewedCandidate: {
+      fields: { results: { summary: text } }, claimSuggestions: [{ statement: text }],
+    } });
     expect(result.scientificReview).toMatchObject({ kind: 'hermes_agent_review', profile: 'paper-source-review', sourceAgentTaskId,
       status: 'review_received', provider: 'minimax', model: 'MiniMax-M3', promptHash: saved?.turns.at(-1)?.target.promptHash });
     expect(result).not.toHaveProperty('nativeDraftClaims'); expect(result.scientificReview).not.toHaveProperty('draftClaims');
@@ -121,6 +125,28 @@ describe('independent native source review using the existing scientific materia
     expect(worker.finish(messages).core.method).toBe(text);
     expect(NATIVE_SOURCE_REVIEW_TOOLS.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['paper_field', 'paper_claim', 'paper_draft']));
     for (const name of ['paper_field', 'paper_claim', 'paper_draft']) expect(await worker.call(name, {})).toHaveProperty('error');
+  });
+  it('returns the consolidated reviewed fields and Claims so a correction can be checked against retained text', async () => {
+    const worker = tools();
+    const candidate = await worker.call('paper_candidate', {}, 0, 'candidate');
+    const summary = 'This is a numerical prediction under the stated optical geometry.';
+    const revised = { ...decision(), fields: { ...decision().fields,
+      limitations: { verdict: 'revised', summary, sourcePassageIds: ['P00001'],
+        issues: [{ code: 'QUALIFIER_LOSS', problem: 'Retain the numerical model qualification.', sourcePassageIds: ['P00001'] }] } } };
+    const receipt = await worker.call('paper_review', revised, 1, 'review');
+    expect(receipt).toMatchObject({ status: 'review_ready', reviewToolCallId: 'review', sourceAgentTaskId,
+      reviewedCandidate: { fields: { results: { verdict: 'accepted', summary: text, sourcePassageIds: ['P00001'] },
+        limitations: { verdict: 'revised', summary } },
+        claimSuggestions: [{ statement: text, sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }],
+        needsMoreEvidence: [] } });
+    const messages = [...pair('candidate', 'paper_candidate', {}, candidate), ...pair('review', 'paper_review', revised, receipt)];
+    const final = worker.finish(messages);
+    expect(final.core.results).toBe(text);
+    expect(final.core.limitations).toBe(summary);
+    expect((receipt.reviewedCandidate as { fields: unknown }).fields).toEqual(final.nativeScientificFields);
+    const rejected = await worker.call('paper_review', { ...revised, sourceAgentTaskId: 'foreign' }, 2, 'rejected');
+    expect(rejected).toMatchObject({ status: 'invalid_review' });
+    expect(rejected).not.toHaveProperty('reviewedCandidate');
   });
   function persistedAuthorWithCoordinateDrift() {
     const sourceMap = structuredClone(map);
@@ -165,6 +191,12 @@ describe('independent native source review using the existing scientific materia
     expect((candidate.fields as Record<string, { summary: string }>).method!.summary).toBe(text);
     expect((await worker.call('paper_review', { ...decision(), sourceAgentTaskId: 'foreign' }, 1, 'bad')).status).toBe('invalid_review');
     expect((await worker.call('paper_review', { ...decision(), draftToolCallId: 'invented' }, 2, 'bad2')).status).toBe('invalid_review');
+  });
+  it('explains misplaced field content without falsely reporting a changed author identity', async () => {
+    const worker = tools(); await worker.call('paper_candidate', {});
+    const misplaced = await worker.call('paper_review', { ...decision(), summary: 'A field was placed at the root.' }, 1, 'bad-shape');
+    expect(misplaced).toMatchObject({ status: 'invalid_review', feedback: expect.stringContaining('inside fields') });
+    expect(misplaced.feedback).not.toContain('exact saved author task');
   });
   it.each(['missing', 'duplicate', 'changed', 'later'])('requires a real preceding candidate receipt: %s', async variant => {
     const { worker, candidate, messages } = await reviewed();
