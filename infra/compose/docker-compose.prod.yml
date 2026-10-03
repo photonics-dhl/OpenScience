@@ -19,6 +19,7 @@ name: openscience-prod
 services:
   postgres:
     image: postgres:16-alpine
+    mem_limit: 2g
     # 无 ports 映射：仅 data_net 内部可达，不绑公网（§14.2）
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
@@ -38,6 +39,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    mem_limit: 512m
+    command: ["redis-server", "--maxmemory", "384mb", "--maxmemory-policy", "noeviction"]
     # 无 ports 映射：仅 data_net 内部可达
     volumes:
       - redis-data:/data
@@ -51,6 +54,7 @@ services:
     restart: unless-stopped
 
   object-storage:
+    mem_limit: 3g
     # SeaweedFS 4.41：活跃维护的 Apache-2.0 S3-compatible store；不暴露宿主端口。
     image: chrislusf/seaweedfs:4.41@sha256:43b768cd62b00d132439cda881b93fd1adebf1b315e996e794087743821d771d
     command: ["mini", "-dir=/data"]
@@ -71,6 +75,7 @@ services:
     restart: unless-stopped
 
   api:
+    mem_limit: 2g
     # node:22（debian bookworm full，含 openssl3）—— Prisma engine 与 cloud host build 的
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
     image: node:22
@@ -142,6 +147,7 @@ services:
     restart: unless-stopped
 
   malware-scanner:
+    mem_limit: 3g
     image: clamav/clamav:stable
     volumes:
       - clamav-data:/var/lib/clamav
@@ -156,6 +162,7 @@ services:
     restart: unless-stopped
 
   agent-worker:
+    mem_limit: 2g
     # Hermes ingestion consumer; no host port, only app/data network access.
     build:
       context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
@@ -460,6 +467,7 @@ services:
     restart: unless-stopped
 
   web:
+    mem_limit: 1g
     image: node:22
     user: node
     ports:

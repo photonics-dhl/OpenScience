@@ -16,6 +16,8 @@ name: openscience-monitor
 services:
   netdata:
     image: netdata/netdata:stable
+    mem_limit: 1536m
+    cpus: 2
     container_name: netdata
     hostname: openscience-ecs
     restart: unless-stopped
@@ -31,6 +33,13 @@ services:
       - netdataconfig:/etc/netdata
       - netdatalib:/var/lib/netdata
       - netdatacache:/var/cache/netdata
+      # Provisioned privately on the host; never copy SMTP credentials into Git.
+      - type: bind
+        source: /opt/monitor/msmtprc
+        target: /etc/msmtprc
+        read_only: true
+        bind:
+          create_host_path: false
       - /:/host/root:ro,rslave
       - /etc/passwd:/host/etc/passwd:ro
       - /etc/group:/host/etc/group:ro
@@ -44,6 +53,8 @@ services:
   # 账单页由宿主机 cron 调 `docker exec vnstat vnstat --json` 渲染（infra/scripts/traffic-report.sh）。
   vnstat:
     image: alpine:3.20
+    mem_limit: 128m
+    cpus: 0.25
     container_name: vnstat
     restart: unless-stopped
     network_mode: host
