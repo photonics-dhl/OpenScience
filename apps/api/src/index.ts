@@ -4,7 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -58,12 +58,17 @@ async function main(): Promise<void> {
     const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
     const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
     const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
+    const synclipImageInboxDir = process.env.SYNCLIP_IMAGE_INBOX_DIR?.trim();
+    const synclipImageResultsDir = process.env.SYNCLIP_IMAGE_RESULTS_DIR?.trim();
     const reviewInboxDir = process.env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim();
     const reviewResultsDir = process.env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim();
     const imageReviewReader = env.ai.sceneImageEnabled && reviewInboxDir && reviewResultsDir
       ? new ChatGptWebScienceReviewProvider({ inboxDir: reviewInboxDir, resultsDir: reviewResultsDir }) : undefined;
     const spoolImageProvider = (kind: string): RecoverableImageProvider | undefined => {
       if (!env.ai.sceneImageEnabled) return undefined;
+      if (kind === 'synclip' && synclipImageInboxDir && synclipImageResultsDir) {
+        return new SynclipSpoolImageProvider({ inboxDir: synclipImageInboxDir, resultsDir: synclipImageResultsDir });
+      }
       if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
         return new CodexSpoolImageProvider({ inboxDir: codexImageInboxDir, resultsDir: codexImageResultsDir });
       }
@@ -79,7 +84,7 @@ async function main(): Promise<void> {
     // consult, and promoting a never-used spare into that role would let an empty inbox
     // authorise reusing a reservation the payer may already have spent.
     const imagePrimaryKind = process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
-    const imageFallbackKind = process.env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
+    const imageFallbackKind = imagePrimaryKind === 'synclip' ? undefined : process.env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
     const payerImageProvider = spoolImageProvider(imagePrimaryKind);
     const spareImageProvider = imageFallbackKind && imageFallbackKind !== imagePrimaryKind
       ? spoolImageProvider(imageFallbackKind) : undefined;
@@ -111,6 +116,7 @@ async function main(): Promise<void> {
       ...(searchPrisma ? { deleteSearchContent: (scope: Parameters<typeof deleteSearchContent>[1]) => deleteSearchContent(searchPrisma, scope) } : {}),
       ...(searchPrisma ? { setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(searchPrisma, tx, scope) } : {}),
       sceneImageEnabled: env.ai.sceneImageEnabled,
+      nativeSceneImageEnabled: env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip',
       videoEnabled: env.ai.videoEnabled,
       ...(inspectPooledImageRecoveryState && payerImageProvider ? {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission

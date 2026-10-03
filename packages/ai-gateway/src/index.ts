@@ -91,5 +91,5 @@ export {
   type ProviderCapabilityPolicy,
 } from './ocr';
 
-export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
+export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, SynclipSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
 export * from './codex-image-protocol';

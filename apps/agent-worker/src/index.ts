@@ -14,6 +14,7 @@ import {
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
   ChatGptWebSpoolImageProvider,
+  SynclipSpoolImageProvider,
   ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
   MutableProviderKillSwitch,
@@ -187,7 +188,7 @@ export type ParserCascadeRunner = ((
   renderPages(input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult>;
 };
 
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
+export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -972,6 +973,7 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
 export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 'storage' | 'audit'>, env: NodeJS.ProcessEnv = process.env): WorkerDeps {
   return { ...input,
     nativeAgentRuntime: nativeAgentRuntimeFromEnv(env),
+    nativeSceneImageEnabled: env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env),
     malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
@@ -1158,6 +1160,12 @@ export function createNativeImageReviewSubmission(prisma: WorkerDeps['prisma'],
   };
 }
 
+function synclipImageConfigured(env: NodeJS.ProcessEnv): boolean {
+  return env.AI_ENABLED === 'true' && env.SYNCLIP_IMAGE_ENABLED === 'true'
+    && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim())
+    && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip');
+}
+
 export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
@@ -1192,6 +1200,10 @@ export function buildGateway(
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
   const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
   const buildImageProvider = (kind: string | undefined): ImageProvider | undefined => {
+    if (kind === 'synclip') {
+      return synclipImageConfigured(env)
+        ? new SynclipSpoolImageProvider({ inboxDir: env.SYNCLIP_IMAGE_INBOX_DIR!.trim(), resultsDir: env.SYNCLIP_IMAGE_RESULTS_DIR!.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
+    }
     if (kind === 'chatgpt-web') {
       return env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
         ? new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(),
@@ -1212,7 +1224,7 @@ export function buildGateway(
   // non-submission (allowance exhausted or unavailable), never after an uncertain
   // attempt that may already have been submitted.
   const primaryImageKind = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
-  const fallbackImageKind = env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
+  const fallbackImageKind = primaryImageKind === 'synclip' ? undefined : env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
   const imageProviders = [
     buildImageProvider(primaryImageKind),
     fallbackImageKind && fallbackImageKind !== primaryImageKind ? buildImageProvider(fallbackImageKind) : undefined,

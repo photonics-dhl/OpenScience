@@ -3,10 +3,11 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { createAgentSession, submitAgentTask, markTaskProgress } from '../../../../packages/domain/src/agent/agent';
-import { reconcileHermesResearchRuns } from '../../../../packages/domain/src/agent/research-run';
+import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../../../packages/domain/src/agent/research-run';
 import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
 import { createPresentationGenerationHandler } from '../../src/presentation/handler';
+import * as scenePlanning from '../../src/presentation/scene-image';
 import type { runHostedNativeTask } from '../../src/native-agent/host-task';
 
 // Only the operating-system Agent process is replaced. The actual gateway, private store,
@@ -44,6 +45,7 @@ const responses = [
 ] as const;
 
 async function fixture(automaticRun = false) {
+  let transactionError: unknown;
   const { prisma, db } = createFakePrisma(); seedUser(db, { id: id(1), platformRole: 'user' });
   db.workspaces.push({ id: id(2), status: 'active' }); db.memberships.push({ userId: id(1), workspaceId: id(2), role: 'author' });
   db.researchObjects.push({ id: id(3), workspaceId: id(2), createdBy: id(1), status: 'draft', visibility: 'private', deletedAt: null });
@@ -71,6 +73,7 @@ async function fixture(automaticRun = false) {
   const objects = new Map([[ref.objectKey, bytes]]);
   const putObject = vi.fn(async (key: string, body: Uint8Array) => { const data = Buffer.from(body); objects.set(key, data); return { key, size: data.length }; });
   const deps = { prisma, redis: { lpush: vi.fn(async () => 1) }, mailer: {} as never,
+    audit: { record: async (event: Record<string, unknown>) => void await prisma.auditLog.create({ data: event }) },
     nativeAgentRuntime: { runtimeId: 'installed-fixture', skillCatalogueId: 'fixture-catalogue', model: 'MiniMax-M3' },
     storage: { putObject, headObject: async (key: string) => objects.has(key) ? { key, size: objects.get(key)!.length } : null,
       getObject: async (key: string) => { const data = objects.get(key); if (!data) throw new Error('Missing fixture object'); return { body: Readable.from([data]), size: data.length }; } } };
@@ -79,12 +82,24 @@ async function fixture(automaticRun = false) {
     storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image', narrative: true, narrativeSceneLimit: 1 } };
   const submit = () => submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'native-plan', dispatch: false });
   if (automaticRun) {
+    const findTasks = prisma.agentTask.findMany.bind(prisma.agentTask);
+    prisma.agentTask.findMany = async args => (await findTasks(args)).filter(row =>
+      (!args.where.id || (typeof args.where.id === 'string' ? row.id === args.where.id : args.where.id.in.includes(row.id)))
+      && (!args.where.idempotencyKey || (typeof args.where.idempotencyKey === 'string' ? row.idempotencyKey === args.where.idempotencyKey
+        : row.idempotencyKey?.startsWith(args.where.idempotencyKey.startsWith))));
+    prisma.agentTask.findFirst = async args => (await prisma.agentTask.findMany(args))[0] ?? null;
+    prisma.hermesResearchRun.findUniqueOrThrow = async args => (await prisma.hermesResearchRun.findUnique(args))!;
+    prisma.hermesResearchRun.findFirst = async ({ where }) => {
+      const rows = await prisma.hermesResearchRun.findMany({ where });
+      return rows.find(row => ['id', 'profile', 'researchObjectId', 'versionId'].every(key =>
+        where[key] === undefined || row[key] === where[key])) ?? null;
+    };
     prisma.agentTask.count = async ({ where }) => (await prisma.agentTask.findMany({ where })).length;
     prisma.auditLog.findMany = async ({ where }) => db.auditLogs.filter(row =>
       ['action', 'targetId', 'targetType', 'actorId'].every(key => where[key] === undefined || row[key] === where[key])
       && (!where.metadata?.path || where.metadata.path.reduce((value: Record<string, unknown>, key: string) => value?.[key], row.metadata) === where.metadata.equals));
     prisma.auditLog.findFirst = async args => (await prisma.auditLog.findMany(args))[0] ?? null;
-    const transaction = prisma.$transaction.bind(prisma); let transactionError: unknown;
+    const transaction = prisma.$transaction.bind(prisma);
     prisma.$transaction = async (...args) => {
       try { return await transaction(...args); } catch (error) { transactionError = error; throw error; }
     };
@@ -112,10 +127,110 @@ async function fixture(automaticRun = false) {
   const oldPlan = vi.spyOn(gateway, 'completeStructured'), oldReview = vi.spyOn(gateway, 'reviewScientific'), generate = vi.spyOn(gateway, 'generateImage');
   const handler = createPresentationGenerationHandler({ gateway, nativeAgent: { gateway, inboxRoot: '/unused-test-socket', renderPages: async () => [] } });
   const task = () => ({ id: owner.id, payload, executionAttempt: owner.executionAttempt, retryCount: 0 });
-  return { deps, db, owner, task, handler, fetcher, oldPlan, oldReview, generate, submit, putObject };
+  const resume = vi.spyOn(gateway, 'resumeImageFromCompletedResult');
+  const canResume = vi.spyOn(gateway, 'canResumeImageFromCompletedResult');
+  return { deps, db, owner, task, handler, fetcher, oldPlan, oldReview, generate, resume, canResume, submit, putObject, transactionError: () => transactionError };
+}
+
+async function failedNativeImage() {
+  const f = await fixture(true);
+  const result = await f.handler(f.deps as never, f.task() as never);
+  await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+  Object.assign(f.deps, { nativeSceneImageEnabled: true, inspectImageRecoveryState: vi.fn(async () => 'completed') });
+  const run = f.db.hermesResearchRuns[0];
+  for (let step = 0; step < 3; step++) {
+    run.lastReconciledAt = null;
+    expect(await reconcileHermesResearchRuns(f.deps as never)).toMatchObject({ errors: 0 });
+  }
+  const image = f.db.agentTasks.find(row => row.payload?.sceneImage)!;
+  expect(image).toBeDefined();
+  Object.assign(image, { status: 'failed', executionAttempt: 1, retryCount: 0, error: 'Provider result was not available before worker deadline' });
+  Object.assign(run, { status: 'failed', error: image.error });
+  Object.assign(f.db.hermesResearchSteps.find(row => row.stage === 'scene_image')!, { status: 'failed', error: image.error });
+  return { ...f, run, image, input: { actorId: id(1), researchObjectId: id(3), runId: run.id,
+    expectedVersion: run.version, idempotencyKey: 'recover-existing-native-png' } };
 }
 
 describe('ordinary-user native illustration through real task/store/asset boundaries', () => {
+  it('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay', async () => {
+    const f = await failedNativeImage();
+    const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, result: structuredClone(f.image.result) };
+    expect(await getHermesResearchRun(f.deps as never, f.input)).toMatchObject({ canRetryGeneration: true, chargeableAttempts: 0, generationRecovery: 'image-render' });
+    await retryHermesGeneration(f.deps as never, f.input);
+    expect(f.image).toMatchObject({ status: 'pending', retryCount: 1, result: before.result });
+    expect(f.run).toMatchObject({ status: 'generating_scene_images', maxAgentTasks: 9 });
+    await retryHermesGeneration(f.deps as never, f.input);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.fetcher).toHaveBeenCalledTimes(5);
+    expect(f.generate).not.toHaveBeenCalled();
+    expect(f.db.auditLogs.filter(row => row.action === 'hermes.research_run.generation_retry')).toHaveLength(1);
+  });
+  it.each([false, true])('revalidates the saved plan in the resumed worker before reading provider bytes (source changed: %s)', async changed => {
+    const f = await failedNativeImage();
+    await retryHermesGeneration(f.deps as never, f.input);
+    Object.assign(f.image, { status: 'running', executionAttempt: 2 });
+    f.canResume.mockResolvedValue(true);
+    if (changed) f.db.claimNodes[0].statement = 'A scientific change after the recovery transaction';
+    f.resume.mockRejectedValue(new Error('COMPLETED_BYTES_CAPTURED'));
+    await expect(f.handler(f.deps as never, { id: f.image.id, payload: f.image.payload, executionAttempt: 2, retryCount: 1 } as never))
+      .rejects.toThrow(changed ? 'Saved storyboard inputs changed' : 'COMPLETED_BYTES_CAPTURED');
+    expect(f.resume).toHaveBeenCalledTimes(changed ? 0 : 1);
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['unknown', 'claim', 'evidence', 'membership', 'review', 'review_started', 'recovered_before'] as const)('refuses completed native image recovery when %s invalidates its existing authority', async change => {
+    const f = await failedNativeImage();
+    if (change === 'unknown') Object.assign(f.deps, { inspectImageRecoveryState: async () => 'unknown' });
+    if (change === 'claim') f.db.claimNodes[0].statement = 'Changed scientific relationship';
+    if (change === 'evidence') f.db.evidenceRecords[0].exactQuote = 'Changed evidence';
+    if (change === 'membership') f.db.memberships[0].role = 'viewer';
+    if (change === 'review') f.owner.result.storyboardReview.decision = 'blocked';
+    if (change === 'review_started') f.image.result.nativeImageReview.state = 'started';
+    if (change === 'recovered_before') f.image.retryCount = 1;
+    const tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
+    await expect(retryHermesGeneration(f.deps as never, f.input)).rejects.toThrow();
+    expect(f.image.status).toBe('failed');
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it('sends the accepted native prompt unchanged without a second model planning request', async () => {
+    const f = await fixture();
+    const result = await f.handler(f.deps as never, f.task() as never);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    const savedPrompt = f.owner.result.illustrationPrompts[0].prompt;
+    const recompile = vi.spyOn(scenePlanning, 'planSceneImagePrompt');
+    f.db.presentationAssets[0].status = 'approved';
+    f.db.users[0].platformRole = 'platform_admin';
+    const payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'image', sourceClaimIds: [id(5)],
+      sceneImage: { storyboardAssetId: f.owner.id, sceneIndex: 0 } };
+    const submitted = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: f.owner.sessionId,
+      kind: 'presentation.generate', payload, idempotencyKey: 'render-native-prompt', dispatch: false });
+    const image = f.db.agentTasks.find(row => row.id === submitted.id)!;
+    Object.assign(image, { status: 'running', executionAttempt: 1 });
+    f.generate.mockRejectedValue(new Error('IMAGE_REQUEST_CAPTURED'));
+    await expect(f.handler(f.deps as never, { id: image.id, payload, executionAttempt: 1, retryCount: 0 } as never)).rejects.toThrow('IMAGE_REQUEST_CAPTURED');
+    expect(f.generate).toHaveBeenCalledWith({ requestId: image.id, prompt: savedPrompt }, { primaryProviderOnly: true });
+    expect(f.oldPlan).not.toHaveBeenCalled();
+    expect(recompile).not.toHaveBeenCalled();
+    expect(f.fetcher).toHaveBeenCalledTimes(5);
+  });
+  it('continues the native private plan through the existing automatic flow only when the replacement renderer is configured', async () => {
+    const f = await fixture(true);
+    const result = await f.handler(f.deps as never, f.task() as never);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    Object.assign(f.deps, { nativeSceneImageEnabled: true });
+    const run = f.db.hermesResearchRuns[0];
+    for (let step = 0; step < 3; step++) {
+      run.lastReconciledAt = null;
+      const checked = await reconcileHermesResearchRuns(f.deps as never);
+      expect(checked, String(f.transactionError())).toMatchObject({ errors: 0 });
+    }
+    const images = f.db.agentTasks.filter(row => row.payload?.sceneImage);
+    expect(images, JSON.stringify({ run, assets: f.db.presentationAssets.map(row => ({ id: row.id, status: row.status })) })).toHaveLength(1);
+    expect(images[0].payload.sceneImage).toEqual({ storyboardAssetId: f.owner.id, sceneIndex: 0 });
+    expect(images[0].result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    expect(f.fetcher).toHaveBeenCalledTimes(5);
+  });
   it('rechecks the original source after a serializable completion conflict without another paid call', async () => {
     const f = await fixture();
     const result = await f.handler(f.deps as never, f.task() as never);

@@ -1021,7 +1021,42 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         promptHash = null;
       } else {
       if (!options.gateway?.generateImage) throw new Error('[blocked] scene image gateway unavailable');
-      const installedSkills = completedProviderRecovery ? undefined
+      let nativePrompt: { prompt: string; designSkills?: DesignSkillUsage[] } | undefined;
+      const parentTask = await deps.prisma.agentTask.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
+      const parentNative = readNativeAgentExecution(parentTask?.result);
+      if (parentNative?.profile === 'paper-illustration') {
+        if (!parentTask || parentTask.status !== 'succeeded' || parentTask.deletedAt || parentTask.kind !== 'presentation.generate'
+          || sceneRevision || styleReference) throw new Error('[blocked] Native rendering requires its completed plan; revise the plan before changing the rendering instructions');
+        const parentPayload = parsePresentationGenerationPayload(parentTask.payload);
+        const saved = parentTask.result as Record<string, unknown>;
+        if (parentPayload.researchObjectId !== payload.researchObjectId || parentPayload.versionId !== payload.versionId
+          || !isDeepStrictEqual(parentPayload.sourceClaimIds, payload.sourceClaimIds) || parentPayload.storyboard?.output !== 'image'
+          || saved.assetId !== parentTask.id || saved.contentHash !== sceneParent.contentHash)
+          throw new Error('[blocked] Native image plan scope changed');
+        const context = saved.nativeIllustrationContext as StoryboardCheckpointIdentity | undefined;
+        const source = await readReviewedVisualContextSource(deps.prisma, narrativeScope, parentPayload, claimRows, sourceEvidence, saved);
+        if (!context || !source || !isDeepStrictEqual(saved.sourceMapRef, source.reference))
+          throw new Error('[blocked] Native image plan source changed');
+        const expected = { ...context, payload: parentPayload, claimContent: presentationClaimContent(claims), sourceEvidenceIdentity,
+          narrativeSourceIdentity: source.identity };
+        const planned = readStoryboardCheckpoint(saved, expected);
+        const review = saved.storyboardReview as StoryboardReview | undefined;
+        const cp = parentNative.checkpoint;
+        if (!isDeepStrictEqual(context, expected) || !planned || !isDeepStrictEqual(planned.document, sceneParent.view.document)
+          || cp?.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+          || !review || review.stage !== 'final-brief' || review.decision !== 'accepted' || review.requestId !== parentTask.id
+          || review.sourceEvidenceIdentity !== sourceEvidenceIdentity
+          || review.candidateHash !== createHash('sha256').update(JSON.stringify(planned.document)).digest('hex')
+          || cp.responseHash !== review.responseHash || cp.target.promptHash !== review.promptHash
+          || cp.target.provider !== review.provider || cp.target.model !== review.model)
+          throw new Error('[blocked] Native image plan review changed');
+        const prompts = saved.illustrationPrompts;
+        const selected = Array.isArray(prompts) ? prompts.filter(item => item?.sceneIndex === payload.sceneImage!.sceneIndex) : [];
+        if (selected.length !== 1 || typeof selected[0].prompt !== 'string' || !selected[0].prompt.trim())
+          throw new Error('[blocked] Native image plan has no exact saved prompt');
+        nativePrompt = { prompt: selected[0].prompt, designSkills: planned.designSkills };
+      }
+      const installedSkills = completedProviderRecovery || nativePrompt ? undefined
         : loadInstalledMediaSkills(storyboardSceneStyles(sceneParent.view, sceneParent.view.document.scenes)[payload.sceneImage.sceneIndex]!, sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.illustration?.treatment ?? sceneParent.view.document.scenes[payload.sceneImage.sceneIndex]!.visualAction, 'render');
       const imagePlanningGateway: Pick<AiGateway, 'completeStructured'> = technicalRecovery ? {
         completeStructured: async (guard, messages, opts) => {
@@ -1030,8 +1065,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         },
       } : options.gateway;
       const prompt = completedProviderRecovery ? null
-        : await planSceneImagePrompt(imagePlanningGateway, claims, sceneParent.view, payload.sceneImage.sceneIndex, installedSkills, sceneRevision?.repairInstruction);
-      designSkills = installedSkills?.usage;
+        : nativePrompt?.prompt ?? await planSceneImagePrompt(imagePlanningGateway, claims, sceneParent.view, payload.sceneImage.sceneIndex, installedSkills, sceneRevision?.repairInstruction);
+      designSkills = nativePrompt?.designSkills ?? installedSkills?.usage;
       const referenceImage = !completedProviderRecovery && styleReference
         ? { bytes: await readPresentationInput(deps.storage, styleReference.objectKey, styleReference.contentHash), contentHash: styleReference.contentHash }
         : undefined;
@@ -1042,7 +1077,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       const result = completedProviderRecovery
         ? await options.gateway.resumeImageFromCompletedResult!(task.id)
         : await options.gateway.generateImage({ prompt: prompt!, requestId: task.id, ...(referenceImage ? { referenceImage } : {}) },
-          technicalReplacement ? { primaryProviderOnly: true } : undefined);
+          technicalReplacement || nativePrompt ? { primaryProviderOnly: true } : undefined);
       bytes = result.bytes; contentType = result.contentType; extension = imageExtension(contentType);
       imageProvider = result.provider;
       generator = `OpenScience Hermes scene image / ${result.provider}`; generatorVersion = result.model; promptHash = result.promptHash;

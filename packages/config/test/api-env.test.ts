@@ -134,3 +134,13 @@ it('selects Codex scene images only explicitly with all enablement conditions', 
   expect(loadApiEnv(env).ai.sceneImageEnabled).toBe(true);
   for (const patch of [{ AI_ENABLED: 'false' }, { HERMES_SCENE_IMAGE_PROVIDER: 'disabled' }, { CODEX_IMAGE_INBOX_DIR: '' }, { AI_DISABLED_PROVIDERS: 'codex-image' }]) expect(loadApiEnv({ ...env, ...patch }).ai.sceneImageEnabled).toBe(false);
 });
+
+it('enables Synclip only through explicit host-spool configuration, without an application credential', () => {
+  const env = { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true',
+    SYNCLIP_IMAGE_INBOX_DIR: '/synclip/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/synclip/results' };
+  expect(loadApiEnv(env).ai.sceneImageEnabled).toBe(true);
+  for (const patch of [{ AI_ENABLED: 'false' }, { SYNCLIP_IMAGE_ENABLED: 'false' }, { SYNCLIP_IMAGE_INBOX_DIR: '' },
+    { SYNCLIP_IMAGE_RESULTS_DIR: ' ' }, { AI_DISABLED_PROVIDERS: 'synclip' }]) {
+    expect(loadApiEnv({ ...env, ...patch }).ai.sceneImageEnabled).toBe(false);
+  }
+});

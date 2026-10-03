@@ -183,7 +183,6 @@ async function finalizeWebImage(config, request, privateDir, jobDir, operationDe
   const raw = await safeRead(join(jobDir, 'output/image.png'), 30 * 1024 * 1024);
   validateRawPng(raw);
   if (innerResult.bytes !== raw.length || innerResult.width !== raw.readUInt32BE(16) || innerResult.height !== raw.readUInt32BE(20)) throw uncertain();
-  const container = 'xgs-chatgpt-web-normalize-' + request.id;
   try {
     const rawPath = join(privateDir, 'browser-result.png');
     if (await exists(rawPath)) {
@@ -205,32 +204,42 @@ async function finalizeWebImage(config, request, privateDir, jobDir, operationDe
       if (await exists(marker)) throw Error('NORMALIZATION_RECOVERY_EXHAUSTED');
       await atomicWrite(marker, String(Date.now()), 0o600);
     }
+    return await normalizeImage(config, request.id, rawPath, normalized, operationDeadlineAt);
+  } catch (error) {
+    reportFailure(request.id, 'normalization', error);
+    throw uncertain();
+  }
+}
+
+/** Local decoding only. Importing this module never starts the browser broker. */
+export async function normalizeImage(config, requestId, rawPath, normalizedDir, deadlineAt, runDocker = docker) {
+  if (!UUID.test(requestId) || !/^(?:[a-z0-9._/-]+@)?sha256:[a-f0-9]{64}$/u.test(config.rendererImage)
+    || !Number.isSafeInteger(deadlineAt)) throw Error('NORMALIZATION_INPUT_INVALID');
+  const container = 'xgs-chatgpt-web-normalize-' + requestId;
+  try {
     const rendererArgs = ['run', '--rm', '--name', container, '--network', 'none', '--read-only', '--cap-drop', 'ALL',
       '--security-opt', 'no-new-privileges', '--user', '1000:1000', '--memory', '512m', '--memory-swap', '512m',
-      '--pids-limit', '64', '-v', rawPath + ':/input.png:ro', '-v', normalized + ':/output:rw',
+      '--pids-limit', '64', '-v', rawPath + ':/input.png:ro', '-v', normalizedDir + ':/output:rw',
       '--entrypoint', '/usr/bin/ffmpeg', config.rendererImage, '-v', 'error', '-nostdin', '-y', '-threads', '1', '-i', '/input.png'];
     const remainingTime = () => {
-      const remaining = operationDeadlineAt - Date.now();
+      const remaining = deadlineAt - Date.now();
       if (remaining <= 0) throw Error('NORMALIZATION_DEADLINE_EXPIRED');
       return Math.min(45000, remaining);
     };
-    await docker([...rendererArgs, '-filter_complex_threads', '1', '-filter_complex', EDGE_SAMPLE_FILTER,
+    await runDocker([...rendererArgs, '-filter_complex_threads', '1', '-filter_complex', EDGE_SAMPLE_FILTER,
       '-frames:v', '1', '-threads', '1', '-pix_fmt', 'rgba', '-f', 'rawvideo', '/output/edge-sample.rgba'], remainingTime());
-    const background = edgeBackground(await safeRead(join(normalized, 'edge-sample.rgba'), 256));
-    await unlink(join(normalized, 'edge-sample.rgba'));
-    await docker([...rendererArgs, '-filter_complex_threads', '1', '-filter_complex',
+    const background = edgeBackground(await safeRead(join(normalizedDir, 'edge-sample.rgba'), 256));
+    await unlink(join(normalizedDir, 'edge-sample.rgba'));
+    await runDocker([...rendererArgs, '-filter_complex_threads', '1', '-filter_complex',
       `color=c=0x${background}:s=1280x720,format=rgb24[ground];[0:v]scale=1280:720:force_original_aspect_ratio=decrease,format=rgba[image];[ground][image]overlay=(W-w)/2:(H-h)/2:format=rgb:shortest=1`,
       '-map_metadata', '-1',
       '-frames:v', '1', '-threads', '1', '-pix_fmt', 'rgb24', '/output/result.pending.png'],
     remainingTime());
-    const bytes = validateImageBytes(await safeRead(join(normalized, 'result.pending.png'), 10 * 1024 * 1024)).bytes;
-    await rename(join(normalized, 'result.pending.png'), join(normalized, 'result.png'));
+    const bytes = validateImageBytes(await safeRead(join(normalizedDir, 'result.pending.png'), 10 * 1024 * 1024)).bytes;
+    await rename(join(normalizedDir, 'result.pending.png'), join(normalizedDir, 'result.png'));
     return bytes;
-  } catch (error) {
-    reportFailure(request.id, 'normalization', error);
-    throw uncertain();
   } finally {
-    await docker(['rm', '-f', container]).catch(() => {});
+    await runDocker(['rm', '-f', container]).catch(() => {});
   }
 }
 async function recoverUncertainWebImage(config) {

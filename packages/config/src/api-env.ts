@@ -152,7 +152,9 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   const sceneImageProvider = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
   const ai = {
     enabled: aiEnabled,
-    sceneImageEnabled: sceneImageProvider === 'chatgpt-web'
+    sceneImageEnabled: sceneImageProvider === 'synclip'
+      ? aiEnabled && env.SYNCLIP_IMAGE_ENABLED === 'true' && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim()) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('synclip')
+      : sceneImageProvider === 'chatgpt-web'
       ? aiEnabled && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('chatgpt-web')
       : sceneImageProvider === 'codex'
         ? aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('codex-image')

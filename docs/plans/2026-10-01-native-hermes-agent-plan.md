@@ -2,11 +2,19 @@
 
 > 接入设计与历史实施记录：原生论文及自动规划入口已部署，真实科学质量仍待验收；当前版本、任务、断点与下一步只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。下方阶段性准备状态不得作为重新接入或重新付费的指令。
 
-## 尚未实现的独立原生核源接续
+## 独立原生核源接续的设计沿革
 
-当前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判；不能把问题归为缺源或宣称独立上下文必然改善。
+接入前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判。下述独立角色现已实现并部署；它曾真实执行，但未证明科学全部正确。当前断点只见CURRENT，不能把本节当待重新接入的任务。
 
-合同定位经独立High只读审查：可复用现有source_review阶段，仅为新任务建立真正原生审阅角色。该角色需绑定实际作者候选，独立Agent/store而不继承作者对话，按保留主张渐进回查原SourceMap并复用完整科学物化；原canonical source、run/step、每轮租约/权限/外部处理授权及最终paid回执仍须一致。新角色必要性是现有固定请求签名与1/2次检查点不能授权多轮Agent；不能把旧收据转换为新执行或伪造semanticStage。仍占原run槽位和一次普通任务扣费，保留replay-before-debit/max9/CAS/unknown不重发。此段是接续边界，尚非候选实现或科学验收；实际下一动作只见CURRENT。
+合同定位经独立High只读审查：复用现有source_review阶段，仅为新任务建立真正原生审阅角色。该角色绑定实际作者候选，独立Agent/store而不继承作者对话，按保留主张渐进回查原SourceMap并复用完整科学物化；原canonical source、run/step、每轮租约/权限/外部处理授权及最终paid回执仍须一致。新角色必要性是原固定请求签名与1/2次检查点不能授权多轮Agent；不能把旧收据转换为新执行或伪造semanticStage。仍占原run槽位和一次普通任务扣费，保留replay-before-debit/max9/CAS/unknown不重发。此段保存已实施设计边界，不代表科学验收。
+
+## Synclip替换图片通道
+
+10-03用户提供[图片API](https://synclip.ai/dev/docs/image)，确认首试模型为gpt-image-2，2.5后续接入；不自动替换Nano Banana或Midjourney。原生Hermes继续负责科学、风格、完整prompt及像素审阅。Gateway接入独立Synclip image spool身份；host保存提交意图并调用POST /v1/image、GET /v1/tasks/:id，复用现有隔离图片正规化。具体实现/配置/真实结果仅见CURRENT。
+
+复用原requestId、promptHash、资产和费用记录；新的持久提交记录只用于防止POST回应丢失或进程重启后重复扣费，既有本地spool标记不能证明外部API是否受理。未知结果且没有task_id时不重发；拿到task_id立即保存，恢复只GET同ID，完成下载及正规化后才发布本地completed。API/Domain只读本地结果，事务内不查询供应商。Native max9补接原任务完成结果恢复、保留原reservation与尚未开始的像素审阅，不新建预算或工作流。Key由用户隐藏输入到host私有文件，不进入业务容器、聊天或spool。
+
+私密配置入口为`infra/synclip-image/configure-key.ps1`，在Windows PowerShell执行文件、按隐藏提示输入；不复制脚本正文。它只保存root私有Key，不启用provider或提交请求。应用默认SYNCLIP_IMAGE_ENABLED=false，安装后的host负责持久提交、续查及正规化；启用前核对待续行的Native任务，确保首张试图对应已审科学方案。Synclip作为主图像通道时忽略备用配置，错误不自动切模型。恢复界面复用image-render/零平台重复收费提示，后续Hermes审阅仍有模型用量。
 
 ## 已结束的接入和局部修复记录
 

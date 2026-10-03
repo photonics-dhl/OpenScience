@@ -148,7 +148,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       if (!missing(error)) throw error;
     }
     const createdAt = this.now();
-    let request = validateCodexImageRequest({ schemaVersion: 1, ...(this.spoolProvider === 'chatgpt-web' ? { provider: this.spoolProvider } : {}), id, prompt, promptHash: expectedPromptHash, ...(reference ? { reference } : {}), createdAt, deadlineAt: createdAt + this.timeout }, undefined, this.spoolProvider);
+    let request = validateCodexImageRequest({ schemaVersion: 1, ...(this.spoolProvider !== 'codex' ? { provider: this.spoolProvider } : {}), id, prompt, promptHash: expectedPromptHash, ...(reference ? { reference } : {}), createdAt, deadlineAt: createdAt + this.timeout }, undefined, this.spoolProvider);
     const submit = async () => {
       if (referenceImage) {
         // Publish immutable reference bytes before either durable request marker.
@@ -207,4 +207,12 @@ export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
   readonly model = 'chatgpt-web/6-pro-image-generation-tool';
   readonly supportsReferenceImage = true;
   protected readonly spoolProvider = 'chatgpt-web' as const;
+}
+
+/** Synclip's explicitly selected API model; the host owns credentials and HTTP submission. */
+export class SynclipSpoolImageProvider extends SpoolImageProvider {
+  constructor(config: CodexSpoolImageConfig) { super(config); }
+  readonly name = 'synclip';
+  readonly model = 'gpt-image-2';
+  protected readonly spoolProvider = 'synclip' as const;
 }

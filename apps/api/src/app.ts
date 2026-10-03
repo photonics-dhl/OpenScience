@@ -53,6 +53,7 @@ export interface BuildAppOptions extends AuthRouteDeps {
   deleteSearchContent?: TrashDeps['deleteSearchContent'];
   setSearchContentVisibility?: TrashDeps['setSearchContentVisibility'];
   sceneImageEnabled?: boolean;
+  nativeSceneImageEnabled?: HermesResearchRunDeps['nativeSceneImageEnabled'];
   videoEnabled?: boolean;
   canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'];

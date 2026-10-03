@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ImageUsageLimitError, SynclipSpoolImageProvider } from '@openscience/ai-gateway';
 import { buildGateway, buildSourceRetrieveHandlerFromEnv } from '../src/index';
 
 const ocrRequest = () => ({
@@ -15,6 +16,28 @@ const ocrRequest = () => ({
 });
 
 describe('MiniMax worker gateway config', () => {
+  it('selects only the explicit Synclip spool and never spends a configured fallback', async () => {
+    const fetcher = vi.fn();
+    const generate = vi.spyOn(SynclipSpoolImageProvider.prototype, 'generate').mockRejectedValue(new ImageUsageLimitError());
+    try {
+      const gateway = buildGateway({ AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true',
+        SYNCLIP_IMAGE_INBOX_DIR: '/offline/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/offline/results',
+        HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: 'minimax', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'offline-fixture' }, fetcher as never);
+      await expect(gateway.generateImage({ requestId: '01900000-0000-7000-8000-000000000001', prompt: 'Reviewed native prompt.' })).rejects.toThrow('IMAGE_USAGE_LIMIT');
+      expect(generate).toHaveBeenCalledOnce(); expect(fetcher).not.toHaveBeenCalled();
+    } finally { generate.mockRestore(); }
+  });
+  it.each([{ SYNCLIP_IMAGE_ENABLED: 'false' }, { AI_DISABLED_PROVIDERS: 'synclip' }, { SYNCLIP_IMAGE_RESULTS_DIR: '' }])('does not redirect a disabled or incomplete Synclip configuration to another renderer (%j)', async override => {
+    const fetcher = vi.fn();
+    const generate = vi.spyOn(SynclipSpoolImageProvider.prototype, 'generate');
+    try {
+      const gateway = buildGateway({ AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true',
+        SYNCLIP_IMAGE_INBOX_DIR: '/offline/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/offline/results',
+        HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: 'minimax', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'offline-fixture', ...override }, fetcher as never);
+      await expect(gateway.generateImage({ prompt: 'Reviewed native prompt.' })).rejects.toThrow('image provider unavailable');
+      expect(generate).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    } finally { generate.mockRestore(); }
+  });
   it('boots with the global AI switch off even when Sol review is configured on', () => {
     expect(() => buildGateway({ AI_ENABLED: 'false', CODEX_SOL_IMAGE_REVIEW_ENABLED: 'true' })).not.toThrow();
   });

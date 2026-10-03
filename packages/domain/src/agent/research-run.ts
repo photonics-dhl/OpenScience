@@ -17,13 +17,13 @@ import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTEN
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustrationSourceSupport } from '../assets/illustration-brief';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
-import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview } from '../assets/scene-image';
+import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview, requireAcceptedSceneImageReview } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
 import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
-import { readNativeAgentExecution } from './native-agent-execution';
+import { readNativeAgentExecution, requireNativeIllustrationTerminalSource } from './native-agent-execution';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -79,6 +79,8 @@ export class HermesResearchRunError extends Error {
 }
 
 export interface HermesResearchRunDeps extends AgentDeps {
+  /** Server configuration of the replacement renderer; never accepted from a run payload. */
+  nativeSceneImageEnabled?: boolean;
   canRetrySourceReviewBeforeSubmission?: SourceReviewNotSubmittedVerifier;
   storage?: IngestionDeps['storage'];
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>;
@@ -343,7 +345,7 @@ export async function getHermesResearchRun(
     if (proof?.run.id === run.id)
       return { ...toView(run), canRetryGeneration: true, chargeableAttempts: 0, generationRecovery: 'source-review-fresh' };
   }
-  if (run.status === 'awaiting_storyboard_review') {
+  if (run.status === 'awaiting_storyboard_review' && !deps.nativeSceneImageEnabled) {
     for (const step of run.steps.filter(item => item.stage === 'storyboard' && item.status === 'awaiting_approval')) {
       const task = step.agentTaskId ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
       if (task?.status === 'succeeded' && !task.deletedAt && readNativeAgentExecution(task.result)?.profile === 'paper-illustration')
@@ -364,7 +366,8 @@ export async function getHermesResearchRun(
     ? run.profile === VISUAL_NARRATIVE_PROFILE
       ? run.versionId
         ? await inspectStoryboardCheckpointRecovery(deps.prisma, run).then(proof => proof ? {
-          chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 } : null).catch(() => null)
+          chargeableAttempts: 'savedOutputResumeMetadata' in proof ? 1 : 0 }
+          : inspectGenerationRecovery(deps.prisma, run, undefined, deps.inspectImageRecoveryState)).catch(() => null)
         : await inspectHermesSourceCompositionRecovery(deps.prisma, run.id).then(composition => composition
           ? { chargeableAttempts: 1, generationRecovery: 'source-composition' as const }
           : (run.steps.filter(step => step.stage === 'source_composition').length === 2
@@ -403,7 +406,7 @@ export async function getHermesResearchRun(
     return view;
   }
   if (recovery && run.profile === VISUAL_NARRATIVE_PROFILE && run.versionId)
-    view.generationRecovery = 'storyboard-review';
+    view.generationRecovery = 'resume' in recovery ? 'image-render' : 'storyboard-review';
   const planningRecovery = WRITE_ROLES.has(authority.membership.role)
     ? await inspectFailedStoryboardPlanning(deps.prisma, run).catch(() => null) : null;
   if (planningRecovery) {
@@ -2031,7 +2034,7 @@ type GenerationRecoveryPlan = {
   storyboardAssetId: string;
   chargeable: Array<{ stepId: string; ordinal: number; oldTaskId: string; sessionId: string; payload: Record<string, unknown> }>;
   rearm: Array<{ stepId: string; ordinal: number; taskId: string; error: string; executionAttempt: number }>;
-  resume: Array<{ stepId: string; ordinal: number; taskId: string }>;
+  resume: Array<{ stepId: string; ordinal: number; taskId: string; expectedResult?: Prisma.JsonValue }>;
   preserved: Array<{ stepId: string; taskId: string; assetId: string }>;
 };
 
@@ -2041,7 +2044,8 @@ async function inspectGenerationRecovery(
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>,
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'],
 ): Promise<(GenerationRecoveryPlan & { chargeableAttempts: number }) | null> {
-  if (run.status !== 'failed' || !((run.profile === CONTENT_DRIVEN_PROFILE && run.maxAgentTasks === 8) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && run.maxAgentTasks === 7))
+  const native = run.profile === VISUAL_NARRATIVE_PROFILE && run.maxAgentTasks === 9;
+  if (run.status !== 'failed' || !(native || (run.profile === CONTENT_DRIVEN_PROFILE && run.maxAgentTasks === 8) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && run.maxAgentTasks === 7))
     || !run.versionId || run.sourceClaimIds.length === 0) return null;
   if (await validateReviewedSources(tx, run) !== 'ready') return null;
   const storyboardStep = run.steps.find(step => step.stage === 'storyboard');
@@ -2054,6 +2058,21 @@ async function inspectGenerationRecovery(
     && isDeepStrictEqual(storyboardClaimIds, run.sourceClaimIds)
     ? presentationStoryboardView(storyboard, storyboardClaimIds) : undefined;
   if (!storyboard || !storyboardView || (run.profile === CONTENT_DRIVEN_PROFILE && (storyboardView.output !== 'video' || storyboardView.document.scenes.some(scene => !scene.animation))) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && storyboardView.output !== 'image')) return null;
+  if (native) {
+    const parent = storyboardStep?.agentTaskId ? await tx.agentTask.findUnique({ where: { id: storyboardStep.agentTaskId } }) : null;
+    const saved = jsonRecord(parent?.result), review = jsonRecord(saved.storyboardReview), provenance = jsonRecord(storyboard.provenance);
+    const execution = readNativeAgentExecution(parent?.result), cp = execution?.checkpoint;
+    if (!parent || parent.status !== 'succeeded' || parent.deletedAt || parent.kind !== 'presentation.generate'
+      || storyboard.deletedAt || parent.id !== storyboard.id || saved.assetId !== storyboard.id || saved.contentHash !== storyboard.contentHash
+      || storyboardView.output !== 'image' || execution?.profile !== 'paper-illustration'
+      || cp?.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+      || review.stage !== 'final-brief' || review.decision !== 'accepted' || review.requestId !== parent.id
+      || review.sourceEvidenceIdentity !== provenance.sourceEvidenceIdentity || !isDeepStrictEqual(review, provenance.illustrationReview)
+      || review.candidateHash !== createHash('sha256').update(JSON.stringify(storyboardView.document)).digest('hex')
+      || review.responseHash !== cp.responseHash || review.promptHash !== cp.target.promptHash
+      || review.provider !== cp.target.provider || review.model !== cp.target.model) return null;
+    try { await requireNativeIllustrationTerminalSource(tx, parent); } catch { return null; }
+  }
   const sceneSteps = run.steps.filter(step => step.stage === 'scene_image').sort((a, b) => a.ordinal - b.ordinal);
   if (sceneSteps.length !== storyboardView.document.scenes.length
     || sceneSteps.some((step, index) => step.ordinal !== index || !step.agentTaskId)) return null;
@@ -2061,7 +2080,7 @@ async function inspectGenerationRecovery(
   const plan: GenerationRecoveryPlan = { storyboardAssetId: storyboard.id, chargeable: [], rearm: [], resume: [], preserved: [] };
   for (const step of sceneSteps) {
     const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId! }, include: { session: true } });
-    if (!task || task.kind !== 'presentation.generate' || task.session.userId !== run.actorId
+    if (!task || (native && (task.deletedAt || task.session.deletedAt)) || task.kind !== 'presentation.generate' || task.session.userId !== run.actorId
       || task.session.researchObjectId !== run.researchObjectId || task.session.status !== 'active') return null;
     let payload: PresentationGenerationPayload;
     try { payload = parsePresentationGenerationPayload(task.payload); } catch { return null; }
@@ -2082,13 +2101,24 @@ async function inspectGenerationRecovery(
         || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId
         || !isDeepStrictEqual(asset.sourceClaims.map(link => link.claimId).sort(), run.sourceClaimIds)) return null;
       if (task.status === 'succeeded') {
+        if (native) {
+          try { requireAcceptedSceneImageReview(asset, parent, task.result); } catch { return null; }
+        }
         plan.preserved.push({ stepId: step.id, taskId: task.id, assetId: asset.id });
       } else {
+        if (native) return null; // Existing saved-image review recovery owns this separate state.
         if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0
           || task.result !== null || task.error?.startsWith('[blocked]') || !inspectImageRecoveryState
           || await inspectImageRecoveryState(task.id) !== 'completed') return null;
         plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id });
       }
+      continue;
+    }
+    if (native) {
+      if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0
+        || !isDeepStrictEqual(task.result, { nativeImageReview: { mode: 'model-native', state: 'not_started' } })
+        || !inspectImageRecoveryState || await inspectImageRecoveryState(task.id).catch(() => 'unsafe') !== 'completed') return null;
+      plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, expectedResult: task.result });
       continue;
     }
     if (task.status !== 'failed' || ![0, 1].includes(task.executionAttempt) || task.retryCount !== 0 || task.result !== null || asset) return null;
@@ -2114,7 +2144,7 @@ async function inspectGenerationRecovery(
     try { if (await canResumeImageBeforeSubmission(item.taskId) !== true) return null; }
     catch { return null; }
   }
-  const futureVideoTasks = run.profile === CONTENT_DRIVEN_IMAGE_PROFILE || run.steps.some(step => step.stage === 'video') ? 0 : 1;
+  const futureVideoTasks = native || run.profile === CONTENT_DRIVEN_IMAGE_PROFILE || run.steps.some(step => step.stage === 'video') ? 0 : 1;
   const logicalTaskCount = 1 + sceneSteps.length + futureVideoTasks;
   if (logicalTaskCount > run.maxAgentTasks!) return null;
   return { ...plan, chargeableAttempts: plan.chargeable.length };
@@ -2249,7 +2279,7 @@ async function advanceAutomaticAssetReviews(deps: HermesResearchRunDeps, run: Ru
       ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
     // Native plans are the handoff to the replacement image API. Preserve the private
     // plan at the existing review boundary until that renderer is connected.
-    if (readNativeAgentExecution(task?.result)?.profile === 'paper-illustration') continue;
+    if (!deps.nativeSceneImageEnabled && readNativeAgentExecution(task?.result)?.profile === 'paper-illustration') continue;
     if (step.presentationAssetId) await transitionHermesPresentationAsset(deps, { runId: run.id, assetId: step.presentationAssetId });
   }
 }
@@ -2501,7 +2531,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           const planningReceipt = await tx.auditLog.findFirst({ where: { action: 'hermes.research_run.generation_retry',
             targetType: 'hermes_research_run', targetId: run.id, actorId: input.actorId,
             metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey } } });
-          if (planningReceipt && [STORYBOARD_PLANNING_RETRY, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, COMPLETED_IMAGE_REVIEW_RECOVERY, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP].includes(String(jsonRecord(planningReceipt.metadata).correction))) {
+          if (planningReceipt && [STORYBOARD_PLANNING_RETRY, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, COMPLETED_IMAGE_REVIEW_RECOVERY, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, 'native-image-result'].includes(String(jsonRecord(planningReceipt.metadata).correction))) {
             if (jsonRecord(planningReceipt.metadata).requestDigest !== requestDigest)
               throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Planning retry key belongs to another request');
             return { run, dispatchIds: [] as string[] };
@@ -2932,7 +2962,11 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           throw new HermesResearchRunError('FORBIDDEN', 'Generation retry permission is unavailable');
         }
 
-        if (run.profile === VISUAL_NARRATIVE_PROFILE) {
+        const nativeImageRecovery = run.profile === VISUAL_NARRATIVE_PROFILE
+          ? await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState) : null;
+        if (nativeImageRecovery && !deps.audit?.record)
+          throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native image result recovery audit is unavailable');
+        if (run.profile === VISUAL_NARRATIVE_PROFILE && !nativeImageRecovery) {
           if (run.version !== input.expectedVersion)
             throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before continuing the saved storyboard');
           const saved = await inspectStoryboardCheckpointRecovery(tx, run);
@@ -3000,7 +3034,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
             metadata: { requestDigest, previousVersion: run.version } }, ctx);
           return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [] as string[] };
         }
-        const plan = await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState);
+        const plan = nativeImageRecovery ?? await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState);
         if (!plan) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This failed generation cannot be retried safely');
 
         const fenced = await tx.hermesResearchRun.updateMany({ where: {
@@ -3033,7 +3067,7 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         for (const item of plan.resume) {
           const taskChanged = await tx.agentTask.updateMany({ where: {
             id: item.taskId, status: 'failed', retryCount: 0, executionAttempt: 1,
-            result: { equals: Prisma.DbNull },
+            result: { equals: item.expectedResult ?? Prisma.DbNull },
           }, data: { status: 'pending', progress: 0, retryCount: 1, error: null, dispatchedAt: null } });
           const stepChanged = await tx.hermesResearchStep.updateMany({ where: {
             id: item.stepId, runId: run.id, stage: 'scene_image', ordinal: item.ordinal, agentTaskId: item.taskId,
@@ -3062,12 +3096,15 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         await recordAudit(deps, tx, {
           actorId: input.actorId, action: 'hermes.research_run.generation_retry', workspaceId: ro.workspaceId,
           targetType: 'hermes_research_run', targetId: run.id, metadata: {
+            ...(nativeImageRecovery ? { correction: 'native-image-result', requestDigest, clientIdempotencyKey: input.idempotencyKey,
+              expectedVersion: input.expectedVersion, storyboardAssetId: plan.storyboardAssetId } : {}),
             chargeableAttempts: plan.chargeable.length,
             replacedTaskIds: plan.chargeable.map(item => item.oldTaskId),
             rearmedTaskIds: plan.rearm.map(item => item.taskId),
             resumedTaskIds: plan.resume.map(item => item.taskId),
             preservedAssetIds: plan.preserved.map(item => item.assetId),
-            creditPolicy: 'new-provider-attempts-charged;pre-provider-authority-rearms-reuse-reservation',
+            creditPolicy: nativeImageRecovery ? 'reuse-original-reservation;remaining-review-incurs-provider-usage'
+              : 'new-provider-attempts-charged;pre-provider-authority-rearms-reuse-reservation',
           },
         }, ctx);
         return {
@@ -3552,7 +3589,7 @@ export async function reconcileHermesResearchRuns(
             const waiting = stage === 'storyboard' ? 'awaiting_storyboard_review' : stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_video_review';
             return moveRun(deps, tx, run, waiting, ro.workspaceId);
           }
-          if (run.status === 'awaiting_storyboard_review'
+          if (run.status === 'awaiting_storyboard_review' && !deps.nativeSceneImageEnabled
             && steps.some(step => readNativeAgentExecution(step.agentTask?.result)?.profile === 'paper-illustration')) {
             // Even an explicit approval cannot dispatch the retired renderer for a new
             // Native plan. This also precedes adoption of an approved revision.

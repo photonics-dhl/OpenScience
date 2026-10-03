@@ -92,6 +92,8 @@ services:
       - /opt/openscience-codex/results:/codex-jobs/results:ro
       - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:ro
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
+      - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:ro
+      - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
       - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:ro
       - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
     command: ["node", "dist/index.js"]
@@ -112,6 +114,9 @@ services:
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
       CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
+      SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
+      SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
+      SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
       CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
       CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
       BGE_M3_ENABLED: ${BGE_M3_ENABLED:-false}
@@ -190,6 +195,8 @@ services:
       - /opt/openscience-video/results:/video-jobs/results:ro
       - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:rw
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
+      - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:rw
+      - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
       - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:rw
       - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
       - /opt/openscience-codex-review/inbox:/codex-sol-review-jobs/inbox:rw
@@ -214,6 +221,9 @@ services:
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
       CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
+      SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
+      SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
+      SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
       CHATGPT_WEB_SCIENCE_REVIEW_ENABLED: "true"
       CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
       CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
