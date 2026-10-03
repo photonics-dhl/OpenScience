@@ -37,7 +37,7 @@
 
 ## 其他交付与保护
 - UI：b7ad37f2帽沿气泡/单Live2D/窄屏修复已合入并上线；132定向/TC/lint/High/精确CI通过，真实逐页视觉/角色/键盘与动效仍待验。公司Word已按实际交付同步；证据 `tmp/ui-hat-polish-20261002/`，细节见[设计](../specs/2026-09-05-integrated-research-product-design.md)和[公司交接](2026-09-30-vendor-evaluation.md)。
-- UI质感候选独立归属codex/research-product-craft：用户认可第三张guide方向、Figma已实看；GSAP/Canvas及多页布局候选通过49定向/High，尚未合入或部署；10-03官方Browser 26.930.21537重新连接后，一次50174/guide导航仍在保存权限核验失败，未取得页面/截图，原始异常未暴露。更新后未恢复，非用户拒绝；既有收据追加到UI树tmp/design-tools-20261002/implementation/browser-reauthorization.txt。保留其预览、旧UI树和证据，不能按本轮清理删除。当前Git身份以该会话/worktree实查为准。
+- UI质感候选独立归属codex/research-product-craft：用户认可第三张guide方向、Figma已实看；GSAP/Canvas及多页布局候选通过49定向/High，尚未合入或部署。10-03已定位权限核验断点：本机默认C:/Users/Mac/.codex为Junction，native TOML读取拒绝所有符号链接祖先；独立High与反汇编核实。User CODEX_HOME已指向同一数据的E:/Softlinks_to_C/.codex，未改权限/安全检查；回退收据及显式启动脚本在UI树tmp/design-tools-20261002/implementation/。待完整退出/启动Codex后实际验读取/截图/交互，尚不算浏览器恢复或UI验收。保留其预览、旧UI树和证据，不能按本轮清理删除。当前Git身份以该会话/worktree实查为准。
 - 视频：品牌原片447219588464928已取回且用户认可画面，配音仍待改善；论文首镜447314218062265实看发现符号/波纹问题，第二镜HTTP402无taskId，不能重放create或把未听验声音标通过。原片/marker/Qwen权重及临时发布树保留；下一步余额对账与旁白/运动修订由视频会话持有，见 `tmp/video-system-20260930/` 和原Task4计划。
 - 公司：只负责正式上线与年度运维，我方继续功能开发；脱敏包/屏幕共享，不给GitHub/服务器账号。21项PDF修正已合入部署；期刊真实试用、版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。
 - 已知独立债务：第14页BGE表格超token限制已恢复lexical（69active chunks），dense未完成；旧v11的58chunks保留。备用key已修好，当前失败无余额耗尽证据，不再重复鉴权任务。视频43旧缓存的13.04GB清理已完成，不重放维护。
