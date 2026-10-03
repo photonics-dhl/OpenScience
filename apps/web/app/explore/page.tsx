@@ -11,7 +11,7 @@ export default async function ExplorePage() {
   const page = await getServerResearchIndex().catch(() => undefined);
   return <PublicShell headerActions={<SiteHeader active="explore" context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />} navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')} tone="paper" wrapHeaderActionsOnMobile>
     <section className={styles.discovery} data-explore-index="true"><div className={styles.inner}>
-      <header className={styles.heading}><div><h1>{t('title')}</h1><p className={styles.intro}>{t('description')}</p></div></header>
+      <header className={styles.heading}><div data-hermes-protected="true"><h1>{t('title')}</h1><p className={styles.intro}>{t('description')}</p></div></header>
       <ResearchIndex initialPage={page} />
     </div></section>
   </PublicShell>;

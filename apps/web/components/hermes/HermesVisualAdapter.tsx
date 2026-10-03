@@ -701,7 +701,6 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               state={state}
             />
             <span aria-hidden="true" className="hermes-visible-crown-anchor" data-hermes-visible-crown-anchor="true" />
-            <span aria-hidden="true" className="hermes-visible-hat-anchor" data-hermes-visible-hat-anchor="true" />
           </span>
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
         </button>

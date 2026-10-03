@@ -71,7 +71,11 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
     }));
 
   return (
-    <section className={styles.researchLibrary} aria-labelledby="research-list-title">
+    <section
+      className={styles.researchLibrary}
+      aria-labelledby="research-list-title"
+      data-surface-state={searchFailed ? 'error' : searching ? 'loading' : visible.length === 0 ? 'empty' : 'ready'}
+    >
       <div className={styles.libraryHeading}>
         <h2 id="research-list-title" className={styles.libraryTitle}>
           {t('research.title')}
@@ -111,7 +115,7 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
         </p>
       ) : null}
       {!searching && !searchFailed && visible.length === 0 ? (
-        <p className={styles.libraryEmpty}>
+        <p className={styles.libraryEmpty} role="status">
           {researchObjects.length === 0 ? t('research.empty') : t('research.noResults')}
         </p>
       ) : visible.length > 0 ? (

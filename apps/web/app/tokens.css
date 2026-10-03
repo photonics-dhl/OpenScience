@@ -22,13 +22,14 @@
   --os-rule-dark: rgb(241 238 231 / 0.18);
   --os-rule-paper: rgb(25 26 24 / 0.2);
 
-  /* Typography roles. next/font supplies the first four variables at <html>. */
-  --font-display-grotesk: var(--font-bricolage), 'Arial Narrow', sans-serif;
-  --font-editorial-serif: var(--font-bodoni), 'Times New Roman', serif;
-  --font-reading-serif: var(--font-source-serif), var(--font-noto-serif-sc), 'Songti SC', Georgia, serif;
-  --font-cjk-serif: var(--font-noto-serif-sc), 'Songti SC', serif;
-  --font-ui: var(--font-bricolage), system-ui, 'PingFang SC', sans-serif;
-  --font-data: var(--font-ibm-plex-mono), 'Cascadia Mono', monospace;
+  /* next/font supplies these roles at <html>. Keep font shorthands valid while
+     a font variable is unavailable, so its absence cannot reset title sizes. */
+  --font-display-grotesk: var(--font-bricolage, 'Arial Narrow'), sans-serif;
+  --font-editorial-serif: var(--font-bodoni, 'Times New Roman'), serif;
+  --font-reading-serif: var(--font-source-serif, Georgia), var(--font-noto-serif-sc, 'Songti SC'), 'SimSun', serif;
+  --font-cjk-serif: var(--font-noto-serif-sc, 'Songti SC'), 'SimSun', serif;
+  --font-ui: var(--font-bricolage, system-ui), 'PingFang SC', sans-serif;
+  --font-data: var(--font-ibm-plex-mono, 'Cascadia Mono'), monospace;
 
   /* A restrained shape vocabulary: editorial rules first, containers second. */
   --radius-flat: 0px;

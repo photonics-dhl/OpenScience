@@ -236,7 +236,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry 
   if (writes) invalidateResearchClientCache();
   try {
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
-    if (!headers['content-type']) headers['content-type'] = 'application/json';
+    // Empty POSTs (including logout) must not invoke Fastify's JSON parser.
+    if (!headers['content-type'] && typeof init?.body === 'string' && init.body.length > 0) {
+      headers['content-type'] = 'application/json';
+    }
     if (isProtectedWrite(path, init)) {
       headers['x-csrf-token'] = await getCsrfToken();
       if (requestSessionRevision !== sessionRevision) throw sessionChangedError();

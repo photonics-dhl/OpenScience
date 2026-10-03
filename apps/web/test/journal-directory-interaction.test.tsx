@@ -7,6 +7,11 @@ const api = vi.hoisted(() => ({ listJournals: vi.fn(), listMyJournals: vi.fn() }
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('@/lib/journal-api', () => api);
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next-intl', async importOriginal => {
+  const actual = await importOriginal<typeof import('next-intl')>();
+  const { default: messages } = await import('../messages/zh.json');
+  return { ...actual, useTranslations: (namespace: 'journalDirectory') => actual.createTranslator({ locale: 'zh', messages, namespace }) };
+});
 vi.mock('@/components/shell/DashboardShell', () => ({ DashboardShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof React>();
@@ -109,6 +114,24 @@ it('appends a cursor page once without duplicating entries or using an unsubmitt
   expect(api.listJournals).toHaveBeenCalledWith({ query: '', limit: 20, cursor: 'next-page' });
   const markup = renderToStaticMarkup(render());
   expect(markup.match(/href="\/journals\/one"/g)).toHaveLength(1);
+  expect(markup).toContain('Photonics Journal');
+});
+
+it('retries the failed cursor page and preserves existing entries despite edits to the search field', async () => {
+  const request = deferred<{ items: JournalSummary[]; nextCursor: null }>();
+  api.listJournals.mockReturnValueOnce(request.promise)
+    .mockResolvedValueOnce({ items: [journal('two', 'Photonics Journal')], nextCursor: null });
+  const render = mountDirectory([journal('one', 'Optics Journal')], 'next-page');
+  find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'unsubmitted' } });
+  find(render(), element => element.type === 'button' && element.props.children === '加载更多期刊').props.onClick!();
+  request.reject(new Error('Page unavailable'));
+  await settle();
+  const alert = find(render(), element => element.props.role === 'alert');
+  find(alert, element => element.type === 'button').props.onClick!();
+  await settle();
+  expect(api.listJournals).toHaveBeenLastCalledWith({ query: '', limit: 20, cursor: 'next-page' });
+  const markup = renderToStaticMarkup(render());
+  expect(markup).toContain('Optics Journal');
   expect(markup).toContain('Photonics Journal');
 });
 

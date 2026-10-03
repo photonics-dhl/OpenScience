@@ -23,6 +23,7 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
       <section
         aria-labelledby="continue-title"
         className={styles.continuation}
+        data-surface-state="empty"
         data-hermes-protected="true"
       >
         <div className={styles.continuationHeading}>
@@ -65,6 +66,7 @@ export function ContinueResearch({ research, tasks = [] }: ContinueResearchProps
       className={styles.continuation}
       aria-labelledby="continue-title"
       data-continuation-priority="primary"
+      data-surface-state="ready"
       data-hermes-protected="true"
     >
       <div className={styles.continuationHeading}>

@@ -1,4 +1,27 @@
 /* The global pet owns only its floating controls; page art and layouts stay local. */
+body[data-hermes-compact-navigation='true'] { padding-bottom: 128px; scroll-padding-bottom: 128px; }
+.hermes-compact-dock { --os-vermilion-ink: #125d66; --os-rule-paper: #dce3e5; position: fixed; bottom: 0; right: 0; z-index: 44; width: 252px; height: 128px; pointer-events: none; }
+.hermes-compact-invoke { position: absolute; left: 16px; bottom: 28px; display: grid; gap: 4px; padding: 8px 12px; border: 0; border-radius: 12px; background: #fff; color: var(--os-muted-paper); font: 500 12px/1.5 var(--font-ui); text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 2px 8px rgb(24 47 53 / .08); }
+.hermes-compact-invoke span { color: var(--os-vermilion-ink); font-size: 15px; }
+.hermes-compact-invoke:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
+.hermes-workspace-stage[data-hermes-compact='true'] { touch-action: manipulation; }
+.hermes-workspace-stage[data-hermes-compact='true'] .hermes-companion-actor { inset: 0; }
+.hermes-workspace-stage[data-hermes-compact='true'] :is(.hermes-pet-menu-button, .hermes-motion-enable, .hermes-visual-state-label, .hermes-visual-invoke-label, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
+[data-hermes-conversation-companion='true'] { display: none; }
+.drawer.hermes-companion-invitation { width: min(440px, calc(100vw - 24px)); top: 12px; right: 12px; bottom: 12px; height: auto; border-radius: 16px; background: var(--os-paper-strong); overflow-y: auto; }
+.hermes-companion-invitation [data-hermes-conversation-companion='true'] { display: grid; place-items: center; height: min(360px, 45dvh); margin-top: 44px; }
+.hermes-companion-invitation-copy { padding: 20px 28px 36px; }
+.hermes-companion-invitation-copy h2 { margin: 0; font: 500 32px/1.3 var(--font-reading-serif); }
+.hermes-companion-invitation-copy p { color: var(--os-muted-paper); font: 400 16px/1.8 var(--font-ui); }
+.hermes-companion-invitation-copy a { display: inline-flex; min-height: 48px; align-items: center; padding: 10px 20px; border-radius: 10px; background: var(--os-vermilion-ink); color: #fff; text-decoration: none; }
+[data-hermes-in-conversation='true'][data-hermes-placement='anchored'] { margin: 0; opacity: 1; pointer-events: auto; }
+[data-hermes-in-conversation='true'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
+[data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
+@media (max-width: 1100px) {
+  .hermes-compact-dock { width: 100%; background: linear-gradient(to bottom, rgb(249 251 250 / .94), #f9fbfa 32%); border-top: 1px solid var(--os-rule-paper); }
+  .hermes-compact-invoke { left: auto; right: 144px; box-shadow: none; background: transparent; bottom: 28px; }
+  .hermes-conversation [data-hermes-conversation-companion='true'] { display: grid; flex: none; place-items: center; height: min(300px, 30dvh); border-bottom: 1px solid var(--os-rule-paper); background: #f6f9f8; }
+}
 [data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
   visibility: hidden;
 }
@@ -53,8 +76,8 @@
 .hermes-workspace-stage [data-hermes-speech-visible='false'] { visibility: hidden; }
 
 [data-hermes-global-companion='true'] .hermes-visible-hat-anchor {
-  top: 13%;
-  left: 30%;
+  top: 16%;
+  left: 36%;
 }
 
 [data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-visible-crown-anchor {

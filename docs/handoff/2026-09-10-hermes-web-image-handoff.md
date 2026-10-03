@@ -44,7 +44,7 @@
 
 ## 其他交付与保护
 - UI：b7ad37f2帽沿气泡/单Live2D/窄屏修复已合入并上线；132定向/TC/lint/High/精确CI通过，真实逐页视觉/角色/键盘与动效仍待验。公司Word已按实际交付同步；证据 `tmp/ui-hat-polish-20261002/`，细节见[设计](../specs/2026-09-05-integrated-research-product-design.md)和[公司交接](2026-09-30-vendor-evaluation.md)。
-- UI质感候选归属codex/research-product-craft，第三张guide/Figma及GSAP/Canvas方向继续有效；10-03 Browser真实读取/截图/站内点击已恢复，桌面代理入口、物理CODEX_HOME及marketplace source修复收据在该树tmp/design-tools-20261002/implementation/。实际公开内容字体退化与宽屏避让已修候选；50表面/定位＋58传输/登录、TC与代码lint/High通过。退出空POST误标JSON已修并在真实内置浏览器退出，桌面入口重新要求登录；临时直连SSH因会话/管理边界风险撤销，Chrome另一临时会话已由用户确认退出。预览57116只作公开查看；私有验收转官网HTTPS或隔离测试环境。窄屏/密集内容遮挡、帽沿气泡实拍、剩余私有页面、干净构建字体、合入部署和公司Word更新仍待完成；详细证据见[设计10-03节](../specs/2026-09-05-integrated-research-product-design.md)，不把浏览器恢复或局部通过算整站交付。保留候选/旧UI树及回退证据；其他科学会话改动不属于本UI提交。
+- UI质感源 f9f86e24（codex/research-product-craft）正在干净 ui-release-integration 树合入最新 canonical c68d1606；未部署。第三张 guide/Figma 与 GSAP/Canvas 方向保留。真实 Browser 已恢复，公开期刊→探索→研究阅读入口、宽屏身份/帽沿气泡及窄屏展开/Escape/焦点返回已观察；桌面360px、窄屏120px单 Live2D入口，展开沿原对话，首页无浮动角色。69陪伴＋8期刊及58传输/登录定向证据、TC/lint、独立High GO；期刊翻译测试适配与失败分页重试回归已修。官网有效会话已从桌面进入真实私有研究，但仍是旧部署界面，不据此验收新UI。干净构建/精确CI、私有候选观察、正式部署及公司Word/脱敏包仍待完成；证据与历史见[设计](../specs/2026-09-05-integrated-research-product-design.md)及候选tmp/design-tools-20261002/implementation/。
 - 视频：品牌原片447219588464928已取回且用户认可画面，配音仍待改善；论文首镜447314218062265实看发现符号/波纹问题，第二镜HTTP402无taskId，不能重放create或把未听验声音标通过。原片/marker/Qwen权重及临时发布树保留；下一步余额对账与旁白/运动修订由视频会话持有，见 `tmp/video-system-20260930/` 和原Task4计划。
 - 公司：只负责正式上线与年度运维，我方继续功能开发；脱敏包/屏幕共享，不给GitHub/服务器账号。21项PDF修正已合入部署；期刊真实试用、版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。
 - 已知独立债务：第14页BGE表格超token限制已恢复lexical（69active chunks），dense未完成；旧v11的58chunks保留。备用key已修好，当前失败无余额耗尽证据，不再重复鉴权任务。视频43旧缓存的13.04GB清理已完成，不重放维护。

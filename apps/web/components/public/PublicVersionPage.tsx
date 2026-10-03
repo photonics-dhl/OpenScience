@@ -246,7 +246,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
   return (
     <div className={`pub-reading-surface research-product ${styles.surface}`} data-public-reading-surface="true" data-has-evidence={Boolean(selectedEvidence)}>
       <div className="pub-reading-layout">
-        <article className="pub-reading-column" data-public-reading-column="true">
+        <article className="pub-reading-column" data-public-reading-column="true" data-hermes-protected="true">
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <h1>{research.title}</h1>
             <div className={styles.identityMeta}>
