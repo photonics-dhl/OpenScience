@@ -26,6 +26,7 @@
 - 29de已发布合并六维/Claims反馈及Skill协议修正：同任务循环核对修订传播，未新增模型阶段；122定向/TC/lint、High和精确CI含Linux资源检查通过。形状诊断不再误报作者身份，最终普通请求确实消费合并稿。纸面工具原回执保真修复亦已上线，真实126001字符/270000聚合及Session/Gateway限额回放通过；实际科学及计划效果以本次新run为准，不能沿用旧稿NO-GO当新稿结论或用测试代替科学验收。
 - 新作者轨迹诊断：20轮缺parent、21轮补父项后两条保存；另一条引用P00014但到30轮才完整读取，31轮遂保存。候选在原claim校验返回路径/原因并明确真实父clientKey与已读来源，未改变接受条件；按原工具描述保留旧paid反馈，132定向/TC/lint/High通过。最后transport根因已以实际29de dispatcher/normalizer和Host复现：原参数未变，32轮paper_draft正确返回invalid_draft；原生达到max_iterations后额外发无tools的总结请求，被SDK协议解析拒绝，未进入Session/Provider。不是参数变造或已证实网络故障。
 - 当前停止修复候选：实例覆盖原_handle_max_iterations，保留消息并直接NativeTaskStopped，沿既有finally→stopped收尾；Host只按可信原config/store恰达上限且全completed给事实性提示，不信任调用者声明。175 Worker pass/12 Windows Unix跳过、真实Host停止回放3/3（含非stopped保持原错，先RED）、Python27pass/1既有Windows跳过、实际native零总结请求回放、TC/scoped lint通过；新增代码最终High GO（显式stopped边界已修）；候选`1eecf30d03e8b1703d00f4fa50ed69457af7685d`的精确CI37122743858完整success，Linux原生/Host及浏览器流程通过，尚未部署。未扩预算/回收额度/重开失败任务；新adapter需新运行时配对。具体日志native-turn-limit-*与independent-domain-native-exhaustion-*。
+- 10-03续作只读实核live仍29de/native29de、rollbacke48、API/Worker running/OOM=false、无活动Native实例（native-turn-limit-runtime-before.json）。有界High确认现有schema/SDK未把六字段变成item数组，当前修复可支持一次正常新验证；完整prompt/风格/科学审阅在私有task结果保留，隐藏公开prompt符合产品边界，无需另加公开接口。尚未创建下一任务。准备的native-prerequisites-{activate,create,status}.py只替精确身份/新键，未执行，须改为最终组合SHA后配对。
 - 历史v11–v13失败/paid证据、33aa独立角色增量及早期终稿JSON故障见Git0d86本页与tmp/hermes-cleanup-20261003/、tmp/ro-journey-20260929/；不是新建任务/重放步骤。旧bridge唯一基线失败、research-run.ts既有20lint均保留，不改不相关行为。安装0.10.0缺最新structured plugin/grounded-citations；不因名称存在就冒称可用，不盲升级或叠Skill。
 
 ## Illustration delivery
@@ -48,7 +49,7 @@
 - 公司：只负责正式上线与年度运维，我方继续功能开发；脱敏包/屏幕共享，不给GitHub/服务器账号。21项PDF修正已合入部署；期刊真实试用、版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。
 - 已知独立债务：第14页BGE表格超token限制已恢复lexical（69active chunks），dense未完成；旧v11的58chunks保留。备用key已修好，当前失败无余额耗尽证据，不再重复鉴权任务。视频43旧缓存的13.04GB清理已完成，不重放维护。
 - 清理仅确认归属且无活动/发布/回退依赖的生成物；不删浏览器profile/spool、历史paid回答、模型权重、用户资料或他人worktree。来源/匿名PDF下载边界及公开版本保护保持。
-- 本轮临时native-consolidated-review-release工作树发布后已归档移除并prune，证据留ignored tmp。并发运维会话负责Compose内存限制、备份/对象备份及release保留脚本；不得混入本科学提交。后续发布须整合其已审配置，避免重建服务丢失已设置资源上限；不以本应用发布覆盖其服务器锁/清理工作。
+- 运维owner明确同意两个已HighGO Compose原样独立提交，现为已推`7342bae3f9e4069a49d01849932594dd9dea9f7e`，媒体CI37124667930进行中；其余backup/retention五文件继续归ops，不混入。用户已授权UI/视频/本会话协调一次组合发布：UI会话01a0f118负责最终合并及正常app部署，本会话负责同最终SHA Native配对与一次普通科研验证；不得并发发版。正常deploy会更新backup.sh，须与ops新备份安装顺序协调。原临时29de树已归档；临时native-prerequisites-release未部署，改组合发布后已归档移除。证据留ignored tmp。
 
 ## Read first / 历史
 - 启动读本页、必要的当前代码/服务器事实与[能力台账](../runbooks/hermes-capability-registry.md)对应条目；管理任务用现有read-current-management-context/Taskmaster，不另建状态库。
