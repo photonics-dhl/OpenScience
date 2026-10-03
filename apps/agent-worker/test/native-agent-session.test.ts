@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionBinding } from '../src/native-agent/session';
 import { AiGateway, AnthropicCompatProvider, nativeAgentSdkRequest, type GatewayCompletion, type TextProvider } from '@openscience/ai-gateway';
-import { nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL } from '../src/native-agent/paper-task';
+import { nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
 import { createNativeScientificMaterializer } from '../src/extractor';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import type { DocumentSourceMap } from '@openscience/domain';
@@ -57,6 +57,50 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it.each(['historical-json', 'tool-submitted'] as const)('replays the %s review receipt through actual Session without another provider submission', async mode => {
+    const text = 'The source describes a simulation, its comparison and the conditions under which its result holds.';
+    const parser = { name: 'fixture', version: '1' };
+    const map: DocumentSourceMap = { artifactId: 'paper', contentHash: 'b'.repeat(64), parser,
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'p1', kind: 'paragraph', text,
+        boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] };
+    const submitted = { draftToolCallId: 'draft-a', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+      needsMoreEvidence: [], claimSuggestions: 'unchanged' };
+    const materializer = (reviewToolCompletion: boolean) => {
+      const worker = createNativeScientificMaterializer(map, () => ['P00001'], { reviewToolCompletion });
+      worker.draft({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: text, sourcePassageIds: ['P00001'] }])),
+        needsMoreEvidence: [], draftClaims: [{ clientKey: 'core', kind: 'core', sourceField: 'insight', statement: text,
+          conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] }, 0, 'draft-a');
+      return worker;
+    };
+    const original = { ...request, tools: [{ type: 'function', function: structuredClone(mode === 'tool-submitted'
+      ? NATIVE_PAPER_COMMITTED_REVIEW_TOOL : NATIVE_PAPER_REVIEW_TOOL) }] };
+    const limits = { allowedTools: ['paper_review'], maxInputBytes: 40_000 };
+    const f = fixture(1, submitted, 'paper_review'); const session = f.create(limits);
+    const first = await session.complete(original);
+    const feedback = materializer(mode === 'tool-submitted').review(submitted, 'read-1');
+    expect(feedback).toMatchObject({ status: 'review_ready', reviewToolCallId: 'read-1' });
+    const next = { ...original, messages: [...original.messages, first.choices[0]!.message,
+      { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(feedback) }] };
+    const last = await session.complete(next);
+    const profile = nativePaperToolProfile(f.state);
+    expect(profile.reviewToolCompletion).toBe(mode === 'tool-submitted');
+    if (mode === 'historical-json') {
+      expect(profile.goal).toBe('向未读过论文的人准确解释核心贡献、科学机制、代表结果及必要条件，并为后续配图保存简洁、有原文依据的六维和核心主张。');
+      expect(profile.instructions).toContain('完成科学复核后直接返回完整JSON终稿');
+      expect(feedback.guidance).toBe('Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, copy the returned reviewToolCallId into the final {"reviewToolCallId":"..."}; draftToolCallId identifies the draft, not this review. Do not regenerate the full review.');
+    } else {
+      expect(profile.instructions).not.toContain('完成科学复核后直接返回完整JSON终稿');
+      expect(profile.instructions).toContain('用paper_review提交完整终审对象');
+    }
+    const replayed = materializer(profile.reviewToolCompletion).review(submitted, 'read-1');
+    expect(JSON.stringify(replayed)).toBe(JSON.stringify(feedback));
+    const restored = f.create({ ...limits, allowedTools: profile.allowedTools });
+    const tools = profile.sourceTools.map(tool => ({ type: 'function', function: tool }));
+    expect(await restored.complete({ ...original, tools })).toEqual(first);
+    expect(await restored.complete({ ...next, tools, messages: [...original.messages, first.choices[0]!.message,
+      { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(replayed) }] })).toEqual(last);
+    expect(f.calls).toBe(2);
+  });
   it.each(['paid-source-only', 'candidate-and-source'])('replays the %s draft comparison receipt through actual Session identity without another model submission', async format => {
     const text = 'The source describes a simulation, its comparison and the conditions under which its result holds.';
     const parser = { name: 'fixture', version: '1' };

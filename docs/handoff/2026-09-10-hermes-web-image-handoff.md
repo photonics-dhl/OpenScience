@@ -25,7 +25,8 @@
 - 新对照输入已部署：草稿回执配对本次实际选中的summary和完整Claim及完整原P，复用原field-Claim诊断提前提示现有绑定错误；历史无context/旧context/新rich描述精确区分，旧paid工具/反馈/属性顺序不变。113定向pass、WorkerTC/四文件lint0、独立High GO；旧源码两项真实回归RED，原v12真实notes离线捕获1/1、零provider。精确CI37092238580 success，正常app发布及Native配对exit0；证据 `tmp/hermes-cleanup-20261003/paired-*`。无新模型阶段/额度/门禁/Domain或API变化，不能据部署证明科学改善。
 - 新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`；复用原Map，5分13.871秒/9paid回复，正常stop但只给普通解释、无JSON，原守卫拒收。实际最后请求已有完整草稿/Claims/原P及两绑定诊断；离线1/1证明本次配对与原P一致、零provider、控制提示初末不变，排除这些候选的丢传/投影错误，不能推断模型为何误判。
 - v13独立科学NO-GO：保存稿把近垂直误写近正碰，终答把0.4THz的10cm示例泛化，棱镜直径跨算例移用；材料内缘阈值表述局部改善。两个Skill在稿前已读，未调用原页/专项引用/稿后核源。未采用/规划/生图，不重开或发v14。原文依据与完整记录 `tmp/hermes-cleanup-20261003/real-paper-science-v13.md`。
-- 下一步：核实已安装Native SDK的可用结构化提交方式及科学核源消费机制，做受限离线兼容验证与独立审查；无具体修复依据前不再付费全文分析，不靠升预算、解析普通正文或加一句话重跑。GitHub最新structured plugin/grounded-citations不在当前安装；delegate文件存在不代表当前受控transport能安全调用。实核 `native-completion-capabilities.json`，不盲升级/叠Skill；真实科学通过后才验证自动计划。
+- 工具提交候选：新任务用现成paper_review保存完整终审对象，普通末回复不再复制科学JSON；仅精确新description启用，旧工具/feedback/system/goal及严格JSON回放保持。重新校验最新唯一成功回执、真实draft及全部原科学守卫；后续写入/失败review不退回旧成功。stop/provider/model/authority与实际responseHash不改，无自动重试/新模型阶段/额度/审批/hash。新字段来源容量对齐现有64，旧schema和issues仍12；已观察17来源真回归RED，132/TC/四文件lint通过，最终High GO，待精确CI及app发布，未新call。证据 `tmp/hermes-cleanup-20261003/tool-submission-*`。
+- 下一步：收敛工具提交候选High、精确CI并正常app发布，兼容复用现有immutable28d Native（adapter/科学资源未变，不新增安装副本）；随后解决实际科学核源效果，真实科学通过才验证自动计划。v13及其科学NO-GO保持，无依据不发v14、不升预算/补普通正文。GitHub最新structured plugin/grounded-citations不在当前安装；delegate文件存在不代表当前transport可调用，实核 `native-completion-capabilities.json`，不盲升级/叠Skill。
 
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |
@@ -51,3 +52,4 @@
 ## Read first / 历史
 - 启动读本页、必要的当前代码/服务器事实与[能力台账](../runbooks/hermes-capability-registry.md)对应条目；管理任务用现有read-current-management-context/Taskmaster，不另建状态库。
 - 10-03以前的应用、GPT菜单/来源审校、v1–v10失败、旧发布与收费过程从Git `ce513eba` 的本页及 `tmp/ro-journey-20260929/` 按需查。它们不是当前next action；[09-18交接](2026-09-18-figure3-image-and-cleanup-handoff.md)的禁止重放事项仍有效。
+

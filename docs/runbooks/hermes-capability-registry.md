@@ -10,6 +10,8 @@ scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专
 
 原生paper-illustration复用同源已审Claims/原页/设计资源和共享科学艺术物化，自动保存完整私有prompt；原自动run的审批及旧图片派发前有image-api-pending暂停。新生图API待提供，新原生科学合格稿到计划的真实路径尚未完成，人工brief不能冒充自动成果。
 
+工具提交候选仅对新精确description采用现成paper_review回执作为终审数据入口；末轮解释不承担复制JSON，所有旧paid接口不变。重建真实稿并重跑原完整科学检查，不允许后续改稿/失败提交后退用旧成功。新字段来源容量与已有notebook一致，issues与旧schema保持；此候选解决数据提交责任，不证明嵌套模型工具调用可靠或科学质量改善。工程/部署身份只见CURRENT。
+
 旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
 
 <a id="local-browser-proxy"></a>

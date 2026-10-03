@@ -3010,7 +3010,7 @@ function nativeReviewShapeFeedback(value: unknown): string {
 }
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
-export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean; reviewCandidate?: boolean } = {}) {
+export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean } = {}) {
   let candidate: ScientificCompositionResponse | undefined;
   let candidateOrder = -1;
   let candidateToolCallId: string | undefined;
@@ -3152,9 +3152,14 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
     },
     review(value: unknown, toolCallId?: string): Record<string, unknown> {
       try {
+        if (options.reviewToolCompletion && (!value || typeof value !== 'object' || Array.isArray(value)
+          || typeof (value as Record<string, unknown>).draftToolCallId !== 'string'))
+          throw new Error('[blocked] Native submitted review requires its exact saved draftToolCallId');
         this.finish(JSON.stringify(value));
         return { status: 'review_ready', ...(toolCallId ? { reviewToolCallId: toolCallId } : {}),
-          guidance: 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, copy the returned reviewToolCallId into the final {"reviewToolCallId":"..."}; draftToolCallId identifies the draft, not this review. Do not regenerate the full review.' };
+          guidance: options.reviewToolCompletion
+            ? 'Private review saved and structure checked, not scientific approval or publication. Finish normally when the science is ready; the platform revalidates this exact saved review at completion. If you change any saved field, Claim or draft, or another review fails, submit the final complete corrected review. Do not copy a second review into your final reply.'
+            : 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, copy the returned reviewToolCallId into the final {"reviewToolCallId":"..."}; draftToolCallId identifies the draft, not this review. Do not regenerate the full review.' };
       } catch (error) {
         const shape = nativeReviewShapeFeedback(value);
         const compact = value && typeof value === 'object' && Object.hasOwn(value, 'draftToolCallId');

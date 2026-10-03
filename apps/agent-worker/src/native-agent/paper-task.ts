@@ -45,6 +45,12 @@ export const NATIVE_PAPER_REVIEW_TOOL = { name: 'paper_review',
     claimSuggestions: { anyOf: [{ type: 'string', enum: ['unchanged'] }, NATIVE_PAPER_DRAFT_TOOL.parameters.properties.draftClaims] },
   } },
 };
+const committedReviewParameters = structuredClone(NATIVE_PAPER_REVIEW_TOOL.parameters);
+for (const field of Object.values(committedReviewParameters.properties.fields.properties))
+  field.properties.sourcePassageIds = { ...field.properties.sourcePassageIds, maxItems: MAX_CANONICAL_EVIDENCE_SEGMENTS };
+export const NATIVE_PAPER_COMMITTED_REVIEW_TOOL = { ...NATIVE_PAPER_REVIEW_TOOL, parameters: committedReviewParameters,
+  description: 'Submit your complete scientific review of the exact saved draftToolCallId through this tool. All field decisions, evidence requests and Claim decisions must be in the submitted object. accepted selects unchanged saved text; revised/blocked provide complete fields and source-grounded issues. This saves private reviewed content and checks the existing structure/source/science rules; it is not publication approval. Correct rejected submissions through the bound source tools. After the latest successful review_ready, finish normally without copying a second review JSON into your final reply. If you change saved fields, Claims or draft, or submit another review, only the latest complete successful submission can be used.',
+};
 
 export const NATIVE_PAPER_FIELD_TOOL = { name: 'paper_field',
   description: 'Save one concise source-grounded field without rewriting the paper. Use the returned fieldToolCallId in paper_draft. A correction saves only this field as another call; prior fields remain selectable. This saves private content, not scientific approval.',
@@ -92,25 +98,36 @@ export function restoreNativePaperDraft(materializer: ReturnType<typeof createNa
   if (!restored) throw new Error('[blocked] Native final lacks its committed earlier candidate');
 }
 
-export function finishNativePaperReview(materializer: ReturnType<typeof createNativeScientificMaterializer>, messages: ChatMessage[], finalResponse: string) {
+export function finishNativePaperReview(materializer: ReturnType<typeof createNativeScientificMaterializer>, messages: ChatMessage[], finalResponse: string,
+  options: { reviewToolCompletion?: boolean } = {}) {
   restoreNativePaperDraft(materializer, messages);
-  const value: unknown = parseStructuredJson(finalResponse);
+  const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
+  const latestReview = [...calls].reverse().find(call => call.function.name === 'paper_review');
+  const value: unknown = options.reviewToolCompletion ? { reviewToolCallId: latestReview?.id } : parseStructuredJson(finalResponse);
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'reviewToolCallId')) return materializer.finish(finalResponse);
   const selection = value as Record<string, unknown>;
   if (Object.keys(selection).length !== 1 || typeof selection.reviewToolCallId !== 'string')
     throw new Error('[blocked] Native final must select exactly one reviewToolCallId');
-  const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
   const selected = calls.filter(call => call.id === selection.reviewToolCallId);
   const ready = (id: string, status: string) => {
     const receipts = messages.filter(message => message.role === 'tool' && message.toolCallId === id);
     if (receipts.length !== 1) return false;
     try { return JSON.parse(receipts[0]!.content).status === status; } catch { return false; }
   };
-  const review = selected[0]; const latestReview = [...calls].reverse().find(call => call.function.name === 'paper_review');
+  const review = selected[0];
   const latestDraft = [...calls].reverse().find(call => call.function.name === 'paper_draft' && ready(call.id, 'draft_ready'));
   if (selected.length !== 1 || !review || review !== latestReview || !ready(review.id, 'review_ready')
     || !latestDraft || calls.filter(call => call.id === latestDraft.id).length !== 1 || calls.indexOf(latestDraft) >= calls.indexOf(review))
     throw new Error('[blocked] Native selected review is missing, failed, ambiguous or superseded');
+  if (options.reviewToolCompletion) {
+    const receipts = messages.filter(message => message.role === 'tool' && message.toolCallId === review.id);
+    const receipt = JSON.parse(receipts[0]!.content);
+    const payload = JSON.parse(review.function.arguments);
+    const writes = new Set(['paper_field', 'paper_claim', 'paper_draft']);
+    if (receipt.reviewToolCallId !== review.id || payload?.draftToolCallId !== latestDraft.id
+      || calls.slice(calls.indexOf(review) + 1).some(call => writes.has(call.function.name)))
+      throw new Error('[blocked] Native submitted review is not the final bound saved content');
+  }
   return materializer.finish(review.function.arguments);
 }
 
@@ -144,11 +161,16 @@ const INSTRUCTIONS = [
 const NOTE_INSTRUCTIONS = INSTRUCTIONS.replace(
   'paper_draft的problem、method、results、insight、limitations、reproducibility全部放在fields内。格式纠错按反馈定位修复现有内容；新增或重写科学断言须来自实际回读。',
   '用paper_field分项保存problem、method、results、insight、limitations、reproducibility，用paper_claim逐条保存必要主张；同一轮可并行保存独立项目。工具返回的fieldToolCallId、claimToolCallId逐字复制到paper_draft的fieldToolCallIds、claimToolCallIds，只选择、不转写正文。科学或格式问题只重存受影响的项，其余ID保持；不同算例、量与空间位置不可合并。新增或重写科学断言须来自实际回读。');
+const TOOL_REVIEW_INSTRUCTIONS = NOTE_INSTRUCTIONS.replace(/完成科学复核后直接返回完整JSON终稿，[^\n]*/,
+  '完成科学复核后，用paper_review提交完整终审对象，根对象只含draftToolCallId、fields、needsMoreEvidence、claimSuggestions；必须选实际保存的当前草稿，六字段给出明确verdict，accepted只选原稿，revised/blocked给完整正文、来源和issues，Claims明确unchanged或完整替换。工具返回review_ready后才完成任务；如再改保存项或稿件、或另一次review被拒收，须重新提交最终完整审阅。最终回复可以简短说明完成情况，不复制审阅JSON，也不在回复中声称已修改而未实际提交。结构通过不证明科学正确或授权公开。');
+const PAPER_GOAL = '向未读过论文的人准确解释核心贡献、科学机制、代表结果及必要条件，并为后续配图保存简洁、有原文依据的六维和核心主张。';
+const TOOL_REVIEW_GOAL = '为后续科研配图保存一份简洁、有原文依据的六维和核心主张，并通过paper_review提交对真实已保存稿的完整科学核对。读者主线、科学机制、代表结果及必要条件保存在这些内容中，完成任务不需要再生成另一份解释正文。';
 
 export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   // Original paid tools keep their exact schemas and feedback when replayed.
   const useNotes = !saved || saved.binding.allowedTools.includes('paper_field');
-  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_NOTE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]), NATIVE_PAPER_REVIEW_TOOL];
+  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_NOTE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]),
+    saved ? NATIVE_PAPER_REVIEW_TOOL : NATIVE_PAPER_COMMITTED_REVIEW_TOOL];
   const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
     if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved paper tool description is absent');
     return { ...structuredClone(tool.function), description: tool.function.description };
@@ -157,8 +179,11 @@ export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   const description = sourceTools.find(tool => tool.name === 'paper_draft')?.description;
   const reviewContext = !saved || description === PAID_SOURCE_CONTEXT_DESCRIPTION || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
   const reviewCandidate = !saved || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
+  const reviewToolCompletion = !saved || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description;
   const allowedTools = saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)];
-  return { useNotes, sourceTools, reviewContext, reviewCandidate, allowedTools };
+  return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, allowedTools,
+    goal: reviewToolCompletion ? TOOL_REVIEW_GOAL : PAPER_GOAL,
+    instructions: reviewToolCompletion ? TOOL_REVIEW_INSTRUCTIONS : useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS };
 }
 
 /** Normal source task entry. No preceding static reducer, provider fallback, new task or approval. */
@@ -170,7 +195,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   if (!execution) throw new Error('[blocked] Actual native Agent execution marker is absent');
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { useNotes, sourceTools, reviewContext, reviewCandidate, allowedTools } = nativePaperToolProfile(saved);
+  const { sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, allowedTools, goal, instructions } = nativePaperToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools,
@@ -184,21 +209,21 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
-  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate });
+  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
       : name === 'paper_claim' ? materializer.claim(args, sequence!, callId!) : name === 'paper_draft' ? materializer.draft(args, sequence, callId)
       : name === 'paper_review' ? materializer.review(args, callId) : source.call(name, args) };
   const native = await runHostedNativeTask({ inboxRoot: input.inboxRoot, executionAttempt: input.task.executionAttempt,
-    config: { ...binding, goal: '向未读过论文的人准确解释核心贡献、科学机制、代表结果及必要条件，并为后续配图保存简洁、有原文依据的六维和核心主张。',
-      instructions: useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS,
+    config: { ...binding, goal,
+      instructions,
       sourceTools },
     deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize, paper });
   await authorize(); const completed = await store.read(); const last = completed?.turns.at(-1);
   if (!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length
     || last.response.model !== execution.model || last.target.model !== execution.model
     || last.response.text !== native.finalResponse) throw new Error('[blocked] Native final response binding changed');
-  const result = finishNativePaperReview(materializer, last.request.messages, native.finalResponse);
+  const result = finishNativePaperReview(materializer, last.request.messages, native.finalResponse, { reviewToolCompletion });
   const { nativeScientificFields, nativeNeedsMoreEvidence, nativeReviewedCandidateHash, ...fields } = result;
   const skillReads = nativeSkillReads(last.request.messages);
   const figures = extractFigureReferences(canonicalPassages(input.sourceMap).map(p => ({ id: p.id, pageStart: p.pageStart, text: p.text })));

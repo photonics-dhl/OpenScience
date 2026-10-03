@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
-import { createNativeScientificMaterializer } from '../src/extractor';
-import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL } from '../src/native-agent/paper-task';
+import { canonicalPassages, createNativeScientificMaterializer } from '../src/extractor';
+import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
 import { createNativePaperTools } from '../src/native-agent/paper-tools';
 import type { ChatMessage } from '@openscience/ai-gateway';
@@ -258,6 +258,84 @@ describe('actual native Agent scientific materializer', () => {
   });
   const compactReview = () => ({ draftToolCallId: 'draft-a', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
     needsMoreEvidence: [], claimSuggestions: 'unchanged' });
+  const toolSubmittedHistory = (): ChatMessage[] => {
+    const messages = reviewedHistory();
+    messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(compactReview());
+    messages[3]!.content = JSON.stringify({ status: 'review_ready', reviewToolCallId: 'review-a' });
+    return messages;
+  };
+  it('uses the actual tool-submitted review payload rather than requiring a duplicate final JSON', () => {
+    const result = finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), toolSubmittedHistory(),
+      'The review is saved. This explanation is not its scientific payload.', { reviewToolCompletion: true });
+    expect(result.core.method).toBe(source);
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+  });
+  it('enables tool-submitted completion only for a fresh task or its exact original tool description', () => {
+    const fresh = nativePaperToolProfile(null);
+    expect(fresh.reviewToolCompletion).toBe(true);
+    const original = fresh.sourceTools.map(tool => ({ type: 'function', function: structuredClone(tool) }));
+    const saved = { binding: { allowedTools: fresh.allowedTools }, turns: [{ request: { options: { tools: original } } }] } as unknown as NativeAgentSessionState;
+    expect(nativePaperToolProfile(saved).reviewToolCompletion).toBe(true);
+    original.find(tool => tool.function.name === 'paper_review')!.function.description += ' unknown variant';
+    expect(nativePaperToolProfile(saved).reviewToolCompletion).toBe(false);
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), toolSubmittedHistory(), 'No JSON')).toThrow();
+  });
+  it.each(['no_review', 'wrong_receipt_id', 'failed_review', 'later_failed_review', 'later_draft', 'later_field', 'later_claim', 'later_failed_field', 'later_failed_draft', 'duplicate_review', 'foreign_source', 'wrong_draft'] as const)(
+    'refuses a tool-submitted completion with %s', change => {
+      const messages = toolSubmittedHistory();
+      if (change === 'no_review') messages.splice(2);
+      if (change === 'wrong_receipt_id') messages[3]!.content = JSON.stringify({ status: 'review_ready', reviewToolCallId: 'foreign' });
+      if (change === 'failed_review') messages[3]!.content = JSON.stringify({ status: 'invalid_review' });
+      if (change === 'duplicate_review') messages[2]!.toolCalls!.push(structuredClone(messages[2]!.toolCalls![0]!));
+      if (change === 'foreign_source' || change === 'wrong_draft') {
+        const payload = { ...compactReview(), ...(change === 'wrong_draft' ? { draftToolCallId: 'other-draft' }
+          : { claimSuggestions: [{ ...draft().draftClaims[0], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] }] }) };
+        messages[2]!.toolCalls![0]!.function.arguments = JSON.stringify(payload);
+      }
+      if (change.startsWith('later_')) {
+        const name = change === 'later_failed_review' ? 'paper_review' : change.includes('draft') ? 'paper_draft' : change.includes('field') ? 'paper_field' : 'paper_claim';
+        const args = name === 'paper_review' ? compactReview() : name === 'paper_draft' ? draft()
+          : name === 'paper_field' ? { field: 'method', ...draft().fields.method } : draft().draftClaims[0];
+        const status = change.includes('failed') ? 'invalid_submission' : name === 'paper_draft' ? 'draft_ready' : name === 'paper_field' ? 'field_saved' : 'claim_saved';
+        messages.push({ role: 'assistant', content: '', toolCalls: [{ id: 'later', type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+          { role: 'tool', toolCallId: 'later', content: JSON.stringify({ status }) });
+      }
+      expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, 'Finished', { reviewToolCompletion: true })).toThrow();
+    });
+  it('uses model call order for a tool-submitted review and later field in the same parallel batch', () => {
+    const messages = toolSubmittedHistory();
+    messages[2]!.toolCalls!.push({ id: 'parallel-field', type: 'function', function: { name: 'paper_field',
+      arguments: JSON.stringify({ field: 'method', ...draft().fields.method }) } });
+    messages.splice(3, 0, { role: 'tool', toolCallId: 'parallel-field', content: JSON.stringify({ status: 'field_saved' }) });
+    expect(() => finishNativePaperReview(createNativeScientificMaterializer(map, () => ['P00001']), messages, 'Finished', { reviewToolCompletion: true })).toThrow();
+  });
+  it('requires the actual draft selector for a tool-submitted review while preserving old full-JSON handling', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], { reviewToolCompletion: true });
+    worker.draft(draft(), 0, 'draft-a');
+    expect(worker.review(review(), 'review-a').status).toBe('invalid_review');
+    expect(worker.review(compactReview(), 'review-a')).toMatchObject({ status: 'review_ready', reviewToolCallId: 'review-a' });
+    const old = createNativeScientificMaterializer(map, () => ['P00001']); old.draft(draft(), 0, 'draft-a');
+    expect(old.review(review(), 'review-a').status).toBe('review_ready');
+  });
+  it('can submit a source-complete field revision already supported by the native notebook and materializer', () => {
+    const larger = structuredClone(map);
+    larger.pages = Array.from({ length: 17 }, (_, index) => ({ ...structuredClone(map.pages[0]!), page: index + 1,
+      blocks: [{ ...structuredClone(map.pages[0]!.blocks[0]!), id: `source-${index + 1}`, text: source.repeat(8) }] }));
+    const ids = canonicalPassages(larger).map(passage => passage.id);
+    expect(ids).toHaveLength(17);
+    const worker = createNativeScientificMaterializer(larger, () => ids, nativePaperToolProfile(null));
+    SDF_CORE_FIELDS.forEach((field, order) => worker.field({ field, summary: source, sourcePassageIds: ids.slice(0, 16) }, order, `field-${field}`));
+    worker.claim(draft().draftClaims[0], 6, 'claim-core');
+    expect(worker.draft(selectedNotes(), 7, 'draft-a').status).toBe('draft_ready');
+    const payload = { ...compactReview(), fields: { ...compactReview().fields, results: { verdict: 'revised',
+      summary: source, sourcePassageIds: ids, issues: [{ code: 'RELATION_MISMATCH', problem: 'Additional already-read original support is retained.', sourcePassageIds: [ids[16]] }] } } };
+    expect(worker.review(payload, 'review-a').status).toBe('review_ready');
+    const declared = NATIVE_PAPER_COMMITTED_REVIEW_TOOL.parameters.properties.fields.properties.results.properties.sourcePassageIds;
+    expect(declared.maxItems).toBeGreaterThanOrEqual(ids.length);
+    for (const field of Object.values(NATIVE_PAPER_COMMITTED_REVIEW_TOOL.parameters.properties.fields.properties))
+      expect(field.properties.issues.items.properties.sourcePassageIds.maxItems).toBe(12);
+    expect(NATIVE_PAPER_REVIEW_TOOL.parameters.properties.fields.properties.results.properties.sourcePassageIds.maxItems).toBe(12);
+  });
   it('consumes a complete compact final review directly from saved notes without a review tool round trip', () => {
     const notes = SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, type: 'function' as const,
       function: { name: 'paper_field', arguments: JSON.stringify({ field, ...draft().fields[field] }) } }));
