@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1380" viewBox="0 0 1320 1380" role="img" aria-label="OpenScience单机运行架构与当前内存"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#6a83a1"/></marker></defs><g font-family="Microsoft YaHei,Segoe UI,sans-serif">
+<rect x="0" y="0" width="1320" height="1380" rx="0" fill="#f7f9fc" stroke="#f7f9fc"/>
+<text x="28" y="46" font-size="29" fill="#152d4c" font-weight="700">OpenScience · 单机运行架构与资源</text>
+<text x="28" y="74" font-size="15" fill="#5a6c82" font-weight="400">2026-10-03 22:42:07 北京时间 · 24个运行容器 · 快照，不代表任务峰值</text>
+<rect x="28" y="94" width="305" height="78" rx="14" fill="#ffffff" stroke="#d2dbe6"/>
+<text x="44" y="122" font-size="15" fill="#62738a" font-weight="400">物理内存</text>
+<text x="44" y="151" font-size="23" fill="#153b68" font-weight="650">30.07 GiB</text>
+<rect x="349" y="94" width="305" height="78" rx="14" fill="#ffffff" stroke="#d2dbe6"/>
+<text x="365" y="122" font-size="15" fill="#62738a" font-weight="400">Linux 可用内存</text>
+<text x="365" y="151" font-size="23" fill="#153b68" font-weight="650">9.12 GiB</text>
+<rect x="670" y="94" width="305" height="78" rx="14" fill="#ffffff" stroke="#d2dbe6"/>
+<text x="686" y="122" font-size="15" fill="#62738a" font-weight="400">Swap 已用 / 总量</text>
+<text x="686" y="151" font-size="23" fill="#153b68" font-weight="650">4.00 GiB / 4.00 GiB</text>
+<rect x="991" y="94" width="305" height="78" rx="14" fill="#ffffff" stroke="#d2dbe6"/>
+<text x="1007" y="122" font-size="15" fill="#62738a" font-weight="400">根盘可用 / 总量</text>
+<text x="1007" y="151" font-size="23" fill="#153b68" font-weight="650">24.67 GiB / 147.27 GiB</text>
+<rect x="20" y="366" width="1280" height="850" rx="20" fill="#eef3fa" stroke="#ccdaeb"/>
+<text x="38" y="399" font-size="20" fill="#325273" font-weight="700">一台 ECS</text>
+<rect x="28" y="199" width="385" height="135" rx="14" fill="#f3f5f8" stroke="#a8b1bf"/>
+<text x="46" y="230" font-size="20" fill="#566477" font-weight="650">公网用户 → Cloudflare Edge</text>
+<text x="46" y="260" font-size="16" fill="#23334a" font-weight="400">Cloudflare入口在服务器之外</text>
+<text x="46" y="286" font-size="16" fill="#23334a" font-weight="400">Tunnel连到当前ECS的Nginx</text>
+<rect x="272" y="395" width="605" height="110" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="290" y="426" font-size="20" fill="#174b87" font-weight="650">入口 · Tunnel → Nginx</text>
+<text x="290" y="456" font-size="16" fill="#23334a" font-weight="400">Tunnel 36.9 MiB / Nginx 27.5 MiB</text>
+<text x="290" y="482" font-size="16" fill="#23334a" font-weight="400">页面与API路由；数据库不直接暴露公网</text>
+<rect x="272" y="535" width="605" height="170" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="290" y="566" font-size="20" fill="#174b87" font-weight="650">网站 / 任务 · 0.96 GiB</text>
+<text x="290" y="596" font-size="16" fill="#23334a" font-weight="400">Web 117.6 MiB / API 745.0 MiB / Worker 116.9 MiB</text>
+<text x="290" y="622" font-size="16" fill="#23334a" font-weight="400">AI Gateway 是代码模块，已计入 API / Worker</text>
+<text x="290" y="648" font-size="16" fill="#23334a" font-weight="400">Worker单实例、4 lanes；Native Hermes按任务启动</text>
+<text x="290" y="674" font-size="16" fill="#23334a" font-weight="400">Native沙箱上限1GiB，本次没有运行实例</text>
+<rect x="28" y="754" width="339" height="159" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="46" y="785" font-size="20" fill="#174b87" font-weight="650">生产数据 · 0.32 GiB</text>
+<text x="46" y="815" font-size="16" fill="#23334a" font-weight="400">PostgreSQL 66.2 MiB</text>
+<text x="46" y="841" font-size="16" fill="#23334a" font-weight="400">Redis 8.3 MiB / SeaweedFS 253.4 MiB</text>
+<text x="46" y="867" font-size="16" fill="#23334a" font-weight="400">保留数据库/上传卷，不做volume prune</text>
+<rect x="394" y="754" width="483" height="183" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="412" y="785" font-size="20" fill="#174b87" font-weight="650">论文能力 · 2.08 GiB</text>
+<text x="412" y="815" font-size="16" fill="#23334a" font-weight="400">Parser 99.5 MiB → Docling 1.22 GiB</text>
+<text x="412" y="841" font-size="16" fill="#23334a" font-weight="400">BGE-M3检索 669.9 MiB</text>
+<text x="412" y="867" font-size="16" fill="#23334a" font-weight="400">ScanSci获取 107.0 MiB（独立轻量浏览器）</text>
+<text x="412" y="893" font-size="16" fill="#23334a" font-weight="400">生图API替换后仍需保留；重任务串行/资源准入</text>
+<rect x="28" y="943" width="339" height="105" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="46" y="974" font-size="20" fill="#174b87" font-weight="650">上传安全 · 0.93 GiB</text>
+<text x="46" y="1004" font-size="16" fill="#23334a" font-weight="400">ClamAV病毒检测，上限3GiB</text>
+<text x="46" y="1030" font-size="16" fill="#23334a" font-weight="400">保留，不以关安全检查节省内存</text>
+<rect x="660" y="199" width="632" height="135" rx="14" fill="#f3f5f8" stroke="#a8b1bf"/>
+<text x="678" y="230" font-size="20" fill="#566477" font-weight="650">外部模型 / API / 账号 · 不在本机加载模型权重</text>
+<text x="678" y="260" font-size="16" fill="#23334a" font-weight="400">MiniMax-M3理解审阅；MiniMax/Hailuo视频与配音</text>
+<text x="678" y="286" font-size="16" fill="#23334a" font-weight="400">Synclip图像API候选：尚未真实验收</text>
+<text x="678" y="312" font-size="16" fill="#23334a" font-weight="400">ChatGPT账号：历史网页生图/审阅通道</text>
+<rect x="926" y="694" width="366" height="207" rx="14" fill="#fff8e8" stroke="#d59c39"/>
+<text x="944" y="725" font-size="20" fill="#845b13" font-weight="650">网页浏览器 · 8.36 GiB</text>
+<text x="944" y="755" font-size="16" fill="#23334a" font-weight="400">浏览器上限 10.00 GiB / PIDs 504/1024</text>
+<text x="944" y="781" font-size="16" fill="#23334a" font-weight="400">桥接 29.4 MiB；Codex备用 43.2 MiB</text>
+<text x="944" y="807" font-size="16" fill="#23334a" font-weight="400">最大可释放项；目前保持运行</text>
+<text x="944" y="833" font-size="16" fill="#23334a" font-weight="400">API生成→审核→入库验收通过后停用</text>
+<text x="944" y="859" font-size="16" fill="#23334a" font-weight="400">并确认无在途/unknown旧任务；保留登录资料</text>
+<rect x="394" y="977" width="483" height="214" rx="14" fill="#fff8e8" stroke="#d59c39"/>
+<text x="412" y="1008" font-size="20" fill="#845b13" font-weight="650">开发诊断栈 · 3.99 GiB</text>
+<text x="412" y="1038" font-size="16" fill="#23334a" font-weight="400">Langfuse六组件 3.62 GiB</text>
+<text x="412" y="1064" font-size="16" fill="#23334a" font-weight="400">其中ClickHouse 2.25 GiB</text>
+<text x="412" y="1090" font-size="16" fill="#23334a" font-weight="400">Langfuse Web 785.4 MiB / Worker 485.4 MiB</text>
+<text x="412" y="1116" font-size="16" fill="#23334a" font-weight="400">Backstage134MiB / Serena195MiB / 采集44MiB</text>
+<text x="412" y="1142" font-size="16" fill="#23334a" font-weight="400">候选按需启停；保留checkpoint与全部数据卷</text>
+<rect x="926" y="957" width="366" height="208" rx="14" fill="#ffffff" stroke="#b7c9df"/>
+<text x="944" y="988" font-size="20" fill="#174b87" font-weight="650">数据保护 / 资源监控</text>
+<text x="944" y="1018" font-size="16" fill="#23334a" font-weight="400">数据库每日03:00自动备份（北京时间）</text>
+<text x="944" y="1044" font-size="16" fill="#23334a" font-weight="400">上传对象967个 / 2.81GB已逐文件校验</text>
+<text x="944" y="1070" font-size="16" fill="#23334a" font-weight="400">隔离恢复验证正在准备；异机目标未配置</text>
+<text x="944" y="1096" font-size="16" fill="#23334a" font-weight="400">Netdata 619.4 MiB / Portainer 36.4 MiB</text>
+<text x="944" y="1122" font-size="16" fill="#23334a" font-weight="400">vnStat 2.3 MiB / 出口Squid 45.7 MiB</text>
+<rect x="28" y="1078" width="339" height="125" rx="14" fill="#f3f5f8" stroke="#a8b1bf"/>
+<text x="46" y="1109" font-size="20" fill="#566477" font-weight="650">按需视频 / 本地模型</text>
+<text x="46" y="1139" font-size="16" fill="#23334a" font-weight="400">本次视频执行器与Qwen均未运行</text>
+<text x="46" y="1165" font-size="16" fill="#23334a" font-weight="400">Qwen权重4.21GiB是磁盘候选</text>
+<text x="46" y="1191" font-size="16" fill="#23334a" font-weight="400">云端视频不等于本地12GiB语音任务</text>
+<path d="M413 266 H574 V395"  fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M574 357 V387" transform="translate(0 148)" fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M874 587 H910 V334 H982"  fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<text x="918" y="490" font-size="13" fill="#536782" font-weight="400">云端请求</text>
+<path d="M435 557 V581 H199 V606" transform="translate(0 148)" fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M632 557 V606" transform="translate(0 148)" fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M330 557 H238 V776 H197 V795" transform="translate(0 148)" fill="none" stroke="#6a83a1" stroke-width="2"  marker-end="url(#arrow)"/>
+<path d="M877 503 H910 V625 H926" transform="translate(0 148)" fill="none" stroke="#ab8744" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<text x="821" y="738" font-size="13" fill="#536782" font-weight="400">历史兼容</text>
+<path d="M1109 694 V334"  fill="none" stroke="#ab8744" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<text x="1118" y="655" font-size="13" fill="#536782" font-weight="400">网页账号通道</text>
+<path d="M367 700 H374 V920 H394" transform="translate(0 148)" fill="none" stroke="#ab8744" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<text x="399" y="966" font-size="13" fill="#536782" font-weight="400">只读审计</text>
+<path d="M367 723 H384 V1058 H1110 V1017" transform="translate(0 148)" fill="none" stroke="#ab8744" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<text x="925" y="1194" font-size="13" fill="#536782" font-weight="400">只读备份</text>
+<text x="28" y="1248" font-size="21" fill="#835b16" font-weight="650">可讨论释放：浏览器及桥接 ≈ 8.39 GiB；开发诊断栈 ≈ 3.99 GiB</text>
+<text x="28" y="1280" font-size="15" fill="#596b82" font-weight="400">实际释放需停用后复测；容器工作集、宿主cgroup与进程RSS不直接相加。上限不是预留内存。</text>
+<text x="28" y="1305" font-size="15" fill="#596b82" font-weight="400">Docker/Containerd宿主cgroup约 0.96 GiB；其余内核、系统进程及缓存未逐项绘制。Swap接近满，不作为视频容量。</text>
+<text x="28" y="1331" font-size="15" fill="#596b82" font-weight="400">蓝色：保留能力　黄色：满足条件后按需停用　灰色：云端/未运行/未验收　·　应用快照 ef9e44d6</text>
+</g></svg>

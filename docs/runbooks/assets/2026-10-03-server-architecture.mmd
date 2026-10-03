@@ -1,0 +1,39 @@
+flowchart TB
+  EDGE[Cloudflare Edge]
+  subgraph ECS["单 ECS · 30.07 GiB · 可用 9.12 GiB"]
+    IN["Tunnel 36.9 MiB / Nginx 27.5 MiB"]
+    WEB["web · 117.6MiB"]
+    API["api · 745MiB"]
+    WORK["agent-worker · 116.9MiB<br/>单实例4 lanes / Gateway代码模块"]
+    DB["PostgreSQL 66.2 MiB<br/>Redis 8.3 MiB<br/>SeaweedFS 253.4 MiB"]
+    PARSE["Parser 99.5 MiB → Docling 1.22 GiB"]
+    RET["BGE-M3 669.9 MiB / ScanSci 107.0 MiB"]
+    AV["ClamAV 951.8 MiB"]
+    BROWSER["ChatGPT浏览器 8.36 GiB<br/>桥接 29.4 MiB / API验收后候选停用"]
+    DEV["Langfuse 3.62 GiB<br/>目录/Serena/采集 0.36 GiB / 按需"]
+    OBS["Netdata 619.4 MiB / Portainer / vnStat"]
+    BACKUP["DB每日03:00 / 上传对象967份已验证<br/>恢复验证及异机目标待完成"]
+    IN --> WEB
+    IN --> API
+    WEB --> API
+    API --> DB
+    WORK --> DB
+    WORK --> PARSE
+    WORK --> RET
+    API --> AV
+    API --> WORK
+    WORK -.历史兼容.-> BROWSER
+    DB -.只读审计.-> DEV
+    DB -.只读备份.-> BACKUP
+  end
+  EDGE --> IN
+  CLOUD["MiniMax-M3 / 云端视频与配音"]
+  SYN["Synclip生图API · 未部署/未实测"]
+  ACCOUNT["ChatGPT账号 · 历史网页通道"]
+  WORK --> CLOUD
+  WORK -.候选.-> SYN
+  BROWSER --> ACCOUNT
+  classDef optional fill:#fff4dd,stroke:#c78416,color:#694718;
+  classDef pending fill:#f1f3f6,stroke:#8390a0,color:#415063;
+  class BROWSER,DEV optional;
+  class SYN pending;

@@ -2,6 +2,12 @@
 
 新论文复用服务器PDF/OCR/SourceMap，由原生Hermes＋MiniMax-M3理解和审阅；旧GPT浏览器不是其前置。运行身份和真实质量统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，调用及消费缺口见[能力台账](hermes-capability-registry.md#原生agent当前入口与消费断点)。旧浏览器、renderer及兼容服务仍须按实际消费者和回滚依赖判断，不能仅因新入口已切换就删除。
 
+## 单机运行架构与资源
+
+2026-10-03 22:42（北京时间）的只读快照覆盖24个运行容器、宿主服务和外部模型调用关系，见[架构图](assets/2026-10-03-server-architecture.svg)、[逐容器内存/上限与磁盘表](assets/2026-10-03-server-resources.md)及[可编辑 Mermaid 源](assets/2026-10-03-server-architecture.mmd)。图是有日期的观察，不是实时监控；当前运行身份与整改执行状态仅见CURRENT。
+
+当时网站Web/API/Worker合计0.96GiB，网页浏览器8.36GiB，开发诊断栈3.99GiB。前者是正常服务；浏览器须待图像API真实生成、审核、入库验收及旧任务排空后才能停用，保留登录资料/任务/spool；开发诊断服务可以按需启停，先停采集器并保留checkpoint及全部数据卷。ScanSci独立轻量浏览器、论文解析/检索和ClamAV仍是产品能力，不随网页生图替换停用。实际释放量须停用后重新测量，配置上限不是预留内存。
+
 ## 历史操作观察（不作为当前版本或任务指令）
 
 > 2026-09-20 按需 renderer 恢复：Chat image broker 配置原镜像已缺失，已按用户 A 恢复标准化依赖，原图真实处理并入库待审；新镜像/配置备份/恢复边界见 [Figure 3 交接最新节](../handoff/2026-09-18-figure3-image-and-cleanup-handoff.md)。无常驻容器不代表可删除，应用 release 与 provider 不变。
