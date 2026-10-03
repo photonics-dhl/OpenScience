@@ -1,5 +1,11 @@
 # Runbook: 部署（Deployment）
 
+## 当前原生 Hermes 发布入口
+
+新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图在新API接入前暂停。实际版本、回滚身份、付费任务和科学验收只读[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。从干净、已推送且精确CI通过的SHA正常发布应用，再用现有Native安装器的`--defer-timer`配对运行时与Skill目录，重建API/Worker并核实两者一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
+
+下列按日期记录的固定阅读、GPT来源审阅及恢复操作是历史兼容说明，不能当作新论文的步骤，也不能据旧“下一步”重发任务。保留历史paid回答、原文、收据和回滚依赖，按CURRENT选择实际适用的恢复路径。
+
 ## 2026-09-30 私有来源耗尽后的新分析
 
 前置：本增量沿现有reanalyze API新增严格付费意图，仅用于已终止、未确认且未物化版本的受控来源链。完成受影响Domain/API/Worker/Web验证、独立High及精确CI后，从干净已推SHA部署；实际release和是否提交新分析只见CURRENT。

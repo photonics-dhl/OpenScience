@@ -6,7 +6,7 @@
 
 scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专项引用通过skill_view按需读取。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选来源reviewContext，终稿复用原科学/Claims/来源守卫，paper_review只是可选结构反馈。安装、注入、实际调用和科学正确是四个不同事实。
 
-最新实际v11读取主文P1–35/85、原页6/7和完整科学方法，却未在draft后调用source-review或回读关键附录，科学NO-GO；完整终稿的accepted表示也被拒收。overview有附录标题，原26页材料存在，不能归罪于缺源。当前已部署方法在新任务指令明确source-review入口（原draft反馈保持，保护已付回放），按保留主线中的对象、量、条件与算例渐进追证，不新增全文分析器、审阅模型、额度或门禁；v12实见两个Skill在草稿前加载，3分27秒完成但未通过最终绑定，科学仍NO-GO；没有后续候选反向比较/必要回读。当前候选为新描述任务补实际saved summaries/完整Claims及原诊断，旧描述回放保持原投影；不增加阶段或gate，真实质量仍待验证。
+原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。当前断点是终稿提交可靠性与科学核对实际效果，不能再靠加指令后连续请求；准确任务及来源依据只见CURRENT。
 
 原生paper-illustration复用同源已审Claims/原页/设计资源和共享科学艺术物化，自动保存完整私有prompt；原自动run的审批及旧图片派发前有image-api-pending暂停。新生图API待提供，新原生科学合格稿到计划的真实路径尚未完成，人工brief不能冒充自动成果。
 
