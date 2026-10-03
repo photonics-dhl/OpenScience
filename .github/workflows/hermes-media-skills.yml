@@ -387,7 +387,10 @@ jobs:
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
-      - run: node --test infra/synclip-image/transport.test.mjs infra/synclip-image/broker.test.mjs infra/synclip-image/install.test.mjs
+      - name: Check image host operations with their production privileges
+        run: |
+          mkdir -p tmp/hermes-cleanup-20261003
+          sudo "$(command -v node)" --test infra/synclip-image/transport.test.mjs infra/synclip-image/broker.test.mjs infra/synclip-image/install.test.mjs
       - run: python3 -m unittest discover -s infra/synclip-image -p configure_key_test.py
       - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts
       - run: python3 -m unittest discover -s infra/hermes-agent -p "test_*.py"
