@@ -1,5 +1,7 @@
 # Hermes Capability Registry
 
+单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
+
 ## 原生Agent当前入口与消费断点
 
 新论文任务由NousResearch AIAgent/MiniMax-M3通过Worker native-agent/paper-task.ts执行；复用SourceMap、paper_read/search/view和原科学物化。科学理解/核查由Hermes负责，服务器GPT来源审阅只保留历史绑定任务，不是当前方向。版本/任务/真实验收统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。

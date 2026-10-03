@@ -92,7 +92,7 @@ export function parsePendingIntent(source) {
 
 export function parseRetentionCli(argv) {
   const command = argv[0];
-  const allowed = new Set(['preflight', 'prepare', 'abort', 'complete', 'resume', 'bootstrap']);
+  const allowed = new Set(['preflight', 'prepare', 'prepare-cleanup', 'abort', 'complete', 'resume', 'bootstrap']);
   if (!allowed.has(command)) throw new Error('production retention command is invalid');
   const values = new Map();
   for (let index = 1; index < argv.length; index += 2) {
@@ -527,6 +527,24 @@ async function prepare({ expectedActive, expectedRollback, lockFd, pruneUnused =
     ? await collectRetentionPlan({ activeSha: expectedActive, rollbackSha: expectedRollback, paths })
     : { releaseShas: [], imageTags: [], capabilityShas: [] };
   if (!pruneUnused) await validatePreservedReleases(expectedActive, expectedRollback, paths);
+  await writePendingIntent(expectedActive, expectedRollback, plan, paths);
+}
+
+async function prepareCleanup({ expectedActive, expectedRollback, lockFd }, paths = PATHS) {
+  await verifyLock(lockFd);
+  await requireAbsent(paths.pending, 'rollback pending intent');
+  await requireAbsent(paths.journal, 'production deploy journal');
+  await requireAbsent(paths.failure, 'production release failure marker');
+  if (await trustedShaMarker(paths.active) !== expectedActive) throw new Error('cleanup active release mismatch');
+  if (await trustedShaMarker(paths.rollback, { exactMode: 0o600 }) !== expectedRollback) {
+    throw new Error('cleanup rollback release mismatch');
+  }
+  // Stable-host cleanup uses the same guarded planner and resumable schema-2 intent.
+  const plan = await collectRetentionPlan({ activeSha: expectedActive, rollbackSha: expectedRollback, paths });
+  await writePendingIntent(expectedActive, expectedRollback, plan, paths);
+}
+
+async function writePendingIntent(expectedActive, expectedRollback, plan, paths) {
   const intent = {
     schemaVersion: 2,
     candidateSha: expectedActive,
@@ -609,6 +627,7 @@ async function main() {
   const options = parseRetentionCli(process.argv.slice(2));
   if (options.command === 'preflight') await preflight(options);
   else if (options.command === 'prepare') await prepare(options);
+  else if (options.command === 'prepare-cleanup') await prepareCleanup(options);
   else if (options.command === 'abort') await abort(options);
   else if (options.command === 'bootstrap') await bootstrap(options);
   else await complete(options);

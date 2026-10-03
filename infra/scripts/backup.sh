@@ -9,7 +9,7 @@
 # 用法（云上执行，经 ssh-run.sh）:
 #   backup.sh [--confirm] [--db] [--objects]
 #     --db       PostgreSQL dump
-#     --objects  SeaweedFS 数据卷快照（不触碰生产卷内容）
+#     --objects  只读 S3 逻辑导出（不读取/修改 SeaweedFS 数据卷）
 #     --confirm  危险命令（rm 轮转）放行
 #
 # 保留策略：KEEP_BACKUPS 轮（默认 7），超出轮转删除。
@@ -138,21 +138,34 @@ echo "BACKUP_OK core_size=$(du -h "$CORE_DUMP_FILE" | cut -f1) search_size=$(du 
 fi
 
 if [ "$BACKUP_OBJECTS" -eq 1 ]; then
-  VOLUME="${SEAWEED_VOLUME:-openscience-prod_seaweed-data}"
-  MOUNTPOINT="$(docker volume inspect -f '{{.Mountpoint}}' "$VOLUME" 2>/dev/null || true)"
-  [ -n "$MOUNTPOINT" ] && [ -d "$MOUNTPOINT" ] || { echo "BACKUP_FAIL: SeaweedFS volume unavailable" >&2; exit 1; }
-  OBJECT_STAGE="$DUMP_DIR/.objects-$DATE.staging"
-  OBJECT_FILE="$DUMP_DIR/objects-$DATE.tar.gz"
-  case "$OBJECT_STAGE" in "$DUMP_DIR"/.objects-*.staging) ;; *) echo "BACKUP_FAIL: unsafe object staging path" >&2; exit 1 ;; esac
-  [ ! -e "$OBJECT_STAGE" ] && [ ! -e "$OBJECT_FILE" ] || { echo "BACKUP_FAIL: object snapshot collision" >&2; exit 1; }
-  install -m 0600 /dev/null "$OBJECT_STAGE"
-  cleanup_object_stage() { case "${OBJECT_STAGE:-}" in "$DUMP_DIR"/.objects-*.staging) rm -f -- "$OBJECT_STAGE" ;; esac; }
-  trap cleanup_object_stage EXIT
-  trap 'cleanup_object_stage; exit 130' HUP INT TERM
-  tar -czf "$OBJECT_STAGE" -C "$MOUNTPOINT" .
-  [ -s "$OBJECT_STAGE" ] || { echo "BACKUP_FAIL: object snapshot empty" >&2; exit 1; }
-  sync -f "$OBJECT_STAGE"
-  mv -- "$OBJECT_STAGE" "$OBJECT_FILE"
-  trap - EXIT HUP INT TERM
-  echo "OBJECT_BACKUP_OK size=$(du -h "$OBJECT_FILE" | cut -f1)"
+  # Normal deployments use the helper from the same immutable release, avoiding
+  # a mutable helper/script replacement window. Legacy releases can use a
+  # reviewed operational pair before this feature is in their release tree.
+  SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  OBJECT_HELPER="$RELEASE_ROOT/infra/scripts/backup-objects.mjs"
+  [ -f "$OBJECT_HELPER" ] || OBJECT_HELPER="$SCRIPT_DIR/backup-objects.mjs"
+  [ -f "$OBJECT_HELPER" ] || { echo "OBJECT_BACKUP_FAIL: helper unavailable" >&2; exit 1; }
+  node "$OBJECT_HELPER" export "$DUMP_DIR" "$DATE" "$RELEASE_SHA" "$KEEP"
+
+  # Only a successfully published logical set permits rotation. Legacy tarballs
+  # and staging directories are not rotation targets. No production volume access.
+  if ! OBJECT_INVENTORY="$(find "$DUMP_DIR" -mindepth 1 -maxdepth 1 -type d -name 'objects-set-*' -printf '%f\n' | sort -r)"; then
+    echo "OBJECT_BACKUP_FAIL: retention inventory failed" >&2
+    exit 1
+  fi
+  OBJECT_SETS=()
+  if [ -n "$OBJECT_INVENTORY" ]; then
+    mapfile -t OBJECT_SETS <<< "$OBJECT_INVENTORY"
+  fi
+  OLD_OBJECT_COUNT=$((${#OBJECT_SETS[@]} > KEEP ? ${#OBJECT_SETS[@]} - KEEP : 0))
+  if [ "$OLD_OBJECT_COUNT" -gt 0 ]; then
+    if [ "$CONFIRM" -ne 1 ]; then
+      echo "轮转需删除 $OLD_OBJECT_COUNT 旧对象备份，加 --confirm 放行" >&2
+    else
+      for set_name in "${OBJECT_SETS[@]:$KEEP}"; do
+        [[ "$set_name" =~ ^objects-set-[0-9]{8}T[0-9]{6}Z-[1-9][0-9]*$ ]] || { echo "OBJECT_BACKUP_FAIL: unsafe rotation target" >&2; exit 1; }
+        rm -rf -- "$DUMP_DIR/$set_name"
+      done
+    fi
+  fi
 fi

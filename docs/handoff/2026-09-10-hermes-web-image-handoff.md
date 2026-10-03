@@ -2,9 +2,9 @@
 > 唯一交付树 `.worktrees/onchip-video-release`，分支 `release/onchip-production-line`；根 main 只作导航。
 
 ## 目标与决定
-- 本轮交付止于生图前：真实 NousResearch Hermes Agent 理解论文并核查科学事实，自动保存六维/Claims/Evidence、科学分镜、构图、完整可迁移提示词和1–2个合适风格；默认首选。随后由用户提供新生图API。物理正确、读者能理解贡献和条件、艺术质量均须实际验收。
+- 先完整验收生图前置：真实 NousResearch Hermes Agent 理解论文并核查科学事实，自动保存六维/Claims/Evidence、科学分镜、构图、完整可迁移提示词和1–2个合适风格；默认首选。用户10-03已给Synclip图像API文档并授权先用`gpt-image-2`试效果，2.5后续再接；不自动切Nano Banana/Midjourney。新接口尚未实现/配置/调用，旧image-api-pending保留至受控接入。物理正确、读者能理解贡献和条件、艺术质量均须实际验收。
 - 新论文理解与科学审阅由 Hermes＋MiniMax-M3 完成。服务器GPT不是新论文审阅者；旧GPT来源审阅只保留历史收据/任务兼容。不要继续旧菜单、上传或迟到答案采用方案。
-- 目标链路：既有PDF/OCR/SourceMap → 原生Hermes理解/核源 → 六维/Claim/Evidence → 原生Hermes科学分镜/风格/完整prompt → 新生图API（待提供）→ Hermes像素核查 → 用户确认/现有发布流程 → 匿名读者页。
+- 目标链路：既有PDF/OCR/SourceMap → 原生Hermes理解/核源 → 六维/Claim/Evidence → 原生Hermes科学分镜/风格/完整prompt → Synclip `gpt-image-2`（待接入）→ Hermes像素核查 → 用户确认/现有发布流程 → 匿名读者页。文档[入口](https://synclip.ai/dev/docs/image)为异步POST /v1/image＋GET /v1/tasks/:id；公开文档模型列表未更新，具体模型采用用户明确给定值。接口备忘`tmp/hermes-cleanup-20261003/synclip-image-api-notes.md`，未知提交不可盲重发，未读取凭据或提交生图。
 - 用户已认可第二篇物理正确图2cc5003f及细化图681ef614；其科学内容不重做。创建RO和效果展示需少操作；局部管理员/API成功不代表普通用户旅程通过。
 - 三篇整体验收、原文疑点回读、可复用经验与定量几何核验仍未全部完成。开源GPU生图第二通道暂停；视频及UI改造独立推进，局部返工不取消这些目标。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
@@ -43,6 +43,7 @@
 - 当前开发树/线上/真实科学结果必须分别判断。10-03旧Browser曾因saved permissions停止；本轮Computer Use仅列出应用，读取Chrome窗口时因不能可靠确定URL而被策略停止，未得页面/截图、未点击或绕过，收据native-preflight-computer-use-limit.txt。CI浏览器fixture不能代替真实角色入口。
 
 ## 其他交付与保护
+- 运维/视频前置：用户10-03决定先在现ECS做好功能与展示，集群以后扩；同机测试隔离网络/数据/账号。用户确认暂时没有异机存储，后续配置；外部备份/监测不必另购计算机，整机高可用/物理隔离才需第二主机。已实设4GiB持久swap及Web/API/Worker/PG/Redis/对象/ClamAV/Netdata/vnStat上限，API/Worker被Native重建后已同PID补回、Redis384MiB/noeviction与原持久配置一致；swap接近满，不当视频容量，12GiB为本地Qwen语音上限而非云端H3内存需求。初查release44.4GB/images26.9GB/models5.16GB、DB backup1.05GB；82旧目录/288tag准备后已取消未执行pending，未实删。已完成单次非轮转对象导出967个/2,812,621,957字节，离线逐文件校验通过、971文件0600/2目录0700、无staging；29de来源，锁已释放，旧备份保留。物理空间/节点余量与不可变同源helper候选32pass/1Windows skip，retention45pass、增量High GO；未装定时脚本，恢复/异机/告警/测试站未验收。证据`tmp/ops-readiness-20261003/`及服务器私有`observations/ops-readiness-20261003/object-backup-verification.json`；操作见[backup](../runbooks/backup-restore.md)、[deployment](../runbooks/deployment.md)。先提交已审候选，待UI组合app与Native配对结束再协调安装，避免正常deploy覆盖新脚本。
 - UI：b7ad37f2帽沿气泡/单Live2D/窄屏修复已合入并上线；132定向/TC/lint/High/精确CI通过，真实逐页视觉/角色/键盘与动效仍待验。公司Word已按实际交付同步；证据 `tmp/ui-hat-polish-20261002/`，细节见[设计](../specs/2026-09-05-integrated-research-product-design.md)和[公司交接](2026-09-30-vendor-evaluation.md)。
 - UI质感源 f9f86e24（codex/research-product-craft）正在干净 ui-release-integration 树合入最新 canonical c68d1606；未部署。第三张 guide/Figma 与 GSAP/Canvas 方向保留。真实 Browser 已恢复，公开期刊→探索→研究阅读入口、宽屏身份/帽沿气泡及窄屏展开/Escape/焦点返回已观察；桌面360px、窄屏120px单 Live2D入口，展开沿原对话，首页无浮动角色。69陪伴＋8期刊及58传输/登录定向证据、TC/lint、独立High GO；期刊翻译测试适配与失败分页重试回归已修。官网有效会话已从桌面进入真实私有研究，但仍是旧部署界面，不据此验收新UI。干净构建/精确CI、私有候选观察、正式部署及公司Word/脱敏包仍待完成；证据与历史见[设计](../specs/2026-09-05-integrated-research-product-design.md)及候选tmp/design-tools-20261002/implementation/。
 - 视频：品牌原片447219588464928已取回且用户认可画面，配音仍待改善；论文首镜447314218062265实看发现符号/波纹问题，第二镜HTTP402无taskId，不能重放create或把未听验声音标通过。原片/marker/Qwen权重及临时发布树保留；下一步余额对账与旁白/运动修订由视频会话持有，见 `tmp/video-system-20260930/` 和原Task4计划。

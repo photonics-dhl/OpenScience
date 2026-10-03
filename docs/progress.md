@@ -1,8 +1,10 @@
 # CURRENT Progress Window
 
-10-03原生Hermes＋M3的论文理解、科学审阅及自动私有分镜接线已部署；新生图API尚待用户提供。最新真实稿仍有科学错误，完整链路未验收。运行身份、任务、费用与交付差额只见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。
+原生Hermes＋M3的论文理解、科学审阅及自动私有分镜接线、用户最新Synclip接口授权和未完成验收，统一见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。本页不另维护接口或发布状态。
 
 ## 本轮检查点
+
+- 单机运维整改与视频前置正在推进：资源配置已推，在线限额/swap已观察；上传对象首份备份及逐文件校验已完成，修复候选通过定向测试与High审阅。实际导出、未执行清理、恢复、异机目标及统一发布状态仅见CURRENT的运维条目，不把本机备份当异机灾备。
 
 - 合并稿反馈、原生Skill提交协议与长paper工具结果保真修复已正常发布并配对安装。仅一次新分析在32轮错误草稿参数处停止，未独立审阅/物化；额外总结漏tools的协议冲突已离线复现。精确Claim诊断及预算即停止候选通过定向/实际Host验证、最终High与精确Linux完整CI，尚未部署。已按ops owner同意原样独立提交资源配置；现与UI/视频协调一次组合发布，UI负责最终app，本会话随后配对Native并验真实科学链路，未创建新任务。完整prompt/风格私有持久化已核实，不能代替科学产物验收。预算/旧paid保持；精确身份和下一动作只见CURRENT。
 - 原PDF、SourceMap、认可图、公开版本、付费回答和失败日志均保留；历史map/reduce/GPT兼容消费者仍存在，不按“已经Native”盲删。

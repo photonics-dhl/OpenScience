@@ -14,6 +14,8 @@
 
 云视频试镜定位：`packages/ai-gateway/src/minimax-video.ts`收口H3调用，`minimax-video-download.ts`负责有界下载与MP4容器检查；`infra/codex-image-runner/minimax-video-pilot.mjs`维护原品牌单次任务及显式论文参考镜头，复用原预留/续查/取片。用例与发布分支检查在相邻test及`.github/workflows/hermes-video.yml`；操作见[视频runbook](docs/runbooks/science-video-demo.md#minimax-paper-reference-video)，实际调用、产物、用户反馈与RO接线差额只见CURRENT。
 
+单机运维与视频前置：`infra/scripts/backup-objects.mjs`及相邻测试补接原`backup.sh`的上传对象逻辑导出/离线校验；`production-release-retention.mjs`及原测试提供稳定主机的显式准备入口，复用原事务和运行引用保护。操作见[备份恢复](docs/runbooks/backup-restore.md)与[发布手册](docs/runbooks/deployment.md)，候选、在线资源、实际导出/清理和未完成恢复仅见Hermes CURRENT。
+
 科学分镜失败取证与纠错位于 `apps/agent-worker/src/presentation/illustration-planner.ts`、`handler.ts`；私有任务结果投影在 `packages/domain/src/agent/agent.ts`，完整表达式比较在 `apps/agent-worker/src/presentation/scientific-comparison.ts`；验收覆盖 `scientific-comparison.test.ts`、`automatic-style.test.ts`、`visual-source-context.test.ts` 和 `packages/domain/test/agent/private-science-diagnostics.test.ts`；managed受控恢复在 `research-run.ts` 与 `storyboard-science-recovery.test.ts`；普通任务原候选重验证沿 `packages/domain/src/agent/standalone-science-recovery.ts`、`standalone-science-recovery.test.ts` 及原Worker检查点。失败任务的可见续作入口在 `ResearchPresentation.tsx` / `PresentationWorkbench.tsx`，复用原retry API。运行与恢复状态见Hermes CURRENT，不把拒收候选当成功分镜。
 来源审校的有界原回答纠错、六字段/Claims同轮反馈与私有失败诊断在 `apps/agent-worker/src/extractor.ts`、`test/source-review-output.test.ts`；Gateway 回传字节上限在 `packages/ai-gateway/src/gateway.ts` 与 `test/structured-retry-budget.test.ts`。显式重新审校沿 `packages/domain/src/ingestion/source-review-recovery.ts`，现代直接凝练谱系由 `packages/domain/test/agent/direct-source-review-recovery.test.ts` 覆盖；精确状态与真实验收见 CURRENT。
 新的Hermes-only来源路由与历史Web兼容由 `packages/domain/test/agent/hermes-source-model-routing.test.ts`、`historical-source-review-fixture.ts` 及原 `saved-source-review-recovery.test.ts` 验证；当前部署及真实质量仍见唯一CURRENT。
@@ -304,7 +306,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `packages/domain/src/publish/publish.ts` / `apps/api/src/routes/publications.ts` | 公开发布的单一 domain boundary；移除 generic approved→published 绕过，在事务内加载并验证 Claim graph | **TASK 2 DEPLOYED**；publish safety gate GREEN |
 | `packages/config/src/search-env.ts` / `packages/search/src/{chunker,lexical,storage,index}.ts` / `packages/search/test/{chunker,lexical,storage.integration}.test.ts` | 独立 `SEARCH_DATABASE_URL`/Prisma client；locator-safe chunk、tenant-safe exact BM25、两阶段有界 hydration、typed degradation；core domain/API 不导入 search client | **TASK 2 BOUNDARY DEPLOYED / TASK 6 TASKS 3–4 ECS ACCEPTED CANDIDATE `7d489c5`**；生产 route disabled、search 1/1 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/web/app/research-objects/[id]/hermes/page.tsx` | Hermes ingestion 建议读取、SDF 六字段人工确认、乐观锁写入与 `needs_review → confirmed` 状态流 | 本地实现，待服务器验收（2026-08-10） |
-| `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | core/search PostgreSQL 私有单飞原子备份集合、独立 SHA-256/manifest + SeaweedFS 原子快照；校验 active release、数据库隔离与双库恢复顺序 | **CURRENT PRODUCTION**；`db-set-20260827T155422Z-1676593` 双库 ECS restore drill GREEN，6 个临时库已按授权清理 |
+| `infra/scripts/backup.sh` / `infra/scripts/backup-objects.mjs` / `docs/runbooks/backup-restore.md` | core/search PostgreSQL 私有单飞原子备份集合及 S3 上传对象逻辑导出、manifest/完整性校验；校验 active release、数据库隔离与恢复顺序 | 候选、安装、首份对象备份及未完成恢复见顶部 CURRENT；2026-08 双库演练为历史证据 |
 | `infra/scripts/deploy.sh` / `infra/scripts/production-deploy-lock.mjs` / `infra/scripts/production-deploy-transaction.sh` / `infra/scripts/production-deploy-transaction-state.sh` / `infra/scripts/verify-document-parser-acceptance.mjs` / `infra/scripts/deploy.test.mjs` / `scripts/verify-embedding-runtime.mjs` | ECS immutable release：锁外只物化 exact archive；锁内单一远端 runner 持 FD9 完成 active/source/report/runtime/image、双账本、switch/health、expected-only CAS、公网验收与 durable-journal rollback；Compose entry 固定 exact release；schema 6 绑定 official MCP exact image | 现行部署入口；历史运行记录 `80db41e` / rollback `761b93d`；两者 official-only |
 | `infra/scripts/import-scansci-cookies.{sh,test.mjs}` | 管理员 Netscape Cookie 经私有 host staging 流入官方 `scansci_pdf_login(kind=cookie_import)`；root/mode/link/size/single-flight 门禁，成功/失败均清除 host 与容器副本且不输出响应内容 | **OFFICIAL-ONLY CANDIDATE**；ECS 真实 cookie import pending |
 | `infra/scripts/rotate-database-credentials.sh` / `infra/scripts/rotate-database-credentials.test.mjs` | ECS-only PostgreSQL 应用凭据原子轮换：Secret 不入 argv/log、active release Compose、`flock` 单飞、mutation-intent、旧/旧或新/新补偿、角色/env 双认证与消费者健康核验 | **CURRENT SECURITY OPERATION**；只可显式 `--confirm`，执行后须复验 release/公网/容器健康 |
@@ -596,7 +598,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `docs/runbooks/hermes-capability-registry.md` | 当前产品目的→代码调用→实际产物→已知缺口；工具选型与定向High审查 | **CURRENT能力定位入口**；版本见handoff，旧PRODUCTION/评测表为历史，不证明当前调用或质量 |
 | `docs/runbooks/server-capabilities.md` | 服务器现有服务、镜像、缓存和复用边界 | **CURRENT服务器能力入口** |
 | `docs/runbooks/chatgpt-browser.md` | 服务器 ChatGPT 浏览器的登录、任务恢复、容量、安全与回滚操作 | **CURRENT浏览器运行手册** |
-| `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
+| `docs/runbooks/backup-restore.md` | core/search 原子备份集合、对象逻辑导出、权限/release 校验与隔离恢复边界；含历史双库演练和 remote stdin guard | 当前安装/恢复与异机副本状态见顶部 CURRENT；历史演练不代替当前对象恢复 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
 | `docs/runbooks/cloudflare-tunnel.md` | Cloudflare Tunnel 公网入口、固定 Edge/HTTP2、HA watchdog、回滚与移动端验收 | 已部署并完成 2026-08-15 出口事故修复 |
@@ -612,7 +614,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `infra/README.md` | infra 目录说明（脚本清单/安全约束/迁移路径） | 活文档 |
 | `infra/scripts/ssh-run.sh` | 远程命令唯一入口（BatchMode 密钥认证、危险命令黑名单需 --confirm） | 可用 |
 | `infra/scripts/checkup.sh` | 只读巡检（磁盘/内存/负载/Docker/服务/TLS 证书） | 可用 |
-| `infra/scripts/backup.sh` | core/search PostgreSQL `0700/0600`、`flock`、staging→directory rename 原子集合 + SHA-256/manifest；对象快照亦原子发布 | **PRODUCTION `c581712`**；双库恢复/失败边界通过，当前原子集合保留 7 组 |
+| `infra/scripts/backup.sh` / `infra/scripts/backup-objects.{mjs,test.mjs}` | core/search PostgreSQL `0700/0600`、`flock`、staging→directory rename 原子集合；对象逻辑导出复用既有 API/S3 SDK并离线校验 | 当前代码、安装及实测对象集合见顶部 CURRENT；轮转与恢复边界见备份手册 |
 | `infra/scripts/traffic-report.sh` | vnStat JSON → 流量账单静态页渲染（cron 每 5min，2026-08-01） | 已部署云上 |
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |

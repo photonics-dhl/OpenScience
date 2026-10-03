@@ -1479,6 +1479,15 @@ expanded into wildcard deletion, Docker system/image/volume prune, evidence or
 backup retention, cache cleanup, log deletion, or volume cleanup. Those remain
 separate audited operations requiring an exact scope.
 
+Stable-host cleanup can prepare the same retention transaction with `prepare-cleanup
+--expected-active <full-SHA> --expected-rollback <full-SHA> --lock-fd 9`.
+It requires the existing deployment lock, matching trusted active/rollback markers,
+and no deployment journal, failure or pending intent. Preparation deletes nothing;
+inspect the exact plan and systemd/manual provider dependencies before using the
+existing `complete`/`resume`. Container and image reference protections remain.
+It never prunes volumes, caches, backups or media evidence. Actual execution status
+belongs to the CURRENT handoff, not this procedure.
+
 ### 5.42 Task 7 release, parser precondition and hygiene lessons (2026-08-29)
 
 Application/release `5e5ae36a08ae314d0c35ee2b976e306aec73d219`
