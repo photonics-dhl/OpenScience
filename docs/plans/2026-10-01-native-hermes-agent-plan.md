@@ -1,10 +1,12 @@
 # 原生 Hermes Agent 接入
 
+> 接入设计与历史实施记录：原生论文及自动规划入口已部署，真实科学质量仍待验收；当前版本、任务、断点与下一步只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。下方阶段性准备状态不得作为重新接入或重新付费的指令。
+
 10-02最新用户范围：本轮先交付生图前的正确物理事实、画面叙事、完整指示词、构图和艺术风格及原文依据；用户将更换生图方式。原生理解与规划继续，暂停本轮旧图片通道调用、新图像receiver及生成后像素接线；后续生成方式待用户决定。旧任务、收费、认可图片和公开版本保持，原未完成的其他需求不据此宣称已交付。实际候选、线上及质量只见CURRENT。
 
-10-02规划准备：已有generateIllustrationStoryboard内科学物化原样提取为materializeIllustrationScience，旧入口薄委托；从同Claims/settings/原图映射重建原lookup与场景上限，数字、标签和来源守卫不变。原生caller尚未接入；这只是复用准备，无新模型、收费、权限或Prompt。RED5→184/184、WorkerTC0及2文件独立High GO，整文件7条旧lint与918d逐项相同、0新增；不能据此宣称Native规划或科学/艺术正确。
+10-02历史规划准备（当时记录）：已有generateIllustrationStoryboard内科学物化原样提取为materializeIllustrationScience，旧入口薄委托；从同Claims/settings/原图映射重建原lookup与场景上限，数字、标签和来源守卫不变。当时原生caller尚未接入（现已部署，见CURRENT）；这只是当时复用准备，无新模型、收费、权限或Prompt。RED5→184/184、WorkerTC0及2文件独立High GO，整文件7条旧lint与918d逐项相同、0新增；不能据此宣称Native规划或科学/艺术正确。
 
-用户已明确授权：Hermes专指已安装的NousResearch Hermes Agent，由它承担论文理解、科学Skill发现/引用加载、按问题溯源与图文规划。GPT只执行Images2.5生图。运行状态只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不再询问是否接入。
+用户已明确授权：Hermes专指已安装的NousResearch Hermes Agent，由它承担论文理解、科学Skill发现/引用加载、按问题溯源与图文规划。生图暂停至用户提供新API；GPT来源审阅只留历史兼容。运行状态只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不再询问是否接入。
 
 ## 已核事实与保留边界
 

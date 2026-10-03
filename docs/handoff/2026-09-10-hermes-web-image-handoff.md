@@ -10,18 +10,20 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
 
 ## 当前锚点
-- 10-03只读实核：app `c6dff447c077fe4c47024681259fc2597cadf364`；rollback `800f971420feaba58849b75af9b6cb47ce5af8c7`。API/Worker running、OOM=false；两者Native runtime/catalogue均同c6完整SHA、MiniMax-M3，broker timer enabled/active，无活动Native实例。证据 `tmp/hermes-cleanup-20261003/runtime-read.json`。
+- 10-03发布后实核：app `2db4cfa2cf44664b07128e8349e6a2c3ef11e1ac`；rollback `c6dff447c077fe4c47024681259fc2597cadf364`。API/Worker running、OOM=false；两者Native runtime/catalogue均同2db完整SHA、MiniMax-M3，broker timer enabled/active，采样时无活动Native实例（随后已创建下方v12）。证据 `tmp/hermes-cleanup-20261003/runtime-after.json`。
 - 本轮起点HEAD `ce513eba57261d368756ddf8ce0ca75243adb90a`，干净；同分支新增候选见下行，文档提交不代表部署。
 - c6精确CI37038196528 success、正常app发布和Native安装激活exit0。直接紧凑审阅终稿已接通，paper_review仅作可选格式反馈；107定向pass/8Windows UDSskip、TC/lint/High GO。工程通过与科学质量分开。
 - 原生科学分镜caller已部署：复用已审科学来源、原文/图页、设计Skill和共享科学艺术物化，保存私有完整prompt；自动run在旧审批和图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图，GET/UI明确image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
 
 ## 当前科学断点
-- 最新唯一私有v11：ingestion `02c1e0f9-68dd-4b9b-beb9-7a3224b26b41`，task `8e184f93-937c-4022-9247-9616fde89b0c`，key `native-hermes-paper-20261003-cds-v11`。复用原26页/85段SourceMap；3分42秒/12paid回复后failed，完整end_turn终稿存在，未采用/规划/生图。
+- 历史私有v11：ingestion `02c1e0f9-68dd-4b9b-beb9-7a3224b26b41`，task `8e184f93-937c-4022-9247-9616fde89b0c`，key `native-hermes-paper-20261003-cds-v11`。复用原26页/85段SourceMap；3分42秒/12paid回复后failed，完整end_turn终稿存在，未采用/规划/生图。
 - 格式拒收：accepted附重复正文和来源；五字段逐字同稿，results只删五处换行。现有accepted必须选择原稿，不能把修改伪装为接受；仅修格式不能消除科学错误。
 - 独立科学NO-GO：材料内边缘损伤阈值错放狭缝中心、正文/附录公式冲突未披露、10cm算例条件泛化、背景跨方法因果外推、复现强断言。完整审查见 `tmp/ro-journey-20260929/native-real-paper-v11-scientific-acceptance.md`。
 - 真实Skill使用：读取scientific-critical-thinking及完整原方法，读P00001–35/85并看原页6/7；没有paper_search、source-review Skill或draft后回读，关键p24/P00076未读。overview已包含附录标题，不能归罪于缺源或未安装Skill。
-- 本轮候选：把现有openscience-source-review明确放到draft_ready后的任务指令及现有Skill方法，方法按保留结论的对象/量/条件/算例渐进核源，说明来源冲突和accepted选择原稿。没有新模型阶段、额度、门禁或科学答案注入；守卫及原paid工具description/schema不改。72项科学物化、WorkerTC、三文件lint、文档audit/lint通过；High指出历史draft反馈不可变，已保留原反馈。最终High/CI及部署状态待更新，不能声称Hermes已实际遵循或科学改善。
-- 下一步：核对候选方法在实际原生任务中的消费，再评估真实科学与下游自动计划。只运行有具体修复依据的最小私有路径，不盲发新全文分析；不调用旧生图通道。
+- 本轮已部署：把现有openscience-source-review明确放到draft_ready后的任务指令及现有Skill方法，方法按保留结论的对象/量/条件/算例渐进核源，说明来源冲突和accepted选择原稿。没有新模型阶段、额度、门禁或科学答案注入；守卫及原paid工具description/schema不改。72项科学物化、WorkerTC、三文件lint、文档audit/lint通过；High指出历史draft反馈不可变，已保留原反馈。最终High GO，精确CI37087580638 success，正常app发布及Native安装激活exit0，两运行时/方法目录配对；证据 `tmp/hermes-cleanup-20261003/{ci-result.json,deploy.log,native-activation.log}`，不能声称Hermes已实际遵循或科学改善。
+- 单一新私有验证v12：ingestion `d9cafbd9-ff1c-415e-ae17-42e455bd904b`，task `ac817822-4a03-4b92-a903-aa7f584ac985`，key `native-hermes-paper-20261003-cds-v12`；正常有费用重分析，复用原PDF/SourceMap，不重新OCR，不重开v11。已failed（02:14:36.994Z，3分27.399秒/11paid）；accepted-only表示正确，但C2的真实P8/P9未归入method字段来源，最终守卫拒收。独立科学NO-GO：近垂直被写成对头、单电子/电子束运算混用、10cm传播算例写成必要门槛；未采用/规划/生图，不重开或追加连续新分析。科学记录 `tmp/hermes-cleanup-20261003/real-paper-science-v12.md`；创建/进度/原答证据在 `tmp/hermes-cleanup-20261003/real-paper-*-v12.*`。
+- 新候选（未部署）：草稿回执配对本次实际选中的summary和完整Claim及完整原P，复用原field-Claim诊断提前提示现有绑定错误；历史无context/旧context/新rich描述精确区分，旧paid工具/反馈/属性顺序不变。113定向pass、WorkerTC/四文件lint0、独立High GO；旧源码两项真实回归RED，原v12真实notes离线捕获1/1、零provider，未修或采用其科学断言。证据 `tmp/hermes-cleanup-20261003/paired-*`；无新模型阶段/额度/门禁/Domain或API变化。
+- 下一步：完成候选精确CI及app/Native配对，再核对方法在实际原生任务中的消费，再评估真实科学与下游自动计划。只运行有具体修复依据的最小私有路径，不盲发新全文分析；不调用旧生图通道。
 
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |

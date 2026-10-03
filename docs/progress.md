@@ -5,7 +5,7 @@
 ## 本轮检查点
 
 - 新私有v11在3分42秒返回完整终稿，但accepted表示被拒收且独立科学NO-GO；未采用、规划或生图。已定位到实际方法执行与核心来源依赖缺口，不能把加载Skill或格式兼容视为解决。
-- 本轮候选明确连接现有draft后的source-review Skill与渐进核源指引，科学/来源/paid守卫不变。删无调用旧包装，清理已结束的baseline副本，压缩CURRENT/本页/能力入口，去掉失效版本和下一步；72科学物化、TC/lint及文档检查通过；原draft反馈保留以保护paid回放，最终独立审查及部署状态见CURRENT。
+- 本轮已配对部署新任务指令与Skill，明确连接现有draft后的source-review Skill与渐进核源指引，科学/来源/paid守卫不变。删无调用旧包装，清理已结束的baseline副本，压缩CURRENT/本页/能力入口，去掉失效版本和下一步；72科学物化、TC/lint及文档检查通过；原draft反馈保留以保护paid回放，最终High及精确CI通过；单一私有v12复用原SourceMap，3分27秒完成但终态来源绑定拒收，独立科学仍NO-GO；未采用/规划/生图。新候选补本次真实草稿句子与来源的并排对照，原诊断提前提示，旧paid回放不变；113/TC/lint/High通过，待精确CI与部署。身份与证据见CURRENT。
 - 原PDF、SourceMap、认可图、公开版本、付费回答和失败日志均保留；历史map/reduce/GPT兼容消费者仍存在，不按“已经Native”盲删。
 
 ## 用户目标与其余交付

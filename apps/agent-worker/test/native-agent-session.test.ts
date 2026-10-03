@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionBinding } from '../src/native-agent/session';
 import { AiGateway, AnthropicCompatProvider, nativeAgentSdkRequest, type GatewayCompletion, type TextProvider } from '@openscience/ai-gateway';
-import { nativePaperToolProfile } from '../src/native-agent/paper-task';
+import { nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL } from '../src/native-agent/paper-task';
+import { createNativeScientificMaterializer } from '../src/extractor';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import type { DocumentSourceMap } from '@openscience/domain';
 
 const binding = { taskId: 'task', artifactId: 'artifact', documentSha256: 'document', sourceMapHash: 'map',
   runtimeId: 'fixed-installed-runtime', skillCatalogueId: 'fixed-catalogue', model: 'MiniMax-M3', allowedTools: ['paper_read'],
@@ -11,7 +14,7 @@ const request = { model: 'MiniMax-M3', messages: [{ role: 'system', content: 'fi
 const completion: Omit<GatewayCompletion, 'provider' | 'promptHash'> = { model: 'MiniMax-M3', text: 'source checked', finishReason: 'stop',
   usage: { inputTokens: 20, outputTokens: 10 }, providerContent: { provider: 'minimax', model: 'MiniMax-M3',
     content: [{ type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'text', text: 'source checked' }] } };
-function fixture(firstTool: boolean | number = false, toolInput: Record<string, unknown> = {}) {
+function fixture(firstTool: boolean | number = false, toolInput: Record<string, unknown> = {}, toolName = 'paper_read') {
   let state: NativeAgentSessionState | null = null;
   let calls = 0; let authorized = true; let loseAnswer = false; let lease = true; let loseLeaseAfterStart = false; let revokeAfterHTTP = false; let reportedModel = completion.model;
   let outputTokens = completion.usage.outputTokens; const requestedAllowances: (number | undefined)[] = [];
@@ -24,9 +27,9 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     const output = { ...structuredClone(completion), usage: { ...completion.usage, outputTokens } };
     if (revokeAfterHTTP) authorized = false;
     if (calls <= Number(firstTool)) return { ...output, text: '', finishReason: 'tool_calls',
-      toolCalls: [{ id: `read-${calls}`, type: 'function', function: { name: 'paper_read', arguments: JSON.stringify(toolInput) } }],
+      toolCalls: [{ id: `read-${calls}`, type: 'function', function: { name: toolName, arguments: JSON.stringify(toolInput) } }],
       providerContent: { provider: 'minimax', model: 'MiniMax-M3', content: [
-        { type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'tool_use', id: `read-${calls}`, name: 'paper_read', input: toolInput }] } };
+        { type: 'thinking', thinking: 'opaque', signature: 'private' }, { type: 'tool_use', id: `read-${calls}`, name: toolName, input: toolInput }] } };
     return { ...output, model: reportedModel, finishReason, ...(providerStopReason ? { providerStopReason } : {}) };
   } };
   const gateway = new AiGateway({ providers: [provider] });
@@ -54,6 +57,45 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it.each(['paid-source-only', 'candidate-and-source'])('replays the %s draft comparison receipt through actual Session identity without another model submission', async format => {
+    const text = 'The source describes a simulation, its comparison and the conditions under which its result holds.';
+    const parser = { name: 'fixture', version: '1' };
+    const map: DocumentSourceMap = { artifactId: 'paper', contentHash: 'b'.repeat(64), parser,
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{ id: 'p1', kind: 'paragraph', text,
+        boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] };
+    const selection = { fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])), claimToolCallIds: ['claim-core'], needsMoreEvidence: [] };
+    const materializer = (profile: { reviewContext?: boolean; reviewCandidate?: boolean }) => {
+      const worker = createNativeScientificMaterializer(map, () => ['P00001'], profile);
+      SDF_CORE_FIELDS.forEach((field, order) => worker.field({ field, summary: text, sourcePassageIds: ['P00001'] }, order, `field-${field}`));
+      worker.claim({ clientKey: 'core', kind: 'core', sourceField: 'insight', statement: text, conditions: [], limitations: [],
+        sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }, 6, 'claim-core');
+      return worker;
+    };
+    const paidDescription = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
+    const original = { ...request, tools: [
+      { type: 'function', function: structuredClone(NATIVE_PAPER_FIELD_TOOL) },
+      { type: 'function', function: structuredClone(NATIVE_PAPER_CLAIM_TOOL) },
+      { type: 'function', function: { ...structuredClone(NATIVE_PAPER_NOTE_DRAFT_TOOL),
+        description: format === 'paid-source-only' ? paidDescription : NATIVE_PAPER_NOTE_DRAFT_TOOL.description } },
+    ] };
+    const limits = { allowedTools: ['paper_field', 'paper_claim', 'paper_draft'] };
+    const f = fixture(1, selection, 'paper_draft'); const session = f.create(limits);
+    const first = await session.complete(original);
+    const feedback = materializer({ reviewContext: true, reviewCandidate: format === 'candidate-and-source' }).draft(selection, 7, 'read-1');
+    expect(feedback.status).toBe('draft_ready');
+    const next = { ...original, messages: [...original.messages, first.choices[0]!.message,
+      { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(feedback) }] };
+    const last = await session.complete(next);
+    const profile = nativePaperToolProfile(f.state);
+    const replayedFeedback = materializer(profile).draft(selection, 7, 'read-1');
+    expect(JSON.stringify(replayedFeedback)).toBe(JSON.stringify(feedback));
+    const restored = f.create({ allowedTools: profile.allowedTools });
+    const tools = profile.sourceTools.map(tool => ({ type: 'function', function: tool }));
+    expect(await restored.complete({ ...original, tools })).toEqual(first);
+    expect(await restored.complete({ ...next, tools, messages: [...original.messages, first.choices[0]!.message,
+      { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(replayedFeedback) }] })).toEqual(last);
+    expect(f.calls).toBe(2);
+  });
   it('replays a known missing call unchanged and continues the same paid history without repeating the original submission', async () => {
     const f = fixture(); f.reportFinishReason('other'); f.reportProviderStopReason('tool_use');
     const first = await f.create().complete(request);

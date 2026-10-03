@@ -15,7 +15,67 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
     conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] });
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
+const paidContextDescription = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
 describe('actual native Agent scientific materializer', () => {
+  it('pairs a new draft with its actual selected sentences and full Claim rather than only their IDs', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(null));
+    saveNotes(worker);
+    worker.field({ field: 'method', summary: 'This discarded note is not part of the selected candidate.', sourcePassageIds: ['P00001'] }, 7, 'discarded');
+    const receipt = worker.draft(selectedNotes(), 8, 'paired-draft');
+    expect(receipt).toMatchObject({ status: 'draft_ready', reviewContext: {
+      fields: SDF_CORE_FIELDS.map(field => ({ field, ...draft().fields[field] })), claims: draft().draftClaims,
+      knownContractIssues: [], passages: [{ id: 'P00001', text: source }],
+    } });
+    expect(JSON.stringify(receipt)).not.toContain('discarded note');
+    const context = receipt.reviewContext as { fields: Array<{ sourcePassageIds: string[] }>; claims: Array<{ conditions: string[] }> };
+    context.fields[0]!.sourcePassageIds.push('foreign'); context.claims[0]!.conditions.push('invented');
+    expect(worker.draft(selectedNotes(), 9, 'paired-again').reviewContext).toMatchObject({
+      fields: SDF_CORE_FIELDS.map(field => ({ field, ...draft().fields[field] })), claims: draft().draftClaims,
+    });
+  });
+  it('reports the existing field-Claim binding issue while keeping the draft private and the final guard intact', () => {
+    const larger = structuredClone(map); larger.pages[0]!.blocks[0]!.text = source.repeat(8);
+    larger.pages[0]!.blocks.push({ ...structuredClone(larger.pages[0]!.blocks[0]!), id: 'later', text: 'A different reported comparison and condition. '.repeat(20) });
+    const worker = createNativeScientificMaterializer(larger, () => ['P00001', 'P00002'], nativePaperToolProfile(null));
+    saveNotes(worker);
+    const claim = { ...draft().draftClaims[0], sourceBindings: [{ sourcePassageId: 'P00002', relation: 'supports' }] };
+    expect(worker.claim(claim, 7, 'claim-other-field-source').status).toBe('claim_saved');
+    const selected = { ...selectedNotes(), claimToolCallIds: ['claim-other-field-source'] };
+    const receipt = worker.draft(selected, 8, 'draft-source-warning');
+    expect(receipt).toMatchObject({ status: 'draft_ready', reviewContext: { knownContractIssues: [
+      'draftClaims[0].sourceBindings[0].sourcePassageId: outside_field_source_ids',
+    ] } });
+    expect(() => worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'draft-source-warning' }))).toThrow('outside_field_source_ids');
+    worker.field({ field: 'insight', summary: source, sourcePassageIds: ['P00001', 'P00002'] }, 9, 'aligned-field');
+    const aligned = { ...selected, fieldToolCallIds: { ...selected.fieldToolCallIds, insight: 'aligned-field' } };
+    expect(worker.draft(aligned, 10, 'aligned-draft')).toMatchObject({ reviewContext: { knownContractIssues: [] } });
+    expect(worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'aligned-draft' })).core.insight).toBe(source);
+  });
+  it('preserves the original paid comparison projection instead of retrofitting candidate text or diagnostics', () => {
+    const saved = { binding: { allowedTools: ['paper_field', 'paper_claim', 'paper_draft'] }, turns: [{ request: { options: { tools: [
+      { type: 'function', function: { ...structuredClone(NATIVE_PAPER_NOTE_DRAFT_TOOL), description: paidContextDescription } },
+    ] } } }] } as unknown as NativeAgentSessionState;
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(saved));
+    saveNotes(worker);
+    const context = worker.draft(selectedNotes(), 7, 'paid-draft').reviewContext;
+    expect(context).toEqual({ source: { artifactId: map.artifactId, documentSha256: map.contentHash },
+      fields: SDF_CORE_FIELDS.map(field => ({ field, sourcePassageIds: ['P00001'] })),
+      claims: [{ clientKey: 'core-a', sourceField: 'insight', sourceBindings: draft().draftClaims[0]!.sourceBindings }],
+      passages: [{ id: 'P00001', pageStart: 1, pageEnd: 1, text: source }],
+    });
+  });
+  it('pairs an earlier selected call with its own text after a concurrent newer candidate has been stored', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(null));
+    saveNotes(worker);
+    const updated = { ...selectedNotes(), fieldToolCallIds: { ...selectedNotes().fieldToolCallIds, method: 'new-method' } };
+    const newerSummary = source + ' This is the newer candidate.';
+    worker.field({ field: 'method', summary: newerSummary, sourcePassageIds: ['P00001'] }, 9, 'new-method');
+    expect(worker.draft(updated, 10, 'new-draft').status).toBe('draft_ready');
+    expect(worker.draft(selectedNotes(), 7, 'old-draft')).toMatchObject({ reviewContext: {
+      fields: SDF_CORE_FIELDS.map(field => ({ field, ...draft().fields[field] })), claims: draft().draftClaims,
+    } });
+    expect(worker.finish(JSON.stringify({ ...compactReview(), draftToolCallId: 'new-draft' })).core.method).toBe(newerSummary);
+  });
   it('keeps original paid paper tools and their old feedback while fresh tasks receive comparison context', () => {
     const old = { ...structuredClone(NATIVE_PAPER_NOTE_DRAFT_TOOL), description: 'Original paid draft tool description' };
     const saved = { binding: { allowedTools: ['paper_field', 'paper_draft'] }, turns: [{ request: { options: { tools: [

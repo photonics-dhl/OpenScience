@@ -3010,7 +3010,7 @@ function nativeReviewShapeFeedback(value: unknown): string {
 }
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
-export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean } = {}) {
+export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean; reviewCandidate?: boolean } = {}) {
   let candidate: ScientificCompositionResponse | undefined;
   let candidateOrder = -1;
   let candidateToolCallId: string | undefined;
@@ -3133,11 +3133,16 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       const selectedIds = new Set([...SDF_CORE_FIELDS.flatMap(field => value.fields[field].sourcePassageIds), ...candidateClaimPassageIds(value.draftClaims)]);
       const reviewContext = options.reviewContext ? {
         source: { artifactId: sourceMap.artifactId, documentSha256: sourceMap.contentHash },
-        fields: SDF_CORE_FIELDS.map(field => ({ field, sourcePassageIds: [...value.fields[field].sourcePassageIds] })),
+        fields: SDF_CORE_FIELDS.map(field => ({ field, ...(options.reviewCandidate ? { summary: value.fields[field].summary } : {}),
+          sourcePassageIds: [...value.fields[field].sourcePassageIds] })),
         claims: (value.draftClaims ?? []).map(raw => {
           const claim = raw as { clientKey: string; sourceField: string; sourceBindings: unknown[] };
-          return { clientKey: claim.clientKey, sourceField: claim.sourceField, sourceBindings: structuredClone(claim.sourceBindings) };
+          return options.reviewCandidate ? structuredClone(raw)
+            : { clientKey: claim.clientKey, sourceField: claim.sourceField, sourceBindings: structuredClone(claim.sourceBindings) };
         }),
+        ...(options.reviewCandidate ? { knownContractIssues: reviewedClaimRepairIssues({
+          ...normalizeScientificComposition(value), claimSuggestions: value.draftClaims,
+        }, undefined, 'draftClaims') } : {}),
         passages: provided.filter(p => selectedIds.has(p.id)).map(p => ({ id: p.id, pageStart: p.pageStart, pageEnd: p.pageEnd, text: p.text })),
       } : undefined;
       return { status: 'draft_ready',
