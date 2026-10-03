@@ -109,7 +109,14 @@ export async function runHostedNativeTask(input: {
           settled = true; respond(res, 200, { received: true });
           return resolve({ finalResponse: last.response.text, observedPassageIds: input.paper.observedPassageIds });
         }
-        respond(res, 200, { received: true }); return stop('[blocked] Native Agent stopped; original receipts retained');
+        const state = await input.store.read();
+        const reachedTurnLimit = value.status === 'stopped' && state?.binding.taskId === input.config.taskId
+          && state.binding.maxTurns === input.config.maxTurns && state.turns.length === input.config.maxTurns
+          && state.turns.every(turn => turn.state === 'completed');
+        respond(res, 200, { received: true });
+        return stop(reachedTurnLimit
+          ? `[blocked] Native Agent stopped at its ${input.config.maxTurns}-turn limit; original receipts retained`
+          : '[blocked] Native Agent stopped; original receipts retained');
       }
       blocked();
     } catch (error) {

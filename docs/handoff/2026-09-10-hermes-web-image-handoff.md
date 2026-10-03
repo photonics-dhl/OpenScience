@@ -10,19 +10,22 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
 
 ## 当前锚点
-- 分支release/onchip-production-line；10-03已发布源代码提交/app `e48ea03982d6650577e10400503f28ea206e527a`，rollback `0d86f351dc01114ffaf517314a5cd8196f2a0bcb`。最后文档同步提交按Git读取，不代表另一轮部署。
-- 精确CI37114648899 success及独立High GO；正常app发布exit0，公网/exact release及原部署事务通过。API/Worker running、OOM=false；两者均使用`installed-native-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`及`project-catalogue-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`、MiniMax-M3，timer enabled/active。adapter/资源未变，经High兼容GO复用该安装，未堆新副本。证据 `tmp/hermes-cleanup-20261003/native-preflight-{ci-result.json,deploy.log,runtime-after.json}`。
+- 分支release/onchip-production-line；10-03已发布源代码提交/app `29de74f2e8f53765283a34055850c1f40122575c`，rollback `e48ea03982d6650577e10400503f28ea206e527a`。最后文档同步提交按Git读取，不代表另一轮部署。
+- 精确CI37119454968 success及独立High GO；从临时干净29de工作树正常发布exit0，公网/exact release及原部署事务通过；随后沿现有安装器defer配对成功。API/Worker running、OOM=false，均为`installed-native-29de74f2e8f53765283a34055850c1f40122575c`/`project-catalogue-29de74f2e8f53765283a34055850c1f40122575c`、MiniMax-M3，timer enabled/active。证据 `tmp/hermes-cleanup-20261003/consolidated-review-{ci-result.json,deploy-clean.log,activation.json,runtime-after.json}`。canonical并发文档提交及其他会话Compose/保留脚本改动不混入本次发布；首次本地HEAD不符拒绝未触服务器。
 - 作者和独立审阅已使用真实paper_review回执保存科学数据，不依赖最后普通回复抄写JSON；旧paid回放及来源/权限/正常stop验证保持。作者实际提交已成功，独立审阅的最新状态见下一节。
 - 原生科学分镜caller已部署：同源已审Claims、原文/图页、设计Skill及共享物化保存私有完整prompt。自动run在审批及旧图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图；GET/UI为image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
 
 ## 当前科学断点与下一步
+- 29de配对后仅创建一次正常新分析：run `caef5a59-76ae-410a-bfed-6c48cf284647`、ingestion `da0fcde0-6c94-4dda-8fff-d7379beeb17b`、author `4eba4ea4-65b9-494b-84bc-e6e19661e1e0`；复用原confirmed215d/24e及原PDF/SourceMap，普通收费/max9。11:49–11:54Z作者32轮后failed，未进入独立审阅、未物化版本：末次paper_draft字段映射为item数组，多次非核心Claim缺父项却只收到通用格式反馈；已复现原生迭代耗尽后的额外无tools总结请求导致协议拒绝。应用/配对仍正确，API/Worker无OOM。尚无新科学或计划验收。`consolidated-review-create.json`及只读status记录结果；创建脚本和远端native-consolidated-review-20261003-cds-1收据不得重放/删除。下一步完成精确反馈与停止候选的最终审查/CI并整合并发运维配置后正常发布；不扩轮数、不重开失败task或直接重发。生图前科学和完整prompt仍未完成；新API前旧生图保持暂停。
 - 本次run `604e8d9a-c573-4b0d-a404-8dabc5cb664a`、ingestion `b0e4d11c-492f-453a-85af-e9c3337fd4cb`，成功author `c801a07f-8441-4f9d-814e-f4c492474c5f`（约6分14秒/23paid轮、8原页图、两科学Skill）；作者尚需修正角度、传播距离、损伤位置、束流算例及非普适表述。独立核源记录 `tmp/hermes-cleanup-20261003/independent-author-science.md`；原稿/CP/PDF/26页85段Map保留，不再执行创建脚本。
 - 0d86修复Worker自动调度漏runtime；初始化恢复沿原retry/同run/原作者，76+280 Domain、80 Worker及TC/build/High/精确CI通过。仅当前run/ingestion已提交才阻断，旧同PDF版本771ff7f3保持。实际恢复回执 `independent-real-resume.json`：version3→4，没有重跑作者或再扣作者费用。
 - reviewer `271fcec7-bf89-4199-a546-03c3b065305a` 首次在任何模型提交前被restoration比较拒绝，错误 `[blocked] Native author science/source data changed`。当时attempt1/retry0、source retry0，1原reservation/1绑定审计、0Gateway调用、无Native CP，证据 `native-review-preflight.json`。e48发布后仅执行一次原retry恢复：同reviewer attempt2已succeeded/18轮，原作者不变；实际调用两科学Skill、paper_read6次、paper_view7次，保留原1笔reservation。回执 `independent-native-preflight-resume.json`；不得重放创建、旧初始化或本次恢复脚本。
 - 根因用真实稿/Map离线复现：仅evidenceSegments定位框存在IEEE-754末位差异，其他科学/来源字段相同。已发布修复复用resolveSourceLocator既有容差，仅归一已验证定位框；真实离线1/1（合成决策，不是科学认可）、Worker120、Domain376、Web26及浏览器fixture2/2、相关TC/build/lint、High/精确CI通过。Domain原20lint基线保持，未引入新错误。
 - 审阅结果独立High科学NO-GO：limitations已区分10/100cm，results却仍保留≥10cm；另有入射角/公式条件遗漏、束流分组矛盾、损伤内缘遗漏、既有方法不可能与高ζ低光子数的过度外推。详见independent-reviewer-science.md，不能将review_received称合格。自动物化私有draft b2508270-e8a8-4014-a8f9-e8511a16ed4b（6Claims/35Evidence），没有公开。
 - 自动分镜task 7226c434-a5b4-483f-9809-ec73937248b3在1个已付费帧后因Native transport停止；run现failed/version11，没有资产或新图片。真实工具参数保存在independent-real-status.json。已用实际native28d方法复现：超过100000字符的工具结果被替换成预览，102278字符重建context变1590字符非JSON，Worker在第二次模型请求前拒绝。当前任务精确DB上下文已用线上编译投影取得：126001字符/164069字节，6Claims/35Evidence/0original、无任务后Claim改动、JSON往返完全一致（native-illustration-context-exact.json）；per-instance原回执保真适配已实现task_agent.py：当前paper调用ID/name/args配对、保留原callback并finally恢复、在图片追加前回填原结果。Python25pass/1Windows skip、真实native方法126001/270000字符回放与host/Session/Gateway7项（含超限拒绝）通过；最终增量代码High GO。原大小/来源校验不放宽，不重放失败任务。
-- 反馈/方法候选已补实际合并六维与Claims回执，纠正旧Skill的可选paper_review/最终JSON及paper_draft-only说明；同任务循环核对修订是否传播到其他字段，未新增模型阶段。122定向及最终TC/lint、独立CODE High已过；形状诊断不再误报作者身份，最终普通请求确实消费合并稿。Linux资源检查留精确CI；需新不可变catalogue，不能冒称应用更新已改变28d资源。下一步完成传输根因与独立High、精确CI，再按正常发布安装和有界真实路径验证；新API前旧生图继续暂停。
+- 29de已发布合并六维/Claims反馈及Skill协议修正：同任务循环核对修订传播，未新增模型阶段；122定向/TC/lint、High和精确CI含Linux资源检查通过。形状诊断不再误报作者身份，最终普通请求确实消费合并稿。纸面工具原回执保真修复亦已上线，真实126001字符/270000聚合及Session/Gateway限额回放通过；实际科学及计划效果以本次新run为准，不能沿用旧稿NO-GO当新稿结论或用测试代替科学验收。
+- 新作者轨迹诊断：20轮缺parent、21轮补父项后两条保存；另一条引用P00014但到30轮才完整读取，31轮遂保存。候选在原claim校验返回路径/原因并明确真实父clientKey与已读来源，未改变接受条件；按原工具描述保留旧paid反馈，132定向/TC/lint/High通过。最后transport根因已以实际29de dispatcher/normalizer和Host复现：原参数未变，32轮paper_draft正确返回invalid_draft；原生达到max_iterations后额外发无tools的总结请求，被SDK协议解析拒绝，未进入Session/Provider。不是参数变造或已证实网络故障。
+- 当前停止修复候选：实例覆盖原_handle_max_iterations，保留消息并直接NativeTaskStopped，沿既有finally→stopped收尾；Host只按可信原config/store恰达上限且全completed给事实性提示，不信任调用者声明。175 Worker pass/12 Windows Unix跳过、真实Host停止回放1/1（先RED）、Python27pass/1既有Windows跳过、实际native零总结请求回放、TC/scoped lint通过；新增代码最终High GO（显式stopped边界已修）；精确Linux CI待完成。未扩预算/回收额度/重开失败任务；新adapter需新运行时配对。具体日志native-turn-limit-*与independent-domain-native-exhaustion-*。
 - 历史v11–v13失败/paid证据、33aa独立角色增量及早期终稿JSON故障见Git0d86本页与tmp/hermes-cleanup-20261003/、tmp/ro-journey-20260929/；不是新建任务/重放步骤。旧bridge唯一基线失败、research-run.ts既有20lint均保留，不改不相关行为。安装0.10.0缺最新structured plugin/grounded-citations；不因名称存在就冒称可用，不盲升级或叠Skill。
 
 ## Illustration delivery
@@ -45,6 +48,7 @@
 - 公司：只负责正式上线与年度运维，我方继续功能开发；脱敏包/屏幕共享，不给GitHub/服务器账号。21项PDF修正已合入部署；期刊真实试用、版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。
 - 已知独立债务：第14页BGE表格超token限制已恢复lexical（69active chunks），dense未完成；旧v11的58chunks保留。备用key已修好，当前失败无余额耗尽证据，不再重复鉴权任务。视频43旧缓存的13.04GB清理已完成，不重放维护。
 - 清理仅确认归属且无活动/发布/回退依赖的生成物；不删浏览器profile/spool、历史paid回答、模型权重、用户资料或他人worktree。来源/匿名PDF下载边界及公开版本保护保持。
+- 本轮临时native-consolidated-review-release工作树发布后已归档移除并prune，证据留ignored tmp。并发运维会话负责Compose内存限制、备份/对象备份及release保留脚本；不得混入本科学提交。后续发布须整合其已审配置，避免重建服务丢失已设置资源上限；不以本应用发布覆盖其服务器锁/清理工作。
 
 ## Read first / 历史
 - 启动读本页、必要的当前代码/服务器事实与[能力台账](../runbooks/hermes-capability-registry.md)对应条目；管理任务用现有read-current-management-context/Taskmaster，不另建状态库。

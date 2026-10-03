@@ -16,6 +16,53 @@ class NativeStub:
 
 
 class AdapterTests(unittest.TestCase):
+    def test_iteration_exhaustion_stops_without_native_summary_or_changes_to_paid_history(self):
+        for limit in [32, 5]:
+            with self.subTest(limit=limit):
+                messages = [{'role': 'assistant', 'content': '', 'tool_calls': [{'id': f'paid-{limit}'}]},
+                    {'role': 'tool', 'tool_call_id': f'paid-{limit}', 'content': ' {"status":"invalid_draft"}\n'}]
+                before = json.dumps(messages)
+                summary_calls = []
+                class NativeConversation:
+                    def __init__(self):
+                        self.max_iterations = limit
+                        self._api_call_count = limit
+                    def run_conversation(self, *args, **kwargs):
+                        return {'final_response': self._handle_max_iterations(messages, self._api_call_count)}
+                    def _handle_max_iterations(self, history, count):
+                        history.append({'role': 'user', 'content': 'Native summary request'})
+                        summary_calls.append(count)
+                        return 'Synthetic final summary'
+                agent = create_task_agent_class(NativeConversation, lambda: None, {'paper_draft'})()
+                with self.assertRaises(NativeTaskStopped):
+                    agent.run_conversation('Bound task')
+                self.assertEqual(json.dumps(messages), before)
+                self.assertEqual(summary_calls, [])
+                self.assertEqual(agent.max_iterations, limit)
+                self.assertEqual(agent._api_call_count, limit)
+
+    def test_exhaustion_during_existing_format_continuation_restores_its_original_limit(self):
+        summary_calls = []
+        class NativeConversation:
+            def __init__(self):
+                self.max_iterations = 8
+                self.runs = 0
+            def run_conversation(self, *args, **kwargs):
+                self.runs += 1
+                if self.runs == 1:
+                    return {'api_calls': 3, 'messages': [{'role': 'assistant', 'content': 'Incomplete', 'finish_reason': 'tool_calls'}]}
+                return {'final_response': self._handle_max_iterations(kwargs['conversation_history'], self.max_iterations)}
+            def _handle_max_iterations(self, messages, count):
+                summary_calls.append(count)
+                return 'Synthetic final summary'
+        agent = create_task_agent_class(NativeConversation, lambda: None, {'paper_draft'})()
+        with self.assertRaises(NativeTaskStopped):
+            agent.run_conversation('Bound task')
+        self.assertEqual(agent.runs, 2)
+        self.assertEqual(agent.max_iterations, 8)
+        self.assertIsNone(agent._native_format_context)
+        self.assertEqual(summary_calls, [])
+
     def continuation_fixture(self, context_tokens=1000, mutation=None, threshold=256000, fail=False):
         history=[{'role':'user','content':'Original goal'}, {'role':'assistant','content':'Preparing review.',
             'finish_reason':'tool_calls','reasoning_details':[{'opaque':'unchanged'}]}]

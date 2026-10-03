@@ -70,6 +70,11 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
             # Task checkpoints use complete SDK responses; use its existing non-stream path.
             self._disable_streaming = True
 
+        def _handle_max_iterations(self, messages, api_call_count):
+            # Native's extra summary request is outside the task's paid turn budget.
+            # Keep the original history; task_runtime reports the normal stopped outcome.
+            raise NativeTaskStopped('Native task iteration budget exhausted')
+
         def run_conversation(self, user_message, system_message=None, conversation_history=None, task_id=None, **kwargs):
             result = super().run_conversation(user_message, system_message=system_message,
                 conversation_history=conversation_history, task_id=task_id, **kwargs)

@@ -3011,7 +3011,7 @@ function nativeReviewShapeFeedback(value: unknown): string {
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
 export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: {
-  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean;
+  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean; claimFeedback?: boolean;
   /** Server-bound final author content, never a draft supplied by the reviewing model. */
   boundDraft?: { sourceAgentTaskId: string; draft: unknown };
 } = {}) {
@@ -3098,25 +3098,42 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
     claim(value: unknown, order: number, toolCallId: string): Record<string, unknown> {
       if (bound) return { status: 'invalid_claim', feedback: 'The independent review uses the saved author Claims. Submit replacements in the review.' };
       const invalid = { status: 'invalid_claim', feedback: 'Save one exact Claim: clientKey, sourceField, kind, statement, conditions, limitations, sourceBindings and parentClientKey for non-core. Bindings use read source IDs with at least one supports. Parent graph and total limits are checked by paper_draft.' };
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid;
+      const reject = (feedback: string) => options.claimFeedback ? { status: 'invalid_claim', feedback } : invalid;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return reject('claim: expected_one_object; use the advertised paper_claim fields.');
       const input = value as Record<string, unknown>; const expected = ['clientKey', 'sourceField', 'kind', 'statement', 'conditions', 'limitations', 'sourceBindings'];
       if (input.parentClientKey !== undefined) expected.push('parentClientKey');
       const text = (s: unknown, max: number): s is string => typeof s === 'string' && !!s.trim() && s.length <= max;
       const strings = (v: unknown) => Array.isArray(v) && v.length <= 100 && v.every(s => text(s, 500));
-      if (Object.keys(input).sort().join(',') !== expected.sort().join(',') || !text(input.clientKey, 100)
-        || !SDF_CORE_FIELDS.includes(input.sourceField as typeof SDF_CORE_FIELDS[number]) || !CLAIM_KINDS.includes(input.kind as typeof CLAIM_KINDS[number])
-        || !text(input.statement, 4_000) || !strings(input.conditions) || !strings(input.limitations)
-        || (input.kind === 'core' ? input.parentClientKey !== undefined : !text(input.parentClientKey, 100))
-        || !Array.isArray(input.sourceBindings) || !input.sourceBindings.length || input.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return invalid;
+      if (Object.keys(input).sort().join(',') !== expected.sort().join(',')) {
+        const missing = expected.filter(key => !Object.hasOwn(input, key));
+        const extra = Object.keys(input).filter(key => !expected.includes(key));
+        return reject(`claim: exact_keys_required; missing=${missing.join(',') || 'none'}; unexpected=${extra.join(',') || 'none'}.`);
+      }
+      if (!text(input.clientKey, 100)) return reject('clientKey: expected_nonempty_text, maximum 100 characters.');
+      if (!SDF_CORE_FIELDS.includes(input.sourceField as typeof SDF_CORE_FIELDS[number])) return reject(`sourceField: expected_one_of ${SDF_CORE_FIELDS.join(',')}.`);
+      if (!CLAIM_KINDS.includes(input.kind as typeof CLAIM_KINDS[number])) return reject(`kind: expected_one_of ${CLAIM_KINDS.join(',')}.`);
+      if (!text(input.statement, 4_000)) return reject('statement: expected_nonempty_text, maximum 4000 characters.');
+      for (const key of ['conditions', 'limitations'])
+        if (!strings(input[key])) return reject(`${key}: expected_array of at most 100 nonempty strings, maximum 500 characters each.`);
+      if (input.kind === 'core' && input.parentClientKey !== undefined) return reject('parentClientKey: forbidden_for_core; omit this property.');
+      if (input.kind !== 'core' && !text(input.parentClientKey, 100))
+        return reject('parentClientKey: required_non_core; use the clientKey of the actual dependency parent, not its tool-call ID. Do not change scientific kind or invent a parent to pass validation.');
+      if (!Array.isArray(input.sourceBindings) || !input.sourceBindings.length || input.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS)
+        return reject(`sourceBindings: expected_nonempty_array, maximum ${MAX_CANONICAL_EVIDENCE_SEGMENTS} bindings.`);
       const known = new Set(readPassageIds()); const seen = new Set<string>(); let supports = false;
-      for (const raw of input.sourceBindings) {
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid;
+      for (const [index, raw] of input.sourceBindings.entries()) {
+        const path = `sourceBindings[${index}]`;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return reject(`${path}: expected_object with sourcePassageId and relation.`);
         const binding = raw as Record<string, unknown>;
-        if (Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId' || typeof binding.sourcePassageId !== 'string'
-          || !known.has(binding.sourcePassageId) || seen.has(binding.sourcePassageId) || !CLAIM_RELATIONS.includes(binding.relation as ClaimRelation)) return invalid;
+        if (Object.keys(binding).sort().join(',') !== 'relation,sourcePassageId') return reject(`${path}: use_only sourcePassageId and relation.`);
+        if (typeof binding.sourcePassageId !== 'string') return reject(`${path}.sourcePassageId: expected_string containing an actual source ID.`);
+        if (!known.has(binding.sourcePassageId)) return reject(`${path}.sourcePassageId: not_read (${binding.sourcePassageId}); read and assess this passage if needed for the retained Claim, or revise the Claim and its evidence. An ID in search results is not a full read.`);
+        if (seen.has(binding.sourcePassageId)) return reject(`${path}.sourcePassageId: duplicate (${binding.sourcePassageId}); use one binding per passage.`);
+        if (!CLAIM_RELATIONS.includes(binding.relation as ClaimRelation)) return reject(`${path}.relation: expected_one_of ${CLAIM_RELATIONS.join(',')}.`);
         seen.add(binding.sourcePassageId); supports ||= binding.relation === 'supports';
       }
-      return supports ? saveNote('claim', input, order, toolCallId) : invalid;
+      return supports ? saveNote('claim', input, order, toolCallId)
+        : reject('sourceBindings: supporting_evidence_required; verify actual support before retaining the Claim. Do not relabel evidence just to pass validation.');
     },
     draft(value: unknown, order = candidateOrder + 1, toolCallId?: string): Record<string, unknown> {
       if (bound) return { status: 'invalid_draft', feedback: 'The independent review cannot replace its saved author candidate.' };

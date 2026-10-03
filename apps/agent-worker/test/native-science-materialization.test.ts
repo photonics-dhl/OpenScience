@@ -218,6 +218,55 @@ describe('actual native Agent scientific materializer', () => {
     saveNotes(worker);
     expect(worker.draft(selectedNotes(), 7, 'draft-good').status).toBe('draft_ready');
   });
+  it('identifies missing parent then unread evidence without saving either rejected Claim', () => {
+    const larger = structuredClone(map);
+    larger.pages[0]!.blocks.push({ ...structuredClone(larger.pages[0]!.blocks[0]!), id: 'second' });
+    const read = ['P00001'];
+    const worker = createNativeScientificMaterializer(larger, () => read, nativePaperToolProfile(null));
+    saveNotes(worker);
+    const child = { ...draft().draftClaims[0]!, clientKey: 'child', kind: 'supporting',
+      sourceBindings: [{ sourcePassageId: 'P00002', relation: 'supports' }] };
+    expect(worker.claim(child, 7, 'missing-parent')).toMatchObject({ status: 'invalid_claim', feedback: expect.stringContaining('parentClientKey: required_non_core') });
+    const parented = { ...child, parentClientKey: 'core-a' };
+    expect(worker.claim(parented, 8, 'unread-source')).toMatchObject({ status: 'invalid_claim', feedback: expect.stringContaining('sourceBindings[0].sourcePassageId: not_read (P00002)') });
+    for (const rejected of ['missing-parent', 'unread-source'])
+      expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['claim-core', rejected] }, 9, 'rejected-selection').status).toBe('invalid_draft');
+    read.push('P00002');
+    expect(worker.claim(parented, 10, 'read-claim')).toMatchObject({ status: 'claim_saved', claimToolCallId: 'read-claim' });
+    expect(parented).toEqual({ ...child, parentClientKey: 'core-a' });
+  });
+  it('retains historical Claim feedback and enables precise feedback only for the saved current tool', () => {
+    const fresh = nativePaperToolProfile(null);
+    const original = fresh.sourceTools.map(tool => ({ type: 'function', function: structuredClone(tool) }));
+    const saved = { binding: { allowedTools: fresh.allowedTools }, turns: [{ request: { options: { tools: original } } }] } as unknown as NativeAgentSessionState;
+    expect(nativePaperToolProfile(saved)).toMatchObject({ claimFeedback: true });
+    const claimTool = original.find(tool => tool.function.name === 'paper_claim')!;
+    claimTool.function.description = 'Save one Claim needed to explain the contribution, with its actual conditions, limits and source relations. Copy the returned claimToolCallId into paper_draft. Do not emit item, nested arrays or field bodies. No scientific approval; the selected parent graph is checked in paper_draft.';
+    const old = nativePaperToolProfile(saved);
+    expect(old).toMatchObject({ claimFeedback: false });
+    expect(old.sourceTools.find(tool => tool.name === 'paper_claim')).toEqual(claimTool.function);
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], old);
+    expect(worker.claim({ ...draft().draftClaims[0], kind: 'supporting' }, 1, 'old-failed')).toEqual({ status: 'invalid_claim',
+      feedback: 'Save one exact Claim: clientKey, sourceField, kind, statement, conditions, limitations, sourceBindings and parentClientKey for non-core. Bindings use read source IDs with at least one supports. Parent graph and total limits are checked by paper_draft.' });
+  });
+  it.each(['core_parent', 'extra_root', 'missing_statement', 'empty_condition', 'duplicate_source', 'wrong_relation', 'no_support', 'foreign_source'])('precise feedback keeps the Claim boundary closed for %s', change => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(null));
+    const value: Record<string, unknown> = structuredClone(draft().draftClaims[0]!);
+    if (change === 'core_parent') value.parentClientKey = 'invented';
+    if (change === 'extra_root') value.item = 'extra';
+    if (change === 'missing_statement') delete value.statement;
+    if (change === 'empty_condition') value.conditions = [''];
+    if (change === 'duplicate_source') value.sourceBindings = [draft().draftClaims[0]!.sourceBindings[0], draft().draftClaims[0]!.sourceBindings[0]];
+    if (change === 'wrong_relation') value.sourceBindings = [{ sourcePassageId: 'P00001', relation: 'invented' }];
+    if (change === 'no_support') value.sourceBindings = [{ sourcePassageId: 'P00001', relation: 'contradicts' }];
+    if (change === 'foreign_source') value.sourceBindings = [{ sourcePassageId: 'P99999', relation: 'supports' }];
+    const before = structuredClone(value);
+    expect(worker.claim(value, 1, 'rejected-claim')).toMatchObject({ status: 'invalid_claim', feedback: expect.any(String) });
+    expect(value).toEqual(before);
+    saveNotes(worker);
+    expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['rejected-claim'] }, 8, 'bad-selection').status).toBe('invalid_draft');
+    expect(worker.draft(selectedNotes(), 9, 'good-selection').status).toBe('draft_ready');
+  });
   it('keeps saved arguments immutable and refuses reused trusted IDs', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001']); saveNotes(worker);
     const item = { field: 'method', summary: source, sourcePassageIds: ['P00001'] };

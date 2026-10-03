@@ -61,7 +61,7 @@ export const NATIVE_PAPER_FIELD_TOOL = { name: 'paper_field',
   } },
 };
 export const NATIVE_PAPER_CLAIM_TOOL = { name: 'paper_claim',
-  description: 'Save one Claim needed to explain the contribution, with its actual conditions, limits and source relations. Copy the returned claimToolCallId into paper_draft. Do not emit item, nested arrays or field bodies. No scientific approval; the selected parent graph is checked in paper_draft.',
+  description: 'Save one Claim needed to explain the contribution, with its actual conditions, limits and source relations. Copy the returned claimToolCallId into paper_draft. Do not emit item, nested arrays or field bodies. A core Claim must omit parentClientKey; every non-core Claim must name its actual dependency parent by clientKey, not tool-call ID. Each sourcePassageId must have been fully read through paper_read; search previews do not count. Rejections identify the field and reason; correct only the affected part using actual science and sources. No scientific approval; the selected parent graph is checked in paper_draft.',
   parameters: NATIVE_PAPER_DRAFT_TOOL.parameters.properties.draftClaims.items,
 };
 const PAID_SOURCE_CONTEXT_DESCRIPTION = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
@@ -180,8 +180,9 @@ export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   const reviewContext = !saved || description === PAID_SOURCE_CONTEXT_DESCRIPTION || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
   const reviewCandidate = !saved || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
   const reviewToolCompletion = !saved || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description;
+  const claimFeedback = !saved || sourceTools.find(tool => tool.name === 'paper_claim')?.description === NATIVE_PAPER_CLAIM_TOOL.description;
   const allowedTools = saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)];
-  return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, allowedTools,
+  return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, allowedTools,
     goal: reviewToolCompletion ? TOOL_REVIEW_GOAL : PAPER_GOAL,
     instructions: reviewToolCompletion ? TOOL_REVIEW_INSTRUCTIONS : useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS };
 }
@@ -195,7 +196,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   if (!execution) throw new Error('[blocked] Actual native Agent execution marker is absent');
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, allowedTools, goal, instructions } = nativePaperToolProfile(saved);
+  const { sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, allowedTools, goal, instructions } = nativePaperToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools,
@@ -209,7 +210,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
-  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion });
+  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
       : name === 'paper_claim' ? materializer.claim(args, sequence!, callId!) : name === 'paper_draft' ? materializer.draft(args, sequence, callId)

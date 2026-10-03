@@ -18,7 +18,7 @@ function post(socketPath: string, path: string, value: unknown) {
     request.on('error', reject); request.end(JSON.stringify(value));
   });
 }
-async function fixture(finalText = 'final', stopReason = 'end_turn') {
+async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3) {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
   let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
   const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, options) => {
@@ -31,7 +31,7 @@ async function fixture(finalText = 'final', stopReason = 'end_turn') {
   });
   const binding = { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
     runtimeId: 'fixture', skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
-    maxTurns: 3, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + 20_000 };
+    maxTurns, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + 20_000 };
   const store = { async read() { return structuredClone(state); }, async compareAndSet(_expected: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async complete(_started: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async publish<T>(_started: unknown, submit: () => Promise<T>) { return submit(); } };
@@ -52,6 +52,26 @@ async function fixture(finalText = 'final', stopReason = 'end_turn') {
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
+  it.each(['exhausted', 'remaining', 'started', 'changed_binding', 'unknown_status', 'completed_without_response'] as const)('classifies stopped using its trusted completed turn budget: %s', async condition => {
+    const f = await fixture('final', 'end_turn', condition === 'remaining' ? 3 : 1);
+    try {
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(200);
+      if (condition === 'started') {
+        const turn = f.state.turns[0]!;
+        f.state.turns[0] = { state: 'started', target: turn.target, request: turn.request, effectiveOptions: turn.effectiveOptions };
+      }
+      if (condition === 'changed_binding') f.state.binding.maxTurns = 2;
+      const saved = structuredClone(f.state);
+      const status = condition === 'unknown_status' ? 'unknown' : condition === 'completed_without_response' ? 'completed' : 'stopped';
+      expect((await post(f.socketPath, '/task/finish', { status })).status).toBe(200);
+      await expect(f.final).rejects.toThrow(condition === 'exhausted'
+        ? 'Native Agent stopped at its 1-turn limit; original receipts retained'
+        : 'Native Agent stopped; original receipts retained');
+      expect(f.state).toEqual(saved);
+      expect(f.providerCalls).toBe(1);
+      expect(f.sourceCalls).toEqual([]);
+    } finally { await f.cleanup(); }
+  });
   it('never accepts the missing-call interim text as a completed task', async () => {
     const f = await fixture('Preparing the saved draft.', 'tool_use');
     try {
