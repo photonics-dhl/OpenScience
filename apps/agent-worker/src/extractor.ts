@@ -816,11 +816,6 @@ async function buildLegacySemanticBridge(gateway: AiGateway, passages: readonly 
     completion: response.completion, kind: 'source_bridge' };
 }
 
-/** Reusable reading phase for the same source-located document; no RO writes or publication. */
-export function readResearchDocument(gateway: AiGateway, sourceMap: DocumentSourceMap) {
-  return buildPaperReadingSynthesis(gateway, canonicalPassages(parseDocumentSourceMap(sourceMap)));
-}
-
 /** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
 export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
   return sourceMap.pages

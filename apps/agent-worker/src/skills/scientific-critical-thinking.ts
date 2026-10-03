@@ -39,8 +39,10 @@ export const SCIENTIFIC_CRITICAL_THINKING_SKILL = {
   nativeInstructions: nativeAppraisalWorkflow,
   nativeSourceReviewInstructions: [
     '对已保存的 paper_draft 执行 scientific-critical-thinking 的 Appraisal Workflow，保持既定研究主线。候选内容和其来源选择都需要核验；它们不是审核结论。',
-    '从 draft_ready.reviewContext 的字段/主张映射与完整原段落开始逐条比较。该上下文只含此稿已选来源，不能证明已覆盖相邻定义、反例或必要的补充材料；发现对象、比较、条件或推断有疑问时，用 paper_search、paper_read、paper_view 找到并实际读取有关原文或原页，再作判断。',
-    '审阅终稿中的 accepted/revised/blocked 和 Claim 决定须来自上述比较。实质差异用现有 issues 记录候选位置、原文依据、影响与必要修订；格式纠错沿原稿定位。没有科学问题可保留，不能因来源数组存在或工具通过就默认全部 accepted/unchanged。按任务规定的同一审阅结构直接返回完整终稿；paper_review仅供需要时取得结构反馈，并非额外科学审阅者。分析过程留在内部，不写进用户正文。',
+    '从 draft_ready.reviewContext 的字段/主张映射与完整原段落开始比较已保存的正文。固定主线中的对象、物理量、代表算例及会改变解释的条件，沿这些依赖核源；不要重跑全文提取或为六字段补齐无关细节。已选来源只是起点，不证明相邻定义、反例和必要的补充材料已覆盖。',
+    '对保留的数值、机制、因果和限制，先定位原稿这句话的直接依据，再核对量的定义、空间位置、比较对象、条件与算例。用 paper_search 查相关对象或量及其定义、限制、补充推导；命中后用 paper_read 读完整段落，公式、图形和位置关系必要时用 paper_view 看原页。已完整读过的来源可直接比较，重复通读不会自动增加可信度。',
+    '正文、图注和附录对同一量给出不同表达时，保留两处原文与冲突，不自行挑一个公式或把它们拼成新式。不同算例的距离、极值或最好数值不能移用；材料某处的阈值不能改写成另一位置的阈值。背景比较不建立跨方法因果，披露模型或参数不证明已经独立复现。不能找到所需支持时，缩小或删除强断言；仍影响核心机制或代表结果的缺口须明确保留。',
+    '审阅终稿中的 accepted/revised/blocked 和 Claim 决定须来自上述比较。实质差异用现有 issues 记录候选位置、原文依据、影响与必要修订；格式纠错沿原稿定位。没有科学问题可保留，不能因来源数组存在或工具通过就默认全部 accepted/unchanged。accepted字段只写{"verdict":"accepted"}，由平台选回真实保存的原摘要和来源；不要重述、删换行或润色后仍标accepted。实际修改须用revised及完整正文、来源和有据issues。按任务规定的同一审阅结构直接返回完整终稿；paper_review仅供需要时取得结构反馈，并非额外科学审阅者。分析过程留在内部，不写进用户正文。',
   ].join('\n'),
   instructions: [
     scientificReconstructionRule,

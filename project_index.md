@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-原生Hermes Agent接入：`docs/plans/2026-10-01-native-hermes-agent-plan.md`（[计划](docs/plans/2026-10-01-native-hermes-agent-plan.md)）记录薄SDK适配、Gateway工具往返与真实验收；apps/agent-worker/src/native-agent/illustration-task.ts承接私有分镜/科学艺术校验与完整prompt（候选）；apps/agent-worker/src/native-agent/paper-task.ts负责读者主线、真实来源Agent及finishNativePaperReview稿件选择，extractor.ts复用正式科学物化；infra/hermes-agent/science-references/保存原方法/按需参考与MIT来源。方法消费与断点见[能力台账](docs/runbooks/hermes-capability-registry.md)，候选、运行与科学质量只见唯一Hermes CURRENT。
+原生Hermes Agent接入：`docs/plans/2026-10-01-native-hermes-agent-plan.md`（[计划](docs/plans/2026-10-01-native-hermes-agent-plan.md)）记录薄SDK适配、Gateway工具往返与真实验收；apps/agent-worker/src/native-agent/illustration-task.ts承接已部署的原生自动私有分镜/科学艺术校验与完整prompt（真实科学与计划质量仍待验收）；apps/agent-worker/src/native-agent/paper-task.ts负责读者主线、真实来源Agent及finishNativePaperReview稿件选择，extractor.ts复用正式科学物化；infra/hermes-agent/science-references/保存原方法/按需参考与MIT来源。方法消费与断点见[能力台账](docs/runbooks/hermes-capability-registry.md)，候选、运行与科学质量只见唯一Hermes CURRENT。
 
 论文旁白与原图试片：`packages/ai-gateway/src/minimax-speech.ts`、`infra/codex-image-runner/video-narration-pilot.mjs` 沿现有按量配置生成独立音轨并保留单次提交；`apps/media-demo/` 的 `artwork-explainer-v1` 消费已审原图及实际音频字幕。操作见[视频手册](docs/runbooks/science-video-demo.md#论文独立旁白试片2026-09-30)，实际成片与未完成 RO 接线只见 CURRENT。
 
@@ -660,7 +660,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 
 | `packages/domain/src/assets/storyboard.ts` / `packages/domain/test/assets/storyboard.test.ts` / `apps/agent-worker/src/presentation/storyboard.ts` / `apps/web/components/presentation/StoryboardPanel.tsx` / `apps/web/test/storyboard-panel.test.tsx` | Sourced storyboard contract, Gateway planner and Hermes revision UI | 既有生产能力；2026-09-12艺术指导/叙事增强候选，实际release见CURRENT handoff |
 | `apps/web/lib/hermes/start-paper-narrative.ts` / `apps/web/test/e2e/create-illustrated-research.spec.ts` | 单篇 PDF 创建后衔接既有自动图文任务，保存原提交以恢复丢响应 | 实施与真实验收状态见 CURRENT |
-| `packages/domain/src/ingestion/source-review-recovery.ts` / `packages/domain/test/agent/saved-source-review-recovery.test.ts` / `packages/domain/test/agent/independent-source-review.test.ts` / `apps/agent-worker/test/source-review-output.test.ts` | 既有来源审校固定独立终审及显式保存回答续作，精确来源、一次调用与同键恢复 | 候选及科学质量缺口见CURRENT |
+| `packages/domain/src/ingestion/source-review-recovery.ts` / `packages/domain/test/agent/saved-source-review-recovery.test.ts` / `packages/domain/test/agent/independent-source-review.test.ts` / `apps/agent-worker/test/source-review-output.test.ts` | 既有来源审校历史独立终审及显式保存回答续作，精确来源、一次调用与同键恢复；新论文走原生Hermes | 当前消费边界及科学质量见CURRENT |
 | `apps/agent-worker/src/parsers/recovery-checkpoint.ts` / `apps/agent-worker/test/parser-recovery-{checkpoint,handler}.test.ts` / `packages/domain/test/agent/source-parser-recovery.test.ts` | 原SourceMap单页解析恢复、原Hermes事务衔接与精确重试收据验证 | 状态与真实验收见CURRENT |
 | `apps/web/lib/presentation/result-gallery.ts` / `apps/web/components/presentation/IllustrationStyleChoices.tsx` / `apps/web/lib/presentation/illustration-style-switch.ts` | 同源图片历史归类、已保存风格选择与私有美术修订恢复 | 实施、权限范围与验证见 CURRENT |
 | `apps/web/lib/presentation/managed-illustration-style.ts` / `apps/web/test/e2e/managed-illustration-style.spec.ts` | 普通作者从当前图片选择已推荐风格，恢复同一次限额续作 | 实际验收与部署状态见 CURRENT |
