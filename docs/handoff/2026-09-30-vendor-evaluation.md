@@ -2,7 +2,7 @@
 
 > 一次性对外评估证据，不是第二份运行 CURRENT。后续应用/回退/功能状态仍从 [Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md) 读取。
 >
-> 10-02用户已授权整轮UI发布与公司Word更新；新版应用已正常构建发布，精确CI、版本/容器/HTTP证据已取得，真实画面浏览器因保存权限核验不可用未完成。本轮更新见文末；旧10-01真实入口验收仅是当时修正证据。当前产品目标与运行版本只见Hermes CURRENT。
+> 10-03新版UI已随组合ef9e44d6正常发布；Browser访问已恢复，常用官网入口/窄屏交互已实际观察。新Word和固定脱敏ZIP见文末10-03节；10-01/02证据保留为历史，不代替本次全部角色或科研质量验收。运行身份仍见Hermes CURRENT。
 
 ## 用户范围与交接边界
 
@@ -63,3 +63,12 @@
 - 13:51与13:56 HTTPS只读复查：公网与正确TLS源站版本、3主应用源码挂载一致，12路径×两链路均预期，API/Worker healthy、Web running、restart0/OOM false、事务journal清除；不证明长期SLA。真实逐页/手机/帽沿气泡/角色浏览器因saved permissions核验故障未完成，不用模拟流程或HTTP代称视觉验收。
 - 新证据归ignored tmp/ui-hat-polish-20261002/，旧tmp/ui-release-20261002/保留。Word资源记录13:51点时RAM总30.07/available7.52GiB、Swap0、根盘余45.28GiB；11:07库/对象聚合及每日03:00双库备份仍分别标原取证时间。对象备份、异地副本、恢复演练与SLA/RPO/RTO待交付。
 - 正式Word tmp/vendor-delivery-20261002/OpenScience 上线评估问题核查回复.docx已原地更新，9页/21项/7表，qa/hat-polish/pages九页全检无溢出/重叠/缺字；bundled renderer缺soffice的诊断保留，改用现有Word只读PDF导出与bundled Poppler渲染。原PDF/旧Word（qa/hat-polish/previous-1126.docx）保留，未发送公司。首轮90da固定包为历史评估源，后续交接需明确新固定版本；不授予GitHub/服务器账号。本轮只提交自身UI/交付记录，并行科研工作由其会话负责；UI树为受阻视觉QA暂留，清理期限见CURRENT。
+
+## 2026-10-03 UI组合发布和报价材料
+
+- 应用源ef9e44d6aa09ee748e792b19005f831b564182f3，rollback29de74f2e8f53765283a34055850c1f40122575c；精确CI37125218586、UI/期刊修复及集成High GO。干净树正常deploy成功；首次备份持锁exit73未修改服务，释放后成功。Native同版本由生图会话配对，本UI验收未创建模型任务。
+- 官网实际入口与字体/1440/390/单Live2D/展开/键盘焦点已观察；源站+公网12路径×2符合HTTP语义，精确版本一致。最终Web/API/AgentWorker/Redis均healthy、restarts0/OOMfalse，API及AgentWorker内存各2GiB；内存与swap合计限制另算。当前是短时观察，不是压力/SLA/全部角色/软键盘或科研产物验收。
+- 对外Word `tmp/vendor-delivery-20261003/OpenScience 上线评估问题核查回复.docx`：10页、21项逐项答复、7表，原生Word导出与Poppler10页逐一实看；版本、原PDF核查、用户决定、页面职责、源码/服务器/数据库/上传位置、当前资源和上线/年度运维报价范围齐备。原始PDF与旧Word未改动。
+- 对外ZIP `tmp/vendor-delivery-20261003/OpenScience 固定版本评估代码包 20261003 ef9e44d6.zip`：1854条目/11310357字节，单一固定应用源，无Git历史/旧运行器变体。1851源码与Git blob/mode一致，环境样例17非空敏感行显式占位，1835文本877候选；713来自旧已审相同blob，164新增逐项独立复核，最终ZIP CRC/路径/字节/mode/命中集合全部通过，High最终GO。校验侧件仅用于已有交付传输身份，不新增发布门禁。
+- SHA256 `600db6266e03c6d695d69f49e1689c2fab047a2cadacf72f835afc762ca19dab`；复核/扫描/导出/包收据留本目录ignored JSON，私有截图与日志不进入ZIP。对外材料未通过消息工具发给报价商，也未提供账户或生产凭据。
+- 本机对象备份967个/2812621957字节及逐文件验证由运维会话完成。3f490d7后继备份候选未包含在ef9e应用；定时对象新脚本未装，异机、整套恢复、测试环境和告警仍待交付，均在Word明确。开发功能及科学/图像/视频质量继续由我方承担。
