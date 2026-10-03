@@ -57,6 +57,22 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
 describe('native Agent durable SDK turns', () => {
+  it.each(['author', 'checkpoint', 'field', 'claim'])('does not rebase an independent reviewer after restart when its %s changes', async changed => {
+    const f = fixture();
+    const sourceReview = { sourceAgentTaskId: 'author-task', authorCheckpointSha256: 'a'.repeat(64),
+      boundDraft: { fields: { method: { summary: 'Actual author mechanism', sourcePassageIds: ['P00001'] } },
+        draftClaims: [{ statement: 'Actual author Claim' }] } };
+    const first = await f.create({ sourceReview }).complete(request);
+    expect(await f.create({ sourceReview }).complete(request)).toEqual(first);
+    const different = structuredClone(sourceReview);
+    if (changed === 'author') different.sourceAgentTaskId = 'other-task';
+    if (changed === 'checkpoint') different.authorCheckpointSha256 = 'b'.repeat(64);
+    if (changed === 'field') different.boundDraft.fields.method.summary = 'Changed mechanism';
+    if (changed === 'claim') different.boundDraft.draftClaims[0]!.statement = 'Changed Claim';
+    await expect(f.create({ sourceReview: different }).complete(request)).rejects.toThrow('identity changed');
+    expect(f.calls).toBe(1);
+  });
+
   it.each(['historical-json', 'tool-submitted'] as const)('replays the %s review receipt through actual Session without another provider submission', async mode => {
     const text = 'The source describes a simulation, its comparison and the conditions under which its result holds.';
     const parser = { name: 'fixture', version: '1' };

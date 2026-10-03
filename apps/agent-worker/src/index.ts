@@ -2,6 +2,8 @@ import { requireStyleReferenceImage } from '@openscience/domain';
 import { startNativeImageReview } from '@openscience/domain';
 import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview, readNativeAgentExecution, requireNativeAgentExecutionAuthority } from '@openscience/domain';
 import { runNativePaperTask } from './native-agent/paper-task';
+import { runNativeSourceReviewTask } from './native-agent/source-review-task';
+import { isDeepStrictEqual } from 'node:util';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma } from '@prisma/client';
@@ -379,6 +381,8 @@ export function createHandlers(
       let requireReviewedClaims = false;
       let scientificReviewMode: 'model' | 'web' = 'model';
       let nativeSourceReview: NativeSourceReviewContext | undefined;
+      let nativeReviewer: Extract<Awaited<ReturnType<typeof requireHermesSourceReviewExecution>>, { mode: 'agent' }> | undefined;
+      let nativeReviewerInput: Parameters<typeof requireHermesSourceReviewExecution>[1] | undefined;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const parserCheckpoint = ownerTask.result;
@@ -408,6 +412,8 @@ export function createHandlers(
         }
       }
       const composition = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):(scientific-summary-v3|scientific-review-v4)$/.exec(ownerTask.idempotencyKey ?? '');
+      if (nativeAgentExecution?.profile === 'paper-source-review' && composition?.[4] !== 'scientific-review-v4')
+        throw new Error('[blocked] Native independent reviewer lacks its source phase identity');
       if (composition) {
         if (composition[4] === 'scientific-review-v4') {
           const executionInput = {
@@ -417,6 +423,14 @@ export function createHandlers(
           };
           const execution = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
             executionInput), { isolationLevel: 'Serializable' });
+          if (execution.mode === 'agent') {
+            if (nativeAgentExecution?.profile !== 'paper-source-review' || execution.taskId !== ownerTask.id
+              || execution.sourceMapRef.artifactId !== artifact.id || execution.sourceMapRef.contentHash !== artifact.blobSha256)
+              throw new Error('[blocked] Native independent reviewer task identity changed');
+            nativeReviewer = structuredClone(execution);
+            nativeReviewerInput = executionInput;
+            reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, execution.sourceMapRef);
+          } else {
           scientificReviewMode = execution.mode;
           savedReviewOutput = execution.savedOutput;
           savedCompositionCandidate = execution.mode === 'model' ? execution.savedCompositionCandidate : undefined;
@@ -462,60 +476,63 @@ export function createHandlers(
               throw new Error('[blocked] Source review processing authorization changed');
             }
           };
+          }
         }
-        const ingestion = await deps.prisma.ingestionTask.findUnique({
-          where: { id: composition[1]! }, include: { batch: true },
-        });
-        const current = await deps.prisma.agentTask.findUnique({
-          where: { id: composition[2]! }, include: { session: true },
-        });
-        const source = await deps.prisma.agentTask.findUnique({
-          where: { id: composition[3]! }, include: { session: true },
-        });
-        const ownerPayload = ownerTask.payload as Record<string, unknown> | null;
-        const currentPayload = current?.payload as Record<string, unknown> | null;
-        const sourcePayload = source?.payload as Record<string, unknown> | null;
-        const sourceResult = source?.result as Record<string, unknown> | null;
-        const sourceReview = sourceResult?.scientificReview;
-        if (!serverDerivedEligibility || !externalProcessingEligible
-          || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
-          || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
-          || !ownerPayload || Object.keys(ownerPayload).sort().join(',') !== 'artifactId,researchObjectId'
-          || ownerPayload.artifactId !== artifact.id || ownerPayload.researchObjectId !== ownerResearchObject.id
-          || current?.kind !== 'sdf.extract' || current.status !== 'succeeded' || current.session.status !== 'active'
-          || current.session.userId !== ownerTask.session.userId || current.session.researchObjectId !== ownerResearchObject.id
-          || !currentPayload || Object.keys(currentPayload).sort().join(',') !== 'artifactId,researchObjectId'
-          || currentPayload.artifactId !== artifact.id || currentPayload.researchObjectId !== ownerResearchObject.id
-          || source?.kind !== 'sdf.extract' || source.status !== 'succeeded' || source.session.status !== 'active'
-          || source.session.userId !== ownerTask.session.userId || source.session.researchObjectId !== ownerResearchObject.id
-          || !sourcePayload || Object.keys(sourcePayload).sort().join(',') !== 'artifactId,researchObjectId'
-          || sourcePayload.artifactId !== artifact.id || sourcePayload.researchObjectId !== ownerResearchObject.id
-          || sourceResult?.canonicalExtractionContract !== 'grounded-passages-v2'
-          || !sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)
-          || !(sourceReview as Record<string, unknown>).semanticStage
-          || typeof (sourceReview as Record<string, unknown>).semanticStage !== 'object'
-          || Array.isArray((sourceReview as Record<string, unknown>).semanticStage)) {
-          throw new Error('[blocked] Semantic composition source scope is invalid');
-        }
-        const reference = parseDocumentSourceMapReference(sourceResult.sourceMapRef);
-        if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
-          || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Semantic composition source identity changed');
-        reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
-        reusableExtractionResult = sourceResult;
-        requireReusableSemanticStage = true;
-        if (composition[4] === 'scientific-review-v4') {
-          reviewExistingSourceTaskId = source.id;
-          // Match the existing consumer's needs without changing manual review or authorization.
-          const narrativeStep = await deps.prisma.hermesResearchStep.findFirst({
-            where: {
-              agentTaskId: ownerTask.id, ingestionTaskId: ingestion.id, artifactId: artifact.id,
-              stage: 'source_review', status: 'waiting',
-              run: { profile: VISUAL_NARRATIVE_PROFILE, actorId: ownerTask.session.userId,
-                researchObjectId: ownerResearchObject.id, status: { in: ['running', 'awaiting_source_review'] } },
-            },
-            select: { id: true },
+        if (!nativeReviewer) {
+          const ingestion = await deps.prisma.ingestionTask.findUnique({
+            where: { id: composition[1]! }, include: { batch: true },
           });
-          requireReviewedClaims = scientificReviewMode === 'web' || Boolean(savedReviewOutput) || narrativeStep !== null;
+          const current = await deps.prisma.agentTask.findUnique({
+            where: { id: composition[2]! }, include: { session: true },
+          });
+          const source = await deps.prisma.agentTask.findUnique({
+            where: { id: composition[3]! }, include: { session: true },
+          });
+          const ownerPayload = ownerTask.payload as Record<string, unknown> | null;
+          const currentPayload = current?.payload as Record<string, unknown> | null;
+          const sourcePayload = source?.payload as Record<string, unknown> | null;
+          const sourceResult = source?.result as Record<string, unknown> | null;
+          const sourceReview = sourceResult?.scientificReview;
+          if (!serverDerivedEligibility || !externalProcessingEligible
+            || ingestion?.agentTaskId !== ownerTask.id || ingestion.artifactId !== artifact.id
+            || ingestion.batch.userId !== ownerTask.session.userId || ingestion.batch.researchObjectId !== ownerResearchObject.id
+            || !ownerPayload || Object.keys(ownerPayload).sort().join(',') !== 'artifactId,researchObjectId'
+            || ownerPayload.artifactId !== artifact.id || ownerPayload.researchObjectId !== ownerResearchObject.id
+            || current?.kind !== 'sdf.extract' || current.status !== 'succeeded' || current.session.status !== 'active'
+            || current.session.userId !== ownerTask.session.userId || current.session.researchObjectId !== ownerResearchObject.id
+            || !currentPayload || Object.keys(currentPayload).sort().join(',') !== 'artifactId,researchObjectId'
+            || currentPayload.artifactId !== artifact.id || currentPayload.researchObjectId !== ownerResearchObject.id
+            || source?.kind !== 'sdf.extract' || source.status !== 'succeeded' || source.session.status !== 'active'
+            || source.session.userId !== ownerTask.session.userId || source.session.researchObjectId !== ownerResearchObject.id
+            || !sourcePayload || Object.keys(sourcePayload).sort().join(',') !== 'artifactId,researchObjectId'
+            || sourcePayload.artifactId !== artifact.id || sourcePayload.researchObjectId !== ownerResearchObject.id
+            || sourceResult?.canonicalExtractionContract !== 'grounded-passages-v2'
+            || !sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)
+            || !(sourceReview as Record<string, unknown>).semanticStage
+            || typeof (sourceReview as Record<string, unknown>).semanticStage !== 'object'
+            || Array.isArray((sourceReview as Record<string, unknown>).semanticStage)) {
+            throw new Error('[blocked] Semantic composition source scope is invalid');
+          }
+          const reference = parseDocumentSourceMapReference(sourceResult.sourceMapRef);
+          if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
+            || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Semantic composition source identity changed');
+          reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
+          reusableExtractionResult = sourceResult;
+          requireReusableSemanticStage = true;
+          if (composition[4] === 'scientific-review-v4') {
+            reviewExistingSourceTaskId = source.id;
+            // Match the existing consumer's needs without changing manual review or authorization.
+            const narrativeStep = await deps.prisma.hermesResearchStep.findFirst({
+              where: {
+                agentTaskId: ownerTask.id, ingestionTaskId: ingestion.id, artifactId: artifact.id,
+                stage: 'source_review', status: 'waiting',
+                run: { profile: VISUAL_NARRATIVE_PROFILE, actorId: ownerTask.session.userId,
+                  researchObjectId: ownerResearchObject.id, status: { in: ['running', 'awaiting_source_review'] } },
+              },
+              select: { id: true },
+            });
+            requireReviewedClaims = scientificReviewMode === 'web' || Boolean(savedReviewOutput) || narrativeStep !== null;
+          }
         }
       }
       const refresh = /^ingestion-analysis-refresh:([0-9a-f-]{36}):([0-9a-f-]{36}):(grounded-passages-v[12]|scientific-review-v[34]|user-requested-reanalysis)$/.exec(ownerTask.idempotencyKey ?? '');
@@ -684,6 +701,26 @@ export function createHandlers(
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       if (nativeAgentExecution) {
         const latest = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
+        if (nativeAgentExecution.profile === 'paper-source-review') {
+          const reviewer = nativeReviewer; const bindingInput = nativeReviewerInput;
+          if (!reviewer || !bindingInput || !isDeepStrictEqual(sourceMapRef, reviewer.sourceMapRef))
+            throw new Error('[blocked] Native independent source binding is unavailable');
+          const result = await runNativeSourceReviewTask({ gateway, deps: { ...deps, storage: deps.storage! },
+            task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
+            sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, sourceAgentTaskId: reviewer.sourceAgentTaskId,
+            authorCheckpointSha256: reviewer.authorCheckpointSha256, sourceResult: reviewer.sourceResult, inboxRoot: options.nativeAgentInboxRoot!,
+            authorize: async tx => {
+              await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
+              const current = await requireHermesSourceReviewExecution(tx, bindingInput);
+              if (!isDeepStrictEqual(current, reviewer) || !await buildIngestionExternalProcessingPolicy(tx)(trustedAuthorizationContext))
+                throw new Error('[blocked] Native independent author or processing authority changed');
+            },
+            renderPages: async pages => (await options.parserCascade!.renderPages({ artifactId: artifact.id,
+              contentHash: artifact.blobSha256, content: bytes, mediaType: parserMediaType }, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages,
+          });
+          await enqueueFigureAuditFromResult(deps, task, result); return result;
+        }
+        if (nativeReviewer) throw new Error('[blocked] Native reviewer cannot execute as its author');
         const result = await runNativePaperTask({ gateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
           sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, inboxRoot: options.nativeAgentInboxRoot!,
           authorize: async tx => {

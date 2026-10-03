@@ -12,7 +12,11 @@ const seam = vi.hoisted(() => ({
   claim: vi.fn(),
   progress: vi.fn(),
   lock: vi.fn(),
+  nativeReview: vi.fn(),
+  nativeAuthority: vi.fn(),
 }));
+
+vi.mock('../src/native-agent/source-review-task', () => ({ runNativeSourceReviewTask: seam.nativeReview }));
 
 vi.mock('../src/extractor', async load => ({
   ...await load<typeof import('../src/extractor')>(),
@@ -28,6 +32,7 @@ vi.mock('@openscience/domain', async load => ({
   claimAgentTask: seam.claim,
   markTaskProgress: seam.progress,
   lockTrashReferences: seam.lock,
+  requireNativeAgentExecutionAuthority: seam.nativeAuthority,
 }));
 
 import { createHandlers, createPollOnce, createSpoolSubmission } from '../src/index';
@@ -133,7 +138,7 @@ const ids = {
   owner: '44444444-4444-4444-8444-444444444444',
 };
 
-function fixture(executionAttempt = 1) {
+function fixture(executionAttempt = 1, native = false) {
   const bytes = Buffer.from('%PDF-1.7 saved source review handler fixture');
   const contentHash = createHash('sha256').update(bytes).digest('hex');
   const parser = { name: 'openscience-parser-cascade', version: '1.0.0' };
@@ -189,7 +194,8 @@ function fixture(executionAttempt = 1) {
   const policy = vi.fn().mockResolvedValue(true);
   const providerSubmit = vi.fn();
   const gateway = { completeStructured: providerSubmit, completeStructuredWithMetadata: providerSubmit } as unknown as AiGateway;
-  const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: policy });
+  const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: policy,
+    ...(native ? { nativeAgentInboxRoot: '/native/inbox' } : {}) });
   const deps = { prisma, storage, malwareScanner: vi.fn(), redis: {
     brpoplpush: vi.fn().mockResolvedValue(ids.owner), lrem: vi.fn().mockResolvedValue(1),
   } };
@@ -198,6 +204,66 @@ function fixture(executionAttempt = 1) {
   return { execute, owner, source, sourceResult, sourceMap, saved, reference, parserCascade, policy, providerSubmit,
     prisma, tx, storage, deps, handlers };
 }
+
+describe('independent native reviewer handler dispatch and authority', () => {
+  beforeEach(() => {
+    seam.extractHandler.mockReset(); seam.nativeReview.mockReset(); seam.nativeAuthority.mockReset().mockResolvedValue(undefined);
+    seam.requireExecution.mockReset(); seam.resolveReanalysis.mockReset().mockResolvedValue(null);
+    seam.lock.mockReset().mockResolvedValue(undefined); seam.progress.mockReset().mockResolvedValue(undefined);
+  });
+
+  function nativeFixture() {
+    const f = fixture(1, true);
+    Object.assign(f.owner, { result: { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-source-review',
+      runtimeId: 'installed-runtime', skillCatalogueId: 'installed-skills', model: 'MiniMax-M3' } } });
+    const execution = { mode: 'agent', taskId: ids.owner, runId: 'run', sourceAgentTaskId: ids.source,
+      authorCheckpointSha256: 'a'.repeat(64), sourceMapRef: f.reference,
+      sourceResult: { core: { method: 'actual author candidate' }, scientificReview: { kind: 'hermes_agent_review' } } };
+    seam.requireExecution.mockResolvedValue(execution);
+    Object.assign(f.tx.agentTask, { findUnique: vi.fn(async () => f.owner) });
+    f.tx.agentTask.updateMany.mockImplementation(async input => { Object.assign(f.owner, { result: structuredClone(input.data.result) }); return { count: 1 }; });
+    const membership = vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' });
+    Object.assign(f.tx, { membership: { findUnique: membership }, ingestionTask: { findUnique: vi.fn(async () => ({
+      agentTask: f.owner, artifactId: 'artifact', artifact: { workspaceId: 'workspace' },
+      batch: { userId: 'actor', researchObjectId: 'ro', researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } },
+    })) } });
+    return { ...f, execution, membership };
+  }
+
+  it('uses the bound author source in the actual handler without legacy semanticStage, parsing or fixed review', async () => {
+    const f = nativeFixture();
+    seam.nativeReview.mockImplementation(async input => { await input.authorize(f.tx); return { core: { method: 'independently reviewed' } }; });
+    await expect(f.execute()).resolves.toMatchObject({ core: { method: 'independently reviewed' } });
+    expect(seam.nativeReview).toHaveBeenCalledOnce();
+    expect(seam.nativeReview.mock.calls[0]![0]).toMatchObject({ sourceAgentTaskId: ids.source, authorCheckpointSha256: 'a'.repeat(64),
+      sourceResult: f.execution.sourceResult, sourceMap: f.sourceMap });
+    expect(f.parserCascade).not.toHaveBeenCalled(); expect(seam.extractHandler).not.toHaveBeenCalled(); expect(f.providerSubmit).not.toHaveBeenCalled();
+    expect(seam.nativeAuthority).toHaveBeenCalledWith(f.tx, { taskId: ids.owner, executionAttempt: 1 });
+  });
+
+  it.each(['author', 'checkpoint', 'candidate', 'membership', 'lease'])('rechecks %s before the native provider or source tool can proceed', async changed => {
+    const f = nativeFixture(); const publish = vi.fn();
+    seam.nativeReview.mockImplementation(async input => {
+      await input.authorize(f.tx);
+      if (changed === 'author') seam.requireExecution.mockResolvedValue({ ...f.execution, sourceAgentTaskId: 'other' });
+      if (changed === 'checkpoint') seam.requireExecution.mockResolvedValue({ ...f.execution, authorCheckpointSha256: 'b'.repeat(64) });
+      if (changed === 'candidate') seam.requireExecution.mockResolvedValue({ ...f.execution, sourceResult: { changed: true } });
+      if (changed === 'membership') f.membership.mockResolvedValue(null);
+      if (changed === 'lease') seam.nativeAuthority.mockRejectedValue(new Error('[blocked] lease changed'));
+      await input.authorize(f.tx); publish(); return {};
+    });
+    await expect(f.execute()).rejects.toThrow('[blocked]'); expect(publish).not.toHaveBeenCalled();
+  });
+
+  it.each(['key', 'profile', 'source'])('rejects a mismatched native %s before dispatch or parser work', async changed => {
+    const f = nativeFixture();
+    if (changed === 'key') f.owner.idempotencyKey = 'unbound-review';
+    if (changed === 'profile') (f.owner.result as unknown as { nativeAgentExecution: { profile: string } }).nativeAgentExecution.profile = 'paper-understanding';
+    if (changed === 'source') seam.requireExecution.mockResolvedValue({ ...f.execution, sourceMapRef: { ...f.reference, artifactId: 'foreign' } });
+    await expect(f.execute()).rejects.toThrow('[blocked]');
+    expect(seam.nativeReview).not.toHaveBeenCalled(); expect(f.parserCascade).not.toHaveBeenCalled(); expect(seam.extractHandler).not.toHaveBeenCalled();
+  });
+});
 
 describe('bound final source composition handler', () => {
   beforeEach(() => {

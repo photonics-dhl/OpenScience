@@ -3010,10 +3010,18 @@ function nativeReviewShapeFeedback(value: unknown): string {
 }
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
-export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: { reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean } = {}) {
-  let candidate: ScientificCompositionResponse | undefined;
+export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: {
+  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean;
+  /** Server-bound final author content, never a draft supplied by the reviewing model. */
+  boundDraft?: { sourceAgentTaskId: string; draft: unknown };
+} = {}) {
+  const bound = options.boundDraft ? structuredClone(options.boundDraft) : undefined;
+  if (bound && (!bound.sourceAgentTaskId || !scientificCompositionGuard(bound.draft, new Set(canonicalPassages(sourceMap).map(p => p.id)))))
+    throw new Error('[blocked] Native independent source candidate is invalid');
+  const boundCandidate = bound?.draft as ScientificCompositionResponse | undefined;
+  let candidate: ScientificCompositionResponse | undefined = boundCandidate ? structuredClone(boundCandidate) : undefined;
   let candidateOrder = -1;
-  let candidateToolCallId: string | undefined;
+  let candidateToolCallId: string | undefined = bound?.sourceAgentTaskId;
   type Note = { kind: 'field' | 'claim'; value: Record<string, unknown>; order: number };
   const notes = new Map<string, Note | null>();
   const saveNote = (kind: Note['kind'], value: Record<string, unknown>, order: number, id: string) => {
@@ -3076,8 +3084,10 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
   };
   return {
     /** Trusted replay rebuilds these data from authenticated paid calls, never from saved feedback bodies. */
-    resetForReplay() { candidate = undefined; candidateOrder = -1; candidateToolCallId = undefined; notes.clear(); },
+    resetForReplay() { candidate = boundCandidate ? structuredClone(boundCandidate) : undefined; candidateOrder = -1;
+      candidateToolCallId = bound?.sourceAgentTaskId; notes.clear(); },
     field(value: unknown, order: number, toolCallId: string): Record<string, unknown> {
+      if (bound) return { status: 'invalid_field', feedback: 'The independent review uses the saved author candidate. Submit changes in the review.' };
       if (!value || typeof value !== 'object' || Array.isArray(value)) return { status: 'invalid_field', feedback: 'Save one field object.' };
       const input = value as Record<string, unknown>; const { field, ...item } = input;
       if (Object.keys(input).sort().join(',') !== 'field,sourcePassageIds,summary' || !SDF_CORE_FIELDS.includes(field as typeof SDF_CORE_FIELDS[number]))
@@ -3086,6 +3096,7 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       return issue ? { status: 'invalid_field', feedback: issue.feedback } : saveNote('field', input, order, toolCallId);
     },
     claim(value: unknown, order: number, toolCallId: string): Record<string, unknown> {
+      if (bound) return { status: 'invalid_claim', feedback: 'The independent review uses the saved author Claims. Submit replacements in the review.' };
       const invalid = { status: 'invalid_claim', feedback: 'Save one exact Claim: clientKey, sourceField, kind, statement, conditions, limitations, sourceBindings and parentClientKey for non-core. Bindings use read source IDs with at least one supports. Parent graph and total limits are checked by paper_draft.' };
       if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid;
       const input = value as Record<string, unknown>; const expected = ['clientKey', 'sourceField', 'kind', 'statement', 'conditions', 'limitations', 'sourceBindings'];
@@ -3108,6 +3119,7 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       return supports ? saveNote('claim', input, order, toolCallId) : invalid;
     },
     draft(value: unknown, order = candidateOrder + 1, toolCallId?: string): Record<string, unknown> {
+      if (bound) return { status: 'invalid_draft', feedback: 'The independent review cannot replace its saved author candidate.' };
       try { value = resolveDraft(value, order); }
       catch (error) { return { status: 'invalid_draft', feedback: error instanceof Error ? error.message : 'Invalid item selection' }; }
       const provided = passages(); const validation = scientificCompositionValidation(sourceMap, provided);
@@ -3181,6 +3193,7 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
       const result = materializeCanonicalProposal({ schemaVersion: SDF_CORE_VERSION, fields });
       const claims = materializeReviewedClaimSuggestions(sourceMap, result, value, provided);
       return { ...result, reviewedClaimSuggestions: claims, nativeScientificFields: value.fields,
+        nativeDraftClaims: structuredClone(value.claimSuggestions),
         nativeNeedsMoreEvidence: value.needsMoreEvidence,
         nativeReviewedCandidateHash: sha256Json({ schemaVersion: SDF_CORE_VERSION, fields: proposal.fields }) };
     },

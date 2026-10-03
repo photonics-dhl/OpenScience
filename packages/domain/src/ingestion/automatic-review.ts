@@ -3,6 +3,8 @@ import { validateSdfDraftCore, SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { parseReviewedClaimSuggestions } from './reviewed-claim-suggestions';
 import { IngestionError } from './errors';
+import { readNativeAgentExecution, nativeAgentTerminalResult } from '../agent/native-agent-execution';
+import { requireNativePaperAuthor } from './native-paper-author';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
@@ -27,6 +29,12 @@ function automaticSourceReference(task: AutomaticIngestionSource, value: unknown
 export function automaticIngestionReview(task: AutomaticIngestionSource) {
   const result = record(task.agentTask?.result);
   const review = record(result.scientificReview);
+  const marker = readNativeAgentExecution(result);
+  if (marker?.profile === 'paper-author') throw new IngestionError('VALIDATION_ERROR', 'Native paper author requires independent source review');
+  if (marker?.profile === 'paper-source-review') {
+    if (!task.agentTask || marker.checkpoint?.taskId !== task.agentTask.id) throw new IngestionError('VALIDATION_ERROR', 'Native reviewer task binding changed');
+    nativeAgentTerminalResult({ ...task.agentTask, kind: 'sdf.extract' } as never, 'succeeded', result);
+  }
   if (review.status === 'review_unavailable' || result.reason === 'scientific_review_unavailable') {
     throw new IngestionError('VALIDATION_ERROR', 'The scientific review service is unavailable; the prior draft is preserved and has not been scientifically rejected');
   }
@@ -51,6 +59,11 @@ export function automaticIngestionReview(task: AutomaticIngestionSource) {
 
 /** Select only the two existing upgrade operations; a failed v5 review is never retried automatically. */
 export function automaticIngestionReviewStage(task: AutomaticIngestionSource): 'ready' | HermesIngestionReviewStage {
+  if (readNativeAgentExecution(task.agentTask?.result)?.profile === 'paper-author') {
+    requireNativePaperAuthor(task.agentTask!);
+    automaticSourceReference(task, record(task.agentTask!.result).sourceMapRef);
+    return 'source_review';
+  }
   try { automaticIngestionReview(task); return 'ready'; }
   catch (error) {
     const result = record(task.agentTask?.result);

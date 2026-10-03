@@ -27,6 +27,9 @@ on:
       - 'scripts/release-input-manifest.mjs'
       - 'scripts/release-input-manifest.test.mjs'
       - 'apps/agent-worker/test/native-science-materialization.test.ts'
+      - 'apps/agent-worker/test/native-source-review-task.test.ts'
+      - 'packages/domain/src/ingestion/native-paper-author.ts'
+      - 'packages/domain/test/agent/native-independent-source-review.test.ts'
       - 'packages/domain/src/agent/native-agent-execution.ts'
       - 'packages/domain/test/agent/native-agent-execution.test.ts'
       - 'apps/agent-worker/test/ingestion-parser.test.ts'
@@ -197,6 +200,9 @@ on:
       - 'scripts/release-input-manifest.mjs'
       - 'scripts/release-input-manifest.test.mjs'
       - 'apps/agent-worker/test/native-science-materialization.test.ts'
+      - 'apps/agent-worker/test/native-source-review-task.test.ts'
+      - 'packages/domain/src/ingestion/native-paper-author.ts'
+      - 'packages/domain/test/agent/native-independent-source-review.test.ts'
       - 'packages/domain/src/agent/native-agent-execution.ts'
       - 'packages/domain/test/agent/native-agent-execution.test.ts'
       - 'apps/agent-worker/test/ingestion-parser.test.ts'
@@ -367,7 +373,7 @@ jobs:
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_install_lifecycle.py
       - run: node --check infra/hermes-agent/offline_host.cjs
       - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-illustration-task.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/native-illustration-task.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
@@ -381,7 +387,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/source-review-output.test.ts test/saved-source-review-handler.test.ts test/native-source-pages.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-source-review.test.ts test/agent/native-agent-execution.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-source-review.test.ts test/agent/native-independent-source-review.test.ts test/agent/native-agent-execution.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/visual-source-context.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-science-diagnostics.test.ts test/agent/storyboard-science-recovery.test.ts test/agent/standalone-science-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/ingestion-parser.test.ts -t "Docling table normalization"

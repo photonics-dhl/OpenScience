@@ -224,7 +224,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
     || last.response.model !== execution.model || last.target.model !== execution.model
     || last.response.text !== native.finalResponse) throw new Error('[blocked] Native final response binding changed');
   const result = finishNativePaperReview(materializer, last.request.messages, native.finalResponse, { reviewToolCompletion });
-  const { nativeScientificFields, nativeNeedsMoreEvidence, nativeReviewedCandidateHash, ...fields } = result;
+  const { nativeScientificFields, nativeNeedsMoreEvidence, nativeReviewedCandidateHash, nativeDraftClaims, ...fields } = result;
   const skillReads = nativeSkillReads(last.request.messages);
   const figures = extractFigureReferences(canonicalPassages(input.sourceMap).map(p => ({ id: p.id, pageStart: p.pageStart, text: p.text })));
   return { ...fields, sourceFigureReferences: figures, sourceMapRef: input.sourceMapRef, understandingSkill: { id: 'native-hermes-agent', version: execution.runtimeId },
@@ -233,5 +233,6 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
       attemptId: `${input.task.id}:native-agent`, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
       provider: last.target.provider, model: last.target.model, promptHash: last.target.promptHash,
       responseHash: createHash('sha256').update(last.response.text).digest('hex'), finishReason: 'stop' as const, usage: last.response.usage,
-      reviewedCandidateHash: nativeReviewedCandidateHash, fieldReviews: nativeScientificFields, needsMoreEvidence: nativeNeedsMoreEvidence, skillReads } };
+      reviewedCandidateHash: nativeReviewedCandidateHash, fieldReviews: nativeScientificFields, needsMoreEvidence: nativeNeedsMoreEvidence, skillReads,
+      ...(execution.profile === 'paper-author' ? { draftClaims: nativeDraftClaims } : {}) } };
 }

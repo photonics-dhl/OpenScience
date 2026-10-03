@@ -9,6 +9,8 @@ export interface NativeAgentSessionBinding {
   contextWindowTokens?: number;
   /** Trusted profile settings, not SDK/model-controlled supplier arguments. */
   generation?: Pick<TextGenerationOptions, 'thinking' | 'temperature' | 'topP'>;
+  /** Private immutable review input; never included in the native host configuration. */
+  sourceReview?: { sourceAgentTaskId: string; authorCheckpointSha256: string; boundDraft: unknown };
 }
 type Target = { provider: string; model: string; promptHash: string };
 type Request = { messages: ChatMessage[]; options: TextGenerationOptions };

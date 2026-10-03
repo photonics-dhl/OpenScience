@@ -7,6 +7,7 @@ import { lockTrashReferences } from '../trash/trash';
 import { parsePresentationGenerationPayload, requirePresentationWriteScope } from '../assets/presentation-asset';
 import { requireHermesPresentationTaskAuthority } from './research-run';
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
+import { requireHermesSourceReviewExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -25,7 +26,7 @@ export interface NativeAgentCheckpointReference {
   responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
 }
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
-  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-illustration'; checkpoint?: NativeAgentCheckpointReference;
+  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration'; checkpoint?: NativeAgentCheckpointReference;
 }
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
@@ -39,6 +40,15 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   const marker = readNativeAgentExecution(task?.result);
   const payload = task?.payload;
+  let sourceReview: HermesAgentSourceReviewExecution | undefined;
+  if (marker?.profile === 'paper-source-review') {
+    const key = /^ingestion-analysis-compose:([0-9a-f-]{36}):([0-9a-f-]{36}):([0-9a-f-]{36}):scientific-review-v4$/u.exec(task?.idempotencyKey ?? '');
+    if (!task || !key) blocked();
+    const execution = await requireHermesSourceReviewExecution(tx, { ownerTaskId: task.id, ingestionTaskId: key[1]!,
+      failedTaskId: key[2]!, compositionTaskId: key[3]!, executionAttempt: input.executionAttempt });
+    if (execution.mode !== 'agent') blocked();
+    sourceReview = execution;
+  }
   if (marker?.profile === 'paper-illustration') {
     if (!task || task.deletedAt || task.status !== 'running' || task.kind !== 'presentation.generate'
       || task.executionAttempt !== input.executionAttempt || task.session.deletedAt || task.session.status !== 'active') blocked();
@@ -57,7 +67,7 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
       || artifact.blobSha256 !== reference.contentHash || reference.parserStatus !== 'succeeded'
       || (marker.checkpoint && (marker.checkpoint.artifactId !== reference.artifactId || marker.checkpoint.documentSha256 !== reference.contentHash
         || marker.checkpoint.sourceMapHash !== reference.serializedSha256)))) blocked();
-    return { task, marker, artifact, researchObject: ro, workspace };
+    return { task, marker, artifact, researchObject: ro, workspace, sourceReview };
   }
   if (!task || task.deletedAt || task.status !== 'running' || task.kind !== 'sdf.extract' || task.executionAttempt !== input.executionAttempt
     || !marker || task.session.deletedAt || task.session.status !== 'active' || !task.session.researchObjectId || !record(payload)
@@ -82,8 +92,10 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
     const run = await tx.hermesResearchRun.findUnique({ where: { id: step.runId } });
     if (!run || run.actorId !== task.session.userId || run.researchObjectId !== ro.id
       || ['failed', 'cancelled', 'completed'].includes(run.status) || step.ingestionTaskId !== source.id || step.artifactId !== artifact.id) blocked();
+    if (marker.profile === 'paper-author' && (!['running', 'awaiting_source_review'].includes(run.status)
+      || step.status !== 'waiting')) blocked();
   }
-  return { task, marker, artifact, researchObject: ro, workspace };
+  return { task, marker, artifact, researchObject: ro, workspace, sourceReview };
 }
 
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */
@@ -98,7 +110,7 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
   if (!record(result) || !Object.hasOwn(result, 'nativeAgentExecution')) return undefined;
   const marker = result.nativeAgentExecution;
   if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
-    || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-illustration'].includes(String(marker.profile))
+    || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration'].includes(String(marker.profile))
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
   if (Object.hasOwn(marker, 'checkpoint')) {
     const cp = marker.checkpoint;
@@ -124,7 +136,7 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
-  if (!task || task.deletedAt || !marker || task.kind !== (marker.profile === 'paper-understanding' ? 'sdf.extract' : 'presentation.generate') || input.next.taskId !== task.id
+  if (!task || task.deletedAt || !marker || task.kind !== (marker.profile === 'paper-illustration' ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
     || !isDeepStrictEqual(marker.checkpoint, input.expected)) blocked();
   const priorObjects = record(task.result) && Array.isArray(task.result.nativeAgentObjects) ? task.result.nativeAgentObjects : [];
   const oldObject = marker.checkpoint?.objectKey;
@@ -190,8 +202,8 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
     }
   }
   if (status === 'succeeded') {
-    if (marker.profile === 'paper-understanding' && task.kind !== 'sdf.extract') blocked();
-    if (marker.profile === 'paper-understanding' && !marker.checkpoint && record(incoming) && incoming.status === 'needs_review' && typeof incoming.reason === 'string'
+    if (marker.profile !== 'paper-illustration' && task.kind !== 'sdf.extract') blocked();
+    if (['paper-understanding', 'paper-author'].includes(marker.profile) && !marker.checkpoint && record(incoming) && incoming.status === 'needs_review' && typeof incoming.reason === 'string'
       && exact(incoming, ['status', 'reason', 'format', 'sourceMapRef'])) {
       const reference = parseDocumentSourceMapReference(incoming.sourceMapRef);
       if (!record(task.payload) || reference.artifactId !== task.payload.artifactId) blocked();
@@ -199,11 +211,15 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
     }
     const cp = marker.checkpoint;
     if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || !record(incoming)) blocked();
-    const receipt = marker.profile === 'paper-understanding' ? incoming.scientificReview : incoming.storyboardReview;
+    const receipt = marker.profile === 'paper-illustration' ? incoming.storyboardReview : incoming.scientificReview;
     if (!record(receipt) || ['provider', 'model', 'promptHash'].some(k => receipt[k] !== cp.target[k as keyof typeof cp.target])
       || receipt.responseHash !== cp.responseHash) blocked();
-    if (marker.profile === 'paper-understanding') {
+    if (marker.profile !== 'paper-illustration') {
       if (receipt.kind !== 'hermes_agent_review' || receipt.runtimeId !== marker.runtimeId || receipt.skillCatalogueId !== marker.skillCatalogueId) blocked();
+      if (marker.profile === 'paper-source-review' && (receipt.profile !== marker.profile || !text(receipt.sourceAgentTaskId)
+        || receipt.sourceAgentTaskId === task.id)) blocked();
+      if (marker.profile === 'paper-author' && (receipt.sourceAgentTaskId !== undefined
+        || (receipt.profile !== undefined && receipt.profile !== 'paper-author'))) blocked();
     } else if (task.kind !== 'presentation.generate' || incoming.assetId !== task.id || receipt.stage !== 'final-brief'
       || receipt.requestId !== task.id || receipt.decision !== 'accepted' || !record(task.result)
       || !isDeepStrictEqual(receipt, task.result.storyboardReview)) blocked();

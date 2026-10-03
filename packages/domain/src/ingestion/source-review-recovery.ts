@@ -9,6 +9,8 @@ import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from
 import { findSavedIngestionCommit } from './saved-source-commit';
 import { requireActiveMembership } from '../workspace/helpers';
 import { inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, hasOrdinarySourceTaskDebit, type HermesSavedSourceCompositionCandidate } from './source-composition-recovery';
+import { readNativeAgentExecution, nativeAgentTerminalResult } from '../agent/native-agent-execution';
+import { requireNativePaperAuthor } from './native-paper-author';
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {};
@@ -33,7 +35,11 @@ export type HermesSavedSourceReviewOutput = {
   sourceTaskId: string; structuredAttempt: number; text: string; responseHash: string;
   promptHash: string; provider: string; model: string; byteLength: number;
 };
-export type HermesSourceReviewExecution = { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput;
+export type HermesAgentSourceReviewExecution = {
+  mode: 'agent'; taskId: string; runId: string; sourceAgentTaskId: string; authorCheckpointSha256: string;
+  sourceMapRef: DocumentSourceMapReference; sourceResult: Prisma.JsonValue;
+};
+export type HermesSourceReviewExecution = HermesAgentSourceReviewExecution | { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput;
   savedCompositionCandidate?: HermesSavedSourceCompositionCandidate;
   nativeSourceReview?: import('./native-source-review').NativeSourceReviewIdentity } | {
   mode: 'web'; provider: 'chatgpt-web-science-review'; model: 'chatgpt-web/6-pro';
@@ -46,7 +52,10 @@ type SourceReviewBindingInput = {
 const independentMode = (metadata: Record<string, unknown>) => metadata.reviewMode === 'web'
   && metadata.reviewProvider === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider
   && metadata.reviewModel === HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel;
-const initialReviewMode = (metadata: Record<string, unknown>): 'model' | 'web' | undefined => {
+const initialReviewMode = (metadata: Record<string, unknown>): 'model' | 'web' | 'agent' | undefined => {
+  if (metadata.policy === 'scientific_review_v4_correction' && metadata.reviewMode === 'agent'
+    && metadata.reviewProfile === 'paper-source-review' && sha256(metadata.authorCheckpointSha256)
+    && metadata.reviewProvider === undefined && metadata.reviewModel === undefined) return 'agent';
   if (metadata.policy === 'scientific_review_v4_independent') return independentMode(metadata) ? 'web' : undefined;
   if (metadata.policy === 'scientific_review_v4_correction' && metadata.reviewMode === undefined
     && metadata.reviewProvider === undefined && metadata.reviewModel === undefined) return 'model';
@@ -1065,6 +1074,19 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   if (!reviewMode) return null;
   const independent = reviewMode === 'web';
   const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
+  const reviewer = readNativeAgentExecution(owner.result);
+  const author = readNativeAgentExecution(composition?.result);
+  if (reviewMode === 'agent') {
+    if (savedCompositionHistory || compositions.length || metadata.savedCompositionCandidate !== undefined
+      || reviewer?.profile !== 'paper-source-review' || author?.profile !== 'paper-author'
+      || Object.hasOwn(record(owner.result), 'nativeSourceReview') || Object.hasOwn(record(composition?.result), 'nativeSourceReview')
+      || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh' || owner.session.kind !== 'ingestion'
+      || composition?.session.kind !== 'ingestion' || !['pending', 'running', 'succeeded'].includes(owner.status)
+      || !['waiting', 'succeeded'].includes(step.status) || !['waiting', 'succeeded'].includes(canonical[0]!.status)
+      || !await hasOrdinarySourceTaskDebit(tx, owner.id, run.actorId)) return null;
+    const authority = await requireActiveMembership(tx, run.researchObject.workspaceId, run.actorId);
+    if (authority.workspace.status !== 'active' || !SOURCE_WRITE_ROLES.has(authority.membership.role)) return null;
+  } else if (reviewer?.profile === 'paper-source-review' || reviewer?.profile === 'paper-author' || author?.profile === 'paper-author') return null;
   const savedComposition = metadata.savedCompositionCandidate !== undefined
     ? await inspectHermesSavedCompositionCandidate(tx, run.id) : null;
   if (metadata.savedCompositionCandidate !== undefined && (!savedComposition || independent
@@ -1087,16 +1109,28 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
     if (!savedComposition && automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
     const reference = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
     if (metadata.sourceMapSha256 !== reference.serializedSha256) return null;
+    if (reviewMode === 'agent') {
+      const candidate = requireNativePaperAuthor(composition);
+      if (candidate.checkpoint.serializedSha256 !== metadata.authorCheckpointSha256
+        || reference.artifactId !== source.artifactId || reference.contentHash !== source.artifact.blobSha256) return null;
+      const result = record(owner.result);
+      if (result.sourceMapRef !== undefined && !isDeepStrictEqual(parseDocumentSourceMapReference(result.sourceMapRef), reference)) return null;
+      const cp = reviewer!.checkpoint;
+      if (cp && (result.sourceMapRef === undefined || cp.taskId !== owner.id || cp.artifactId !== reference.artifactId
+        || cp.documentSha256 !== reference.contentHash || cp.sourceMapHash !== reference.serializedSha256)) return null;
+    }
     if (owner.status === 'succeeded') {
       const final = record(owner.result); const review = record(final.scientificReview);
-      if ((independent ? review.kind !== 'independent_review'
+      if ((reviewMode === 'agent' ? review.kind !== 'hermes_agent_review' || review.profile !== 'paper-source-review'
+        : independent ? review.kind !== 'independent_review'
         || review.provider !== metadata.reviewProvider || review.model !== metadata.reviewModel : review.kind !== 'model_self_check')
         || review.sourceAgentTaskId !== composition.id
         || !isDeepStrictEqual(parseDocumentSourceMapReference(final.sourceMapRef), reference)
-        || !isDeepStrictEqual(review.semanticStage, record(record(composition.result).scientificReview).semanticStage)) return null;
+        || (reviewMode !== 'agent' && !isDeepStrictEqual(review.semanticStage, record(record(composition.result).scientificReview).semanticStage))) return null;
+      if (reviewMode === 'agent') nativeAgentTerminalResult(owner, 'succeeded', final);
     }
   } catch { return null; }
-  return { run, source, composition, owner, independent,
+  return { run, source, composition, owner, independent, reviewMode,
     ...(savedComposition ? { savedCompositionCandidate: savedComposition.savedCompositionCandidate } : {}) };
 }
 
@@ -1123,6 +1157,13 @@ export async function requireHermesSourceReviewExecution(tx: Prisma.TransactionC
     || (continuation && continuation.failed.id !== input.failedTaskId)) throw new Error('[blocked] Source review binding changed');
   const { membership } = await requireActiveMembership(tx, proof.run.researchObject.workspaceId, proof.run.actorId);
   if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) throw new Error('[blocked] Source review binding changed');
+  if (first?.reviewMode === 'agent') {
+    if (!['queued', 'parsing'].includes(first.source.state)
+      || first.run.steps.some(step => step.status !== 'waiting')) throw new Error('[blocked] Source review execution phase changed');
+    const candidate = requireNativePaperAuthor(first.composition);
+    return { mode: 'agent', taskId: owner.id, runId: first.run.id, sourceAgentTaskId: first.composition.id,
+      authorCheckpointSha256: candidate.checkpoint.serializedSha256, sourceMapRef: candidate.sourceMapRef, sourceResult: first.composition.result };
+  }
   const savedOutput = continuation?.savedOutput;
   if (!(first?.independent || continuation?.reviewMode === 'web')) return { mode: 'model', ...(savedOutput ? { savedOutput } : {}),
     ...(first?.savedCompositionCandidate ? { savedCompositionCandidate: first.savedCompositionCandidate } : {}),
@@ -1160,6 +1201,8 @@ async function requireUnmanagedInitialReview(tx: Prisma.TransactionClient, input
     || metadata.policy !== 'scientific_review_v4_correction' || metadata.artifactId !== source.artifactId
     || metadata.oldAgentTaskId !== composition.id || metadata.compositionSourceAgentTaskId !== composition.id) return blocked();
   for (const task of [owner, composition]) {
+    const profile = readNativeAgentExecution(task.result)?.profile;
+    if (profile === 'paper-author' || profile === 'paper-source-review') return blocked();
     if (task.deletedAt || task.kind !== 'sdf.extract' || task.session.deletedAt || task.session.status !== 'active'
       || task.session.userId !== source.batch.userId || task.session.researchObjectId !== source.batch.researchObjectId
       || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId })) return blocked();

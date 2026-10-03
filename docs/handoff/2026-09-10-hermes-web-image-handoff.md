@@ -16,10 +16,10 @@
 - 原生科学分镜caller已部署：同源已审Claims、原文/图页、设计Skill及共享物化保存私有完整prompt。自动run在审批及旧图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图；GET/UI为image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
 
 ## 当前科学断点与下一步
-- 最新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`。原26页/85段Map未变；5分13.871秒/9paid回复，一次普通平台任务收费，正常stop但只有普通解释/无JSON，原守卫拒收。未采用/规划/生图，不重开或发v14。
+- 最新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`。原26页/85段Map未变；5分13.871秒/9paid回复，一次普通平台任务收费，正常stop但只有普通解释/无JSON，原守卫拒收。未采用/规划/生图，不重开失败任务或盲目另发同一旧流程。
 - 实际最后请求已有完整所选稿、7Claim、原P和两条绑定诊断；离线1/1匹配实际调用与未变来源、零provider，控制提示初末不变，排除该候选丢传/投影错误，不能据此解释模型为何误判。两个Skill在稿前读取，未调用原页/专项引用/稿后来源工具；这不证明完全未作内部比较。
 - 独立科学NO-GO：保存稿把近垂直误写近正碰，普通终答把0.4THz的10cm示例泛化，棱镜直径跨算例移用。材料内缘阈值表述局部改善；格式或来源ID合法不能视为科学正确。原文与完整评估 `tmp/hermes-cleanup-20261003/real-paper-science-v13.md`；真实输入证据 `real-paper-trace-v13.json`、`paired-v13-context.json`、`paired-v13-capture.log`。
-- 当前完整稿仍由同一作者会话自评；已有source_review阶段是model-native固定请求。独立High只读确认可仅对新任务替换为独立原生Hermes角色，绑定实际作者候选、独立会话及原Map，保持既有阶段/权限/扣费/max9/旧paid解释；边界见[原生计划](../plans/2026-10-01-native-hermes-agent-plan.md)。尚未实现，效果未知；下一步落实该角色的精确创建、执行和终态绑定，再验证实际核源，科学通过后才验证自动计划。
+- 本地正在实现独立原生source_review（未发布）：新paper-author只保存作者稿，不能被自动物化为已审科学；paper-source-review复用真实已存稿/Claims/完整所选原P、现有搜索/原页/Skill、原生Session/Gateway和科学物化。私有会话绑定原作者及其既有CP，SDK配置不暴露私有绑定；旧paper-understanding/paid解释不改。Worker214定向、TC通过，Domain创建/权限/计费/终态由Carver实现，Halley作独立High增量审查。下一步完成集成/精确CI/发布，再以新角色的有界真实路径验收科学和自动计划，不以测试改科学NO-GO；边界见[原生计划](../plans/2026-10-01-native-hermes-agent-plan.md)。
 - 历史v11/v12及来源配对修复已结束：失败任务与全部paid/原文/High证据保持，按Git `ba52f5b` 的本页及 `tmp/ro-journey-20260929/`、`tmp/hermes-cleanup-20261003/` 定向读，不再作为当前重试/安装步骤。安装0.10.0缺最新structured plugin/grounded-citations；delegate文件存在不代表当前transport可调用，不盲升级/叠Skill。
 
 ## Illustration delivery

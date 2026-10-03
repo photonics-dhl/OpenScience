@@ -590,7 +590,7 @@ async function persistAgentTaskCoreInTransaction(
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
-    ? initialNativeAgentExecution(deps.nativeAgentRuntime)
+    ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
       ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
   try {
@@ -1141,7 +1141,10 @@ async function markTaskProgressOnce(
         throw new AgentError('ILLEGAL_TRANSITION', 'Native source review authority changed');
     }
     if (input.status === 'succeeded' && readNativeAgentExecution(current.result)) {
-      await requireNativeAgentExecutionAuthority(tx, { taskId: current.id, executionAttempt: current.executionAttempt });
+      const authority = await requireNativeAgentExecutionAuthority(tx, { taskId: current.id, executionAttempt: current.executionAttempt });
+      if (authority.sourceReview && (!isJsonRecord(input.result) || !isJsonRecord(input.result.scientificReview)
+        || input.result.scientificReview.sourceAgentTaskId !== authority.sourceReview.sourceAgentTaskId))
+        throw new AgentError('ILLEGAL_TRANSITION', 'Native independent reviewer author changed');
       await requireNativeIllustrationTerminalSource(tx, current);
     }
     const result = nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
@@ -1167,7 +1170,7 @@ async function markTaskProgressOnce(
     const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
-  }, readNativeAgentExecution(task.result)?.profile === 'paper-illustration' ? { isolationLevel: 'Serializable' } : undefined);
+  }, ['paper-illustration', 'paper-source-review'].includes(readNativeAgentExecution(task.result)?.profile ?? '') ? { isolationLevel: 'Serializable' } : undefined);
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
 }

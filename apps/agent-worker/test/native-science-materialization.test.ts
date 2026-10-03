@@ -17,6 +17,52 @@ const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => 
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 const paidContextDescription = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
 describe('actual native Agent scientific materializer', () => {
+  it('retains the exact raw final Claims for a later independent source review', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001']);
+    expect(worker.draft(draft(), 0, 'author-draft').status).toBe('draft_ready');
+    const finalReview = review();
+    finalReview.claimSuggestions[0]!.limitations = ['This statement is a numerical prediction.'];
+    const result = worker.finish(JSON.stringify(finalReview));
+    expect(result.nativeDraftClaims).toEqual(finalReview.claimSuggestions);
+    expect(result.nativeDraftClaims).not.toEqual(draft().draftClaims);
+  });
+
+  it('reviews the actual bound author candidate without requiring a newly invented reviewer draft', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], {
+      boundDraft: { sourceAgentTaskId: 'author-task', draft: draft() },
+    });
+    const result = worker.finish(JSON.stringify({ draftToolCallId: 'author-task',
+      fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+      needsMoreEvidence: [], claimSuggestions: 'unchanged' }));
+    expect(result.core.method).toBe(source);
+    expect(result.reviewedClaimSuggestions?.[0]?.statement).toBe(source);
+  });
+
+  it('keeps an independent review baseline unchanged after attempted writer calls or replay reset', () => {
+    const original = draft();
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], {
+      boundDraft: { sourceAgentTaskId: 'author-task', draft: original },
+    });
+    original.fields.method!.summary = 'Mutated outside the bound review.';
+    expect(worker.field({ field: 'method', summary: source, sourcePassageIds: ['P00001'] }, 1, 'rewrite').status).toBe('invalid_field');
+    expect(worker.claim(draft().draftClaims[0], 2, 'new-claim').status).toBe('invalid_claim');
+    expect(worker.draft(draft(), 3, 'new-draft').status).toBe('invalid_draft');
+    worker.resetForReplay();
+    const decision = { draftToolCallId: 'author-task', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+      needsMoreEvidence: [], claimSuggestions: 'unchanged' };
+    expect(worker.finish(JSON.stringify(decision)).core.method).toBe(source);
+    expect(() => worker.finish(JSON.stringify({ ...decision, draftToolCallId: 'new-draft' }))).toThrow();
+  });
+
+  it('does not count bound author citations as passages the reviewer has actually received', () => {
+    const worker = createNativeScientificMaterializer(map, () => [], {
+      boundDraft: { sourceAgentTaskId: 'author-task', draft: draft() },
+    });
+    expect(() => worker.finish(JSON.stringify({ draftToolCallId: 'author-task',
+      fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+      needsMoreEvidence: [], claimSuggestions: 'unchanged' }))).toThrow();
+  });
+
   it('pairs a new draft with its actual selected sentences and full Claim rather than only their IDs', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(null));
     saveNotes(worker);

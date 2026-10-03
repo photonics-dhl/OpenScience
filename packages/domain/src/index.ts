@@ -273,7 +273,7 @@ export type { NativeSourceReviewIdentity, NativeSourceReviewTarget, NativeSource
 export { resolveHermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';
 export { requireHermesSourceCompositionRecoveryExecution } from './ingestion/source-composition-recovery';
 export type { HermesPrivateSourceReanalysisInput, HermesPrivateSourceReanalysisExecutionInput, HermesPrivateSourceReanalysisExecution } from './ingestion/source-review-recovery';
-export type { HermesSavedSourceReviewOutput, HermesSourceReviewExecution, SourceReviewNotSubmittedInput, SourceReviewNotSubmittedVerifier } from './ingestion/source-review-recovery';
+export type { HermesSavedSourceReviewOutput, HermesSourceReviewExecution, HermesAgentSourceReviewExecution, SourceReviewNotSubmittedInput, SourceReviewNotSubmittedVerifier } from './ingestion/source-review-recovery';
 export type { HermesSavedSourceCompositionCandidate } from './ingestion/source-composition-recovery';
 export { MAX_INGESTION_CLAIMS, areSourceCompositionDraftClaimsValid, parseReviewedClaimSuggestions, type ReviewedClaimSuggestion } from './ingestion/reviewed-claim-suggestions';
 export {

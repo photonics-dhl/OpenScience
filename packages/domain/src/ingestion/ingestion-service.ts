@@ -6,6 +6,8 @@ import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
 import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
 import { AgentError } from '../agent/errors';
+import { initialNativeAgentExecution, readNativeAgentExecution } from '../agent/native-agent-execution';
+import { requireNativePaperAuthor } from './native-paper-author';
 import { requireActive, requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
@@ -980,6 +982,9 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
             if (!initial) throw new IngestionError('VALIDATION_ERROR', 'Initial scientific review is not the bound final source');
             if (initial.savedCompositionCandidate) savedCompositionTaskId = initial.composition.id;
           }
+          if (readNativeAgentExecution(source.agentTask.result)?.profile === 'paper-source-review'
+            && !phases.some(step => step.stage === 'source_review'))
+            throw new IngestionError('VALIDATION_ERROR', 'Native independent reviewer phase is missing');
           const recoveredComposition = phases.filter(step => step.stage === 'source_composition').length === 2
             ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
           if (phases.filter(step => step.stage === 'source_composition').length === 2 && !recoveredComposition)
@@ -1042,10 +1047,19 @@ export async function refreshIngestionAnalysis(
   if (internalRunId && Boolean(input.compositionSourceAgentTaskId) !== Boolean(input.reviewOnly))
     throw new IngestionError('VALIDATION_ERROR', 'Hermes source upgrades use general composition or current-source review only');
   const refreshPolicy = (value: unknown, artifact: { id: string; blobSha256: string }) => {
+    if (readNativeAgentExecution(value)?.profile === 'paper-author')
+      return internalRunId && input.reviewOnly ? 'scientific_review_v4' as const : undefined;
     const policy = unconfirmedAnalysisRefreshPolicy(value, artifact);
     // Reuse the canonical SourceMap through the existing scientific refresh,
     // never the user-requested path that intentionally runs the parser again.
     return internalRunId && !input.reviewOnly ? 'scientific_review_v4' as const : policy;
+  };
+  const compositionSourceReference = (task: { id: string; status: string; result: unknown; executionAttempt: number } | null,
+    artifact: { id: string; blobSha256: string }) => {
+    if (readNativeAgentExecution(task?.result)?.profile !== 'paper-author') return semanticCompositionSourceReference(task?.result, artifact);
+    if (!internalRunId || !input.reviewOnly || !task) return undefined;
+    const author = requireNativePaperAuthor(task);
+    return author.sourceMapRef.artifactId === artifact.id && author.sourceMapRef.contentHash === artifact.blobSha256 ? author.sourceMapRef : undefined;
   };
   const checkRefreshReplay = async (replacementId: string) => {
     await deps.prisma.$transaction(async tx => {
@@ -1084,7 +1098,7 @@ export async function refreshIngestionAnalysis(
     const compositionPayload = compositionSource?.payload && typeof compositionSource.payload === 'object' && !Array.isArray(compositionSource.payload)
       ? compositionSource.payload as Record<string, unknown> : null;
     const currentPolicy = currentAgent ? refreshPolicy(currentAgent.result, initial.artifact) : undefined;
-    const compositionReference = semanticCompositionSourceReference(compositionSource?.result, initial.artifact);
+    const compositionReference = compositionSourceReference(compositionSource, initial.artifact);
     if (!currentAgent || currentAgent.kind !== 'sdf.extract' || currentAgent.status !== 'succeeded' || !currentPolicy
       || !validRefreshSourceExecution(currentPolicy, initial.id, currentAgent)
       || currentAgent.session.userId !== input.userId || currentAgent.session.researchObjectId !== initial.batch.researchObjectId
@@ -1153,7 +1167,7 @@ export async function refreshIngestionAnalysis(
           const transactionCompositionPayload = transactionComposition?.payload && typeof transactionComposition.payload === 'object'
             && !Array.isArray(transactionComposition.payload) ? transactionComposition.payload as Record<string, unknown> : null;
           const transactionPolicy = transactionCurrent ? refreshPolicy(transactionCurrent.result, source.artifact) : undefined;
-          const transactionReference = semanticCompositionSourceReference(transactionComposition?.result, source.artifact);
+          const transactionReference = compositionSourceReference(transactionComposition, source.artifact);
           if (!transactionCurrent || transactionCurrent.kind !== 'sdf.extract' || transactionCurrent.status !== 'succeeded'
             || transactionPolicy !== currentPolicy || !validRefreshSourceExecution(currentPolicy, source.id, transactionCurrent)
             || transactionCurrent.session.userId !== input.userId
@@ -1194,6 +1208,11 @@ export async function refreshIngestionAnalysis(
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only the current scoped unconfirmed extraction can be composed');
           }
           const hermesRun = internalRunId ? await prepareHermesRefresh(tx, source, input, internalRunId) : undefined;
+          const nativeAuthor = readNativeAgentExecution(transactionComposition.result)?.profile === 'paper-author'
+            ? requireNativePaperAuthor(transactionComposition) : undefined;
+          const nativeReviewer = nativeAuthor ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-source-review') : undefined;
+          if (nativeAuthor && (!hermesRun || !input.reviewOnly || !nativeReviewer))
+            throw new IngestionError('VALIDATION_ERROR', 'Native independent reviewer runtime or grant is unavailable');
           if (hermesRun && (!deps.audit?.record || hermesRun.maxAgentTasks !== 9 || hermesRun.steps.length + 1 + 3 > hermesRun.maxAgentTasks))
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Independent source review receipt or remaining grant is unavailable');
           const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
@@ -1211,7 +1230,11 @@ export async function refreshIngestionAnalysis(
             idempotencyKey: stableKey,
           }, ctx);
           if (hermesRun && replayed) throw new IngestionError('VALIDATION_ERROR', 'Hermes phase cannot adopt an unrecorded refresh replay');
-          if (!replayed && input.reviewOnly && (source.artifact.mimeType === 'application/pdf'
+          if (!replayed && nativeReviewer) {
+            const initialized = await tx.agentTask.updateMany({ where: { id: replacement.id, status: replacement.status,
+              result: { equals: Prisma.AnyNull } }, data: { result: nativeReviewer as unknown as Prisma.InputJsonObject } });
+            if (initialized.count !== 1) throw new IngestionError('VALIDATION_ERROR', 'Native Agent reviewer initialization changed');
+          } else if (!replayed && input.reviewOnly && (source.artifact.mimeType === 'application/pdf'
             || source.artifact.logicalPath.toLowerCase().endsWith('.pdf'))) {
             const initialized = await tx.agentTask.updateMany({ where: { id: replacement.id, status: replacement.status,
               result: { equals: Prisma.AnyNull } }, data: { result: { nativeSourceReview: { mode: 'model-native', attempts: [] } } } });
@@ -1237,6 +1260,8 @@ export async function refreshIngestionAnalysis(
               artifactId: source.artifactId,
               sourceMapSha256: sourceMapProof.serializedSha256,
               creditPolicy: 'charged_ingestion_analysis_refresh',
+              ...(nativeAuthor ? { reviewMode: 'agent', reviewProfile: 'paper-source-review',
+                authorCheckpointSha256: nativeAuthor.checkpoint.serializedSha256 } : {}),
               ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, stage: 'source_review' } : {}),
             },
           }, ctx);
@@ -1676,6 +1701,12 @@ async function saveIngestionTask(
             throw new IngestionError('VALIDATION_ERROR', 'Hermes source authorization changed');
           }
           requireUnchangedAutomaticCore(internalReview!, input.core);
+          const nativeReviewer = readNativeAgentExecution(task.agentTask?.result)?.profile === 'paper-source-review';
+          if (nativeReviewer || run.steps.some(step => step.stage === 'source_review' && step.ordinal === 0 && step.agentTaskId === task.agentTaskId)) {
+            const proof = await inspectInitialHermesSourceReview(tx, input.sourceAgentTaskId);
+            if (!proof || (nativeReviewer && proof.reviewMode !== 'agent') || proof.run.id !== run.id || proof.source.id !== task.id)
+              throw new IngestionError('VALIDATION_ERROR', 'Native independent reviewer source lineage changed');
+          }
         }
         const commitKey = internalRunId ? `hermes-ingestion:${internalRunId}:${task.id}` : `ingestion-confirm:${task.id}`;
         let commit = await savedConfirmation(scoped, task.id, ro.id, commitKey);
