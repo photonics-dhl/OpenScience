@@ -37,6 +37,17 @@ function renderRun(run: HermesResearchRun) {
 }
 
 describe('Hermes research run panel', () => {
+  it.each(['en', 'zh'])('describes a native preflight resume without another platform debit (%s)', locale => {
+    translations.locale = locale;
+    const run = sourceRun(); run.canRetryGeneration = true; run.chargeableAttempts = 0;
+    run.generationRecovery = 'source-review-fresh';
+    const html = renderRun(run);
+    expect(html).toContain(locale === 'zh' ? '复用原平台任务额度，不重复扣除' : 'Reuses the original platform task credit without another debit');
+    expect(html).toContain(locale === 'zh' ? '供应商用量' : 'provider usage still applies');
+    expect(html).toContain(locale === 'zh' ? '>继续 Hermes 审阅</button>' : '>Continue Hermes review</button>');
+    expect(html).not.toContain('ChatGPT');
+    expect(html).not.toContain((locale === 'zh' ? zh : en).hermesRun.narrative.resumeDescription);
+  });
   it.each(['en', 'zh'])('shows the prepared plan without claiming image production is running (%s)', locale => {
     translations.locale = locale;
     const run = sourceRun(); run.status = 'awaiting_storyboard_review'; run.error = null; run.versionId = 'version-1';

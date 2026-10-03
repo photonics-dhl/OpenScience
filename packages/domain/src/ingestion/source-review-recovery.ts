@@ -81,6 +81,8 @@ const PRIVATE_REANALYSIS_BATCH_PREFIX = 'ingestion-private-source-reanalysis:';
 const SOURCE_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 export const NATIVE_REVIEW_INITIALIZATION_ERROR = 'Native independent reviewer runtime or grant is unavailable';
 export const NATIVE_REVIEW_INITIALIZATION_RECOVERY = 'native_source_review_initialization' as const;
+export const NATIVE_REVIEW_PREFLIGHT_ERROR = '[blocked] Native author science/source data changed';
+export const NATIVE_REVIEW_PREFLIGHT_RECOVERY = 'native_source_review_preflight' as const;
 
 /** Resume only the pre-creation initialization failure; the ordinary ensure path owns review creation and charging. */
 export async function inspectNativeSourceReviewInitializationRecovery(tx: Prisma.TransactionClient, runId: string) {
@@ -1077,6 +1079,31 @@ export async function requireHermesSourceReviewRecoveryBinding(tx: Prisma.Transa
 
 /** Initial review uses the existing refresh receipt; a missing receipt never selects a provider. */
 export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionClient, ownerTaskId: string, savedCompositionHistory = false) {
+  return inspectInitialHermesSourceReviewForPurpose(tx, ownerTaskId, savedCompositionHistory ? 'saved-composition-history' : 'execution');
+}
+
+/** Recovery-only proof. Execution callers cannot opt into failed states through the normal binder. */
+export async function inspectNativeSourceReviewPreflightRecovery(tx: Prisma.TransactionClient, ownerTaskId: string) {
+  const proof = await inspectInitialHermesSourceReviewForPurpose(tx, ownerTaskId, 'native-preflight-recovery').catch(() => null);
+  if (!proof) return null;
+  const { run, source, owner } = proof;
+  if (await tx.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${source.id}` } })
+    || await tx.commit.findUnique({ where: { idempotencyKey: `hermes-ingestion:${run.id}:${source.id}` } })
+    || (await tx.auditLog.findMany({ where: { action: 'ai.gateway.call', requestId: owner.id }, take: 1 })).length
+    || (await tx.auditLog.findMany({ where: { action: 'hermes.research_run.source_review_resume',
+      targetType: 'hermes_research_run', targetId: run.id,
+      AND: [{ metadata: { path: ['recovery'], equals: NATIVE_REVIEW_PREFLIGHT_RECOVERY } },
+        { metadata: { path: ['agentTaskId'], equals: owner.id } }] }, take: 1 })).length) return null;
+  const debit = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${owner.id}` } });
+  // The shared proof already checked the exact ordinary debit; keep its existing ID in the origin receipt.
+  if (!debit) return null;
+  return { ...proof, reservationLedgerId: debit.id };
+}
+
+async function inspectInitialHermesSourceReviewForPurpose(tx: Prisma.TransactionClient, ownerTaskId: string,
+  purpose: 'execution' | 'saved-composition-history' | 'native-preflight-recovery') {
+  const savedCompositionHistory = purpose === 'saved-composition-history';
+  const preflight = purpose === 'native-preflight-recovery';
   const steps = await tx.hermesResearchStep.findMany({ where: { stage: 'source_review', ordinal: 0, agentTaskId: ownerTaskId }, take: 2 });
   if (steps.length !== 1) return null;
   const step = steps[0]!;
@@ -1090,7 +1117,7 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
   const recoveredComposition = run && compositions.length === 2 ? await inspectHermesRecoveredSourceComposition(tx, run.id) : null;
   if (!run || !owner || !source || step.ordinal !== 0 || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9
     || (!savedCompositionHistory && (run.versionId !== null || run.sourceClaimIds.length || run.sourceReviewDigest
-      || !['running', 'awaiting_source_review'].includes(run.status))) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
+      || !(preflight ? run.status === 'failed' : ['running', 'awaiting_source_review'].includes(run.status)))) || run.researchObject.status !== 'draft' || run.researchObject.deletedAt
     || canonical.length !== 1 || reviews.length !== 1 || compositions.length > 2
     || (!savedCompositionHistory && run.steps.length !== 2 + compositions.length)
     || (compositions.length === 2 && !recoveredComposition)
@@ -1099,7 +1126,8 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
     || canonical[0]!.agentTaskId !== owner.id || source.agentTaskId !== owner.id || source.retryCount !== 0
     || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
     || source.artifact.workspaceId !== run.researchObject.workspaceId || source.artifact.deletedAt || source.artifact.bytesPurgedAt
-    || !['queued', 'parsing', 'needs_review', 'confirmed'].includes(source.state) || owner.retryCount !== 0) return null;
+    || !(preflight ? source.state === 'failed_blocked' : ['queued', 'parsing', 'needs_review', 'confirmed'].includes(source.state))
+    || owner.retryCount !== 0) return null;
   const receipts = await tx.auditLog.findMany({ where: { action: 'ingestion.task.system_analysis_refresh',
     targetType: 'ingestion_task', targetId: source.id, actorId: null, workspaceId: run.researchObject.workspaceId,
     metadata: { path: ['newAgentTaskId'], equals: owner.id } }, take: 2 });
@@ -1110,7 +1138,7 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
     || metadata.stage !== 'source_review' || metadata.artifactId !== source.artifactId
     || typeof metadata.oldAgentTaskId !== 'string' || metadata.oldAgentTaskId !== metadata.compositionSourceAgentTaskId) return null;
   const reviewMode = initialReviewMode(metadata);
-  if (!reviewMode) return null;
+  if (!reviewMode || (preflight && reviewMode !== 'agent')) return null;
   const independent = reviewMode === 'web';
   const composition = await tx.agentTask.findUnique({ where: { id: metadata.oldAgentTaskId }, include: { session: true } });
   const reviewer = readNativeAgentExecution(owner.result);
@@ -1120,9 +1148,13 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
       || reviewer?.profile !== 'paper-source-review' || author?.profile !== 'paper-author'
       || Object.hasOwn(record(owner.result), 'nativeSourceReview') || Object.hasOwn(record(composition?.result), 'nativeSourceReview')
       || metadata.creditPolicy !== 'charged_ingestion_analysis_refresh' || owner.session.kind !== 'ingestion'
-      || composition?.session.kind !== 'ingestion' || !['pending', 'running', 'succeeded'].includes(owner.status)
-      || !['waiting', 'succeeded'].includes(step.status) || !['waiting', 'succeeded'].includes(canonical[0]!.status)
+      || composition?.session.kind !== 'ingestion' || !(preflight ? owner.status === 'failed' : ['pending', 'running', 'succeeded'].includes(owner.status))
+      || !(preflight ? step.status === 'failed' && canonical[0]!.status === 'failed'
+        : ['waiting', 'succeeded'].includes(step.status) && ['waiting', 'succeeded'].includes(canonical[0]!.status))
       || !await hasOrdinarySourceTaskDebit(tx, owner.id, run.actorId)) return null;
+    if (preflight && (owner.executionAttempt !== 1 || Object.hasOwn(reviewer, 'checkpoint')
+      || Object.keys(record(owner.result)).sort().join(',') !== 'nativeAgentExecution,sourceMapRef'
+      || [run.error, owner.error, source.error, step.error, canonical[0]!.error].some(error => error !== NATIVE_REVIEW_PREFLIGHT_ERROR))) return null;
     const authority = await requireActiveMembership(tx, run.researchObject.workspaceId, run.actorId);
     if (authority.workspace.status !== 'active' || !SOURCE_WRITE_ROLES.has(authority.membership.role)) return null;
   } else if (reviewer?.profile === 'paper-source-review' || reviewer?.profile === 'paper-author' || author?.profile === 'paper-author') return null;
@@ -1169,7 +1201,7 @@ export async function inspectInitialHermesSourceReview(tx: Prisma.TransactionCli
       if (reviewMode === 'agent') nativeAgentTerminalResult(owner, 'succeeded', final);
     }
   } catch { return null; }
-  return { run, source, composition, owner, independent, reviewMode,
+  return { run, source, composition, owner, independent, reviewMode, initialReviewAuditId: receipts[0]!.id,
     ...(savedComposition ? { savedCompositionCandidate: savedComposition.savedCompositionCandidate } : {}) };
 }
 

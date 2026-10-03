@@ -1546,6 +1546,8 @@
     "sourceParsingPages": "Pages awaiting parsing: {pages}",
     "sourceParsingResume": "Continue unfinished page parsing",
     "sourceReviewFresh": "Re-review and continue",
+    "sourceReviewNativeResume": "Continue Hermes review",
+    "sourceReviewNativeResumeDescription": "The previous review stopped before a model request. Hermes will continue scientific review of the saved draft. Reuses the original platform task credit without another debit; provider usage still applies. Once it passes, preparation of the private illustration plan continues.",
     "sourceReviewSaved": "Correct saved review and continue",
     "sourceReviewIndependent": "Review independently and continue",
     "sourceReviewTechnicalContinue": "Continue independent review",

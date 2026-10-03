@@ -10,19 +10,18 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
 
 ## 当前锚点
-- 分支release/onchip-production-line；10-03已发布源代码提交/app `33aa38489e1f8418bf7ece866078a38bbfbfcd64`，rollback `ba52f5b26b8c70ef17488b3792863b06751f3990`。最后文档同步提交按Git读取，不代表另一轮部署。
-- 精确CI37107038661 success及独立High GO；正常app发布exit0，公网/exact release及原部署事务通过。API/Worker running、OOM=false；两者均使用`installed-native-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`及`project-catalogue-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`、MiniMax-M3，timer enabled/active、实核无活动实例。adapter/资源未变，经High兼容GO复用该安装，未堆新副本。证据 `tmp/hermes-cleanup-20261003/independent-{ci-result.json,deploy.log,runtime-after.json}`。
-- 已发布工具提交：新任务用paper_review保存完整终审数据，普通末回复不再抄JSON。仅精确新description启用；旧paid工具/schema/feedback/system/goal及严格JSON回放不变。选择最新真实review调用，重建真实稿并重跑原完整科学检查；后续改稿/失败review不退用旧成功。字段来源对齐既有64、旧schema和issues仍12；stop/provider/model/authority与实际responseHash不改，无新阶段/额度/审批/hash。真RED、132/TC/四文件lint/High及精确CI通过；没有新科学调用。
+- 分支release/onchip-production-line；10-03已发布源代码提交/app `0d86f351dc01114ffaf517314a5cd8196f2a0bcb`，rollback `33aa38489e1f8418bf7ece866078a38bbfbfcd64`。最后文档同步提交按Git读取，不代表另一轮部署。
+- 精确CI37111385512 success及独立High GO；正常app发布exit0，公网/exact release及原部署事务通过。API/Worker running、OOM=false；两者均使用`installed-native-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`及`project-catalogue-28d637de61f2a12e5c1f4171cf3a00fbcb0dc89e`、MiniMax-M3，timer enabled/active、实核无活动实例。adapter/资源未变，经High兼容GO复用该安装，未堆新副本。证据 `tmp/hermes-cleanup-20261003/initialization-{ci-result.json,deploy.log,runtime-after.json}`。
+- 作者和独立审阅已使用真实paper_review回执保存科学数据，不依赖最后普通回复抄写JSON；旧paid回放及来源/权限/正常stop验证保持。作者实际提交已成功，独立审阅的最新状态见下一节。
 - 原生科学分镜caller已部署：同源已审Claims、原文/图页、设计Skill及共享物化保存私有完整prompt。自动run在审批及旧图片派发两处停在awaiting_storyboard_review，即使手工批准也不走旧生图；GET/UI为image-api-pending。尚无新原生科学合格稿贯通到计划的真实验收。
 
 ## 当前科学断点与下一步
-- 最新私有v13已failed：ingestion `366931b0-acbc-4038-95c3-edc478cb98ca`，task `64b2aaf8-57e6-4401-bc89-78e9f849884d`，key `native-hermes-paper-20261003-cds-v13`。原26页/85段Map未变；5分13.871秒/9paid回复，一次普通平台任务收费，正常stop但只有普通解释/无JSON，原守卫拒收。未采用/规划/生图，不重开失败任务或盲目另发同一旧流程。
-- 实际最后请求已有完整所选稿、7Claim、原P和两条绑定诊断；离线1/1匹配实际调用与未变来源、零provider，控制提示初末不变，排除该候选丢传/投影错误，不能据此解释模型为何误判。两个Skill在稿前读取，未调用原页/专项引用/稿后来源工具；这不证明完全未作内部比较。
-- 独立科学NO-GO：保存稿把近垂直误写近正碰，普通终答把0.4THz的10cm示例泛化，棱镜直径跨算例移用。材料内缘阈值表述局部改善；格式或来源ID合法不能视为科学正确。原文与完整评估 `tmp/hermes-cleanup-20261003/real-paper-science-v13.md`；真实输入证据 `real-paper-trace-v13.json`、`paired-v13-context.json`、`paired-v13-capture.log`。
-- 独立原生source_review已发布：新paper-author不能直接被自动物化为已审科学；paper-source-review复用实际作者稿/Claims/完整原P、搜索/原页/Skill、原生Session/Gateway及科学物化，保留旧paid语义/阶段/max9/一次普通收费。Worker214、Domain54新增+431控制、TC/build/lint、High及精确CI通过；额外bridge9/10唯一失败在未变HEAD隔离复现。没有额外下游门槛；已经采用的结果不因作者会话后来归档而失效。
-- 新角色真实运行 `604e8d9a-c573-4b0d-a404-8dabc5cb664a` 已failed/version3，ingestion `b0e4d11c-492f-453a-85af-e9c3337fd4cb`。author `c801a07f-8441-4f9d-814e-f4c492474c5f` 已succeeded（约6分14秒/23paid轮、8原页图进入输入、两科学Skill），原稿/CP保留；独立核源要求修正角度、THz传播距离、损伤位置、电子束算例与非普适表述，作者稿尚未科学通过。创建回执与实际稿见tmp/hermes-cleanup-20261003/independent-{real-create.json,real-status.json,author-result.json}。断点是Worker启动deps漏nativeAgentRuntime，导致独立审阅创建前报runtime/grant unavailable；尚无reviewer/收费。接线候选真RED→80/TC/lint及High GO，未发布。
-- 下一步沿既有retry恢复“成功原生作者、尚未创建审阅”的初始化失败：同一run/CAS/原paid作者/原Map、现有权限/审计/费用，走原ensure，不重开作者/另建run或加额度。架构已High GO且用户已授权；候选76+280/TC/build及最终High GO，已允许同PDF旧版本且仍拒绝当前run/ingestion的已提交结果（线上旧771ff7f3保持，当前run无version/commit，initialization-binding-before.json）。日志independent-domain-init-*；research-run.ts既有20lint与HEAD一致。待本次精确CI及发布后继续原操作，科学通过再验私有分镜；不再执行创建脚本。
-- 历史v11/v12及来源配对修复已结束：失败任务与全部paid/原文/High证据保持，按Git `ba52f5b` 的本页及 `tmp/ro-journey-20260929/`、`tmp/hermes-cleanup-20261003/` 定向读，不再作为当前重试/安装步骤。安装0.10.0缺最新structured plugin/grounded-citations；delegate文件存在不代表当前transport可调用，不盲升级/叠Skill。
+- 本次run `604e8d9a-c573-4b0d-a404-8dabc5cb664a`、ingestion `b0e4d11c-492f-453a-85af-e9c3337fd4cb`，成功author `c801a07f-8441-4f9d-814e-f4c492474c5f`（约6分14秒/23paid轮、8原页图、两科学Skill）；作者尚需修正角度、传播距离、损伤位置、束流算例及非普适表述。独立核源记录 `tmp/hermes-cleanup-20261003/independent-author-science.md`；原稿/CP/PDF/26页85段Map保留，不再执行创建脚本。
+- 0d86修复Worker自动调度漏runtime；初始化恢复沿原retry/同run/原作者，76+280 Domain、80 Worker及TC/build/High/精确CI通过。仅当前run/ingestion已提交才阻断，旧同PDF版本771ff7f3保持。实际恢复回执 `independent-real-resume.json`：version3→4，没有重跑作者或再扣作者费用。
+- 实际创建reviewer `271fcec7-bf89-4199-a546-03c3b065305a` 后，在任何模型提交前被新restoration比较拒绝；当前run failed/version6，错误 `[blocked] Native author science/source data changed`。实际task attempt1/retry0、source retry0，1原reservation/1绑定审计、0Gateway调用、无Native CP；result只有sourceMapRef和Native标识。只读证据 `native-review-preflight.json`，SourceMap原字节hash相符。
+- 根因已用真实稿/真实Map离线复现：仅evidenceSegments定位框存在IEEE-754末位差异，正文/引用/Claims/其余字段完全一致。Worker候选复用现有resolveSourceLocator的序列化容差，只归一已验证定位框后仍严格比较其他内容；真实离线1/1、Worker120/TC/lint及High GO；同task/原预留恢复Domain376/TC/build、Web26/TC/lint及真实浏览器fixture2/2已通过，最终组合High与精确CI待完，未再提交模型；不得套用“尚未创建审阅”的旧初始化恢复。
+- 下一步完成该窄修复/恢复的最终审查与精确CI，发布后沿原reviewer继续。审阅结果须独立对原文确认，再验自动私有分镜、完整prompt及1–2风格；新API前旧生图继续暂停。工程通过不等于科学通过。
+- 历史v11–v13失败/paid证据、33aa独立角色增量及早期终稿JSON故障见Git0d86本页与tmp/hermes-cleanup-20261003/、tmp/ro-journey-20260929/；不是新建任务/重放步骤。旧bridge唯一基线失败、research-run.ts既有20lint均保留，不改不相关行为。安装0.10.0缺最新structured plugin/grounded-citations；不因名称存在就冒称可用，不盲升级或叠Skill。
 
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |
@@ -39,7 +38,7 @@
 
 ## 其他交付与保护
 - UI：b7ad37f2帽沿气泡/单Live2D/窄屏修复已合入并上线；132定向/TC/lint/High/精确CI通过，真实逐页视觉/角色/键盘与动效仍待验。公司Word已按实际交付同步；证据 `tmp/ui-hat-polish-20261002/`，细节见[设计](../specs/2026-09-05-integrated-research-product-design.md)和[公司交接](2026-09-30-vendor-evaluation.md)。
-- UI质感候选独立归属codex/research-product-craft：用户认可第三张guide方向、Figma已实看；GSAP/Canvas及多页布局候选通过49定向/High，尚未合入或部署。10-03已定位权限核验断点：本机默认C:/Users/Mac/.codex为Junction，native TOML读取拒绝所有符号链接祖先；独立High与反汇编核实。User CODEX_HOME已指向同一数据的E:/Softlinks_to_C/.codex，未改权限/安全检查；已接入用户桌面“Codex 代理启动”的原start-codex-proxy.ps1，保留Store激活及127.0.0.1:7890代理；PS5语法/实际root设置与子进程继承通过，原脚本备份和回退收据在UI树tmp/design-tools-20261002/implementation/。待完整退出后由原桌面图标启动，再实际验读取/截图/交互，尚不算浏览器恢复或UI验收。保留其预览、旧UI树和证据，不能按本轮清理删除。当前Git身份以该会话/worktree实查为准。
+- UI质感候选独立归属codex/research-product-craft：用户认可第三张guide方向、Figma已实看；GSAP/Canvas及多页布局候选通过49定向/High，尚未合入或部署。10-03已定位权限核验断点：本机默认C:/Users/Mac/.codex为Junction，native TOML读取拒绝所有符号链接祖先；独立High与反汇编核实。User CODEX_HOME已指向同一数据的E:/Softlinks_to_C/.codex，未改权限/安全检查；已接入用户桌面“Codex 代理启动”的原start-codex-proxy.ps1，保留Store激活及127.0.0.1:7890代理；PS5语法/实际root设置与子进程继承通过，原脚本备份和回退收据在UI树tmp/design-tools-20261002/implementation/。10-03重启后Process/User真实root已实核；另发现bundled marketplace仍用旧verbatim路径，官方CLI清单为空；只修同目录source行后六个既有插件恢复installed/enabled，其他配置字节/代理/安全守卫未变。私密非Secret表备份及精确回退在同收据目录；当前回合缺Browser技能，待新一轮载入后实际验页面读取/截图/交互，插件清单恢复不等于浏览器或UI验收。保留其预览、旧UI树和证据，不能按本轮清理删除。当前Git身份以该会话/worktree实查为准。
 - 视频：品牌原片447219588464928已取回且用户认可画面，配音仍待改善；论文首镜447314218062265实看发现符号/波纹问题，第二镜HTTP402无taskId，不能重放create或把未听验声音标通过。原片/marker/Qwen权重及临时发布树保留；下一步余额对账与旁白/运动修订由视频会话持有，见 `tmp/video-system-20260930/` 和原Task4计划。
 - 公司：只负责正式上线与年度运维，我方继续功能开发；脱敏包/屏幕共享，不给GitHub/服务器账号。21项PDF修正已合入部署；期刊真实试用、版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。
 - 已知独立债务：第14页BGE表格超token限制已恢复lexical（69active chunks），dense未完成；旧v11的58chunks保留。备用key已修好，当前失败无余额耗尽证据，不再重复鉴权任务。视频43旧缓存的13.04GB清理已完成，不重放维护。

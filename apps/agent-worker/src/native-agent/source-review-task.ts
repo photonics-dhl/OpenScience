@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { NATIVE_IMAGE_REQUEST_MAX_BYTES, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
-import { readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference } from '@openscience/domain';
+import { readNativeAgentExecution, resolveSourceLocator, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference, type SourceLocator } from '@openscience/domain';
 import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -46,8 +46,25 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
     fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])), needsMoreEvidence: [], claimSuggestions: 'unchanged' };
   // This reconstructs stored data for equality checking; it is not a new model review or an adopted approval.
   const restored = createNativeScientificMaterializer(input.sourceMap, () => canonicalPassages(input.sourceMap).map(p => p.id), { boundDraft }).finish(JSON.stringify(unchanged));
+  const sourceStable = (key: string, value: unknown) => {
+    if (key !== 'evidenceLocation' && key !== 'evidenceSegments') return value;
+    const fields = structuredClone(value);
+    if (!record(fields)) return fields;
+    for (const field of SDF_CORE_FIELDS) {
+      const entries = key === 'evidenceSegments' ? fields[field] : [fields[field]];
+      if (!Array.isArray(entries)) continue;
+      for (const entry of entries) if (record(entry) && record(entry.sourceLocator)) {
+        const locator = entry.sourceLocator as unknown as SourceLocator;
+        // Reuse source resolution's IEEE-754 persistence tolerance, never a general numeric tolerance.
+        // Identity, page, ranges and all remaining content still participate in the strict comparison.
+        const block = resolveSourceLocator(input.sourceMap, locator);
+        entry.sourceLocator = { ...locator, boundingBox: { ...block.boundingBox } };
+      }
+    }
+    return fields;
+  };
   for (const key of ['core', 'evidence', 'evidenceLocation', 'evidenceSegments', 'reviewedClaimSuggestions', 'needsMoreInformation', 'canonicalExtractionContract'])
-    if (!isDeepStrictEqual(restored[key], original[key])) throw new Error('[blocked] Native author science/source data changed');
+    if (!isDeepStrictEqual(sourceStable(key, restored[key]), sourceStable(key, original[key]))) throw new Error('[blocked] Native author science/source data changed');
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { boundDraft, reviewToolCompletion: true });
   const passageIds = [...new Set(Object.values(fields).flatMap(field => field.sourcePassageIds as string[]))];

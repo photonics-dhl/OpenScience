@@ -8,6 +8,8 @@ for (const scenario of [
   { recovery: 'source-review-independent', outcome: '409' },
   { recovery: 'source-review-not-submitted', outcome: 'lost-response' },
   { recovery: 'source-review-not-submitted', outcome: '409' },
+  { recovery: 'source-review-fresh', outcome: 'lost-response' },
+  { recovery: 'source-review-fresh', outcome: '409' },
 ]) {
 test(`${scenario.recovery} preserves the correct operation after ${scenario.outcome}`, async ({ page }) => {
   const ro = '10000000-0000-4000-8000-000000000001';
@@ -15,7 +17,7 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
   const run = { id: runId, researchObjectId: ro, actorId: 'author', versionId: null, version: 2,
     profile: 'visual-narrative-v1', maxAgentTasks: 9, sourceClaimIds: [], status: 'failed', error: 'review output incomplete',
     createdAt: '2026-09-29T00:00:00Z', updatedAt: '2026-09-29T00:00:00Z',
-    canRetryGeneration: true, generationRecovery: scenario.recovery, chargeableAttempts: scenario.recovery === 'source-review-not-submitted' ? 0 : 1,
+    canRetryGeneration: true, generationRecovery: scenario.recovery, chargeableAttempts: ['source-review-not-submitted', 'source-review-fresh'].includes(scenario.recovery) ? 0 : 1,
     steps: [{ id: 'review-step', stage: scenario.recovery === 'source-composition' ? 'source_composition' : 'source_review',
       ordinal: scenario.recovery === 'source-composition' ? 0 : 1, status: 'failed', ingestionTaskId: 'source-task', agentTaskId: 'review-task', error: null }] };
   const writes: Array<{ key: string; body: unknown }> = [];
@@ -51,6 +53,11 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
   } else if (scenario.recovery === 'source-review-independent') {
     await expect(page.getByText(/ChatGPT Web 6 Pro/)).toBeVisible();
     await expect(page.getByText(/platform task credits and ChatGPT subscription usage/)).toBeVisible();
+  } else if (scenario.recovery === 'source-review-fresh') {
+    await expect(page.getByText(/Hermes will continue scientific review of the saved draft/)).toBeVisible();
+    await expect(page.getByText(/Reuses the original platform task credit without another debit/)).toBeVisible();
+    await expect(page.getByText(/provider usage still applies/)).toBeVisible();
+    await expect(page.getByText(/ChatGPT subscription/)).toHaveCount(0);
   } else if (scenario.recovery === 'source-review-not-submitted') {
     await expect(page.getByText(/Reuses the original platform task credit without another debit/)).toBeVisible();
     await expect(page.getByText(/ChatGPT subscription usage still applies/)).toBeVisible();
@@ -58,7 +65,7 @@ test(`${scenario.recovery} preserves the correct operation after ${scenario.outc
     await expect(page.getByText(/This adds one charged task/)).toBeVisible();
     await expect(page.getByText(/earlier requests may already have been billed/)).toBeVisible();
   }
-  const retry = page.getByRole('button', { name: scenario.recovery === 'source-composition' ? 'Finish the paper summary' : scenario.recovery === 'source-review-not-submitted'
+  const retry = page.getByRole('button', { name: scenario.recovery === 'source-review-fresh' ? 'Continue Hermes review' : scenario.recovery === 'source-composition' ? 'Finish the paper summary' : scenario.recovery === 'source-review-not-submitted'
     ? 'Continue independent review' : scenario.recovery === 'source-review-independent'
     ? 'Review independently and continue' : 'Correct saved review and continue', exact: true });
   await retry.click();

@@ -1546,6 +1546,8 @@
     "sourceParsingPages": "待继续解析的页码：{pages}",
     "sourceParsingResume": "继续未完成页面解析",
     "sourceReviewFresh": "重新审校并继续",
+    "sourceReviewNativeResume": "继续 Hermes 审阅",
+    "sourceReviewNativeResumeDescription": "上次审阅尚未提交给模型。Hermes 将使用已保存稿件继续科学审阅，复用原平台任务额度，不重复扣除；实际模型调用仍会产生供应商用量。通过后继续准备私有图解方案。",
     "sourceReviewSaved": "修正已保存审校并继续",
     "sourceReviewIndependent": "独立审校并继续",
     "sourceReviewTechnicalContinue": "继续独立审校",

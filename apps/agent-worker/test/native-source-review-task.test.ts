@@ -18,11 +18,11 @@ const map: DocumentSourceMap = { artifactId: 'paper', contentHash: 'a'.repeat(64
 const sourceAgentTaskId = 'author-task';
 const decision = () => ({ sourceAgentTaskId, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
   needsMoreEvidence: [], claimSuggestions: 'unchanged' });
-function authorResult() {
+function authorResult(sourceMap: DocumentSourceMap = map) {
   const draft = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { summary: text, sourcePassageIds: ['P00001'] }])),
     needsMoreEvidence: [], draftClaims: [{ clientKey: 'core', sourceField: 'insight', kind: 'core', statement: text,
       conditions: [], limitations: [], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] }] };
-  const materializer = createNativeScientificMaterializer(map, () => ['P00001']);
+  const materializer = createNativeScientificMaterializer(sourceMap, () => ['P00001']);
   expect(materializer.draft(draft, 0, 'actual-author-draft').status).toBe('draft_ready');
   const { nativeScientificFields, nativeDraftClaims, nativeNeedsMoreEvidence: _evidence, nativeReviewedCandidateHash: _hash, ...result } = materializer.finish(JSON.stringify({
     draftToolCallId: 'actual-author-draft', fields: decision().fields, needsMoreEvidence: [], claimSuggestions: 'unchanged' }));
@@ -121,6 +121,35 @@ describe('independent native source review using the existing scientific materia
     expect(worker.finish(messages).core.method).toBe(text);
     expect(NATIVE_SOURCE_REVIEW_TOOLS.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['paper_field', 'paper_claim', 'paper_draft']));
     for (const name of ['paper_field', 'paper_claim', 'paper_draft']) expect(await worker.call(name, {})).toHaveProperty('error');
+  });
+  function persistedAuthorWithCoordinateDrift() {
+    const sourceMap = structuredClone(map);
+    sourceMap.pages[0]!.width = 612;
+    sourceMap.pages[0]!.blocks[0]!.boundingBox.x = 53.999999999999886;
+    const saved = JSON.parse(JSON.stringify(authorResult(sourceMap))) as ReturnType<typeof authorResult>;
+    for (const field of SDF_CORE_FIELDS) {
+      saved.evidenceSegments![field][0]!.sourceLocator.boundingBox!.x = 53.99999999999989;
+      const location = saved.evidenceLocation![field];
+      if (location.status === 'located') location.sourceLocator.boundingBox!.x = 53.99999999999989;
+    }
+    return { sourceMap, saved };
+  }
+  it('reads a persisted author with only IEEE-754 locator drift without changing saved data', async () => {
+    const { sourceMap, saved } = persistedAuthorWithCoordinateDrift(); const before = structuredClone(saved);
+    const worker = createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: saved, renderPages: async () => [] });
+    expect((await worker.call('paper_candidate', {})).status).toBe('candidate_ready');
+    expect(saved).toEqual(before);
+  });
+  it.each(['box', 'artifact', 'block', 'page', 'range', 'quote'] as const)('still rejects real persisted source %s changes', change => {
+    const { sourceMap, saved } = persistedAuthorWithCoordinateDrift();
+    const segment = saved.evidenceSegments!.method[0]!, locator = segment.sourceLocator;
+    if (change === 'box') locator.boundingBox!.x += 0.001;
+    if (change === 'artifact') locator.artifactId = 'different-paper';
+    if (change === 'block') locator.blockId = 'different-block';
+    if (change === 'page') locator.page = 2;
+    if (change === 'range') locator.charRange!.start += 1;
+    if (change === 'quote') segment.quote = 'Different scientific source.';
+    expect(() => createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: saved, renderPages: async () => [] })).toThrow();
   });
   it.each(['core', 'fieldReviews', 'draftClaims', 'evidenceSegments'])('rejects changed author %s before starting a reviewer', key => {
     const original = authorResult();
