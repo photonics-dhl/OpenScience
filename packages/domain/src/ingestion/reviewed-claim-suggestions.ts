@@ -6,7 +6,7 @@ import { MAX_CANONICAL_EVIDENCE_SEGMENTS } from './canonical-evidence-contract';
 export const MAX_INGESTION_CLAIMS = 12;
 
 /** Private candidates use the actual supplied reading passages; this grants no reviewed evidence indices. */
-export function areSourceCompositionDraftClaimsValid(value: unknown, providedPassageIds: readonly string[]): boolean {
+export function areSourceCompositionDraftClaimsValid(value: unknown, providedPassageIds: readonly string[], onInvalid?: (reason: string) => void): boolean {
   if (!Array.isArray(value) || JSON.stringify(value).length > 8_000) return false;
   const ids = [...new Set(providedPassageIds)];
   const projected: unknown[] = [];
@@ -24,7 +24,7 @@ export function areSourceCompositionDraftClaimsValid(value: unknown, providedPas
     }
     projected.push({ ...claim, sourceBindings: bindings });
   }
-  return parseReviewedClaimSuggestions(projected, Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ids.length]))) !== undefined;
+  return parseReviewedClaimSuggestions(projected, Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, ids.length])), onInvalid) !== undefined;
 }
 
 /** Worker-owned suggestions. Indices address this extraction's field evidenceSegments. */
@@ -43,6 +43,7 @@ export interface ReviewedClaimSuggestion {
 export function parseReviewedClaimSuggestions(
   value: unknown,
   sourceCounts: Partial<Record<typeof SDF_CORE_FIELDS[number], number>>,
+  onInvalid?: (reason: string) => void,
 ): ReviewedClaimSuggestion[] | undefined {
   if (!Array.isArray(value) || value.length > MAX_INGESTION_CLAIMS) return undefined;
   const claims: ReviewedClaimSuggestion[] = [];
@@ -52,10 +53,14 @@ export function parseReviewedClaimSuggestions(
   for (const item of value) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
     const record = item as Record<string, unknown>;
+    if (keys.has(record.clientKey as string)) {
+      onInvalid?.(`draftClaims[${claims.length}].clientKey: duplicate_clientKey (${record.clientKey}); select one actual saved Claim for this key.`);
+      return undefined;
+    }
     const expected = ['clientKey', 'sourceField', 'kind', 'statement', 'conditions', 'limitations', 'sourceBindings'];
     if (record.parentClientKey !== undefined) expected.push('parentClientKey');
     if (Object.keys(record).sort().join(',') !== expected.sort().join(',')
-      || !text(record.clientKey, 100) || keys.has(record.clientKey)
+      || !text(record.clientKey, 100)
       || !SDF_CORE_FIELDS.includes(record.sourceField as ReviewedClaimSuggestion['sourceField'])
       || !CLAIM_KINDS.includes(record.kind as ClaimKind) || !text(record.statement, 4_000)
       || !strings(record.conditions) || !strings(record.limitations)
@@ -81,7 +86,10 @@ export function parseReviewedClaimSuggestions(
     let parentKey = claim.parentClientKey;
     while (parentKey !== undefined) {
       const parent = byKey.get(parentKey);
-      if (!parent || ancestry.has(parentKey)) return undefined;
+      if (!parent || ancestry.has(parentKey)) {
+        onInvalid?.(`draftClaims[${claims.indexOf(claim)}].parentClientKey: ${parent ? 'parent_cycle' : 'parent_not_selected'} (${parentKey}); select the actual required parent or correct the dependency using the paper.`);
+        return undefined;
+      }
       ancestry.add(parentKey);
       parentKey = parent.parentClientKey;
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { canonicalPassages, createNativeScientificMaterializer } from '../src/extractor';
-import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
+import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_SELECTED_DRAFT_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
 import { createNativePaperTools } from '../src/native-agent/paper-tools';
 import type { ChatMessage } from '@openscience/ai-gateway';
@@ -17,6 +17,50 @@ const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => 
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 const paidContextDescription = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
 describe('actual native Agent scientific materializer', () => {
+  it('keeps author Claim revisions in the saved notebook and selects them unchanged at review', () => {
+    const profile = nativePaperToolProfile(null);
+    const advertised = profile.sourceTools.find(tool => tool.name === 'paper_review')!;
+    expect(advertised.parameters.properties.claimSuggestions).toEqual({ type: 'string', enum: ['unchanged'] });
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], profile);
+    saveNotes(worker);
+    const revised = { ...draft().draftClaims[0]!, limitations: ['This is a numerical prediction.'] };
+    expect(worker.claim(revised, 7, 'claim-revised').status).toBe('claim_saved');
+    expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['claim-revised'] }, 8, 'selected-revision').status).toBe('draft_ready');
+    const body = { draftToolCallId: 'selected-revision', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])),
+      needsMoreEvidence: [], claimSuggestions: 'unchanged' };
+    const rejected = worker.review({ ...body, claimSuggestions: [revised] }, 'array-review');
+    expect(rejected).toMatchObject({ status: 'invalid_review', feedback: expect.stringContaining('paper_claim') });
+    expect(rejected.feedback).not.toContain('或完整数组');
+    expect(worker.review(body, 'chosen-review')).toMatchObject({ status: 'review_ready', guidance: expect.stringContaining('paper_claim, then paper_draft') });
+    expect(worker.finish(JSON.stringify(body)).nativeDraftClaims).toEqual([revised]);
+    expect(NATIVE_PAPER_COMMITTED_REVIEW_TOOL.parameters.properties.claimSuggestions).toHaveProperty('anyOf');
+  });
+  it('reports the actual duplicate selected Claim and missing selected parent without repairing the batch', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], nativePaperToolProfile(null));
+    saveNotes(worker);
+    expect(worker.claim(draft().draftClaims[0], 7, 'core-revised').status).toBe('claim_saved');
+    const duplicated = { ...selectedNotes(), claimToolCallIds: ['claim-core', 'core-revised'] };
+    expect(worker.draft(duplicated, 8, 'duplicate')).toMatchObject({ status: 'invalid_draft', feedback: expect.stringContaining('duplicate_clientKey (core-a)') });
+    const child = { ...draft().draftClaims[0]!, clientKey: 'child', kind: 'supporting', parentClientKey: 'core-a' };
+    expect(worker.claim(child, 9, 'child-note').status).toBe('claim_saved');
+    expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['child-note'] }, 10, 'parent-missing')).toMatchObject({ status: 'invalid_draft', feedback: expect.stringContaining('parent_not_selected (core-a)') });
+    expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['core-revised', 'child-note'] }, 11, 'valid-batch').status).toBe('draft_ready');
+    expect(duplicated.claimToolCallIds).toEqual(['claim-core', 'core-revised']);
+  });
+  it('restores the old paid review array and generic batch feedback without upgrading its tool contract', () => {
+    const fresh = nativePaperToolProfile(null);
+    const original = fresh.sourceTools.map(tool => ({ type: 'function', function: structuredClone(
+      tool.name === 'paper_review' ? NATIVE_PAPER_COMMITTED_REVIEW_TOOL : tool.name === 'paper_draft' ? NATIVE_PAPER_NOTE_DRAFT_TOOL : tool) }));
+    const saved = { binding: { allowedTools: fresh.allowedTools }, turns: [{ request: { options: { tools: original } } }] } as unknown as NativeAgentSessionState;
+    const profile = nativePaperToolProfile(saved);
+    expect(profile).toMatchObject({ savedClaimsReview: false, draftFeedback: false, reviewToolCompletion: true });
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], profile);
+    saveNotes(worker); worker.claim(draft().draftClaims[0], 7, 'core-again');
+    expect(worker.draft({ ...selectedNotes(), claimToolCallIds: ['claim-core', 'core-again'] }, 8, 'invalid').feedback).toContain('最多12条');
+    expect(worker.draft(selectedNotes(), 9, 'old-draft').status).toBe('draft_ready');
+    expect(worker.review({ ...review(), draftToolCallId: 'old-draft', fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])) }, 'old-review').status).toBe('review_ready');
+    expect(profile.sourceTools.find(tool => tool.name === 'paper_review')).toEqual(NATIVE_PAPER_COMMITTED_REVIEW_TOOL);
+  });
   it('retains the exact raw final Claims for a later independent source review', () => {
     const worker = createNativeScientificMaterializer(map, () => ['P00001']);
     expect(worker.draft(draft(), 0, 'author-draft').status).toBe('draft_ready');
@@ -133,7 +177,7 @@ describe('actual native Agent scientific materializer', () => {
     profile.sourceTools[0]!.parameters.changed = true;
     expect(old.parameters).not.toHaveProperty('changed');
     expect(nativePaperToolProfile(null)).toMatchObject({ useNotes: true, reviewContext: true });
-    expect(nativePaperToolProfile(null).sourceTools).toContainEqual(NATIVE_PAPER_NOTE_DRAFT_TOOL);
+    expect(nativePaperToolProfile(null).sourceTools).toContainEqual(NATIVE_PAPER_SELECTED_DRAFT_TOOL);
   });
   it('retains comparison context when replaying tasks that originally received its tool description', () => {
     const saved = { binding: { allowedTools: ['paper_field', 'paper_draft'] }, turns: [{ request: { options: { tools: [

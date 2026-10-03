@@ -3011,7 +3011,7 @@ function nativeReviewShapeFeedback(value: unknown): string {
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
 export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: {
-  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean; claimFeedback?: boolean;
+  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean; claimFeedback?: boolean; draftFeedback?: boolean; savedClaimsReview?: boolean;
   /** Server-bound final author content, never a draft supplied by the reviewing model. */
   boundDraft?: { sourceAgentTaskId: string; draft: unknown };
 } = {}) {
@@ -3155,7 +3155,10 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
             ...(foreign.length ? [`fields.${field}.sourcePassageIds不属于当前SourceMap：${foreign.join('、')}；不能引用这些编号，按实际原文核对证据。`] : []),
           ];
         }) : [];
-        return { status: 'invalid_draft', feedback: [validation.feedback(value), ...unread].join('\n') };
+        let batchFeedback: string | undefined;
+        if (options.draftFeedback && value && typeof value === 'object' && !Array.isArray(value))
+          areSourceCompositionDraftClaimsValid((value as Record<string, unknown>).draftClaims, [...known], reason => { batchFeedback ??= reason; });
+        return { status: 'invalid_draft', feedback: [batchFeedback ?? validation.feedback(value), ...unread].join('\n') };
       }
       if (order >= candidateOrder) { candidate = structuredClone(value); candidateOrder = order; candidateToolCallId = toolCallId; }
       // Pair this actual call with its already-read evidence. This is input for the Agent's judgment, not a support verdict.
@@ -3181,6 +3184,9 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
     },
     review(value: unknown, toolCallId?: string): Record<string, unknown> {
       try {
+        if (options.savedClaimsReview && (!value || typeof value !== 'object' || Array.isArray(value)
+          || (value as Record<string, unknown>).claimSuggestions !== 'unchanged'))
+          throw new Error('[blocked] Author Claims must select unchanged; use paper_claim then paper_draft to save and select any corrections before paper_review');
         if (options.reviewToolCompletion && (!value || typeof value !== 'object' || Array.isArray(value)
           || typeof (value as Record<string, unknown>).draftToolCallId !== 'string'))
           throw new Error('[blocked] Native submitted review requires its exact saved draftToolCallId');
@@ -3190,13 +3196,17 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
             fields: reviewed.nativeScientificFields, claimSuggestions: reviewed.nativeDraftClaims,
             needsMoreEvidence: reviewed.nativeNeedsMoreEvidence,
           } } : {}),
-          guidance: options.reviewToolCompletion
+          guidance: options.savedClaimsReview
+            ? 'Private review saved and structure checked, not scientific approval or publication. Read reviewedCandidate and check factual consistency across fields and Claims. For Claim corrections, use paper_claim, then paper_draft selecting exactly the corrected Claims and their parents, then paper_review with claimSuggestions unchanged. Correct field decisions through paper_review against the current draft. Finish normally only when the saved content is scientifically ready; do not copy another review into your final reply.'
+            : options.reviewToolCompletion
             ? 'Private review saved and structure checked, not scientific approval or publication. Read reviewedCandidate: it is the actual merged content, including unchanged accepted fields and the selected Claims. Check that each factual correction is consistent wherever the same quantity, case or qualification is retained; correcting one field does not change any other field or Claim. If a contradiction remains, revise every affected retained statement through this same tool. Finish normally only when this saved content is scientifically ready; the platform revalidates it at completion. Do not copy a second review into your final reply.'
             : 'Structure checked, not scientific approval. Correct any scientific problem through the bound source tools and another explicit review. When ready, copy the returned reviewToolCallId into the final {"reviewToolCallId":"..."}; draftToolCallId identifies the draft, not this review. Do not regenerate the full review.' };
       } catch (error) {
         const shape = nativeReviewShapeFeedback(value);
         const compact = value && typeof value === 'object' && Object.hasOwn(value, 'draftToolCallId');
-        const format = compact ? '以上科学诊断针对展开后的记录。重试本工具时保留draftToolCallId；accepted只写verdict，revised/blocked提供完整字段；claimSuggestions明确选unchanged或完整数组，不必重写未变正文。' : '';
+        const format = compact ? options.savedClaimsReview
+          ? '以上科学诊断针对展开后的记录。claimSuggestions必须为unchanged；修订Claims使用paper_claim → paper_draft → paper_review，并选择新稿的真实draftToolCallId。未改稿时保留当前draftToolCallId；accepted只写verdict，revised/blocked提供完整字段，不重复正文。'
+          : '以上科学诊断针对展开后的记录。重试本工具时保留draftToolCallId；accepted只写verdict，revised/blocked提供完整字段；claimSuggestions明确选unchanged或完整数组，不必重写未变正文。' : '';
         return { status: 'invalid_review', feedback: [shape, error instanceof Error ? error.message : 'Invalid scientific review structure', format].filter(Boolean).join('\n') };
       }
     },

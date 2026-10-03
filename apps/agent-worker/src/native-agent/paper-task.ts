@@ -51,6 +51,11 @@ for (const field of Object.values(committedReviewParameters.properties.fields.pr
 export const NATIVE_PAPER_COMMITTED_REVIEW_TOOL = { ...NATIVE_PAPER_REVIEW_TOOL, parameters: committedReviewParameters,
   description: 'Submit your complete scientific review of the exact saved draftToolCallId through this tool. All field decisions, evidence requests and Claim decisions must be in the submitted object. accepted selects unchanged saved text; revised/blocked provide complete fields and source-grounded issues. This saves private reviewed content and checks the existing structure/source/science rules; it is not publication approval. Correct rejected submissions through the bound source tools. After the latest successful review_ready, finish normally without copying a second review JSON into your final reply. If you change saved fields, Claims or draft, or submit another review, only the latest complete successful submission can be used.',
 };
+export const NATIVE_PAPER_AUTHOR_REVIEW_TOOL = { ...NATIVE_PAPER_COMMITTED_REVIEW_TOOL,
+  parameters: { ...committedReviewParameters, properties: { ...committedReviewParameters.properties,
+    claimSuggestions: { type: 'string', enum: ['unchanged'] } } },
+  description: NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description + ' In this author tool, claimSuggestions must be unchanged, explicitly selecting the current saved draft Claims. To correct Claims, save the affected Claim with paper_claim and select the intended unique Claim keys and their actual parents in a new paper_draft before reviewing it. Never copy a replacement Claim array into this review; unchanged does not bypass any scientific or source validation.',
+};
 
 export const NATIVE_PAPER_FIELD_TOOL = { name: 'paper_field',
   description: 'Save one concise source-grounded field without rewriting the paper. Use the returned fieldToolCallId in paper_draft. A correction saves only this field as another call; prior fields remain selectable. This saves private content, not scientific approval.',
@@ -73,6 +78,9 @@ export const NATIVE_PAPER_NOTE_DRAFT_TOOL = { name: 'paper_draft',
     claimToolCallIds: { type: 'array', items: { type: 'string' }, maxItems: MAX_INGESTION_CLAIMS, uniqueItems: true },
     needsMoreEvidence: NATIVE_PAPER_DRAFT_TOOL.parameters.properties.needsMoreEvidence,
   } },
+};
+export const NATIVE_PAPER_SELECTED_DRAFT_TOOL = { ...NATIVE_PAPER_NOTE_DRAFT_TOOL,
+  description: NATIVE_PAPER_NOTE_DRAFT_TOOL.description + ' Select exactly one saved claimToolCallId for each clientKey, including the actual parent Claims required by the selected children. An older and a corrected call for the same clientKey cannot both be selected. Batch rejection reports duplicate keys or missing parents; it never deduplicates, inserts or removes scientific claims for you.',
 };
 
 /** Restore the real candidate in model call order; parallel completion order cannot change the replay baseline. */
@@ -163,28 +171,33 @@ const NOTE_INSTRUCTIONS = INSTRUCTIONS.replace(
   '用paper_field分项保存problem、method、results、insight、limitations、reproducibility，用paper_claim逐条保存必要主张；同一轮可并行保存独立项目。工具返回的fieldToolCallId、claimToolCallId逐字复制到paper_draft的fieldToolCallIds、claimToolCallIds，只选择、不转写正文。科学或格式问题只重存受影响的项，其余ID保持；不同算例、量与空间位置不可合并。新增或重写科学断言须来自实际回读。');
 const TOOL_REVIEW_INSTRUCTIONS = NOTE_INSTRUCTIONS.replace(/完成科学复核后直接返回完整JSON终稿，[^\n]*/,
   '完成科学复核后，用paper_review提交完整终审对象，根对象只含draftToolCallId、fields、needsMoreEvidence、claimSuggestions；必须选实际保存的当前草稿，六字段给出明确verdict，accepted只选原稿，revised/blocked给完整正文、来源和issues，Claims明确unchanged或完整替换。工具返回review_ready后才完成任务；如再改保存项或稿件、或另一次review被拒收，须重新提交最终完整审阅。最终回复可以简短说明完成情况，不复制审阅JSON，也不在回复中声称已修改而未实际提交。结构通过不证明科学正确或授权公开。');
+const AUTHOR_REVIEW_INSTRUCTIONS = TOOL_REVIEW_INSTRUCTIONS
+  .replace('Claims明确unchanged或完整替换。', 'claimSuggestions必须明确为unchanged，选择当前实际保存稿的Claims；需要修订时先用paper_claim保存受影响主张，再用paper_draft选择新稿，然后终审，不在paper_review重复抄写Claims。')
+  .replace('替换的claimSuggestions数组沿draftClaims结构；', 'paper_draft每个clientKey只选一个实际保存的claimToolCallId，修订前后的同名主张不能同时选；');
 const PAPER_GOAL = '向未读过论文的人准确解释核心贡献、科学机制、代表结果及必要条件，并为后续配图保存简洁、有原文依据的六维和核心主张。';
 const TOOL_REVIEW_GOAL = '为后续科研配图保存一份简洁、有原文依据的六维和核心主张，并通过paper_review提交对真实已保存稿的完整科学核对。读者主线、科学机制、代表结果及必要条件保存在这些内容中，完成任务不需要再生成另一份解释正文。';
 
 export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   // Original paid tools keep their exact schemas and feedback when replayed.
   const useNotes = !saved || saved.binding.allowedTools.includes('paper_field');
-  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_NOTE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]),
-    saved ? NATIVE_PAPER_REVIEW_TOOL : NATIVE_PAPER_COMMITTED_REVIEW_TOOL];
+  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_SELECTED_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]),
+    saved ? NATIVE_PAPER_REVIEW_TOOL : NATIVE_PAPER_AUTHOR_REVIEW_TOOL];
   const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
     if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved paper tool description is absent');
     return { ...structuredClone(tool.function), description: tool.function.description };
   });
   const sourceTools = originalTools?.length ? originalTools : currentTools;
   const description = sourceTools.find(tool => tool.name === 'paper_draft')?.description;
-  const reviewContext = !saved || description === PAID_SOURCE_CONTEXT_DESCRIPTION || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
-  const reviewCandidate = !saved || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
-  const reviewToolCompletion = !saved || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description;
+  const draftFeedback = !saved || description === NATIVE_PAPER_SELECTED_DRAFT_TOOL.description;
+  const savedClaimsReview = !saved || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_AUTHOR_REVIEW_TOOL.description;
+  const reviewContext = draftFeedback || description === PAID_SOURCE_CONTEXT_DESCRIPTION || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
+  const reviewCandidate = draftFeedback || description === NATIVE_PAPER_NOTE_DRAFT_TOOL.description;
+  const reviewToolCompletion = savedClaimsReview || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description;
   const claimFeedback = !saved || sourceTools.find(tool => tool.name === 'paper_claim')?.description === NATIVE_PAPER_CLAIM_TOOL.description;
   const allowedTools = saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)];
-  return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, allowedTools,
+  return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, savedClaimsReview, allowedTools,
     goal: reviewToolCompletion ? TOOL_REVIEW_GOAL : PAPER_GOAL,
-    instructions: reviewToolCompletion ? TOOL_REVIEW_INSTRUCTIONS : useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS };
+    instructions: savedClaimsReview ? AUTHOR_REVIEW_INSTRUCTIONS : reviewToolCompletion ? TOOL_REVIEW_INSTRUCTIONS : useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS };
 }
 
 /** Normal source task entry. No preceding static reducer, provider fallback, new task or approval. */
@@ -196,7 +209,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   if (!execution) throw new Error('[blocked] Actual native Agent execution marker is absent');
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, allowedTools, goal, instructions } = nativePaperToolProfile(saved);
+  const { sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, savedClaimsReview, allowedTools, goal, instructions } = nativePaperToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools,
@@ -210,7 +223,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
-  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback });
+  const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, savedClaimsReview });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
       : name === 'paper_claim' ? materializer.claim(args, sequence!, callId!) : name === 'paper_draft' ? materializer.draft(args, sequence, callId)
