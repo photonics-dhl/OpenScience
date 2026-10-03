@@ -119,9 +119,15 @@
 .directory[data-journal-directory] .feedback { margin-bottom: 24px; padding: 16px 20px; border-left: 2px solid var(--status-danger-text, #9c343c); background: #fff; overflow-wrap: anywhere; }
 .feedback p { margin: 0 0 8px; line-height: 1.8; }
 .feedback button { min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--craft-accent, #125d66); text-decoration: underline; text-underline-offset: .24em; }
-.directory[data-journal-directory] .empty { padding: 40px 12px; }
-.empty p:first-child { margin: 0 0 12px; font: 400 24px/1.5 var(--font-reading-serif); }
-.empty p:last-child { margin: 0; color: var(--craft-muted, #51666c); font-size: 16px; line-height: 1.8; }
+.directory[data-journal-directory] .empty { display: grid; justify-items: start; gap: 20px; padding: 40px 0; }
+.empty > svg { color: #6a9895; }
+.empty h2 { margin: 0; font: 400 clamp(24px, 2.4vw, 32px)/1.4 var(--font-reading-serif); text-wrap: balance; }
+.empty p { max-width: 40em; margin: 0; color: var(--craft-muted, #51666c); font-size: 16px; line-height: 1.8; }
+.empty :is(a, button) { display: inline-flex; align-items: center; gap: 16px; min-height: 44px; border: 0; padding: 8px 0; background: transparent; color: var(--craft-accent, #125d66); text-decoration: none; font-size: 15px; }
+.dataResources { border-block: 1px solid var(--craft-rule, #dce5e5); color: var(--craft-muted, #51666c); }
+.dataResources summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 14px; }
+.dataResources[open] summary { color: var(--craft-accent, #125d66); }
+.dataResources summary:focus-visible { outline: 2px solid var(--craft-accent, #125d66); outline-offset: 3px; }
 .directory[data-journal-directory] .more { min-height: 48px; margin-top: 24px; padding: 11px 24px; border: 1px solid var(--craft-rule, #dce5e5); border-radius: 6px; background: #fff; color: var(--craft-accent, #125d66); }
 .directory[data-journal-directory] :is(input, button, a) { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
 .directory[data-journal-directory] :is(input, button, a):focus-visible { outline: 2px solid var(--craft-accent, #125d66); outline-offset: 4px; }

@@ -20,6 +20,7 @@
 .primary:active { transform: scale(.98); }
 .companion { width: min(360px, 100%); min-height: 360px; margin-top: 24px; }
 .companion :global(.hermes-dock-anchor) { min-height: 360px; }
+.companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .chapterLink { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 14px; color: var(--os-ink); text-decoration: none; }
 .chapterLink svg { color: var(--os-vermilion-ink); }
 .proof { min-width: 0; margin: 0; padding: 36px; border: 1px solid #e5e7e4; border-radius: 6px; background: #fffefb; color: var(--os-ink); box-shadow: 0 24px 44px -24px rgb(34 70 74 / .22), 0 2px 5px rgb(34 70 74 / .04); }
@@ -105,6 +106,10 @@
   .proofLoading { min-height: 480px; }
   .sceneContent { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .sceneCopy { max-width: 42em; }
+}
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .companion { display: none; }
 }
 @media (max-width: 800px) {
   .hero { grid-template-columns: minmax(0, 1fr); }

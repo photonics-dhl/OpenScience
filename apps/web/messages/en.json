@@ -1,4 +1,30 @@
 {
+  "journalDirectory": {
+    "eyebrow": "Journals",
+    "title": "Journal directory",
+    "intro": "Browse journals by field and follow papers and research interpretations.",
+    "skip": "Skip to content",
+    "navigation": "Main navigation",
+    "searchLabel": "Search journals",
+    "searchPlaceholder": "Journal name, ISSN or field",
+    "search": "Search",
+    "loading": "Loading journals…",
+    "loadFailed": "The journal directory could not be loaded.",
+    "retry": "Retry",
+    "articleCount": "{count} public papers",
+    "emptyTitle": "Discovery starts with a paper.",
+    "emptyBody": "The directory grows as journals join. Explore public research while you are here.",
+    "noMatches": "No matching journals",
+    "noMatchesBody": "Try the full journal name, an ISSN or a research field.",
+    "clearSearch": "View all journals",
+    "explore": "Explore public research",
+    "more": "Load more journals",
+    "dataResources": "Open data and indexes",
+    "openapi": "Open data API specification",
+    "sitemap": "Public journal sitemap",
+    "accountTools": "Journal account tools",
+    "apply": "Bring your journal to OpenScience"
+  },
   "developers": {
     "title": "Developer API",
     "intro": "Read public articles, sources and fixed-version citations from external AI tools, research software and scripts using standard HTTP and JSON.",
@@ -2302,6 +2328,10 @@
     "error": "The editorial queue could not be loaded."
   },
   "hermesCompanion": {
+    "close": "Close Hermes",
+    "invitation": "Bring your papers and ideas. Let's move your research forward together.",
+    "start": "Open research desk",
+    "compactLabel": "With Hermes",
     "dismiss": "Dismiss Hermes guidance",
     "dismissSpeech": "Dismiss Hermes note",
     "guideLabel": "Field note",

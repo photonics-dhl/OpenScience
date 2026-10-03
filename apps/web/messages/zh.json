@@ -1,4 +1,30 @@
 {
+  "journalDirectory": {
+    "eyebrow": "期刊",
+    "title": "期刊目录",
+    "intro": "按研究领域浏览期刊，追踪论文与研究解读。",
+    "skip": "跳到内容",
+    "navigation": "主导航",
+    "searchLabel": "搜索期刊",
+    "searchPlaceholder": "搜索期刊名称、ISSN 或学科",
+    "search": "搜索",
+    "loading": "正在加载期刊目录…",
+    "loadFailed": "暂时无法加载期刊目录。",
+    "retry": "重试",
+    "articleCount": "公开论文 {count} 篇",
+    "emptyTitle": "发现，先从一篇研究开始。",
+    "emptyBody": "期刊目录将随入驻期刊逐步丰富。现在也可以从公开研究开始阅读。",
+    "noMatches": "没有找到匹配的期刊",
+    "noMatchesBody": "试试期刊全名、ISSN 或研究领域。",
+    "clearSearch": "查看全部期刊",
+    "explore": "浏览公开研究",
+    "more": "加载更多期刊",
+    "dataResources": "开放数据与索引",
+    "openapi": "开放数据 API 规范",
+    "sitemap": "公开期刊站点地图",
+    "accountTools": "期刊账户工具",
+    "apply": "申请期刊入驻"
+  },
   "developers": {
     "title": "开发者 API",
     "intro": "通过标准 HTTP 与 JSON，让外部 AI、研究工具和脚本读取公开文章、来源与固定版本引用。",
@@ -2302,6 +2328,10 @@
     "error": "暂时无法读取策展队列。"
   },
   "hermesCompanion": {
+    "close": "收起 Hermes",
+    "invitation": "带上你的论文与想法，我们一起把研究向前推进。",
+    "start": "进入研究桌面",
+    "compactLabel": "与 Hermes 一起",
     "dismiss": "关闭 Hermes 引导",
     "dismissSpeech": "收起 Hermes 的话",
     "guideLabel": "字段批注",

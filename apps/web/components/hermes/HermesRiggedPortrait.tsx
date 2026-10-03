@@ -167,6 +167,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
     >
       <span aria-hidden="true" className="hermes-rig-vector-fallback" style={{ opacity: runtimeStatus.phase === 'ready' ? 0 : 1 }}>{fallback}</span>
       <WankoCarrierScene>
+        <span aria-hidden="true" className="hermes-visible-hat-anchor" data-hermes-visible-hat-anchor="true" />
         <canvas
           aria-hidden="true"
           className="hermes-rig-canvas"

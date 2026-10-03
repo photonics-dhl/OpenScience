@@ -1,5 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
+import messages from '../messages/zh.json';
 import { describe, expect, it } from 'vitest';
 import { JournalDirectory } from '../components/journals/JournalDirectory';
 import type { JournalSummary } from '../lib/journal-api';
@@ -15,11 +17,12 @@ const journal: JournalSummary = {
   status: 'active',
 };
 
+const renderDirectory = (initial: JournalSummary[]) => renderToStaticMarkup(createElement(NextIntlClientProvider,
+  { locale: 'zh', messages, timeZone: 'Asia/Shanghai', children: createElement(JournalDirectory, { initial }) }));
+
 describe('journal directory presentation', () => {
   it('retains journal identity and navigation without loading arbitrary external logos', () => {
-    const markup = renderToStaticMarkup(createElement(JournalDirectory, {
-      initial: [{ ...journal, logoUrl: 'https://tracking.example/visitor.gif' }],
-    }));
+    const markup = renderDirectory([{ ...journal, logoUrl: 'https://tracking.example/visitor.gif' }]);
     expect(markup).toContain('Optics Review');
     expect(markup).toContain('光学研究');
     expect(markup).toContain('href="/journals/optics"');
@@ -29,9 +32,7 @@ describe('journal directory presentation', () => {
 
   it('bounds a long source description without splitting Unicode characters', () => {
     const description = '🔬'.repeat(219) + '🌌' + '完整简介'.repeat(1200);
-    const markup = renderToStaticMarkup(createElement(JournalDirectory, {
-      initial: [{ ...journal, description }],
-    }));
+    const markup = renderDirectory([{ ...journal, description }]);
     expect(markup).toContain('🔬'.repeat(219) + '🌌…');
     expect(markup).not.toContain('完整简介');
     expect(markup).not.toContain('\ufffd');
