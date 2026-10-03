@@ -8,8 +8,8 @@ export function ResearchCard({ item, prominent = false }: { item: ResearchIndexI
   const t = useTranslations('explore');
   return <article className={`${styles.card} ${prominent ? styles.prominent : ''}`}>
     <Link href={item.url} className={styles.cardLink}>
-      {item.thumbnail ? <div className={styles.cover}><img src={item.thumbnail.url} alt={t('imageFor', { title: item.title })} loading="lazy" decoding="async" /></div> : null}
-      <div className={styles.cardBody}>
+      {item.thumbnail ? <div className={styles.cover} data-hermes-protected="true"><img src={item.thumbnail.url} alt={t('imageFor', { title: item.title })} loading="lazy" decoding="async" /></div> : null}
+      <div className={styles.cardBody} data-hermes-protected="true">
         <p className={styles.meta}>{item.publicId}<span>v{item.latestVersion}</span>{item.publishedAt ? <time dateTime={item.publishedAt}>{item.publishedAt.slice(0, 10)}</time> : null}</p>
         <ScientificText as="h2" hideSourceMarkers>{item.title}</ScientificText>
         {item.insight ? <ScientificText as="p" hideSourceMarkers className={styles.abstract}>{scientificTextExcerpt(item.insight)}</ScientificText> : null}

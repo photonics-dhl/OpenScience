@@ -1010,12 +1010,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
 
   useClientLayoutEffect(() => {
     if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue
-      || !anchorRect || reducedMotion === null || viewportSize.width <= 0 || viewportSize.height <= 0) return;
+      || (!anchorRect && !navigationOnly) || reducedMotion === null || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const stage = stageRef.current;
     const travelHull = stage?.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]');
     if (!stage || !travelHull) return;
     const stageBounds = stage.getBoundingClientRect();
-    const anchorCenter = { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 };
+    const anchorCenter = anchorRect
+      ? { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 }
+      : position;
     if (Math.abs(stageBounds.width - stageSize) >= 1 || Math.abs(stageBounds.height - stageSize) >= 1
       || Math.abs(stageBounds.left - (anchorCenter.x - stageSize / 2)) >= 1
       || Math.abs(stageBounds.top - (anchorCenter.y - stageSize / 2)) >= 1) return;
@@ -1036,10 +1038,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     });
     setPatrolEnvelopeSafe(settled.safe);
     if (!settled.safe || Math.hypot(settled.point.x - anchorCenter.x, settled.point.y - anchorCenter.y) < .5) return;
+    // Public pages without a dock still need to yield to their reading content.
+    // Keep automatic placement separate from a position chosen by dragging.
+    if (!anchorRect) { setPosition(settled.point); return; }
     setSettlingDockReady(false);
     setSettlingNewDock(true);
     setCustomDock(true);
-  }, [anchorRect, stageSize, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, protectedGeometryVersion,
+  }, [anchorRect, stageSize, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, navigationOnly, position, protectedGeometryVersion,
     reducedMotion, speech.cue, stageMotionVersion, viewportSize, workspaceId]);
 
   useClientLayoutEffect(() => {

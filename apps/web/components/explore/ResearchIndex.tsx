@@ -50,14 +50,14 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
 
   return <section aria-label={t('indexLabel')} aria-busy={loading}>
     <form onSubmit={event => { event.preventDefault(); void load(); }}>
-      <div className={styles.search}>
+      <div className={styles.search} data-hermes-protected="true">
         <label className="sr-only" htmlFor="research-search">{t('search')}</label>
         <div className={styles.searchField}><Search className={styles.searchIcon} size={18} aria-hidden="true" /><input id="research-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search')} /></div>
         <button type="submit" disabled={loading}>{loading ? t('loading') : t('searchAction')}</button>
       </div>
       <details className={styles.filters}>
-        <summary>{t('refineSearch')}</summary>
-        <div className={styles.filterControls}>
+        <summary data-hermes-protected="true">{t('refineSearch')}</summary>
+        <div className={styles.filterControls} data-hermes-protected="true">
           <label>{t('field')}<select value={field} onChange={event => setField(event.target.value)}>{FIELDS.map(value => <option key={value} value={value}>{value ? t(`fields.${value}`) : t('allFields')}</option>)}</select></label>
           <label>{t('artifactType')}<select value={artifactType} onChange={event => setArtifactType(event.target.value)}>{ARTIFACT_TYPES.map(value => <option key={value} value={value}>{value ? t(`artifacts.${value}`) : t('allArtifacts')}</option>)}</select></label>
         </div>

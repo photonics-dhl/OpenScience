@@ -59,6 +59,7 @@ export function ResearchGuide() {
   }, { scope: guideRef, dependencies: [selected, sceneMotion], revertOnUpdate: true });
 
   function moveScene(event: React.KeyboardEvent, index: number) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     let next: number;
     if (event.key === 'ArrowRight') next = (index + 1) % scenes.length;
     else if (event.key === 'ArrowLeft') next = (index + scenes.length - 1) % scenes.length;

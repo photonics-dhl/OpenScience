@@ -29,6 +29,21 @@ describe('same-origin API routing contract', () => {
 });
 
 describe('apiRequest CSRF contract', () => {
+  it('sends an empty logout POST without claiming a JSON body, retaining CSRF protection', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-logout' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { apiRequest } = await import('../lib/api');
+
+    await expect(apiRequest('/api/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
+    const sent = fetchMock.mock.calls.at(-1)?.[1] as RequestInit;
+    expect(new Headers(sent.headers).has('content-type')).toBe(false);
+    expect(new Headers(sent.headers).get('x-csrf-token')).toBe('csrf-logout');
+    expect(sent.credentials).toBe('include');
+    expect(sent.body).toBeUndefined();
+  });
+
   it('requests server-authoritative personal and RO recovery before any client history limit', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

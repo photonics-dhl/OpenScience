@@ -19,7 +19,7 @@ import "./hermes-companion.css";
 import "katex/dist/katex.min.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.
-// The four roles deliberately separate display, editorial, CJK and data voices.
+// The five faces separate display, editorial, reading, CJK and data voices.
 const displayGrotesk = Bricolage_Grotesque({
   subsets: ["latin"],
   display: "swap",

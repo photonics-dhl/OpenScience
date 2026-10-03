@@ -188,7 +188,7 @@ body {
   --color-accent-primary: #0d4d55;
   --color-accent-primary-strong: #125d66;
   --focus-ring: #125d66;
-  --font-ui: var(--font-bricolage), Arial, 'Microsoft YaHei', sans-serif;
+  --font-ui: var(--font-bricolage, Arial), 'Microsoft YaHei', sans-serif;
   --os-paper-strong: #ffffff;
   --shadow-card: 0 14px 30px -22px rgb(28 62 68 / .18), 0 1px 3px rgb(28 62 68 / .04);
 }

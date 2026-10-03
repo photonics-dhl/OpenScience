@@ -19,7 +19,7 @@ function IdentityShell({ children, className, context, mainClassName, navigation
       <ShellHeader actions={<ProductRouteNavigation variant="identity" />} navigationLabel={navigationLabel} tone="paper" wrapActionsOnMobile />
       <div className={styles.layout}>
         <main className={cn(styles.main, mainClassName)} id="main-content" tabIndex={-1}>
-          <div className="w-full">{children}</div>
+          <div className="w-full" data-hermes-protected="true">{children}</div>
         </main>
         {context ? <aside className={styles.context}>{context}</aside> : null}
       </div>

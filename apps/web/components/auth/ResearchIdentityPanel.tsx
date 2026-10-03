@@ -11,7 +11,7 @@ interface ResearchIdentityPanelProps {
 
 function ResearchIdentityPanel({ description, eyebrow, intent, tagline, title }: ResearchIdentityPanelProps) {
   return (
-    <section className={styles.welcome} data-research-identity-context={intent}>
+    <section className={styles.welcome} data-research-identity-context={intent} data-hermes-protected="true">
       <p className={styles.eyebrow}>{eyebrow}</p>
       <h2>{title}</h2>
       <p className={styles.description}>{description}</p>

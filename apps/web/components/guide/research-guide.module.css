@@ -8,7 +8,7 @@
 .opticalMargin img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: right top; }
 .hero { padding-block: 28px 0; }
 .intro { display: grid; gap: 24px; align-items: start; }
-.intro h1 { max-width: 12ch; font: 500 clamp(44px, 4.3vw, 64px)/1.17 var(--font-reading-serif); letter-spacing: -.035em; text-wrap: balance; }
+.intro h1 { max-width: 12ch; font: 500 clamp(42px, 3.85vw, 60px)/1.17 var(--font-reading-serif); letter-spacing: -.035em; text-wrap: balance; }
 .intro h1 > span { display: block; }
 .titleAccent { color: var(--os-vermilion-ink); }
 :global(html[lang='zh-CN']) .intro h1 { max-width: none; font-family: var(--font-cjk-serif), serif; font-weight: 600; letter-spacing: -.025em; line-height: 1.3; }

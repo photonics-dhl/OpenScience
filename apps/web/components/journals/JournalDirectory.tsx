@@ -12,6 +12,7 @@ function JournalEntry({ journal }: { journal: JournalSummary }) {
     <li>
       <Link
         data-journal-entry
+        data-hermes-protected="true"
         href={`/journals/${journal.slug}`}
         className={styles.entry}
       >
@@ -53,6 +54,7 @@ export function JournalDirectory({ initial = [], initialNextCursor = null }: { i
     <section data-journal-directory className={styles.directory} aria-label="期刊目录">
       <form
         aria-busy={loading}
+        data-hermes-protected="true"
         className={styles.search}
         onSubmit={(event) => { event.preventDefault(); void load(term); }}
       >
