@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionBinding } from '../src/native-agent/session';
 import { AiGateway, AnthropicCompatProvider, nativeAgentSdkRequest, type GatewayCompletion, type TextProvider } from '@openscience/ai-gateway';
 import { nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
@@ -56,6 +56,342 @@ function fixture(firstTool: boolean | number = false, toolInput: Record<string, 
     loseAnswer: () => { loseAnswer = true; }, reportModel: (model: string) => { reportedModel = model; },
     corrupt: (mutate: (s: NativeAgentSessionState) => void) => { mutate(state!); } };
 }
+function httpSessionFixture(http: (attempt: number, init: RequestInit) => Promise<Response>) {
+  let state: NativeAgentSessionState | null = null;
+  let authorized = true; let lease = true; let fallbackCalls = 0; let publishAttempts = 0;
+  const calls: Array<{ at: number; url: string; body: string }> = [];
+  const audits: Array<Record<string, unknown>> = [];
+  const published: NativeAgentSessionState[] = [];
+  const hooks: { beforePublish?: (attempt: number) => void | Promise<void>;
+    authorize?: () => void | Promise<void>; afterComplete?: () => void | Promise<void> } = {};
+  const provider = new AnthropicCompatProvider('minimax', {
+    baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: binding.model,
+  }, async (url, init) => {
+    calls.push({ at: Date.now(), url: String(url), body: String(init?.body) });
+    return http(calls.length, init!);
+  });
+  const fallback = new AnthropicCompatProvider('fallback', {
+    baseUrl: 'https://fallback.invalid', apiKey: 'fixture', model: binding.model,
+  }, async () => { fallbackCalls++; throw new Error('Unexpected fallback HTTP'); });
+  const gateway = new AiGateway({ providers: [provider, fallback], audit: {
+    async record(event) { audits.push(event.metadata as Record<string, unknown>); },
+  } });
+  const assertCurrent = (expected: NativeAgentSessionState | null) => {
+    if (JSON.stringify(state) !== JSON.stringify(expected)) throw new Error('checkpoint CAS changed');
+  };
+  const authorize = async () => {
+    await hooks.authorize?.();
+    if (!authorized || !lease) throw new Error('authority revoked');
+  };
+  const store = { read: async () => structuredClone(state),
+    async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
+      await authorize(); assertCurrent(expected);
+      if (expected?.turns.at(-1)?.state === 'started') throw new Error('started checkpoint cannot be replaced');
+      expect(next.turns).toHaveLength((expected?.turns.length ?? 0) + 1);
+      expect(next.turns.at(-1)?.state).toBe('started'); state = structuredClone(next);
+    },
+    async complete(started: NativeAgentSessionState, completed: NativeAgentSessionState) {
+      assertCurrent(started);
+      expect(completed.binding).toEqual(started.binding);
+      expect(completed.initialMessages).toEqual(started.initialMessages);
+      expect(completed.turns).toHaveLength(started.turns.length);
+      expect(completed.turns.slice(0, -1)).toEqual(started.turns.slice(0, -1));
+      expect(started.turns.at(-1)?.state).toBe('started');
+      expect(completed.turns.at(-1)).toMatchObject({ state: 'completed',
+        target: started.turns.at(-1)!.target, request: started.turns.at(-1)!.request });
+      state = structuredClone(completed); await hooks.afterComplete?.();
+    },
+    async publish<T>(started: NativeAgentSessionState, submit: () => Promise<T>) {
+      await hooks.beforePublish?.(++publishAttempts); await authorize(); assertCurrent(started);
+      published.push(structuredClone(started)); return submit();
+    } };
+  const create = (limits: Partial<NativeAgentSessionBinding> = {}) => createNativeAgentSession({
+    gateway, binding: { ...binding, ...limits }, store, now: () => Date.now(), authorize,
+  });
+  return { create, calls, audits, published, hooks, get state() { return structuredClone(state); },
+    get fallbackCalls() { return fallbackCalls; }, revoke: () => { authorized = false; }, loseLease: () => { lease = false; },
+    corrupt: (mutate: (current: NativeAgentSessionState) => void) => { mutate(state!); } };
+}
+function successfulHttpResponse(outputTokens = 10) {
+  return new Response(JSON.stringify({ model: binding.model, content: [{ type: 'text', text: 'source checked' }],
+    stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: outputTokens } }));
+}
+
+describe('native HTTP 529 process-local retry', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('retries typed HTTP 529 once after 1s and replays its success without HTTP', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+      const f = httpSessionFixture(async attempt => attempt === 1
+        ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+      const pending = f.create().complete(request);
+      const settled = Promise.allSettled([pending]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.calls).toHaveLength(1);
+      expect(f.audits[0]).toMatchObject({ outcome: 'failed', error: 'provider_http_529', outputTokens: null });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(f.calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await settled;
+      expect(f.calls).toHaveLength(2);
+      const result = await pending;
+      expect(f.calls.map(call => call.at)).toEqual([100, 1100]);
+      expect(f.calls[1]!.url).toBe(f.calls[0]!.url);
+      expect(f.calls[1]!.body).toBe(f.calls[0]!.body);
+      expect(f.published).toHaveLength(2);
+      expect(f.published[1]).toEqual(f.published[0]);
+      expect(f.state?.turns[0]).toMatchObject({ state: 'completed',
+        rejectedAttempt: { httpStatus: 529, maxOutputTokens: 100 }, effectiveOptions: { timeoutMs: 8900 } });
+      expect(f.audits).toHaveLength(2);
+      expect(f.audits[1]).toMatchObject({ outcome: 'succeeded', promptHash: f.audits[0]!.promptHash });
+      expect(await f.create().complete(request)).toEqual(result);
+      expect(f.calls).toHaveLength(2); expect(f.audits).toHaveLength(2); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('stops after two HTTP 529 responses and cannot unlock the original started CP using existing audits', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async () => new Response('overloaded', { status: 529 }));
+    const session = f.create(); const pending = session.complete(request);
+    const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect((await settled)[0]?.status).toBe('rejected');
+    expect(f.calls).toHaveLength(2); expect(f.audits).toHaveLength(2);
+    expect(f.audits.map(audit => audit.error)).toEqual(['provider_http_529', 'provider_http_529']);
+    expect(f.published[1]).toEqual(f.published[0]);
+    expect(f.state).toEqual(f.published[0]);
+    await expect(session.complete(request)).rejects.toThrow('submission outcome unknown');
+    await expect(f.create().complete(request)).rejects.toThrow('submission outcome unknown');
+    expect(f.calls).toHaveLength(2); expect(f.audits).toHaveLength(2); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it.each([400, 429, 503])('does not retry HTTP %s or use a fallback provider', async status => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async () => new Response('rejected', { status }));
+    await expect(f.create().complete(request)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1);
+    expect(f.audits[0]).toMatchObject({ error: `provider_http_${status}`, outputTokens: null });
+    expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it.each(['connection-reset', '529-lookalike'])('does not retry uncertain %s transport', async failure => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async () => {
+      if (failure === 'connection-reset') throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } });
+      throw new Error('Provider minimax HTTP 529');
+    });
+    await expect(f.create().complete(request)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1);
+    expect(f.audits[0]!.error).not.toBe('provider_http_529');
+    expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('does not retry a real provider timeout after the HTTP transport waits for abort', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async (_attempt, init) => new Promise((_resolve, reject) => {
+      init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    }));
+    const pending = f.create({ deadlineAt: 2100 }).complete(request);
+    const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect((await settled)[0]?.status).toBe('rejected');
+    expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1);
+    expect(f.audits[0]).toMatchObject({ error: 'provider_timeout', outputTokens: null });
+    expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it.each([
+    ['backoff', 'authority'], ['backoff', 'lease'], ['backoff', 'checkpoint'],
+    ['publication', 'authority'], ['publication', 'lease'], ['publication', 'checkpoint'],
+  ] as const)('sends no second HTTP if %s loses %s', async (phase, change) => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1
+      ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+    let changed = false;
+    const mutate = () => {
+      changed = true;
+      if (change === 'authority') f.revoke();
+      else if (change === 'lease') f.loseLease();
+      else f.corrupt(current => { current.turns[0]!.effectiveOptions.timeoutMs = 8888; });
+    };
+    if (phase === 'publication') f.hooks.beforePublish = attempt => { if (attempt === 2) mutate(); };
+    const pending = f.create().complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.calls).toHaveLength(1);
+    if (phase === 'backoff') mutate();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await settled)[0]?.status).toBe('rejected'); expect(changed).toBe(true);
+    expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1); expect(f.fallbackCalls).toBe(0);
+    expect(f.state?.turns[0]?.state).toBe('started');
+  });
+
+  it.each([
+    ['physical calls', { maxTurns: 1 }], ['reserved output', { maxTotalOutputTokens: 100 }],
+    ['original deadline', { deadlineAt: 1100 }],
+  ] as const)('cannot buy a retry when the original %s allowance is exhausted', async (_reason, limits) => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1
+      ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+    const pending = f.create(limits).complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await settled)[0]?.status).toBe('rejected');
+    expect(f.calls).toHaveLength(1); expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('refuses a restarted session during backoff while only the original invocation may republish', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1
+      ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+    const pending = f.create().complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.audits[0]!.error).toBe('provider_http_529');
+    expect(f.state).toEqual(f.published[0]);
+    await expect(f.create().complete(request)).rejects.toThrow('submission outcome unknown');
+    expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await settled)[0]?.status).toBe('fulfilled');
+    expect(f.calls).toHaveLength(2); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('counts a recovered logical turn as two physical calls while retaining zero-call replay at the limit', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1
+      ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+    const limits = { maxTurns: 2 }; const session = f.create(limits);
+    const pending = session.complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(1000); await settled; const result = await pending;
+    await expect(session.complete({ ...request, messages: [...request.messages, result.choices[0]!.message,
+      { role: 'user', content: 'Continue the original task.' }] })).rejects.toThrow('budget');
+    expect(await f.create(limits).complete(request)).toEqual(result);
+    expect(f.calls).toHaveLength(2); expect(f.state?.turns).toHaveLength(1);
+  });
+
+  it('charges the full 529 reservation plus successful usage against later turns and preserves their replay', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1 ? new Response('overloaded', { status: 529 })
+      : successfulHttpResponse(attempt === 3 ? 100 : 10));
+    const limits = { maxTurns: 4, maxTotalOutputTokens: 250 }; const session = f.create(limits);
+    const pending = session.complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(1000); await settled; const first = await pending;
+    const secondRequest = { ...request, messages: [...request.messages, first.choices[0]!.message,
+      { role: 'user', content: 'Continue the original task.' }] };
+    const second = await session.complete(secondRequest);
+    const thirdRequest = { ...request, messages: [...secondRequest.messages, second.choices[0]!.message,
+      { role: 'user', content: 'Finish the original task.' }] };
+    const third = await session.complete(thirdRequest);
+    expect(f.calls.map(call => JSON.parse(call.body).max_tokens)).toEqual([100, 100, 100, 40]);
+    const replay = f.create(limits);
+    expect(await replay.complete(request)).toEqual(first);
+    expect(await replay.complete(secondRequest)).toEqual(second);
+    expect(await replay.complete(thirdRequest)).toEqual(third);
+    expect(f.calls).toHaveLength(4); expect(f.audits).toHaveLength(4); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('retains a retry overrun but never replays it using the larger original allowance', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    const f = httpSessionFixture(async attempt => attempt === 1
+      ? new Response('overloaded', { status: 529 }) : successfulHttpResponse(16));
+    const limits = { maxTotalOutputTokens: 115 };
+    const pending = f.create(limits).complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(1000); await settled;
+    await expect(pending).rejects.toThrow('exceeded reserved');
+    expect(f.calls.map(call => JSON.parse(call.body).max_tokens)).toEqual([100, 15]);
+    expect(f.state?.turns[0]).toMatchObject({ state: 'completed', effectiveOptions: { maxTokens: 15 },
+      rejectedAttempt: { httpStatus: 529, maxOutputTokens: 100 }, response: { usage: { outputTokens: 16 } } });
+    await expect(f.create(limits).complete(request)).rejects.toThrow('exceeded reserved');
+    expect(f.calls).toHaveLength(2); expect(f.audits).toHaveLength(2);
+  });
+
+  it.each([
+    ['binding deadline', 6100, 6100], ['single-call timeout', 900100, 600100],
+  ] as const)('retains the original %s across slow rejection, backoff and the second HTTP', async (_reason, deadlineAt, expiresAt) => {
+    vi.useFakeTimers(); vi.setSystemTime(100);
+    let abortedAt = 0;
+    const f = httpSessionFixture(async (attempt, init) => {
+      if (attempt === 1) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        return new Response('overloaded', { status: 529 });
+      }
+      return new Promise((_resolve, reject) => {
+        init.signal!.addEventListener('abort', () => {
+          abortedAt = Date.now(); reject(new DOMException('aborted', 'AbortError'));
+        }, { once: true });
+      });
+    });
+    const pending = f.create({ deadlineAt }).complete(request); const settled = Promise.allSettled([pending]);
+    await vi.advanceTimersByTimeAsync(expiresAt - 100);
+    expect((await settled)[0]?.status).toBe('rejected');
+    expect(abortedAt).toBe(expiresAt); expect(f.calls.map(call => call.at)).toEqual([100, 1500]);
+    expect(f.audits.map(audit => audit.error)).toEqual(['provider_http_529', 'provider_timeout']);
+    expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it.each(['publication lock', 'publication authorization'] as const)(
+    'sends no second HTTP when %s waits past the independent 600s call deadline', async phase => {
+      vi.useFakeTimers(); vi.setSystemTime(100);
+      const callDeadlineAt = 600100; const limits = { deadlineAt: 900100 };
+      const f = httpSessionFixture(async attempt => attempt === 1
+        ? new Response('overloaded', { status: 529 }) : successfulHttpResponse());
+      let publicationAuthorization = false; let waited = false;
+      const waitPastDeadline = async () => {
+        waited = true;
+        await new Promise(resolve => setTimeout(resolve, callDeadlineAt - Date.now()));
+      };
+      f.hooks.beforePublish = async attempt => {
+        if (attempt !== 2) return;
+        if (phase === 'publication lock') await waitPastDeadline();
+        else publicationAuthorization = true;
+      };
+      f.hooks.authorize = async () => {
+        if (!publicationAuthorization) return;
+        publicationAuthorization = false; await waitPastDeadline();
+      };
+      const pending = f.create(limits).complete(request); const settled = Promise.allSettled([pending]);
+      await vi.advanceTimersByTimeAsync(callDeadlineAt - 100); await settled;
+      await expect(pending).rejects.toThrow('original request deadline expired');
+      expect(waited).toBe(true); expect(Date.now()).toBeLessThan(limits.deadlineAt);
+      expect(f.calls).toHaveLength(1); expect(f.audits).toHaveLength(1);
+      expect(f.published).toHaveLength(2); expect(f.published[1]).toEqual(f.published[0]);
+      expect(f.state).toEqual(f.published[0]); expect(f.fallbackCalls).toBe(0);
+    });
+
+  it.each(['late HTTP answer', 'checkpoint persistence', 'final authorization'] as const)(
+    'retains completed paid evidence but refuses consumption after %s crosses the call deadline', async phase => {
+      vi.useFakeTimers(); vi.setSystemTime(100);
+      const callDeadlineAt = 600100; const limits = { deadlineAt: 900100 };
+      let crossed = false; let lateResponseSawAbort = false;
+      const waitPastDeadline = async () => {
+        crossed = true;
+        await new Promise(resolve => setTimeout(resolve, callDeadlineAt + 1 - Date.now()));
+      };
+      const f = httpSessionFixture(async (attempt, init) => {
+        if (attempt === 1) return new Response('overloaded', { status: 529 });
+        if (phase === 'late HTTP answer') {
+          // A late upstream success is still paid evidence even when cancellation has raced it.
+          await waitPastDeadline(); lateResponseSawAbort = init.signal!.aborted;
+        }
+        return successfulHttpResponse();
+      });
+      if (phase === 'checkpoint persistence') f.hooks.afterComplete = waitPastDeadline;
+      if (phase === 'final authorization') f.hooks.authorize = async () => {
+        if (!crossed && f.state?.turns.at(-1)?.state === 'completed') await waitPastDeadline();
+      };
+      const pending = f.create(limits).complete(request); const settled = Promise.allSettled([pending]);
+      await vi.advanceTimersByTimeAsync(callDeadlineAt + 1 - 100); await settled;
+      await expect(pending).rejects.toThrow('original request deadline expired');
+      expect(crossed).toBe(true); expect(Date.now()).toBeLessThan(limits.deadlineAt);
+      if (phase === 'late HTTP answer') expect(lateResponseSawAbort).toBe(true);
+      expect(f.calls.map(call => call.at)).toEqual([100, 1100]);
+      expect(f.published[1]).toEqual(f.published[0]);
+      expect(f.state?.turns[0]).toMatchObject({ state: 'completed',
+        rejectedAttempt: { httpStatus: 529, maxOutputTokens: 100 }, effectiveOptions: { timeoutMs: 599000 },
+        response: { text: 'source checked', usage: { inputTokens: 20, outputTokens: 10 } } });
+      expect(f.audits.map(audit => audit.outcome)).toEqual(['failed', 'succeeded']);
+      expect(f.fallbackCalls).toBe(0);
+    });
+});
+
 describe('native Agent durable SDK turns', () => {
   it.each(['author', 'checkpoint', 'field', 'claim'])('does not rebase an independent reviewer after restart when its %s changes', async changed => {
     const f = fixture();
