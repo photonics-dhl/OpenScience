@@ -41,9 +41,11 @@ export function JournalDirectory({ initial = [], initialNextCursor = null }: { i
   const [cursor, setCursor] = React.useState(initialNextCursor);
   const [appliedTerm, setAppliedTerm] = React.useState('');
   const inFlight = React.useRef(false);
+  const lastRequest = React.useRef<{ query: string; cursor?: string }>({ query: '' });
   const load = React.useCallback(async (value = '', next?: string) => {
     if (inFlight.current) return;
     inFlight.current = true;
+    lastRequest.current = { query: value, cursor: next };
     setLoading(true); setError('');
     try {
       const page = await listJournals({ query: value, limit: 20, cursor: next });
@@ -69,7 +71,7 @@ export function JournalDirectory({ initial = [], initialNextCursor = null }: { i
       {error ? (
         <div className={styles.feedback} role="alert">
           <p>{error}</p>
-          <button type="button" disabled={loading} onClick={() => void load(term)}>{t('retry')}</button>
+          <button type="button" disabled={loading} onClick={() => void load(lastRequest.current.query, lastRequest.current.cursor)}>{t('retry')}</button>
         </div>
       ) : null}
       {!loading && !error && !items.length ? (
