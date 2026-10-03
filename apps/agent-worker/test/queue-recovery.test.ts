@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { createResearchRunReconcileScheduler, reconcileResearchRunsTick, recoverProcessingQueue } from '../src/index';
+import { initialNativeAgentExecution } from '@openscience/domain';
+import { createWorkerDeps, createResearchRunReconcileScheduler, reconcileResearchRunsTick, recoverProcessingQueue } from '../src/index';
 
 describe('agent-worker durable queue recovery', () => {
+  it('carries the actual bootstrap runtime into automatic review and storyboard creation', async () => {
+    const deps = createWorkerDeps({ prisma: {}, redis: {} } as never, { HERMES_NATIVE_AGENT_ENABLED: 'true',
+      HERMES_NATIVE_RUNTIME_ID: 'installed-runtime', HERMES_NATIVE_SKILL_CATALOGUE_ID: 'installed-skills', HERMES_NATIVE_AGENT_MODEL: 'MiniMax-M3' });
+    const roles: unknown[] = [];
+    const scheduler = createResearchRunReconcileScheduler({ reconcile: async actual => {
+      for (const profile of ['paper-source-review', 'paper-illustration'] as const)
+        roles.push(initialNativeAgentExecution(actual.nativeAgentRuntime, profile));
+      return { inspected: 1, advanced: 1, failed: 0, stopped: 0, errors: 0 };
+    } });
+    expect(await scheduler(deps)).toBe(true);
+    expect(roles).toEqual(['paper-source-review', 'paper-illustration'].map(profile => ({ nativeAgentExecution: {
+      kind: 'hermes-agent', profile, runtimeId: 'installed-runtime', skillCatalogueId: 'installed-skills', model: 'MiniMax-M3' } })));
+  });
+  it('preserves disabled native execution at bootstrap', () => {
+    expect(createWorkerDeps({ prisma: {}, redis: {} } as never, { HERMES_NATIVE_AGENT_ENABLED: 'false' }).nativeAgentRuntime).toBeUndefined();
+  });
+  it('refuses enabled but incomplete runtime configuration before the Worker loop starts', () => {
+    expect(() => createWorkerDeps({ prisma: {}, redis: {} } as never, { HERMES_NATIVE_AGENT_ENABLED: 'true' })).toThrow();
+  });
   it('contains a research reconciler failure so normal queue polling can continue', async () => {
     const errors: unknown[] = [];
     const completed = await reconcileResearchRunsTick({} as never, async () => { throw new Error('database unavailable'); }, (error) => errors.push(error));

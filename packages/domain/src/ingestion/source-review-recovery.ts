@@ -79,6 +79,45 @@ export type HermesPrivateSourceReanalysisExecution = { sourceMapRef: DocumentSou
 const PRIVATE_SOURCE_REANALYSIS = 'new_paid_private_analysis' as const;
 const PRIVATE_REANALYSIS_BATCH_PREFIX = 'ingestion-private-source-reanalysis:';
 const SOURCE_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+export const NATIVE_REVIEW_INITIALIZATION_ERROR = 'Native independent reviewer runtime or grant is unavailable';
+export const NATIVE_REVIEW_INITIALIZATION_RECOVERY = 'native_source_review_initialization' as const;
+
+/** Resume only the pre-creation initialization failure; the ordinary ensure path owns review creation and charging. */
+export async function inspectNativeSourceReviewInitializationRecovery(tx: Prisma.TransactionClient, runId: string) {
+  const run = await tx.hermesResearchRun.findUnique({ where: { id: runId }, include: { steps: true, researchObject: true } });
+  if (!run || run.status !== 'failed' || run.error !== NATIVE_REVIEW_INITIALIZATION_ERROR
+    || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9 || run.versionId !== null
+    || run.sourceClaimIds.length || run.sourceReviewDigest || run.researchObject.deletedAt || run.researchObject.status !== 'draft'
+    || run.steps.length !== 1) return null;
+  const step = run.steps[0]!;
+  if (step.stage !== 'source_ingestion' || step.ordinal !== 0 || step.status !== 'succeeded'
+    || !step.ingestionTaskId || !step.artifactId || !step.agentTaskId || step.presentationAssetId !== null) return null;
+  const authority = await requireActiveMembership(tx, run.researchObject.workspaceId, run.actorId).catch(() => null);
+  if (!authority || authority.workspace.status !== 'active' || !SOURCE_WRITE_ROLES.has(authority.membership.role)) return null;
+  const source = await tx.ingestionTask.findUnique({ where: { id: step.ingestionTaskId }, include: { artifact: true, batch: true } });
+  if (!source || source.state !== 'needs_review' || source.retryCount !== 0 || source.agentTaskId !== step.agentTaskId
+    || source.artifactId !== step.artifactId || source.batch.userId !== run.actorId || source.batch.researchObjectId !== run.researchObjectId
+    || source.artifact.workspaceId !== run.researchObject.workspaceId || source.artifact.deletedAt || source.artifact.bytesPurgedAt) return null;
+  const author = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+  if (!author || author.deletedAt || author.kind !== 'sdf.extract' || author.status !== 'succeeded'
+    || author.session.deletedAt || author.session.status !== 'active' || author.session.kind !== 'ingestion'
+    || author.session.userId !== run.actorId || author.session.researchObjectId !== run.researchObjectId
+    || !isDeepStrictEqual(author.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })) return null;
+  let proof: ReturnType<typeof requireNativePaperAuthor>;
+  try { proof = requireNativePaperAuthor(author); } catch { return null; }
+  if (proof.sourceMapRef.artifactId !== source.artifactId || proof.sourceMapRef.contentHash !== source.artifact.blobSha256
+    || !(await hasOrdinarySourceTaskDebit(tx, author.id, run.actorId))) return null;
+  const reviewerKey = `ingestion-analysis-compose:${source.id}:${author.id}:${author.id}:scientific-review-v4`;
+  // Task, session and ordinary debit are created atomically. An absent task/session proves that creation never committed;
+  // its debit key contains the generated task UUID, not reviewerKey. Never invent a second ledger identity here.
+  // The same PDF may already appear in older versions. Only this ingestion/run's commit identities prove downstream adoption.
+  if (await tx.agentTask.findUnique({ where: { idempotencyKey: reviewerKey } })
+    || await tx.agentSession.findUnique({ where: { idempotencyKey: `${reviewerKey}:session` } })
+    || await tx.commit.findUnique({ where: { idempotencyKey: `ingestion-confirm:${source.id}` } })
+    || await tx.commit.findUnique({ where: { idempotencyKey: `hermes-ingestion:${run.id}:${source.id}` } })) return null;
+  return { run, step, source, author, ...proof };
+}
+
 const uuid = (value: unknown): value is string => typeof value === 'string'
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 

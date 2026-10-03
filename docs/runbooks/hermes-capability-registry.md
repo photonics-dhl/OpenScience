@@ -12,7 +12,7 @@ scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专
 
 工具提交已部署，仅对新精确description采用现成paper_review回执作为终审数据入口；重建真实稿并重跑原完整科学检查，不允许后续改稿/失败提交后退用旧成功。新字段来源容量与已有notebook一致，issues与旧schema保持。132定向/TC/lint/High及精确CI通过，未新发科学验证；工程通过只证明提交守卫与旧任务兼容，不证明真实模型会正确完成或科学正确。部署复用未变的Native运行时与Skill目录，身份只见CURRENT。
 
-独立原生审阅候选正在实现，尚未部署：新paper-author仍复用现有作者能力但不再直接成为自动采用结果；既有source_review阶段选paper-source-review，paper_candidate提供实际最终作者稿/Claims和所选完整原文，审阅者保留按需搜索、看原页、完整Skill方法，paper_review提交修订。复用原Session/store及科学物化，私有绑定原作者/既有CP/实际稿，逐次重验来源/权限，SDK配置不含私有绑定。旧paper-understanding及历史fixed/web paid路线保持；阶段、一次普通扣费/max9不扩张。代码与High进度只见CURRENT，独立上下文的真实科学改善尚未证明。
+独立原生审阅已部署：新paper-author仍复用现有作者能力但不再直接成为自动采用结果；既有source_review阶段选paper-source-review，paper_candidate提供实际最终作者稿/Claims和所选完整原文，审阅者保留按需搜索、看原页、完整Skill方法，paper_review提交修订。复用原Session/store及科学物化，私有绑定原作者/既有CP/实际稿，逐次重验来源/权限，SDK配置不含私有绑定。旧paper-understanding及历史fixed/web paid路线保持；阶段、一次普通扣费/max9不扩张。工程与High已通过；真实作者成功并调用原页/科学Skill，但Worker启动deps漏runtime阻止创建独立审阅。接线修复及原retry的同run恢复已通过定向验证/High，候选只恢复尚未创建审阅的明确初始化失败，不重跑作者或拒绝同PDF旧版本；待精确CI/部署，身份/回执只见CURRENT；独立上下文的真实科学改善尚未证明。
 
 旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
 

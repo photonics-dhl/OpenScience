@@ -9,7 +9,8 @@ import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridg
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
 import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, reviewHermesSavedCompositionInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
 import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, inspectHermesPrivateSourceReanalysis, readHermesPrivateSourceReanalysisReplay,
-  requireNoPrivateSourceReanalysisWriter, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
+  requireNoPrivateSourceReanalysisWriter, inspectNativeSourceReviewInitializationRecovery,
+  NATIVE_REVIEW_INITIALIZATION_ERROR, NATIVE_REVIEW_INITIALIZATION_RECOVERY, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
@@ -332,6 +333,8 @@ export async function getHermesResearchRun(
   if (!ro) throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
+  if (WRITE_ROLES.has(authority.membership.role) && await inspectNativeSourceReviewInitializationRecovery(deps.prisma, run.id))
+    return { ...toView(run), canRetryGeneration: true, chargeableAttempts: 1, generationRecovery: 'source-review-fresh' };
   if (run.status === 'awaiting_storyboard_review') {
     for (const step of run.steps.filter(item => item.stage === 'storyboard' && item.status === 'awaiting_approval')) {
       const task = step.agentTaskId ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
@@ -2350,6 +2353,40 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (run.profile === VISUAL_NARRATIVE_PROFILE) {
           if (!ro || ro.deletedAt || ro.status !== 'draft' || !membership || !WRITE_ROLES.has(membership.membership.role))
             throw new HermesResearchRunError('FORBIDDEN', 'Source review recovery permission is unavailable');
+          const initializationReceipts = await tx.auditLog.findMany({ where: {
+            action: 'hermes.research_run.source_review_resume', targetType: 'hermes_research_run', targetId: run.id,
+            actorId: input.actorId, workspaceId: ro.workspaceId,
+            metadata: { path: ['clientIdempotencyKey'], equals: input.idempotencyKey },
+          }, take: 2 });
+          if (initializationReceipts.length) {
+            const meta = jsonRecord(initializationReceipts[0]!.metadata);
+            const step = run.steps.find(item => item.id === meta.sourceStepId);
+            if (initializationReceipts.length !== 1 || meta.recovery !== NATIVE_REVIEW_INITIALIZATION_RECOVERY
+              || meta.requestDigest !== requestDigest || meta.previousVersion !== input.expectedVersion || run.version <= input.expectedVersion
+              || !step || step.stage !== 'source_ingestion' || step.ingestionTaskId !== meta.ingestionTaskId || step.artifactId !== meta.artifactId)
+              throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Source review resume receipt does not match this request');
+            return { run, dispatchIds: [] as string[] };
+          }
+          if (run.error === NATIVE_REVIEW_INITIALIZATION_ERROR) {
+            if (run.version !== input.expectedVersion)
+              throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before resuming source review');
+            const proof = await inspectNativeSourceReviewInitializationRecovery(tx, run.id);
+            if (!proof || !deps.audit)
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native source review initialization cannot be resumed safely');
+            const moved = await tx.hermesResearchRun.updateMany({ where: {
+              id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
+              status: 'failed', error: NATIVE_REVIEW_INITIALIZATION_ERROR, version: input.expectedVersion,
+              versionId: null, profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9,
+            }, data: { status: 'awaiting_source_review', error: null, lastReconciledAt: null, version: { increment: 1 } } });
+            if (moved.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed while resuming source review');
+            await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+              action: 'hermes.research_run.source_review_resume', targetType: 'hermes_research_run', targetId: run.id,
+              metadata: { recovery: NATIVE_REVIEW_INITIALIZATION_RECOVERY, requestDigest, clientIdempotencyKey: input.idempotencyKey,
+                previousVersion: input.expectedVersion, sourceStepId: proof.step.id, ingestionTaskId: proof.source.id,
+                artifactId: proof.source.artifactId, sourceAgentTaskId: proof.author.id,
+                authorCheckpointSha256: proof.checkpoint.serializedSha256, explicitUserAction: true } }, ctx);
+            return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [] as string[] };
+          }
           const parserReceipts = await tx.auditLog.findMany({ where: {
             action: 'ingestion.task.retry', targetType: 'ingestion_task', actorId: input.actorId, workspaceId: ro.workspaceId,
             AND: [{ metadata: { path: ['runId'], equals: run.id } },

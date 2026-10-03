@@ -33,6 +33,7 @@ import {
   assertSearchIndexSourceLive,
   findSavedIngestionCommit,
   requireHermesSourceReviewExecution,
+  nativeAgentRuntimeFromEnv,
   resolveHermesPrivateSourceReanalysisExecution,
   requireHermesSourceCompositionRecoveryExecution,
   type HermesSavedSourceReviewOutput,
@@ -967,6 +968,15 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
   };
 }
 
+/** Shared dependency assembly used by the real Worker entry and automatic run scheduler. */
+export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 'storage' | 'audit'>, env: NodeJS.ProcessEnv = process.env): WorkerDeps {
+  return { ...input,
+    nativeAgentRuntime: nativeAgentRuntimeFromEnv(env),
+    malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
+    mailer: { send: async () => undefined },
+  };
+}
+
 /** 主循环（独立进程入口，云上 systemd/nohup 常驻）。 */
 async function main(): Promise<void> {
   let ownedPrisma: ReturnType<typeof createPrismaClient> | undefined;
@@ -993,12 +1003,7 @@ async function main(): Promise<void> {
     const storage = createStorageAdapter(storageConfigFromEnv());
     const trashSearchClient = ownedSearch = process.env.SEARCH_DATABASE_URL || loadSearchIndexRuntimeConfig(process.env).enabled
       ? createSearchPrismaClient({ env: process.env }) : undefined;
-    const deps: WorkerDeps = {
-      prisma, redis, storage,
-      audit,
-      malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
-      mailer: { send: async () => undefined },
-    };
+    const deps = createWorkerDeps({ prisma, redis, storage, audit });
     // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
     const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
     const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');

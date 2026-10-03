@@ -9,7 +9,7 @@ import { persistDocumentSourceMapReference } from '../../src/research-intelligen
 import { markTaskProgress, persistAgentTaskInTransaction } from '../../src/agent/agent';
 import { compareNativeAgentCheckpoint, initialNativeAgentExecution, readNativeAgentExecution, requireNativeAgentExecutionAuthority,
   type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
-import { createHermesResearchRun, reconcileHermesResearchRuns } from '../../src/agent/research-run';
+import { createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 
 const runtime = { runtimeId: 'installed-native-28d', skillCatalogueId: 'project-catalogue-28d', model: 'MiniMax-M3' };
 function authorFixture() {
@@ -33,7 +33,7 @@ function authorFixture() {
   const source = { ...f.db.ingestionTasks[0]!, artifact: f.db.artifacts[0]!, agentTask: author };
   return { ...f, author, cp, source, deps: { ...f.deps, nativeAgentRuntime: runtime } };
 }
-async function queuedFixture(lose = false) {
+async function storedAuthorFixture() {
   const f = authorFixture(); const objects = new Map<string, Buffer>();
   const storage = { headObject: async () => null,
     putObject: async (key: string, body: Buffer) => { objects.set(key, body); return { key, size: body.length, etag: 'test' }; },
@@ -44,12 +44,120 @@ async function queuedFixture(lose = false) {
       text: 'The source model has specified assumptions and conditions.', boundingBox: { x: 1, y: 1, width: 90, height: 90 },
       parser: { name: 'fixture', version: '1' }, transformations: [] }] }] }, 'succeeded');
   f.author.result.sourceMapRef = ref; f.cp.sourceMapHash = ref.serializedSha256;
+  return { ...f, deps: { ...f.deps, storage } };
+}
+async function queuedFixture(lose = false) {
+  const f = await storedAuthorFixture();
   const before = structuredClone(f.db);
   if (lose) vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
-  const deps = { ...f.deps, storage };
+  const deps = f.deps;
   const request = ensureHermesIngestionReview(deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run });
   return { ...f, deps, request, before };
 }
+const initializationError = 'Native independent reviewer runtime or grant is unavailable';
+async function initializationFailureFixture() {
+  const f = await storedAuthorFixture();
+  f.db.researchObjects[0]!.visibility = 'private';
+  f.db.usageLedger.push({ id: 'author-debit', userId: f.input.actorId, resource: 'ai_credit', delta: -1,
+    kind: 'consume', reason: 'Agent task reservation sdf.extract', idempotencyKey: `agent-task-reserve:${f.author.id}`,
+    metadata: { taskId: f.author.id, kind: 'sdf.extract', policy: 'charged-on-submit' } });
+  expect(await reconcileHermesResearchRuns({ ...f.deps, nativeAgentRuntime: undefined })).toMatchObject({ failed: 1, errors: 0 });
+  expect(f.db.hermesResearchRuns[0]).toMatchObject({ status: 'failed', error: initializationError });
+  return { ...f, input: { ...f.input, expectedVersion: f.db.hermesResearchRuns[0]!.version } };
+}
+
+describe('native reviewer initialization failure recovery', () => {
+  it.each(['older-source', 'current-source', 'current-run'] as const)(
+    'scopes existing versions to the current ingestion/run, allowing reuse of the same PDF (%s)', async origin => {
+      const f = await initializationFailureFixture();
+      const key = origin === 'current-run' ? `hermes-ingestion:${f.ids.run}:${f.ids.source}`
+        : `ingestion-confirm:${origin === 'current-source' ? f.ids.source : 'older-ingestion'}`;
+      f.db.commits.push({ id: 'saved-commit', researchObjectId: f.ids.ro, idempotencyKey: key });
+      f.db.versions.push({ id: 'saved-version', researchObjectId: f.ids.ro, commitId: 'saved-commit', status: 'draft', versionNo: 1 });
+      f.db.versionManifests.push({ id: 'saved-manifest', versionId: 'saved-version' });
+      f.db.manifestEntries.push({ id: 'saved-entry', manifestId: 'saved-manifest', artifactId: f.ids.artifact, blobSha256: 'a'.repeat(64) });
+      const before = structuredClone(f.db);
+      const view = await getHermesResearchRun(f.deps, f.input);
+      if (origin === 'older-source') {
+        expect(view).toMatchObject({ canRetryGeneration: true, generationRecovery: 'source-review-fresh' });
+        await expect(retryHermesGeneration(f.deps, f.input)).resolves.toMatchObject({ status: 'awaiting_source_review' });
+        expect(f.db.agentTasks).toEqual(before.agentTasks); expect(f.db.usageLedger).toEqual(before.usageLedger);
+        expect(f.db.commits).toEqual(before.commits); expect(f.db.versions).toEqual(before.versions);
+      } else {
+        expect(view.canRetryGeneration).not.toBe(true);
+        await expect(retryHermesGeneration(f.deps, f.input)).rejects.toMatchObject({ code: 'SOURCE_NOT_READY' });
+        expect(f.db).toEqual(before);
+      }
+    });
+  it('recovers the actual failed reconcile without rerunning or charging the paid author, then ensures one reviewer', async () => {
+    const f = await initializationFailureFixture(); const before = structuredClone(f.db);
+    const tx = vi.spyOn(f.prisma, '$transaction');
+    expect(await getHermesResearchRun(f.deps, f.input)).toMatchObject({ canRetryGeneration: true,
+      generationRecovery: 'source-review-fresh', chargeableAttempts: 1 });
+    expect(await retryHermesGeneration(f.deps, f.input)).toMatchObject({ id: f.ids.run, status: 'awaiting_source_review',
+      version: f.input.expectedVersion + 1, maxAgentTasks: 9, error: null });
+    expect(tx).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable', timeout: 30_000 });
+    expect(f.db.agentTasks).toEqual(before.agentTasks); expect(f.db.agentSessions).toEqual(before.agentSessions);
+    expect(f.db.usageLedger).toEqual(before.usageLedger); expect(f.db.hermesResearchSteps).toEqual(before.hermesResearchSteps);
+    expect(f.redis.lpush).not.toHaveBeenCalled();
+    for (let i = 0; i < 2; i++) expect(await ensureHermesIngestionReview(f.deps,
+      { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run })).toBe('queued');
+    expect(f.db.agentTasks).toHaveLength(2); expect(f.db.agentTasks[0]).toEqual(before.agentTasks[0]);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(2);
+    expect(readNativeAgentExecution(f.db.agentTasks[1]!.result)?.profile).toBe('paper-source-review');
+  });
+  it.each([false, true])('replays a lost response before eligibility despite current run progress (reviewer created=%s)', async progress => {
+    const f = await initializationFailureFixture(); await retryHermesGeneration(f.deps, f.input);
+    if (progress) await ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run });
+    const before = structuredClone(f.db);
+    expect(await retryHermesGeneration(f.deps, f.input)).toMatchObject({ id: f.ids.run, version: before.hermesResearchRuns[0]!.version });
+    expect(f.db).toEqual(before);
+  });
+  it('rejects reuse of the receipt key with a changed request', async () => {
+    const f = await initializationFailureFixture(); await retryHermesGeneration(f.deps, f.input);
+    await expect(retryHermesGeneration(f.deps, { ...f.input, expectedVersion: f.input.expectedVersion + 1 }))
+      .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+  });
+  it.each(['membership', 'scope'] as const)('still rejects revoked %s on receipt replay', async change => {
+    const f = await initializationFailureFixture(); await retryHermesGeneration(f.deps, f.input);
+    if (change === 'membership') f.db.memberships[0]!.role = 'viewer';
+    else f.db.researchObjects[0]!.status = 'published';
+    const before = structuredClone(f.db);
+    await expect(retryHermesGeneration(f.deps, f.input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(f.db).toEqual(before);
+  });
+  it.each(['stale-version', 'lost-cas'] as const)('does not charge or write a receipt on %s', async change => {
+    const f = await initializationFailureFixture(); const before = structuredClone(f.db);
+    if (change === 'lost-cas') vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    await expect(retryHermesGeneration(f.deps, { ...f.input,
+      expectedVersion: f.input.expectedVersion - (change === 'stale-version' ? 1 : 0) })).rejects.toMatchObject({ code: 'CONCURRENT_UPDATE' });
+    expect(f.db).toEqual(before);
+  });
+  it.each(['error', 'budget', 'version', 'claims', 'stage', 'checkpoint', 'source', 'debit', 'reviewer-task', 'reviewer-session'] as const)(
+    'does not advertise or perform initialization recovery when %s proof changes', async change => {
+      const f = await initializationFailureFixture(); const run = f.db.hermesResearchRuns[0]!;
+      const key = `ingestion-analysis-compose:${f.ids.source}:${f.author.id}:${f.author.id}:scientific-review-v4`;
+      if (change === 'error') run.error = 'Another source failure';
+      if (change === 'budget') run.maxAgentTasks = 11;
+      if (change === 'version') run.versionId = 'existing-version';
+      if (change === 'claims') run.sourceClaimIds = ['existing-claim'];
+      if (change === 'stage') f.db.hermesResearchSteps.push({ ...f.db.hermesResearchSteps[0], id: 'other-stage', stage: 'storyboard' });
+      if (change === 'checkpoint') f.db.agentTasks[0]!.result.nativeAgentExecution.checkpoint.finishReason = 'length';
+      if (change === 'source') f.db.artifacts[0]!.blobSha256 = '9'.repeat(64);
+      if (change === 'debit') f.db.usageLedger.find(row => row.kind === 'consume')!.delta = 0;
+      if (change === 'reviewer-task') f.db.agentTasks.push({ ...f.db.agentTasks[0], id: 'reviewer', idempotencyKey: key });
+      if (change === 'reviewer-session') f.db.agentSessions.push({ ...f.db.agentSessions[0], id: 'reviewer-session', idempotencyKey: `${key}:session` });
+      const before = structuredClone(f.db);
+      expect((await getHermesResearchRun(f.deps, f.input)).canRetryGeneration).not.toBe(true);
+      await expect(retryHermesGeneration(f.deps, f.input)).rejects.toThrow();
+      expect(f.db).toEqual(before);
+    });
+  it('requires the audit sink before changing recovery state', async () => {
+    const f = await initializationFailureFixture(); const before = structuredClone(f.db);
+    await expect(retryHermesGeneration({ ...f.deps, audit: undefined }, f.input)).rejects.toThrow();
+    expect(f.db).toEqual(before);
+  });
+});
 async function runningFixture() {
   const f = await queuedFixture(); await f.request;
   const reviewer = f.db.agentTasks.at(-1)!;
