@@ -141,7 +141,9 @@ class InstallLifecycleTests(unittest.TestCase):
         reference=scope.resolve('scientific-critical-thinking',resource)
         self.assertEqual(reference.read_text(), 'Bind retained measurements to their objects, definitions, comparison and scope.\n')
         self.assertIn(resource, scope.resolve('scientific-critical-thinking').read_text())
-        self.assertIn(resource, scope.resolve('openscience-source-review').read_text())
+        source_method=scope.resolve('openscience-source-review').read_text()
+        self.assertIn('without peer-reviewing the paper', source_method)
+        self.assertIn('separately requested critical assessment', source_method)
         self.assertEqual(reference.stat().st_mode & 0o222, 0)
         self.assertFalse(self.active)
 
