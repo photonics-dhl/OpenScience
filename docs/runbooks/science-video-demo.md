@@ -24,7 +24,7 @@ Nginx Range 播放；独立于本样片，管理员 RO 单幕 Codex 生图已验
 
 ### 单次提交与续查
 
-从干净、已推送的完整 SHA 通过既有 `scripts/cloud-sync.mjs` 物化不可变发布源；源码的 Gateway 依赖按现有服务器缓存构建。此操作不切换科研应用版本、不重启科研服务，也不启动失效的离线 TTS runner。设置操作 shell 的 `video_source=/opt/openscience-releases/<完整SHA>`，确认该源的完整性和审查/定向 CI；不得在未知原任务状态下另建试镜目录。
+2026-10-04手动云视频入口已从旧应用发布树迁入既有视频运行目录：`/opt/openscience-video/cloud`指向独立不可变bundle，原`7b805b16ad5715cee20eabf6930a21c8070de339`的三个MJS入口、Gateway输出和包元数据逐字复制，真实import-only通过。设置操作 shell 的 `video_source=/opt/openscience-video/cloud`；更新入口时从干净已推源物化、沿同样闭合依赖复制到视频运行包，不能再次长期依赖`/opt/openscience-releases/`。本次不改变私有请求/任务标记/原片、凭据或配置，零模型调用、无科研服务重启；不得在未知原任务状态下另建试镜目录。
 
 1. 在 root/0600 的私密请求文件保存经审查的纯文本品牌概念与普通话旁白，格式严格为 `{model:"MiniMax-H3",content:[{type:"text",text:"..."}],resolution:"768P",duration:10,ratio:"16:9"}`；不含未公开论文和用户数据。执行 `node "$video_source/infra/codex-image-runner/minimax-video-pilot.mjs" prepare --request-file /opt/openscience-video/pilot-request.json`，只保存原请求，零模型调用。
 2. 执行同一命令并将 `prepare` 替换为 `submit`。固定 `/opt/openscience-video/minimax-h3-pilot/create-attempt` 使用独占创建、文件和父目录 fsync，完成后才 POST；并发、重启、换输入路径都不能获得第二次提交。此标记用于防止已观察到的会话中断重复收费；此前只有配置上限，没有实际消费者保障。

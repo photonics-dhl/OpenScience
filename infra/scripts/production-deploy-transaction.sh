@@ -760,10 +760,10 @@ run_remote "rm -f $REMOTE_ROOT/.release-failed"
 # install/bash -n 任一步失败都不会破坏当前可执行文件。
 run_remote "set -e; install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh /usr/local/bin/backup.sh.next; bash -n /usr/local/bin/backup.sh.next; mv /usr/local/bin/backup.sh.next /usr/local/bin/backup.sh"
 
-# Publish rollback identity while retaining historical releases and tool mounts.
-# Historical cleanup is a separately authorized operation, not a deployment step.
+# After acceptance, retain only the published application and its rollback.
+# Host executors use their own installed bundles; live container references remain protected.
 node "$SCRIPT_DIR/production-release-retention.mjs" prepare \
-  --expected-active "$RELEASE_SHA" --expected-rollback "$PREVIOUS_RELEASE_SHA" --lock-fd 9
+  --expected-active "$RELEASE_SHA" --expected-rollback "$PREVIOUS_RELEASE_SHA" --lock-fd 9 --prune-unused 1
 transaction_commit
 node "$SCRIPT_DIR/production-release-retention.mjs" complete \
   --expected-active "$RELEASE_SHA" --expected-rollback "$PREVIOUS_RELEASE_SHA" --lock-fd 9 || {

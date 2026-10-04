@@ -4,6 +4,8 @@
 
 新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图在新API接入前暂停。实际版本、回滚身份、付费任务和科学验收只读[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
 
+2026-10-04用户明确正常应用发布只保留当前发布版和一个回滚版。源修复恢复在公开验收成功后、同一FD9事务内以`prepare --prune-unused 1`准备精确旧版计划，再提交并执行`complete`；准备失败仍回滚候选，提交后清理失败保留pending，不把已接受应用回滚。Host执行器使用自己的完整运行包，模型、浏览器状态、上传数据与备份独立存放；不得用保留整份旧应用源解决运行依赖。该改动已定向验证/High GO，下一正常发版验证；当前清盘进度只见CURRENT。
+
 下列按日期记录的固定阅读、GPT来源审阅及恢复操作是历史兼容说明，不能当作新论文的步骤，也不能据旧“下一步”重发任务。保留历史paid回答、原文、收据和回滚依赖，按CURRENT选择实际适用的恢复路径。
 
 ## 2026-09-30 私有来源耗尽后的新分析
@@ -80,7 +82,7 @@
 2026-09-17**运维软件为何未阻止磁盘达80%**（三套工具三条独立断链，均实测）：①**Netdata**（运行6周、healthy）确实在采集，且内置 `disk_space_usage` 告警存在（warn >80%、crit >90% 且 avail<5G），但 `/etc/netdata/health_alarm_notify.conf` **不存在**——镜像默认 `SEND_EMAIL="AUTO"` 需要容器内有 MTA（官方镜像没有），其余渠道（Telegram/Slack/Pushover/Gotify 等）默认 `YES` 却**无 token**，全为 no-op；`/var/lib/netdata/health/` 为空，说明告警从未进入可通知状态，**告警被求值后送往空处**。且 crit 要求 >90% 且可用<5G，当时尚有30G，故只有静默的 80% warn 适用。②**Portainer**（2026-08-01 起运行）是手动面板，无自动化、无策略、无人查看。③**`openscience-private-cleanup.timer`**（每60秒运行）单元描述即"Erase authorized OpenScience private host job copies"，只处理**经明确授权**的私有作业副本清理请求（共4条，均9-14已完成），对 release/镜像/日志/卷**无任何管辖范围**。另 `journald` 为 `Storage=persistent` 且**无 size 上限**，日志自增至1.4G。结论：没有任何一环在观测聚合磁盘用量并通知到人。已补 `SystemMaxUse=500M`（journald 1.4G→481M，持久生效）。
 **告警已于同日补接并实发验证**：传输用 `/opt/monitor/msmtprc`（服务器端脚本从 `.env.prod` 的 `SMTP_HOST/PORT/USER/PASS` 生成，0600，**不入 git、不拷进 release 目录**），经 `/opt/monitor/docker-compose.monitor.yml` 挂入容器；路由写 netdataconfig 卷的 `health_alarm_notify.conf`（`SEND_EMAIL=YES` 并把内置磁盘告警的 role `sysadmin` 显式路由到收件人）。`alarm-notify.sh test` 已实发 WARNING/CRITICAL/CLEAR 三封、exit 0；`msmtp --serverinfo` 亦通过。**收件人保留在服务器端配置，不写入本仓库**（仓库公开）。细节见 [monitoring runbook](monitoring.md)。
 
-2026-09-14发布收尾修正：正常部署仍在FD9锁内登记并发布精确rollback身份，但prepare默认写空v2清理意图，保留全部历史release、capability与镜像。原因是独立开发工具可能仍挂载旧release；9c30构建/启动通过后曾因此拒绝并回滚。历史清理是另行明确授权的操作，只有prepare显式传`--prune-unused 1`才规划原严格清理，complete/resume仍按已记录意图执行；不得为清理已被容器引用的目录而绕过保护。普通部署不传该参数。保留历史会继续占用磁盘，沿用现有磁盘监控，由独立清理任务决定范围。
+HISTORICAL（已被10-04两版策略替代）—2026-09-14发布收尾修正：正常部署仍在FD9锁内登记并发布精确rollback身份，但prepare默认写空v2清理意图，保留全部历史release、capability与镜像。原因是独立开发工具可能仍挂载旧release；9c30构建/启动通过后曾因此拒绝并回滚。历史清理是另行明确授权的操作，只有prepare显式传`--prune-unused 1`才规划原严格清理，complete/resume仍按已记录意图执行；不得为清理已被容器引用的目录而绕过保护。普通部署不传该参数。保留历史会继续占用磁盘，沿用现有磁盘监控，由独立清理任务决定范围。
 
 2026-09-14历史科研配图能力：应用 release `e2cccb4d75ee8980167d23d4b5c1867263caf2e8` / rollback `ea43696dd6b115415712fe87fd8ff4d2a4cbdc37`。独立 High 静态审阅修正科学关系来源覆盖后，干净发布树执行 `deploy.sh --confirm --no-tests --skip-migrate --reuse-unchanged-capability-images --rollback-ref ea43696dd6b115415712fe87fd8ff4d2a4cbdc37 e2cccb4d75ee8980167d23d4b5c1867263caf2e8`，必要服务器 build/start exit0。随后用该 immutable release 的 `infra/chatgpt-browser/install.sh --confirm-provider --source /opt/openscience-releases/e2cccb4d75ee8980167d23d4b5c1867263caf2e8 --renderer-image sha256:1c47a579ceb608f244878b41888eee50bda1135ff325cb7b49de3a275ee2013d` 安装 broker/runner/协议；既有清理器 installer 同源更新精确 reference.png 后缀，均 exit0，不提交清理请求。没有测试/预检/CI/迁移/新依赖，浏览器会话、代理和 Codex reserve 保持。收据 `tmp/illustration-brief-deploy.log`、`tmp/illustration-provider-install.log`。回退时应用与 Chat bundle 同步：应用回 ea43696d，image broker 恢复 b78fb94d bundle（config-d1630135），runner11494323、science501da7a3、helperd369ccc2；不以旧纯文本 runner 处理新参考图请求。实际功能结果见 CURRENT handoff。
 

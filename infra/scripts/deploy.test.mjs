@@ -39,6 +39,49 @@ test('production commit publishes durable rollback identity before exact retenti
   assert.match(transactionStateSource, /transaction_abort_rollback_intent[\s\S]*transaction_journal_clear/u);
   assert.doesNotMatch(retentionSource, /docker\s+(?:system|image|volume|builder)\s+prune/u);
 });
+
+test('normal publication prunes inactive releases only after acceptance and keeps committed cleanup failure visible', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-retention-publication-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const begin = transactionSource.indexOf('node "$SCRIPT_DIR/production-release-retention.mjs" prepare');
+  const end = transactionSource.indexOf('exec 9>&-', begin);
+  assert.ok(begin > 0 && end > begin);
+  const finish = transactionSource.slice(begin, end);
+  for (const mode of ['success', 'prepare-failed', 'complete-failed']) {
+    const trace = join(root, `${mode}.txt`).replaceAll('\\', '/');
+    const script = [
+      'set -eEuo pipefail', `TRACE='${trace}'`, `MODE='${mode}'`,
+      'SCRIPT_DIR=/unused; RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; PREVIOUS_RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'node() {',
+      '  local phase="$2"; shift 2',
+      '  if [ "$phase" = prepare ]; then',
+      '    local prune=0; while [ "$#" -gt 0 ]; do [ "$1" != --prune-unused ] || prune="$2"; shift 2; done',
+      '    [ "$prune" = 1 ] || return 65',
+      '    printf "%s\\n" prepare >> "$TRACE"',
+      '    [ "$MODE" != prepare-failed ] || return 66',
+      '  else',
+      '    printf "%s\\n" complete >> "$TRACE"',
+      '    [ "$MODE" != complete-failed ] || return 78',
+      '  fi',
+      '}',
+      'transaction_commit() { printf "%s\\n" commit >> "$TRACE"; }',
+      finish,
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    const observed = existsSync(trace) ? (await readFile(trace, 'utf8')).trim().split('\n') : [];
+    if (mode === 'success') {
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(observed, ['prepare', 'commit', 'complete']);
+    } else if (mode === 'prepare-failed') {
+      assert.equal(result.status, 66, result.stderr);
+      assert.deepEqual(observed, ['prepare']);
+    } else {
+      assert.equal(result.status, 78, result.stderr);
+      assert.deepEqual(observed, ['prepare', 'commit', 'complete']);
+      assert.match(result.stderr, /DEPLOY_COMMITTED_RETENTION_PENDING/u);
+    }
+  }
+});
 const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8');
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
 const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.yml', import.meta.url), 'utf8');
