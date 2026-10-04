@@ -26,6 +26,8 @@ UDS回归在Linux运行，Windows跳过；broker inode/mode攻击回归需要Lin
 
 科学catalogue在scientific-critical-thinking根Skill直接呈现已有七条共享证据对齐规则；作者和reviewer首次通过`skill_view`读根即可取得，专项原方法仍按需加载。`references/source-evidence-alignment.md`保留同源独立副本供兼容，不要求为同一内容重复读取。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
 
+Native分镜的数量语法和有界诊断按首帧已保存的实际科学工具描述选择；旧描述/未知描述保持旧解析与原反馈，新描述才识别图表结构引用和独立数值–Hz单位跨度。执行和finish重建用同一选择，成功/失败回执均严格全等；原来源/单位/数量校验、必填nullable与输出额度不改。
+
 前置：source候选独立High与精确CI通过，按现有deploy脚本完成干净已推SHA的构建/启动；先保留当前生产和回退身份。安装前timer/broker/原生任务须自然排空，不能停止活动论文进程。已有原生任务时须保留原marker绑定的运行时与Skill目录，不能用新配置冒充旧执行。
 
 受控构建后从该不可变release生成现有`release-input-manifest.mjs runtime-snapshot`收据，root保存且禁止普通用户修改；安装器先验证source与这一既有runtime收据，再执行已构建科学方法导出。`python3 -B install.py --source /opt/openscience-releases/<FULL_SHA> --runtime-snapshot <PROTECTED_BUILD_RECEIPT> --defer-timer`只复制服务器已安装Agent/依赖及项目Skills，不下载依赖、不改全局记忆、不调用模型。快照链接限本副本或已挂载的只读系统依赖。

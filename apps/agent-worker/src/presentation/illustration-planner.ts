@@ -38,13 +38,14 @@ const supportedBindingKeys = (quantity: ScientificQuantity) => {
   return [...keys, ...(quantity.equalities ?? []).flatMap(([left, right]) => keys.includes(left) ? [right] : keys.includes(right) ? [left] : [])];
 };
 const SOURCE_VARIABLE_NAMES = new Map([['fwhmt', 'FWHM_T'], ['fwhms', 'FWHM_S'], ['nsp', 'N_SP']]);
-class UnboundNumericSourceError extends Error {
+export class UnboundNumericSourceError extends Error {
   constructor(message: string, readonly expectedVariable?: string | null, readonly fields: readonly string[] = [],
     readonly otherDiagnostics: readonly string[] = []) { super(message); }
 }
 const QUANTITY_PATTERN = /(?<![A-Za-z\u0370-\u03ff\d])[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)(?:\s*[×x]\s*10\s*\^?\s*[+-]?\d+|[eE][+-]?\d+)?(?!\d|\.\d)/gu;
 const STRUCTURAL_REFERENCE_PATTERN = /\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b|(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/giu;
-function stripStructuralReferences(value: string): string {
+function stripStructuralReferences(value: string, nativeQuantitySyntax = false): string {
+  if (nativeQuantitySyntax) value = value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_])/giu, ';');
   return value.replace(/\b(?:fig\.?|figure)\s*S\d+[a-z]?\s*\|/giu, ';')
     .replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
     const inner = group.slice(1, -1), remaining = inner.replace(STRUCTURAL_REFERENCE_PATTERN, '');
@@ -53,7 +54,7 @@ function stripStructuralReferences(value: string): string {
 }
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
-function scientificQuantities(input: string): ScientificQuantity[] {
+function scientificQuantities(input: string, nativeQuantitySyntax = false): ScientificQuantity[] {
   const value = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
@@ -64,7 +65,7 @@ function scientificQuantities(input: string): ScientificQuantity[] {
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
-    .replace(/μ\s+m/giu, 'μm'));
+    .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax);
   const ratioPattern = /(?<![\d.])\d+(?:\.\d+)?(?:[ \t]*:[ \t]*\d+(?:\.\d+)?){1,3}(?![\d.])/gu;
   const ratios = [...value.matchAll(ratioPattern)].map(match => ({
     value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', binding: null,
@@ -75,12 +76,17 @@ function scientificQuantities(input: string): ScientificQuantity[] {
   const afterRange = new RegExp(`^\\s*(?:±|[-–—]|to)\\s*[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*${unitToken}`, 'iu');
   const results: Array<{ quantity: ScientificQuantity; index: number }> = [];
   const expressionRanges: Array<{ start: number; end: number }> = [];
+  const hyphenatedUnits: Array<{ start: number; end: number }> = [];
   for (const match of scalarValue.matchAll(QUANTITY_PATTERN)) {
     const raw = match[0];
     const isRangeEnd = raw.startsWith('-') && /\d\s*$/u.test(scalarValue.slice(0, match.index));
     const normalizedNumber = (isRangeEnd ? raw.slice(1) : raw).replaceAll(',', '')
       .replace(/\s*[×x]\s*10\s*\^?\s*([+-]?\d+)/iu, 'e$1').replaceAll(' ', '').toLowerCase();
     const after = scalarValue.slice(match.index! + raw.length, match.index! + raw.length + 40);
+    // Only an independent Hz-family quantity, not arbitrary "number-variable"
+    // subtraction or a larger expression, may take precedence over math parsing.
+    const hyphenatedUnit = nativeQuantitySyntax ? /^[-–](?:da|[qryzafpnμumcdhkMGTPEZYRQ])?Hz(?![\p{L}\p{N}_/%^+-])/u.exec(after) : null;
+    if (hyphenatedUnit) hyphenatedUnits.push({ start: match.index!, end: match.index! + raw.length + hyphenatedUnit[0].length });
     const unitText = unitPattern.exec(after)?.[1] ?? afterRange.exec(after)?.[1] ?? null;
     const unit = unitText?.toLowerCase().replaceAll('µ', 'μ').replace(/^(?:(?:个)?(?:散射)?光子|(?:scattered\s+)?photons?)$/iu, 'photon_count') ?? null;
     const fullBefore = scalarValue.slice(Math.max(0, match.index! - 80), match.index!);
@@ -105,6 +111,7 @@ function scientificQuantities(input: string): ScientificQuantity[] {
   // Denominators and coefficients inside a parsed LHS are structure, not
   // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
   const references = scientificExpressionReferences(scalarValue)
+    .filter(reference => !hyphenatedUnits.some(range => reference.start === range.start && reference.end === range.end))
     .filter(reference => !expressionRanges.some(range => reference.start >= range.start
       && (reference.end <= range.end || reference.unsupported && reference.start < range.end)));
   const structuralRanges = [...expressionRanges, ...references];
@@ -132,12 +139,12 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   }
   return true;
 }
-function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][]): void {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false): void {
   const cache = new Map<string, ScientificQuantity[]>();
   const quantities = (text: string) => {
     const existing = cache.get(text);
     if (existing) return existing;
-    const parsed = scientificQuantities(text);
+    const parsed = scientificQuantities(text, nativeQuantitySyntax);
     cache.set(text, parsed);
     return parsed;
   };
@@ -416,7 +423,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map()): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -477,7 +484,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       ['message', illustration.message], ['encoding', illustration.encoding],
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
       ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
-    illustration.subjects);
+    illustration.subjects, nativeQuantitySyntax);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
     return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
@@ -485,7 +492,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
   });
   requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
-    [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects));
+    [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
 }

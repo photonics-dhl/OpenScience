@@ -5,7 +5,7 @@ import { readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type 
   type PaperOriginalRef, type StoryboardRequest } from '@openscience/domain';
 import type { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
-import { materializeIllustrationScience, materializeIllustrationArt } from '../presentation/illustration-planner';
+import { materializeIllustrationScience, materializeIllustrationArt, UnboundNumericSourceError } from '../presentation/illustration-planner';
 import { materializeIllustrationReview } from '../presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../presentation/scene-image';
 import { loadIllustrationStyleSkills } from '../presentation/illustration-styles';
@@ -13,7 +13,7 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage } from '../skills/insta
 import type { PresentationClaim } from '../presentation/chart-generator';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 import { createNativeTaskStore } from './task-store';
-import { createNativeAgentSession } from './session';
+import { createNativeAgentSession, type NativeAgentSessionState } from './session';
 import { runHostedNativeTask } from './host-task';
 import { nativeSkillReads } from './paper-task';
 import { NATIVE_PAPER_TOOLS, createNativePaperTools, type NativePaperImage } from './paper-tools';
@@ -29,9 +29,11 @@ const SCIENCE_SCHEMA = object({ title: str, narrative: object({ mainMessage: str
 const ART_SCENE = object({ layout: str, treatment: str, styleId: str,
   styleRecommendations: object({ selectedStyleId: str, choices: { type: 'array', minItems: 1, maxItems: 2,
     items: object({ styleId: str, name: str, reason: str }) } }) }, ['layout', 'treatment']);
+const PAID_SCIENCE_DESCRIPTION = 'Save the scientific visual narrative before art. Choose only the scenes needed to convey the paper. Each subject has one exact supporting sN source. Encode direction, quantity meaning, comparison and model conditions explicitly. Labels are the complete visible text inventory, including axis symbols and qualifiers; no citations or hidden extra text. Constraints at most two. Narration <=600 characters; title <=120, mainMessage <=240, audience <=160. Subject and label indices are zero-based. paperOriginalAssetId is null for a designed image or an exact available original asset. This validates structure and binding, not scientific truth.';
+const SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key. Bibliographic Table/Fig references are structural labels; independent numeric-Hz-family quantities retain their value and unit. Validation feedback identifies affected fields and the explicit source variable when available; it never establishes symbol aliases or substitutes source evidence.';
 export const NATIVE_ILLUSTRATION_TOOLS = [
   { name: 'paper_illustration_context', description: 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.', parameters: object({}) },
-  { name: 'paper_illustration_science', description: 'Save the scientific visual narrative before art. Choose only the scenes needed to convey the paper. Each subject has one exact supporting sN source. Encode direction, quantity meaning, comparison and model conditions explicitly. Labels are the complete visible text inventory, including axis symbols and qualifiers; no citations or hidden extra text. Constraints at most two. Narration <=600 characters; title <=120, mainMessage <=240, audience <=160. Subject and label indices are zero-based. paperOriginalAssetId is null for a designed image or an exact available original asset. This validates structure and binding, not scientific truth.', parameters: SCIENCE_SCHEMA },
+  { name: 'paper_illustration_science', description: SCIENCE_DESCRIPTION, parameters: SCIENCE_SCHEMA },
   { name: 'paper_illustration_art', description: 'Apply art to the exact successful scienceToolCallId, one entry per designed scene (skip original-paper scenes). layout chooses placement, reading path and spacing; treatment chooses linework, material, palette and typography. Reference only existing subject and label indices. Never add scientific quantities, marks, objects, symbols or text. Both fields share the remaining complete brief budget. Auto style requires an exact installed family-qualified styleId, explicit style omits it. Recommend the selected style plus at most one useful alternative via styleRecommendations; optional display metadata is not science or visible image text. The result contains the actual complete compiled prompts; inspect them before review.', parameters: object({ scienceToolCallId: str, scenes: { type: 'array', items: ART_SCENE } }) },
   { name: 'paper_illustration_review', description: 'After reading the saved plan and its compiled prompts against source text/pages and relevant scientific/design Skills, review that exact planToolCallId. accepted requires no unresolved scientific/visual ambiguity and empty corrections/issues. blocked records all material defects with exact sN sources; revise science/art through the earlier tools, then review the new plan. Never declare acceptance merely because validation passed. No rewrite inside review.', parameters: object({ planToolCallId: str, decision: { type: 'string', enum: ['accepted', 'blocked'] }, summary: str,
     corrections: { type: 'array', maxItems: 0 }, issues: { type: 'array', items: object({ sceneIndex: { type: 'integer', minimum: 0 }, labelIndex: { type: ['integer', 'null'] },
@@ -43,7 +45,8 @@ type MaterializerInput = { claims: readonly PresentationClaim[]; settings: Story
 function stopped(): never { throw new Error('[blocked] Native illustration selected history changed'); }
 
 /** Deterministic tools only. The installed Agent makes all planning and scientific review decisions. */
-export function createNativeIllustrationMaterializer(input: MaterializerInput) {
+export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean }) {
+  const scienceFeedback = input.scienceFeedback === true;
   const styles = loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan');
   type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience> };
   type Art = { id: string; sequence: number; scienceId: string; document: ReturnType<typeof materializeIllustrationArt>;
@@ -65,7 +68,7 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput) {
       }
       if (!Number.isSafeInteger(sequence) || sequence < 0 || !callId) stopped();
       if (name === 'paper_illustration_science') {
-        const intent = materializeIllustrationScience(args, input.claims, input.settings, input.paperOriginals);
+        const intent = materializeIllustrationScience(args, input.claims, input.settings, input.paperOriginals, scienceFeedback);
         science = { id: callId, sequence, intent };
         return { status: 'science_ready', scienceToolCallId: callId, intent };
       }
@@ -90,7 +93,18 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput) {
       }
       throw new Error('unknown_illustration_tool');
     } catch (error) {
-      return { status: 'invalid_illustration', error: error instanceof Error ? error.message.slice(0, 500) : 'invalid_illustration' };
+      let diagnostic = error instanceof Error ? error.message.slice(0, 500) : 'invalid_illustration';
+      if (scienceFeedback && error instanceof UnboundNumericSourceError) {
+        const hints = [
+          ...(error.fields.length ? [` Fields: ${error.fields.join(', ')}.`] : []),
+          ...(error.expectedVariable === undefined ? [] : [error.expectedVariable === null
+            ? ' The source names this quantity in prose, without the asserted symbol; do not infer an alias.'
+            : ` Explicit source variable: ${error.expectedVariable}; do not infer an alias.`]),
+          ...error.otherDiagnostics.map(detail => ` Also: ${detail}.`),
+        ];
+        for (const hint of hints) if (diagnostic.length + hint.length <= 500) diagnostic += hint;
+      }
+      return { status: 'invalid_illustration', error: diagnostic };
     }
   }
   function finish(messages: ChatMessage[], finalResponse: string) {
@@ -119,6 +133,17 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput) {
   return { call, finish };
 }
 
+export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | null) {
+  const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
+    if (typeof tool.function.description !== 'string') stopped();
+    return { ...structuredClone(tool.function), description: tool.function.description };
+  });
+  const sourceTools = originalTools ?? [...NATIVE_PAPER_TOOLS, ...NATIVE_ILLUSTRATION_TOOLS.map(tool =>
+    saved && tool.name === 'paper_illustration_science' ? { ...tool, description: PAID_SCIENCE_DESCRIPTION } : tool)];
+  const scienceFeedback = !saved || originalTools?.find(tool => tool.name === 'paper_illustration_science')?.description === SCIENCE_DESCRIPTION;
+  return { sourceTools, scienceFeedback };
+}
+
 export async function runNativeIllustrationTask(input: MaterializerInput & {
   gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter }; task: { id: string; executionAttempt: number; result: unknown };
   sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference; sourceEvidenceIdentity: string;
@@ -128,11 +153,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   if (execution?.profile !== 'paper-illustration') stopped();
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const currentTools = [...NATIVE_PAPER_TOOLS, ...NATIVE_ILLUSTRATION_TOOLS];
-  const sourceTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
-    if (typeof tool.function.description !== 'string') stopped();
-    return { ...structuredClone(tool.function), description: tool.function.description };
-  }) ?? currentTools;
+  const { sourceTools, scienceFeedback } = nativeIllustrationToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)],
@@ -142,7 +163,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages);
-  const materializer = createNativeIllustrationMaterializer(input);
+  const materializer = createNativeIllustrationMaterializer({ ...input, scienceFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
