@@ -8,15 +8,15 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { canonicalPassages, createNativeScientificMaterializer } from '../extractor';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { createNativePaperTools, NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
-import { nativeSkillReads, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from './paper-task';
-import { createNativeAgentSession } from './session';
+import { nativeSkillReads, NATIVE_PAPER_COMMITTED_REVIEW_TOOL, NATIVE_PAPER_DRAFT_TOOL } from './paper-task';
+import { createNativeAgentSession, type NativeAgentSessionState } from './session';
 import { createNativeTaskStore } from './task-store';
 import { runHostedNativeTask } from './host-task';
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const { draftToolCallId: _draftId, ...reviewProperties } = NATIVE_PAPER_COMMITTED_REVIEW_TOOL.parameters.properties;
 void _draftId;
-export const NATIVE_SOURCE_REVIEW_TOOLS = [...NATIVE_PAPER_TOOLS,
+export const LEGACY_NATIVE_SOURCE_REVIEW_TOOLS = [...NATIVE_PAPER_TOOLS,
   { name: 'paper_candidate', description: 'Read the actual saved author candidate, its Claims and complete selected original passages. This is the independent review baseline, not scientific approval. Follow additional definitions, figures or conditions using the bound paper tools.',
     parameters: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'paper_review', description: 'Submit your independent scientific review of the exact sourceAgentTaskId returned by paper_candidate. accepted selects unchanged author text; revised/blocked provides complete replacements and source-grounded issues. Explicitly choose Claims unchanged or supply full replacements. Correct only through this review; the author baseline cannot be rewritten. After review_ready inspect the returned merged reviewedCandidate for corrections that also affect retained fields or Claims; correct through this tool if needed, then finish normally without another JSON copy. Only the latest successful review submission can be used; this does not publish anything.',
@@ -24,10 +24,32 @@ export const NATIVE_SOURCE_REVIEW_TOOLS = [...NATIVE_PAPER_TOOLS,
       required: ['sourceAgentTaskId', 'fields', 'needsMoreEvidence', 'claimSuggestions'],
       properties: { sourceAgentTaskId: { type: 'string' }, ...reviewProperties } } },
 ];
+const legacyReviewTool = LEGACY_NATIVE_SOURCE_REVIEW_TOOLS.find(tool => tool.name === 'paper_review')!;
+export const NATIVE_SOURCE_REVIEW_TOOLS = [
+  ...LEGACY_NATIVE_SOURCE_REVIEW_TOOLS.filter(tool => tool.name !== 'paper_review'),
+  { ...legacyReviewTool,
+    description: 'Submit complete independent field decisions and evidence requests for the exact sourceAgentTaskId returned by paper_candidate. accepted selects unchanged author text; revised/blocked provides complete replacements and source-grounded issues. claimSuggestions must be "unchanged", selecting the ORIGINAL author Claims, not a previous replacement. To correct Claims or retain earlier Claim corrections, use paper_review_claims with the full replacement array and complete field decisions. The author baseline cannot be rewritten. Inspect the merged review_ready result for contradictions across fields and Claims, then use the appropriate review tool if another correction is needed. Only the latest successful review submission can be used; a later rejected submission cannot fall back to an earlier success. Finish normally without another JSON copy; this does not publish anything.',
+    parameters: { ...legacyReviewTool.parameters, properties: { ...legacyReviewTool.parameters.properties,
+      claimSuggestions: { type: 'string', enum: ['unchanged'] } } } },
+  { ...legacyReviewTool, name: 'paper_review_claims',
+    description: 'Submit complete field decisions, evidence requests and the complete replacement Claim array against the ORIGINAL paper_candidate author baseline. This replaces all Claims; include every retained Claim and its actual parent. There is no unchanged or item-wrapper form. Use the same original sources and scientific checks, inspect the merged review_ready result, then finish normally. A later submission through either review tool supersedes this one; a later rejected submission cannot fall back to an earlier success.',
+    parameters: { ...legacyReviewTool.parameters, properties: { ...legacyReviewTool.parameters.properties,
+      claimSuggestions: NATIVE_PAPER_DRAFT_TOOL.parameters.properties.draftClaims } } },
+];
+
+/** Paid checkpoints keep their original schemas, descriptions and review semantics. */
+export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | null) {
+  const legacyClaimsReview = !!saved && !saved.binding.allowedTools.includes('paper_review_claims');
+  const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
+    if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved review tool description is absent');
+    return { ...structuredClone(tool.function), description: tool.function.description };
+  });
+  return { sourceTools: originalTools?.length ? originalTools : legacyClaimsReview ? LEGACY_NATIVE_SOURCE_REVIEW_TOOLS : NATIVE_SOURCE_REVIEW_TOOLS, legacyClaimsReview };
+}
 
 /** Reuse the existing scientific materializer with the actual final author fields as its immutable input. */
 export function createNativeSourceReviewTools(input: { sourceMap: DocumentSourceMap; sourceAgentTaskId: string; sourceResult: unknown;
-  renderPages: (pages: number[]) => Promise<NativePaperImage[]> }) {
+  renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean }) {
   const original = structuredClone(input.sourceResult);
   if (!input.sourceAgentTaskId || !record(original) || !record(original.core) || !record(original.scientificReview)
     || !record(original.scientificReview.fieldReviews) || original.scientificReview.kind !== 'hermes_agent_review'
@@ -92,17 +114,31 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
           guidance: 'These are the actual final author statements and original selected passages. Use openscience-source-review on this saved candidate; trace definitions, case limits and contradicting evidence with the existing paper tools before submitting your decisions.' };
         return structuredClone(candidateResult);
       }
-      if (name === 'paper_review') {
+      if (name === 'paper_review' || (!input.legacyClaimsReview && name === 'paper_review_claims')) {
         try {
           if (!candidateResult) throw new Error('Read paper_candidate before reviewing its content.');
-          return { ...materializer.review(selectedReview(args), callId), sourceAgentTaskId: input.sourceAgentTaskId };
+          if (!input.legacyClaimsReview && name === 'paper_review' && (!record(args) || args.claimSuggestions !== 'unchanged'))
+            throw new Error('paper_review selects only unchanged ORIGINAL author Claims. Use paper_review_claims with complete replacements.');
+          if (name === 'paper_review_claims' && (!record(args) || !Array.isArray(args.claimSuggestions)))
+            throw new Error('paper_review_claims requires a complete replacement Claim array; item objects are not arrays.');
+          const reviewed = materializer.review(selectedReview(args), callId);
+          if (!input.legacyClaimsReview) {
+            if (typeof reviewed.guidance === 'string') reviewed.guidance = reviewed.guidance.replace(
+              'through this same tool.',
+              'through paper_review with unchanged ORIGINAL author Claims, or through paper_review_claims with the complete replacement Claim array (including any earlier Claim corrections).');
+            if (typeof reviewed.feedback === 'string') reviewed.feedback = reviewed.feedback.replaceAll('draftToolCallId', 'sourceAgentTaskId').replace(
+              '以上科学诊断针对展开后的记录。重试本工具时保留sourceAgentTaskId；accepted只写verdict，revised/blocked提供完整字段；claimSuggestions明确选unchanged或完整数组，不必重写未变正文。',
+              '以上科学诊断针对展开后的记录。重试时保留原作者sourceAgentTaskId；accepted只写verdict，revised/blocked提供完整字段。paper_review仅接受claimSuggestions="unchanged"，选择原作者Claims；修订Claims或保留前次修订时，使用paper_review_claims并提交完整替换数组。不必重写未变正文。');
+          }
+          return { ...reviewed, sourceAgentTaskId: input.sourceAgentTaskId };
         } catch (error) { return { status: 'invalid_review', feedback: error instanceof Error ? error.message : 'Invalid independent review' }; }
       }
       return source.call(name, args);
     },
     finish(messages: readonly ChatMessage[]) {
       const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
-      const review = [...calls].reverse().find(call => call.function.name === 'paper_review');
+      const review = [...calls].reverse().find(call => call.function.name === 'paper_review'
+        || (!input.legacyClaimsReview && call.function.name === 'paper_review_claims'));
       const candidates = calls.filter(call => call.function.name === 'paper_candidate');
       const receipts = review ? messages.filter(message => message.role === 'tool' && message.toolCallId === review.id) : [];
       if (!review || calls.filter(call => call.id === review.id).length !== 1 || receipts.length !== 1 || !candidateResult)
@@ -130,6 +166,11 @@ const REVIEW_INSTRUCTIONS = [
   '使用paper_review选择paper_candidate提供的sourceAgentTaskId并提交完整判断。accepted只选原文；revised/blocked提供完整字段和有依据的issues；Claims明确unchanged或完整替换，必须与字段来源一致。不能以先另写草稿来改变被审基准。工具反馈仅校验结构和来源，科学判断由你负责。',
   'paper_review返回review_ready后，阅读reviewedCandidate中的实际合并稿，按所用科学方法核对同一事实在六字段和Claims中的所有保留表述；accepted仍是原文，改一处不会自动改其他处。若有遗漏，通过同一工具修正受影响项，再确认最新合并稿。完成后正常结束，不重复JSON或声称未实际保存的修正。后一次review被拒绝时不能退用旧成功。结果是私有科学稿，不授权公开或生图。',
 ].join('\n');
+const EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS = REVIEW_INSTRUCTIONS
+  .replace('使用paper_review选择paper_candidate提供的sourceAgentTaskId并提交完整判断。',
+    '保留原作者Claims时使用paper_review；修订Claims时使用paper_review_claims并提供完整替换数组。两者都选择paper_candidate提供的sourceAgentTaskId并提交完整六字段判断和证据请求。unchanged始终选择原作者Claims，不继承前次替换；若再次提交时保留已修正的Claims，仍须通过paper_review_claims明确提交完整修订数组。')
+  .replace('paper_review返回review_ready后，', '任一审阅工具返回review_ready后，')
+  .replace('通过同一工具修正受影响项，', '通过适合本次Claims决定的审阅工具提交完整修正，');
 
 export async function runNativeSourceReviewTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };
   task: { id: string; executionAttempt: number; result: unknown }; sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference;
@@ -140,8 +181,9 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
   if (!/^[a-f0-9]{64}$/.test(input.authorCheckpointSha256)) throw new Error('[blocked] Native author checkpoint identity is absent');
-  const paper = createNativeSourceReviewTools(input);
-  const sourceTools = NATIVE_SOURCE_REVIEW_TOOLS;
+  const profile = nativeSourceReviewToolProfile(saved);
+  const paper = createNativeSourceReviewTools({ ...input, legacyClaimsReview: profile.legacyClaimsReview });
+  const sourceTools = profile.sourceTools;
   const allowedTools = ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)];
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
@@ -156,7 +198,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
     config: { taskId: binding.taskId, runtimeId: binding.runtimeId, skillCatalogueId: binding.skillCatalogueId, model: binding.model,
       maxTurns: binding.maxTurns, maxOutputTokens: binding.maxOutputTokens,
       ...(binding.contextWindowTokens ? { contextWindowTokens: binding.contextWindowTokens } : {}),
-      sourceTools, instructions: REVIEW_INSTRUCTIONS,
+      sourceTools, instructions: profile.legacyClaimsReview ? REVIEW_INSTRUCTIONS : EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS,
       goal: '独立核对已保存论文稿的核心解释、科学关系和成立条件，必要时据原文修正，提交可用于后续配图的可靠私有科学稿。' },
     deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize, paper });
   await authorize(); const completed = await store.read(); const last = completed?.turns.at(-1);

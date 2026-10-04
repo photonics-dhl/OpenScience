@@ -1,3 +1,5 @@
+import { SCIENTIFIC_READER_ORGANIZATION } from './scientific-summary';
+
 /** Product-runtime adaptation, loaded for synthesis or source review rather than every page.
  * Methodology reference: K-Dense scientific-critical-thinking v1.3 (MIT metadata),
  * https://github.com/K-Dense-AI/scientific-agent-skills/tree/main/skills/scientific-critical-thinking
@@ -13,11 +15,11 @@ const scientificIntegrationRule = '整合时保留每条观察的来源和限定
 // specialist references remain on demand. Static consumers retain their v5 projection.
 const nativeAppraisalWorkflow = [
   '## 按研究主线执行 Appraisal Workflow',
-  '1. 固定问题与比较单位：确定论文要解决的问题、核心机制和代表结果。每个保留结论对应哪个对象、量、比较基线和算例？将描述、预测与因果解释分开；先明确这些关系，再判断结论。',
+  '1. 先确定向未读论文者解释的主线：问题如何由核心机制解决，以一个条件完整的代表算例说明贡献；只有比较本身构成核心贡献时，才保留解释该比较所必需的算例。固定保留结论的对象、量、比较基线和条件，将描述、预测与因果解释分开，再沿这些关系取证。',
   '2. 先找证据再评价：用原文、图注、原页和必要的补充材料找到直接结果及条件。将自己的句子与完整原段落比较，同时寻找会缩小或反驳它的定义、限制和相反材料。检索命中只是位置，不能代替完整读取；解析失败与论文未报告分开。',
   '3. 检查方法与分析：沿“对象和前提→操作或推导→输出”解释机制。核对所保留结果使用的模型、假设及实际平均/叠加等运算；拟合或一个吻合算例不足以证明因果、唯一参数或普适结论。需要时查看原页确认公式、图形和量的位置。',
   '4. 选适合研究类型的方法：理论关注假设与推导，仿真关注模型和适用条件，实验关注对照与测量。报告完整性、偏倚和证据可信程度回答不同问题，不能用清单数量评分，也不把临床分级套到物理论文。只按当前疑问加载原方法或相关引用。',
-  '5. 保留范围再凝练：让核心机制、代表结果和必要条件构成简洁解释。保留原文所比较的量、算例和适用范围；不同算例的最好数值不能拼成同一个结果，模型内推论不能变成普遍规律。辅助推导和其他参数留在来源，不为六字段凑信息或主张数量。',
+  '5. 据主线组织保存内容：' + SCIENTIFIC_READER_ORGANIZATION + ' 比较是核心贡献时保留必要的比较及各自条件；影响主线的反例和边界也须保留。其他算例与辅助推导留在来源。减少次要断言来凝练，不删必要条件，也不把不同算例的最好数值拼成一个结果。',
   '6. 给可追溯的判断：每个实质问题指出候选位置、原文位置、两者差异、对结论的影响和最小修订。支持较弱结论就缩小主张；没有所需材料就保留具体疑问。已正确内容保持，不为润色重写整稿；工具格式通过不构成科学认可。',
 ].join('\n');
 

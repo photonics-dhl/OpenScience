@@ -176,6 +176,7 @@ const AUTHOR_REVIEW_INSTRUCTIONS = TOOL_REVIEW_INSTRUCTIONS
   .replace('替换的claimSuggestions数组沿draftClaims结构；', 'paper_draft每个clientKey只选一个实际保存的claimToolCallId，修订前后的同名主张不能同时选；');
 const PAPER_GOAL = '向未读过论文的人准确解释核心贡献、科学机制、代表结果及必要条件，并为后续配图保存简洁、有原文依据的六维和核心主张。';
 const TOOL_REVIEW_GOAL = '为后续科研配图保存一份简洁、有原文依据的六维和核心主张，并通过paper_review提交对真实已保存稿的完整科学核对。读者主线、科学机制、代表结果及必要条件保存在这些内容中，完成任务不需要再生成另一份解释正文。';
+const READER_TOOL_REVIEW_GOAL = '向未读论文者解释真正的核心贡献和科学机制，以一个条件完整的代表算例说明；比较本身是核心贡献时，仅保留说明比较所必需的算例及各自条件。六维和必要Claims共同服务这条读者主线，其他参数和辅助推导留在来源。通过现有paper_review完成对实际保存稿的科学核对，最终简短说明完成情况。';
 
 export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   // Original paid tools keep their exact schemas and feedback when replayed.
@@ -195,8 +196,9 @@ export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   const reviewToolCompletion = savedClaimsReview || sourceTools.find(tool => tool.name === 'paper_review')?.description === NATIVE_PAPER_COMMITTED_REVIEW_TOOL.description;
   const claimFeedback = !saved || sourceTools.find(tool => tool.name === 'paper_claim')?.description === NATIVE_PAPER_CLAIM_TOOL.description;
   const allowedTools = saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(t => t.name)];
+  const readerFocus = !saved || saved.initialMessages?.some(message => message.role === 'user' && message.content === READER_TOOL_REVIEW_GOAL);
   return { useNotes, sourceTools, reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, savedClaimsReview, allowedTools,
-    goal: reviewToolCompletion ? TOOL_REVIEW_GOAL : PAPER_GOAL,
+    goal: reviewToolCompletion ? readerFocus ? READER_TOOL_REVIEW_GOAL : TOOL_REVIEW_GOAL : PAPER_GOAL,
     instructions: savedClaimsReview ? AUTHOR_REVIEW_INSTRUCTIONS : reviewToolCompletion ? TOOL_REVIEW_INSTRUCTIONS : useNotes ? NOTE_INSTRUCTIONS : INSTRUCTIONS };
 }
 

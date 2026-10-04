@@ -16,6 +16,17 @@ const draft = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [
 const review = () => ({ fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { ...draft().fields[field], verdict: 'accepted', issues: [] }])),
   needsMoreEvidence: [], claimSuggestions: draft().draftClaims });
 const paidContextDescription = 'Select exact successful paper_field and paper_claim calls to compose the private draft. No text regeneration: fieldToolCallIds maps each of the six fields to its own returned ID; claimToolCallIds selects required Claims. Use [] when no evidence request is needed. The existing complete science/source/Claim checks apply; this is not scientific approval. The returned reviewContext pairs this call with its complete selected source passages. Compare your saved statements, quantities, cases and conditions against them before deciding paper_review; use source tools for missing definitions, restrictions and counterexamples.';
+
+it('keeps the original paid author goal while new authors use the reader focus on replay', () => {
+  const fresh = nativePaperToolProfile(null);
+  expect(fresh.goal).toContain('一个条件完整的代表算例');
+  const oldGoal = '为后续科研配图保存一份简洁、有原文依据的六维和核心主张，并通过paper_review提交对真实已保存稿的完整科学核对。读者主线、科学机制、代表结果及必要条件保存在这些内容中，完成任务不需要再生成另一份解释正文。';
+  const saved = { binding: { allowedTools: fresh.allowedTools }, initialMessages: [{ role: 'user', content: oldGoal }],
+    turns: [{ request: { options: { tools: fresh.sourceTools.map(tool => ({ type: 'function', function: tool })) } } }] } as unknown as NativeAgentSessionState;
+  expect(nativePaperToolProfile(saved).goal).toBe(oldGoal);
+  saved.initialMessages = [{ role: 'user', content: fresh.goal }];
+  expect(nativePaperToolProfile(saved).goal).toBe(fresh.goal);
+});
 describe('actual native Agent scientific materializer', () => {
   it('keeps author Claim revisions in the saved notebook and selects them unchanged at review', () => {
     const profile = nativePaperToolProfile(null);
