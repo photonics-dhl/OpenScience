@@ -19,7 +19,7 @@
 
 同一失败planner的完整context和28个旧拒收回执已零外呼回放一致，证明s29原句的表达式数字binding及完整谓词被误拒；s5页码quote、uppercase IDs及qualifies当supports则是正确拒收。通用分镜增量仅为新保存描述识别精确whole expression representation、完整predicate+article和单位；真实/未知单位、错符号/分母/因子保留拒绝。源ID、12..12000 quote及supports错误给具体scene/subject位置，context/原文/关系不改；歧义括号仍拒并提示分号独立比较，不创造自然语言数学外壳规则。旧base/Hz/annotation paid grammar与回执逐字保持，新mode贯穿call/finish和root层。
 
-最终六文件Code High GO、413/413定向、Worker TC/build0及5文件scopedlint0；planner5处ESLint基线严格复现。实际原句两个正向案例新模式通过、旧模式拒绝，错符号/分母仍拒，未调用模型。SDK、根Skill及Native目录不变，复用Ops GO。当前仍未部署，新实际稿保真仍须论文验收；精确CI、部署及受控once状态只见CURRENT。
+最终六文件Code High GO、413/413定向、Worker TC/build0及5文件scopedlint0；planner5处ESLint基线严格复现。实际原句两个正向案例新模式通过、旧模式拒绝，错符号/分母仍拒，回放没有模型调用。SDK、根Skill及Native目录不变，复用Ops GO。精确CI和正常应用发布已完成，受控一次新修订已创建；真实阅读、稿件保真及自动分镜仍须实际验收，唯一运行身份和once状态见CURRENT。
 
 ## 独立原生核源接续的设计沿革
 
