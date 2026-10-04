@@ -111,4 +111,4 @@
 
 长期做法：发布成功后自动保留两版，失败保留可恢复事务并告警；数据/模型/浏览器状态与发布目录分离，已装执行器按自身依赖维护。日常缓存维护继续复用现有timer，不能代替release/tag保留。生产容器日志轮转、开发历史数据保留/迁出仍需单独落实，不能以本次释放42GiB宣称所有增长源已消失。
 
-11:13下一次正常发布后根盘仍54%，可用66.23GiB；正常发布的PREPARE/COMPLETE及部署exit0由生图发布owner确认，目录仅新发布与前一版，不再保留原旧回滚目录。Native同源配对由该会话继续，实际应用/Native身份与最新后验只在CURRENT记录；11:03的25容器身份比较是本次清盘边界，不冒称新部署后容器完全未变。证据normal-publish-metadata.json及发布owner的正常部署收据。
+11:13下一次正常发布后根盘仍54%，可用66.23GiB；正常发布的PREPARE/COMPLETE及部署exit0由生图发布owner确认，目录仅新发布与前一版，不再保留原旧回滚目录。Native同源配对也已完成，API/Worker运行时及目录ID一致、原资源上限保持、核心7服务running/OOMfalse、timer enabled/active、2目录/0tombstone/pending及FD9释放后验通过；实际应用/Native身份只在CURRENT记录，配对收据见tmp/hermes-cleanup-20261003/native-review-runtime-after.json；11:03的25容器身份比较是本次清盘边界，不冒称新部署后容器完全未变。证据normal-publish-metadata.json及发布owner的正常部署收据。
