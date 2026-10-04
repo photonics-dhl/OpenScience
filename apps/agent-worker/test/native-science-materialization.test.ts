@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
-import { canonicalPassages, createNativeScientificMaterializer } from '../src/extractor';
+import { canonicalPassages, createNativeScientificMaterializer, createNativeScientificNotebook,
+  validateNativeScientificClaim, scientificReviewFieldGuard } from '../src/extractor';
 import { finishNativePaperReview, nativeSkillReads, restoreNativePaperDraft, nativePaperToolProfile, NATIVE_PAPER_NOTE_DRAFT_TOOL, NATIVE_PAPER_SELECTED_DRAFT_TOOL, NATIVE_PAPER_REVIEW_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL } from '../src/native-agent/paper-task';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
 import { createNativePaperTools } from '../src/native-agent/paper-tools';
@@ -27,6 +28,106 @@ it('keeps the original paid author goal while new authors use the reader focus o
   saved.initialMessages = [{ role: 'user', content: fresh.goal }];
   expect(nativePaperToolProfile(saved).goal).toBe(fresh.goal);
 });
+describe('shared native scientific staging primitives', () => {
+  it('selects saved independent decisions and Claims for the original-bound complete review', () => {
+    const original = draft(); const before = structuredClone(original);
+    const notebook = createNativeScientificNotebook();
+    for (const [order, field] of SDF_CORE_FIELDS.entries())
+      expect(notebook.save('review_field', { field, verdict: 'accepted' }, order, `review-${field}`).status).toBe('review_field_saved');
+    const replacement = { ...original.draftClaims[0]!, limitations: ['This is a numerical prediction.'] };
+    expect(validateNativeScientificClaim(replacement, ['P00001'])).toBeUndefined();
+    expect(notebook.save('claim', replacement, 6, 'replacement').status).toBe('claim_saved');
+    const fields = Object.fromEntries(SDF_CORE_FIELDS.map(field => {
+      const { field: savedField, ...decision } = notebook.select(`review-${field}`, 'review_field', 7);
+      expect(savedField).toBe(field); return [field, decision];
+    }));
+    const value = { draftToolCallId: 'actual-author', fields, needsMoreEvidence: [],
+      claimSuggestions: [notebook.select('replacement', 'claim', 7)] };
+    const materializer = createNativeScientificMaterializer(map, () => ['P00001'], {
+      boundDraft: { sourceAgentTaskId: 'actual-author', draft: original }, reviewToolCompletion: true,
+    });
+    expect(materializer.review(value, 'commit')).toMatchObject({ status: 'review_ready',
+      reviewedCandidate: { claimSuggestions: [replacement] } });
+    expect(materializer.finish(JSON.stringify(value)).nativeDraftClaims).toEqual([replacement]);
+    expect(original).toEqual(before);
+    expect(materializer.draft(original, 8, 'rewrite').status).toBe('invalid_draft');
+  });
+
+  it('preserves author note receipts and isolates saved and selected values', () => {
+    const notebook = createNativeScientificNotebook();
+    const guidance = 'Private item saved, not scientific approval. Select this returned ID in paper_draft; correct only the affected item when needed.';
+    const field = { field: 'method', summary: source, sourcePassageIds: ['P00001'] };
+    expect(notebook.save('field', field, 0, 'field')).toEqual({ status: 'field_saved', fieldToolCallId: 'field', guidance });
+    expect(notebook.save('claim', draft().draftClaims[0]!, 1, 'claim')).toEqual({ status: 'claim_saved', claimToolCallId: 'claim', guidance });
+    field.sourcePassageIds.length = 0;
+    const selected = notebook.select('field', 'field', 2);
+    expect(selected.sourcePassageIds).toEqual(['P00001']);
+    (selected.sourcePassageIds as string[]).push('P99999');
+    expect(notebook.select('field', 'field', 2).sourcePassageIds).toEqual(['P00001']);
+  });
+
+  it('rejects wrong-kind or non-prior IDs, poisons reused IDs across kinds and clears replay state', () => {
+    const notebook = createNativeScientificNotebook();
+    const invalid = 'A saved item needs its unique real tool call ID and original call order.';
+    const selectionError = 'Selected item is missing, failed, ambiguous, of another type or from a later call.';
+    expect(notebook.save('review_field', { field: 'method', verdict: 'accepted' }, 1, 'decision').status).toBe('review_field_saved');
+    expect(() => notebook.select('decision', 'field', 2)).toThrow(selectionError);
+    expect(() => notebook.select('decision', 'review_field', 1)).toThrow(selectionError);
+    expect(() => notebook.select('decision', 'review_field', 1.5)).toThrow(selectionError);
+    expect(notebook.save('claim', draft().draftClaims[0]!, 2, 'decision')).toEqual({ status: 'invalid_claim', feedback: invalid });
+    expect(() => notebook.select('decision', 'review_field', 3)).toThrow(selectionError);
+    expect(notebook.save('field', {}, -1, 'failed')).toEqual({ status: 'invalid_field', feedback: invalid });
+    expect(() => notebook.select('failed', 'field', 3)).toThrow(selectionError);
+    notebook.reset();
+    expect(() => notebook.select('decision', 'review_field', 3)).toThrow(selectionError);
+    expect(notebook.save('review_field', { field: 'method', verdict: 'accepted' }, 1, 'decision').status).toBe('review_field_saved');
+    expect(notebook.select('decision', 'review_field', 2)).toEqual({ field: 'method', verdict: 'accepted' });
+  });
+
+  it.each([
+    { name: 'item wrapper', value: { item: draft().draftClaims },
+      error: 'claim: exact_keys_required; missing=clientKey,conditions,kind,limitations,sourceBindings,sourceField,statement; unexpected=item.' },
+    { name: 'missing parent', value: { ...draft().draftClaims[0], kind: 'supporting' },
+      error: 'parentClientKey: required_non_core; use the clientKey of the actual dependency parent, not its tool-call ID. Do not change scientific kind or invent a parent to pass validation.' },
+    { name: 'unread source', value: { ...draft().draftClaims[0], sourceBindings: [{ sourcePassageId: 'P99999', relation: 'supports' }] },
+      error: 'sourceBindings[0].sourcePassageId: not_read (P99999); read and assess this passage if needed for the retained Claim, or revise the Claim and its evidence. An ID in search results is not a full read.' },
+    { name: 'no support', value: { ...draft().draftClaims[0], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'contradicts' }] },
+      error: 'sourceBindings: supporting_evidence_required; verify actual support before retaining the Claim. Do not relabel evidence just to pass validation.' },
+  ])('keeps exact shared Claim diagnostics and historical feedback for $name', ({ value, error }) => {
+    const before = structuredClone(value);
+    expect(validateNativeScientificClaim(value, ['P00001'])).toBe(error);
+    const detailed = createNativeScientificMaterializer(map, () => ['P00001'], { claimFeedback: true });
+    expect(detailed.claim(value, 0, 'invalid')).toEqual({ status: 'invalid_claim', feedback: error });
+    const historical = createNativeScientificMaterializer(map, () => ['P00001']);
+    expect(historical.claim(value, 0, 'invalid')).toEqual({ status: 'invalid_claim',
+      feedback: 'Save one exact Claim: clientKey, sourceField, kind, statement, conditions, limitations, sourceBindings and parentClientKey for non-core. Bindings use read source IDs with at least one supports. Parent graph and total limits are checked by paper_draft.' });
+    expect(value).toEqual(before);
+  });
+
+  it('shares the full field shape guard without replacing complete original-relative science validation', () => {
+    const allowed = new Set(['P00001']);
+    const accepted = { ...draft().fields.method, verdict: 'accepted', issues: [] };
+    expect(scientificReviewFieldGuard(accepted, allowed)).toBe(true);
+    expect(scientificReviewFieldGuard({ verdict: 'accepted' }, allowed)).toBe(false);
+    const issue = { code: 'QUALIFIER_LOSS', problem: 'Retain the numerical qualification.', sourcePassageIds: ['P00001'] };
+    const revised = { ...accepted, verdict: 'revised', summary: 'This is a numerical prediction under the stated geometry.', issues: [issue] };
+    expect(scientificReviewFieldGuard(revised, allowed)).toBe(true);
+    expect(scientificReviewFieldGuard({ ...revised, sourcePassageIds: ['P99999'] }, allowed)).toBe(false);
+    expect(scientificReviewFieldGuard({ ...revised, issues: [{ ...issue, sourcePassageIds: ['P99999'] }] }, allowed)).toBe(false);
+    expect(scientificReviewFieldGuard({ ...revised, issues: [{ ...issue, code: 'invented' }] }, allowed)).toBe(false);
+    expect(scientificReviewFieldGuard({ ...revised, sourcePassageIds: ['P00001', 'P00001'] }, allowed)).toBe(false);
+    expect(scientificReviewFieldGuard({ ...revised, verdict: 'blocked' }, allowed)).toBe(false);
+    expect(scientificReviewFieldGuard({ ...revised, verdict: 'blocked', summary: '', sourcePassageIds: [] }, allowed)).toBe(true);
+    const unchangedRevision = { ...accepted, verdict: 'revised', issues: [issue] };
+    expect(scientificReviewFieldGuard(unchangedRevision, allowed)).toBe(true);
+    const materializer = createNativeScientificMaterializer(map, () => ['P00001'], { boundDraft: { sourceAgentTaskId: 'author', draft: draft() } });
+    const body = { draftToolCallId: 'author', needsMoreEvidence: [], claimSuggestions: 'unchanged',
+      fields: { ...Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, { verdict: 'accepted' }])), method: unchangedRevision } };
+    expect(materializer.review(body, 'unchanged-revision').status).toBe('invalid_review');
+    expect(materializer.review({ ...body, fields: { ...body.fields, method: revised } }, 'actual-revision').status).toBe('review_ready');
+  });
+});
+
 describe('actual native Agent scientific materializer', () => {
   it('keeps author Claim revisions in the saved notebook and selects them unchanged at review', () => {
     const profile = nativePaperToolProfile(null);
