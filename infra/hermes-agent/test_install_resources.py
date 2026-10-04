@@ -17,6 +17,7 @@ class InstallResourceTests(unittest.TestCase):
             method = {'version': 'fixture', 'instructions': 'STATIC_SYNTHESIS_ONLY',
                       'sourceReviewInstructions': 'STATIC_REVIEW_ONLY',
                       'nativeInstructions': 'NATIVE_APPRAISAL_STEPS',
+                      'nativeEvidenceAlignmentInstructions': 'SHARED_SOURCE_ALIGNMENT',
                       'nativeSourceReviewInstructions': 'NATIVE_COMPARE_SAVED_DRAFT'}
             write_science_skills(source, root/'catalogue', method)
             scope = SkillScope(root/'catalogue')
@@ -26,6 +27,8 @@ class InstallResourceTests(unittest.TestCase):
             self.assertIn('NATIVE_COMPARE_SAVED_DRAFT', review)
             self.assertNotIn('STATIC_SYNTHESIS_ONLY', primary)
             self.assertNotIn('STATIC_REVIEW_ONLY', review)
+            self.assertEqual(scope.resolve('scientific-critical-thinking', 'references/source-evidence-alignment.md').read_text(),
+                             'SHARED_SOURCE_ALIGNMENT\n')
             self.assertEqual(scope.resolve('scientific-critical-thinking', 'upstream/critical-thinking-method.md').read_bytes(),
                              (source/'infra'/'hermes-agent'/'science-references'/'critical-thinking-method.md').read_bytes())
 
@@ -37,6 +40,7 @@ class InstallResourceTests(unittest.TestCase):
             (resources/'.env').write_text('excluded fixture')
             catalogue = root/'catalogue'
             method = {'version': 'fixture', 'instructions': 'Retained understanding method',
+                      'nativeEvidenceAlignmentInstructions': 'Retained shared source alignment',
                       'sourceReviewInstructions': 'Retained review method'}
             write_science_skills(source, catalogue, method)
             scope = SkillScope(catalogue)

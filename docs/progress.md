@@ -4,7 +4,7 @@
 
 ## 本轮检查点
 
-- 通用修复候选已补SDK期限/父线程停止和既有证据对齐规则的Native按需引用消费；原Worker600与预算不变，实际SDK3场均单HTTP、Linuxinstaller8、Worker14及构建/静态检查通过，最终代码High GO，精确CI/发布与跨论文真实效果待完成。详见CURRENT。
+- 通用修复候选已补SDK期限/父线程停止和既有证据对齐规则的Native按需引用消费；原Worker600与预算不变，实际SDK3场均单HTTP、Linuxinstaller8、Worker14及构建/静态检查通过，最终代码High GO；首份CI仅两个资源fixture缺新增导出已修正，Linux12项通过，修正提交的精确CI/发布与跨论文真实效果待完成。详见CURRENT。
 - thinking-only保存与实际SDK接续已正常发布并完成Native配对；安装自产pycache故障已恢复，源修复High/5项RED→GREEN/精确CI通过。真实作者3m44成功，独立审阅报concurrent SDK request；迟到paid原响应已保留、未执行科学提交，无新version/计划/图。正在复现原SDK300s stale与Worker600s/UDS610s时序，作者科学核源待结果，Synclip关闭；原任务不重放。用户再明确通用能力、跨论文验收，不能固化样本答案。精确状态与证据只见CURRENT。
 
 - 原作者科学NO-GO/独立审阅失败保留。纯数组兼容与读者方法修复已通过定向/High/精确CI并正常发布、同源Native配对，发布树归档。新实际作者5m24s/22帧技术成功，但独立审阅仍遗漏工具而失败；数组修复未消除主故障，正文凝练目标也未完全体现，没有正式科学稿/计划。独立原文验收NO-GO；原子审阅复用候选已实现并经独立代码High GO，source73/science119及相关session/工具通过、TC/lint0；已正常发布/精确CI通过，复用既有Native；新正常验证只创建一次，作者约3m05s再次遗漏调用/空响应失败，未进入新的独立审阅；科学/计划未通过，转SDK/API协议定位，不重开旧任务。Synclip应用/Key就绪但disabled/无生图请求；全链科学与图片质量未验收。精确任务、版本、证据和下一步只见CURRENT。
