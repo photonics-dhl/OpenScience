@@ -21,6 +21,8 @@
 
 最终六文件Code High GO、413/413定向、Worker TC/build0及5文件scopedlint0；planner5处ESLint基线严格复现。实际原句两个正向案例新模式通过、旧模式拒绝，错符号/分母仍拒，回放没有模型调用。SDK、根Skill及Native目录不变，复用Ops GO。精确CI和正常应用发布已完成，受控一次新修订已创建；真实阅读、稿件保真及自动分镜仍须实际验收，唯一运行身份和once状态见CURRENT。
 
+新实际作者6帧/4分钟只修λ趋势，另外三项结果对象/条件/范围失真仍在；五字段accepted及六Claims unchanged真实保留，原段/图注已送达，不是保存丢失。planner16帧截断，无asset/图。下一有界候选只在fresh sourceCorrection动态指引和工具description明确：按拟保留句子及每条Claim的conditions/limits核对，关联简略比较的图注和必要原页；复用共享读者组织，允许省略完整无关辅助断言，immutable基准不等于新稿必须全保留；accepted/unchanged意味着全部保留内容已核且拟保留。纯润色不得编造source issue，原有revised/来源/父Claim/commit合同不放宽。Source88、TC、scopedlint及两项delivery/isolation RED→GREEN已观察；High与实际科学收益仍待，不改根Skill/目录、不另加模型阶段，运行只见CURRENT。
+
 ## 独立原生核源接续的设计沿革
 
 接入前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判。下述独立角色现已实现并部署；它曾真实执行，但未证明科学全部正确。当前断点只见CURRENT，不能把本节当待重新接入的任务。
@@ -158,3 +160,7 @@ v9的两页图片编码被已安装Native rough estimator当普通文字，88776
 v10在真实draft_ready后连续两次tool_use但无结构化调用，只留下未闭合draftToolCallId JSON；不能将其当作科学审阅、补造字段或增加重试。既有finishNativePaperReview已可从真实paid历史还原最新草稿，并对直接完整紧凑终稿执行同一expandReview/完整科学、来源和Claims物化。候选只把新任务INSTRUCTIONS、review工具说明和nativeSourceReviewInstructions对齐现有入口，明确六字段决定、Claims选择及精确草稿ID；paper_review成为可选结构反馈，实际成功时仍支持原reviewToolCallId终稿。旧paid系统prompt和工具定义继续原样恢复，Host/Store/权限/预算/来源守卫不改。
 
 新增真保存notes无review调用的终稿测试核对实际修订、科学字段与原文证据保真，反例覆盖截断、无/失败/被取代草稿、缺少Claims决定、外来来源和accepted中夹带修改。该检查证明既有通路可用，不是供应商异常的red-green或科学正确性证据；工具schema导致截断仍未经证实。最终工程/真实验收状态见CURRENT。
+
+## 当前分镜修复的精确范围（10-05）
+
+实际528完整context回放确认Tc1/2在自己的支持quote中，但对应subject只描述另一表达式，拒收正确；后续场景同错而反馈缺scene编号。as/that说明短语被解析为单位；现不扩quantity grammar，而明确完整表达式须同时写入对应subject及own quote，比较与说明用分号分离且保留算符/值/单位。只fresh science工具补通用最小叙事、sN/P、availableOriginals指引及既有六domain枚举；sourceQuantityLocations默认false，真实首轮新描述启用scene/root路径。保留be20 PAID_PROSE全部语法/旧反馈，保存schema原样恢复，缺tools回退旧string domain。Source核对方法候选及Planner精确验证/审查/部署/真实结果以CURRENT为准，不重新请求任何旧失败任务。

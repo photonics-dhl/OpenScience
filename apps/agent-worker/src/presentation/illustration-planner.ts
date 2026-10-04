@@ -474,7 +474,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -536,10 +536,11 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     if (illustration.schemaVersion !== 2) throw new Error('structured_encoding_required');
     requireLabelReferencesInRange(illustration);
     requireIllustrationSourceSupport(illustration, claims);
-    requireBoundNumericalResults([['title', String(scene.title)], ['narration', String(scene.narration)],
+    const quantityFields: Array<readonly [string, string]> = [['title', String(scene.title)], ['narration', String(scene.narration)],
       ['message', illustration.message], ['encoding', illustration.encoding],
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
-      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
+      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])];
+    requireBoundNumericalResults(sourceQuantityLocations ? quantityFields.map(([field, value]) => [`scenes[${sceneIndex}].${field}`, value] as const) : quantityFields,
     illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
@@ -547,7 +548,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
       sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
   });
-  requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
+  requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [[sourceQuantityLocations ? 'narrative.mainMessage' : 'mainMessage', narrative.mainMessage] as const] : [])],
     [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
     sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);

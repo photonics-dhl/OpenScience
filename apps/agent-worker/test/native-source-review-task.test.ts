@@ -8,6 +8,7 @@ import { createNativeSourceReviewTools, LEGACY_NATIVE_SOURCE_REVIEW_TOOLS, NATIV
 import { createNativeAgentSession, type NativeAgentSessionState } from '../src/native-agent/session';
 import type { runHostedNativeTask } from '../src/native-agent/host-task';
 import { runNativePaperTask } from '../src/native-agent/paper-task';
+import { SCIENTIFIC_READER_ORGANIZATION } from '../src/skills/scientific-summary';
 
 const seam = vi.hoisted(() => ({ host: vi.fn(), store: vi.fn() }));
 vi.mock('../src/native-agent/host-task', () => ({ runHostedNativeTask: seam.host }));
@@ -563,6 +564,14 @@ describe('independent native source review using the existing scientific materia
       expect(JSON.stringify(input.config)).not.toContain(text);
       expect(JSON.stringify(input.config)).not.toContain('d'.repeat(64));
       expect(input.config.sourceTools.map(tool => tool.name)).toEqual(expect.arrayContaining(['paper_review', 'paper_review_field', 'paper_review_claim']));
+      // Verify delivery/isolation at the real host boundary, not whether a fixture model understands the paper.
+      expect(input.config.sourceTools.map(({ name, parameters }) => ({ name, parameters })))
+        .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.map(({ name, parameters }) => ({ name, parameters })));
+      if (sourceCorrection) {
+        expect(input.config.instructions).toContain(SCIENTIFIC_READER_ORGANIZATION);
+        expect(input.config.sourceTools.find(tool => tool.name === 'paper_review_claim')!.description)
+          .not.toBe(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.find(tool => tool.name === 'paper_review_claim')!.description);
+      } else expect(input.config.sourceTools).toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS);
       const request = { model: input.config.model, max_tokens: input.config.maxOutputTokens,
         messages: [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }] as unknown[],
         tools: [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object' } })),

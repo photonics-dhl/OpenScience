@@ -12,13 +12,13 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
     scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations,
-    sourceQuantityProse: options.sourceQuantityProse, ...options.input };
+    sourceQuantityProse: options.sourceQuantityProse, sourceQuantityLocations: options.sourceQuantityLocations, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);
@@ -60,6 +60,7 @@ describe('native illustration selects actual private tool history', () => {
 const PAID_SCIENCE_DESCRIPTION = 'Save the scientific visual narrative before art. Choose only the scenes needed to convey the paper. Each subject has one exact supporting sN source. Encode direction, quantity meaning, comparison and model conditions explicitly. Labels are the complete visible text inventory, including axis symbols and qualifiers; no citations or hidden extra text. Constraints at most two. Narration <=600 characters; title <=120, mainMessage <=240, audience <=160. Subject and label indices are zero-based. paperOriginalAssetId is null for a designed image or an exact available original asset. This validates structure and binding, not scientific truth.';
 const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key. Bibliographic Table/Fig references are structural labels; independent numeric-Hz-family quantities retain their value and unit. Validation feedback identifies affected fields and the explicit source variable when available; it never establishes symbol aliases or substitutes source evidence.';
 const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Recognized hyphenated scientific units in source prose or consecutive typed quantities are quantities, not subtraction; a complete parenthetical named-variable assignment remains distinct from arithmetic. Explicit local source symbols may have spaced subscripts and an is/of approximation statement; preserve their exact symbol identity, not aliases or arithmetic factors.';
+const PAID_PROSE_SCIENCE_DESCRIPTION = PAID_ANNOTATION_SCIENCE_DESCRIPTION + ' A bare expression reference can match only that exact whole expression explicitly reported in the same supporting quote. Ordinary complete predicates after a comparison are prose, not units; unknown units remain binding. Use exact case-sensitive source IDs, supports relations and complete supporting text of 12..12000 characters; page markers or qualifiers cannot serve as subject bases. If an independent comparison is written after prose, separate it with a semicolon instead of an ambiguous mathematical wrapper; never remove functions, factors, terms or units.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION): NativeAgentSessionState {
   const tools = nativeIllustrationToolProfile(null).sourceTools.map(tool => ({ type: 'function' as const,
@@ -71,6 +72,92 @@ function savedProfile(description: string | undefined, omitTools = false, contex
   initialMessages: [], turns: [{ state: 'started', target: { provider: 'minimax', model: 'MiniMax-M3', promptHash: 'existing-request' },
     request: { messages: [], options: omitTools ? {} : { tools } }, effectiveOptions: {} }] } as NativeAgentSessionState;
 }
+
+describe('Native planner locates quantity repairs without changing paid science', () => {
+  it('advertises exactly the existing supported domains and accepts each through the real materializer', () => {
+    const domains = ['real-space', 'wavevector-space', 'time', 'frequency', 'parameter-space', 'conceptual'];
+    const profile = nativeIllustrationToolProfile(null);
+    const schema = profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.parameters as {
+      properties: { scenes: { items: { properties: { domain: { type: string; enum?: string[] } } } } };
+    };
+    expect(schema.properties.scenes.items.properties.domain).toEqual({ type: 'string', enum: domains });
+    for (const domain of domains) {
+      const value = structuredClone(science); value.scenes[0]!.domain = domain;
+      expect(fixture(profile).invoke('paper_illustration_science', value, domain).status).toBe('science_ready');
+    }
+  });
+  it('identifies the second scene label while retaining the same rejection', () => {
+    const value = structuredClone(science); value.scenes.push(structuredClone(value.scenes[0]!));
+    value.scenes[1]!.labels = ['7 fs'];
+    const quote = 'The reported output duration is 7 fs.';
+    const input = { settings: { ...settings, narrativeSceneLimit: 2 } };
+    const fresh = fixture({ ...nativeIllustrationToolProfile(null), quote, input });
+    const old = fixture({ ...nativeIllustrationToolProfile(savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION)), quote, input });
+    const repaired = fresh.invoke('paper_illustration_science', value, 'failed');
+    expect(repaired).toMatchObject({ status: 'invalid_illustration', error: expect.stringMatching(/^unbound_numeric_7_fs_description/u) });
+    expect(repaired.error).toContain('Fields: scenes[1].labels[0].');
+    expect(old.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
+      error: 'unbound_numeric_7_fs_description Fields: labels[0].' });
+    value.scenes[1]!.subjects[0]!.description = 'The reported output duration is 7 fs.';
+    expect(fresh.invoke('paper_illustration_science', value, 'repaired').status).toBe('science_ready');
+    expect(old.invoke('paper_illustration_science', value, 'repaired').status).toBe('science_ready');
+  });
+  it('identifies the root narrative separately from scene messages', () => {
+    const value = structuredClone(science); value.narrative.mainMessage = 'The output duration is 7 fs.';
+    const quote = 'The reported output duration is 7 fs.';
+    const fresh = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    const old = fixture({ ...nativeIllustrationToolProfile(savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION)), quote });
+    expect(fresh.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
+      error: 'unbound_numeric_7_fs_description Fields: narrative.mainMessage.' });
+    expect(old.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
+      error: 'unbound_numeric_7_fs_description Fields: mainMessage.' });
+  });
+  it('keeps the actual be20 paid tool schema, prose grammar and unqualified feedback on restart', () => {
+    const saved = savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION);
+    const definition = saved.turns[0]!.request.options.tools!.find(tool => tool.function.name === 'paper_illustration_science')!;
+    definition.function.parameters = { type: 'object', properties: { paidMarker: { type: 'string' } } };
+    saved.turns.push(structuredClone(saved.turns[0]!));
+    saved.turns[1]!.request.options.tools!.find(tool => tool.function.name === 'paper_illustration_science')!.function =
+      structuredClone(nativeIllustrationToolProfile(null).sourceTools.find(tool => tool.name === 'paper_illustration_science')!);
+    const before = structuredClone(saved); const profile = nativeIllustrationToolProfile(saved);
+    expect(profile).toMatchObject({ scienceFeedback: true, sourceQuantityAnnotations: true, sourceQuantityProse: true, sourceQuantityLocations: false });
+    expect(profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')).toEqual(definition.function);
+    expect(saved).toEqual(before);
+  });
+  it.each([
+    { mode: 'base', description: PAID_SCIENCE_DESCRIPTION }, { mode: 'Hz', description: PAID_HZ_SCIENCE_DESCRIPTION },
+    { mode: 'annotations', description: PAID_ANNOTATION_SCIENCE_DESCRIPTION }, { mode: 'be20 prose', description: PAID_PROSE_SCIENCE_DESCRIPTION },
+    { mode: 'unknown', description: 'unknown paid science' },
+  ])('never upgrades the quantity locations of a saved description: $mode', ({ description }) => {
+    expect(nativeIllustrationToolProfile(savedProfile(description)).sourceQuantityLocations).toBe(false);
+    expect(nativeIllustrationToolProfile(savedProfile(undefined, true)).sourceQuantityLocations).toBe(false);
+  });
+  it('keeps the legacy string domain schema when the first paid tool list is absent', () => {
+    const tools = nativeIllustrationToolProfile(savedProfile(undefined, true)).sourceTools;
+    const schema = tools.find(tool => tool.name === 'paper_illustration_science')!.parameters as {
+      properties: { scenes: { items: { properties: { domain: unknown } } } };
+    };
+    expect(schema.properties.scenes.items.properties.domain).toEqual({ type: 'string' });
+  });
+  it('strictly replays located failure receipts and does not accept a changed scene path', () => {
+    const http = vi.fn(() => { throw new Error('Unexpected HTTP'); }); vi.stubGlobal('fetch', http);
+    const profile = nativeIllustrationToolProfile(null);
+    const saved = savedProfile(profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description, false,
+      profile.sourceTools.find(tool => tool.name === 'paper_illustration_context')!.description);
+    const f = fixture({ ...profile, quote: 'The reported output duration is 7 fs.' });
+    const value = structuredClone(science); value.scenes[0]!.labels = ['7 fs'];
+    expect(f.invoke('paper_illustration_science', value, 'invalid').error).toContain('scenes[0].labels[0]');
+    f.complete();
+    const restore = () => createNativeIllustrationMaterializer({ ...f.input, ...nativeIllustrationToolProfile(saved) });
+    const final = '{"reviewToolCallId":"review-call"}';
+    expect(restore().finish(f.messages, final).review.decision).toBe('accepted');
+    const changed = structuredClone(f.messages);
+    const receipt = changed.find(message => message.role === 'tool' && message.toolCallId === 'invalid')!;
+    receipt.content = receipt.content.replace('scenes[0]', 'scenes[1]');
+    expect(() => restore().finish(changed, final)).toThrow(/history changed/u);
+    expect(http).not.toHaveBeenCalled();
+  });
+});
 
 describe('Native source prose retains whole expressions and exact source identities', () => {
   const quantityScene = (label: string) => {
