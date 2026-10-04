@@ -6,7 +6,7 @@ import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { canonicalPassages, createNativeScientificMaterializer, createNativeScientificNotebook,
-  scientificReviewFieldGuard, validateNativeScientificClaim } from '../extractor';
+  scientificReviewFieldGuard, scientificReviewFieldIssue, validateNativeScientificClaim } from '../extractor';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { createNativePaperTools, NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
 import { nativeSkillReads, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL, NATIVE_PAPER_DRAFT_TOOL,
@@ -39,10 +39,11 @@ export const NATIVE_SOURCE_REVIEW_TOOLS = [
       claimSuggestions: NATIVE_PAPER_DRAFT_TOOL.parameters.properties.draftClaims } } },
 ];
 
+const FIELD_REPAIR_DESCRIPTION = 'Invalid decisions report the failing field path and required repair.';
 export const STAGED_NATIVE_SOURCE_REVIEW_TOOLS = [
   ...LEGACY_NATIVE_SOURCE_REVIEW_TOOLS.filter(tool => tool.name !== 'paper_review'),
   { name: 'paper_review_field',
-    description: 'Save one independent field decision against the ORIGINAL paper_candidate. accepted uses only field and verdict and retains the original author text. revised/blocked requires the complete replacement summary, sourcePassageIds and source-grounded issues. Copy its reviewFieldToolCallId into paper_review. Correct only affected items; the author baseline stays immutable. This saves a private decision, not approval.',
+    description: 'Save one independent field decision against the ORIGINAL paper_candidate. accepted uses only field and verdict and retains the original author text. revised/blocked requires the complete replacement summary, sourcePassageIds and source-grounded issues. Each issues[].problem is at most 500 characters. Field and issue source IDs must have been fully read with paper_read; search excerpts alone are insufficient. ' + FIELD_REPAIR_DESCRIPTION + ' Copy its reviewFieldToolCallId into paper_review. Correct only affected items; the author baseline stays immutable. This saves a private decision, not approval.',
     parameters: { type: 'object', additionalProperties: false, required: ['field', 'verdict'], properties: {
       field: { type: 'string', enum: SDF_CORE_FIELDS }, ...reviewProperties.fields.properties.problem!.properties,
     } } },
@@ -70,14 +71,16 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
     if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved review tool description is absent');
     return { ...structuredClone(tool.function), description: tool.function.description };
   });
-  return { sourceTools: originalTools?.length ? originalTools : reviewMode === 'staged' ? STAGED_NATIVE_SOURCE_REVIEW_TOOLS
-    : legacyClaimsReview ? LEGACY_NATIVE_SOURCE_REVIEW_TOOLS : NATIVE_SOURCE_REVIEW_TOOLS, legacyClaimsReview, reviewMode,
+  const sourceTools = originalTools?.length ? originalTools : reviewMode === 'staged' ? STAGED_NATIVE_SOURCE_REVIEW_TOOLS
+    : legacyClaimsReview ? LEGACY_NATIVE_SOURCE_REVIEW_TOOLS : NATIVE_SOURCE_REVIEW_TOOLS;
+  return { sourceTools, legacyClaimsReview, reviewMode,
+    fieldFeedback: !saved || originalTools?.find(tool => tool.name === 'paper_review_field')?.description.includes(FIELD_REPAIR_DESCRIPTION) === true,
     sourceFaithfulness: !saved || saved.initialMessages?.some(message => message.role === 'user' && message.content === SOURCE_FIDELITY_REVIEW_GOAL) };
 }
 
 /** Reuse the existing scientific materializer with the actual final author fields as its immutable input. */
 export function createNativeSourceReviewTools(input: { sourceMap: DocumentSourceMap; sourceAgentTaskId: string; sourceResult: unknown;
-  renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode }) {
+  renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode; fieldFeedback?: boolean }) {
   const reviewMode = input.reviewMode ?? (input.legacyClaimsReview ? 'legacy' : 'split');
   const staged = reviewMode === 'staged';
   const legacy = reviewMode === 'legacy';
@@ -134,7 +137,9 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
         if (decision.verdict === 'accepted') {
           if (Object.keys(decision).join(',') !== 'verdict') throw new Error('accepted selects unchanged ORIGINAL author text; use revised with the full replacement for changes.');
         } else if (!scientificReviewFieldGuard(decision, new Set(source.observedPassageIds))) {
-          throw new Error('revised/blocked requires a complete field decision, read source IDs and source-grounded issues under the existing review contract.');
+          throw new Error(input.fieldFeedback === false
+            ? 'revised/blocked requires a complete field decision, read source IDs and source-grounded issues under the existing review contract.'
+            : scientificReviewFieldIssue(decision, new Set(source.observedPassageIds))!);
         }
       } else {
         const issue = validateNativeScientificClaim(value, source.observedPassageIds);
@@ -291,6 +296,16 @@ function sourceFidelityReviewInstructions(instructions: string) {
   ].join('\n');
 }
 
+// New source corrections use the existing Skill and source tools before seeing
+// the saved author's wording. Paid descriptions retain their original method.
+const SOURCE_FIRST_CORRECTION_INSTRUCTIONS = [
+  '你是原生Hermes本次新私有稿的作者。论文是事实来源，旧稿是不可变的修订基准；核对我们的转述，不评议论文，不自行补造结果或额外推导参数。',
+  '先用skill_view读取openscience-source-review，再用paper_overview定位全文结构，以paper_read读取摘要、结论及主机制、代表结果的直接原段和图注；需要哪项定义或条件再搜索并完整读取相邻段落/附录，不再次提取整篇或保存全部细节。此时先不读paper_candidate，避免旧稿的措辞替你决定作者的意思。',
+  '从这些原文先确定要向读者表达的贡献和一个条件完整的代表算例；若比较本身是核心贡献则保留必要对照。对拟保留的量明确其所指对象、输入/输出身份、算例条件及比较关系；作者的示例、扫描趋势、限定极值与普适界限不能互换。不需要新工具、额外笔记或计算来完成这个判断。',
+  '现在调用paper_candidate读取实际旧稿及已选原文，先对照主机制、代表结果和条件，以及同一事实在results/limitations/Claims中的每处表述，再处理不影响主线的归因或实现细节。某处已修改不表示其他处已同步；正确的主线保持，只修真正曲解、遗漏或添加的项。',
+  ...sourceFidelityReviewInstructions(STAGED_REVIEW_INSTRUCTIONS).split('\n').slice(2),
+].join('\n');
+
 export async function runNativeSourceReviewTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };
   task: { id: string; executionAttempt: number; result: unknown }; sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference;
   sourceAgentTaskId: string; authorCheckpointSha256: string; sourceResult: unknown; inboxRoot: string; renderPages: (pages: number[]) => Promise<NativePaperImage[]>;
@@ -305,7 +320,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
     throw new Error('[blocked] Native source revision differs from its saved execution');
   if (!/^[a-f0-9]{64}$/.test(input.authorCheckpointSha256)) throw new Error('[blocked] Native author checkpoint identity is absent');
   const profile = nativeSourceReviewToolProfile(saved);
-  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode });
+  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback });
   const sourceTools = sourceCorrection && !saved ? profile.sourceTools.map(tool => ({ ...tool,
     description: tool.description.replace(/\bindependent\b/gu, 'source-fidelity') })) : profile.sourceTools;
   const allowedTools = ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)];
@@ -323,8 +338,9 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
       maxTurns: binding.maxTurns, maxOutputTokens: binding.maxOutputTokens,
       ...(binding.contextWindowTokens ? { contextWindowTokens: binding.contextWindowTokens } : {}),
       ...(sourceCorrection ? { profile: 'paper-author' as const } : {}),
-      sourceTools, instructions: sourceCorrection ? sourceFidelityReviewInstructions(STAGED_REVIEW_INSTRUCTIONS)
-        .replace('你是原生Hermes的来源对照者。', '你是原生Hermes本次新私有稿的作者，旧稿仅作为不可变的修订基准。')
+      sourceTools, instructions: sourceCorrection ? profile.fieldFeedback ? SOURCE_FIRST_CORRECTION_INSTRUCTIONS
+        : sourceFidelityReviewInstructions(STAGED_REVIEW_INSTRUCTIONS)
+          .replace('你是原生Hermes的来源对照者。', '你是原生Hermes本次新私有稿的作者，旧稿仅作为不可变的修订基准。')
         : profile.sourceFaithfulness ? sourceFidelityReviewInstructions(profile.reviewMode === 'staged' ? STAGED_REVIEW_INSTRUCTIONS
         : profile.legacyClaimsReview ? REVIEW_INSTRUCTIONS : EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS)
         : profile.reviewMode === 'staged' ? STAGED_REVIEW_INSTRUCTIONS : profile.legacyClaimsReview ? REVIEW_INSTRUCTIONS : EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS,

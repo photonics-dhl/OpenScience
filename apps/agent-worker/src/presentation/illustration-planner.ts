@@ -57,7 +57,7 @@ function stripStructuralReferences(value: string, nativeQuantitySyntax = false):
 }
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
-function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false): ScientificQuantity[] {
+function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): ScientificQuantity[] {
   const value = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
@@ -127,7 +127,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
       .replace(/\s*[×x]\s*10\s*\^?\s*([+-]?\d+)/iu, 'e$1').replaceAll(' ', '').toLowerCase();
     const after = scalarValue.slice(match.index! + raw.length, match.index! + raw.length + 40);
     const unitText = unitPattern.exec(after)?.[1] ?? afterRange.exec(after)?.[1] ?? null;
-    const unit = unitText?.toLowerCase().replaceAll('µ', 'μ').replace(/^(?:(?:个)?(?:散射)?光子|(?:scattered\s+)?photons?)$/iu, 'photon_count') ?? null;
+    let unit = unitText?.toLowerCase().replaceAll('µ', 'μ').replace(/^(?:(?:个)?(?:散射)?光子|(?:scattered\s+)?photons?)$/iu, 'photon_count') ?? null;
     const fullBefore = scalarValue.slice(Math.max(0, match.index! - 80), match.index!);
     const before = fullBefore.split(/[。.;\n]/u).at(-1) ?? '';
     // Source prose may spell out "FWHM_T, i.e., τ₁) of 19 as". Ignore
@@ -136,6 +136,11 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     const abbreviationSafeBefore = fullBefore.replace(/\bi\.e\./giu, 'ie').replace(/\be\.g\./giu, 'eg');
     const namedFwhm = /(FWHM[_\s]*[ST])(?:(?!FWHM)[^。.;\n]){0,50}(?:of|=)\s*$/iu.exec(abbreviationSafeBefore)?.[1] ?? null;
     const comparison = scientificComparisonBinding(comparisonValue, match.index!, sourceQuantityAnnotations);
+    // An explicit comparison followed by a complete predicate + article is
+    // ordinary source prose. Retain unknown units and incomplete predicates;
+    // this does not allow an asserted quantity to omit a source unit.
+    if (sourceQuantityProse && comparison && comparison.binding.kind !== 'unsupported-expression'
+      && /^[ \t]+(?:sets|defines|marks|indicates|establishes|provides|yields|constitutes)[ \t]+(?:a|an|the)[ \t]+[A-Za-z]/u.test(after)) unit = null;
     const directVariable = /(FWHM[_\s]*[ST]|N[_\s]*SP)\s*\)?\s+of\s*$/iu.exec(before)?.[1] ?? namedFwhm
       // Original prose also writes "FWHM_T (19 as)". Bind only an immediately
       // adjacent named width, not another result elsewhere in a parenthesis.
@@ -160,8 +165,15 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     ...results.filter(item => !structuralRanges.some(range => item.index >= range.start && item.index < range.end))
     .map(item => ({ ...item.quantity, equalities }))];
 }
-function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity, allowOmittedVariable = false): boolean {
+function sameScientificQuantity(asserted: ScientificQuantity, supported: ScientificQuantity, allowOmittedVariable = false, sourceQuantityProse = false): boolean {
   if (asserted.binding?.kind === 'unsupported-expression' || supported.binding?.kind === 'unsupported-expression') return false;
+  // A bare reference can identify the exact whole expression explicitly bound
+  // to a reported number in this subject's own quote. No value-based aliases,
+  // algebra, cross-subject evidence or new numeric results are inferred.
+  if (sourceQuantityProse && asserted.unit === '__expression__') {
+    const explicit = [...(supported.representations ?? []), ...(supported.binding ? [supported.binding, ...(supported.binding.equivalents ?? [])] : [])];
+    if (explicit.some(item => item.kind === 'expression' && item.key === asserted.value)) return true;
+  }
   if (asserted.value !== supported.value) return false;
   if (!asserted.unit && supported.unit && !(symbolKey(asserted) === 'nsp' && supported.unit === 'photon_count')) return false;
   if (asserted.unit && asserted.unit !== supported.unit
@@ -178,21 +190,21 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   }
   return true;
 }
-function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false): void {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): void {
   const cache = new Map<string, ScientificQuantity[]>();
   const quantities = (text: string) => {
     const existing = cache.get(text);
     if (existing) return existing;
-    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations);
+    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
     cache.set(text, parsed);
     return parsed;
   };
   const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string | null }> = [];
   for (const [field, value] of fields) for (const quantity of quantities(value)) {
     const described = subjects.filter(subject => quantities(subject.description)
-      .some(item => sameScientificQuantity(quantity, item, true)));
+      .some(item => sameScientificQuantity(quantity, item, true, sourceQuantityProse)));
     if (!described.some(subject => quantities(subject.basis.quote)
-      .some(item => sameScientificQuantity(quantity, item)))) {
+      .some(item => sameScientificQuantity(quantity, item, false, sourceQuantityProse)))) {
       const reason = quantity.binding?.kind === 'unsupported-expression' ? 'syntax' : described.length ? 'source' : 'description';
       const equality = quantity.binding && quantity.binding.kind !== 'unsupported-expression' && quantity.binding.equivalents?.length
         ? [quantity.binding, ...quantity.binding.equivalents].map(representationKey).join('=') : null;
@@ -462,7 +474,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -495,17 +507,22 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     // count so the next attempt can repair the count without changing semantics.
     throw new Error(`figure_plan_scene_count_expected_${eligibleFigures.length}_actual_${root.scenes.length}`);
   }
-  const scenes = root.scenes.map(raw => {
+  const scenes = root.scenes.map((raw, sceneIndex) => {
     const scene = object(raw); keys(scene, settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
     if (!Array.isArray(scene.subjects) || scene.subjects.length < 1 || scene.subjects.length > subjectLimit) throw new Error('subject_count');
     if (!Array.isArray(scene.labels)) throw new Error('labels:array_required');
     if (!Array.isArray(scene.constraints) || scene.constraints.length > 2) throw new Error('constraint_count');
-    const subjects = scene.subjects.map(rawSubject => {
+    const subjects = scene.subjects.map((rawSubject, subjectIndex) => {
       const subject = object(rawSubject); keys(subject, ['description', 'basis'], 'science_subject');
       const basis = object(subject.basis); keys(basis, ['sourceId'], 'science_subject_basis');
       const original = typeof basis.sourceId === 'string' ? sourceLookup.get(basis.sourceId) : undefined;
-      if (!original) throw new Error('unknown_original_source');
-      if (original.relation !== 'supports') throw new Error('subject_requires_supporting_evidence');
+      const sourcePath = `scenes[${sceneIndex}].subjects[${subjectIndex}].basis.sourceId`;
+      if (!original) throw new Error(sourceQuantityProse
+        ? `unknown_original_source: ${sourcePath} must select an exact case-sensitive sourceId from paper_illustration_context. Do not invent or convert IDs.` : 'unknown_original_source');
+      if (original.relation !== 'supports') throw new Error(sourceQuantityProse
+        ? `subject_requires_supporting_evidence: ${sourcePath} must select a supports source; qualifiers describe limits, not direct support. Keep the recorded relation unchanged.` : 'subject_requires_supporting_evidence');
+      if (sourceQuantityProse && (original.text.trim().length < 12 || original.text.length > 12000))
+        throw new Error(`invalid_bound_source: ${sourcePath} selects a quote with trimmed_length=${original.text.trim().length}, raw_length=${original.text.length}; required trimmed>=12, raw<=12000. Choose complete supporting text from paper_illustration_context; do not rewrite its quote or ID.`);
       return { description: subject.description, basis: { claimId: original.claimId, evidenceId: original.evidenceId, quote: original.text } };
     });
     const original = settings.narrative && scene.paperOriginalAssetId !== null
@@ -523,7 +540,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       ['message', illustration.message], ['encoding', illustration.encoding],
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
       ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])],
-    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations);
+    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
     return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
@@ -531,7 +548,8 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
   });
   requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [['mainMessage', narrative.mainMessage] as const] : [])],
-    [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax);
+    [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
+    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
 }

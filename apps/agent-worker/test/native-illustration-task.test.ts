@@ -12,12 +12,13 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
-    scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations, ...options.input };
+    scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations,
+    sourceQuantityProse: options.sourceQuantityProse, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);
@@ -58,6 +59,7 @@ describe('native illustration selects actual private tool history', () => {
 // Exact paid description from before the quantity/feedback correction. Its receipts are immutable.
 const PAID_SCIENCE_DESCRIPTION = 'Save the scientific visual narrative before art. Choose only the scenes needed to convey the paper. Each subject has one exact supporting sN source. Encode direction, quantity meaning, comparison and model conditions explicitly. Labels are the complete visible text inventory, including axis symbols and qualifiers; no citations or hidden extra text. Constraints at most two. Narration <=600 characters; title <=120, mainMessage <=240, audience <=160. Subject and label indices are zero-based. paperOriginalAssetId is null for a designed image or an exact available original asset. This validates structure and binding, not scientific truth.';
 const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key. Bibliographic Table/Fig references are structural labels; independent numeric-Hz-family quantities retain their value and unit. Validation feedback identifies affected fields and the explicit source variable when available; it never establishes symbol aliases or substitutes source evidence.';
+const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Recognized hyphenated scientific units in source prose or consecutive typed quantities are quantities, not subtraction; a complete parenthetical named-variable assignment remains distinct from arithmetic. Explicit local source symbols may have spaced subscripts and an is/of approximation statement; preserve their exact symbol identity, not aliases or arithmetic factors.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION): NativeAgentSessionState {
   const tools = nativeIllustrationToolProfile(null).sourceTools.map(tool => ({ type: 'function' as const,
@@ -69,6 +71,82 @@ function savedProfile(description: string | undefined, omitTools = false, contex
   initialMessages: [], turns: [{ state: 'started', target: { provider: 'minimax', model: 'MiniMax-M3', promptHash: 'existing-request' },
     request: { messages: [], options: omitTools ? {} : { tools } }, effectiveOptions: {} }] } as NativeAgentSessionState;
 }
+
+describe('Native source prose retains whole expressions and exact source identities', () => {
+  const quantityScene = (label: string) => {
+    const value = structuredClone(science);
+    value.narrative.mainMessage = label;
+    value.scenes[0]!.labels = [label]; value.scenes[0]!.subjects[0]!.description = label;
+    return value;
+  };
+  const current = (quote: string) => fixture({ scienceFeedback: true, sourceQuantityAnnotations: true, sourceQuantityProse: true, quote });
+  it('binds a bare reference to its exact expression in a reported quantity, including the root narrative', () => {
+    const f = current('The reference period is T_r/2 (i.e., 0.26 fs) for the stated numerical example.');
+    expect(f.invoke('paper_illustration_science', quantityScene('T_r/2'), 'science')).toMatchObject({ status: 'science_ready' });
+    f.invoke('paper_illustration_art', { scienceToolCallId: 'science', scenes: [{ layout: 'Display label 0.', treatment: 'Crisp ink.' }] }, 'art');
+    f.invoke('paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Exact source period is retained.', corrections: [], issues: [] }, 'review');
+    expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review"}').document.scenes[0]!.illustration!.labels).toEqual(['T_r/2']);
+  });
+  it.each(['T_q/2', 'T_r/3', '2*T_r/2', 'T_r/(2*f)'])('rejects a different whole reference %s despite the same source number', label => {
+    const f = current('The reference period is T_r/2 (i.e., 0.26 fs) for the stated numerical example.');
+    expect(f.invoke('paper_illustration_science', quantityScene(label), 'science').status).toBe('invalid_illustration');
+  });
+  it.each(['sets a', 'defines the', 'marks a'])('distinguishes the ordinary predicate %s from a unit', predicate => {
+    const f = current(`The criterion Q > 2 ${predicate} threshold for this numerical example.`);
+    expect(f.invoke('paper_illustration_science', quantityScene('Q > 2'), 'science')).toMatchObject({ status: 'science_ready' });
+  });
+  it.each(['fs', 'm', 'frobs', 'sets'])('does not silently drop a real or unknown source unit %s', unit => {
+    const f = current(`The reported quantity Q > 2 ${unit}; it applies to the stated numerical example.`);
+    expect(f.invoke('paper_illustration_science', quantityScene('Q > 2'), 'science').status).toBe('invalid_illustration');
+  });
+  it('names the exact failed source position without changing its case or selecting another source', () => {
+    const f = current('The criterion Q > 2 sets a threshold for this numerical example.');
+    const value = quantityScene('Q > 2'); value.scenes[0]!.subjects[0]!.basis.sourceId = 'S0';
+    const invalid = f.invoke('paper_illustration_science', value, 'invalid');
+    expect(invalid.status).toBe('invalid_illustration');
+    expect(invalid.error).toContain('scenes[0].subjects[0].basis.sourceId');
+    expect(invalid.error).toContain('case-sensitive');
+    value.scenes[0]!.subjects[0]!.basis.sourceId = 's0';
+    expect(f.invoke('paper_illustration_science', value, 'fixed').status).toBe('science_ready');
+  });
+  it('explains a too-short bound quote instead of encouraging invented source IDs', () => {
+    const f = current('Page 5.');
+    const invalid = f.invoke('paper_illustration_science', science, 'invalid');
+    expect(invalid.status).toBe('invalid_illustration');
+    expect(invalid.error).toContain('scenes[0].subjects[0].basis.sourceId');
+    expect(invalid.error).toContain('7'); expect(invalid.error).toContain('12');
+    expect(invalid.error).toContain('paper_illustration_context');
+  });
+  it('locates a qualifier used as direct support while preserving its recorded relation', () => {
+    const selected = structuredClone(claims); selected[0]!.sourcePassages[0]!.relation = 'qualifies';
+    const f = fixture({ sourceQuantityProse: true, input: { claims: selected as never } });
+    const invalid = f.invoke('paper_illustration_science', science, 'invalid');
+    expect(invalid.status).toBe('invalid_illustration');
+    expect(invalid.error).toContain('scenes[0].subjects[0].basis.sourceId');
+    expect(invalid.error).toContain('supports');
+    expect(f.invoke('paper_illustration_context', {}, 'context').claims).toMatchObject([{ sources: [{ sourceId: 's0', relation: 'qualifies' }] }]);
+  });
+  it('keeps ambiguous math shells rejected and gives an independent prose comparison repair', () => {
+    const f = current('The criterion Q > 2; this is the reported threshold for the stated example.');
+    const invalid = f.invoke('paper_illustration_science', quantityScene('pulse-period (Q > 2)'), 'invalid');
+    expect(invalid.status).toBe('invalid_illustration');
+    expect(invalid.error).toContain('semicolon');
+    expect(f.invoke('paper_illustration_science', quantityScene('pulse-period; Q > 2'), 'fixed').status).toBe('science_ready');
+    for (const label of ['f(Q > 2)', '2*(Q > 2)', '(x*(Q > 2))', 'pulse-period (Q > 2']) {
+      expect(f.invoke('paper_illustration_science', quantityScene(label), label).status).toBe('invalid_illustration');
+    }
+  });
+  it('preserves the previously paid annotation mode and all of its failed receipts', () => {
+    const profile = nativeIllustrationToolProfile(savedProfile(PAID_ANNOTATION_SCIENCE_DESCRIPTION));
+    expect(profile.sourceQuantityAnnotations).toBe(true); expect(profile.scienceFeedback).toBe(true);
+    expect(profile.sourceQuantityProse).toBe(false);
+    expect(nativeIllustrationToolProfile(null).sourceQuantityProse).toBe(true);
+    const f = fixture({ ...profile, quote: 'The reference period is T_r/2 (i.e., 0.26 fs) for the stated numerical example.' });
+    expect(f.invoke('paper_illustration_science', quantityScene('T_r/2'), 'old').status).toBe('invalid_illustration');
+    const invalid = structuredClone(science); invalid.scenes[0]!.subjects[0]!.basis.sourceId = 'S0';
+    expect(f.invoke('paper_illustration_science', invalid, 'old-source')).toEqual({ status: 'invalid_illustration', error: 'unknown_original_source' });
+  });
+});
 function quantityScene(text: string, description = text) {
   const value = structuredClone(science);
   value.scenes[0]!.narration = text;
@@ -109,7 +187,8 @@ describe('native illustration defers design guidance until science is saved', ()
       sources: [{ sourceId: 's0' }, { sourceId: 's1' }] }]);
     expect(context.paper).toMatchObject({ sourceContext: { excerpts: [{ id: 'P00001', text: 'The full original paragraph.', page: 2 }] } });
     const invalid = structuredClone(science); invalid.scenes[0]!.subjects[0]!.basis.sourceId = 'foreign';
-    expect(f.invoke('paper_illustration_science', invalid, 'invalid')).toEqual({ status: 'invalid_illustration', error: 'unknown_original_source' });
+    expect(f.invoke('paper_illustration_science', invalid, 'invalid')).toEqual({ status: 'invalid_illustration',
+      error: 'unknown_original_source: scenes[0].subjects[0].basis.sourceId must select an exact case-sensitive sourceId from paper_illustration_context. Do not invent or convert IDs.' });
     for (const id of ['first-science', 'revised-science']) {
       expect(f.invoke('paper_illustration_science', science, id)).toEqual({
         ...legacy.invoke('paper_illustration_science', science, id), designGuidance,

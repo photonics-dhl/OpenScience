@@ -3,7 +3,7 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { AiGateway, AnthropicCompatProvider, type ChatMessage, type TextProvider } from '@openscience/ai-gateway';
 import type { DocumentSourceMap } from '@openscience/domain';
 import { createNativeScientificMaterializer } from '../src/extractor';
-import { createNativeSourceReviewTools, LEGACY_NATIVE_SOURCE_REVIEW_TOOLS, NATIVE_SOURCE_REVIEW_TOOLS,
+import { createNativeSourceReviewTools, LEGACY_NATIVE_SOURCE_REVIEW_TOOLS, NATIVE_SOURCE_REVIEW_TOOLS, STAGED_NATIVE_SOURCE_REVIEW_TOOLS,
   nativeSourceReviewToolProfile, runNativeSourceReviewTask } from '../src/native-agent/source-review-task';
 import { createNativeAgentSession, type NativeAgentSessionState } from '../src/native-agent/session';
 import type { runHostedNativeTask } from '../src/native-agent/host-task';
@@ -113,6 +113,69 @@ it.each(['paper-author', 'paper-understanding'] as const)('emits the adopted aut
 });
 const stagedTools = (sourceMap: DocumentSourceMap = map) => createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: authorResult(sourceMap),
   renderPages: async () => [], reviewMode: 'staged' });
+
+describe('actionable Native field repair against complete observed sources', () => {
+  const revised = () => ({ field: 'results', verdict: 'revised', summary: text, sourcePassageIds: ['P00001'],
+    issues: [{ code: 'QUALIFIER_LOSS', problem: 'The draft omitted the stated condition.', sourcePassageIds: ['P00001'] }] });
+  it('reports the exact overlong issue instead of encouraging a rewrite of the valid summary', async () => {
+    const worker = stagedTools(); await worker.call('paper_candidate', {}, 0, 'candidate');
+    const input = revised(); input.issues[0]!.problem = 'x'.repeat(551);
+    const rejected = await worker.call('paper_review_field', input, 1, 'too-long');
+    expect(rejected).toMatchObject({ status: 'invalid_review_field' });
+    expect(rejected.feedback).toContain('issues[0].problem');
+    expect(rejected.feedback).toContain('551'); expect(rejected.feedback).toContain('500');
+    input.issues[0]!.problem = 'The draft omitted the stated condition.';
+    expect((await worker.call('paper_review_field', input, 2, 'fixed')).status).toBe('review_field_saved');
+  });
+  it('distinguishes searched passages from read evidence and identifies the source to read', async () => {
+    const sourceMap: DocumentSourceMap = { ...map, pages: [{ ...map.pages[0]!, blocks: [{ ...map.pages[0]!.blocks[0]!, text: text.repeat(7) }] }, { ...map.pages[0]!, page: 2,
+      blocks: [{ ...map.pages[0]!.blocks[0]!, id: 'qualifier', text: 'Additional condition applies only to this numerical example.' }] }] };
+    const worker = stagedTools(sourceMap); await worker.call('paper_candidate', {}, 0, 'candidate');
+    await worker.call('paper_search', { query: 'Additional' }, 1, 'search');
+    expect(worker.observedPassageIds).toEqual(['P00001']);
+    const input = revised(); input.issues[0]!.sourcePassageIds = ['P00002'];
+    const rejected = await worker.call('paper_review_field', input, 2, 'unread');
+    expect(rejected).toMatchObject({ status: 'invalid_review_field' });
+    expect(rejected.feedback).toContain('issues[0].sourcePassageIds');
+    expect(rejected.feedback).toContain('P00002'); expect(rejected.feedback).toContain('paper_read');
+    expect(await worker.call('paper_read', { passageIds: ['P00002'] }, 3, 'read')).toHaveProperty('passages');
+    expect((await worker.call('paper_review_field', input, 4, 'fixed')).status).toBe('review_field_saved');
+  });
+  it('identifies missing field source IDs without discarding the valid replacement', async () => {
+    const worker = stagedTools(); await worker.call('paper_candidate', {}, 0, 'candidate');
+    const { sourcePassageIds: _ids, ...input } = revised(); void _ids;
+    const rejected = await worker.call('paper_review_field', input, 1, 'missing');
+    expect(rejected).toMatchObject({ status: 'invalid_review_field' });
+    expect(rejected.feedback).toContain('missing sourcePassageIds');
+    expect((await worker.call('paper_review_field', { ...input, sourcePassageIds: ['P00001'] }, 2, 'fixed')).status).toBe('review_field_saved');
+  });
+  it('keeps generic feedback for an old paid staged tool definition', async () => {
+    const oldTool = { ...structuredClone(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.find(tool => tool.name === 'paper_review_field')!),
+      description: 'Original paid independent field decision.' };
+    const profile = nativeSourceReviewToolProfile({ binding: { allowedTools: ['paper_review_field'] },
+      turns: [{ request: { options: { tools: [{ type: 'function', function: oldTool }] } } }] } as unknown as NativeAgentSessionState);
+    expect(profile.fieldFeedback).toBe(false);
+    const worker = createNativeSourceReviewTools({ sourceMap: map, sourceAgentTaskId, sourceResult: authorResult(),
+      renderPages: async () => [], reviewMode: 'staged', fieldFeedback: profile.fieldFeedback });
+    await worker.call('paper_candidate', {}, 0, 'candidate');
+    const input = revised(); input.issues[0]!.problem = 'x'.repeat(551);
+    expect(await worker.call('paper_review_field', input, 1, 'too-long')).toEqual({ status: 'invalid_review_field',
+      feedback: 'revised/blocked requires a complete field decision, read source IDs and source-grounded issues under the existing review contract.' });
+    expect(profile.sourceTools).toEqual([oldTool]);
+    expect(nativeSourceReviewToolProfile(null).fieldFeedback).toBe(true);
+  });
+  it('restores detailed feedback only from its actual saved description', () => {
+    const sourceTools = nativeSourceReviewToolProfile(null).sourceTools;
+    const saved = { binding: { allowedTools: sourceTools.map(tool => tool.name) },
+      turns: [{ request: { options: { tools: sourceTools.map(tool => ({ type: 'function', function: tool })) } } }] } as unknown as NativeAgentSessionState;
+    expect(nativeSourceReviewToolProfile(saved).fieldFeedback).toBe(true);
+    expect(nativeSourceReviewToolProfile(saved).sourceTools).toEqual(sourceTools);
+  });
+  it.each([undefined, []])('does not upgrade a saved staged checkpoint when its actual tool definitions are %j', tools => {
+    const saved = { binding: { allowedTools: ['paper_review_field'] }, turns: [{ request: { options: { tools } } }] } as unknown as NativeAgentSessionState;
+    expect(nativeSourceReviewToolProfile(saved).fieldFeedback).toBe(false);
+  });
+});
 async function stagedReview(claimsDecision: 'unchanged' | 'replace' = 'unchanged', sourceMap: DocumentSourceMap = map) {
   const worker = stagedTools(sourceMap); const messages: ChatMessage[] = [];
   const invoke = async (id: string, name: string, args: unknown) => {

@@ -11,6 +11,16 @@
 3. 验证：先证明新作者路径在旧实现拒绝，再验证实际Gateway/session/tool往返、同键回放无新调用；Domain/API验证正常一次收费、旧私有恢复兼容、父稿/CP/Map/权限变化拒绝、终态与采用重复检查、原稿保持。命令采用现有对应vitest定向入口、包TC/build、scopedlint；仅新增CI文件覆盖必要增量。
 4. 独立High复核实际增量后完成精确CI与正常应用发布，复用未变Native资源。实际一次修订通过原文对照后再建合法新run继续科学/艺术方案；不把接口/fixture成功称为内容正确或普通用户旅程通过。
 
+### 基于实际失败修正工具反馈与阅读顺序
+
+原生修订已实际执行，保存正确但保真失败；完整工具回放重现10次泛化拒收。最小增量只在Worker既有边界：共享字段校验给出失败路径、超长说明的实际长度与未完整读取的原P，指导只修该问题；新paper_review_field描述启用详细反馈，保存的旧描述仍使用原反馈，校验接受集合不变。新来源修订先用已安装openscience-source-review及原文工具理解主线/主机制/条件完整的代表结果，再读取旧稿核对，辅助实现归因后置。没有新的模型阶段、请求字段、科学门禁、资源安装或样本答案。
+
+新反馈测试RED及缺首轮定义升级的High P2两项RED→GREEN已观察；保存模式只认实际首轮description，不能从当前fallback工具推断旧paid采用新行为。源侧及旧review/materializer验证通过，阅读顺序按方法和调用入口审查，不以静态字符串检查声称Agent已遵循。
+
+同一失败planner的完整context和28个旧拒收回执已零外呼回放一致，证明s29原句的表达式数字binding及完整谓词被误拒；s5页码quote、uppercase IDs及qualifies当supports则是正确拒收。通用分镜增量仅为新保存描述识别精确whole expression representation、完整predicate+article和单位；真实/未知单位、错符号/分母/因子保留拒绝。源ID、12..12000 quote及supports错误给具体scene/subject位置，context/原文/关系不改；歧义括号仍拒并提示分号独立比较，不创造自然语言数学外壳规则。旧base/Hz/annotation paid grammar与回执逐字保持，新mode贯穿call/finish和root层。
+
+最终六文件Code High GO、413/413定向、Worker TC/build0及5文件scopedlint0；planner5处ESLint基线严格复现。实际原句两个正向案例新模式通过、旧模式拒绝，错符号/分母仍拒，未调用模型。SDK、根Skill及Native目录不变，复用Ops GO。当前仍未部署，新实际稿保真仍须论文验收；精确CI、部署及受控once状态只见CURRENT。
+
 ## 独立原生核源接续的设计沿革
 
 接入前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判。下述独立角色现已实现并部署；它曾真实执行，但未证明科学全部正确。当前断点只见CURRENT，不能把本节当待重新接入的任务。

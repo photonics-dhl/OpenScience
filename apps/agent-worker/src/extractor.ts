@@ -1389,26 +1389,51 @@ function selectScienceReviewPassages(passages: readonly CanonicalPassage[], prop
   return result.sort((left, right) => left.pageStart - right.pageStart || left.id.localeCompare(right.id));
 }
 
-export function scientificReviewFieldGuard(value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewField {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+/** Explain the existing field contract without changing its accepted values. */
+export function scientificReviewFieldIssue(value: unknown, allowedIds: ReadonlySet<string>): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'field must be one decision object.';
   const item = value as Record<string, unknown>;
-  if (Object.keys(item).sort().join(',') !== 'issues,sourcePassageIds,summary,verdict'
-    || !['accepted', 'revised', 'blocked'].includes(String(item.verdict)) || typeof item.summary !== 'string' || item.summary.length > MAX_CANONICAL_CORE_CHARS
-    || !Array.isArray(item.sourcePassageIds) || item.sourcePassageIds.length > MAX_SOURCE_PASSAGE_IDS
-    || new Set(item.sourcePassageIds).size !== item.sourcePassageIds.length
-    || item.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))
-    || !Array.isArray(item.issues) || item.issues.length > 8) return false;
-  if (item.verdict === 'blocked' ? item.summary !== '' || item.sourcePassageIds.length !== 0 : !item.summary.trim() || item.sourcePassageIds.length === 0) return false;
-  for (const issue of item.issues) {
-    if (!issue || typeof issue !== 'object' || Array.isArray(issue)) return false;
-    const entry = issue as Record<string, unknown>;
-    if (Object.keys(entry).sort().join(',') !== 'code,problem,sourcePassageIds'
-      || !['RELATION_MISMATCH', 'EVIDENCE_TYPE_OVERCLAIM', 'FIELD_MISPLACED', 'QUALIFIER_LOSS', 'PHYSICS_MISINTERPRETATION'].includes(String(entry.code))
-      || typeof entry.problem !== 'string' || !entry.problem.trim() || entry.problem.length > 500
-      || !Array.isArray(entry.sourcePassageIds) || entry.sourcePassageIds.length < 1
-      || entry.sourcePassageIds.some((id) => typeof id !== 'string' || !allowedIds.has(id))) return false;
+  const keys = ['issues', 'sourcePassageIds', 'summary', 'verdict'];
+  if (Object.keys(item).sort().join(',') !== keys.join(',')) {
+    const missing = keys.filter(key => !Object.hasOwn(item, key));
+    return `field requires exactly issues, sourcePassageIds, summary, verdict; ${missing.length ? `missing ${missing.join(', ')}` : 'remove extra properties'}.`;
   }
-  return true;
+  if (!['accepted', 'revised', 'blocked'].includes(String(item.verdict))) return 'verdict must be accepted, revised or blocked.';
+  if (typeof item.summary !== 'string') return 'summary must be a string.';
+  if (item.summary.length > MAX_CANONICAL_CORE_CHARS) return `summary has ${item.summary.length} characters; maximum ${MAX_CANONICAL_CORE_CHARS}. Keep necessary scientific conditions.`;
+  const sourceIssue = (ids: unknown, path: string, maximum?: number): string | null => {
+    if (!Array.isArray(ids)) return `${path} must be an array of fully read source IDs.`;
+    if (maximum !== undefined && ids.length > maximum) return `${path} has ${ids.length} IDs; maximum ${maximum}. Keep evidence for every retained assertion.`;
+    const unread = ids.filter(id => typeof id !== 'string' || !allowedIds.has(id));
+    if (unread.length) return `${path} includes unknown or not fully read IDs: ${unread.slice(0, 6).map(id => typeof id === 'string' && /^P\d{5}$/u.test(id) ? id : '(invalid ID)').join(', ')}. Locate IDs with paper_overview/paper_search, then paper_read the complete passages before citing them; a search excerpt is insufficient.`;
+    return null;
+  };
+  const fieldSourceIssue = sourceIssue(item.sourcePassageIds, 'sourcePassageIds', MAX_SOURCE_PASSAGE_IDS);
+  if (fieldSourceIssue) return fieldSourceIssue;
+  const ids = item.sourcePassageIds as unknown[];
+  if (new Set(ids).size !== ids.length) return 'sourcePassageIds contains duplicate IDs; use each source ID once.';
+  if (!Array.isArray(item.issues) || item.issues.length > 8) return 'issues must be an array with at most 8 source-grounded issues.';
+  if (item.verdict === 'blocked') {
+    if (item.summary !== '' || ids.length !== 0) return 'blocked requires summary="" and sourcePassageIds=[]; put the source-grounded reason in issues.';
+  } else if (!item.summary.trim() || ids.length === 0) return 'summary and sourcePassageIds must be nonempty for a retained field.';
+  for (const [index, issue] of item.issues.entries()) {
+    const path = `issues[${index}]`;
+    if (!issue || typeof issue !== 'object' || Array.isArray(issue)) return `${path} must be an issue object.`;
+    const entry = issue as Record<string, unknown>;
+    if (Object.keys(entry).sort().join(',') !== 'code,problem,sourcePassageIds') return `${path} requires exactly code, problem, sourcePassageIds.`;
+    if (!['RELATION_MISMATCH', 'EVIDENCE_TYPE_OVERCLAIM', 'FIELD_MISPLACED', 'QUALIFIER_LOSS', 'PHYSICS_MISINTERPRETATION'].includes(String(entry.code)))
+      return `${path}.code must be one of the advertised source-fidelity issue codes.`;
+    if (typeof entry.problem !== 'string' || !entry.problem.trim()) return `${path}.problem must explain the source-grounded difference.`;
+    if (entry.problem.length > 500) return `${path}.problem has ${entry.problem.length} characters; maximum 500. Shorten only the issue explanation, retaining the difference and source IDs.`;
+    const issueSourceIssue = sourceIssue(entry.sourcePassageIds, `${path}.sourcePassageIds`);
+    if (issueSourceIssue) return issueSourceIssue;
+    if ((entry.sourcePassageIds as unknown[]).length < 1) return `${path}.sourcePassageIds must include the fully read source for this issue.`;
+  }
+  return null;
+}
+
+export function scientificReviewFieldGuard(value: unknown, allowedIds: ReadonlySet<string>): value is ScientificReviewField {
+  return scientificReviewFieldIssue(value, allowedIds) === null;
 }
 
 function scientificReviewGuard(
