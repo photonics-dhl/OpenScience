@@ -4,7 +4,7 @@
 
 ## 本轮检查点
 
-- thinking-only完整回复丢失定位到Gateway空响应异常，保存代码已High/精确CI通过但未部署。实际SDK又实证placeholder改字/prefill删paid；新只读副本的单点兼容已通过10场零外呼、Gateway92/Session82及构建/静态检查，Host空finish已真实Linux RED→GREEN15项、combined代码High GO；精确CI/发布及科学实际验证待完成。原失败不重发，科学/全链仍未验收。详见CURRENT。
+- thinking-only保存与实际SDK单点接续已combined High/精确CI通过并正常发布；导入自产pycache安装故障已明确定位、按独立ops GO恢复，同SHA新Native配对和原限额后验通过。一次普通原论文作者→独立审阅→计划验证已实际创建，正在跟踪；科学/计划/全链仍待验收，Synclip关闭，失败/未知不重发。导入源修复High GO/独立子进程RED→GREEN5/5，guard未放宽。版本、任务与证据只见CURRENT。
 
 - 原作者科学NO-GO/独立审阅失败保留。纯数组兼容与读者方法修复已通过定向/High/精确CI并正常发布、同源Native配对，发布树归档。新实际作者5m24s/22帧技术成功，但独立审阅仍遗漏工具而失败；数组修复未消除主故障，正文凝练目标也未完全体现，没有正式科学稿/计划。独立原文验收NO-GO；原子审阅复用候选已实现并经独立代码High GO，source73/science119及相关session/工具通过、TC/lint0；已正常发布/精确CI通过，复用既有Native；新正常验证只创建一次，作者约3m05s再次遗漏调用/空响应失败，未进入新的独立审阅；科学/计划未通过，转SDK/API协议定位，不重开旧任务。Synclip应用/Key就绪但disabled/无生图请求；全链科学与图片质量未验收。精确任务、版本、证据和下一步只见CURRENT。
 

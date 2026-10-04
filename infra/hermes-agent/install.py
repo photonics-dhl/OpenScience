@@ -10,6 +10,10 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
+
+# Importing a local helper must not add unmanifested files to the immutable release.
+sys.dont_write_bytecode = True
 from sdk_compat import patch_native_sdk_continuation
 
 ROOT = Path('/opt/openscience-hermes')

@@ -24,7 +24,9 @@ UDS回归在Linux运行，Windows跳过；broker inode/mode攻击回归需要Lin
 
 前置：source候选独立High与精确CI通过，按现有deploy脚本完成干净已推SHA的构建/启动；先保留当前生产和回退身份。安装前timer/broker/原生任务须自然排空，不能停止活动论文进程。已有原生任务时须保留原marker绑定的运行时与Skill目录，不能用新配置冒充旧执行。
 
-受控构建后从该不可变release生成现有`release-input-manifest.mjs runtime-snapshot`收据，root保存且禁止普通用户修改；安装器先验证source与这一既有runtime收据，再执行已构建科学方法导出。`install.py --source /opt/openscience-releases/<FULL_SHA> --runtime-snapshot <PROTECTED_BUILD_RECEIPT> --defer-timer`只复制服务器已安装Agent/依赖及项目Skills，不下载依赖、不改全局记忆、不调用模型。快照链接限本副本或已挂载的只读系统依赖。
+受控构建后从该不可变release生成现有`release-input-manifest.mjs runtime-snapshot`收据，root保存且禁止普通用户修改；安装器先验证source与这一既有runtime收据，再执行已构建科学方法导出。`python3 -B install.py --source /opt/openscience-releases/<FULL_SHA> --runtime-snapshot <PROTECTED_BUILD_RECEIPT> --defer-timer`只复制服务器已安装Agent/依赖及项目Skills，不下载依赖、不改全局记忆、不调用模型。快照链接限本副本或已挂载的只读系统依赖。
+
+入口在导入本地helper前禁写bytecode，避免向已验证release新增缓存；建议同时以`python3 -B`运行。校验前失败可能尚无`previous/state.json`，须核实原unit/runtime/timer再恢复，不能假定backup已经生成或重建manifest掩盖额外文件。
 
 安装始终defer：原units、非秘密`runtime.env`及timer enable/active状态保存在release的`previous/`。随后用相同release Compose重建API/Worker，确认启动健康、它们的非秘密runtime/catalogue身份和Worker inbox挂载，再启动固定`openscience-hermes-broker.timer`。只有此后允许新产品动作创建原生任务；旧未标记任务仍沿原路径。
 

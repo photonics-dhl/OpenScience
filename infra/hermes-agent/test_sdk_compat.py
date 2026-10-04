@@ -1,6 +1,10 @@
 """Snapshot layout rejection and observable native empty-branch behavior."""
 from copy import deepcopy
 from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -71,6 +75,29 @@ class SdkCompatibilityTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_installer_entrypoint_does_not_add_bytecode_to_verified_source(self):
+        entry = self.runtime/'installer-source'
+        entry.mkdir()
+        for name in ['install.py', 'sdk_compat.py']:
+            shutil.copyfile(Path(__file__).with_name(name), entry/name)
+        before = {p.name: p.read_bytes() for p in entry.iterdir()}
+        # Execute the entrypoint as production does, without -B or inherited bytecode flags.
+        # fcntl is never called by --help; this import-only stub permits the same check on Windows.
+        bootstrap = (
+            'import os, runpy, sys, types; '
+            'sys.path.insert(0, sys.argv[1]); '
+            'sys.modules.update({"fcntl": types.ModuleType("fcntl")} if os.name == "nt" else {}); '
+            'sys.argv = [sys.argv[1] + "/install.py", "--help"]; '
+            'runpy.run_path(sys.argv[0], run_name="__main__")'
+        )
+        environment = {key: os.environ[key] for key in ['PATH', 'SYSTEMROOT', 'WINDIR'] if key in os.environ}
+        result = subprocess.run([sys.executable, '-c', bootstrap, str(entry)], cwd=entry,
+                                env=environment, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--runtime-snapshot', result.stdout)
+        self.assertEqual(sorted(p.relative_to(entry).as_posix() for p in entry.rglob('*')), sorted(before))
+        self.assertEqual({p.name: p.read_bytes() for p in entry.iterdir()}, before)
 
     def agent(self, model='MiniMax-M3', turns=3):
         namespace = {}
