@@ -7,6 +7,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from test_sdk_compat import native_fixture_source
 if os.name == 'posix':
     import install
 
@@ -27,7 +28,8 @@ class InstallLifecycleTests(unittest.TestCase):
         for name in install.ART_SKILLS:
             (skills/name).mkdir(); (skills/name/'SKILL.md').write_text('fixture art resource')
         self.native = self.folder/'installed-agent'; self.native.mkdir()
-        (self.native/'run_agent.py').write_text('fixture installed native entry')
+        (self.native/'run_agent.py').write_text(native_fixture_source(), encoding='utf-8')
+        (self.native/'pyproject.toml').write_text('[project]\nversion = "0.10.0"\n', encoding='utf-8')
         python = self.native/'.venv/bin/python'; python.parent.mkdir(parents=True)
         python.write_text('fixture existing interpreter'); python.chmod(0o755)
         (self.native/'skills').mkdir(); (self.native/'skills/method.md').write_text('fixture installed skill')
@@ -123,6 +125,20 @@ class InstallLifecycleTests(unittest.TestCase):
         self.assertFalse(any(event[:2] == ('systemctl','start') for event in self.events))
         self.assertEqual((self.root/'releases'/self.source.name/'runtime/run_agent.py').stat().st_mode & 0o222, 0)
         self.assertTrue(any(event[0] == 'node' and 'runtime-verify' in event for event in self.events))
+        runtime = self.root/'releases'/self.source.name/'runtime'
+        self.assertEqual(receipt['runtimeId'], 'installed-native-continuation-'+self.source.name)
+        self.assertEqual((runtime/'.runtime-id').read_text().strip(), receipt['runtimeId'])
+        self.assertIn('OpenScience controlled thinking-only continuation', (runtime/'run_agent.py').read_text())
+        self.assertEqual((self.native/'run_agent.py').read_text(), native_fixture_source())
+
+    def test_unknown_sdk_layout_rejects_before_runtime_identity_and_restores_existing_installation(self):
+        (self.native/'run_agent.py').write_text('print("unknown upstream layout")\n')
+        with self.assertRaisesRegex(ValueError, 'flow anchor'):
+            install.install(self.source, self.snapshot)
+        self.assert_old_files()
+        self.assertTrue(self.active)
+        self.assertEqual(self.layers, {'runtime'})
+        self.assertFalse((self.root/'releases'/self.source.name/'runtime/.runtime-id').exists())
 
 
 if __name__ == '__main__': unittest.main()

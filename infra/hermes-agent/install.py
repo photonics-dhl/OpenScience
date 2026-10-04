@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from sdk_compat import patch_native_sdk_continuation
 
 ROOT = Path('/opt/openscience-hermes')
 NATIVE = Path('/opt/hermes-agent')
@@ -168,7 +169,8 @@ def install(source, runtime_snapshot, defer_timer=True):
                         copy_resources(NATIVE/name, runtime/name)
                 if not (runtime/'.venv/bin/python').exists() or not (runtime/'run_agent.py').is_file():
                     raise ValueError('The installed native Python runtime is incomplete')
-                runtime_id = f'installed-native-{sha}'
+                patch_native_sdk_continuation(runtime)
+                runtime_id = f'installed-native-continuation-{sha}'
                 catalogue_id = f'project-catalogue-{sha}'
                 (runtime/'.runtime-id').write_text(runtime_id+'\n')
                 catalogue = release/'catalogue'

@@ -118,6 +118,99 @@ function successfulHttpResponse(outputTokens = 10) {
 }
 
 describe('received thinking-only Native turns remain paid evidence, never scientific completion', () => {
+  it.each(['tool_use', 'end_turn'] as const)('lets a new immutable runtime consume %s and retain exact history across process replay', async stopReason => {
+    const content = [{ type: 'thinking', thinking: 'Unfinished private model reasoning.', signature: 'unchanged-signature' }];
+    const f = httpSessionFixture(async attempt => attempt === 1 ? new Response(JSON.stringify({ model: binding.model, content,
+      stop_reason: stopReason, usage: { input_tokens: 20, output_tokens: 37 } })) : successfulHttpResponse());
+    const limits = { runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000 };
+    const received = await f.create(limits).complete(request);
+    expect(received.choices[0].message.content).toBe('');
+    expect(received.choices[0].message.tool_calls).toBeUndefined();
+    const original = f.state;
+    const restarted = f.create(limits);
+    expect(await restarted.complete(request)).toEqual(received);
+    expect(f.calls).toHaveLength(1); expect(f.state).toEqual(original);
+    const continued = { ...request, messages: [...request.messages, received.choices[0].message,
+      { role: 'user', content: 'Continue the original task from its saved source results.' }] };
+    const final = await restarted.complete(continued);
+    expect(final.choices[0].message.content).toBe('source checked');
+    expect(f.calls).toHaveLength(2); expect(f.fallbackCalls).toBe(0);
+    expect(JSON.parse(f.calls[1]!.body).messages.find((message: { role: string }) => message.role === 'assistant').content).toEqual(content);
+    expect(f.state?.turns[0]?.response).toEqual(original?.turns[0]?.response);
+    expect(f.state?.turns[0]?.target).toEqual(original?.turns[0]?.target);
+    expect(f.state?.initialMessages).toEqual(original?.initialMessages);
+  });
+
+  it('keeps a subsequent thinking-only reply separate from the existing one missing-call correction', async () => {
+    const f = httpSessionFixture(async attempt => attempt === 3 ? successfulHttpResponse() : new Response(JSON.stringify({
+      model: binding.model, content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: `exact-${attempt}` },
+        ...(attempt === 1 ? [{ type: 'text', text: 'Preparing the next source call.' }] : [])],
+      stop_reason: 'tool_use', usage: { input_tokens: 20, output_tokens: 37 } })));
+    const session = f.create({ runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000 });
+    const first = await session.complete(request);
+    const secondRequest = { ...request, messages: [...request.messages, first.choices[0].message,
+      { role: 'user', content: 'Continue with the intended source call.' }] };
+    const second = await session.complete(secondRequest);
+    expect(second.choices[0].message.content).toBe('');
+    const final = await session.complete({ ...request, messages: [...secondRequest.messages, second.choices[0].message,
+      { role: 'user', content: 'Continue from the existing saved results.' }] });
+    expect(final.choices[0].message.content).toBe('source checked');
+    expect(f.calls).toHaveLength(3); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it.each(['pause_turn', 'missing'] as const)('keeps unsupported thinking stop %s saved but unavailable to the new runtime', async stopReason => {
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model,
+      content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }],
+      stop_reason: stopReason, usage: { input_tokens: 20, output_tokens: 37 } })));
+    await expect(f.create({ runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000 })
+      .complete(request)).rejects.toThrow('no visible completion or tool call');
+    expect(f.state?.turns[0]?.state).toBe('completed'); expect(f.calls).toHaveLength(1);
+  });
+
+  it('does not give an old or malformed runtime identity new continuation semantics', async () => {
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model,
+      content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }],
+      stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: 37 } })));
+    await expect(f.create({ runtimeId: 'installed-native-continuation-not-a-release', deadlineAt: Date.now() + 10_000 })
+      .complete(request)).rejects.toThrow('no visible completion or tool call');
+    expect(f.calls).toHaveLength(1); expect(f.state?.turns[0]?.state).toBe('completed');
+  });
+
+  it('a thinking-only reply consumes the original call/output budget without creating a fresh reservation', async () => {
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model,
+      content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }],
+      stop_reason: 'tool_use', usage: { input_tokens: 20, output_tokens: 37 } })));
+    const session = f.create({ runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000,
+      maxTurns: 1, maxTotalOutputTokens: 37 });
+    const received = await session.complete(request);
+    await expect(session.complete({ ...request, messages: [...request.messages, received.choices[0].message,
+      { role: 'user', content: 'Continue.' }] })).rejects.toThrow('budget exhausted');
+    expect(f.calls).toHaveLength(1); expect(f.fallbackCalls).toBe(0); expect(f.state?.turns).toHaveLength(1);
+  });
+
+  it('new thinking continuation still requires the exact original paid signature before another HTTP call', async () => {
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model,
+      content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }],
+      stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: 37 } })));
+    const session = f.create({ runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000 });
+    const received = await session.complete(request);
+    const altered = structuredClone(received.choices[0].message);
+    altered.reasoning_details![0]!.provider_content.content[0]!.signature = 'altered';
+    await expect(session.complete({ ...request, messages: [...request.messages, altered,
+      { role: 'user', content: 'Continue.' }] })).rejects.toThrow('history');
+    expect(f.calls).toHaveLength(1); expect(f.fallbackCalls).toBe(0);
+  });
+
+  it('new thinking continuation cannot consume a reply after authority is revoked', async () => {
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model,
+      content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }],
+      stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: 37 } })));
+    f.hooks.afterComplete = () => f.revoke();
+    await expect(f.create({ runtimeId: `installed-native-continuation-${'a'.repeat(40)}`, deadlineAt: Date.now() + 10_000 })
+      .complete(request)).rejects.toThrow('authority revoked');
+    expect(f.state?.turns[0]?.state).toBe('completed'); expect(f.calls).toHaveLength(1);
+  });
+
   it.each(['tool_use', 'end_turn'] as const)('retains the actual %s reply before stopping and replays without HTTP', async stopReason => {
     const content = [{ type: 'thinking', thinking: 'Unfinished private model reasoning.', signature: 'unchanged-signature' }];
     const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model, content,

@@ -76,14 +76,26 @@ export function nativeAgentHasMissingToolCall(completion: GatewayCompletion): bo
     && blocks.every(block => block.type === 'thinking' || block.type === 'text');
 }
 
+/** A complete received thinking-only reply can continue inside a compatible immutable native runtime. */
+export function nativeAgentHasThinkingOnlyResponse(completion: GatewayCompletion): boolean {
+  const opaque = completion.providerContent;
+  return completion.model === 'MiniMax-M3' && completion.text === '' && completion.toolCalls === undefined && !!opaque?.content.length
+    && opaque.provider === completion.provider && opaque.model === completion.model
+    && opaque.content.every(block => block.type === 'thinking' && typeof block.thinking === 'string' && !!block.thinking.trim())
+    && [completion.usage.inputTokens, completion.usage.outputTokens].every(tokens => Number.isSafeInteger(tokens) && tokens >= 0)
+    && (completion.providerStopReason === 'tool_use' && completion.finishReason === 'other'
+      || completion.providerStopReason === 'end_turn' && completion.finishReason === 'stop');
+}
+
 /** SDK extra field is preserved by the installed native _build_assistant_message; no extracted thinking text is needed. */
 export function nativeAgentSdkResponse(completion: GatewayCompletion, requestId: string) {
-  const missingToolCall = nativeAgentHasMissingToolCall(completion);
-  if (!completion.toolCalls && !missingToolCall && completion.finishReason !== 'stop' && completion.finishReason !== 'length')
+  const incompleteToolUse = nativeAgentHasMissingToolCall(completion)
+    || nativeAgentHasThinkingOnlyResponse(completion) && completion.providerStopReason === 'tool_use';
+  if (!completion.toolCalls && !incompleteToolUse && completion.finishReason !== 'stop' && completion.finishReason !== 'length')
     throw new TextProviderError('provider_response_shape', 'Unsupported native agent SDK response');
   return {
     id: requestId, object: 'chat.completion', created: 0, model: completion.model,
-    choices: [{ index: 0, finish_reason: completion.finishReason === 'length' ? 'length' : completion.toolCalls || missingToolCall ? 'tool_calls' : 'stop',
+    choices: [{ index: 0, finish_reason: completion.finishReason === 'length' ? 'length' : completion.toolCalls || incompleteToolUse ? 'tool_calls' : 'stop',
       message: { role: 'assistant', content: completion.text,
         ...(completion.toolCalls ? { tool_calls: completion.toolCalls } : {}),
         ...(completion.providerContent ? { reasoning_details: [{ type: 'openscience-provider-content', provider_content: completion.providerContent }] } : {}),

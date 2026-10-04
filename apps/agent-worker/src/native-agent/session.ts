@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, type AiGateway, type GatewayCompletion,
+import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse, type AiGateway, type GatewayCompletion,
   type ChatMessage, type TextGenerationOptions } from '@openscience/ai-gateway';
 
 export interface NativeAgentSessionBinding {
@@ -186,14 +186,17 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       if (result.model !== binding.model) blocked('provider reported a different model');
       if (result.usage.outputTokens > responseAllowance) blocked('provider exceeded reserved output budget');
       if (result.finishReason === 'length') blocked('output truncated; no automatic paid correction');
+      // The matching new SDK snapshot retains this reply in its own loop; old immutable runtimes still stop.
+      const nativeThinking = /^installed-native-continuation-[a-f0-9]{40}$/u.test(binding.runtimeId)
+        && nativeAgentHasThinkingOnlyResponse(result);
       // completed above means the actual paid reply was saved, not that the Agent finished its work.
-      if (!result.text.trim() && !result.toolCalls?.length)
+      if (!result.text.trim() && !result.toolCalls?.length && !nativeThinking)
         blocked('provider returned no visible completion or tool call; original paid response retained');
       if (nativeAgentHasMissingToolCall(result)) {
         // Count the original paid prefix, including on replay. Restarting a process grants no second correction.
         if (state?.turns.slice(0, cursor).some(turn => turn.state === 'completed' && nativeAgentHasMissingToolCall(turn.response)))
           blocked('provider omitted a tool call again; original paid responses retained');
-      } else if (!result.toolCalls?.length && result.finishReason !== 'stop')
+      } else if (!result.toolCalls?.length && result.finishReason !== 'stop' && !nativeThinking)
         blocked('provider response has no valid completion or tool call; original paid response retained');
       cursor++;
       return nativeAgentSdkResponse(result, `${binding.taskId}:native-turn:${cursor}`);

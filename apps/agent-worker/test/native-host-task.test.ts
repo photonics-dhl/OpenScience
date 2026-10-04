@@ -18,7 +18,7 @@ function post(socketPath: string, path: string, value: unknown) {
     request.on('error', reject); request.end(JSON.stringify(value));
   });
 }
-async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3) {
+async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3, thinkingOnly = false) {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
   let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
   const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, options) => {
@@ -27,10 +27,12 @@ async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 
     return new Response(JSON.stringify({ model: 'MiniMax-M3', content: first ? [
       { type: 'thinking', thinking: 'x'.repeat(3000), signature: 'private' }, { type: 'text', text: 'x'.repeat(3000) },
       { type: 'tool_use', id: 'read-1', name: 'paper_read', input: { passageIds: ['P00001'] } },
-    ] : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : stopReason, usage: { input_tokens: 5, output_tokens: 5 } }));
+    ] : thinkingOnly ? [{ type: 'thinking', thinking: 'Unfinished private reasoning.', signature: 'original' }]
+      : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : stopReason, usage: { input_tokens: 5, output_tokens: 5 } }));
   });
   const binding = { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
-    runtimeId: 'fixture', skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
+    runtimeId: thinkingOnly ? `installed-native-continuation-${'a'.repeat(40)}` : 'fixture',
+    skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
     maxTurns, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + 20_000 };
   const store = { async read() { return structuredClone(state); }, async compareAndSet(_expected: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async complete(_started: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
@@ -52,6 +54,27 @@ async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
+  it('never completes from an empty thinking-only reply even when its saved provider stop is end_turn', async () => {
+    const f = await fixture('', 'end_turn', 3, true);
+    try {
+      const first = await post(f.socketPath, '/v1/chat/completions', f.sdk);
+      const args = { passageIds: ['P00001'] };
+      await post(f.socketPath, '/task/tools/authorize', { name: 'paper_read', arguments: args });
+      const read = await post(f.socketPath, '/task/tools/call', { name: 'paper_read', arguments: args });
+      const message = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
+      const thinking = await post(f.socketPath, '/v1/chat/completions', { ...f.sdk, messages: [...f.sdk.messages, message,
+        { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(read.body) }] });
+      expect(thinking.status).toBe(200);
+      expect(f.state.turns.at(-1)).toMatchObject({ state: 'completed', response: {
+        text: '', finishReason: 'stop', providerStopReason: 'end_turn', providerContent: {
+          content: [{ type: 'thinking', thinking: 'Unfinished private reasoning.', signature: 'original' }] } } });
+      const saved = structuredClone(f.state);
+      expect((await post(f.socketPath, '/task/finish', { status: 'completed', finalResponse: '' })).status).toBe(409);
+      await expect(f.final).rejects.toThrow('stopped');
+      expect(f.state).toEqual(saved); expect(f.providerCalls).toBe(2);
+    } finally { await f.cleanup(); }
+  });
+
   it.each(['exhausted', 'remaining', 'started', 'changed_binding', 'unknown_status', 'completed_without_response'] as const)('classifies stopped using its trusted completed turn budget: %s', async condition => {
     const f = await fixture('final', 'end_turn', condition === 'remaining' ? 3 : 1);
     try {

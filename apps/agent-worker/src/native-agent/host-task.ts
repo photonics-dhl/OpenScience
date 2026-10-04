@@ -103,7 +103,8 @@ export async function runHostedNativeTask(input: {
         if (value.status === 'completed' && typeof value.finalResponse === 'string') {
           const state = await input.store.read(); const last = state?.turns.at(-1);
           // Native run_conversation trims its returned presentation text. Retain the original paid bytes.
-          if (!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.text.trim() !== value.finalResponse
+          if (!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || !last.response.text.trim()
+            || last.response.text.trim() !== value.finalResponse
             || last.response.model !== input.config.model || last.target.model !== input.config.model
             || last.response.toolCalls?.length || slots.length) blocked();
           settled = true; respond(res, 200, { received: true });

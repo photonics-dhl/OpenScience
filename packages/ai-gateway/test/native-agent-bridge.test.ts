@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { nativeAgentSdkRequest, nativeAgentSdkResponse } from '../src/native-agent-bridge';
+import { nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasThinkingOnlyResponse } from '../src/native-agent-bridge';
 import { AnthropicCompatProvider } from '../src/provider';
 
 const tools = [{ type: 'function', function: { name: 'skills_list', parameters: { type: 'object', properties: {} } } }];
@@ -9,7 +9,41 @@ const continuation = { provider: 'm3', model: 'MiniMax-M3', content: [{ type: 't
   { type: 'tool_use', id: 'call-1', name: 'skills_list', input: {} }] };
 const calls = [{ id: 'call-1', type: 'function', function: { name: 'skills_list', arguments: '{}' } }];
 
+describe('thinking-only native continuation identity', () => {
+  const received = { text: '', provider: 'm3', model: 'MiniMax-M3', promptHash: 'test',
+    usage: { inputTokens: 20, outputTokens: 37 }, finishReason: 'other' as const, providerStopReason: 'tool_use' as const,
+    providerContent: { provider: 'm3', model: 'MiniMax-M3', content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'exact' }] } };
+  it.each([
+    { text: '(empty)' }, { text: ' ' }, { toolCalls: [] }, { finishReason: 'length' as const },
+    { providerStopReason: 'pause_turn' as const }, { providerStopReason: 'end_turn' as const },
+    { providerContent: undefined }, { providerContent: { ...received.providerContent, model: 'another-model' } },
+    { model: 'MiniMax-M2', providerContent: { ...received.providerContent, model: 'MiniMax-M2' } },
+    { providerContent: { ...received.providerContent, provider: 'another-provider' } },
+    ...[[], [{ type: 'thinking', thinking: '' }], [{ type: 'thinking', thinking: ' ' }],
+      [{ type: 'redacted_thinking', data: 'redacted' }], [{ type: 'thinking', thinking: 'Opaque' }, { type: 'text', text: '' }]]
+      .map(content => ({ providerContent: { ...received.providerContent, content } })),
+    ...[-1, 0.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1].map(outputTokens => ({ usage: { ...received.usage, outputTokens } })),
+  ])('does not grant native thinking continuation for incompatible evidence %j', patch => {
+    expect(nativeAgentHasThinkingOnlyResponse({ ...received, ...patch })).toBe(false);
+  });
+  it('counts an explicitly reported zero-token thinking reply as a received turn', () => {
+    expect(nativeAgentHasThinkingOnlyResponse({ ...received, usage: { inputTokens: 0, outputTokens: 0 } })).toBe(true);
+  });
+});
+
 describe('real native SDK messages at the private Gateway bridge', () => {
+  it.each(['tool_use', 'end_turn'] as const)('passes the actual thinking-only %s response to the native loop without inventing a call', reason => {
+    const providerContent = { ...continuation, content: [{ type: 'thinking', thinking: 'Unfinished opaque reasoning.', signature: 'exact' }] };
+    const result = nativeAgentSdkResponse({ text: '', provider: 'm3', model: 'MiniMax-M3', promptHash: 'thinking-only',
+      usage: { inputTokens: 334, outputTokens: 353 }, finishReason: reason === 'tool_use' ? 'other' : 'stop',
+      providerStopReason: reason, providerContent }, 'received-turn');
+    expect(result.choices[0].finish_reason).toBe(reason === 'tool_use' ? 'tool_calls' : 'stop');
+    expect(result.choices[0].message.content).toBe('');
+    expect(result.choices[0].message.tool_calls).toBeUndefined();
+    expect(result.choices[0].message.reasoning_details?.[0]?.provider_content).toEqual(providerContent);
+    expect(result.usage.completion_tokens).toBe(353);
+  });
+
   it('preserves a confirmed missing tool-call response as incomplete tool use, never a final stop or fabricated call', () => {
     const providerContent = { ...continuation, content: [{ type: 'thinking', thinking: 'opaque', signature: 'unchanged' },
       { type: 'text', text: 'Preparing the saved draft.' }] };
