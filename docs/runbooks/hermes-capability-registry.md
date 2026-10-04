@@ -4,8 +4,8 @@
 
 ## 原生Agent当前入口与消费断点
 - 默认入口复用完整PDF/OCR/SourceMap，实际NousResearch Hermes Agent＋MiniMax-M3选择paper_read/search/view和已装openscience-source-review，凝练六维/Claims并自校转述，再走原生科学分镜/设计/风格。论文是内容依据，不评议论文自身有效性；scientific-critical-thinking的完整专项方法仍保留给另行请求。SourceMap、隔离science-worker、既有来源/权限/收费/paid恢复守卫继续复用。
-- 实际最新原文写稿2m27s完成，新的中文/Reader组织及subset/budget描述确实送达；没有看原页，仍抄公式/多案例，六字段及选中Claims有碰撞/发射角、速度条件方向、跨案例产额和范围失真。终态与实际保存一致，不是缺Skill安装、缺源或保存丢失；未接分镜，不称前置或全链完成。真实结果、身份、报告和禁止重放的once只见CURRENT。
-- 具体消费缺口：默认openscience-source-review仅泛化提示对象/方向/条件，现成双方向角度、宽度对象/定义、算例依赖与披露层级仅在专项critical入口。候选以同源常量补入默认保真流程，不默认评议论文；Source单独v6、critical/static/art仍v5，旧paid/预算/守卫不变。版本只标资源内容，正常immutable目录切换后才能称实际安装；来源忠实程度仍须真实产物验收。
+- 上一份原文写稿2m27s完成，新的中文/Reader组织及subset/budget描述确实送达；没有看原页，仍抄公式/多案例，六字段及选中Claims有碰撞/发射角、速度条件方向、跨案例产额和范围失真。终态与实际保存一致，不是缺源或保存丢失；未接分镜，不称前置或全链完成。v6新source-only执行中；真实结果、身份、报告和禁止重放的once只见CURRENT。
+- 已补接具体消费缺口：默认openscience-source-review过去仅泛化提示，现以同源常量直接复用双方向角度、宽度对象/定义、算例依赖与披露层级，不默认评议论文；Source单独v6、critical/static/art仍v5，旧paid/预算/守卫不变。版本只标资源内容；正常immutable目录切换后已实际读回完整正文及引用全等，新任务效果仍须真实产物验收。
 - 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。已部署增量仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
 - 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
 - Synclip应用接线与私密Key保存完成，host尚未启用、调用为0；科学方案/完整prompt/风格、像素核源、普通用户旅程与跨论文稳定性仍待真实验收。有效科学/设计Skill、历史paid消费者及共同守卫有引用，不能因新默认入口改变而整块删除；完成自有stage可确认后归档，用户资产/回滚/失败证据保留。
