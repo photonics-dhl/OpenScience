@@ -100,7 +100,7 @@
 | 单机资源保护 | 核心容器上限、Redis384MiB/noeviction和4GiB持久swap已落实；浏览器/诊断仍重，Portainer未限，峰值资源未完全解决 |
 | 数据备份 | DB每日定时仍执行，最新03:00集合存在；967对象已逻辑导出及逐文件验证。对象定时尚未启用，当前全量隔离恢复未通过验收 |
 | 异机副本 | 用户尚无外部存储；真实备份加密/传输/恢复未执行，已有crypto暂停要求继续有效 |
-| 磁盘保留策略 | 已完成85目录/300旧标签/73 sidecar清理，应用精确两版。正常发布恢复prune-unused1，RED→GREEN及独立High GO、精确CI37172325083 success；下一次正常发布由生图会话执行，需其实际后验才能称持续策略已线上观察 |
+| 磁盘保留策略 | 已完成85目录/300旧标签/73 sidecar清理。恢复正常发布prune-unused1，RED→GREEN、High GO、精确CI37172325083 success；随后正常部署exit0且PREPARE/COMPLETE成功，11:13实读发布目录仍精确两版、pending/journal/failed均无，持续策略已首次线上观察 |
 | 监控告警 | Netdata与邮件投递有历史成功记录；独立于本机的可用性、备份失败和欠费告警未完成验收 |
 | 测试环境/扩容 | 独立隔离测试站与后台多副本去重尚未完成；现有worker保持单实例，不直接复制 |
 | 账号依赖/论文质量 | Synclip应用接线已部署但真实API生图未验收；论文链有仍未解决的真实科学/工具响应问题，不以healthy代替质量 |
@@ -110,3 +110,5 @@
 手动H3执行入口已从旧应用目录脱离，20文件/216317B Gateway复用复制到既有独立video bundle，稳定入口 `/opt/openscience-video/cloud`。旧应用源码删除后实际Node导入再次通过，0付费请求；原Native运行包和catalogue未替换。额外探测的历史Codex配置runtime路径不存在，未在此前六个闭合目录扫描内、也未被retention触及；不能据此宣称本次误删或Codex真实生成已验收。独立High收尾复核及具体元数据见post-cleanup.json、post-inventory.json、docker-df-after.json。
 
 长期做法：发布成功后自动保留两版，失败保留可恢复事务并告警；数据/模型/浏览器状态与发布目录分离，已装执行器按自身依赖维护。日常缓存维护继续复用现有timer，不能代替release/tag保留。生产容器日志轮转、开发历史数据保留/迁出仍需单独落实，不能以本次释放42GiB宣称所有增长源已消失。
+
+11:13下一次正常发布后根盘仍54%，可用66.23GiB；正常发布的PREPARE/COMPLETE及部署exit0由生图发布owner确认，目录仅新发布与前一版，不再保留原旧回滚目录。Native同源配对由该会话继续，实际应用/Native身份与最新后验只在CURRENT记录；11:03的25容器身份比较是本次清盘边界，不冒称新部署后容器完全未变。证据normal-publish-metadata.json及发布owner的正常部署收据。
