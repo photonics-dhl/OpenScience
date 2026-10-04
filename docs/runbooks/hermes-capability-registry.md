@@ -3,12 +3,13 @@
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
+- 用户10-04纠正优先：默认理解/图解以论文作者的内容为依据，只核我们的转述和视觉表达保真度；不评议原论文科学有效性/质量/创新性。旧Appraisal路由及“科学NO-GO”混合目的记录降为历史；实际条件、符号、范围和空间位置的转述失真仍是有效问题。当前候选复用openscience-source-review负责理解和自校，scientific-critical-thinking完整方法保留给另行请求的评议；真实作者自校复用原ready/确认/CAS、艺术资料后置，不增模型阶段。部署与验证以CURRENT为准。
 
 Native论文任务的计算执行缺口已定向确认：paper-task/nativeSourceReviewToolProfile白名单只有Skill、论文读取和提交工具，task_runtime按白名单注册；scientific-critical-thinking方法文本不会自动提供Python。已有science-worker通过claimNextPendingSandboxJob、checkPythonAST和SandboxController执行NumPy/SciPy/SymPy（仅源码能力，未新增线上探针），现有sandbox-jobs要求workspace membership与Python配额。Native task/run/source/lease绑定与可靠幂等尚缺，不能直接裸调Domain作为授权；应补适配复用隔离后端，不开放主机terminal。实际新稿仍有推理/范围错误，不能把缺计算器当唯一根因；精确结果见CURRENT。
 
 新论文任务由NousResearch AIAgent/MiniMax-M3通过Worker native-agent/paper-task.ts执行；复用SourceMap、paper_read/search/view和原科学物化。科学理解/核查由Hermes负责，服务器GPT来源审阅只保留历史绑定任务，不是当前方向。版本/任务/真实验收统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
 
-scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专项引用通过skill_view按需读取。既有scientificEvidenceRules在静态消费存在、Native Appraisal投影未接入；已将同一规则导出到唯一references/source-evidence-alignment.md，作者与reviewer按保留机制/量/比较/范围读取，不注入当前论文答案、不内联整套方法或增设科学门禁。生成/发现/受限读取已验证并部署；真实作者及独立审阅的根回包与目录全文逐字相等，未见单独引用读取；实际终稿仍有范围/条件/位置误判。现已在根直接呈现同一七条，服务器与built导出匹配，专项方法按需读，不新增规则或读取门禁；科学改善与跨论文正确消费仍须实际任务评价。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选稿、Claims及原来源reviewContext。新任务用paper_review提交完整终审数据，最后普通回复不重复JSON；旧paid任务保持原可选反馈和严格JSON规则。安装、注入、实际调用和科学正确是四个不同事实。 分镜另实复现书目引用slash与数字–Hz单位连字符的数量解析误识别，以及Native仅返简称丢既有字段定位；不是缺nullable的schema漂移。已发布解析/反馈修复：既有保存工具描述精确启用新模式，旧描述/旧解析及全等receipt重放保留，其他调用方default旧；数量值/单位/ownQuote继续校验、500字符内给字段位置，不默认nullable或扩原输出额度。92项、TC/build和新增差异独立High通过，3条lint为HEAD复现基线；部署/科学验收只见CURRENT。缺父Claim的完整替换集合曾只回invalid_structure，使Agent两次重试；已在既有诊断补具体parent_not_selected路径和真实saved IDs语义，保留完整图/来源校验、不自动补父。
+scientific-critical-thinking历史入口提供Appraisal Workflow，完整原方法/专项引用保留给另行请求的评议，通过skill_view按需读取。既有scientificEvidenceRules在静态消费存在、Native Appraisal投影未接入；已将同一规则导出到唯一references/source-evidence-alignment.md，作者与reviewer按保留机制/量/比较/范围读取，不注入当前论文答案、不内联整套方法或增设科学门禁。生成/发现/受限读取已验证并部署；真实作者及独立审阅的根回包与目录全文逐字相等，未见单独引用读取；实际终稿仍有范围/条件/位置误判。现已在根直接呈现同一七条，服务器与built导出匹配，专项方法按需读，不新增规则或读取门禁；科学改善与跨论文正确消费仍须实际任务评价。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选稿、Claims及原来源reviewContext。新任务用paper_review提交完整终审数据，最后普通回复不重复JSON；旧paid任务保持原可选反馈和严格JSON规则。安装、注入、实际调用和科学正确是四个不同事实。 分镜另实复现书目引用slash与数字–Hz单位连字符的数量解析误识别，以及Native仅返简称丢既有字段定位；不是缺nullable的schema漂移。已发布解析/反馈修复：既有保存工具描述精确启用新模式，旧描述/旧解析及全等receipt重放保留，其他调用方default旧；数量值/单位/ownQuote继续校验、500字符内给字段位置，不默认nullable或扩原输出额度。92项、TC/build和新增差异独立High通过，3条lint为HEAD复现基线；部署/科学验收只见CURRENT。缺父Claim的完整替换集合曾只回invalid_structure，使Agent两次重试；已在既有诊断补具体parent_not_selected路径和真实saved IDs语义，保留完整图/来源校验、不自动补父。
 
 原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。这些是历史故障证据；最新作者已正常工具提交，当前状态以下文及CURRENT为准，不能据旧问题连续请求；准确任务及来源依据只见CURRENT。
 
@@ -16,7 +17,7 @@ scientific-critical-thinking入口提供Appraisal Workflow，完整原方法/专
 
 工具提交已部署：新精确description使用paper_review回执作为终审数据入口，重建真实稿并执行原完整科学检查；后续改稿或失败提交不能退用旧成功。字段来源容量、issues及旧paid兼容保持。历史132定向/TC/lint/High证明提交边界，不能证明真实供应商总会返回调用或科学正确。
 
-独立原生审阅已部署：新paper-author不直接成为自动采用结果；source_review阶段选择paper-source-review，paper_candidate提供实际最终作者稿/Claims和已选完整原文。原生Agent按需搜索、看原页、加载Skill并以paper_review修订；回执返回合并六维/Claims供它核查修改传播。沿用Session/store、来源权限、普通收费/max9。历史运行有加载Skill和原页但未提交终审的失败；当前独立Agent已成功保存实际合并稿，并修正部分算数，但仍漏判关系、条件和范围。调用与安装不能称科学合格，实际结果只见CURRENT。
+历史独立原生审阅已部署，旧goal保留该路径；新的默认忠实理解候选由作者自校直接采用，见本节首项。旧paper-author不直接成为自动采用结果；source_review阶段选择paper-source-review，paper_candidate提供实际最终作者稿/Claims和已选完整原文。原生Agent按需搜索、看原页、加载Skill并以paper_review修订；回执返回合并六维/Claims供它核查修改传播。沿用Session/store、来源权限、普通收费/max9。历史运行有加载Skill和原页但未提交终审的失败；当前独立Agent已成功保存实际合并稿，并修正部分算数，但仍漏判关系、条件和范围。调用与安装不能称科学合格，实际结果只见CURRENT。
 
 新的审阅兼容实现已部署：paper_review限定为unchanged原作者Claims，paper_review_claims使用完整数组；两者复用同一科学物化和最新提交守卫，旧paid schema/说明/回执保持。真实合成对照已复现union数组被写成item对象，纯数组对照正确，但历史遗漏调用的完整原因未证明。Native科学Skill同时复用现有scientific-summary的读者组织方法，按核心贡献及条件完整的代表算例展开，核心比较保留必要对照；不增加预算或模型阶段。定向工程验证、独立High、精确CI与正常部署/目录配对通过，新真实论文科学收益仍见CURRENT，不能借合成结构成功宣称全链健康。
 

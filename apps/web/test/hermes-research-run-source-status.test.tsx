@@ -161,7 +161,7 @@ describe('Hermes research run panel', () => {
     const copy = (locale === 'zh' ? zh : en).hermesRun;
     expect(html).toContain(locale === 'zh' ? '材料解析' : 'Source parsing');
     expect(html).toContain(locale === 'zh' ? '解析任务已结束' : 'Parsing task ended');
-    expect(html).toContain(locale === 'zh' ? '此状态不代表全文理解或科学审校已完成。' : 'This status does not confirm complete paper understanding or scientific review.');
+    expect(html).toContain(locale === 'zh' ? '此状态不代表全文理解或来源核对已完成。' : 'This status does not confirm complete paper understanding or source comparison.');
     expect(html).toContain(copy.narrative.status.incomplete);
     expect(html).not.toContain(copy.narrative.viewResult);
     expect(html).not.toContain(`>${copy.step.succeeded}<`);

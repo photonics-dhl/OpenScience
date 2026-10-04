@@ -30,7 +30,10 @@ export function automaticIngestionReview(task: AutomaticIngestionSource) {
   const result = record(task.agentTask?.result);
   const review = record(result.scientificReview);
   const marker = readNativeAgentExecution(result);
-  if (marker?.profile === 'paper-author') throw new IngestionError('VALIDATION_ERROR', 'Native paper author requires independent source review');
+  if (marker?.profile === 'paper-author') {
+    if (review.profile !== 'paper-author') throw new IngestionError('VALIDATION_ERROR', 'Native paper author requires independent source review');
+    requireNativePaperAuthor(task.agentTask!);
+  }
   if (marker?.profile === 'paper-source-review') {
     if (!task.agentTask || marker.checkpoint?.taskId !== task.agentTask.id) throw new IngestionError('VALIDATION_ERROR', 'Native reviewer task binding changed');
     nativeAgentTerminalResult({ ...task.agentTask, kind: 'sdf.extract' } as never, 'succeeded', result);
@@ -62,6 +65,10 @@ export function automaticIngestionReviewStage(task: AutomaticIngestionSource): '
   if (readNativeAgentExecution(task.agentTask?.result)?.profile === 'paper-author') {
     requireNativePaperAuthor(task.agentTask!);
     automaticSourceReference(task, record(task.agentTask!.result).sourceMapRef);
+    if (record(record(task.agentTask!.result).scientificReview).profile === 'paper-author') {
+      automaticIngestionReview(task);
+      return 'ready';
+    }
     return 'source_review';
   }
   try { automaticIngestionReview(task); return 'ready'; }

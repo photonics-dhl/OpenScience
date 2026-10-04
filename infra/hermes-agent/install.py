@@ -42,9 +42,9 @@ def copy_resources(source, target):
 
 def write_science_skills(source, catalogue, science):
     for name, description, body in [
-            ('scientific-critical-thinking', 'Understand scientific manuscripts and their core contribution using original evidence, conditions and research-type appropriate reasoning.', science.get('nativeInstructions', science['instructions'])),
-            ('openscience-source-review', 'Review the caller-provided saved candidate against original passages and actual figures; align central claims, comparisons, conditions and evidence.',
-             'Use this method on the actual saved candidate supplied by the task: paper_draft for authors or paper_candidate for independent reviewers. Initial whole-paper understanding uses scientific-critical-thinking; this review preserves the chosen focus. Follow the current task tool protocol for submission and read back its saved content.\n\n'+science.get('nativeSourceReviewInstructions', science['sourceReviewInstructions']))]:
+            ('scientific-critical-thinking', 'Critically appraise scientific validity, research quality or bias when the user explicitly requests such an assessment; not the default paper-understanding or illustration method.', science.get('nativeInstructions', science['instructions'])),
+            ('openscience-source-review', 'Understand the paper author\'s main message and faithfully summarize or visualize it; compare our saved statements with original passages, figures, cases and conditions without peer-reviewing the paper.',
+             'Use this method for whole-paper understanding and faithful source comparison. When a draft exists, use the actual saved candidate: paper_draft for authors or paper_candidate for independent reviewers. Follow the current task tool protocol for submission and read back its saved content.\n\n'+science.get('nativeSourceReviewInstructions', science['sourceReviewInstructions']))]:
         folder = catalogue/'science'/name
         folder.mkdir(parents=True)
         if name == 'scientific-critical-thinking':
@@ -61,12 +61,9 @@ def write_science_skills(source, catalogue, science):
                 'Load only relevant references with skill_view and the displayed file_path. Choose an appraisal framework appropriate to this paper; clinical grading is not a default for theoretical physics. ' \
                 'These read-only references grant no new tool, script, external service or approval authority.'
         else:
-            body += '\n\nFor a difficult inference or possible confirmation bias, select the relevant original references through ' \
-                'skill_view(name="scientific-critical-thinking", file_path="upstream/README.md"). ' \
-                'For retained mechanisms, quantities, comparisons or scope, apply the shared alignment in the scientific-critical-thinking root Skill. ' \
-                'The same method remains available separately through skill_view(name="scientific-critical-thinking", file_path="references/source-evidence-alignment.md"); do not reread it when already loaded. ' \
-                'The task is source-grounded manuscript appraisal, not a journal intake or editorial decision. ' \
-                'Recheck retained claims against the bound paper; structural feedback does not freeze your wording or make it scientifically correct.'
+            body += '\n\nThe bound paper is the source of the author\'s message. Recheck our retained statements against it, including cases and conditions. ' \
+                'Structural feedback does not establish faithful interpretation. Do not invoke a separate appraisal or add derived quantities to complete this task. ' \
+                'The complete scientific-critical-thinking references remain installed for separately requested critical assessment; they are not a mandatory step here.'
         (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{science["version"]}"\n---\n\n'
             'Project method adaptation; reuse paper_overview, paper_search, paper_read and paper_view for this task. '
             'The Agent controls progressive source reading; do not run external scripts or another provider. '

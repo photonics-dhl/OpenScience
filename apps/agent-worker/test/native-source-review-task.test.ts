@@ -7,6 +7,7 @@ import { createNativeSourceReviewTools, LEGACY_NATIVE_SOURCE_REVIEW_TOOLS, NATIV
   nativeSourceReviewToolProfile, runNativeSourceReviewTask } from '../src/native-agent/source-review-task';
 import { createNativeAgentSession, type NativeAgentSessionState } from '../src/native-agent/session';
 import type { runHostedNativeTask } from '../src/native-agent/host-task';
+import { runNativePaperTask } from '../src/native-agent/paper-task';
 
 const seam = vi.hoisted(() => ({ host: vi.fn(), store: vi.fn() }));
 vi.mock('../src/native-agent/host-task', () => ({ runHostedNativeTask: seam.host }));
@@ -44,6 +45,72 @@ const pair = (id: string, name: string, args: unknown, result: unknown): ChatMes
   { role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
   { role: 'tool', toolCallId: id, content: JSON.stringify(result) },
 ];
+
+it.each(['paper-author', 'paper-understanding'] as const)('emits the adopted author profile only for a real source-fidelity %s completion', async profile => {
+  let state: NativeAgentSessionState | null = null;
+  const store = {
+    async read() { return structuredClone(state); },
+    async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
+      expect(state).toEqual(expected); state = structuredClone(next);
+    },
+    async complete(expected: NativeAgentSessionState, next: NativeAgentSessionState) {
+      expect(state).toEqual(expected); state = structuredClone(next);
+    },
+    async publish<T>(expected: NativeAgentSessionState, submit: () => Promise<T>) {
+      expect(state).toEqual(expected); return submit();
+    },
+  };
+  seam.store.mockReturnValue(store);
+  let calls = 0;
+  const preflight = new AnthropicCompatProvider('minimax', { baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async () => { throw new Error('No HTTP'); });
+  const provider: TextProvider = { name: 'minimax', model: 'MiniMax-M3', preflightNativeTools: opts => preflight.preflightNativeTools(opts), async complete() {
+    calls++;
+    const common = { model: 'MiniMax-M3', usage: { inputTokens: 20, outputTokens: 10 } };
+    const items = calls === 1 ? [{ id: 'read', name: 'paper_read', args: { passageIds: ['P00001'] } }]
+      : calls === 2 ? [...SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, name: 'paper_field', args: { field, summary: text, sourcePassageIds: ['P00001'] } })),
+        { id: 'claim-core', name: 'paper_claim', args: authorResult().scientificReview.draftClaims[0] }]
+      : calls === 3 ? [{ id: 'draft', name: 'paper_draft', args: { fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
+        claimToolCallIds: ['claim-core'], needsMoreEvidence: [] } }]
+      : calls === 4 ? [{ id: 'review', name: 'paper_review', args: { draftToolCallId: 'draft', fields: decision().fields, needsMoreEvidence: [], claimSuggestions: 'unchanged' } }]
+      : [];
+    return items.length ? { ...common, text: '', finishReason: 'tool_calls',
+      toolCalls: items.map(item => ({ id: item.id, type: 'function' as const, function: { name: item.name, arguments: JSON.stringify(item.args) } })),
+      providerContent: { provider: 'minimax', model: 'MiniMax-M3', content: items.map(item => ({ type: 'tool_use', id: item.id, name: item.name, input: item.args })) } }
+      : { ...common, text: 'Source comparison saved.', finishReason: 'stop' };
+  } };
+  seam.host.mockImplementation(async (input: Parameters<typeof runHostedNativeTask>[0]) => {
+    const request = { model: input.config.model, max_tokens: input.config.maxOutputTokens,
+      messages: [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }] as unknown[],
+      tools: [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object' } })),
+        ...input.config.sourceTools].map(tool => ({ type: 'function', function: tool })) };
+    let sequence = 0;
+    for (let i = 0; i < 4; i++) {
+      const response = await input.session.complete(request); const message = response.choices[0]!.message;
+      request.messages.push(message);
+      for (const call of message.tool_calls!) {
+        const result = await input.paper.call(call.function.name, JSON.parse(call.function.arguments), sequence++, call.id);
+        expect(result.status ?? (result.passages ? 'read' : undefined)).not.toMatch(/^invalid/u);
+        request.messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+      }
+    }
+    const final = await input.session.complete(request);
+    return { finalResponse: final.choices[0]!.message.content, observedPassageIds: input.paper.observedPassageIds };
+  });
+  const input: Parameters<typeof runNativePaperTask>[0] = { gateway: new AiGateway({ providers: [provider] }),
+    deps: { prisma: { $transaction: async (fn: (tx: never) => Promise<void>) => fn({} as never) } } as never,
+    task: { id: 'author-task', executionAttempt: 1, result: { nativeAgentExecution: { kind: 'hermes-agent', profile,
+      runtimeId: 'runtime', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' } } }, sourceMap: map,
+    sourceMapRef: { artifactId: map.artifactId, contentHash: map.contentHash, serializedSha256: 'c'.repeat(64) } as never,
+    inboxRoot: 'unused', renderPages: async () => [], authorize: async () => undefined };
+  const result = await runNativePaperTask(input);
+  expect(result.core.method).toBe(text);
+  expect(result.scientificReview).toMatchObject({ status: 'review_received', fieldReviews: { method: { verdict: 'accepted' } } });
+  expect(result.scientificReview.profile).toBe(profile === 'paper-author' ? 'paper-author' : undefined);
+  const saved = await store.read();
+  expect(calls).toBe(5);
+  expect(await runNativePaperTask(input)).toEqual(result);
+  expect(calls).toBe(5); expect(await store.read()).toEqual(saved);
+});
 const stagedTools = (sourceMap: DocumentSourceMap = map) => createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: authorResult(sourceMap),
   renderPages: async () => [], reviewMode: 'staged' });
 async function stagedReview(claimsDecision: 'unchanged' | 'replace' = 'unchanged', sourceMap: DocumentSourceMap = map) {

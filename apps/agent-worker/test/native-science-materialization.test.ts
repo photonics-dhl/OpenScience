@@ -21,12 +21,20 @@ const paidContextDescription = 'Select exact successful paper_field and paper_cl
 it('keeps the original paid author goal while new authors use the reader focus on replay', () => {
   const fresh = nativePaperToolProfile(null);
   expect(fresh.goal).toContain('一个条件完整的代表算例');
+  expect(fresh.sourceFaithfulness).toBe(true);
+  expect(fresh.instructions).toContain('先用skill_view读取openscience-source-review');
+  expect(fresh.instructions).not.toContain('实际通过skill_view读取scientific-critical-thinking');
+  expect(fresh.instructions).toContain('必须等待其真实返回ID后');
   const oldGoal = '为后续科研配图保存一份简洁、有原文依据的六维和核心主张，并通过paper_review提交对真实已保存稿的完整科学核对。读者主线、科学机制、代表结果及必要条件保存在这些内容中，完成任务不需要再生成另一份解释正文。';
   const saved = { binding: { allowedTools: fresh.allowedTools }, initialMessages: [{ role: 'user', content: oldGoal }],
     turns: [{ request: { options: { tools: fresh.sourceTools.map(tool => ({ type: 'function', function: tool })) } } }] } as unknown as NativeAgentSessionState;
   expect(nativePaperToolProfile(saved).goal).toBe(oldGoal);
+  expect(nativePaperToolProfile(saved).sourceFaithfulness).toBe(false);
+  const previousReaderGoal = '向未读论文者解释真正的核心贡献和科学机制，以一个条件完整的代表算例说明；比较本身是核心贡献时，仅保留说明比较所必需的算例及各自条件。六维和必要Claims共同服务这条读者主线，其他参数和辅助推导留在来源。通过现有paper_review完成对实际保存稿的科学核对，最终简短说明完成情况。';
+  saved.initialMessages = [{ role: 'user', content: previousReaderGoal }];
+  expect(nativePaperToolProfile(saved)).toMatchObject({ goal: previousReaderGoal, sourceFaithfulness: false });
   saved.initialMessages = [{ role: 'user', content: fresh.goal }];
-  expect(nativePaperToolProfile(saved).goal).toBe(fresh.goal);
+  expect(nativePaperToolProfile(saved)).toMatchObject({ goal: fresh.goal, sourceFaithfulness: true });
 });
 describe('shared native scientific staging primitives', () => {
   it('selects saved independent decisions and Claims for the original-bound complete review', () => {

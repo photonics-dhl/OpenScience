@@ -1702,7 +1702,9 @@ async function saveIngestionTask(
           }
           requireUnchangedAutomaticCore(internalReview!, input.core);
           const nativeReviewer = readNativeAgentExecution(task.agentTask?.result)?.profile === 'paper-source-review';
-          if (nativeReviewer || run.steps.some(step => step.stage === 'source_review' && step.ordinal === 0 && step.agentTaskId === task.agentTaskId)) {
+          const nativeAuthor = readNativeAgentExecution(task.agentTask?.result)?.profile === 'paper-author';
+          if (nativeReviewer || run.steps.some(step => step.stage === 'source_review'
+            && (nativeAuthor || (step.ordinal === 0 && step.agentTaskId === task.agentTaskId)))) {
             const proof = await inspectInitialHermesSourceReview(tx, input.sourceAgentTaskId);
             if (!proof || (nativeReviewer && proof.reviewMode !== 'agent') || proof.run.id !== run.id || proof.source.id !== task.id)
               throw new IngestionError('VALIDATION_ERROR', 'Native independent reviewer source lineage changed');

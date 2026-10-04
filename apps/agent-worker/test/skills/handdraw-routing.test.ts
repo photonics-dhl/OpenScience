@@ -6,6 +6,14 @@ import { automaticStyleReviewGuidance, automaticStyleTreatment, loadInstalledMed
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from '../../src/skills/scientific-critical-thinking';
 
 describe('Hermes media skill stages', () => {
+  it('provides paper fidelity without routing the default method through paper appraisal', () => {
+    const method = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeSourceReviewInstructions;
+    expect(method).toContain('论文正文、图注、公式和附录是本任务的事实来源');
+    expect(method).toContain('核对的是我们的摘要、Claims和图解是否忠实');
+    expect(method).not.toContain('执行 scientific-critical-thinking 的 Appraisal Workflow');
+    expect(method).toContain('不要自行推导额外参数');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).toContain('Appraisal Workflow');
+  });
   it('makes essential shared alignment available in the Native root without another reference read', () => {
     const alignment = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeEvidenceAlignmentInstructions;
     expect(alignment.length).toBeGreaterThan(0);

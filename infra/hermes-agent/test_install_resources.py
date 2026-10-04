@@ -26,6 +26,11 @@ class InstallResourceTests(unittest.TestCase):
             self.assertIn('NATIVE_APPRAISAL_STEPS', primary)
             self.assertEqual(primary.count('SHARED_SOURCE_ALIGNMENT'), 1)
             self.assertIn('NATIVE_COMPARE_SAVED_DRAFT', review)
+            self.assertIn('faithfully summarize or visualize', review)
+            self.assertIn('explicitly requests', primary)
+            self.assertNotIn('Initial whole-paper understanding uses scientific-critical-thinking', review)
+            self.assertNotIn('source-grounded manuscript appraisal', review)
+            self.assertNotIn('apply the shared alignment in the scientific-critical-thinking root Skill', review)
             self.assertNotIn('STATIC_SYNTHESIS_ONLY', primary)
             self.assertNotIn('STATIC_REVIEW_ONLY', review)
             self.assertEqual(scope.resolve('scientific-critical-thinking', 'references/source-evidence-alignment.md').read_text(),

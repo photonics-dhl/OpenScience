@@ -5,7 +5,8 @@ import { fixture, fields } from './direct-source-review-fixture';
 import { automaticIngestionReview, automaticIngestionReviewStage } from '../../src/ingestion/automatic-review';
 import { ensureHermesIngestionReview, materializeHermesIngestion } from '../../src/ingestion/ingestion-service';
 import { requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
-import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
+import { persistDocumentSourceMapReference, loadDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
+import { createBlockSourceLocator } from '../../src/research-intelligence/source-locator';
 import { claimAgentTask, markTaskProgress, persistAgentTaskInTransaction } from '../../src/agent/agent';
 import { compareNativeAgentCheckpoint, initialNativeAgentExecution, readNativeAgentExecution, requireNativeAgentExecutionAuthority,
   type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
@@ -268,6 +269,91 @@ describe('native reviewer zero-submit preflight recovery', () => {
 });
 
 describe('native independent author/reviewer domain contract', () => {
+  it('persists the author self-check through actual confirm and Claim/Evidence reconciliation', async () => {
+    const f = await storedAuthorFixture(); f.author.result.scientificReview.profile = 'paper-author';
+    const map = await loadDocumentSourceMapReference(f.deps.storage, f.author.result.sourceMapRef);
+    const quote = map.pages[0]!.blocks[0]!.text!;
+    const locator = createBlockSourceLocator(map, 'source', { charRange: { start: 0, end: quote.length } });
+    Object.assign(f.author.result, {
+      core: { schemaVersion: '0.1.0', ...fields(() => quote) },
+      evidence: fields(() => ({ quote, locator: 'passages:P00001' })),
+      evidenceSegments: fields(() => [{ quote, sourceLocator: locator }]),
+      evidenceLocation: fields(() => ({ status: 'located', matching: 'exact', sourceLocator: locator })),
+    });
+    f.author.result.scientificReview.fieldReviews = fields(() => ({ verdict: 'accepted', summary: quote, sourcePassageIds: ['P00001'], issues: [] }));
+    f.author.result.scientificReview.draftClaims[0].statement = quote;
+    f.author.result.reviewedClaimSuggestions[0].statement = quote;
+    Object.assign(f.db.researchObjects[0]!, { version: 1, visibility: 'private' });
+    f.db.sdfDocuments.push({ id: 'doc', researchObjectId: f.ids.ro, coreJson: f.author.result.core });
+    f.db.sdfNodes.push(...Object.keys(f.author.result.scientificReview.fieldReviews).map(nodeType => ({ id: `node-${nodeType}`, sdfDocumentId: 'doc', nodeType, content: quote })));
+    f.db.branches.push({ id: 'main-branch', researchObjectId: f.ids.ro, name: 'main', headCommitId: null });
+    Object.assign(f.prisma.evidenceRecord, { createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+      f.db.evidenceRecords.push(...data); return { count: data.length };
+    } });
+    const beforeLedger = structuredClone(f.db.usageLedger);
+    await materializeHermesIngestion(f.deps, { actorId: f.input.actorId, runId: f.ids.run, taskId: f.ids.source });
+    const originalTransaction = f.prisma.$transaction.bind(f.prisma);
+    const diagnostics: string[] = [];
+    vi.spyOn(f.prisma, '$transaction').mockImplementation(async (...args) => {
+      try { return await originalTransaction(...args); }
+      catch (error) { diagnostics.push(String(error)); throw error; }
+    });
+    const result = await reconcileHermesResearchRuns(f.deps);
+    expect(result.errors, diagnostics.join('\n')).toBe(0);
+    expect(f.db.hermesResearchRuns[0]).toMatchObject({ status: 'awaiting_claim_review' });
+    expect(f.db.ingestionTasks[0]).toMatchObject({ state: 'confirmed', agentTaskId: f.author.id });
+    expect(f.db.hermesResearchSteps.some(step => step.stage === 'source_review')).toBe(false);
+    expect(f.db.agentTasks.some(task => task.result?.nativeAgentExecution?.profile === 'paper-source-review')).toBe(false);
+    expect(f.db.usageLedger).toEqual(beforeLedger);
+    expect(f.db.claimNodes).toHaveLength(1);
+    expect(f.db.evidenceRecords).toHaveLength(1);
+    expect(f.db.auditLogs.find(row => row.action === 'ingestion.system_materialize')).toMatchObject({ metadata: {
+      sourceAgentTaskId: f.author.id, reviewResponseHash: f.cp.responseHash,
+    } });
+  });
+  it('uses the new author source self-check without another independent model stage', async () => {
+    const f = authorFixture(); f.author.result.scientificReview.profile = 'paper-author';
+    const before = structuredClone(f.db);
+    expect(automaticIngestionReviewStage(f.source)).toBe('ready');
+    expect(automaticIngestionReview(f.source)).toMatchObject({ agentTaskId: f.author.id, responseHash: f.cp.responseHash });
+    for (let i = 0; i < 2; i++) {
+      await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run }))
+        .resolves.toBe('ready');
+    }
+    expect(f.db.agentTasks).toEqual(before.agentTasks);
+    expect(f.db.agentSessions).toEqual(before.agentSessions);
+    expect(f.db.usageLedger).toEqual(before.usageLedger);
+    expect(f.db.hermesResearchSteps).toEqual(before.hermesResearchSteps);
+    expect(f.redis.lpush).not.toHaveBeenCalled();
+  });
+  it.each(['missing-cp', 'partial-cp', 'tool-calls', 'field-core-drift', 'source-drift', 'missing-claims', 'wrong-response'] as const)(
+    'rejects an incomplete new author self-check (%s)', change => {
+      const f = authorFixture(); f.author.result.scientificReview.profile = 'paper-author';
+      if (change === 'missing-cp') delete f.author.result.nativeAgentExecution.checkpoint;
+      if (change === 'partial-cp') f.cp.finishReason = 'length';
+      if (change === 'tool-calls') f.cp.hasToolCalls = true;
+      if (change === 'field-core-drift') f.author.result.core.method = 'different';
+      if (change === 'source-drift') f.source.artifact.blobSha256 = '9'.repeat(64);
+      if (change === 'missing-claims') delete f.author.result.reviewedClaimSuggestions;
+      if (change === 'wrong-response') f.author.result.scientificReview.responseHash = '9'.repeat(64);
+      expect(() => automaticIngestionReview(f.source)).toThrow();
+      expect(() => automaticIngestionReviewStage(f.source)).toThrow();
+    });
+  it.each(['membership', 'source-step', 'existing-review', 'existing-review-foreign', 'failed-run'] as const)(
+    'preserves run authority and paid phase lineage for a new author (%s)', async change => {
+      const f = authorFixture(); f.author.result.scientificReview.profile = 'paper-author';
+      if (change === 'membership') f.db.memberships[0]!.role = 'viewer';
+      if (change === 'source-step') f.db.hermesResearchSteps[0]!.agentTaskId = 'foreign';
+      if (change.startsWith('existing-review')) f.db.hermesResearchSteps.push({ ...f.db.hermesResearchSteps[0]!,
+        id: 'existing-review', stage: 'source_review',
+        ...(change === 'existing-review-foreign' ? { agentTaskId: 'original-paid-reviewer' } : {}) });
+      if (change === 'failed-run') f.db.hermesResearchRuns[0]!.status = 'failed';
+      const before = structuredClone(f.db);
+      await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run })).rejects.toThrow();
+      if (change.startsWith('existing-review')) await expect(materializeHermesIngestion(f.deps,
+        { actorId: f.input.actorId, taskId: f.ids.source, runId: f.ids.run })).rejects.toThrow('lineage changed');
+      expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    });
   it('rejects author automatic consumption and chooses the existing review stage without a semanticStage', () => {
     const f = authorFixture();
     expect(() => automaticIngestionReview(f.source)).toThrow();
