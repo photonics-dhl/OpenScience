@@ -2024,6 +2024,11 @@ function reviewedClaimRepairIssues(
   providedPassageIds?: ReadonlySet<string>,
 ): string[] {
   if (!Array.isArray(review.claimSuggestions) || review.claimSuggestions.length > MAX_INGESTION_CLAIMS) return [];
+  const selectedKeys = new Set(review.claimSuggestions.flatMap(value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const key = (value as Record<string, unknown>).clientKey;
+    return typeof key === 'string' && !!key.trim() && key.length <= 100 ? [key] : [];
+  }));
   const parents: string[] = [];
   const bindings: string[] = [];
   review.claimSuggestions.forEach((value, index) => {
@@ -2037,6 +2042,10 @@ function reviewedClaimRepairIssues(
     if (!SDF_CORE_FIELDS.includes(item.sourceField as ReviewedClaimSuggestion['sourceField'])
       || !Array.isArray(item.sourceBindings) || item.sourceBindings.length > MAX_CANONICAL_EVIDENCE_SEGMENTS) return;
     const field = review.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']];
+    if (item.kind !== 'core' && typeof item.parentClientKey === 'string' && !selectedKeys.has(item.parentClientKey)
+      && field.verdict !== 'blocked' && validateNativeScientificClaim(item, field.sourcePassageIds) === undefined) {
+      parents.push(`${path}.parentClientKey: parent_not_selected (${item.parentClientKey}). A replacement is the complete replacement set, not an incremental update. When selecting saved items, use the real saved IDs of the source-supported parent and all retained Claims; do not invent a parent or its support.`);
+    }
     const originalIds = proposal
       ? proposal.fields[item.sourceField as ReviewedClaimSuggestion['sourceField']].sourcePassageIds ?? []
       : field.sourcePassageIds;

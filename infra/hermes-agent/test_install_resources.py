@@ -16,7 +16,7 @@ class InstallResourceTests(unittest.TestCase):
             copy_resources(Path(__file__).resolve().parent/'science-references', source/'infra'/'hermes-agent'/'science-references')
             method = {'version': 'fixture', 'instructions': 'STATIC_SYNTHESIS_ONLY',
                       'sourceReviewInstructions': 'STATIC_REVIEW_ONLY',
-                      'nativeInstructions': 'NATIVE_APPRAISAL_STEPS',
+                      'nativeInstructions': 'NATIVE_APPRAISAL_STEPS\nSHARED_SOURCE_ALIGNMENT',
                       'nativeEvidenceAlignmentInstructions': 'SHARED_SOURCE_ALIGNMENT',
                       'nativeSourceReviewInstructions': 'NATIVE_COMPARE_SAVED_DRAFT'}
             write_science_skills(source, root/'catalogue', method)
@@ -24,6 +24,7 @@ class InstallResourceTests(unittest.TestCase):
             primary = scope.resolve('scientific-critical-thinking').read_text()
             review = scope.resolve('openscience-source-review').read_text()
             self.assertIn('NATIVE_APPRAISAL_STEPS', primary)
+            self.assertEqual(primary.count('SHARED_SOURCE_ALIGNMENT'), 1)
             self.assertIn('NATIVE_COMPARE_SAVED_DRAFT', review)
             self.assertNotIn('STATIC_SYNTHESIS_ONLY', primary)
             self.assertNotIn('STATIC_REVIEW_ONLY', review)

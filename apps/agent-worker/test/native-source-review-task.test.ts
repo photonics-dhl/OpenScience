@@ -44,10 +44,10 @@ const pair = (id: string, name: string, args: unknown, result: unknown): ChatMes
   { role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
   { role: 'tool', toolCallId: id, content: JSON.stringify(result) },
 ];
-const stagedTools = () => createNativeSourceReviewTools({ sourceMap: map, sourceAgentTaskId, sourceResult: authorResult(),
+const stagedTools = (sourceMap: DocumentSourceMap = map) => createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: authorResult(sourceMap),
   renderPages: async () => [], reviewMode: 'staged' });
-async function stagedReview(claimsDecision: 'unchanged' | 'replace' = 'unchanged') {
-  const worker = stagedTools(); const messages: ChatMessage[] = [];
+async function stagedReview(claimsDecision: 'unchanged' | 'replace' = 'unchanged', sourceMap: DocumentSourceMap = map) {
+  const worker = stagedTools(sourceMap); const messages: ChatMessage[] = [];
   const invoke = async (id: string, name: string, args: unknown) => {
     const result = await worker.call(name, args, messages.filter(m => m.role === 'assistant').length, id);
     messages.push(...pair(id, name, args, result)); return result;
@@ -81,6 +81,58 @@ describe('staged source review selects real private item receipts against the im
     expect((await invoke('replace', 'paper_review', args)).status).toBe('review_ready');
     expect((await invoke('original', 'paper_review', { ...args, claimsDecision: 'unchanged', claimToolCallIds: [] })).status).toBe('review_ready');
     expect(worker.finish(messages).nativeDraftClaims).toEqual(authorResult().scientificReview.draftClaims);
+  });
+  it('reports the unselected parent path and complete replacement semantics without adopting or repairing Claims', async () => {
+    const { worker, messages, args, invoke } = await stagedReview('replace');
+    const original = structuredClone(worker.boundDraft);
+    const rejected = await invoke('child-only', 'paper_review', { ...args, claimToolCallIds: ['claim-1'] });
+    expect(rejected.status).toBe('invalid_review');
+    expect(rejected.feedback).toContain('claimSuggestions=invalid_structure');
+    expect(rejected.feedback).toContain('claimSuggestions[0].parentClientKey: parent_not_selected (reviewed-core)');
+    expect(rejected.feedback).toContain('complete replacement set');
+    expect(rejected.feedback).toContain('not an incremental update');
+    expect(rejected.feedback).toContain('real saved IDs');
+    expect(rejected.feedback).toContain('source-supported parent');
+    expect(rejected.feedback).toContain('all retained Claims');
+    expect(() => worker.finish(messages)).toThrow('not committed');
+    expect(worker.boundDraft).toEqual(original);
+    expect((await invoke('complete-set', 'paper_review', args)).status).toBe('review_ready');
+    expect(worker.finish(messages).nativeDraftClaims).toEqual(replacementClaims());
+  });
+  it('keeps source_unmaterializable when the selected parent cites a read passage outside its reviewed field', async () => {
+    const sourceMap = structuredClone(map);
+    // Keep the two source paragraphs in separate canonical passages.
+    sourceMap.pages[0]!.blocks[0]!.text = text.repeat(7);
+    sourceMap.pages.push({ ...sourceMap.pages[0]!, page: 2, blocks: [{ ...sourceMap.pages[0]!.blocks[0]!,
+      id: 'other', text: 'A separate source paragraph with different assumptions.' }] });
+    const { worker, messages, args, invoke } = await stagedReview('replace', sourceMap);
+    expect(await invoke('read-other', 'paper_read', { passageIds: ['P00002'] })).toMatchObject({ passages: [{ id: 'P00002' }] });
+    expect((await invoke('unsupported-parent', 'paper_review_claim', { ...replacementClaims()[0],
+      sourceBindings: [{ sourcePassageId: 'P00002', relation: 'supports' }] })).status).toBe('claim_saved');
+    const rejected = await invoke('unsupported-set', 'paper_review', { ...args, claimToolCallIds: ['unsupported-parent', 'claim-1'] });
+    expect(rejected.status).toBe('invalid_review');
+    expect(rejected.feedback).toContain('claimSuggestions=source_unmaterializable');
+    expect(rejected.feedback).not.toContain('parent_not_selected');
+    expect(rejected.feedback).not.toContain('real saved IDs');
+    expect(() => worker.finish(messages)).toThrow('not committed');
+  });
+  it('keeps core_missing for an empty replacement without suggesting an unselected parent', async () => {
+    const { worker, messages, args, invoke } = await stagedReview('replace');
+    const rejected = await invoke('empty-set', 'paper_review', { ...args, claimToolCallIds: [] });
+    expect(rejected.status).toBe('invalid_review');
+    expect(rejected.feedback).toContain('claimSuggestions=core_missing');
+    expect(rejected.feedback).not.toContain('parent_not_selected');
+    expect(() => worker.finish(messages)).toThrow('not committed');
+  });
+  it('does not suggest parent selection for a malformed Claim in the existing full-review seam', async () => {
+    const worker = tools();
+    await worker.call('paper_candidate', {}, 0, 'candidate');
+    const rejected = await worker.call('paper_review_claims', { ...decision(), claimSuggestions: [
+      { ...replacementClaims()[1], statement: { text: 'Not a statement string.' } },
+    ] }, 1, 'malformed');
+    expect(rejected.status).toBe('invalid_review');
+    expect(rejected.feedback).toContain('claimSuggestions=invalid_structure');
+    expect(rejected.feedback).not.toContain('parent_not_selected');
   });
   it.each(['missing', 'wrong-field', 'claim-as-field', 'duplicate-claim', 'unchanged-with-ids', 'foreign-author', 'inline-fields', 'unread-claim'] as const)(
     'rejects %s selections instead of altering retained science', async defect => {

@@ -6,13 +6,15 @@ import { automaticStyleReviewGuidance, automaticStyleTreatment, loadInstalledMed
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from '../../src/skills/scientific-critical-thinking';
 
 describe('Hermes media skill stages', () => {
-  it('keeps shared source alignment available on demand without adding static output protocol to Native', () => {
+  it('makes essential shared alignment available in the Native root without another reference read', () => {
     const alignment = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeEvidenceAlignmentInstructions;
     expect(alignment.length).toBeGreaterThan(0);
     expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.instructions).toContain(alignment);
     expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.sourceReviewInstructions).toContain(alignment);
     expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).toContain('references/source-evidence-alignment.md');
-    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).not.toContain(alignment);
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).toContain(alignment);
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions.split(alignment)).toHaveLength(2);
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).not.toContain('只引用输入中存在的观察编号，程序将回填原始来源');
     expect(alignment).not.toContain('只引用输入中存在的观察编号，程序将回填原始来源');
   });
   it('keeps scientific visual clarity in science without adding art routing', () => {

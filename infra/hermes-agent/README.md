@@ -24,7 +24,7 @@ UDS回归在Linux运行，Windows跳过；broker inode/mode攻击回归需要Lin
 
 任务清空环境后固定模型client/stale期限610秒，与既有UDS610秒衔接；Worker请求上限仍600秒，原预算不变。父线程未取得有效SDK回复或收到原生TimeoutError时沿既有停止信号结束，不进入SDK通用坏响应重试；以原付费回执为准，不据停止推断未提交/未计费。
 
-科学catalogue按需引用`references/source-evidence-alignment.md`原样消费项目已有共享证据对齐规则；作者和reviewer通过现有`skill_view`读取。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
+科学catalogue在scientific-critical-thinking根Skill直接呈现已有七条共享证据对齐规则；作者和reviewer首次通过`skill_view`读根即可取得，专项原方法仍按需加载。`references/source-evidence-alignment.md`保留同源独立副本供兼容，不要求为同一内容重复读取。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
 
 前置：source候选独立High与精确CI通过，按现有deploy脚本完成干净已推SHA的构建/启动；先保留当前生产和回退身份。安装前timer/broker/原生任务须自然排空，不能停止活动论文进程。已有原生任务时须保留原marker绑定的运行时与Skill目录，不能用新配置冒充旧执行。
 
