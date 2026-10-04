@@ -109,8 +109,10 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     const { taskId } = z.object({ taskId: z.string().uuid() }).parse(req.params);
     const idempotencyKey = z.string().min(1).max(64).parse(req.headers['idempotency-key']);
     const body = z.object({ processingConsent: z.literal(true), sourceAgentTaskId: z.string().uuid(),
-      sourceReanalysis: z.object({ intent: z.literal('new_paid_private_analysis'), sourceRunId: z.string().uuid(),
-        expectedRunVersion: z.number().int().positive() }).strict().optional(),
+      sourceReanalysis: z.discriminatedUnion('intent', [
+        z.object({ intent: z.literal('new_paid_private_analysis'), sourceRunId: z.string().uuid(), expectedRunVersion: z.number().int().positive() }).strict(),
+        z.object({ intent: z.literal('revise_saved_source') }).strict(),
+      ]).optional(),
     }).strict().parse(req.body);
     return reply.status(202).send({ task: await reanalyzeConfirmedIngestion(deps, {
       userId: user.userId, taskId, idempotencyKey, ...body,

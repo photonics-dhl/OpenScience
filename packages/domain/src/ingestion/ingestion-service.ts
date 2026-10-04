@@ -30,7 +30,8 @@ import { findSavedIngestionCommit, type SavedIngestionOrigin } from './saved-sou
 import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview,
   inspectHermesPrivateSourceReanalysis, privateSourceReanalysisBatchKey, privateSourceReanalysisRequestDigest,
   readHermesPrivateSourceReanalysisReplay, requireNoPrivateSourceReanalysisWriter, validPrivateSourceReanalysisInput,
-  type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
+  validNativeSourceCorrectionInput, resolveNativeSourceCorrectionExecution,
+  type NativeSourceCorrectionInput, type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
 import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from './source-composition-recovery';
 
@@ -967,6 +968,7 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
         if (['pending', 'running'].includes(source.agentTask.status) && ['queued', 'parsing'].includes(source.state))
           return { stage: 'queued' as const, sourceAgentTaskId: source.agentTaskId };
         if (!['needs_review', 'confirmed'].includes(source.state)) throw new IngestionError('VALIDATION_ERROR', 'Hermes source analysis failed or is incomplete');
+        await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: source.agentTask.id });
         const stage = automaticIngestionReviewStage(source);
         if (stage === 'ready') {
           const phases = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage));
@@ -1430,12 +1432,14 @@ export async function refreshIngestionAnalysis(
 export async function reanalyzeConfirmedIngestion(
   deps: IngestionDeps,
   input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string;
-    sourceReanalysis?: HermesPrivateSourceReanalysisInput },
+    sourceReanalysis?: HermesPrivateSourceReanalysisInput | NativeSourceCorrectionInput },
   ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (!input.idempotencyKey || input.idempotencyKey.length > 64) throw new IngestionError('VALIDATION_ERROR', 'A bounded idempotency key is required');
-  if (input.sourceReanalysis !== undefined && !validPrivateSourceReanalysisInput(input.sourceReanalysis))
+  const sourceCorrection = validNativeSourceCorrectionInput(input.sourceReanalysis);
+  const privateInput = validPrivateSourceReanalysisInput(input.sourceReanalysis) ? input.sourceReanalysis : undefined;
+  if (input.sourceReanalysis !== undefined && !sourceCorrection && !privateInput)
     throw new IngestionError('VALIDATION_ERROR', 'A scoped paid private source analysis intent is required');
   const initial = await deps.prisma.ingestionTask.findUnique({
     where: { id: input.taskId },
@@ -1446,20 +1450,23 @@ export async function reanalyzeConfirmedIngestion(
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
   const sourceAgent = initial.agentTask;
   const sourcePayload = sourceAgent?.payload;
-  const privateProof = input.sourceReanalysis ? await inspectHermesPrivateSourceReanalysis(deps.prisma, input.sourceReanalysis) : null;
-  if ((input.sourceReanalysis ? !privateProof || privateProof.source.id !== initial.id || privateProof.run.actorId !== input.userId
+  const privateProof = privateInput ? await inspectHermesPrivateSourceReanalysis(deps.prisma, privateInput) : null;
+  if ((privateInput ? !privateProof || privateProof.source.id !== initial.id || privateProof.run.actorId !== input.userId
     : initial.state !== 'confirmed') || initial.agentTaskId !== input.sourceAgentTaskId
     || initial.batch.userId !== input.userId || initial.artifact.workspaceId !== workspace.id
     || !sourceAgent || sourceAgent.kind !== 'sdf.extract' || sourceAgent.status !== 'succeeded'
     || sourceAgent.session.userId !== input.userId || sourceAgent.session.researchObjectId !== initial.batch.researchObjectId
     || !exactRecordKeys(sourcePayload, ['artifactId', 'researchObjectId'])
     || sourcePayload.artifactId !== initial.artifactId || sourcePayload.researchObjectId !== initial.batch.researchObjectId
-    || (!input.sourceReanalysis && (analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
+    || (!privateInput && (analysisRefreshPolicy(sourceAgent.result, initial.artifact) !== 'user_requested_reanalysis'
       || !await savedConfirmation(deps, initial.id, initial.batch.researchObjectId)))) {
-    throw new IngestionError('INGESTION_NOT_RETRYABLE', input.sourceReanalysis
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', privateInput
       ? 'Only the scoped exhausted private source review can create a new paid analysis draft'
       : 'Only a scoped confirmed extraction can create a new analysis draft');
   }
+  const correctionAuthor = sourceCorrection ? requireNativePaperAuthor(sourceAgent) : undefined;
+  if (sourceCorrection && (!deps.nativeAgentRuntime || !deps.audit?.record))
+    throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Native saved-source correction runtime or audit is unavailable');
   const reference = parseDocumentSourceMapReference((sourceAgent.result as Record<string, unknown>).sourceMapRef);
   await loadDocumentSourceMapReference(deps.storage, reference);
   const sourceMapProof = { objectKey: reference.objectKey, serializedSha256: reference.serializedSha256 };
@@ -1467,6 +1474,7 @@ export async function reanalyzeConfirmedIngestion(
   const requestDigest = privateProof ? privateSourceReanalysisRequestDigest(privateProof) : createHash('sha256').update(JSON.stringify({
     taskId: initial.id, sourceAgentTaskId: sourceAgent.id, artifactId: initial.artifactId,
     sourceMapSha256: sourceMapProof.serializedSha256,
+    ...(correctionAuthor ? { intent: 'revise_saved_source', authorCheckpointSha256: correctionAuthor.checkpoint.serializedSha256 } : {}),
   })).digest('hex');
   let queued: Prisma.IngestionTaskGetPayload<{ include: { artifact: true } }> | null = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -1483,8 +1491,8 @@ export async function reanalyzeConfirmedIngestion(
         if (!INGESTION_WRITE_ROLES.has(transactionMembership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
         const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
         const transactionPayload = source.agentTask?.payload;
-        const transactionProof = input.sourceReanalysis ? await inspectHermesPrivateSourceReanalysis(tx, input.sourceReanalysis) : null;
-        if ((input.sourceReanalysis ? !transactionProof || transactionProof.run.actorId !== input.userId || transactionProof.source.id !== source.id
+        const transactionProof = privateInput ? await inspectHermesPrivateSourceReanalysis(tx, privateInput) : null;
+        if ((privateInput ? !transactionProof || transactionProof.run.actorId !== input.userId || transactionProof.source.id !== source.id
           : source.state !== 'confirmed') || source.agentTaskId !== sourceAgent.id
           || source.batch.userId !== input.userId || source.batch.researchObjectId !== initial.batch.researchObjectId
           || source.artifactId !== initial.artifactId || source.artifact.workspaceId !== transactionWorkspace.id
@@ -1492,12 +1500,14 @@ export async function reanalyzeConfirmedIngestion(
           || source.agentTask.session.userId !== input.userId || source.agentTask.session.researchObjectId !== initial.batch.researchObjectId
           || !exactRecordKeys(transactionPayload, ['artifactId', 'researchObjectId'])
           || transactionPayload.artifactId !== source.artifactId || transactionPayload.researchObjectId !== source.batch.researchObjectId
-          || (!input.sourceReanalysis && (analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
+          || (!privateInput && (analysisRefreshPolicy(source.agentTask.result, source.artifact) !== 'user_requested_reanalysis'
             || !await savedConfirmation(scoped, source.id, source.batch.researchObjectId)))) {
-          throw new IngestionError('INGESTION_NOT_RETRYABLE', input.sourceReanalysis
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', privateInput
             ? 'Private source review changed while creating a new paid analysis draft'
             : 'Confirmed extraction changed while creating a new draft');
         }
+        if (correctionAuthor && requireNativePaperAuthor(source.agentTask).checkpoint.serializedSha256 !== correctionAuthor.checkpoint.serializedSha256)
+          throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Native author changed while creating its revision');
         if (transactionProof) {
           const replay = await readHermesPrivateSourceReanalysisReplay(tx, transactionProof).catch(error => {
             throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Private source analysis replay binding changed', error);
@@ -1516,11 +1526,14 @@ export async function reanalyzeConfirmedIngestion(
             || candidate.artifactId !== initial.artifactId || candidate.agentTask.kind !== 'sdf.extract'
             || candidate.agentTask.session.userId !== input.userId
             || candidate.agentTask.session.researchObjectId !== initial.batch.researchObjectId
-            || candidate.agentTask.idempotencyKey !== `ingestion-analysis-reanalysis:${candidate.id}:${sourceAgent.id}`
+            || candidate.agentTask.idempotencyKey !== `ingestion-analysis-reanalysis:${candidate.id}:${sourceAgent.id}${sourceCorrection ? ':source-fidelity' : ''}`
             || !exactRecordKeys(payload, ['artifactId', 'researchObjectId'])
             || payload.artifactId !== initial.artifactId || payload.researchObjectId !== initial.batch.researchObjectId) {
             throw new IngestionError('VALIDATION_ERROR', 'Confirmed analysis replay scope does not match');
           }
+          if (sourceCorrection) await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: candidate.agentTask.id }).catch(error => {
+            throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved-source revision replay binding changed', error);
+          });
           return tx.ingestionTask.findUniqueOrThrow({ where: { id: candidate.id }, include: { artifact: true } });
         }
         const transactionReference = parseDocumentSourceMapReference((source.agentTask.result as Record<string, unknown>).sourceMapRef);
@@ -1538,7 +1551,7 @@ export async function reanalyzeConfirmedIngestion(
           });
           // Read CAS authority in this Serializable snapshot; no update of old rows or deadlines.
           const authority = await tx.hermesResearchRun.findUnique({ where: { id: transactionProof.run.id,
-            version: input.sourceReanalysis!.expectedRunVersion, actorId: input.userId, researchObjectId: source.batch.researchObjectId,
+            version: privateInput!.expectedRunVersion, actorId: input.userId, researchObjectId: source.batch.researchObjectId,
             status: 'failed', versionId: null, profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9 }, select: { id: true } });
           const freshAuthority = await requireActiveMembership(tx, transactionWorkspace.id, input.userId);
           if (!authority || freshAuthority.workspace.status !== 'active' || !INGESTION_WRITE_ROLES.has(freshAuthority.membership.role))
@@ -1559,7 +1572,7 @@ export async function reanalyzeConfirmedIngestion(
         const { task: analysis } = await persistAgentTaskInTransaction(deps, tx, {
           sessionId: session.id, userId: input.userId, kind: 'sdf.extract',
           payload: { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId },
-          idempotencyKey: `ingestion-analysis-reanalysis:${newIngestion.id}:${sourceAgent.id}`,
+          idempotencyKey: `ingestion-analysis-reanalysis:${newIngestion.id}:${sourceAgent.id}${sourceCorrection ? ':source-fidelity' : ''}`,
         }, ctx);
         const attached = await tx.ingestionTask.updateMany({
           where: { id: newIngestion.id, agentTaskId: null, state: 'queued' }, data: { agentTaskId: analysis.id },
@@ -1570,7 +1583,9 @@ export async function reanalyzeConfirmedIngestion(
           targetType: 'ingestion_task', targetId: newIngestion.id,
           metadata: { sourceIngestionTaskId: source.id, sourceAgentTaskId: sourceAgent.id, newAgentTaskId: analysis.id,
             artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft',
-            ...(transactionProof ? { ...transactionProof.input, creditPolicy: 'fresh_task_charge' } : {}) },
+            ...(transactionProof ? { ...transactionProof.input, creditPolicy: 'fresh_task_charge' } : {}),
+            ...(correctionAuthor ? { intent: 'revise_saved_source', authorCheckpointSha256: correctionAuthor.checkpoint.serializedSha256,
+              creditPolicy: 'fresh_task_charge' } : {}) },
         }, ctx);
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: newIngestion.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });
@@ -1690,6 +1705,8 @@ async function saveIngestionTask(
           include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
         if (!task || task.artifact.deletedAt || task.agentTask?.deletedAt || task.batch.researchObject.deletedAt) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
         const { researchObject: ro } = await authorizeIngestionWrite(scoped, { userId: input.userId, researchObjectId: task.batch.researchObjectId });
+        if (task.agentTask)
+          await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: task.agentTask.id });
         const internalReview = internalRunId ? automaticIngestionReview(task) : undefined;
         if (internalRunId) {
           const run = await tx.hermesResearchRun.findUnique({ where: { id: internalRunId }, include: { steps: true } });

@@ -7,7 +7,7 @@ import { lockTrashReferences } from '../trash/trash';
 import { parsePresentationGenerationPayload, requirePresentationWriteScope } from '../assets/presentation-asset';
 import { requireHermesPresentationTaskAuthority } from './research-run';
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
-import { requireHermesSourceReviewExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
+import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -39,6 +39,7 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   await lockTrashReferences(tx);
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   const marker = readNativeAgentExecution(task?.result);
+  const sourceCorrection = await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: input.taskId, executionAttempt: input.executionAttempt });
   const payload = task?.payload;
   let sourceReview: HermesAgentSourceReviewExecution | undefined;
   if (marker?.profile === 'paper-source-review') {
@@ -67,7 +68,7 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
       || artifact.blobSha256 !== reference.contentHash || reference.parserStatus !== 'succeeded'
       || (marker.checkpoint && (marker.checkpoint.artifactId !== reference.artifactId || marker.checkpoint.documentSha256 !== reference.contentHash
         || marker.checkpoint.sourceMapHash !== reference.serializedSha256)))) blocked();
-    return { task, marker, artifact, researchObject: ro, workspace, sourceReview };
+    return { task, marker, artifact, researchObject: ro, workspace, sourceReview, sourceCorrection };
   }
   if (!task || task.deletedAt || task.status !== 'running' || task.kind !== 'sdf.extract' || task.executionAttempt !== input.executionAttempt
     || !marker || task.session.deletedAt || task.session.status !== 'active' || !task.session.researchObjectId || !record(payload)
@@ -95,7 +96,7 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
     if (marker.profile === 'paper-author' && (!['running', 'awaiting_source_review'].includes(run.status)
       || step.status !== 'waiting')) blocked();
   }
-  return { task, marker, artifact, researchObject: ro, workspace, sourceReview };
+  return { task, marker, artifact, researchObject: ro, workspace, sourceReview, sourceCorrection };
 }
 
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */

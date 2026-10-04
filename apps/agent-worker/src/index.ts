@@ -36,6 +36,7 @@ import {
   requireHermesSourceReviewExecution,
   nativeAgentRuntimeFromEnv,
   resolveHermesPrivateSourceReanalysisExecution,
+  resolveNativeSourceCorrectionExecution,
   requireHermesSourceCompositionRecoveryExecution,
   type HermesSavedSourceReviewOutput,
   type HermesSavedSourceCompositionCandidate,
@@ -385,6 +386,7 @@ export function createHandlers(
       let nativeSourceReview: NativeSourceReviewContext | undefined;
       let nativeReviewer: Extract<Awaited<ReturnType<typeof requireHermesSourceReviewExecution>>, { mode: 'agent' }> | undefined;
       let nativeReviewerInput: Parameters<typeof requireHermesSourceReviewExecution>[1] | undefined;
+      let nativeSourceCorrection: Awaited<ReturnType<typeof resolveNativeSourceCorrectionExecution>> = null;
       let persistedScientificReviewCandidateHash: string | undefined;
       let reusableScientificReviewAttempt: { attemptId: string; reviewedCandidateHash: string; parentRequestId: string; contractVersion: string } | undefined;
       const parserCheckpoint = ownerTask.result;
@@ -606,9 +608,11 @@ export function createHandlers(
             throw new Error('[blocked] Final composition processing authority changed');
         };
       }
-      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})$/.exec(ownerTask.idempotencyKey ?? '');
+      const reanalysis = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36})(?::source-fidelity)?$/.exec(ownerTask.idempotencyKey ?? '');
       if (reanalysis) {
-        const privateReanalysis = await deps.prisma.$transaction(tx =>
+        nativeSourceCorrection = await deps.prisma.$transaction(tx => resolveNativeSourceCorrectionExecution(tx,
+          { ownerTaskId: ownerTask.id, executionAttempt: task.executionAttempt }), { isolationLevel: 'Serializable' });
+        const privateReanalysis = nativeSourceCorrection ? null : await deps.prisma.$transaction(tx =>
           resolveHermesPrivateSourceReanalysisExecution(tx, { ownerTaskId: ownerTask.id,
             ingestionTaskId: reanalysis[1]!, sourceAgentTaskId: reanalysis[2]!, executionAttempt: task.executionAttempt }),
         { isolationLevel: 'Serializable' });
@@ -638,7 +642,7 @@ export function createHandlers(
           || previousResult?.canonicalExtractionContract !== 'grounded-passages-v2') {
           throw new Error('[blocked] Reusable confirmed analysis scope is invalid');
         }
-        const reference = privateReanalysis?.sourceMapRef ?? parseDocumentSourceMapReference(previousResult.sourceMapRef);
+        const reference = nativeSourceCorrection?.sourceMapRef ?? privateReanalysis?.sourceMapRef ?? parseDocumentSourceMapReference(previousResult.sourceMapRef);
         if (reference.parserStatus !== 'succeeded' || reference.artifactId !== artifact.id
           || reference.contentHash !== artifact.blobSha256) throw new Error('[blocked] Reusable analysis source identity changed');
         reusableSourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
@@ -703,17 +707,18 @@ export function createHandlers(
       if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
       if (nativeAgentExecution) {
         const latest = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
-        if (nativeAgentExecution.profile === 'paper-source-review') {
-          const reviewer = nativeReviewer; const bindingInput = nativeReviewerInput;
-          if (!reviewer || !bindingInput || !isDeepStrictEqual(sourceMapRef, reviewer.sourceMapRef))
+        if (nativeSourceCorrection || nativeAgentExecution.profile === 'paper-source-review') {
+          const reviewer = nativeSourceCorrection ?? nativeReviewer; const bindingInput = nativeReviewerInput;
+          if (!reviewer || (!nativeSourceCorrection && !bindingInput) || !isDeepStrictEqual(sourceMapRef, reviewer.sourceMapRef))
             throw new Error('[blocked] Native independent source binding is unavailable');
           const result = await runNativeSourceReviewTask({ gateway, deps: { ...deps, storage: deps.storage! },
             task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
             sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, sourceAgentTaskId: reviewer.sourceAgentTaskId,
             authorCheckpointSha256: reviewer.authorCheckpointSha256, sourceResult: reviewer.sourceResult, inboxRoot: options.nativeAgentInboxRoot!,
+            ...(nativeSourceCorrection ? { sourceCorrection: true } : {}),
             authorize: async tx => {
-              await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
-              const current = await requireHermesSourceReviewExecution(tx, bindingInput);
+              const authority = await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
+              const current = nativeSourceCorrection ? authority.sourceCorrection : await requireHermesSourceReviewExecution(tx, bindingInput!);
               if (!isDeepStrictEqual(current, reviewer) || !await buildIngestionExternalProcessingPolicy(tx)(trustedAuthorizationContext))
                 throw new Error('[blocked] Native independent author or processing authority changed');
             },

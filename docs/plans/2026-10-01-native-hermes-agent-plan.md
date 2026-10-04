@@ -2,6 +2,15 @@
 
 > 接入设计与历史实施记录：原生论文及自动规划入口已部署，真实科学质量仍待验收；当前版本、任务、断点与下一步只见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。下方阶段性准备状态不得作为重新接入或重新付费的指令。
 
+## 已保存来源稿的原生修订
+
+10-05有界方向已获独立High GO，候选已实现；Domain283/Worker142/实际HTTP41及Domain build、Domain/Worker/API/Web TC和14文件scopedlint通过。两项High P2已真实RED→GREEN修复，最终Code High及Native789复用Ops GO；精确CI、发布和实际来源修订尚待完成；工程通过不代表科学验收。复用现有reanalyze API、同源SourceMap和原生逐字段/Claim工具，让Hermes修正本平台转述，生成新paper-author私有稿；不评议论文、不把验收样本答案写入Skill，不重开旧任务或覆盖旧版本。
+
+1. Domain/API：sourceReanalysis按intent区分既有new_paid_private_analysis和新增单字段revise_saved_source。旧请求键/digest保持；新意图只在confirmed且真实Native作者/CP有效时创建普通收费任务。现有reanalyze audit绑定服务端CP；新任务沿原key增加source-fidelity后缀，避免意图缺失时退回普通分析。 resolver在执行、终态及采用的现有Serializable权威检查中重验来源/权限/作者/CP。
+2. Worker：在原reanalysis分支取得可信修订上下文，复用runNativeSourceReviewTask的paper_candidate和逐项工具。新执行保持paper-author，终态保留修订后raw Claims及自身完成回执，不带独立reviewer的sourceAgentTaskId；旧稿基准放原binding.sourceReview，旧保存协议不升级。
+3. 验证：先证明新作者路径在旧实现拒绝，再验证实际Gateway/session/tool往返、同键回放无新调用；Domain/API验证正常一次收费、旧私有恢复兼容、父稿/CP/Map/权限变化拒绝、终态与采用重复检查、原稿保持。命令采用现有对应vitest定向入口、包TC/build、scopedlint；仅新增CI文件覆盖必要增量。
+4. 独立High复核实际增量后完成精确CI与正常应用发布，复用未变Native资源。实际一次修订通过原文对照后再建合法新run继续科学/艺术方案；不把接口/fixture成功称为内容正确或普通用户旅程通过。
+
 ## 独立原生核源接续的设计沿革
 
 接入前paper_review由作者同一Agent会话执行；完整contract5会被automaticIngestionReviewStage直接消费。v13的实际草稿、Claims及所选完整原文已传入，但角度、跨算例参数和条件仍误判。下述独立角色现已实现并部署；它曾真实执行，但未证明科学全部正确。当前断点只见CURRENT，不能把本节当待重新接入的任务。

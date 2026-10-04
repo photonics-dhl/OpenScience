@@ -39,6 +39,63 @@ export type HermesAgentSourceReviewExecution = {
   mode: 'agent'; taskId: string; runId: string; sourceAgentTaskId: string; authorCheckpointSha256: string;
   sourceMapRef: DocumentSourceMapReference; sourceResult: Prisma.JsonValue;
 };
+export type NativeSourceCorrectionInput = { intent: 'revise_saved_source' };
+export const validNativeSourceCorrectionInput = (value: unknown): value is NativeSourceCorrectionInput => {
+  const input = record(value);
+  return Object.keys(input).join(',') === 'intent' && input.intent === 'revise_saved_source';
+};
+export type NativeSourceCorrectionExecution = {
+  sourceAgentTaskId: string; authorCheckpointSha256: string; sourceMapRef: DocumentSourceMapReference; sourceResult: Prisma.JsonValue;
+};
+export const isNativeSourceCorrectionTaskKey = (key: string | null | undefined): boolean =>
+  !!key?.startsWith('ingestion-analysis-reanalysis:') && key.endsWith(':source-fidelity');
+
+/** Read the existing reanalysis receipt; this grants no execution or adoption on its own. */
+export async function resolveNativeSourceCorrectionExecution(tx: Prisma.TransactionClient,
+  input: { ownerTaskId: string; executionAttempt?: number }): Promise<NativeSourceCorrectionExecution | null> {
+  const owner = await tx.agentTask.findUnique({ where: { id: input.ownerTaskId }, include: { session: true } });
+  const fail = (): never => { throw new Error('[blocked] Native source correction binding changed'); };
+  if (!owner) return null;
+  const correctionKey = isNativeSourceCorrectionTaskKey(owner.idempotencyKey);
+  if (owner.kind !== 'sdf.extract') return correctionKey ? fail() : null;
+  const source = await tx.ingestionTask.findUnique({ where: { agentTaskId: owner.id },
+    include: { artifact: true, batch: { include: { researchObject: true } } } });
+  if (!source) return correctionKey ? fail() : null;
+  const receipts = await tx.auditLog.findMany({ where: { action: 'ingestion.task.reanalyze', targetType: 'ingestion_task', targetId: source.id } });
+  const key = /^ingestion-analysis-reanalysis:([0-9a-f-]{36}):([0-9a-f-]{36}):source-fidelity$/u.exec(owner.idempotencyKey ?? '');
+  if (!correctionKey && !receipts.some(row => record(row.metadata).intent === 'revise_saved_source')) return null;
+  const receipt = receipts[0]; const metadata = record(receipt?.metadata);
+  if (!key || receipts.length !== 1 || !receipt || owner.deletedAt || owner.session.deletedAt || owner.session.status !== 'active'
+    || owner.session.kind !== 'ingestion' || readNativeAgentExecution(owner.result)?.profile !== 'paper-author'
+    || (input.executionAttempt !== undefined && (owner.status !== 'running' || owner.executionAttempt !== input.executionAttempt))
+    || source.id !== key[1] || source.artifact.deletedAt || source.artifact.bytesPurgedAt || source.batch.researchObject.deletedAt
+    || source.batch.userId !== owner.session.userId || source.batch.researchObjectId !== owner.session.researchObjectId
+    || receipt.actorId !== owner.session.userId || receipt.workspaceId !== source.batch.researchObject.workspaceId
+    || metadata.intent !== 'revise_saved_source' || metadata.newAgentTaskId !== owner.id || metadata.sourceAgentTaskId !== key[2]
+    || typeof metadata.sourceIngestionTaskId !== 'string' || metadata.confirmationPolicy !== 'new_draft'
+    || metadata.creditPolicy !== 'fresh_task_charge' || metadata.artifactId !== source.artifactId
+    || !isDeepStrictEqual(owner.payload, { artifactId: source.artifactId, researchObjectId: source.batch.researchObjectId })) return fail();
+  const { workspace, membership } = await requireActiveMembership(tx, source.batch.researchObject.workspaceId, owner.session.userId);
+  if (workspace.status !== 'active' || !['owner', 'maintainer', 'author', 'contributor'].includes(membership.role)) return fail();
+  const parent = await tx.ingestionTask.findUnique({ where: { id: metadata.sourceIngestionTaskId },
+    include: { artifact: true, agentTask: { include: { session: true } }, batch: true } });
+  if (!parent || parent.state !== 'confirmed' || parent.agentTaskId !== key[2] || parent.artifactId !== source.artifactId
+    || parent.batch.userId !== owner.session.userId || parent.batch.researchObjectId !== owner.session.researchObjectId
+    || !parent.agentTask || parent.agentTask.deletedAt || parent.agentTask.kind !== 'sdf.extract'
+    || parent.agentTask.session.deletedAt || parent.agentTask.session.status !== 'active'
+    || parent.agentTask.session.userId !== owner.session.userId || parent.agentTask.session.researchObjectId !== owner.session.researchObjectId
+    || !isDeepStrictEqual(parent.agentTask.payload, owner.payload)
+    || !await findSavedIngestionCommit(tx, { taskId: parent.id, researchObjectId: source.batch.researchObjectId })
+    || !await hasOrdinarySourceTaskDebit(tx, owner.id, owner.session.userId)) return fail();
+  const author = requireNativePaperAuthor(parent.agentTask);
+  const reference = author.sourceMapRef;
+  if (author.checkpoint.serializedSha256 !== metadata.authorCheckpointSha256 || reference.serializedSha256 !== metadata.sourceMapSha256
+    || reference.artifactId !== source.artifactId || reference.contentHash !== source.artifact.blobSha256 || reference.parserStatus !== 'succeeded'
+    || source.artifact.workspaceId !== workspace.id
+    || (record(owner.result).sourceMapRef !== undefined && !isDeepStrictEqual(record(owner.result).sourceMapRef, reference))) return fail();
+  return { sourceAgentTaskId: parent.agentTask.id, authorCheckpointSha256: author.checkpoint.serializedSha256,
+    sourceMapRef: reference, sourceResult: parent.agentTask.result! };
+}
 export type HermesSourceReviewExecution = HermesAgentSourceReviewExecution | { mode: 'model'; savedOutput?: HermesSavedSourceReviewOutput;
   savedCompositionCandidate?: HermesSavedSourceCompositionCandidate;
   nativeSourceReview?: import('./native-source-review').NativeSourceReviewIdentity } | {

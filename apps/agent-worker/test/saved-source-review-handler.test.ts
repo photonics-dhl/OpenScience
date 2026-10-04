@@ -7,6 +7,7 @@ const seam = vi.hoisted(() => ({
   extractHandler: vi.fn(),
   requireExecution: vi.fn(),
   resolveReanalysis: vi.fn(),
+  resolveCorrection: vi.fn(),
   requireComposition: vi.fn(),
   savedCommit: vi.fn(),
   claim: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('@openscience/domain', async load => ({
   ...await load<typeof import('@openscience/domain')>(),
   requireHermesSourceReviewExecution: seam.requireExecution,
   resolveHermesPrivateSourceReanalysisExecution: seam.resolveReanalysis,
+  resolveNativeSourceCorrectionExecution: seam.resolveCorrection,
   requireHermesSourceCompositionRecoveryExecution: seam.requireComposition,
   findSavedIngestionCommit: seam.savedCommit,
   claimAgentTask: seam.claim,
@@ -36,6 +38,7 @@ vi.mock('@openscience/domain', async load => ({
 }));
 
 import { createHandlers, createPollOnce, createSpoolSubmission } from '../src/index';
+beforeEach(() => { seam.resolveCorrection.mockReset().mockResolvedValue(null); });
 
 describe('new Hermes model review authorization', () => {
   beforeEach(() => {
@@ -339,8 +342,8 @@ describe('fresh private source reanalysis handler', () => {
     seam.lock.mockReset().mockResolvedValue(undefined);
   });
 
-  function reanalysisFixture() {
-    const f = fixture();
+  function reanalysisFixture(native = false) {
+    const f = fixture(1, native);
     f.owner.idempotencyKey = `ingestion-analysis-reanalysis:${ids.ingestion}:${ids.source}`;
     f.prisma.ingestionTask.findUnique.mockResolvedValue({ id: ids.ingestion, agentTaskId: ids.owner,
       artifactId: 'artifact', state: 'queued', batch: { userId: 'actor', researchObjectId: 'ro' } } as never);
@@ -391,6 +394,38 @@ describe('fresh private source reanalysis handler', () => {
     expect(seam.resolveReanalysis).toHaveBeenCalledOnce();
     expect(seam.extractHandler).not.toHaveBeenCalled();
     expect(f.parserCascade).not.toHaveBeenCalled();
+  });
+
+  it.each(['trusted', 'forged-payload', 'changed-proof'])('routes only trusted saved-source correction context to the new author (%s)', async variant => {
+    const f = reanalysisFixture(true);
+    f.owner.idempotencyKey += ':source-fidelity';
+    f.owner.result = { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-author',
+      runtimeId: 'fixture-runtime', skillCatalogueId: 'fixture-catalogue', model: 'MiniMax-M3' } };
+    Object.assign(f.tx.agentTask, { findUnique: vi.fn(async () => f.owner) });
+    f.tx.agentTask.updateMany.mockImplementation(async input => { Object.assign(f.owner, { result: structuredClone(input.data.result) }); return { count: 1 }; });
+    Object.assign(f.tx, { membership: { findUnique: vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' }) },
+      ingestionTask: { findUnique: vi.fn(async () => ({ agentTask: f.owner, artifactId: 'artifact', artifact: { workspaceId: 'workspace' },
+        batch: { userId: 'actor', researchObjectId: 'ro', researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } },
+      })) } });
+    Object.assign(f.source, { ingestionTask: { id: ids.failed, state: 'confirmed', artifactId: 'artifact',
+      batch: { userId: 'actor', researchObjectId: 'ro' } } });
+    seam.savedCommit.mockResolvedValue({ commit: { researchObjectId: 'ro' } });
+    const execution = { sourceAgentTaskId: ids.source, authorCheckpointSha256: 'a'.repeat(64),
+      sourceMapRef: f.reference, sourceResult: { core: { method: 'actual saved baseline' } } };
+    seam.resolveCorrection.mockResolvedValue(execution);
+    seam.nativeAuthority.mockReset().mockResolvedValue({ sourceCorrection: variant === 'changed-proof'
+      ? { ...execution, authorCheckpointSha256: 'b'.repeat(64) } : execution });
+    seam.nativeReview.mockReset().mockImplementation(async input => {
+      await input.authorize(f.tx); return { core: { method: 'new author revision' } };
+    });
+    if (variant === 'forged-payload') f.owner.payload.sourceResult = { forged: true };
+    if (variant === 'trusted') {
+      await expect(f.execute()).resolves.toMatchObject({ core: { method: 'new author revision' } });
+      expect(seam.nativeReview).toHaveBeenCalledOnce();
+      expect(seam.nativeReview.mock.calls[0]![0]).toMatchObject({ ...execution, sourceCorrection: true });
+    } else await expect(f.execute()).rejects.toThrow('[blocked]');
+    expect(seam.extractHandler).not.toHaveBeenCalled(); expect(f.parserCascade).not.toHaveBeenCalled();
+    expect(seam.resolveReanalysis).not.toHaveBeenCalled();
   });
 
   it('preserves the existing confirmed reanalysis path when no private intent exists', async () => {

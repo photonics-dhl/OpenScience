@@ -1919,11 +1919,12 @@ export async function refreshIngestionAnalysis(
   return result.task;
 }
 
-export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string): Promise<IngestionTaskSummary> {
+export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string,
+  sourceReanalysis?: import('@openscience/domain').NativeSourceCorrectionInput): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId }),
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, ...(sourceReanalysis ? { sourceReanalysis } : {}) }),
   });
   return result.task;
 }

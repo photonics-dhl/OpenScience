@@ -25,7 +25,7 @@ import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
-import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
+import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, isNativeSourceCorrectionTaskKey, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
@@ -1140,6 +1140,8 @@ async function markTaskProgressOnce(
       if (execution.mode !== 'model' || !execution.nativeSourceReview)
         throw new AgentError('ILLEGAL_TRANSITION', 'Native source review authority changed');
     }
+    if (input.status === 'succeeded')
+      await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: current.id, executionAttempt: current.executionAttempt });
     if (input.status === 'succeeded' && readNativeAgentExecution(current.result)) {
       const authority = await requireNativeAgentExecutionAuthority(tx, { taskId: current.id, executionAttempt: current.executionAttempt });
       if (authority.sourceReview && (!isJsonRecord(input.result) || !isJsonRecord(input.result.scientificReview)
@@ -1170,7 +1172,8 @@ async function markTaskProgressOnce(
     const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
-  }, ['paper-illustration', 'paper-source-review'].includes(readNativeAgentExecution(task.result)?.profile ?? '') ? { isolationLevel: 'Serializable' } : undefined);
+  }, isNativeSourceCorrectionTaskKey(task.idempotencyKey) || ['paper-illustration', 'paper-source-review', 'paper-author'].includes(readNativeAgentExecution(task.result)?.profile ?? '')
+    ? { isolationLevel: 'Serializable' } : undefined);
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
 }

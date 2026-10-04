@@ -461,7 +461,8 @@ describe('independent native source review using the existing scientific materia
       expect(original).toEqual(authorResult());
     });
 
-  it.each(['unchanged', 'replace'] as const)('runs fresh staged %s through actual Session/Gateway while keeping the private baseline out of host config', async claimsDecision => {
+  it.each([['unchanged', false], ['replace', false], ['unchanged', true], ['replace', true]] as const)(
+    'runs staged %s (source correction=%s) through actual Session/Gateway without changing the private baseline', async (claimsDecision, sourceCorrection) => {
     let state: NativeAgentSessionState | null = null;
     const store = { async read() { return structuredClone(state); },
       async compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState) {
@@ -495,7 +496,7 @@ describe('independent native source review using the existing scientific materia
     const gateway = new AiGateway({ providers: [provider] });
     const authorize = vi.fn(async () => undefined);
     seam.host.mockImplementation(async (input: Parameters<typeof runHostedNativeTask>[0]) => {
-      expect(Object.keys(input.config).sort()).toEqual(['contextWindowTokens', 'goal', 'instructions', 'maxOutputTokens', 'maxTurns', 'model', 'runtimeId', 'skillCatalogueId', 'sourceTools', 'taskId'].sort());
+      expect(Object.keys(input.config).sort()).toEqual(['contextWindowTokens', 'goal', 'instructions', 'maxOutputTokens', 'maxTurns', 'model', 'runtimeId', 'skillCatalogueId', 'sourceTools', 'taskId', ...(sourceCorrection ? ['profile'] : [])].sort());
       expect(JSON.stringify(input.config)).not.toContain(text);
       expect(JSON.stringify(input.config)).not.toContain('d'.repeat(64));
       expect(input.config.sourceTools.map(tool => tool.name)).toEqual(expect.arrayContaining(['paper_review', 'paper_review_field', 'paper_review_claim']));
@@ -516,11 +517,13 @@ describe('independent native source review using the existing scientific materia
       const final = await input.session.complete(request);
       return { finalResponse: final.choices[0]!.message.content, observedPassageIds: input.paper.observedPassageIds };
     });
-    const input: Parameters<typeof runNativeSourceReviewTask>[0] = { gateway, deps: { prisma: { $transaction: async (fn: (tx: never) => Promise<void>) => fn({} as never) } } as never,
+    const baseline = authorResult(); const original = structuredClone(baseline);
+    const input: Parameters<typeof runNativeSourceReviewTask>[0] & { sourceCorrection: boolean } = { gateway, sourceCorrection,
+      deps: { prisma: { $transaction: async (fn: (tx: never) => Promise<void>) => fn({} as never) } } as never,
       task: { id: 'review-task', executionAttempt: 1, result: { nativeAgentExecution: {
-        kind: 'hermes-agent', profile: 'paper-source-review', runtimeId: 'runtime', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' } } },
+        kind: 'hermes-agent', profile: sourceCorrection ? 'paper-author' : 'paper-source-review', runtimeId: 'runtime', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' } } },
       sourceMap: map, sourceMapRef: { artifactId: map.artifactId, contentHash: map.contentHash, serializedSha256: 'c'.repeat(64) } as never,
-      sourceAgentTaskId, authorCheckpointSha256: 'd'.repeat(64), sourceResult: authorResult(), inboxRoot: 'unused', renderPages: async () => [], authorize };
+      sourceAgentTaskId, authorCheckpointSha256: 'd'.repeat(64), sourceResult: baseline, inboxRoot: 'unused', renderPages: async () => [], authorize };
     const result = await runNativeSourceReviewTask(input);
     const saved = await store.read();
     expect(calls).toBe(4); expect(authorize).toHaveBeenCalled();
@@ -532,9 +535,16 @@ describe('independent native source review using the existing scientific materia
     expect(JSON.parse(committed!.content)).toMatchObject({ reviewedCandidate: {
       fields: { results: { summary: text } }, claimSuggestions: claimsDecision === 'unchanged' ? [{ statement: text }] : replacementClaims(),
     } });
-    expect(result.scientificReview).toMatchObject({ kind: 'hermes_agent_review', profile: 'paper-source-review', sourceAgentTaskId,
+    expect(result.scientificReview).toMatchObject({ kind: 'hermes_agent_review', profile: sourceCorrection ? 'paper-author' : 'paper-source-review',
+      ...(!sourceCorrection ? { sourceAgentTaskId } : {}),
       status: 'review_received', provider: 'minimax', model: 'MiniMax-M3', promptHash: saved?.turns.at(-1)?.target.promptHash });
-    expect(result).not.toHaveProperty('nativeDraftClaims'); expect(result.scientificReview).not.toHaveProperty('draftClaims');
+    expect(result).not.toHaveProperty('nativeDraftClaims');
+    if (sourceCorrection) {
+      expect(result.scientificReview).not.toHaveProperty('sourceAgentTaskId');
+      expect(result.scientificReview).toHaveProperty('draftClaims', claimsDecision === 'unchanged' ? original.scientificReview.draftClaims : replacementClaims());
+      expect(saved?.initialMessages.some(m => m.content.includes('修正已保存'))).toBe(true);
+    } else expect(result.scientificReview).not.toHaveProperty('draftClaims');
+    expect(baseline).toEqual(original);
     expect(result.core.method).toBe(text);
     expect(result.reviewedClaimSuggestions?.map(claim => claim.statement)).toEqual(claimsDecision === 'unchanged'
       ? [text] : replacementClaims().map(claim => claim.statement));
