@@ -117,6 +117,24 @@ function successfulHttpResponse(outputTokens = 10) {
     stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: outputTokens } }));
 }
 
+describe('received thinking-only Native turns remain paid evidence, never scientific completion', () => {
+  it.each(['tool_use', 'end_turn'] as const)('retains the actual %s reply before stopping and replays without HTTP', async stopReason => {
+    const content = [{ type: 'thinking', thinking: 'Unfinished private model reasoning.', signature: 'unchanged-signature' }];
+    const f = httpSessionFixture(async () => new Response(JSON.stringify({ model: binding.model, content,
+      stop_reason: stopReason, usage: { input_tokens: 20, output_tokens: 37 } })));
+    const limits = { deadlineAt: Date.now() + 10_000 };
+    await expect(f.create(limits).complete(request)).rejects.toThrow('no visible completion or tool call');
+    const saved = f.state;
+    expect(saved?.turns).toHaveLength(1);
+    expect(saved?.turns[0]).toMatchObject({ state: 'completed', response: { text: '', providerStopReason: stopReason,
+      usage: { inputTokens: 20, outputTokens: 37 }, providerContent: { content } } });
+    expect(saved?.turns[0]?.state === 'completed' && saved.turns[0].response.toolCalls).toBeUndefined();
+    expect(f.calls).toHaveLength(1); expect(f.fallbackCalls).toBe(0);
+    await expect(f.create(limits).complete(request)).rejects.toThrow('no visible completion or tool call');
+    expect(f.calls).toHaveLength(1); expect(f.fallbackCalls).toBe(0); expect(f.state).toEqual(saved);
+  });
+});
+
 describe('native HTTP 529 process-local retry', () => {
   afterEach(() => { vi.useRealTimers(); });
 

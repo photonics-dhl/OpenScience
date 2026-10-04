@@ -442,9 +442,14 @@ export class AnthropicCompatProvider implements Provider {
       const tools = snapshotToolDefinitions(opts.tools);
       const toolCalls = tools ? callsFromAnthropic(data.content, tools) : undefined;
       validateResponseCallIds(toolCalls, opts.messages);
-      const providerContent = tools ? snapshotAssistantContent({ provider: this.name, model: opts.model, content: data.content }) : undefined;
+      const providerContent = tools && data.content.length
+        ? snapshotAssistantContent({ provider: this.name, model: opts.model, content: data.content }) : undefined;
       if (tools && data.model !== opts.model) throw new TextProviderError('provider_response_shape', 'Native agent response model changed');
-      if (!text.trim() && !toolCalls) {
+      // Preserve the actual paid native receipt; the Session still decides whether it can continue.
+      const nativeThinkingReceipt = res.status === 200 && !!providerContent
+        && data.content.every(block => block.type === 'thinking' && typeof block.thinking === 'string' && !!block.thinking.trim())
+        && reportedTokens(data.usage?.input_tokens) !== null && reportedTokens(data.usage?.output_tokens) !== null;
+      if (!text.trim() && !toolCalls && !nativeThinkingReceipt) {
         const textBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'text').length;
         const thinkingBlocks = data.content.filter((block) => block && typeof block === 'object' && block.type === 'thinking').length;
         throw new TextProviderError('provider_empty', `Provider ${this.name} returned empty content`, undefined, {

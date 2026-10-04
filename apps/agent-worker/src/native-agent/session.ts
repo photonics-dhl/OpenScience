@@ -186,6 +186,9 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       if (result.model !== binding.model) blocked('provider reported a different model');
       if (result.usage.outputTokens > responseAllowance) blocked('provider exceeded reserved output budget');
       if (result.finishReason === 'length') blocked('output truncated; no automatic paid correction');
+      // completed above means the actual paid reply was saved, not that the Agent finished its work.
+      if (!result.text.trim() && !result.toolCalls?.length)
+        blocked('provider returned no visible completion or tool call; original paid response retained');
       if (nativeAgentHasMissingToolCall(result)) {
         // Count the original paid prefix, including on replay. Restarting a process grants no second correction.
         if (state?.turns.slice(0, cursor).some(turn => turn.state === 'completed' && nativeAgentHasMissingToolCall(turn.response)))

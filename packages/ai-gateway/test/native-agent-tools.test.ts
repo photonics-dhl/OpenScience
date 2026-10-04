@@ -16,6 +16,80 @@ const controls = () => ({ beforeProviderAttempt: vi.fn(async () => undefined),
   submitProvider: vi.fn(async (_target: unknown, submit: () => Promise<unknown>) => submit()) });
 
 describe('native Hermes tool round trips through Gateway', () => {
+  it('preserves a paid native thinking-only response without inventing text or a tool call', async () => {
+    const content = [{ type: 'thinking', thinking: 'Opaque fixture continuation.', signature: 'exact-private-signature' }];
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: config.model, content,
+      stop_reason: 'tool_use', usage: { input_tokens: 334, output_tokens: 353 } })));
+    const fallback = vi.fn(async () => response());
+    const audit = { record: vi.fn(async () => undefined) };
+    const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('m3', config, fetcher),
+      new AnthropicCompatProvider('fallback', config, fallback)], audit });
+    const result = await gateway.nativeAgentComplete([{ role: 'user', content: 'Continue the bound task.' }], { tools: [tool] }, controls());
+    expect(result).toMatchObject({ text: '', model: config.model, finishReason: 'other', providerStopReason: 'tool_use',
+      usage: { inputTokens: 334, outputTokens: 353 }, providerContent: { provider: 'm3', model: config.model, content } });
+    expect(result.toolCalls).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledOnce(); expect(fallback).not.toHaveBeenCalled();
+    expect(JSON.stringify(audit.record.mock.calls)).not.toContain('Opaque fixture continuation.');
+    expect(JSON.stringify(audit.record.mock.calls)).not.toContain('exact-private-signature');
+  });
+
+  it.each(['end_turn', 'pause_turn'] as const)('retains the actual %s reason and explicitly reported zero usage', async reason => {
+    const content = [{ type: 'thinking', thinking: 'Opaque first block.', signature: 'first' },
+      { type: 'thinking', thinking: 'Opaque second block.', signature: 'second' }];
+    const provider = new AnthropicCompatProvider('m3', config, async () => new Response(JSON.stringify({
+      model: config.model, content, stop_reason: reason, usage: { input_tokens: 0, output_tokens: 0 } })));
+    const result = await provider.complete({ model: config.model, tools: [tool], messages: [{ role: 'user', content: 'Continue.' }] });
+    expect(result).toMatchObject({ text: '', providerStopReason: reason, finishReason: reason === 'end_turn' ? 'stop' : 'other',
+      usage: { inputTokens: 0, outputTokens: 0 }, providerContent: { content } });
+    expect(result.toolCalls).toBeUndefined();
+  });
+
+  it('keeps generic thinking-only and non-200 responses outside native receipt preservation', async () => {
+    const content = [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'signature' }];
+    const provider = new AnthropicCompatProvider('m3', config, async () => response(content));
+    await expect(provider.complete({ model: config.model, messages: [{ role: 'user', content: 'Return text.' }] }))
+      .rejects.toMatchObject({ code: 'provider_empty' });
+    for (const status of [201, 529]) {
+      const guarded = new AnthropicCompatProvider('m3', config, async () => new Response(JSON.stringify({
+        model: config.model, content, stop_reason: 'tool_use', usage: { input_tokens: 334, output_tokens: 353 } }), { status }));
+      await expect(guarded.complete({ model: config.model, tools: [tool], messages: [{ role: 'user', content: 'Continue.' }] }))
+        .rejects.toMatchObject(status === 529 ? { code: 'provider_http', httpStatus: 529 } : { code: 'provider_empty' });
+    }
+  });
+
+  it.each(['input_tokens', 'output_tokens'] as const)('does not preserve thinking-only output with missing or invalid %s', async key => {
+    for (const value of [undefined, null, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, '353']) {
+      const provider = new AnthropicCompatProvider('m3', config, async () => new Response(JSON.stringify({ model: config.model,
+        content: [{ type: 'thinking', thinking: 'Opaque fixture.', signature: 'signature' }], stop_reason: 'tool_use',
+        usage: { input_tokens: 334, output_tokens: 353, [key]: value } })));
+      await expect(provider.complete({ model: config.model, tools: [tool], messages: [{ role: 'user', content: 'Continue.' }] }))
+        .rejects.toMatchObject({ code: 'provider_empty' });
+    }
+  });
+
+  it.each([
+    { content: [] }, { content: [{ type: 'thinking', thinking: '' }] },
+    { content: [{ type: 'thinking', thinking: ' \n ' }] },
+    { content: [{ type: 'text', text: '' }] },
+    { content: [{ type: 'redacted_thinking', data: 'opaque-redaction' }] },
+    { content: [{ type: 'thinking', thinking: 'Opaque fixture.' }, { type: 'text', text: ' ' }] },
+  ])('keeps empty or non-thinking-only content rejected: %j', async ({ content }) => {
+    const provider = new AnthropicCompatProvider('m3', config, async () => response(content));
+    await expect(provider.complete({ model: config.model, tools: [tool], messages: [{ role: 'user', content: 'Continue.' }] }))
+      .rejects.toMatchObject({ code: 'provider_empty' });
+  });
+
+  it.each([
+    { model: 'different-model', content: [{ type: 'thinking', thinking: 'Opaque fixture.' }] },
+    { content: [{ type: 'thinking', thinking: 'Opaque fixture.' }] },
+    { model: config.model, content: null },
+    { model: config.model, content: [{ type: 'thinking', thinking: 42 }] },
+  ])('does not admit a thinking-only receipt with invalid model or block shape: %j', async partial => {
+    const provider = new AnthropicCompatProvider('m3', config, async () => new Response(JSON.stringify({ ...partial,
+      stop_reason: 'tool_use', usage: { input_tokens: 334, output_tokens: 353 } })));
+    await expect(provider.complete({ model: config.model, tools: [tool], messages: [{ role: 'user', content: 'Continue.' }] })).rejects.toThrow();
+  });
+
   it.each([
     [{ input_tokens: 31, cache_read_input_tokens: 4000, cache_creation_input_tokens: 120 }, 4151],
     [{ input_tokens: 31, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, 31],

@@ -33,6 +33,8 @@
 - 更早604e8d9a/c801a07f作者及271fcec7独立审阅虽技术成功，科学High NO-GO；私有b2508270、分镜7226c434及原稿/原图/CP仍保留。定位框精度、长工具结果保真、合并稿反馈、终轮无tools请求等修复已发布；旧“候选未部署/待配对”的叙述降级到Git历史。详细历史见本页5b135提交与tmp/hermes-cleanup-20261003/、tmp/ro-journey-20260929/，不重跑旧步骤。
 - 临时发布树native-overload-release已归档，worktree list实核已移除；证据日志在canonical ignored tmp。历史240个本地测试fixture删除被自动审批以blocked by policy拒绝，未执行/绕过，仍保留；新fixture退出自动清理。新API真实生成/审核/入库前不退役浏览器。原research-run.ts 20项、handler4项lint为同源已复现基线，不在本修复中掩盖；Native安装0.10.0不因Skill名称存在就视为最新插件可用。
 
+- 新断点已核实：thinking-only回复在Gateway provider_empty之前已收到完整HTTP200，但没有进入completed私有CP；候选仅对有tools/原model/明确真实usage的非空thinking回复保留原opaque/签名/stop，Session保存后仍停止，不作为科学完成。Gateway53/Session73、两包TC/build及scoped lint通过，独立High代码GO；尚未部署/未接续/未再发模型。证据native-thinking-receipt-session-*及independent-domain-native-empty-receipt-*。原b5第12帧的原始stop/全文已丢失，不能补造或重发；接下来复用真实SDK离线loop验证历史与原预算，不因0.10/0.21.5版本差异盲升级或假定新版invalid-response重试安全。
+
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |
 |---|---|---|
