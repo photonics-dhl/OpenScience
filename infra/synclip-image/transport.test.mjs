@@ -42,9 +42,10 @@ async function fixture() {
   const base = await mkdtemp(join(fixtureRoot, 'independent-domain-synclip-'));
   fixtureDirectories.push(base);
   const privateDir = join(base, id); await mkdir(privateDir);
+  const createdAt = Date.now();
   const request = { schemaVersion: 1, provider: 'synclip', id, prompt: 'Exact privately reviewed scientific brief.',
     promptHash: createHash('sha256').update('Exact privately reviewed scientific brief.').digest('hex'),
-    createdAt: Date.now(), deadlineAt: Date.now() + 600000 };
+    createdAt, deadlineAt: createdAt + 600000 };
   await writeFile(join(privateDir, 'request.json'), JSON.stringify(request));
   const calls = []; const config = { apiKey: 'test-only-host-key', rendererImage: `sha256:${'a'.repeat(64)}` };
   const deps = {
