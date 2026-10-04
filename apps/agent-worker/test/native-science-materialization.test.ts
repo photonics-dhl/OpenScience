@@ -36,6 +36,50 @@ it('keeps the original paid author goal while new authors use the reader focus o
   saved.initialMessages = [{ role: 'user', content: fresh.goal }];
   expect(nativePaperToolProfile(saved)).toMatchObject({ goal: fresh.goal, sourceFaithfulness: true });
 });
+
+describe('native author selected claims size feedback', () => {
+  it('enables the diagnostic only for its actual fresh tool definition and retains paid definitions', () => {
+    const fresh = nativePaperToolProfile(null);
+    expect(fresh.claimSizeFeedback).toBe(true);
+    const tools = fresh.sourceTools.map(tool => ({ type: 'function', function: structuredClone(tool) }));
+    const saved = { binding: { allowedTools: fresh.allowedTools }, initialMessages: [{ role: 'user', content: fresh.goal }],
+      turns: [{ request: { options: { tools } } }] } as unknown as NativeAgentSessionState;
+    expect(nativePaperToolProfile(saved).claimSizeFeedback).toBe(true);
+    const draftTool = tools.find(tool => tool.function.name === 'paper_draft')!;
+    draftTool.function = structuredClone(NATIVE_PAPER_SELECTED_DRAFT_TOOL);
+    expect(nativePaperToolProfile(saved)).toMatchObject({ claimSizeFeedback: false, draftFeedback: true });
+    expect(nativePaperToolProfile(saved).sourceTools.find(tool => tool.name === 'paper_draft')).toEqual(draftTool.function);
+    saved.turns = [];
+    expect(nativePaperToolProfile(saved)).toMatchObject({ claimSizeFeedback: false, draftFeedback: true, reviewContext: true, reviewCandidate: true });
+    expect(nativePaperToolProfile(saved).sourceTools.find(tool => tool.name === 'paper_draft')).toEqual(NATIVE_PAPER_SELECTED_DRAFT_TOOL);
+  });
+
+  it.each([7_999, 8_000, 8_001])('keeps the existing selected claims boundary and diagnoses %i serialized characters', size => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], { draftFeedback: true, claimSizeFeedback: true });
+    const claim = { ...draft().draftClaims[0]!, statement: 's'.repeat(3_500), conditions: Array<string>(8).fill('c'.repeat(500)) };
+    claim.statement += 's'.repeat(size - JSON.stringify([claim]).length);
+    expect(JSON.stringify([claim])).toHaveLength(size);
+    for (const [order, field] of SDF_CORE_FIELDS.entries())
+      expect(worker.field({ field, ...draft().fields[field] }, order, `field-${field}`).status).toBe('field_saved');
+    expect(worker.claim(claim, 6, 'claim').status).toBe('claim_saved');
+    const result = worker.draft({ fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
+      claimToolCallIds: ['claim'], needsMoreEvidence: [] }, 7, 'draft');
+    expect(result.status).toBe(size > 8_000 ? 'invalid_draft' : 'draft_ready');
+    if (size > 8_000) {
+      expect(result.feedback).toContain('8001');
+      expect(result.feedback).toContain('8000');
+      expect(result.feedback).toContain('serialized JSON');
+      expect(() => worker.finish(JSON.stringify({ ...review(), draftToolCallId: 'draft' }))).toThrow();
+    }
+  });
+
+  it('preserves the generic oversized receipt for an already-paid author', () => {
+    const worker = createNativeScientificMaterializer(map, () => ['P00001'], { draftFeedback: true, claimSizeFeedback: false });
+    const body = draft();
+    body.draftClaims[0]!.conditions = Array<string>(20).fill('c'.repeat(500));
+    expect(worker.draft(body, 0, 'paid').feedback).toBe('draftClaims未满足既有主张合同：最多12条、总计8000字符；core无parentClientKey，非core依赖本批真实父项且不成环。sourceBindings须属于本轮真实输入P、无重复且至少一项supports；conditions与limitations为字符串数组。');
+  });
+});
 describe('shared native scientific staging primitives', () => {
   it('selects saved independent decisions and Claims for the original-bound complete review', () => {
     const original = draft(); const before = structuredClone(original);
@@ -297,7 +341,9 @@ describe('actual native Agent scientific materializer', () => {
     profile.sourceTools[0]!.parameters.changed = true;
     expect(old.parameters).not.toHaveProperty('changed');
     expect(nativePaperToolProfile(null)).toMatchObject({ useNotes: true, reviewContext: true });
-    expect(nativePaperToolProfile(null).sourceTools).toContainEqual(NATIVE_PAPER_SELECTED_DRAFT_TOOL);
+    const freshDraft = nativePaperToolProfile(null).sourceTools.find(tool => tool.name === 'paper_draft')!;
+    expect(freshDraft.parameters).toEqual(NATIVE_PAPER_SELECTED_DRAFT_TOOL.parameters);
+    expect(freshDraft.description).toContain('8000-character serialized JSON limit');
   });
   it('retains comparison context when replaying tasks that originally received its tool description', () => {
     const saved = { binding: { allowedTools: ['paper_field', 'paper_draft'] }, turns: [{ request: { options: { tools: [

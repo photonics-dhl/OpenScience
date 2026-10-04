@@ -3109,7 +3109,7 @@ export function validateNativeScientificClaim(value: unknown, readPassageIds: re
 
 /** Thin native entry: reuse scientific guards and materializers; the actual Agent owns the draft and review. */
 export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap, readPassageIds: () => string[], options: {
-  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean; claimFeedback?: boolean; draftFeedback?: boolean; savedClaimsReview?: boolean;
+  reviewContext?: boolean; reviewCandidate?: boolean; reviewToolCompletion?: boolean; claimFeedback?: boolean; draftFeedback?: boolean; claimSizeFeedback?: boolean; savedClaimsReview?: boolean;
   /** Server-bound final author content, never a draft supplied by the reviewing model. */
   boundDraft?: { sourceAgentTaskId: string; draft: unknown };
 } = {}) {
@@ -3205,6 +3205,9 @@ export function createNativeScientificMaterializer(sourceMap: DocumentSourceMap,
           ];
         }) : [];
         let batchFeedback: string | undefined;
+        const draftClaims = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).draftClaims : undefined;
+        if (options.claimSizeFeedback && Array.isArray(draftClaims) && JSON.stringify(draftClaims).length > 8_000)
+          batchFeedback = `draftClaims serialized JSON has ${JSON.stringify(draftClaims).length} characters; the existing limit is 8000, including statements, conditions, limitations and sourceBindings. Keep complete Claims needed for the main explanation and representative result, with their required parents and conditions; omit entire auxiliary Claims that do not serve that explanation. Do not truncate text, discard necessary qualifiers or repeatedly test oversized subsets.`;
         if (options.draftFeedback && value && typeof value === 'object' && !Array.isArray(value))
           areSourceCompositionDraftClaimsValid((value as Record<string, unknown>).draftClaims, [...known], reason => { batchFeedback ??= reason; });
         return { status: 'invalid_draft', feedback: [batchFeedback ?? validation.feedback(value), ...unread].join('\n') };

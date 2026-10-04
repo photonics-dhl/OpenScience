@@ -3,38 +3,12 @@
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
-- 同一Native来源修订入口已部署渐进paper_candidate及既有field/Claim staging：先建立论文主线，再按完整字段或完整Claims核对并保存；关联取实际sourcePassageId及真实parent closure，不靠字段名称或当前论文答案。服务器全稿仍供完整终态物化，新快捷保留仅接受真实送达及严格重放的完整视图，旧paid合同不升级。定向工程、真实旧paid零外呼回放、独立High及精确CI通过并正常部署，新实际任务已创建、结果待验；视图减重的科学效果仍未证明，不加Skill、模型阶段或预算。版本与下一步只见CURRENT。
-- 用户10-04纠正优先：默认理解/图解以论文作者的内容为依据，只核我们的转述和视觉表达保真度；不评议原论文科学有效性/质量/创新性。旧Appraisal路由及“科学NO-GO”混合目的记录降为历史；实际条件、符号、范围和空间位置的转述失真仍是有效问题。当前已部署实现复用openscience-source-review负责理解和自校，scientific-critical-thinking完整方法保留给另行请求的评议；真实作者自校复用原ready/确认/CAS、艺术资料后置，不增模型阶段。部署与验证以CURRENT为准。
+- 默认入口复用完整PDF/OCR/SourceMap，实际NousResearch Hermes Agent＋MiniMax-M3选择paper_read/search/view和已装openscience-source-review，凝练六维/Claims并自校转述，再走原生科学分镜/设计/风格。论文是内容依据，不评议论文自身有效性；scientific-critical-thinking的完整专项方法仍保留给另行请求。SourceMap、隔离science-worker、既有来源/权限/收费/paid恢复守卫继续复用。
+- 实际最新原文写稿读过正文并查看原页，主机制与主THz例有改善，但六字段及选中Claims仍有量关系、量对象和案例范围失真。终态与实际保存一致，不是缺Skill安装、缺源或保存丢失；未接分镜，不称前置或全链完成。真实结果、身份、报告和禁止重放的once只见CURRENT。
+- 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。候选仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
+- 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
+- Synclip应用接线与私密Key保存完成，host尚未启用、调用为0；科学方案/完整prompt/风格、像素核源、普通用户旅程与跨论文稳定性仍待真实验收。有效科学/设计Skill、历史paid消费者及共同守卫有引用，不能因新默认入口改变而整块删除；完成自有stage可确认后归档，用户资产/回滚/失败证据保留。
 
-Native论文任务的计算执行缺口已定向确认：paper-task/nativeSourceReviewToolProfile白名单只有Skill、论文读取和提交工具，task_runtime按白名单注册；scientific-critical-thinking方法文本不会自动提供Python。已有science-worker通过claimNextPendingSandboxJob、checkPythonAST和SandboxController执行NumPy/SciPy/SymPy（仅源码能力，未新增线上探针），现有sandbox-jobs要求workspace membership与Python配额。Native task/run/source/lease绑定与可靠幂等尚缺，不能直接裸调Domain作为授权；应补适配复用隔离后端，不开放主机terminal。实际新稿仍有推理/范围错误，不能把缺计算器当唯一根因；精确结果见CURRENT。
-
-新论文任务由NousResearch AIAgent/MiniMax-M3通过Worker native-agent/paper-task.ts执行；复用SourceMap、paper_read/search/view和原科学物化。科学理解/核查由Hermes负责，服务器GPT来源审阅只保留历史绑定任务，不是当前方向。版本/任务/真实验收统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
-
-scientific-critical-thinking历史入口提供Appraisal Workflow，完整原方法/专项引用保留给另行请求的评议，通过skill_view按需读取。既有scientificEvidenceRules在静态消费存在、Native Appraisal投影未接入；已将同一规则导出到唯一references/source-evidence-alignment.md，作者与reviewer按保留机制/量/比较/范围读取，不注入当前论文答案、不内联整套方法或增设科学门禁。生成/发现/受限读取已验证并部署；真实作者及独立审阅的根回包与目录全文逐字相等，未见单独引用读取；实际终稿仍有范围/条件/位置误判。现已在根直接呈现同一七条，服务器与built导出匹配，专项方法按需读，不新增规则或读取门禁；科学改善与跨论文正确消费仍须实际任务评价。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选稿、Claims及原来源reviewContext。新任务用paper_review提交完整终审数据，最后普通回复不重复JSON；旧paid任务保持原可选反馈和严格JSON规则。安装、注入、实际调用和科学正确是四个不同事实。 分镜另实复现书目引用slash与数字–Hz单位连字符的数量解析误识别，以及Native仅返简称丢既有字段定位；不是缺nullable的schema漂移。已发布解析/反馈修复：既有保存工具描述精确启用新模式，旧描述/旧解析及全等receipt重放保留，其他调用方default旧；数量值/单位/ownQuote继续校验、500字符内给字段位置，不默认nullable或扩原输出额度。92项、TC/build和新增差异独立High通过，3条lint为HEAD复现基线；部署/科学验收只见CURRENT。缺父Claim的完整替换集合曾只回invalid_structure，使Agent两次重试；已在既有诊断补具体parent_not_selected路径和真实saved IDs语义，保留完整图/来源校验、不自动补父。
-
-原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。这些是历史故障证据；最新作者已正常工具提交，当前状态以下文及CURRENT为准，不能据旧问题连续请求；准确任务及来源依据只见CURRENT。
-
-原生paper-illustration复用同源Claims/原页/设计资源及共享科学艺术物化，自动保存完整私有prompt。默认忠实理解已实际由作者自校→确认→私有分镜自动衔接，无额外论文评议；仍须真实来源保真验收。已有单位/括号变量词法修复已发布，新保存描述启用、旧paid严格回放，未降低来源或数值绑定。Native作者稿修订复用reanalyze/source-review-task逐项工具及同源Map，新paper-author回执保存私有稿；父稿/CP/Map/权限在执行、终态与采用重验，普通任务键不会因同名后缀误入。Code/Ops High、精确CI及部署完成；实际作者4m30s/19帧读Skill/原文并完成，只修改两处次要字段，四项主结果失真及六Claims原样保留，来源保真High NO-GO；分镜32帧重复拒收失败，无asset/图。零外呼逐工具回放确认超长issue、未完整读取的P及缺字段被统一泛化反馈掩盖；当前债务在source-review-task字段诊断与主线优先组织，不是未安装Skill或保存丢失。先修这条链再验证，API helper尚无真实UI入口。官方grounded-citations与既有P/Claim/Evidence方法相符，不再建账本。Synclip应用/私密Key就绪，host未启用、0请求；真实图像后半链待验。精确身份、证据与下一步只见CURRENT。
-
-上述字段反馈/阅读组织修复复用同一ScientificReviewField校验及openscience-source-review：先建立原文主线/代表结果，再对照旧稿；只有实际首轮新描述给明确字段路径与paper_read动作，旧或缺失描述不升级。真实分镜同context逐拒收回放已确定表达式数值binding不相认、完整谓词误作单位；新science描述仅补精确same-quote expression匹配及封闭predicate+article识别，未知/真单位不删，旧paid保持。源ID/短页码quote/qualifier错误给具体位置，不转ID、改quote/关系或默补null；歧义括号继续拒收并指示分号独立比较。最终Code High与Native复用Ops GO、定向/回放/build/TC/精确CI通过并已正常发布；根Skill、目录、SDK未改。其实际消费与保真结果见下段，不能从机械通过推定科学收益；运行身份只见CURRENT。
-
-该新稿已终态：只修λ趋势，其余三项结果对象/条件/范围仍NO-GO；旧复杂字段与整组Claims经accepted/unchanged保留。原文、完整图注及原页工具可用，不存在缺安装/缺源证据。已部署修复将现有逐句/算例/读者方法落实到fresh sourceCorrection指引及快捷选择语义，允许完整省去不服务主线的辅助断言，复用search/read/view和Claim保存。实际planner零外呼12回执对照确认Tc1/2缺对应主体描述，而非格式或跨算例；as/that说明短语误作单位，指导独立比较而不扩词法。新science描述补主体/own quote、sN/P、availableOriginals，schema明示既有六domain，反馈补scene/root路径；旧paid定义/语法/严格回执保持。不建新台账、门禁、模型阶段或样本答案。最新一次作者修订只调用SourceSkill/candidate/overview，随后32768token内部推理截断、无科学工具动作；实际原文/方法送达且官方采样符合，仍误认比较对象并过度斟酌微词，不是安装缺失。须修任务颗粒度和图注/必要原页的实际使用，未证明可用，不按技术GO继续付费或开启API。精确验证、部署、失败回执和下一动作见CURRENT。
-
-工具提交已部署：新精确description使用paper_review回执作为终审数据入口，重建真实稿并执行原完整科学检查；后续改稿或失败提交不能退用旧成功。字段来源容量、issues及旧paid兼容保持。历史132定向/TC/lint/High证明提交边界，不能证明真实供应商总会返回调用或科学正确。
-
-历史独立原生审阅已部署，旧goal保留该路径；新的默认忠实理解由实际作者自校直接采用，见本节首项。旧paper-author不直接成为自动采用结果；source_review阶段选择paper-source-review，paper_candidate提供实际最终作者稿/Claims和已选完整原文。原生Agent按需搜索、看原页、加载Skill并以paper_review修订；回执返回合并六维/Claims供它核查修改传播。沿用Session/store、来源权限、普通收费/max9。历史运行有加载Skill和原页但未提交终审的失败；当前独立Agent已成功保存实际合并稿，并修正部分算数，但仍漏判关系、条件和范围。调用与安装不能称科学合格，实际结果只见CURRENT。
-
-新的审阅兼容实现已部署：paper_review限定为unchanged原作者Claims，paper_review_claims使用完整数组；两者复用同一科学物化和最新提交守卫，旧paid schema/说明/回执保持。真实合成对照已复现union数组被写成item对象，纯数组对照正确，但历史遗漏调用的完整原因未证明。Native科学Skill同时复用现有scientific-summary的读者组织方法，按核心贡献及条件完整的代表算例展开，核心比较保留必要对照；不增加预算或模型阶段。定向工程验证、独立High、精确CI与正常部署/目录配对通过，新真实论文科学收益仍见CURRENT，不能借合成结构成功宣称全链健康。
-
-发布后实际作者约5m24s保存了五条Claims，但英语正文仍偏长并包含多个算例；新的独立审阅也再次遇到原始响应缺少tool_use块。实际schema已无Claims union，输出额度未耗尽；因此当前科学断点并非已被数组修复解决，科学和读者结果尚未认可。真实非流式请求与不透明块保留已核；原子审阅复用候选已实现且代码High GO，真实ID选择/完整科学守卫及paid三模式保留，部署/精确CI/既有Native复用实核通过，新一次正常验证作者再次遗漏调用/空响应失败，未进入staged审阅，不能据此宣称端到端有效；另实核blocked空来源在原materializer也返回segment_count拒绝，当前不放宽，若真实需要再定向修复，不通过安装更多Skill或重开旧任务代替根因定位，具体证据与下一动作只见CURRENT。
-
-Gateway/Session保存断点：历史thinking-only HTTP200因provider_empty没有保留完整回复。保存修复已部署，仅在Native工具请求、原model和明确usage时保存完整opaque及raw stop；旧identity仍阻断空正文/无调用，新identity仅消费经SDK修复的原消息。工程验证不能称科学合格。真实0.10 SDK已实证placeholder改写与prefill删paid；新独立副本在同原loop保留受控M3 thinking-only回复并继续，原预算/历史/权限与旧identity语义保持，不加手写科学或重新请求旧unknown。安装器须在导入本地helper前禁写bytecode，避免自产pycache破坏已验证release；守卫不忽略额外文件，已保存snapshot不重建。实际SDK运行还须对齐非流式stale与受控Worker请求期限：不能在Worker尚持有原请求时由SDK盲重试。新真实审阅已被并发守卫阻断，迟到paid仍完整保存但不执行/采用；实际SDK零外呼完整loop已复现并验证stale/API610和父线程停止修复，各场只发一次HTTP；修复已部署，新正常作者和独立审阅技术成功，但终稿科学未通过；自动进入私有计划不代表可生图。守卫和原额度不放宽；本次是否科学合格仍须原文验收，具体状态只见CURRENT。
-
-历史32轮草稿参数失败及最终无tools总结请求已经定位并修复发布：精确反馈协助选择真实Claims，实例预算终点停止，不发送额外总结，也不增加轮数。此前候选未部署/待组合发布的说法不再有效；该原任务仍失败。完整illustrationPrompts、设计资源与私有计划的工程持久化已有验证，但最新真实链路尚未产出合格计划；公开projection隐藏prompt不是丢失，也不能当作新API真实消费证据。
-
-旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
-
-<a id="local-browser-proxy"></a>
 ## 本机浏览器代理配置
 
 2026-09-21：用户授权将 `.codex/config.toml` 的浏览器代理作为独立配置提交；仅用于本机 Codex 工具，不部署科研业务。依赖 Windows、PowerShell 7、现有 `127.0.0.1:7890` 代理，以及 `C:/Users/Mac/.codex/diagnostics/browser-tools-20260921/cua-proxy-launcher.ps1`。该现有启动器从桌面生成的清单读取官方运行时和 IPC，保留同名 `cua_repl`、`turn_ended` 生命周期及工具限制；`node_repl` 配置代理环境。源码检索 MCP 保留。其他主机须适配本地路径/代理，不能直接声称可用。
@@ -324,6 +298,43 @@ Worker关闭（2026-09-21）：旧信号仅停journal计时器而主poller继续
 已知边界：目录需随能力变更更新；Serena源快照需随所查版本切换；Docker容器重建/IP变化后重开隧道；生产DB容器重建后需恢复专用telemetry网络。Langfuse未知费用不是0、接收成功不是科学正确；没有新增自动全产品质量评分。
 
 ## 历史证据（按需检索，不作当前状态）
+
+### 原生接入与修订阶段记录（历史）
+
+以下保留当时的实现、失败和消费证据，不作为当前入口或next action；原生默认理解与未完成验收以上方短表及CURRENT为准。
+
+- 同一Native来源修订入口已部署渐进paper_candidate及既有field/Claim staging，关联真实sourcePassageId/parent closure、完整基准和严格回放不变。工程/High/精确CI及正常部署通过，实际作者9帧技术完成但六字段原样、只有一条Claim限制修订，3项原文对象/条件/范围失真仍NO-GO。新方法确实送达，Agent先收全view再集中accepted，没有显式read/search/view；不是保存丢失。下一假设回用已有普通reanalyze→runNativePaperTask直接从同Map写稿，移除坏父稿比较起点，效果仍待实证，不叠新模板/门禁/模型阶段。ResearchRun routes仅create/get/confirm/grant/retry/style、无安全cancel入口；已知坏源时可保持图像关闭，但不能取消正在执行的Native分镜，不能改库或杀进程伪造终态，当前已自然结束；取消的权限/并发/paid保存接线是独立可用性债。版本与下一步只见CURRENT。
+- 用户10-04纠正优先：默认理解/图解以论文作者的内容为依据，只核我们的转述和视觉表达保真度；不评议原论文科学有效性/质量/创新性。旧Appraisal路由及“科学NO-GO”混合目的记录降为历史；实际条件、符号、范围和空间位置的转述失真仍是有效问题。当前已部署实现复用openscience-source-review负责理解和自校，scientific-critical-thinking完整方法保留给另行请求的评议；真实作者自校复用原ready/确认/CAS、艺术资料后置，不增模型阶段。部署与验证以CURRENT为准。
+
+Native论文任务的计算执行缺口已定向确认：paper-task/nativeSourceReviewToolProfile白名单只有Skill、论文读取和提交工具，task_runtime按白名单注册；scientific-critical-thinking方法文本不会自动提供Python。已有science-worker通过claimNextPendingSandboxJob、checkPythonAST和SandboxController执行NumPy/SciPy/SymPy（仅源码能力，未新增线上探针），现有sandbox-jobs要求workspace membership与Python配额。Native task/run/source/lease绑定与可靠幂等尚缺，不能直接裸调Domain作为授权；应补适配复用隔离后端，不开放主机terminal。实际新稿仍有推理/范围错误，不能把缺计算器当唯一根因；精确结果见CURRENT。
+
+新论文任务由NousResearch AIAgent/MiniMax-M3通过Worker native-agent/paper-task.ts执行；复用SourceMap、paper_read/search/view和原科学物化。科学理解/核查由Hermes负责，服务器GPT来源审阅只保留历史绑定任务，不是当前方向。版本/任务/真实验收统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
+
+scientific-critical-thinking历史入口提供Appraisal Workflow，完整原方法/专项引用保留给另行请求的评议，通过skill_view按需读取。既有scientificEvidenceRules在静态消费存在、Native Appraisal投影未接入；已将同一规则导出到唯一references/source-evidence-alignment.md，作者与reviewer按保留机制/量/比较/范围读取，不注入当前论文答案、不内联整套方法或增设科学门禁。生成/发现/受限读取已验证并部署；真实作者及独立审阅的根回包与目录全文逐字相等，未见单独引用读取；实际终稿仍有范围/条件/位置误判。现已在根直接呈现同一七条，服务器与built导出匹配，专项方法按需读，不新增规则或读取门禁；科学改善与跨论文正确消费仍须实际任务评价。openscience-source-review提供保存草稿后的对照方法；paper_field/claim分项保存、paper_draft选择真实ID并给完整已选稿、Claims及原来源reviewContext。新任务用paper_review提交完整终审数据，最后普通回复不重复JSON；旧paid任务保持原可选反馈和严格JSON规则。安装、注入、实际调用和科学正确是四个不同事实。 分镜另实复现书目引用slash与数字–Hz单位连字符的数量解析误识别，以及Native仅返简称丢既有字段定位；不是缺nullable的schema漂移。已发布解析/反馈修复：既有保存工具描述精确启用新模式，旧描述/旧解析及全等receipt重放保留，其他调用方default旧；数量值/单位/ownQuote继续校验、500字符内给字段位置，不默认nullable或扩原输出额度。92项、TC/build和新增差异独立High通过，3条lint为HEAD复现基线；部署/科学验收只见CURRENT。缺父Claim的完整替换集合曾只回invalid_structure，使Agent两次重试；已在既有诊断补具体parent_not_selected路径和真实saved IDs语义，保留完整图/来源校验、不自动补父。
+
+原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。这些是历史故障证据；最新作者已正常工具提交，当前状态以下文及CURRENT为准，不能据旧问题连续请求；准确任务及来源依据只见CURRENT。
+
+原生paper-illustration复用同源Claims/原页/设计资源及共享科学艺术物化，自动保存完整私有prompt。默认忠实理解已实际由作者自校→确认→私有分镜自动衔接，无额外论文评议；仍须真实来源保真验收。已有单位/括号变量词法修复已发布，新保存描述启用、旧paid严格回放，未降低来源或数值绑定。Native作者稿修订复用reanalyze/source-review-task逐项工具及同源Map，新paper-author回执保存私有稿；父稿/CP/Map/权限在执行、终态与采用重验，普通任务键不会因同名后缀误入。Code/Ops High、精确CI及部署完成；实际作者4m30s/19帧读Skill/原文并完成，只修改两处次要字段，四项主结果失真及六Claims原样保留，来源保真High NO-GO；分镜32帧重复拒收失败，无asset/图。零外呼逐工具回放确认超长issue、未完整读取的P及缺字段被统一泛化反馈掩盖；当前债务在source-review-task字段诊断与主线优先组织，不是未安装Skill或保存丢失。先修这条链再验证，API helper尚无真实UI入口。官方grounded-citations与既有P/Claim/Evidence方法相符，不再建账本。Synclip应用/私密Key就绪，host未启用、0请求；真实图像后半链待验。精确身份、证据与下一步只见CURRENT。
+
+上述字段反馈/阅读组织修复复用同一ScientificReviewField校验及openscience-source-review：先建立原文主线/代表结果，再对照旧稿；只有实际首轮新描述给明确字段路径与paper_read动作，旧或缺失描述不升级。真实分镜同context逐拒收回放已确定表达式数值binding不相认、完整谓词误作单位；新science描述仅补精确same-quote expression匹配及封闭predicate+article识别，未知/真单位不删，旧paid保持。源ID/短页码quote/qualifier错误给具体位置，不转ID、改quote/关系或默补null；歧义括号继续拒收并指示分号独立比较。最终Code High与Native复用Ops GO、定向/回放/build/TC/精确CI通过并已正常发布；根Skill、目录、SDK未改。其实际消费与保真结果见下段，不能从机械通过推定科学收益；运行身份只见CURRENT。
+
+该新稿已终态：只修λ趋势，其余三项结果对象/条件/范围仍NO-GO；旧复杂字段与整组Claims经accepted/unchanged保留。原文、完整图注及原页工具可用，不存在缺安装/缺源证据。已部署修复将现有逐句/算例/读者方法落实到fresh sourceCorrection指引及快捷选择语义，允许完整省去不服务主线的辅助断言，复用search/read/view和Claim保存。实际planner零外呼12回执对照确认Tc1/2缺对应主体描述，而非格式或跨算例；as/that说明短语误作单位，指导独立比较而不扩词法。新science描述补主体/own quote、sN/P、availableOriginals，schema明示既有六domain，反馈补scene/root路径；旧paid定义/语法/严格回执保持。不建新台账、门禁、模型阶段或样本答案。最新一次作者修订只调用SourceSkill/candidate/overview，随后32768token内部推理截断、无科学工具动作；实际原文/方法送达且官方采样符合，仍误认比较对象并过度斟酌微词，不是安装缺失。须修任务颗粒度和图注/必要原页的实际使用，未证明可用，不按技术GO继续付费或开启API。精确验证、部署、失败回执和下一动作见CURRENT。
+
+工具提交已部署：新精确description使用paper_review回执作为终审数据入口，重建真实稿并执行原完整科学检查；后续改稿或失败提交不能退用旧成功。字段来源容量、issues及旧paid兼容保持。历史132定向/TC/lint/High证明提交边界，不能证明真实供应商总会返回调用或科学正确。
+
+历史独立原生审阅已部署，旧goal保留该路径；新的默认忠实理解由实际作者自校直接采用，见本节首项。旧paper-author不直接成为自动采用结果；source_review阶段选择paper-source-review，paper_candidate提供实际最终作者稿/Claims和已选完整原文。原生Agent按需搜索、看原页、加载Skill并以paper_review修订；回执返回合并六维/Claims供它核查修改传播。沿用Session/store、来源权限、普通收费/max9。历史运行有加载Skill和原页但未提交终审的失败；当前独立Agent已成功保存实际合并稿，并修正部分算数，但仍漏判关系、条件和范围。调用与安装不能称科学合格，实际结果只见CURRENT。
+
+新的审阅兼容实现已部署：paper_review限定为unchanged原作者Claims，paper_review_claims使用完整数组；两者复用同一科学物化和最新提交守卫，旧paid schema/说明/回执保持。真实合成对照已复现union数组被写成item对象，纯数组对照正确，但历史遗漏调用的完整原因未证明。Native科学Skill同时复用现有scientific-summary的读者组织方法，按核心贡献及条件完整的代表算例展开，核心比较保留必要对照；不增加预算或模型阶段。定向工程验证、独立High、精确CI与正常部署/目录配对通过，新真实论文科学收益仍见CURRENT，不能借合成结构成功宣称全链健康。
+
+发布后实际作者约5m24s保存了五条Claims，但英语正文仍偏长并包含多个算例；新的独立审阅也再次遇到原始响应缺少tool_use块。实际schema已无Claims union，输出额度未耗尽；因此当前科学断点并非已被数组修复解决，科学和读者结果尚未认可。真实非流式请求与不透明块保留已核；原子审阅复用候选已实现且代码High GO，真实ID选择/完整科学守卫及paid三模式保留，部署/精确CI/既有Native复用实核通过，新一次正常验证作者再次遗漏调用/空响应失败，未进入staged审阅，不能据此宣称端到端有效；另实核blocked空来源在原materializer也返回segment_count拒绝，当前不放宽，若真实需要再定向修复，不通过安装更多Skill或重开旧任务代替根因定位，具体证据与下一动作只见CURRENT。
+
+Gateway/Session保存断点：历史thinking-only HTTP200因provider_empty没有保留完整回复。保存修复已部署，仅在Native工具请求、原model和明确usage时保存完整opaque及raw stop；旧identity仍阻断空正文/无调用，新identity仅消费经SDK修复的原消息。工程验证不能称科学合格。真实0.10 SDK已实证placeholder改写与prefill删paid；新独立副本在同原loop保留受控M3 thinking-only回复并继续，原预算/历史/权限与旧identity语义保持，不加手写科学或重新请求旧unknown。安装器须在导入本地helper前禁写bytecode，避免自产pycache破坏已验证release；守卫不忽略额外文件，已保存snapshot不重建。实际SDK运行还须对齐非流式stale与受控Worker请求期限：不能在Worker尚持有原请求时由SDK盲重试。新真实审阅已被并发守卫阻断，迟到paid仍完整保存但不执行/采用；实际SDK零外呼完整loop已复现并验证stale/API610和父线程停止修复，各场只发一次HTTP；修复已部署，新正常作者和独立审阅技术成功，但终稿科学未通过；自动进入私有计划不代表可生图。守卫和原额度不放宽；本次是否科学合格仍须原文验收，具体状态只见CURRENT。
+
+历史32轮草稿参数失败及最终无tools总结请求已经定位并修复发布：精确反馈协助选择真实Claims，实例预算终点停止，不发送额外总结，也不增加轮数。此前候选未部署/待组合发布的说法不再有效；该原任务仍失败。完整illustrationPrompts、设计资源与私有计划的工程持久化已有验证，但最新真实链路尚未产出合格计划；公开projection隐藏prompt不是丢失，也不能当作新API真实消费证据。
+
+旧固定阅读/整合仍服务无Native marker和manuscript-only调用；GPT web来源分支仍服务服务器绑定的历史收据。它们不是新Native task的前置，清理只能删除零引用包装/无活动的生成物，不能删共同来源守卫、旧paid回放或历史控制测试。单页OCR恢复已部署并真实只补缺页；parser/budget失败不能说论文未报告。10-03前执行过程见Git ce513eba的本台账及CURRENT历史，旧下一步不进入启动判断。
+
+<a id="local-browser-proxy"></a>
 
 以下旧记录原文保留。其中“当前”“PRODUCTION”“GREEN”和旧next action均只指记录当时；最新版本、未完成任务以上方索引和CURRENT handoff为准。
 
