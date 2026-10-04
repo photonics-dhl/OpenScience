@@ -13,7 +13,7 @@ scientific-critical-thinking历史入口提供Appraisal Workflow，完整原方�
 
 原26页/85段材料与附录标题存在；历史v11/v12的实际工具与科学拒收只作证据，不能归罪于缺源。新对照输入已部署，为新描述任务补实际saved summaries/完整Claims、完整原P及既有诊断，旧paid描述与投影保持。v13最后实际请求的配对已离线核实，但正常stop只返回普通正文，科学亦NO-GO：角度、跨算例几何与传播条件仍失真。两个Skill已加载，未调用原页/专项引用/稿后核源；不能由此推断完全未作内部比较或指令冲突。这些是历史故障证据；最新作者已正常工具提交，当前状态以下文及CURRENT为准，不能据旧问题连续请求；准确任务及来源依据只见CURRENT。
 
-原生paper-illustration复用同源Claims/原页/设计资源及共享科学艺术物化，自动保存完整私有prompt。默认忠实理解已实际由作者自校→确认→私有分镜自动衔接，无额外论文评议；最新作者仍有输入/输出误标、趋势方向及算例范围错误，整稿保真未通过。分镜另实证单位后括号变量注释被吞成数学式，正确来源数值拒收；通用词法修复已发布，只为新保存描述补边界，旧paid严格重放，未降低来源或数值绑定。已保存Native作者稿的修订候选复用既有reanalyze/source-review-task逐项工具，以新的paper-author完成回执保存私有稿；父稿/CP/Map及权限在执行、终态与采用重新验证，普通任务键不因同名后缀误入该路径。工程证据、最终High/CI/部署和真实纠正状态只见CURRENT，API helper未代表实际UI入口。现有Skill已完整送达，进一步改善需按实际消费和结果判断；官方grounded-citations的先登记来源、逐断言保留原句方法与既有P/Claim/Evidence相符，不另建URL账本或安装重复工具。Synclip应用/私密Key就绪，host未启用、0请求；固定gpt-image-2的spool/正规化/恢复工程已审，实际图像后半链待验。精确任务、版本、验证和下一步只见CURRENT。
+原生paper-illustration复用同源Claims/原页/设计资源及共享科学艺术物化，自动保存完整私有prompt。默认忠实理解已实际由作者自校→确认→私有分镜自动衔接，无额外论文评议；仍须真实来源保真验收。已有单位/括号变量词法修复已发布，新保存描述启用、旧paid严格回放，未降低来源或数值绑定。Native作者稿修订复用reanalyze/source-review-task逐项工具及同源Map，新paper-author回执保存私有稿；父稿/CP/Map/权限在执行、终态与采用重验，普通任务键不会因同名后缀误入。Code/Ops High、精确CI及部署完成；实际作者4m30s/19帧读Skill/原文并完成，只修改两处次要字段，四项主结果失真及六Claims原样保留，来源保真High NO-GO；分镜32帧重复拒收失败，无asset/图。零外呼逐工具回放确认超长issue、未完整读取的P及缺字段被统一泛化反馈掩盖；当前债务在source-review-task字段诊断与主线优先组织，不是未安装Skill或保存丢失。先修这条链再验证，API helper尚无真实UI入口。官方grounded-citations与既有P/Claim/Evidence方法相符，不再建账本。Synclip应用/私密Key就绪，host未启用、0请求；真实图像后半链待验。精确身份、证据与下一步只见CURRENT。
 
 工具提交已部署：新精确description使用paper_review回执作为终审数据入口，重建真实稿并执行原完整科学检查；后续改稿或失败提交不能退用旧成功。字段来源容量、issues及旧paid兼容保持。历史132定向/TC/lint/High证明提交边界，不能证明真实供应商总会返回调用或科学正确。
 
