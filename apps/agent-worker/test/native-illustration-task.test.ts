@@ -12,12 +12,12 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
-    scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, ...options.input };
+    scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);
@@ -57,6 +57,7 @@ describe('native illustration selects actual private tool history', () => {
 
 // Exact paid description from before the quantity/feedback correction. Its receipts are immutable.
 const PAID_SCIENCE_DESCRIPTION = 'Save the scientific visual narrative before art. Choose only the scenes needed to convey the paper. Each subject has one exact supporting sN source. Encode direction, quantity meaning, comparison and model conditions explicitly. Labels are the complete visible text inventory, including axis symbols and qualifiers; no citations or hidden extra text. Constraints at most two. Narration <=600 characters; title <=120, mainMessage <=240, audience <=160. Subject and label indices are zero-based. paperOriginalAssetId is null for a designed image or an exact available original asset. This validates structure and binding, not scientific truth.';
+const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key. Bibliographic Table/Fig references are structural labels; independent numeric-Hz-family quantities retain their value and unit. Validation feedback identifies affected fields and the explicit source variable when available; it never establishes symbol aliases or substitutes source evidence.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION): NativeAgentSessionState {
   const tools = nativeIllustrationToolProfile(null).sourceTools.map(tool => ({ type: 'function' as const,
@@ -199,6 +200,130 @@ describe('native illustration defers design guidance until science is saved', ()
 });
 
 describe('native illustration preserves paid quantity and feedback semantics', () => {
+  it.each([
+    ['0.4', 'THz', 'an ICS pulse generated using a 3-MeV 1-fs 1-nC electron bunch and a 0.4-THz ( λ 0=750 μ m) 1-ps pulsed driving field'],
+    ['2.5', 'GHz', 'A 2.5–GHz (λ=0.12 m) signal connects the regions.'],
+    ['15', 'kHz', 'A 15-kHz (f=15 kHz) signal connects the regions.'],
+  ])('binds the independent %s %s quantity before a parenthetical source annotation', (value, unit, quote) => {
+    const http = vi.fn(() => { throw new Error('Unexpected HTTP'); }); vi.stubGlobal('fetch', http);
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    const result = f.invoke('paper_illustration_science', quantityScene(`A ${value} ${unit} signal connects the regions.`, `Frequency ${value} ${unit}`), 'quantity');
+    expect(result, JSON.stringify(result))
+      .toMatchObject({ status: 'science_ready' });
+    expect(http).not.toHaveBeenCalled();
+  });
+  it('preserves the actual old rejection receipt and does not upgrade its first paid description', () => {
+    const saved = savedProfile(PAID_HZ_SCIENCE_DESCRIPTION);
+    saved.turns.push(structuredClone(saved.turns[0]!));
+    saved.turns[1]!.request.options.tools!.find(tool => tool.function.name === 'paper_illustration_science')!.function.description =
+      nativeIllustrationToolProfile(null).sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    const f = fixture({ ...nativeIllustrationToolProfile(saved), quote: 'A 0.4-THz ( λ 0=750 μ m) pulsed driving field.' });
+    f.invoke('paper_illustration_context', {}, 'context');
+    expect(f.invoke('paper_illustration_science', quantityScene('A 0.4 THz field.', 'Frequency 0.4 THz'), 'quantity'))
+      .toEqual({ status: 'invalid_illustration', error: 'unbound_numeric_0_4_thz_source Fields: narration.' });
+    f.complete();
+    expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
+    const changed = structuredClone(f.messages);
+    changed.find(message => message.role === 'tool' && message.toolCallId === 'quantity')!.content = JSON.stringify({ status: 'science_ready' });
+    expect(() => f.restore().finish(changed, '{"reviewToolCallId":"review-call"}')).toThrow(/history changed/u);
+  });
+  it.each(['(2.5-GHz)/2', '2.5-GHz + x', '2.5-GHz (x)/2', 'x-2.5-GHz', '1-β', 'λ/2'])('does not turn the larger expression %s into an independent frequency', expression => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote: 'An unrelated frequency is 2.5 GHz.' });
+    expect(f.invoke('paper_illustration_science', quantityScene(expression), 'expression')).toMatchObject({ status: 'invalid_illustration',
+      error: expect.stringContaining('unbound_expression_') });
+  });
+  it('continues to reject a changed value or unit against the annotated source', () => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote: 'A 0.4-THz (λ0=750 μm) pulsed field.' });
+    for (const value of ['0.5 THz', '0.4 GHz'])
+      expect(f.invoke('paper_illustration_science', quantityScene(`Frequency ${value}.`, `Frequency ${value}`), value)).toMatchObject({ status: 'invalid_illustration',
+        error: expect.stringContaining('_source') });
+  });
+  it.each([
+    '(0.4-THz (λ0=750 μm))/2', 'x-0.4-THz (λ0=750 μm)',
+    '0.4-THz (λ0=750 μm) / 2', '0.4-THz (λ0=750 μm) + x',
+    '0.4-THz (λ0=750 μm) x', '0.4-THz (λ0=750 μm) β',
+    '0.4-THz (λ0=750 μm) (x)', '0.4-THz (λ0=750 μm) exp(x)', '0.4-THz (λ0=750 μm) exp (x)',
+    '0.4-THz (λ0=750 μm) gain*x', '0.4-THz (λ0=750 μm) gain * x',
+    '0.4-THz (λ0=750 μm) gain1', '0.4-THz (λ0=750 μm) gain_1',
+    '0.4-THz (λ0=750 μm',
+  ])('does not extract a reported frequency from the expression or incomplete annotation %s', quote => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    expect(f.invoke('paper_illustration_science', quantityScene('A 0.4 THz signal.', 'Frequency 0.4 THz'), 'quantity'))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+  });
+  it('keeps an annotation quantity bound to its own source variable rather than inventing an alias', () => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote: 'A 15-kHz (f=15 kHz) signal connects the regions.' });
+    expect(f.invoke('paper_illustration_science', quantityScene('f = 15 kHz', 'f = 15 kHz'), 'frequency'))
+      .toMatchObject({ status: 'science_ready' });
+    expect(f.invoke('paper_illustration_science', quantityScene('w = 15 kHz', 'w = 15 kHz'), 'alias'))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+  });
+  it.each([PAID_SCIENCE_DESCRIPTION, PAID_HZ_SCIENCE_DESCRIPTION, 'unknown paid science description'])('uses fresh annotation recognition only from the first exact new description: %s', description => {
+    const saved = savedProfile(description);
+    saved.turns.push(structuredClone(saved.turns[0]!));
+    saved.turns[1]!.request.options.tools!.find(tool => tool.function.name === 'paper_illustration_science')!.function.description =
+      nativeIllustrationToolProfile(null).sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    expect(nativeIllustrationToolProfile(saved).sourceQuantityAnnotations).toBe(false);
+    expect(nativeIllustrationToolProfile(saved).scienceFeedback).toBe(description === PAID_HZ_SCIENCE_DESCRIPTION);
+    expect(nativeIllustrationToolProfile(null).sourceQuantityAnnotations).toBe(true);
+    expect(nativeIllustrationToolProfile(savedProfile(undefined, true)).sourceQuantityAnnotations).toBe(false);
+  });
+  it('strictly restores a new successful annotated-source plan without changing static or historical defaults', () => {
+    const http = vi.fn(() => { throw new Error('Unexpected HTTP'); }); vi.stubGlobal('fetch', http);
+    const profile = nativeIllustrationToolProfile(null);
+    const f = fixture({ ...profile, quote: 'A 0.4-THz ( λ 0=750 μ m) pulsed driving field.' });
+    const value = quantityScene('A 0.4 THz field.', 'Frequency 0.4 THz');
+    expect(() => materializeIllustrationScience(value, f.input.claims, settings, new Map(), true)).toThrow('unbound_numeric_0_4_thz_source');
+    f.complete(value);
+    const description = profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    const context = profile.sourceTools.find(tool => tool.name === 'paper_illustration_context')!.description;
+    const restore = () => createNativeIllustrationMaterializer({ ...f.input, ...nativeIllustrationToolProfile(savedProfile(description, false, context)) });
+    const result = restore().finish(f.messages, '{"reviewToolCallId":"review-call"}');
+    expect(result).toEqual(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}'));
+    expect(result.prompts[0]!.prompt).toContain('0.4 THz');
+    const changed = structuredClone(f.messages);
+    const receipt = changed.find(message => message.role === 'tool' && message.toolCallId === 'science-call')!;
+    receipt.content = JSON.stringify({ ...JSON.parse(receipt.content), sceneCount: 9 });
+    expect(() => restore().finish(changed, '{"reviewToolCallId":"review-call"}')).toThrow(/history changed/u);
+    expect(http).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['Here τ 1 is ∼ 3.6 fs, for this source case.', 'τ₁ ≈ 3.6 fs', 'τ₂ ≈ 3.6 fs'],
+    ['Calculated ν p is ∼ 26 THz for this source case.', 'ν_p ≈ 26 THz', 'ν_q ≈ 26 THz'],
+    ['This corresponds to a T c1 of ~38 fs.', 'T_c1 ≈ 38 fs', 'T_c2 ≈ 38 fs'],
+    ['A 0.4-THz ( λ 0=750 μ m) pulsed field.', 'λ₀ = 750 μm', 'λ₁ = 750 μm'],
+  ])('binds the explicitly written source symbol in %s without allowing a different variable', (quote, asserted, alias) => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    const result = f.invoke('paper_illustration_science', quantityScene(asserted, asserted), 'quantity');
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
+    expect(f.invoke('paper_illustration_science', quantityScene(alias, alias), 'alias'))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+    const historical = fixture({ ...nativeIllustrationToolProfile(savedProfile(PAID_HZ_SCIENCE_DESCRIPTION)), quote });
+    expect(historical.invoke('paper_illustration_science', quantityScene(asserted, asserted), 'old'))
+      .toMatchObject({ status: 'invalid_illustration' });
+  });
+  it.each(['(τ 1/2) ≈ 3.6 fs', 'x + τ 1 is ∼ 3.6 fs', 'a τ 1≈3.6 fs', 'x + a τ 1 of ~3.6 fs', 'The width is ∼ 3.6 fs.'])('does not reinterpret %s as a plain source variable assignment', quote => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    expect(f.invoke('paper_illustration_science', quantityScene('τ₁ ≈ 3.6 fs', 'τ₁ ≈ 3.6 fs'), 'quantity'))
+      .toMatchObject({ status: 'invalid_illustration' });
+  });
+  it.each([
+    ['19', 'fs', 'The 19-fs width of a Gaussian-profile output pulse.'],
+    ['3', 'MeV', 'A 3-MeV electron bunch produces the reported signal.'],
+    ['1', 'nC', 'A 1-nC electron bunch produces the reported signal.'],
+    ['25', 'μm', 'A 25-μm slit confines the driving field.'],
+  ])('recognizes a hyphenated %s %s unit as source prose rather than subtraction', (value, unit, quote) => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    const result = f.invoke('paper_illustration_science', quantityScene(`Reported ${value} ${unit}.`, `Reported ${value} ${unit}`), 'quantity');
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
+    expect(f.invoke('paper_illustration_science', quantityScene(`Reported ${Number(value) + 1} ${unit}.`, `Reported ${Number(value) + 1} ${unit}`), 'wrong'))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+  });
+  it.each(['(3-MeV)/2', '3-MeV + x', '3-MeV β', '3-MeV (x)/2', '3-MeV exp (x)', '3-MeV gain*x', '3-MeV gain * x', '3-MeV gain1', '3-MeV gain_1'])('does not reinterpret the full expression %s as a reported energy', quote => {
+    const f = fixture({ ...nativeIllustrationToolProfile(null), quote });
+    expect(f.invoke('paper_illustration_science', quantityScene('Reported 3 MeV.', 'Reported 3 MeV'), 'quantity'))
+      .toMatchObject({ status: 'invalid_illustration' });
+  });
   it('selects the new mode only from the exact first paid science description and retains saved schemas', () => {
     const fresh = nativeIllustrationToolProfile(null);
     expect(fresh.scienceFeedback).toBe(true);

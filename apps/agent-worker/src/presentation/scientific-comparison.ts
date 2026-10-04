@@ -151,11 +151,33 @@ export function scientificEqualityRelations(input: string): Array<[ScientificRep
 }
 
 /** Syntactic binding only: no evaluation, algebraic rewriting or inferred aliases. */
-export function scientificComparisonBinding(input: string, numberStart: number): {
+export function scientificComparisonBinding(input: string, numberStart: number, sourceProseSymbols = false): {
   binding: ScientificBinding; start: number; end: number; prose?: boolean;
 } | undefined {
   const offset = Math.max(0, numberStart - 160);
   const before = input.slice(offset, numberStart);
+  if (sourceProseSymbols) {
+    const localSymbol = '(?:[A-Za-z\\u0370-\\u03ff](?:[_ \\t]*(?:[A-Za-z]\\d*|\\d+))?|FWHM[_ \\t]*[ST]|N[_ \\t]*SP)';
+    const spacedSymbol = '(?:[\\u0370-\\u03ff][ \\t_]+(?:[A-Za-z]\\d*|\\d+)|[A-Za-z][ \\t_]+(?:[A-Za-z]\\d+|\\d+)|FWHM[ \\t_]+[ST]|N[ \\t_]+SP)';
+    const boundary = '(?<![\\p{L}\\p{N}_])';
+    const copula = new RegExp(`${boundary}(${localSymbol})[ \\t]+(?:is|of)[ \\t]*(?:[≈∼~][ \\t]*)?$`, 'u').exec(before);
+    const assignment = new RegExp(`${boundary}(${spacedSymbol})[ \\t]*[=≈∼~][ \\t]*$`, 'u').exec(before);
+    const explicit = copula ?? assignment;
+    if (explicit) {
+      const prefix = tokenize(before.slice(0, explicit.index)), preceding = prefix.at(-1);
+      const beforeArticle = prefix.at(-2);
+      const article = !!copula && !!preceding && /^[aA]$/u.test(preceding.text)
+        && !(beforeArticle && (mathSyntax(beforeArticle) || beforeArticle.kind === 'number'));
+      // A prose statement can name a local symbol. A factor in an enclosing
+      // expression or equality chain must still go through the full math parser.
+      if (preceding && (mathSyntax(preceding) && !(preceding.text === '(' && groupBoundary(prefix, prefix.length - 1))
+        || preceding.kind === 'number' || preceding.kind === 'identifier' && preceding.text.length === 1 && !article)) {
+        if (!['=', '≈', '~'].includes(preceding.text))
+          return { binding: { kind: 'unsupported-expression' }, start: offset + explicit.index, end: numberStart };
+      } else return { binding: { kind: 'symbol', key: normalizeIdentifier(explicit[1]!.replace(/[ \t]/gu, '')) },
+        start: offset + explicit.index, end: numberStart };
+    }
+  }
   const prose = proseQuantity(before, offset);
   if (prose) return prose;
   const relation = /(?:<<|<=|>=|=|≈|~|≪|≥|≤|>|<)\s*$/u.exec(before);
