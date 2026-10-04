@@ -14,6 +14,27 @@ describe('Hermes media skill stages', () => {
     expect(method).toContain('不要自行推导额外参数');
     expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeInstructions).toContain('Appraisal Workflow');
   });
+  it('delivers concrete shared source alignment in the default Native method without appraisal', () => {
+    const method = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeSourceReviewInstructions;
+    for (const operation of [
+      '未知算例归属保持未知，不将不同算例的参数拼在一起',
+      '分别核对场传播、偏振、粒子轨迹与观测方向',
+      '角度须保留两条方向及其参考轴/参照系',
+      '每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例',
+      '不能把几何开口、场幅/强度的空间宽度和脉冲时间宽度互换',
+      '不能将不同分析目标的条件互相移用',
+      '已给方程不证明代码可用，未取得代码不证明模型方法未交代',
+      '缺项只限定对应层级',
+    ]) {
+      expect(method).toContain(operation);
+      expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeEvidenceAlignmentInstructions).toContain(operation);
+    }
+    expect(method).not.toContain('某个算例吻合不能消除推导或量纲疑义');
+    expect(method).not.toContain('实验关注对照、校准与不确定性');
+    expect(method).not.toContain('reported只表示作者如此陈述，不表示已核正确');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.version).toBe('5');
+    expect(SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeSourceReviewVersion).toBe('6');
+  });
   it('makes essential shared alignment available in the Native root without another reference read', () => {
     const alignment = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeEvidenceAlignmentInstructions;
     expect(alignment.length).toBeGreaterThan(0);

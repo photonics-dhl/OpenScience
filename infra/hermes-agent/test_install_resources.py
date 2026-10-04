@@ -15,6 +15,7 @@ class InstallResourceTests(unittest.TestCase):
             root = Path(folder).resolve(); source = root/'source'
             copy_resources(Path(__file__).resolve().parent/'science-references', source/'infra'/'hermes-agent'/'science-references')
             method = {'version': 'fixture', 'instructions': 'STATIC_SYNTHESIS_ONLY',
+                      'nativeSourceReviewVersion': 'source-fixture',
                       'sourceReviewInstructions': 'STATIC_REVIEW_ONLY',
                       'nativeInstructions': 'NATIVE_APPRAISAL_STEPS\nSHARED_SOURCE_ALIGNMENT',
                       'nativeEvidenceAlignmentInstructions': 'SHARED_SOURCE_ALIGNMENT',
@@ -26,6 +27,8 @@ class InstallResourceTests(unittest.TestCase):
             self.assertIn('NATIVE_APPRAISAL_STEPS', primary)
             self.assertEqual(primary.count('SHARED_SOURCE_ALIGNMENT'), 1)
             self.assertIn('NATIVE_COMPARE_SAVED_DRAFT', review)
+            self.assertIn('version: "source-fixture"', review)
+            self.assertIn('version: "fixture"', primary)
             self.assertIn('faithfully summarize or visualize', review)
             self.assertIn('explicitly requests', primary)
             self.assertNotIn('Initial whole-paper understanding uses scientific-critical-thinking', review)
@@ -58,6 +61,7 @@ class InstallResourceTests(unittest.TestCase):
             self.assertIn('Retained understanding method', primary.read_text())
             self.assertIn('references/', primary.read_text())
             self.assertIn('Retained review method', scope.resolve('openscience-source-review').read_text())
+            self.assertIn('version: "fixture"', scope.resolve('openscience-source-review').read_text())
             self.assertFalse((reference.parent/'.env').exists())
             close_symlinks(catalogue, source); freeze(catalogue)
             (resources/'references'/'logical_fallacies.md').write_text('Changed source')

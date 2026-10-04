@@ -64,7 +64,8 @@ def write_science_skills(source, catalogue, science):
             body += '\n\nThe bound paper is the source of the author\'s message. Recheck our retained statements against it, including cases and conditions. ' \
                 'Structural feedback does not establish faithful interpretation. Do not invoke a separate appraisal or add derived quantities to complete this task. ' \
                 'The complete scientific-critical-thinking references remain installed for separately requested critical assessment; they are not a mandatory step here.'
-        (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{science["version"]}"\n---\n\n'
+        version = science.get('nativeSourceReviewVersion', science['version']) if name == 'openscience-source-review' else science['version']
+        (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{version}"\n---\n\n'
             'Project method adaptation; reuse paper_overview, paper_search, paper_read and paper_view for this task. '
             'The Agent controls progressive source reading; do not run external scripts or another provider. '
             'Use P IDs actually fully read, and source pixels for visual scientific relations.\n\n'+body+'\n', encoding='utf-8')

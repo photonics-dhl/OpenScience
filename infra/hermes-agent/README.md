@@ -24,7 +24,7 @@ UDS回归在Linux运行，Windows跳过；broker inode/mode攻击回归需要Lin
 
 任务清空环境后固定模型client/stale期限610秒，与既有UDS610秒衔接；Worker请求上限仍600秒，原预算不变。父线程未取得有效SDK回复或收到原生TimeoutError时沿既有停止信号结束，不进入SDK通用坏响应重试；以原付费回执为准，不据停止推断未提交/未计费。
 
-科学catalogue在scientific-critical-thinking根Skill直接呈现已有七条共享证据对齐规则；作者和reviewer首次通过`skill_view`读根即可取得，专项原方法仍按需加载。`references/source-evidence-alignment.md`保留同源独立副本供兼容，不要求为同一内容重复读取。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
+科学catalogue默认使用`openscience-source-review`理解作者主线并核对我们的转述；v6直接复用已有对象、角度、量定义、算例条件及披露层级的纯保真方法，不要求重复读专项引用。`nativeSourceReviewVersion`仅标该资源内容，历史导出缺字段时回退原`version`。scientific-critical-thinking v5根仍完整保留七条共享方法和专项评议能力；`references/source-evidence-alignment.md`保留同源独立副本供兼容，原方法按需加载。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
 
 Native分镜的数量语法和有界诊断按首帧已保存的实际科学工具描述选择；旧描述/未知描述保持旧解析与原反馈，新描述才识别图表结构引用和独立数值–Hz单位跨度。执行和finish重建用同一选择，成功/失败回执均严格全等；原来源/单位/数量校验、必填nullable与输出额度不改。
 
