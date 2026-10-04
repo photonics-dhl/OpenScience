@@ -47,6 +47,165 @@ const pair = (id: string, name: string, args: unknown, result: unknown): ChatMes
   { role: 'tool', toolCallId: id, content: JSON.stringify(result) },
 ];
 
+describe('progressive source candidate views', () => {
+  function fixture(scopedCandidate = true) {
+    const secondText = 'A separate source case assumes a different material and reports its own conditions.';
+    const sourceMap = structuredClone(map);
+    sourceMap.pages[0]!.blocks[0]!.text += ' The accompanying derivation defines the model inputs and states the boundary assumptions.'.repeat(8);
+    sourceMap.pages[0]!.blocks.push({ ...structuredClone(sourceMap.pages[0]!.blocks[0]!), id: 'second', text: secondText,
+      boundingBox: { x: 0, y: 20, width: 100, height: 20 } });
+    const draftClaims = [
+      { clientKey: 'core', sourceField: 'insight', kind: 'core', statement: text, conditions: ['The stated geometry.'],
+        limitations: ['A numerical prediction.'], sourceBindings: [{ sourcePassageId: 'P00001', relation: 'supports' }] },
+      { clientKey: 'other-case', parentClientKey: 'core', sourceField: 'reproducibility', kind: 'supporting', statement: secondText,
+        conditions: ['A different material.'], limitations: ['This separate case only.'], sourceBindings: [{ sourcePassageId: 'P00002', relation: 'supports' }] },
+    ];
+    const draft = { fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, {
+      summary: field === 'reproducibility' ? secondText : text, sourcePassageIds: [field === 'reproducibility' ? 'P00002' : 'P00001'],
+    }])), needsMoreEvidence: [], draftClaims };
+    const materializer = createNativeScientificMaterializer(sourceMap, () => ['P00001', 'P00002']);
+    const initialDraft = materializer.draft(draft, 0, 'source-draft');
+    expect(initialDraft, JSON.stringify(initialDraft)).toMatchObject({ status: 'draft_ready' });
+    const { nativeScientificFields, nativeDraftClaims, nativeNeedsMoreEvidence: _needs, nativeReviewedCandidateHash: _hash, ...saved } =
+      materializer.finish(JSON.stringify({ draftToolCallId: 'source-draft', fields: decision().fields,
+        needsMoreEvidence: [], claimSuggestions: 'unchanged' }));
+    void _needs; void _hash;
+    const original = { ...saved, scientificReview: { kind: 'hermes_agent_review', contractVersion: '5', status: 'review_received',
+      fieldReviews: nativeScientificFields, draftClaims: nativeDraftClaims } };
+    const tool = createNativeSourceReviewTools({ sourceMap, sourceAgentTaskId, sourceResult: original,
+      renderPages: async () => [], reviewMode: 'staged', scopedCandidate });
+    return { tool, original };
+  }
+  it('delivers one complete field with its related complete Claims and only their actual sources', async () => {
+    const { tool, original } = fixture(); const before = structuredClone(original);
+    const result = await tool.call('paper_candidate', { view: 'results' });
+    expect(result).toMatchObject({ status: 'candidate_ready', view: 'results', sourceAgentTaskId });
+    expect(result.fields).toEqual({ results: original.scientificReview.fieldReviews.results && {
+      summary: original.core.results, sourcePassageIds: ['P00001'],
+    } });
+    expect(result.draftClaims).toEqual([original.scientificReview.draftClaims[0]]);
+    expect((result.passages as Array<{ id: string }>).map(p => p.id)).toEqual(['P00001']);
+    expect(tool.observedPassageIds).toEqual(['P00001']);
+    expect(original).toEqual(before);
+  });
+  it('includes the actual parent closure and all case qualifiers without loading other field bodies', async () => {
+    const { tool, original } = fixture();
+    const result = await tool.call('paper_candidate', { view: 'reproducibility' });
+    expect(Object.keys(result.fields as object)).toEqual(['reproducibility']);
+    expect(result.draftClaims).toEqual(original.scientificReview.draftClaims);
+    expect((result.passages as Array<{ id: string }>).map(p => p.id).sort()).toEqual(['P00001', 'P00002']);
+    expect(tool.observedPassageIds.slice().sort()).toEqual(['P00001', 'P00002']);
+  });
+  it('delivers the full original Claim set separately from the six field bodies', async () => {
+    const { tool, original } = fixture();
+    const result = await tool.call('paper_candidate', { view: 'claims' });
+    expect(result).toMatchObject({ status: 'candidate_ready', view: 'claims', fields: {} });
+    expect(result.draftClaims).toEqual(original.scientificReview.draftClaims);
+    expect((result.passages as Array<{ id: string }>).map(p => p.id).sort()).toEqual(['P00001', 'P00002']);
+  });
+  it('requires receipt of the field body even when its shared source paragraph has already been delivered', async () => {
+    const { tool } = fixture();
+    await tool.call('paper_candidate', { view: 'results' });
+    expect(await tool.call('paper_review_field', { field: 'method', verdict: 'accepted' }, 1, 'unseen'))
+      .toMatchObject({ status: 'invalid_review_field', feedback: expect.stringContaining('method') });
+    await tool.call('paper_candidate', { view: 'method' });
+    expect(await tool.call('paper_review_field', { field: 'method', verdict: 'accepted' }, 2, 'seen')).toMatchObject({ status: 'review_field_saved' });
+  });
+  it.each([{}, { view: 'all' }, { view: 'Results' }, { view: null }, { view: 'results', extra: true }])('rejects an invalid view without delivering or observing source data: %j', async args => {
+      const { tool } = fixture();
+      expect(await tool.call('paper_candidate', args)).toMatchObject({ error: expect.stringContaining('view') });
+      expect(tool.observedPassageIds).toEqual([]);
+    });
+  it('keeps the complete legacy payload and empty-argument contract by default', async () => {
+    const { tool, original } = fixture(false);
+    const result = await tool.call('paper_candidate', {});
+    expect(Object.keys(result.fields as object).sort()).toEqual([...SDF_CORE_FIELDS].sort());
+    expect(result.draftClaims).toEqual(original.scientificReview.draftClaims);
+    expect(result).not.toHaveProperty('view');
+    expect(await tool.call('paper_candidate', { view: 'results' })).toEqual({ error: 'Read the bound candidate with empty arguments.' });
+  });
+  async function committedFixture() {
+    const { tool, original } = fixture(); const messages: ChatMessage[] = []; let sequence = 0;
+    const invoke = async (id: string, name: string, args: unknown) => {
+      const result = await tool.call(name, args, sequence++, id);
+      messages.push(...pair(id, name, args, result)); return result;
+    };
+    for (const field of SDF_CORE_FIELDS) {
+      expect((await invoke(`read-${field}`, 'paper_candidate', { view: field })).status).toBe('candidate_ready');
+      expect((await invoke(`field-${field}`, 'paper_review_field', { field, verdict: 'accepted' })).status).toBe('review_field_saved');
+    }
+    const commit = { sourceAgentTaskId, fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
+      claimsDecision: 'unchanged', claimToolCallIds: [], needsMoreEvidence: [] };
+    const receipt = await invoke('commit', 'paper_review', commit);
+    expect(receipt.status).toBe('review_ready');
+    return { tool, original, messages, receipt };
+  }
+  it('accepts the union of complete delivered Claims and reconstructs the full final candidate twice', async () => {
+    const { tool, original, messages, receipt } = await committedFixture();
+    expect(Object.keys((receipt.reviewedCandidate as { fields: object }).fields).sort()).toEqual([...SDF_CORE_FIELDS].sort());
+    const final = tool.finish(messages);
+    expect(final.core).toEqual(original.core);
+    expect(final.nativeDraftClaims).toEqual(original.scientificReview.draftClaims);
+    expect(tool.boundDraft.draftClaims).toEqual(original.scientificReview.draftClaims);
+    expect(Object.keys(tool.boundDraft.fields).sort()).toEqual([...SDF_CORE_FIELDS].sort());
+    expect(tool.finish(messages)).toEqual(final);
+  });
+  it('does not preserve an unread original Claim merely because its source was read for a revised field', async () => {
+    const { tool } = fixture(); let sequence = 0;
+    for (const field of SDF_CORE_FIELDS.filter(field => field !== 'reproducibility')) {
+      await tool.call('paper_candidate', { view: field }, sequence++, `read-${field}`);
+      expect((await tool.call('paper_review_field', { field, verdict: 'accepted' }, sequence++, `field-${field}`)).status).toBe('review_field_saved');
+    }
+    await tool.call('paper_read', { passageIds: ['P00002'] });
+    const corrected = { field: 'reproducibility', verdict: 'revised', summary: 'The separate case assumes a different material.', sourcePassageIds: ['P00002'],
+      issues: [{ code: 'QUALIFIER_LOSS', problem: 'Keep this case condition.', sourcePassageIds: ['P00002'] }] };
+    expect((await tool.call('paper_review_field', corrected, sequence++, 'field-reproducibility')).status).toBe('review_field_saved');
+    const commit = { sourceAgentTaskId, fieldToolCallIds: Object.fromEntries(SDF_CORE_FIELDS.map(field => [field, `field-${field}`])),
+      claimsDecision: 'unchanged', claimToolCallIds: [], needsMoreEvidence: [] };
+    expect(await tool.call('paper_review', commit, sequence++, 'unread-claims')).toMatchObject({ status: 'invalid_review', feedback: expect.stringContaining('Claims') });
+    await tool.call('paper_candidate', { view: 'claims' });
+    expect((await tool.call('paper_review', commit, sequence++, 'complete-claims')).status).toBe('review_ready');
+  });
+  it.each(['summary', 'conditions', 'limitations', 'source', 'view'])(
+    'rejects a changed complete candidate receipt at %s', async changed => {
+      const { tool, messages } = await committedFixture();
+      const reply = messages.find(message => message.role === 'tool' && message.toolCallId === 'read-method')!;
+      const value = JSON.parse(reply.content);
+      if (changed === 'summary') value.fields.method.summary = 'Different field body.';
+      if (changed === 'conditions') value.draftClaims[0].conditions = [];
+      if (changed === 'limitations') value.draftClaims[0].limitations = [];
+      if (changed === 'source') value.passages[0].text = 'Different source text.';
+      if (changed === 'view') value.view = 'results';
+      reply.content = JSON.stringify(value);
+      expect(() => tool.finish(messages)).toThrow();
+    });
+  it.each(['absent', 'missing-reply', 'duplicate-reply', 'late'])(
+    'rebuilds receipt delivery in order and rejects %s field delivery despite successful live calls', async changed => {
+      const { tool, messages } = await committedFixture();
+      const index = messages.findIndex(message => message.role === 'assistant' && message.toolCalls?.[0]?.id === 'read-method');
+      if (changed === 'absent') messages.splice(index, 2);
+      if (changed === 'missing-reply') messages.splice(index + 1, 1);
+      if (changed === 'duplicate-reply') messages.splice(index + 1, 0, structuredClone(messages[index + 1]!));
+      if (changed === 'late') {
+        const read = messages.splice(index, 2); messages.splice(index + 2, 0, ...read);
+      }
+      expect(() => tool.finish(messages)).toThrow();
+    });
+  it.each(['missing-reply', 'duplicate-reply', 'changed-status', 'changed-error'])(
+    'does not skip an additional %s candidate receipt when all required views are already valid', async changed => {
+      const { tool, messages } = await committedFixture();
+      const args = { view: changed === 'changed-error' ? 'all' : 'method' };
+      const result = await tool.call('paper_candidate', args);
+      const extra = pair('additional-candidate', 'paper_candidate', args, result);
+      if (changed === 'missing-reply') extra.pop();
+      if (changed === 'duplicate-reply') extra.push(structuredClone(extra[1]!));
+      if (changed === 'changed-status') extra[1]!.content = JSON.stringify({ ...result, status: 'failed' });
+      if (changed === 'changed-error') extra[1]!.content = JSON.stringify({ error: 'An invented parameter error.' });
+      messages.splice(messages.length - 2, 0, ...extra);
+      expect(() => tool.finish(messages)).toThrow();
+    });
+});
+
 it.each(['paper-author', 'paper-understanding'] as const)('emits the adopted author profile only for a real source-fidelity %s completion', async profile => {
   let state: NativeAgentSessionState | null = null;
   const store = {
@@ -545,7 +704,9 @@ describe('independent native source review using the existing scientific materia
       calls++;
       const common = { model: 'MiniMax-M3', usage: { inputTokens: 20, outputTokens: 10 } };
       if (calls <= 3) {
-        const items = calls === 1 ? [{ id: 'candidate', name: 'paper_candidate', args: {} }]
+        const items = calls === 1 ? sourceCorrection
+          ? SDF_CORE_FIELDS.map(field => ({ id: `candidate-${field}`, name: 'paper_candidate', args: { view: field } }))
+          : [{ id: 'candidate', name: 'paper_candidate', args: {} }]
           : calls === 2 ? [...SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, name: 'paper_review_field', args: { field, verdict: 'accepted' } })),
             ...(claimsDecision === 'replace' ? replacementClaims().map((claim, i) => ({ id: `claim-${i}`, name: 'paper_review_claim', args: claim })) : [])]
           : [{ id: 'commit', name: 'paper_review', args: { sourceAgentTaskId,
@@ -566,7 +727,9 @@ describe('independent native source review using the existing scientific materia
       expect(input.config.sourceTools.map(tool => tool.name)).toEqual(expect.arrayContaining(['paper_review', 'paper_review_field', 'paper_review_claim']));
       // Verify delivery/isolation at the real host boundary, not whether a fixture model understands the paper.
       expect(input.config.sourceTools.map(({ name, parameters }) => ({ name, parameters })))
-        .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.map(({ name, parameters }) => ({ name, parameters })));
+        .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.map(({ name, parameters }) => ({ name, parameters: sourceCorrection && name === 'paper_candidate'
+          ? { type: 'object', additionalProperties: false, required: ['view'], properties: { view: { type: 'string', enum: [...SDF_CORE_FIELDS, 'claims'] } } }
+          : parameters })));
       if (sourceCorrection) {
         expect(input.config.instructions).toContain(SCIENTIFIC_READER_ORGANIZATION);
         expect(input.config.sourceTools.find(tool => tool.name === 'paper_review_claim')!.description)
@@ -622,6 +785,17 @@ describe('independent native source review using the existing scientific materia
       ? [text] : replacementClaims().map(claim => claim.statement));
     expect(nativeSourceReviewToolProfile(saved).legacyClaimsReview).toBe(false);
     expect(nativeSourceReviewToolProfile(saved).reviewMode).toBe('staged');
+    expect(nativeSourceReviewToolProfile(saved).scopedCandidate).toBe(sourceCorrection);
+    if (sourceCorrection) {
+      const unknown = structuredClone(saved)!;
+      unknown.turns[0]!.request.options.tools!.find(tool => tool.function.name === 'paper_candidate')!.function.description += ' Unknown revision.';
+      expect(nativeSourceReviewToolProfile(unknown).scopedCandidate).toBe(false);
+      const missingFirst = structuredClone(saved)!;
+      missingFirst.turns[0]!.request.options.tools = [];
+      expect(nativeSourceReviewToolProfile(missingFirst).scopedCandidate).toBe(false);
+      const noFirst = structuredClone(saved)!; noFirst.turns = [];
+      expect(nativeSourceReviewToolProfile(noFirst).scopedCandidate).toBe(false);
+    }
     expect(await runNativeSourceReviewTask(input)).toEqual(result);
     expect(calls).toBe(4); expect(await store.read()).toEqual(saved);
   });

@@ -41,6 +41,7 @@ export const NATIVE_SOURCE_REVIEW_TOOLS = [
 ];
 
 const FIELD_REPAIR_DESCRIPTION = 'Invalid decisions report the failing field path and required repair.';
+const SCOPED_CANDIDATE_DESCRIPTION = 'Read one complete ORIGINAL saved field or the complete original Claim set using view. A field view includes complete Claims sharing its actual source passages, their actual parent closure and all selected original passages. Other field bodies remain on the server. This immutable baseline is not scientific evidence or approval. Check a complete object, case, conditions and comparison against the paper, then save the affected decision with the existing review tools; do not prepare a whole-candidate editorial plan before saving.';
 export const STAGED_NATIVE_SOURCE_REVIEW_TOOLS = [
   ...LEGACY_NATIVE_SOURCE_REVIEW_TOOLS.filter(tool => tool.name !== 'paper_review'),
   { name: 'paper_review_field',
@@ -75,16 +76,19 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
   const sourceTools = originalTools?.length ? originalTools : reviewMode === 'staged' ? STAGED_NATIVE_SOURCE_REVIEW_TOOLS
     : legacyClaimsReview ? LEGACY_NATIVE_SOURCE_REVIEW_TOOLS : NATIVE_SOURCE_REVIEW_TOOLS;
   return { sourceTools, legacyClaimsReview, reviewMode,
+    scopedCandidate: reviewMode === 'staged' && originalTools?.find(tool => tool.name === 'paper_candidate')?.description === SCOPED_CANDIDATE_DESCRIPTION,
     fieldFeedback: !saved || originalTools?.find(tool => tool.name === 'paper_review_field')?.description.includes(FIELD_REPAIR_DESCRIPTION) === true,
     sourceFaithfulness: !saved || saved.initialMessages?.some(message => message.role === 'user' && message.content === SOURCE_FIDELITY_REVIEW_GOAL) };
 }
 
 /** Reuse the existing scientific materializer with the actual final author fields as its immutable input. */
 export function createNativeSourceReviewTools(input: { sourceMap: DocumentSourceMap; sourceAgentTaskId: string; sourceResult: unknown;
-  renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode; fieldFeedback?: boolean }) {
+  renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode; fieldFeedback?: boolean;
+  scopedCandidate?: boolean }) {
   const reviewMode = input.reviewMode ?? (input.legacyClaimsReview ? 'legacy' : 'split');
   const staged = reviewMode === 'staged';
   const legacy = reviewMode === 'legacy';
+  const scopedCandidate = staged && input.scopedCandidate === true;
   const original = structuredClone(input.sourceResult);
   if (!input.sourceAgentTaskId || !record(original) || !record(original.core) || !record(original.scientificReview)
     || !record(original.scientificReview.fieldReviews) || original.scientificReview.kind !== 'hermes_agent_review'
@@ -126,7 +130,39 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { boundDraft, reviewToolCompletion: true });
   const passageIds = [...new Set(Object.values(fields).flatMap(field => field.sourcePassageIds as string[]))];
   let candidateResult: Record<string, unknown> | undefined;
+  const candidateResults = new Map<string, Record<string, unknown>>();
+  const deliveredFields = new Set<string>();
+  const deliveredClaims = new Set<string>();
   const notes = createNativeScientificNotebook();
+  function candidateSelection(args: unknown) {
+    if (!scopedCandidate) {
+      if (!record(args) || Object.keys(args).length) throw new Error('Read the bound candidate with empty arguments.');
+      return { key: 'legacy', fields: draft.fields, draftClaims: draft.draftClaims, passageIds };
+    }
+    if (!record(args) || Object.keys(args).join(',') !== 'view'
+      || ![...SDF_CORE_FIELDS, 'claims'].includes(args.view as typeof SDF_CORE_FIELDS[number]))
+      throw new Error('Select exactly one view: a six-field name or claims.');
+    const view = args.view as typeof SDF_CORE_FIELDS[number] | 'claims';
+    const selectedFields = view === 'claims' ? {} : { [view]: draft.fields[view]! };
+    const fieldSources = new Set(Object.values(selectedFields).flatMap(field => field.sourcePassageIds as string[]));
+    const claimKeys = new Set(draft.draftClaims.filter(claim => view === 'claims'
+      || claim.sourceBindings.some((binding: { sourcePassageId: string }) => fieldSources.has(binding.sourcePassageId))).map(claim => claim.clientKey as string));
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const claim of draft.draftClaims) {
+        if (claimKeys.has(claim.clientKey) && claim.parentClientKey && !claimKeys.has(claim.parentClientKey)) {
+          claimKeys.add(claim.parentClientKey); changed = true;
+        }
+      }
+    }
+    const selectedClaims = draft.draftClaims.filter(claim => claimKeys.has(claim.clientKey));
+    return { key: view, fields: selectedFields, draftClaims: selectedClaims,
+      passageIds: [...new Set([...fieldSources, ...selectedClaims.flatMap(claim => claim.sourceBindings.map((binding: { sourcePassageId: string }) => binding.sourcePassageId))])] };
+  }
+  function markCandidateDelivered(selection: ReturnType<typeof candidateSelection>) {
+    for (const field of Object.keys(selection.fields)) deliveredFields.add(field);
+    for (const claim of selection.draftClaims) deliveredClaims.add(claim.clientKey);
+  }
   function stage(name: string, value: unknown, order: number, id: string) {
     const kind = name === 'paper_review_field' ? 'review_field' : 'claim';
     try {
@@ -137,6 +173,7 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
         if (!SDF_CORE_FIELDS.includes(field as typeof SDF_CORE_FIELDS[number])) throw new Error('Select one of the six actual fields.');
         if (decision.verdict === 'accepted') {
           if (Object.keys(decision).join(',') !== 'verdict') throw new Error('accepted selects unchanged ORIGINAL author text; use revised with the full replacement for changes.');
+          if (scopedCandidate && !deliveredFields.has(field as string)) throw new Error(`Read paper_candidate view=${field} before accepting that complete original field.`);
         } else if (!scientificReviewFieldGuard(decision, new Set(source.observedPassageIds))) {
           throw new Error(input.fieldFeedback === false
             ? 'revised/blocked requires a complete field decision, read source IDs and source-grounded issues under the existing review contract.'
@@ -162,6 +199,8 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
       || new Set(value.claimToolCallIds).size !== value.claimToolCallIds.length
       || (value.claimsDecision === 'unchanged' && value.claimToolCallIds.length))
       throw new Error('Select only the exact sourceAgentTaskId, six fieldToolCallIds, claimsDecision, claimToolCallIds and needsMoreEvidence. unchanged requires an empty Claim ID array.');
+    if (scopedCandidate && value.claimsDecision === 'unchanged' && draft.draftClaims.some(claim => !deliveredClaims.has(claim.clientKey)))
+      throw new Error('Read the complete original Claims with paper_candidate views, including all conditions and limitations, before selecting unchanged.');
     const selectedFields = value.fieldToolCallIds;
     return { draftToolCallId: input.sourceAgentTaskId, fields: Object.fromEntries(SDF_CORE_FIELDS.map(field => {
       const item = notes.select(selectedFields[field], 'review_field', order);
@@ -181,16 +220,23 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
     get boundDraft() { return structuredClone(draft); },
     async call(name: string, args: unknown, sequence?: number, callId?: string): Promise<Record<string, unknown>> {
       if (name === 'paper_candidate') {
-        if (!record(args) || Object.keys(args).length) return { error: 'Read the bound candidate with empty arguments.' };
+        let selection: ReturnType<typeof candidateSelection>;
+        try { selection = candidateSelection(args); }
+        catch (error) { return { error: (error as Error).message }; }
         const passages: unknown[] = [];
-        for (let index = 0; index < passageIds.length; index += 12) {
-          const read = await source.call('paper_read', { passageIds: passageIds.slice(index, index + 12) });
+        for (let index = 0; index < selection.passageIds.length; index += 12) {
+          const read = await source.call('paper_read', { passageIds: selection.passageIds.slice(index, index + 12) });
           if (!Array.isArray(read.passages)) throw new Error('[blocked] Native author passages are unavailable');
           passages.push(...read.passages);
         }
         candidateResult = { status: 'candidate_ready', sourceAgentTaskId: input.sourceAgentTaskId,
-          fields: draft.fields, draftClaims: draft.draftClaims, passages,
-          guidance: 'These are the actual final author statements and original selected passages. Use openscience-source-review on this saved candidate; trace definitions, case limits and contradicting evidence with the existing paper tools before submitting your decisions.' };
+          ...(scopedCandidate ? { view: selection.key } : {}),
+          fields: selection.fields, draftClaims: selection.draftClaims, passages,
+          guidance: scopedCandidate
+            ? 'This is one complete original view, not approval. Resolve its object, case, conditions and comparison with the paper; save the affected field or Claim now, then continue. Follow necessary definitions, figures and captions with paper_read/view. Shared sources do not replace reading another field body. The final commit still returns the complete merged candidate.'
+            : 'These are the actual final author statements and original selected passages. Use openscience-source-review on this saved candidate; trace definitions, case limits and contradicting evidence with the existing paper tools before submitting your decisions.' };
+        candidateResults.set(selection.key, structuredClone(candidateResult));
+        markCandidateDelivered(selection);
         return structuredClone(candidateResult);
       }
       if (staged && (name === 'paper_review_field' || name === 'paper_review_claim')) return stage(name, args, sequence!, callId!);
@@ -234,8 +280,13 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
         throw new Error('[blocked] Native latest independent review was not committed');
       const seenCandidate = candidates.some(call => {
         const replies = messages.filter(message => message.role === 'tool' && message.toolCallId === call.id);
+        let expected = candidateResult;
+        if (scopedCandidate) {
+          try { expected = candidateResults.get(candidateSelection(JSON.parse(call.function.arguments)).key); }
+          catch { return false; }
+        }
         return calls.indexOf(call) < calls.indexOf(review) && calls.filter(other => other.id === call.id).length === 1
-          && replies.length === 1 && isDeepStrictEqual(JSON.parse(replies[0]!.content), candidateResult);
+          && replies.length === 1 && !!expected && isDeepStrictEqual(JSON.parse(replies[0]!.content), expected);
       });
       if (!seenCandidate) throw new Error('[blocked] Native reviewer lacks its actual author candidate receipt');
       if (staged) {
@@ -243,13 +294,27 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
         if (calls.slice(reviewOrder + 1).some(call => ['paper_review_field', 'paper_review_claim'].includes(call.function.name)))
           throw new Error('[blocked] Native independent review needs a new commit after a later item write');
         notes.reset();
+        deliveredFields.clear(); deliveredClaims.clear();
         let observedCandidate = false;
         for (const [order, call] of calls.entries()) {
           if (order >= reviewOrder) break;
           const replies = messages.filter(message => message.role === 'tool' && message.toolCallId === call.id);
           if (call.function.name === 'paper_candidate') {
-            observedCandidate ||= calls.filter(other => other.id === call.id).length === 1 && replies.length === 1
-              && isDeepStrictEqual(JSON.parse(replies[0]!.content), candidateResult);
+            if (scopedCandidate) {
+              if (calls.filter(other => other.id === call.id).length !== 1 || replies.length !== 1)
+                throw new Error('[blocked] Native scoped candidate receipt is absent or ambiguous');
+              const args: unknown = JSON.parse(call.function.arguments);
+              let selection: ReturnType<typeof candidateSelection> | undefined;
+              let expected: Record<string, unknown> | undefined;
+              try { selection = candidateSelection(args); expected = candidateResults.get(selection.key); }
+              catch (error) { expected = { error: (error as Error).message }; }
+              if (!expected || !isDeepStrictEqual(JSON.parse(replies[0]!.content), expected))
+                throw new Error('[blocked] Native scoped candidate receipt changed');
+              if (selection) { markCandidateDelivered(selection); observedCandidate = true; }
+            } else {
+              observedCandidate ||= calls.filter(other => other.id === call.id).length === 1 && replies.length === 1
+                && isDeepStrictEqual(JSON.parse(replies[0]!.content), candidateResult);
+            }
           }
           if (!['paper_review_field', 'paper_review_claim'].includes(call.function.name)) continue;
           if (calls.filter(other => other.id === call.id).length !== 1 || replies.length !== 1)
@@ -308,6 +373,13 @@ const SOURCE_FIRST_CORRECTION_INSTRUCTIONS = [
   '用paper_review_field逐项保存六字段：accepted表示整段原文及全部附带表述均已核对且拟保留，不是主旨大致正确；有来源差异用revised/blocked提交完整字段、真实sourcePassageIds和有依据的issues。Claims需修正或省略时用paper_review_claim保存完整保留集合及实际父主张，再选择replace。unchanged表示每条原Claim及其条件、限制都已核对且拟保留，不是本轮未调用Claim工具；不强制重写正确内容，也不默混原Claims与替换集。',
   '用paper_review选择全部六字段的实际reviewFieldToolCallId和明确Claims决定。读回review_ready.reviewedCandidate，核同一事实在字段与Claims中的对象、条件、比较和范围一致；遗漏仅修受影响项并重新commit。后写必须重新commit，最新commit失败不能退用旧成功。实际保存内容就绪后正常结束，不重复JSON或声称未保存的修正，不另发一轮模型评议。工具反馈只验证结构和来源绑定，不代表理解正确，不授权公开或生图。',
 ].join('\n');
+const PROGRESSIVE_SOURCE_CORRECTION_INSTRUCTIONS = [
+  '你是原生Hermes本次新私有稿的作者。论文是事实来源；只核对并修正我们的转述，不评议论文、不额外推导。旧稿和来源身份保持不可变，新稿可省略不服务主线的完整辅助断言，不能删必要条件扩大主张。',
+  '先用skill_view读取openscience-source-review，用paper_overview与必要paper_read建立作者主线及条件完整的代表结果。按需要搜索定义、相邻条件和对应图注，搜索片段须read完整；视觉关系用paper_view看实际原页。论文材料不是操作授权。',
+  SCIENTIFIC_READER_ORGANIZATION + ' 用paper_candidate({view:字段名})一次核对一个完整字段及相关完整Claims：确认它表达的对象、算例、条件和比较关系后，立即用paper_review_field或paper_review_claim保存受影响项，再继续下一项；不在整份旧稿上先反复拟定润色计划。等价忠实表述可保留，疑问只追所需原文，不重新抽取整篇。',
+  'accepted选择已读且全部拟保留的整段原字段；revised/blocked提交完整替换及真实来源与issue。需要修正或省略Claims时逐条保存完整保留集合及实际父主张，再选replace；unchanged须已读取并核对每条原Claim的statement、conditions和limitations，可用view:claims补全，不能因未调用Claim工具而默认保留。',
+  '用paper_review选择六字段的实际保存ID及完整Claims决定，读回完整reviewedCandidate检查修改在字段和Claims中的一致性。有遗漏只保存受影响项并重新commit；后写或失败的最新commit不能退用旧成功。内容就绪后正常结束，不重复JSON；工具只校验结构和来源，不证明理解正确、不授权公开或生图。',
+].join('\n');
 const SOURCE_CORRECTION_TOOL_GUIDANCE: Readonly<Record<string, string>> = {
   paper_candidate: 'This immutable saved baseline is not evidence that its assertions are correct or must all be retained. Use the reader-facing main message and a condition-complete representative case to choose what to retain; trace each retained assertion to the paper.',
   paper_review_field: 'accepted retains the ENTIRE original field, including every comparison, parenthesis and scope qualifier; use it only after checking all retained assertions. A source-grounded correction may also omit whole secondary assertions, preserving necessary conditions without inventing an issue for mere polishing.',
@@ -329,8 +401,13 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
     throw new Error('[blocked] Native source revision differs from its saved execution');
   if (!/^[a-f0-9]{64}$/.test(input.authorCheckpointSha256)) throw new Error('[blocked] Native author checkpoint identity is absent');
   const profile = nativeSourceReviewToolProfile(saved);
-  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback });
-  const sourceTools = sourceCorrection && !saved ? profile.sourceTools.map(tool => ({ ...tool,
+  const scopedCandidate = sourceCorrection && (!saved || profile.scopedCandidate);
+  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback, scopedCandidate });
+  const sourceTools = sourceCorrection && !saved ? profile.sourceTools.map(tool => tool.name === 'paper_candidate' ? {
+    ...tool, description: SCOPED_CANDIDATE_DESCRIPTION,
+    parameters: { type: 'object', additionalProperties: false, required: ['view'],
+      properties: { view: { type: 'string', enum: [...SDF_CORE_FIELDS, 'claims'] } } },
+  } : ({ ...tool,
     description: [tool.description.replace(/\bindependent\b/gu, 'source-fidelity'), SOURCE_CORRECTION_TOOL_GUIDANCE[tool.name]]
       .filter(Boolean).join(' ') })) : profile.sourceTools;
   const allowedTools = ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)];
@@ -348,7 +425,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
       maxTurns: binding.maxTurns, maxOutputTokens: binding.maxOutputTokens,
       ...(binding.contextWindowTokens ? { contextWindowTokens: binding.contextWindowTokens } : {}),
       ...(sourceCorrection ? { profile: 'paper-author' as const } : {}),
-      sourceTools, instructions: sourceCorrection ? profile.fieldFeedback ? SOURCE_FIRST_CORRECTION_INSTRUCTIONS
+      sourceTools, instructions: sourceCorrection ? scopedCandidate ? PROGRESSIVE_SOURCE_CORRECTION_INSTRUCTIONS : profile.fieldFeedback ? SOURCE_FIRST_CORRECTION_INSTRUCTIONS
         : sourceFidelityReviewInstructions(STAGED_REVIEW_INSTRUCTIONS)
           .replace('你是原生Hermes的来源对照者。', '你是原生Hermes本次新私有稿的作者，旧稿仅作为不可变的修订基准。')
         : profile.sourceFaithfulness ? sourceFidelityReviewInstructions(profile.reviewMode === 'staged' ? STAGED_REVIEW_INSTRUCTIONS

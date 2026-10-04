@@ -3,9 +3,11 @@
 原生Hermes＋M3忠实理解论文、自校转述及自动私有分镜，用户最新Synclip接口授权和未完成验收，统一见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。本页不另维护接口或发布状态。
 
 ## 本轮检查点
+- 当前候选把fresh来源修订的paper_candidate改为六字段/Claims七种完整视图；逐项核对并使用既有保存工具，不把整份旧稿的润色计划留在一个completion。服务器完整基准、最终六字段/Claims物化与原权限/预算保持；共享原段不能代替完整字段读取。Source113+共享201共314通过、实际旧paid两项零外呼回放全等、Worker TC/build0/scopedlint0；额外缺/双/错误回执静默跳过的High P2已4项RED→GREEN修复。最终Code High及Native789复用Ops GO，精确CI和部署待完成，科学效果未证，Synclip仍停用；实际身份只见CURRENT。
+
 - 原生来源修订已通过Code/Ops High、精确CI并正常发布；一次实际作者4m30s/19帧技术成功、自动确认来源及建新私有版本。真实终稿仍保留四项结果对象/趋势/范围/条件失真，High保真NO-GO；只有两处次要表述修改，六Claims未改，不是保存丢失。零外呼回放重现10次拒收，证明通用反馈未指出超长说明/未读原段/缺字段；现修任务组织与反馈，不再同法盲重跑。分镜自然32帧失败、无asset或图；Synclip关闭，旧稿/版本/paid保留。精确身份、证据和下一步只见CURRENT，不称全链完成。
 
-- 上次修复已发布；真实作者4分钟/6帧仅修λ趋势，仍3项原文失真，完整原段和图注不缺，保真NO-GO。自动planner16帧截断，无asset/图；保留paid、不重开。新候选明确逐句/Claims核源与完整辅助断言取舍，并定位数量错误到场景、明示domain/主体绑定/原图规则；最终Code High及Native复用Ops GO，精确CI/部署/实际效果待。242定向通过、Worker TC/build0、四文件lint0；planner五条lint复现HEAD，实际12拒收回执零外呼保持，Linux host15项待CI。精确身份和once禁止重发只见CURRENT。
+- 上次修复已发布；真实作者4分钟/6帧仅修λ趋势，仍3项原文失真，完整原段和图注不缺，保真NO-GO。自动planner16帧截断，无asset/图；保留paid、不重开。新修复明确逐句/Claims核源与完整辅助断言取舍，并定位数量错误到场景、明示domain/主体绑定/原图规则；最终Code High及Native复用Ops GO、精确CI与正常部署通过；新的私有真实任务一次验证自然failed：第二轮32768token全部内部推理，未落新科学工具/稿/分镜；方法实际送达、采样符合官方，当前科学前置仍未验收，先诊断组织与来源解读，不重开或blind重跑。242定向通过、Worker TC/build0、四文件lint0；planner五条lint复现HEAD，实际12拒收回执零外呼保持，Linux host已在本次CI通过。精确身份和once禁止重发只见CURRENT。
 
 - 通用组织/能力缺口已核：科学阶段提前收到艺术指导；依赖新返回ID的草稿曾同帧选择旧项；Native未接入计算器/Python，虽然隔离科学后端存在。按实际断点复用并分阶段加载，不注入样本答案。8个完成stage已保权限归档、旧脚本停用，0释放空间。精确证据与状态见CURRENT。
 

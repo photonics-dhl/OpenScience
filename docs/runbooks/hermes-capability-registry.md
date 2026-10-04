@@ -3,6 +3,7 @@
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
+- 新候选在同一Native来源修订入口复用paper_candidate及现有field/Claim staging：先建立论文主线，再按完整字段或完整Claims渐进核对并保存；关联取实际sourcePassageId及真实parent closure，不靠字段名称或当前论文答案。服务器全稿仍供完整终态物化，新快捷保留仅接受真实送达及严格重放的完整视图，旧paid合同不升级。定向工程与实际旧paid零外呼回放通过；尚未新实际运行，不能把视图减重当作科学效果因果证明，也不加Skill、模型阶段或预算。版本与下一步只见CURRENT。
 - 用户10-04纠正优先：默认理解/图解以论文作者的内容为依据，只核我们的转述和视觉表达保真度；不评议原论文科学有效性/质量/创新性。旧Appraisal路由及“科学NO-GO”混合目的记录降为历史；实际条件、符号、范围和空间位置的转述失真仍是有效问题。当前已部署实现复用openscience-source-review负责理解和自校，scientific-critical-thinking完整方法保留给另行请求的评议；真实作者自校复用原ready/确认/CAS、艺术资料后置，不增模型阶段。部署与验证以CURRENT为准。
 
 Native论文任务的计算执行缺口已定向确认：paper-task/nativeSourceReviewToolProfile白名单只有Skill、论文读取和提交工具，task_runtime按白名单注册；scientific-critical-thinking方法文本不会自动提供Python。已有science-worker通过claimNextPendingSandboxJob、checkPythonAST和SandboxController执行NumPy/SciPy/SymPy（仅源码能力，未新增线上探针），现有sandbox-jobs要求workspace membership与Python配额。Native task/run/source/lease绑定与可靠幂等尚缺，不能直接裸调Domain作为授权；应补适配复用隔离后端，不开放主机terminal。实际新稿仍有推理/范围错误，不能把缺计算器当唯一根因；精确结果见CURRENT。
@@ -17,7 +18,7 @@ scientific-critical-thinking历史入口提供Appraisal Workflow，完整原方�
 
 上述字段反馈/阅读组织修复复用同一ScientificReviewField校验及openscience-source-review：先建立原文主线/代表结果，再对照旧稿；只有实际首轮新描述给明确字段路径与paper_read动作，旧或缺失描述不升级。真实分镜同context逐拒收回放已确定表达式数值binding不相认、完整谓词误作单位；新science描述仅补精确same-quote expression匹配及封闭predicate+article识别，未知/真单位不删，旧paid保持。源ID/短页码quote/qualifier错误给具体位置，不转ID、改quote/关系或默补null；歧义括号继续拒收并指示分号独立比较。最终Code High与Native复用Ops GO、定向/回放/build/TC/精确CI通过并已正常发布；根Skill、目录、SDK未改。其实际消费与保真结果见下段，不能从机械通过推定科学收益；运行身份只见CURRENT。
 
-该新稿已终态：只修λ趋势，其余三项结果对象/条件/范围仍NO-GO；旧复杂字段与整组Claims经accepted/unchanged保留。原文、完整图注及原页工具可用，不存在缺安装/缺源证据。新候选将现有逐句/算例/读者方法落实到fresh sourceCorrection指引及快捷选择语义，允许完整省去不服务主线的辅助断言，复用search/read/view和Claim保存。实际planner零外呼12回执对照确认Tc1/2缺对应主体描述，而非格式或跨算例；as/that说明短语误作单位，指导独立比较而不扩词法。新science描述补主体/own quote、sN/P、availableOriginals，schema明示既有六domain，反馈补scene/root路径；旧paid定义/语法/严格回执保持。不建新台账、门禁、模型阶段或样本答案。精确候选、验证、部署和真实效果见CURRENT。
+该新稿已终态：只修λ趋势，其余三项结果对象/条件/范围仍NO-GO；旧复杂字段与整组Claims经accepted/unchanged保留。原文、完整图注及原页工具可用，不存在缺安装/缺源证据。已部署修复将现有逐句/算例/读者方法落实到fresh sourceCorrection指引及快捷选择语义，允许完整省去不服务主线的辅助断言，复用search/read/view和Claim保存。实际planner零外呼12回执对照确认Tc1/2缺对应主体描述，而非格式或跨算例；as/that说明短语误作单位，指导独立比较而不扩词法。新science描述补主体/own quote、sN/P、availableOriginals，schema明示既有六domain，反馈补scene/root路径；旧paid定义/语法/严格回执保持。不建新台账、门禁、模型阶段或样本答案。最新一次作者修订只调用SourceSkill/candidate/overview，随后32768token内部推理截断、无科学工具动作；实际原文/方法送达且官方采样符合，仍误认比较对象并过度斟酌微词，不是安装缺失。须修任务颗粒度和图注/必要原页的实际使用，未证明可用，不按技术GO继续付费或开启API。精确验证、部署、失败回执和下一动作见CURRENT。
 
 工具提交已部署：新精确description使用paper_review回执作为终审数据入口，重建真实稿并执行原完整科学检查；后续改稿或失败提交不能退用旧成功。字段来源容量、issues及旧paid兼容保持。历史132定向/TC/lint/High证明提交边界，不能证明真实供应商总会返回调用或科学正确。
 

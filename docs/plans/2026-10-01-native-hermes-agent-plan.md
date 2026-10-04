@@ -164,3 +164,13 @@ v10在真实draft_ready后连续两次tool_use但无结构化调用，只留下�
 ## 当前分镜修复的精确范围（10-05）
 
 实际528完整context回放确认Tc1/2在自己的支持quote中，但对应subject只描述另一表达式，拒收正确；后续场景同错而反馈缺scene编号。as/that说明短语被解析为单位；现不扩quantity grammar，而明确完整表达式须同时写入对应subject及own quote，比较与说明用分号分离且保留算符/值/单位。只fresh science工具补通用最小叙事、sN/P、availableOriginals指引及既有六domain枚举；sourceQuantityLocations默认false，真实首轮新描述启用scene/root路径。保留be20 PAID_PROSE全部语法/旧反馈，保存schema原样恢复，缺tools回退旧string domain。Source核对方法候选及Planner精确验证/审查/部署/真实结果以CURRENT为准，不重新请求任何旧失败任务。
+
+## 完整科学单元的渐进读取（10-05）
+
+最新真实来源修订仅调用Skill/candidate/overview，下一帧32768token全部内部推理而截断，没有新科学保存。原文、方法与官方采样已正确送达；缺失调用和对结果对象的误认仍存在，不能归咎安装或以延长预算解决。视图减重只是假设有帮助的执行组织调整，效果须由新实际稿评价。
+
+复用现有paper_candidate，以六字段及claims七个view读取完整科学单元。字段视图带实际sourcePassageId关联的完整Claims、真实parent closure及全部选中原段；不删算例条件、比较基准或父主张，不按sourceField标签推断关系。服务器完整不可变boundDraft仍交同一物化器；已有字段/Claim保存与最终完整合并检查不换协议或新增模型阶段。新指导让Agent建立论文主线后，对一个完整对象/算例/条件/比较核对并保存，再继续；不先规划全稿润色，正确等价表述可保留。
+
+局部视图使共享原段无法证明另一个原字段正文已送达，因此仅新模式accepted要求该完整字段视图，unchanged要求全部原Claim完整送达，可跨真实视图累积。终态清空送达集合，按实际历史重建并逐条全等验证成功及参数错误回执；缺失、重复或更改不能被静默忽略。这是局部投影新增的实际缺口，原来源校验只知道P编号，不能代替正文读取。旧paid/未知/缺首轮定义保原全稿空参语义；启用来自可信sourceCorrection与实际首轮exact描述，不接受payload选择模式。
+
+Source113及共享201共314、真实旧paid两项零外呼回放、Worker TC/build/scopedlint通过；额外candidate回执P2四项真实RED→GREEN。最终独立审查、精确CI、部署与真实效果以CURRENT为准；不重开旧任务、不改输出额度/截止时间/SDK，不注入当前论文答案。
