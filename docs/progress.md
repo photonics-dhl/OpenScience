@@ -3,7 +3,7 @@
 原生Hermes＋M3忠实理解论文、自校转述及自动私有分镜，用户最新Synclip接口授权和未完成验收，统一见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。本页不另维护接口或发布状态。
 
 ## 本轮检查点
-- 忠实理解候选已完成并通过combined独立Code High：默认Skill路由、真实作者自校→原确认/CAS自动采用、科学就绪后加载艺术资料，保留旧paid及来源/Claims/付费阶段守卫。Worker252、Domain160、Web35定向通过；尚未部署，下一步按CURRENT正常发布并配对新Native，再验真实论文。无需为解释作者意图另推参数，计算工具适配不纳入默认链。
+- 默认忠实理解/作者自校直接采用及科学就绪后加载艺术指导已combined Code/Ops High、精确CI通过并正常发布，同SHA Native/catalogue配对已实核；旧paid/权限/来源/Claims守卫保持。一次新普通论文验证已创建running，理解用时、实际主旨/条件及完整图解提示词仍待观察；未生图、不称全链质量通过。精确版本/任务/证据及下一步只见CURRENT。
 
 - 通用组织/能力缺口已核：科学阶段提前收到艺术指导；依赖新返回ID的草稿曾同帧选择旧项；Native未接入计算器/Python，虽然隔离科学后端存在。按实际断点复用并分阶段加载，不注入样本答案。8个完成stage已保权限归档、旧脚本停用，0释放空间。精确证据与状态见CURRENT。
 
