@@ -16,6 +16,56 @@ class NativeStub:
 
 
 class AdapterTests(unittest.TestCase):
+    def stopped_response_fixture(self, response=None, error=None):
+        calls = []
+        history = [{'role': 'assistant', 'content': 'Saved paid reply.', 'reasoning_details': [{'opaque': 'original'}]}]
+        class NativeConversation:
+            def _interruptible_api_call(self, request):
+                calls.append(request)
+                if error is not None:
+                    raise error
+                return response
+            def run_conversation(self, *args, **kwargs):
+                # Model native's ordinary-Exception/invalid-response retry boundary.
+                for _ in range(2):
+                    try:
+                        result = self._interruptible_api_call({'messages': history})
+                    except Exception:
+                        continue
+                    if result is not None:
+                        return {'final_response': 'Completed', 'messages': history}
+                return {'error': 'Native retries exhausted', 'messages': history}
+        agent = create_task_agent_class(NativeConversation, lambda: None, {'paper_read'})()
+        return agent, calls, history
+
+    def test_missing_sdk_reply_stops_before_native_retry_and_preserves_paid_history(self):
+        agent, calls, history = self.stopped_response_fixture()
+        before = json.dumps(history)
+        with self.assertRaisesRegex(NativeTaskStopped, 'no valid SDK reply; original paid receipts remain authoritative'):
+            agent.run_conversation('Original task')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(json.dumps(history), before)
+        self.assertIsNone(agent._native_last_context_tokens)
+
+    def test_native_stale_timeout_stops_before_native_retry_and_preserves_paid_history(self):
+        timeout = TimeoutError('Non-streaming API call timed out (threshold: 610s)')
+        agent, calls, history = self.stopped_response_fixture(error=timeout)
+        before = json.dumps(history)
+        with self.assertRaisesRegex(NativeTaskStopped, 'no valid SDK reply; original paid receipts remain authoritative') as caught:
+            agent.run_conversation('Original task')
+        self.assertIs(caught.exception.__cause__, timeout)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(json.dumps(history), before)
+        self.assertIsNone(agent._native_last_context_tokens)
+
+    def test_valid_sdk_reply_is_returned_intact_and_still_records_actual_context_usage(self):
+        response = SimpleNamespace(usage=SimpleNamespace(openscience_context_input_tokens=4933),
+            choices=[{'message': {'content': '', 'reasoning_details': [{'opaque': 'exact paid reply'}]}}])
+        agent, calls, _ = self.stopped_response_fixture(response=response)
+        self.assertIs(agent._interruptible_api_call({'messages': []}), response)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(agent._native_last_context_tokens, 4933)
+
     def test_iteration_exhaustion_stops_without_native_summary_or_changes_to_paid_history(self):
         for limit in [32, 5]:
             with self.subTest(limit=limit):

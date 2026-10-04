@@ -22,6 +22,10 @@ UDS回归在Linux运行，Windows跳过；broker inode/mode攻击回归需要Lin
 
 ## 已安装运行时的生产接入
 
+任务清空环境后固定模型client/stale期限610秒，与既有UDS610秒衔接；Worker请求上限仍600秒，原预算不变。父线程未取得有效SDK回复或收到原生TimeoutError时沿既有停止信号结束，不进入SDK通用坏响应重试；以原付费回执为准，不据停止推断未提交/未计费。
+
+科学catalogue按需引用`references/source-evidence-alignment.md`原样消费项目已有共享证据对齐规则；作者和reviewer通过现有`skill_view`读取。主线选择依研究类型与原文，当前论文仅为验收样本；生成文件/加载证明不能代替跨论文科学效果。
+
 前置：source候选独立High与精确CI通过，按现有deploy脚本完成干净已推SHA的构建/启动；先保留当前生产和回退身份。安装前timer/broker/原生任务须自然排空，不能停止活动论文进程。已有原生任务时须保留原marker绑定的运行时与Skill目录，不能用新配置冒充旧执行。
 
 受控构建后从该不可变release生成现有`release-input-manifest.mjs runtime-snapshot`收据，root保存且禁止普通用户修改；安装器先验证source与这一既有runtime收据，再执行已构建科学方法导出。`python3 -B install.py --source /opt/openscience-releases/<FULL_SHA> --runtime-snapshot <PROTECTED_BUILD_RECEIPT> --defer-timer`只复制服务器已安装Agent/依赖及项目Skills，不下载依赖、不改全局记忆、不调用模型。快照链接限本副本或已挂载的只读系统依赖。

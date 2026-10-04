@@ -21,7 +21,9 @@ def main():
     instance = os.environ.get("OPENSCIENCE_NATIVE_INSTANCE", "")
     os.environ.clear()
     os.environ.update(HOME="/task", HERMES_HOME="/task", PATH="/usr/bin:/bin",
-        HERMES_TELEMETRY_ENABLED="false", HERMES_NO_AUTO_UPDATE="1", PYTHONUNBUFFERED="1")
+        HERMES_TELEMETRY_ENABLED="false", HERMES_NO_AUTO_UPDATE="1", PYTHONUNBUFFERED="1",
+        # Worker owns the 600s call deadline; allow its outcome through the 610s UDS wait.
+        HERMES_API_CALL_STALE_TIMEOUT="610", HERMES_API_TIMEOUT="610")
     sys.path.insert(0, "/opt/hermes-agent")
     import httpx
     from task_agent import NativeTaskStopped, SkillScope, create_task_agent_class, guard_registered_tools

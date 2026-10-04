@@ -16,7 +16,7 @@ const scientificIntegrationRule = '整合时保留每条观察的来源和限定
 const nativeAppraisalWorkflow = [
   '## 按研究主线执行 Appraisal Workflow',
   '1. 先确定向未读论文者解释的主线：问题如何由核心机制解决，以一个条件完整的代表算例说明贡献；只有比较本身构成核心贡献时，才保留解释该比较所必需的算例。固定保留结论的对象、量、比较基线和条件，将描述、预测与因果解释分开，再沿这些关系取证。',
-  '2. 先找证据再评价：用原文、图注、原页和必要的补充材料找到直接结果及条件。将自己的句子与完整原段落比较，同时寻找会缩小或反驳它的定义、限制和相反材料。检索命中只是位置，不能代替完整读取；解析失败与论文未报告分开。',
+  '2. 先找证据再评价：用原文、图注、原页和必要的补充材料找到直接结果及条件。将自己的句子与完整原段落比较，同时寻找会缩小或反驳它的定义、限制和相反材料。保留机制、量、比较或范围关系时，用skill_view(name="scientific-critical-thinking", file_path="references/source-evidence-alignment.md")读取共享对齐方法，只应用与主线关系有关的条款。检索命中只是位置，不能代替完整读取；解析失败与论文未报告分开。',
   '3. 检查方法与分析：沿“对象和前提→操作或推导→输出”解释机制。核对所保留结果使用的模型、假设及实际平均/叠加等运算；拟合或一个吻合算例不足以证明因果、唯一参数或普适结论。需要时查看原页确认公式、图形和量的位置。',
   '4. 选适合研究类型的方法：理论关注假设与推导，仿真关注模型和适用条件，实验关注对照与测量。报告完整性、偏倚和证据可信程度回答不同问题，不能用清单数量评分，也不把临床分级套到物理论文。只按当前疑问加载原方法或相关引用。',
   '5. 据主线组织保存内容：' + SCIENTIFIC_READER_ORGANIZATION + ' 比较是核心贡献时保留必要的比较及各自条件；影响主线的反例和边界也须保留。其他算例与辅助推导留在来源。减少次要断言来凝练，不删必要条件，也不把不同算例的最好数值拼成一个结果。',
@@ -39,6 +39,7 @@ export const SCIENTIFIC_CRITICAL_THINKING_SKILL = {
   id: 'scientific-critical-thinking',
   version: '5',
   nativeInstructions: nativeAppraisalWorkflow,
+  nativeEvidenceAlignmentInstructions: scientificEvidenceRules().join('\n'),
   nativeSourceReviewInstructions: [
     '对调用方提供的真实已保存候选执行 scientific-critical-thinking 的 Appraisal Workflow，保持既定研究主线：作者使用paper_draft，独立审阅使用paper_candidate，不另造草稿替换被审基准。候选内容和其来源选择都需要核验；它们不是审核结论。',
     '从候选回执中的字段/主张映射与完整原段落开始比较已保存的正文。固定主线中的对象、物理量、代表算例及会改变解释的条件，沿这些依赖核源；不要重跑全文提取或为六字段补齐无关细节。已选来源只是起点，不证明相邻定义、反例和必要的补充材料已覆盖。',

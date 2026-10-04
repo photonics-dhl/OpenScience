@@ -62,7 +62,8 @@ class InstallLifecycleTests(unittest.TestCase):
             if any(action in argv for action in ('verify', 'runtime-verify')) and self.verification_seconds > timeout:
                 raise subprocess.TimeoutExpired(argv, timeout)
             if '-e' in argv:
-                output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review','version':5})
+                output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review',
+                    'nativeEvidenceAlignmentInstructions':'Bind retained measurements to their objects, definitions, comparison and scope.', 'version':5})
         elif argv[1] == 'is-active':
             output = ('active' if self.active else 'inactive') if argv[2].endswith('.timer') else 'inactive'
         elif argv[1] == 'is-enabled':
@@ -130,6 +131,19 @@ class InstallLifecycleTests(unittest.TestCase):
         self.assertEqual((runtime/'.runtime-id').read_text().strip(), receipt['runtimeId'])
         self.assertIn('OpenScience controlled thinking-only continuation', (runtime/'run_agent.py').read_text())
         self.assertEqual((self.native/'run_agent.py').read_text(), native_fixture_source())
+
+    def test_catalogue_exposes_shared_evidence_alignment_through_restricted_skill_read(self):
+        from task_agent import SkillScope
+        install.install(self.source, self.snapshot)
+        catalogue=self.root/'releases'/self.source.name/'catalogue'
+        resource='references/source-evidence-alignment.md'
+        scope=SkillScope(catalogue)
+        reference=scope.resolve('scientific-critical-thinking',resource)
+        self.assertEqual(reference.read_text(), 'Bind retained measurements to their objects, definitions, comparison and scope.\n')
+        self.assertIn(resource, scope.resolve('scientific-critical-thinking').read_text())
+        self.assertIn(resource, scope.resolve('openscience-source-review').read_text())
+        self.assertEqual(reference.stat().st_mode & 0o222, 0)
+        self.assertFalse(self.active)
 
     def test_unknown_sdk_layout_rejects_before_runtime_identity_and_restores_existing_installation(self):
         (self.native/'run_agent.py').write_text('print("unknown upstream layout")\n')

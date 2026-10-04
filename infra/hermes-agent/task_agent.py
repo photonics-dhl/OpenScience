@@ -120,10 +120,17 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
                 self.max_iterations = original_limit
 
         def _interruptible_api_call(self, api_kwargs):
-            # The override only measures the already-received response; native owns the call.
+            # Native owns the call; an unknown outcome must not enter its generic retry loop.
             self._native_format_context = None
             self._native_last_context_tokens = None
-            response = super()._interruptible_api_call(api_kwargs)
+            stop_reason = 'Native task received no valid SDK reply; original paid receipts remain authoritative'
+            try:
+                response = super()._interruptible_api_call(api_kwargs)
+            except TimeoutError as error:
+                raise NativeTaskStopped(stop_reason) from error
+            # A fatal transport stop can escape only the SDK's background thread, leaving None.
+            if response is None:
+                raise NativeTaskStopped(stop_reason)
             tokens = getattr(getattr(response, 'usage', None), 'openscience_context_input_tokens', None)
             if type(tokens) is int and 0 <= tokens <= 9007199254740991:
                 self._native_last_context_tokens = tokens

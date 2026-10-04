@@ -49,7 +49,11 @@ def write_science_skills(source, catalogue, science):
         folder.mkdir(parents=True)
         if name == 'scientific-critical-thinking':
             copy_resources(source/'infra'/'hermes-agent'/'science-references', folder/'upstream')
+            references = folder/'references'
+            references.mkdir()
+            (references/'source-evidence-alignment.md').write_text(science['nativeEvidenceAlignmentInstructions']+'\n', encoding='utf-8')
             body += '\n\n## On-demand original method references\n' \
+                'For retained mechanisms, quantities, comparisons or scope, use [shared source/evidence alignment](references/source-evidence-alignment.md). Apply only relevant clauses to the chosen research line. ' \
                 'Read [the source index](upstream/README.md) and [the complete original method](upstream/critical-thinking-method.md) when needed. ' \
                 'For unsupported inference or scope changes, use [logical fallacies](upstream/references/logical_fallacies.md); ' \
                 'for confirmation or anchoring while reviewing your own draft, use [common biases](upstream/references/common_biases.md); ' \
@@ -59,6 +63,8 @@ def write_science_skills(source, catalogue, science):
         else:
             body += '\n\nFor a difficult inference or possible confirmation bias, select the relevant original references through ' \
                 'skill_view(name="scientific-critical-thinking", file_path="upstream/README.md"). ' \
+                'For retained mechanisms, quantities, comparisons or scope, read the shared alignment method through ' \
+                'skill_view(name="scientific-critical-thinking", file_path="references/source-evidence-alignment.md"). ' \
                 'The task is source-grounded manuscript appraisal, not a journal intake or editorial decision. ' \
                 'Recheck retained claims against the bound paper; structural feedback does not freeze your wording or make it scientifically correct.'
         (folder/'SKILL.md').write_text(f'---\nname: {name}\ndescription: {description}\nversion: "{science["version"]}"\n---\n\n'
