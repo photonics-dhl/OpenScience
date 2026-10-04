@@ -3,7 +3,7 @@
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
-- 新候选在同一Native来源修订入口复用paper_candidate及现有field/Claim staging：先建立论文主线，再按完整字段或完整Claims渐进核对并保存；关联取实际sourcePassageId及真实parent closure，不靠字段名称或当前论文答案。服务器全稿仍供完整终态物化，新快捷保留仅接受真实送达及严格重放的完整视图，旧paid合同不升级。定向工程与实际旧paid零外呼回放通过；尚未新实际运行，不能把视图减重当作科学效果因果证明，也不加Skill、模型阶段或预算。版本与下一步只见CURRENT。
+- 同一Native来源修订入口已部署渐进paper_candidate及既有field/Claim staging：先建立论文主线，再按完整字段或完整Claims核对并保存；关联取实际sourcePassageId及真实parent closure，不靠字段名称或当前论文答案。服务器全稿仍供完整终态物化，新快捷保留仅接受真实送达及严格重放的完整视图，旧paid合同不升级。定向工程、真实旧paid零外呼回放、独立High及精确CI通过并正常部署，新实际任务已创建、结果待验；视图减重的科学效果仍未证明，不加Skill、模型阶段或预算。版本与下一步只见CURRENT。
 - 用户10-04纠正优先：默认理解/图解以论文作者的内容为依据，只核我们的转述和视觉表达保真度；不评议原论文科学有效性/质量/创新性。旧Appraisal路由及“科学NO-GO”混合目的记录降为历史；实际条件、符号、范围和空间位置的转述失真仍是有效问题。当前已部署实现复用openscience-source-review负责理解和自校，scientific-critical-thinking完整方法保留给另行请求的评议；真实作者自校复用原ready/确认/CAS、艺术资料后置，不增模型阶段。部署与验证以CURRENT为准。
 
 Native论文任务的计算执行缺口已定向确认：paper-task/nativeSourceReviewToolProfile白名单只有Skill、论文读取和提交工具，task_runtime按白名单注册；scientific-critical-thinking方法文本不会自动提供Python。已有science-worker通过claimNextPendingSandboxJob、checkPythonAST和SandboxController执行NumPy/SciPy/SymPy（仅源码能力，未新增线上探针），现有sandbox-jobs要求workspace membership与Python配额。Native task/run/source/lease绑定与可靠幂等尚缺，不能直接裸调Domain作为授权；应补适配复用隔离后端，不开放主机terminal。实际新稿仍有推理/范围错误，不能把缺计算器当唯一根因；精确结果见CURRENT。

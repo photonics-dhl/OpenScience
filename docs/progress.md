@@ -3,7 +3,7 @@
 原生Hermes＋M3忠实理解论文、自校转述及自动私有分镜，用户最新Synclip接口授权和未完成验收，统一见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。本页不另维护接口或发布状态。
 
 ## 本轮检查点
-- 当前候选把fresh来源修订的paper_candidate改为六字段/Claims七种完整视图；逐项核对并使用既有保存工具，不把整份旧稿的润色计划留在一个completion。服务器完整基准、最终六字段/Claims物化与原权限/预算保持；共享原段不能代替完整字段读取。Source113+共享201共314通过、实际旧paid两项零外呼回放全等、Worker TC/build0/scopedlint0；额外缺/双/错误回执静默跳过的High P2已4项RED→GREEN修复。最终Code High及Native789复用Ops GO，精确CI和部署待完成，科学效果未证，Synclip仍停用；实际身份只见CURRENT。
+- fresh来源修订已改为六字段/Claims七种完整视图，逐项核对并使用既有保存工具；服务器全稿和最终完整校验保持。Source113+共享201共314、实际旧paid两项零外呼回放、TC/build/lint通过；额外缺/双/错误回执High P2真实4RED→GREEN，最终Code/Ops GO、精确CI及正常部署通过。已创建一次新的真实私有作者修订+自动分镜run，复用原论文/Map，结果待原文验收；不重开或重放旧once，Synclip仍停用。正常retention仅留当前+回滚，三份无用初步日志已清理。精确身份与运行结果只见CURRENT。
 
 - 原生来源修订已通过Code/Ops High、精确CI并正常发布；一次实际作者4m30s/19帧技术成功、自动确认来源及建新私有版本。真实终稿仍保留四项结果对象/趋势/范围/条件失真，High保真NO-GO；只有两处次要表述修改，六Claims未改，不是保存丢失。零外呼回放重现10次拒收，证明通用反馈未指出超长说明/未读原段/缺字段；现修任务组织与反馈，不再同法盲重跑。分镜自然32帧失败、无asset或图；Synclip关闭，旧稿/版本/paid保留。精确身份、证据和下一步只见CURRENT，不称全链完成。
 
