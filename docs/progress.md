@@ -3,7 +3,7 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-06：线上 `7d208827d0e0bc41811b46dc1bf67231daf8230a` 部署完成并通过 release/CAS、Nginx、容器启动健康和公网 `/__release` 复核。Hermes 窄屏入口已改为右下角透明浮动邀请，不再生成全宽底栏或 body 空白带；390px 真实页面无横向溢出，点击后展开 300px companion surface；桌面仍为 360px。Landing 保持不变。Parser/ScanSci/embedding 深层能力探针因本次 `--no-tests` 未验证。
+- 2026-10-06：线上 `4ed53b71faa11692756bcf79d5b3504e57581b19` 部署完成并通过 release/CAS、Nginx、容器启动健康和公网 `/__release` 复核，回退为 `7d208827d0e0bc41811b46dc1bf67231daf8230a`。Hermes 窄屏入口已改为右下角透明浮动邀请，不再生成全宽底栏；内容末尾保留透明安全区，390px 指南页滚动到底部与 CTA 重叠数为 0、无横向溢出，点击后展开 300px companion surface；桌面仍为 360px。Landing 保持不变。Parser/ScanSci/embedding 深层能力探针因本次 `--no-tests` 未验证。
 - 2026-10-06：在现有已确认分镜上完成一次新的真实站内生图复测。RO 9067a2d5-42ad-4c06-b234-753728b71064 的 `presentation.generate` task `ead639dc-e480-4520-8f0c-691402c8b739` 单次执行 succeeded/100%，retry0、attempt1、error=null；Synclip `gpt-image-2` 资产已保存为私有 draft，Hermes/MiniMax-M3 图像审校 accepted，页面实际可见且人工核对公式、分区和曲线可读。
 - 2026-10-05：线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64 完成第二篇真实入口部署；后续 UI 候选已合并至本次 7d208827 发布。
 - RO 9067a2d5-42ad-4c06-b234-753728b71064 的 Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf 完成全文来源、独立 source-review 和4幕科学分镜；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 为 succeeded/illustrationReview=accepted。
