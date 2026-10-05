@@ -9,7 +9,7 @@ import { canonicalPassages, createNativeScientificMaterializer, createNativeScie
   scientificReviewFieldGuard, scientificReviewFieldIssue, validateNativeScientificClaim } from '../extractor';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { SCIENTIFIC_READER_ORGANIZATION } from '../skills/scientific-summary';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
 import { nativeSkillReads, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL, NATIVE_PAPER_DRAFT_TOOL,
   NATIVE_PAPER_SELECTED_DRAFT_TOOL } from './paper-task';
 import { createNativeAgentSession, type NativeAgentSessionState } from './session';
@@ -73,8 +73,10 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
     if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved review tool description is absent');
     return { ...structuredClone(tool.function), description: tool.function.description };
   });
-  const sourceTools = originalTools?.length ? originalTools : reviewMode === 'staged' ? STAGED_NATIVE_SOURCE_REVIEW_TOOLS
+  const fallbackTools = reviewMode === 'staged' ? STAGED_NATIVE_SOURCE_REVIEW_TOOLS
     : legacyClaimsReview ? LEGACY_NATIVE_SOURCE_REVIEW_TOOLS : NATIVE_SOURCE_REVIEW_TOOLS;
+  const sourceTools = originalTools?.length ? originalTools : fallbackTools.map(tool => saved && tool.name === 'paper_search'
+    ? LEGACY_NATIVE_PAPER_TOOLS.find(original => original.name === 'paper_search')! : tool);
   return { sourceTools, legacyClaimsReview, reviewMode,
     scopedCandidate: reviewMode === 'staged' && originalTools?.find(tool => tool.name === 'paper_candidate')?.description === SCOPED_CANDIDATE_DESCRIPTION,
     fieldFeedback: !saved || originalTools?.find(tool => tool.name === 'paper_review_field')?.description.includes(FIELD_REPAIR_DESCRIPTION) === true,
@@ -84,7 +86,7 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
 /** Reuse the existing scientific materializer with the actual final author fields as its immutable input. */
 export function createNativeSourceReviewTools(input: { sourceMap: DocumentSourceMap; sourceAgentTaskId: string; sourceResult: unknown;
   renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode; fieldFeedback?: boolean;
-  scopedCandidate?: boolean }) {
+  scopedCandidate?: boolean; paperToolDefinitions?: Parameters<typeof createNativePaperTools>[2] }) {
   const reviewMode = input.reviewMode ?? (input.legacyClaimsReview ? 'legacy' : 'split');
   const staged = reviewMode === 'staged';
   const legacy = reviewMode === 'legacy';
@@ -126,7 +128,7 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
   };
   for (const key of ['core', 'evidence', 'evidenceLocation', 'evidenceSegments', 'reviewedClaimSuggestions', 'needsMoreInformation', 'canonicalExtractionContract'])
     if (!isDeepStrictEqual(sourceStable(key, restored[key]), sourceStable(key, original[key]))) throw new Error('[blocked] Native author science/source data changed');
-  const source = createNativePaperTools(input.sourceMap, input.renderPages);
+  const source = createNativePaperTools(input.sourceMap, input.renderPages, input.paperToolDefinitions);
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { boundDraft, reviewToolCompletion: true });
   const passageIds = [...new Set(Object.values(fields).flatMap(field => field.sourcePassageIds as string[]))];
   let candidateResult: Record<string, unknown> | undefined;
@@ -402,7 +404,8 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
   if (!/^[a-f0-9]{64}$/.test(input.authorCheckpointSha256)) throw new Error('[blocked] Native author checkpoint identity is absent');
   const profile = nativeSourceReviewToolProfile(saved);
   const scopedCandidate = sourceCorrection && (!saved || profile.scopedCandidate);
-  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback, scopedCandidate });
+  const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback, scopedCandidate,
+    paperToolDefinitions: profile.sourceTools });
   const sourceTools = sourceCorrection && !saved ? profile.sourceTools.map(tool => tool.name === 'paper_candidate' ? {
     ...tool, description: SCOPED_CANDIDATE_DESCRIPTION,
     parameters: { type: 'object', additionalProperties: false, required: ['view'],

@@ -29,6 +29,8 @@
 
 合同定位经独立High只读审查：复用现有source_review阶段，仅为新任务建立真正原生审阅角色。该角色绑定实际作者候选，独立Agent/store而不继承作者对话，按保留主张渐进回查原SourceMap并复用完整科学物化；原canonical source、run/step、每轮租约/权限/外部处理授权及最终paid回执仍须一致。新角色必要性是原固定请求签名与1/2次检查点不能授权多轮Agent；不能把旧收据转换为新执行或伪造semanticStage。仍占原run槽位和一次普通任务扣费，保留replay-before-debit/max9/CAS/unknown不重发。此段保存已实施设计边界，不代表科学验收。
 
+独立来源对照复用已有Native审阅阶段，并保留自动私有Claims/分镜及既有生图hold。针对真实失败，论文定位的新定义优先词/符号边界并展示命中附近原文；自行设计场景的空原图引用由程序补齐。已保存首轮工具定义决定重放语义，缺失/未知定义保持历史行为；不改论文/来源、模型、权限、收费、预算或历史回执。内容保真和完整生图prompt仍须真实验收，工具修复不能替代科学通过。
+
 ## Synclip替换图片通道
 
 默认作者自检会接受有源但条件／案例关系错误的转述；这在实际84f5稿的传播阈值、扫描因果及绑定上已复现。现有形状、回执与来源守卫不足以判断语义，下一增量复用已注册的独立Native source_review，不重生全文、不评议论文：仅新max9创建时同Serializable事务持久化真实reviewer/task/session、source步骤、普通扣费与审计；保留原作者稿／CP。Native agent初始binder以真实阶段／唯一审计／debit／作者CP／Map证明授权，历史classifier、model/web及旧run replay不改。范围为research-run.ts、ingestion-service.ts、source-review-recovery.ts；提交后dispatch，角色成功才能materialize／Claims／私有planner。沿已核实际nativeSceneImageEnabled=false与原image-api-pending暂停图像，不新建暂停字段或门禁；源稿和分镜质量必须实际验收，独立上下文收益尚未证明。即时上传会在作者未完成时创建run，因此新max9先记录既有ordinal0/waiting/null-agentTask的source_review，保留作者当前指针与执行授权；作者完成后ensure在旧classifier之前复核完整身份/CP/Map/权限，同事务普通扣费、创建reviewer并严格CAS填原步骤，之后dispatch。重复/畸形步骤拒绝，作者失败不扣审阅费；没有该空步骤的旧run保持原行为。此补接已获有界架构与最终Code High GO，实际上传顺序→核源→Claims→私有planner→旧image hold已离线验证；真实质量仍须观察。

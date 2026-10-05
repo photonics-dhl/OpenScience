@@ -3,6 +3,7 @@
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
+- 已观察的工具断点：词法搜索把短词内部片段计分且只展示段首，实际有支持段落落在top12外；科学场景反复漏写无原图时的nullable占位。当前候选复用原工具：新任务边界命中优先/原文窗口，新设计场景省略引用由适配层补null；旧付费定义、完整段落引用授权和原图权限保持。独立核源仍有内容失真，不能把工具检索或严格回执成功当作作者含义已核正确；实际身份/状态/证据仅见CURRENT。
 - 默认入口复用完整PDF/OCR/SourceMap，实际NousResearch Hermes Agent＋MiniMax-M3选择paper_read/search/view和已装openscience-source-review，凝练六维/Claims并自校转述，再走原生科学分镜/设计/风格。论文是内容依据，不评议论文自身有效性；scientific-critical-thinking的完整专项方法仍保留给另行请求。SourceMap、隔离science-worker、既有来源/权限/收费/paid恢复守卫继续复用。
 - v6新source-only一次4m45s自然完成，4Claims/单一99as代表例；主机制、φ及代表条件基本忠实，传播阈值/案例、扫描因果、比较对象和Claim绑定仍原文保真NO-GO。方法已实际读取，失真在采用稿与完整paid中一致，不能归为未安装或保存丢失。未接分镜，不称前置或全链完成；真实报告、身份和禁止重放的once只见CURRENT。
 - 已补接具体消费缺口：默认openscience-source-review过去仅泛化提示，现以同源常量直接复用双方向角度、宽度对象/定义、算例依赖与披露层级，不默认评议论文；Source单独v6、critical/static/art仍v5，旧paid/预算/守卫不变。版本只标资源内容；正常immutable目录切换后已实际读回完整正文及引用全等，新任务效果仍须真实产物验收。

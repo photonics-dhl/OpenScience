@@ -12,7 +12,7 @@ import { createNativeAgentSession } from './session';
 import type { NativeAgentSessionState } from './session';
 import { createNativeTaskStore } from './task-store';
 import { runHostedNativeTask } from './host-task';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
 
 const ids = { type: 'array', items: { type: 'string' }, maxItems: 12 };
 export const NATIVE_PAPER_DRAFT_TOOL = { name: 'paper_draft',
@@ -197,7 +197,7 @@ const sourceFidelityAuthorInstructions = (concise: boolean) => [
 export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
   // Original paid tools keep their exact schemas and feedback when replayed.
   const useNotes = !saved || saved.binding.allowedTools.includes('paper_field');
-  const currentTools = [...NATIVE_PAPER_TOOLS, ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, saved ? NATIVE_PAPER_SELECTED_DRAFT_TOOL : NATIVE_PAPER_CONCISE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]),
+  const currentTools = [...(saved ? LEGACY_NATIVE_PAPER_TOOLS : NATIVE_PAPER_TOOLS), ...(useNotes ? [NATIVE_PAPER_FIELD_TOOL, NATIVE_PAPER_CLAIM_TOOL, saved ? NATIVE_PAPER_SELECTED_DRAFT_TOOL : NATIVE_PAPER_CONCISE_DRAFT_TOOL] : [NATIVE_PAPER_DRAFT_TOOL]),
     saved ? NATIVE_PAPER_REVIEW_TOOL : NATIVE_PAPER_AUTHOR_REVIEW_TOOL];
   const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
     if (typeof tool.function.description !== 'string') throw new Error('[blocked] Native saved paper tool description is absent');
@@ -243,7 +243,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
     deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
-  const source = createNativePaperTools(input.sourceMap, input.renderPages);
+  const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, claimSizeFeedback, savedClaimsReview });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)

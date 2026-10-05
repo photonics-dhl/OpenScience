@@ -12,13 +12,14 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
     scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations,
-    sourceQuantityProse: options.sourceQuantityProse, sourceQuantityLocations: options.sourceQuantityLocations, ...options.input };
+    sourceQuantityProse: options.sourceQuantityProse, sourceQuantityLocations: options.sourceQuantityLocations,
+    defaultPaperOriginalRef: options.defaultPaperOriginalRef, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);
@@ -33,6 +34,53 @@ function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boo
   };
   return { tool, messages, invoke, complete, input, restore: () => createNativeIllustrationMaterializer(input) };
 }
+describe('Native designed scenes omit the nullable original reference', () => {
+  const omitted = () => { const value = structuredClone(science); Reflect.deleteProperty(value.scenes[0]!, 'paperOriginalAssetId'); return value; };
+  it('advertises the nullable reference as optional only for fresh tasks', () => {
+    const profile = nativeIllustrationToolProfile(null);
+    const schema = profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.parameters as {
+      properties: { scenes: { items: { required: string[]; properties: Record<string, unknown> } } } };
+    expect(schema.properties.scenes.items.required).not.toContain('paperOriginalAssetId');
+    expect(schema.properties.scenes.items.properties.paperOriginalAssetId).toEqual({ type: ['string', 'null'] });
+    expect(profile.defaultPaperOriginalRef).toBe(true);
+  });
+  it('produces the exact explicit-null receipt without changing the model arguments', () => {
+    const profile = nativeIllustrationToolProfile(null), value = omitted(), before = structuredClone(value);
+    expect(fixture(profile).invoke('paper_illustration_science', value, 'same')).toEqual(
+      fixture(profile).invoke('paper_illustration_science', science, 'same'));
+    expect(value).toEqual(before);
+  });
+  it('replays the same omitted reference through finish and rejects a required-schema replay', () => {
+    const f = fixture(nativeIllustrationToolProfile(null)); f.complete(omitted());
+    expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
+    expect(() => createNativeIllustrationMaterializer({ ...f.input, defaultPaperOriginalRef: false })
+      .finish(f.messages, '{"reviewToolCallId":"review-call"}')).toThrow(/Native|native/u);
+  });
+  it('uses only the first known optional schema, keeping required, absent and unknown definitions strict', () => {
+    const description = nativeIllustrationToolProfile(null).sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    const optional = savedProfile(description);
+    expect(nativeIllustrationToolProfile(optional).defaultPaperOriginalRef).toBe(true);
+    const required = structuredClone(optional);
+    const definition = required.turns[0]!.request.options.tools!.find(tool => tool.function.name === 'paper_illustration_science')!;
+    const schema = definition.function.parameters as { properties: { scenes: { items: { required: string[] } } } };
+    schema.properties.scenes.items.required.push('paperOriginalAssetId');
+    required.turns.push(structuredClone(optional.turns[0]!));
+    for (const saved of [required, savedProfile('unknown saved science'), savedProfile(undefined, true)]) {
+      const profile = nativeIllustrationToolProfile(saved);
+      expect(profile.defaultPaperOriginalRef).toBe(false);
+      expect(fixture(profile).invoke('paper_illustration_science', omitted(), 'old')).toMatchObject({ status: 'invalid_illustration' });
+    }
+  });
+  it.each(['foreign-original', 'invalid-type', 'extra-key', 'unsupported-source', 'unsupported-number'])('retains rejection of %s', mode => {
+    const value = omitted();
+    if (mode === 'foreign-original') value.scenes[0]!.paperOriginalAssetId = '00000000-0000-4000-8000-000000000099' as never;
+    if (mode === 'invalid-type') value.scenes[0]!.paperOriginalAssetId = 42 as never;
+    if (mode === 'extra-key') Object.assign(value.scenes[0]!, { unauthorized: true });
+    if (mode === 'unsupported-source') value.scenes[0]!.subjects[0]!.basis.sourceId = 'foreign';
+    if (mode === 'unsupported-number') value.scenes[0]!.labels = ['7 fs'];
+    expect(fixture(nativeIllustrationToolProfile(null)).invoke('paper_illustration_science', value, 'bad')).toMatchObject({ status: 'invalid_illustration' });
+  });
+});
 describe('native illustration selects actual private tool history', () => {
   it('restores the exact reviewed plan and portable prompt without another model', () => {
     const f = fixture(); f.complete();
