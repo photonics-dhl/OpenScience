@@ -495,6 +495,7 @@ model ResearchObject {
   id             String       @id @default(uuid()) @db.Uuid
   workspaceId    String       @map("workspace_id") @db.Uuid
   title          String
+  originalDoi    String?      @map("original_doi")
   status         RoStatus     @default(draft)
   visibility     RoVisibility @default(private)
   version        Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
@@ -532,6 +533,7 @@ model ResearchObject {
 
   @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
   @@index([workspaceId])
+  @@index([workspaceId, originalDoi])
   @@map("research_objects")
   journalArticle JournalArticle?
 }

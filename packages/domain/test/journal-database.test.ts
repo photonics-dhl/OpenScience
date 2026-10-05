@@ -125,8 +125,8 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
   });
   it('reserves, delivers, reviews and publishes atomically; edits invalidate review and v1 remains immutable', async () => {
     const ctx = await journal(); const item = await article(ctx);
-    const job = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() });
-    const claimed = await claimJournalJob(deps); expect(claimed?.id).toBe(job.id);
+    const job = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() }, true);
+    const claimed = await claimJournalJob(deps, { runtimeId: 'test-native', skillCatalogueId: 'test-catalogue', model: 'MiniMax-M3' }); expect(claimed?.id).toBe(job.id);
     const completed = await finishJournalJob(deps, job.id, claimed!.leaseToken!, draft); expect(completed.state).toBe('succeeded');
     await finishJournalJob(deps, job.id, claimed!.leaseToken!, draft);
     const grant = await prisma.journalGrant.findFirstOrThrow({ where: { journalId: ctx.journal.id } });
@@ -165,7 +165,7 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
   it('only one request can reserve the last credit; cancelling twice releases exactly once and expiration is not revived', async () => {
     const ctx = await journal(); const a = await article(ctx); const b = await article(ctx);
     await grantJournalCredits(deps, adminId, { journalId: ctx.journal.id, amount: -4, expiresAt: new Date(Date.now() + 60_000), reason: 'Isolated last-credit test', requestKey: randomUUID() });
-    const attempts = await Promise.allSettled([a, b].map((item) => submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() })));
+    const attempts = await Promise.allSettled([a, b].map((item) => submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() }, true)));
     expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
     const job = attempts.find((a) => a.status === 'fulfilled')!; if (job.status !== 'fulfilled') throw new Error('Expected one winner');
     await prisma.journalGrant.update({ where: { id: job.value.grantId! }, data: { expiresAt: new Date(Date.now() - 1000) } });
@@ -173,11 +173,11 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     const grant = await prisma.journalGrant.findUniqueOrThrow({ where: { id: job.value.grantId! } });
     expect([grant.remaining, grant.reserved, grant.consumed]).toEqual([0, 0, 0]);
     expect(await prisma.journalLedger.count({ where: { jobId: job.value.id, kind: 'release' } })).toBe(1);
-    await expect(submitJournalJob(deps, ctx.owner.id, ctx.journal.id, a.id, { revision: a.revision, language: 'en', requestKey: randomUUID() })).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
+    await expect(submitJournalJob(deps, ctx.owner.id, ctx.journal.id, a.id, { revision: a.revision, language: 'en', requestKey: randomUUID() }, true)).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
   });
   it('settles suite-owned active jobs during isolation cleanup without consuming their reserved credit', async () => {
     const ctx = await journal(); const item = await article(ctx);
-    const job = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() });
+    const job = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() }, true);
     const before = await prisma.journalGrant.findUniqueOrThrow({ where: { id: job.grantId! } });
     expect(before.reserved).toBe(1);
     await settleActiveSyntheticJobs([ctx.journal.id]);
@@ -189,13 +189,13 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
   });
   it('rejects stale delivery after editing or revocation and reconciles abandoned workers', async () => {
     const ctx = await journal(); const editor = await user(); await addJournalMember(deps, ctx.owner.id, ctx.journal.id, { targetUserId: editor.id, role: 'editor' });
-    const item = await article(ctx); const job = await submitJournalJob(deps, editor.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() });
-    const running = await claimJournalJob(deps); expect(running?.id).toBe(job.id);
+    const item = await article(ctx); const job = await submitJournalJob(deps, editor.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() }, true);
+    const running = await claimJournalJob(deps, { runtimeId: 'test-native', skillCatalogueId: 'test-catalogue', model: 'MiniMax-M3' }); expect(running?.id).toBe(job.id);
     await removeJournalMember(deps, ctx.owner.id, ctx.journal.id, editor.id);
     expect((await finishJournalJob(deps, job.id, running!.leaseToken!, draft)).state).toBe('failed');
     expect((await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } })).draft).toBeNull();
-    const next = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID(), retryOf: job.id });
-    const nextClaim = await claimJournalJob(deps); expect(nextClaim?.id).toBe(next.id);
+    const next = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID(), retryOf: job.id }, true);
+    const nextClaim = await claimJournalJob(deps, { runtimeId: 'test-native', skillCatalogueId: 'test-catalogue', model: 'MiniMax-M3' }); expect(nextClaim?.id).toBe(next.id);
     await prisma.journalJob.update({ where: { id: next.id }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
     await recoverJournalJobs(deps); await recoverJournalJobs(deps);
     expect((await prisma.journalJob.findUniqueOrThrow({ where: { id: next.id } })).state).toBe('failed');

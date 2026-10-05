@@ -1,65 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as domain from '@openscience/domain';
 import type { WorkspaceDeps } from '@openscience/domain';
-import type { AiGateway } from '@openscience/ai-gateway';
 import { processOneJournalJob } from '../src/journal-worker';
 
 vi.mock('@openscience/domain', async (load) => ({
   ...await load<typeof import('@openscience/domain')>(), claimJournalJob: vi.fn(), journalJobInput: vi.fn(), finishJournalJob: vi.fn(), renewJournalJobLease: vi.fn(),
 }));
 const quote = 'Numerical simulations predict 14.7 TW peak power; full-system experiments have not been performed.';
-const source = { kind: 'fulltext', text: quote, url: 'https://example.test/source', label: 'Results' };
-const draft = { summary: 'A numerical prediction.', core: { problem: 'Scaling.', insight: 'Numerical prediction.', method: 'Simulation.', results: '14.7 TW predicted.', limitations: 'No full-system experiment.', reproducibility: 'Not reported.' }, claims: [{ text: '14.7 TW predicted.', kind: 'simulation', evidence: { quote, locator: 'Results' } }], figures: [], faq: [{ question: 'Experimental?', answer: 'No.', evidence: { quote, locator: 'Results' } }], scope: 'fulltext', language: 'en' };
-describe('journal worker producer and validation boundary', () => {
+const source = { kind: 'fulltext' as const, text: quote, url: 'https://example.test/source', label: 'Results' };
+const draft = { summary: 'A numerical prediction.', core: { problem: 'Scaling.', insight: 'Numerical prediction.', method: 'Simulation.', results: '14.7 TW predicted.', limitations: 'No full-system experiment.', reproducibility: 'Not reported.' },
+  claims: [{ text: '14.7 TW predicted.', kind: 'simulation', evidence: { quote, locator: 'J00001' } }], figures: [],
+  faq: [{ question: 'Experimental?', answer: 'No.', evidence: { quote, locator: 'J00001' } }], scope: 'fulltext', language: 'en' };
+const runtime = { runtimeId: 'installed-native', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' };
+
+describe('journal worker native producer and private delivery', () => {
   const deps = {} as WorkspaceDeps;
-  const complete = vi.fn(); const gateway = { complete } as unknown as Pick<AiGateway, 'complete'>;
+  const generate = vi.fn();
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'generate', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
     vi.mocked(domain.journalJobInput).mockResolvedValue({ source, language: 'en', kind: 'generate', workspaceId: 'workspace', actorId: 'editor' } as Awaited<ReturnType<typeof domain.journalJobInput>>);
-    complete.mockResolvedValue({ text: JSON.stringify(draft) });
+    generate.mockResolvedValue(draft);
   });
-  it('passes validated structured producer output to the atomic delivery boundary', async () => {
-    expect(await processOneJournalJob(deps, gateway)).toBe(true);
+  it('delivers only the native producer output through the atomic private boundary', async () => {
+    expect(await processOneJournalJob(deps, generate, undefined, runtime)).toBe(true);
+    expect(domain.claimJournalJob).toHaveBeenCalledWith(deps, runtime);
+    expect(generate).toHaveBeenCalledWith({ jobId: 'job', leaseToken: 'lease', source, language: 'en' });
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', draft);
-    expect(complete.mock.calls[0]![0][1].content).toContain('SOURCE DATA');
   });
-  it('does not deliver a simulation wrongly classified as experimental, even after bounded provider retries', async () => {
-    complete.mockResolvedValue({ text: JSON.stringify({ ...draft, claims: [{ ...draft.claims[0], kind: 'experimental' }] }) });
-    await processOneJournalJob(deps, gateway);
-    expect(complete).toHaveBeenCalledTimes(3);
-    expect(domain.journalJobInput).toHaveBeenCalledTimes(3);
+  it('does not make a second model request after a native failure or unknown paid outcome', async () => {
+    generate.mockRejectedValue(new Error('submission outcome unknown'));
+    await processOneJournalJob(deps, generate, undefined, runtime);
+    expect(generate).toHaveBeenCalledTimes(1);
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', null, expect.any(String));
-    expect(complete.mock.calls[1]![0][1].content).toContain('预测或模拟证据不能标记为实验实现');
   });
-  it('repairs PDF-only quote whitespace before the strict evidence check', async () => {
-    vi.mocked(domain.journalJobInput).mockResolvedValue({ source: { ...source, text: quote.replace('simulations predict', 'simulations\npredict') }, language: 'en', kind: 'generate', workspaceId: 'workspace', actorId: 'editor' } as Awaited<ReturnType<typeof domain.journalJobInput>>);
-    await processOneJournalJob(deps, gateway);
-    expect(complete).toHaveBeenCalledTimes(1);
-    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', expect.objectContaining({ claims: [expect.objectContaining({ evidence: { quote: quote.replace('simulations predict', 'simulations\npredict'), locator: 'Results' } })] }));
-  });
-  it('resolves selected source anchors before saving the private draft', async () => {
-    const selected = structuredClone(draft);
-    selected.claims[0]!.evidence = { quote: '', locator: 'J00001' };
-    selected.faq[0]!.evidence = { quote: '', locator: 'J00001' };
-    complete.mockResolvedValue({ text: JSON.stringify(selected) });
-    await processOneJournalJob(deps, gateway);
-    expect(complete).toHaveBeenCalledTimes(1);
-    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', expect.objectContaining({
-      claims: [expect.objectContaining({ evidence: { quote, locator: 'J00001' } })],
-    }));
-  });
-  it('performs local source parsing without calling a paid model', async () => {
+  it('performs local source parsing without calling the native model', async () => {
     vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
     const parse = vi.fn().mockResolvedValue(quote);
-    await processOneJournalJob(deps, gateway, parse);
-    expect(complete).not.toHaveBeenCalled();
+    await processOneJournalJob(deps, generate, parse);
+    expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', { text: quote });
   });
-  it('blocks provider dispatch after current authorization fails', async () => {
+  it('blocks dispatch after current journal authorization fails', async () => {
     vi.mocked(domain.journalJobInput).mockRejectedValue(new Error('revoked'));
-    await processOneJournalJob(deps, gateway);
-    expect(complete).not.toHaveBeenCalled();
+    await processOneJournalJob(deps, generate, undefined, runtime);
+    expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', null, expect.any(String));
   });
 });

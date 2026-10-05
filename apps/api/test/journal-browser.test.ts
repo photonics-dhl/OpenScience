@@ -264,7 +264,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       const pollDeps = { prisma, mailer: createFakeMailer() };
       const pollJob = await submitJournalJob(pollDeps, ownerId, journalId, articleId, {
         requestKey: `browser-poll-${randomUUID()}`, revision: currentArticle.revision, language: 'zh',
-      });
+      }, true);
       try {
         const editPage = await ownerContext.newPage();
         await editPage.goto(`${baseUrl}/journals/manage/${journalId}/articles/${articleId}`, { waitUntil: 'networkidle' });

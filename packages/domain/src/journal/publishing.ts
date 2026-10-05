@@ -26,7 +26,7 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
     assertJournalPublishCapability(article, deps.now?.() ?? new Date());
     if (!journal.homepagePublished || article.contentState !== 'active' || !rights.internalProcessing || !rights.derivativeGeneration || !rights.publicDerivative || !rights.license || !rights.evidence) throw new JournalError('FORBIDDEN', '请先公开已核验的期刊主页，并确认此解读的加工和公开许可');
     if (article.reviewState !== 'approved' || article.reviewedRevision !== article.revision || !article.reviewedBy || article.reviewedDigest !== articleReviewDigest(article)) throw new JournalError('INVALID_STATE', '当前草稿与来源必须经人工审核通过后发布');
-    const reviewer = await journalScope(tx, journalId, article.reviewedBy, ['owner', 'maintainer', 'reviewer'], true);
+    const reviewer = await journalScope(tx, journalId, article.reviewedBy, ['owner', 'maintainer', 'author', 'reviewer'], true);
     if (reviewer.membership.role === 'reviewer' && article.assignedReviewerId !== article.reviewedBy) throw new JournalError('INVALID_STATE', '审核分配已改变，请重新审核');
     const source = article.source as unknown as JournalSource;
     const draft = validateJournalDraft(article.draft, source);
@@ -61,7 +61,7 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
         textSha256: createHash('sha256').update(source.text, 'utf8').digest('hex'), revision: article.revision,
         ...(rights.publicSource ? { text: source.text } : {}) },
       license: rights.license, journal: { id: journal.id, slug: journal.slug, name: journal.nameEn || journal.nameZh },
-      review: { method: 'editorial-human-review', revision: article.revision }, publishedAt: publishedAt.toISOString(),
+      review: { method: 'editorial-content-confirmation', revision: article.revision }, publishedAt: publishedAt.toISOString(),
       versionNo, url: `/research/${publicId}/v/${versionNo}`,
       identity: 'journal-authored-interpretation-of-published-work',
     };

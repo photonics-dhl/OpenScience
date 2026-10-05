@@ -14,6 +14,7 @@ import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/re
 import { ApiClientError, createCommit, getResearchObject, type ArtifactReference, type ResearchObjectSummary, type SdfCore } from '@/lib/api';
 import { appendMaterials, loadAttachmentDraft, loadResearchMaterials } from '@/lib/research-materials';
 import styles from './files.module.css';
+import { PaperDoiAssociation } from './PaperDoiAssociation';
 
 type FilesResearchObject = ResearchObjectSummary & { sdf: { core: SdfCore } };
 
@@ -70,6 +71,7 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
         <p className={styles.description}>{t('files.body')}</p>
       </header>
       {!restored && !error && <p className={styles.feedback} role="status">{t('state.loadingBody')}</p>}
+      <PaperDoiAssociation object={currentObject} onSaved={(doi, version) => { setCurrentObject((current) => ({ ...current, originalDoi: doi, version })); setRevision((value) => value + 1); }} />
       {restored && (restored.artifacts.length > 0 || restored.ingestion.tasks.length > 0) ? <section className={styles.savedMaterials} aria-labelledby="saved-materials-title">
         <h2 id="saved-materials-title">{t('files.savedMaterials')}</h2>
         {restored.artifacts.map((artifact) => <ArtifactRow action={<ArtifactViewer artifactId={artifact.artifactId} logicalPath={artifact.logicalPath} />} key={artifact.artifactId} name={artifact.logicalPath} />)}

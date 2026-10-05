@@ -149,17 +149,20 @@ export async function updateJournalArticle(deps: WorkspaceDeps, userId: string, 
     return updated;
   });
 }
-export async function reviewJournalArticle(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; decision: 'submit' | 'approve' | 'request_changes'; note: string }) {
+export async function reviewJournalArticle(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; decision: 'submit' | 'approve' | 'request_changes' | 'confirm'; note: string; humanConfirmed?: boolean }) {
   return journalTransaction(deps, journalId, async (tx) => {
-    const access = await journalScope(tx, journalId, userId, input.decision === 'submit' ? JOURNAL_EDIT_ROLES : ['owner', 'maintainer', 'reviewer'], true);
+    const editorConfirmation = input.decision === 'confirm';
+    const access = await journalScope(tx, journalId, userId, input.decision === 'submit' || editorConfirmation ? JOURNAL_EDIT_ROLES : ['owner', 'maintainer', 'reviewer'], true);
+    if (editorConfirmation && input.humanConfirmed !== true) throw new JournalError('VALIDATION_ERROR', '请明确确认已核对解读内容、原文证据和素材使用范围');
     const article = await journalArticleInScope(tx, journalId, articleId);
     if (access.membership.role === 'reviewer' && article.assignedReviewerId !== userId) throw new JournalError('FORBIDDEN', '只能审核分配给自己的论文');
     assertArticleRevision(article, input.revision);
     if (article.contentState !== 'active' || !article.draft) throw new JournalError('INVALID_STATE', '需要可审核的解读草稿');
     assertJournalReviewCapability(article, deps.now?.() ?? new Date());
     validateJournalDraft(article.draft, article.source as unknown as JournalSource);
-    if (input.decision !== 'submit' && article.reviewState !== 'submitted') throw new JournalError('INVALID_STATE', '请先提交当前版本审核');
-    const approved = input.decision === 'approve';
+    if (!editorConfirmation && input.decision !== 'submit' && article.reviewState !== 'submitted') throw new JournalError('INVALID_STATE', '请先提交当前版本核对');
+    const approved = input.decision === 'approve' || editorConfirmation;
+    if (editorConfirmation && article.reviewState === 'approved' && article.reviewedRevision === article.revision && article.reviewedDigest === articleReviewDigest(article) && article.reviewedBy === userId) return article;
     const updated = await tx.journalArticle.update({ where: { id: articleId }, data: { reviewState: approved ? 'approved' : input.decision === 'submit' ? 'submitted' : 'changes_requested', reviewedRevision: approved ? article.revision : null, reviewedDigest: approved ? articleReviewDigest(article) : null, reviewedBy: approved ? userId : null, reviewNote: input.note } });
     await journalArticleEvent(tx, journalId, userId, `journal.review.${input.decision}`, articleId, { revision: article.revision, note: input.note });
     const owner = await tx.workspace.findUnique({ where: { id: (await tx.journal.findUniqueOrThrow({ where: { id: journalId } })).workspaceId } });

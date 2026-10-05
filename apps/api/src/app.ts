@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import type { StorageAdapter } from '@openscience/storage';
 import { httpStatusForError } from './error-map';
 import { registerJournalRoutes } from './routes/journals';
+import { registerPaperRoutes } from './routes/papers';
 import { registerJournalBoundary } from './journal-boundary';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
 import { registerWorkspaceRoutes } from './routes/workspaces';
@@ -122,6 +123,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerJournalBoundary(app, opts);
   await app.register(async (instance) => registerAuthRoutes(instance, opts), { prefix: '/auth' });
   await app.register(async (instance) => registerJournalRoutes(instance, opts));
+  await app.register(async (instance) => registerPaperRoutes(instance, opts));
   await app.register(async (instance) => registerWorkspaceRoutes(instance, opts), { prefix: '/workspaces' });
   await app.register(async (instance) => registerAdminRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerAdminUsageRoutes(instance, opts), { prefix: '/admin' });

@@ -26,7 +26,7 @@ export interface NativeAgentCheckpointReference {
   responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
 }
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
-  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration'; checkpoint?: NativeAgentCheckpointReference;
+  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor'; checkpoint?: NativeAgentCheckpointReference;
 }
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
@@ -111,7 +111,7 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
   if (!record(result) || !Object.hasOwn(result, 'nativeAgentExecution')) return undefined;
   const marker = result.nativeAgentExecution;
   if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
-    || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration'].includes(String(marker.profile))
+    || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration', 'journal-editor'].includes(String(marker.profile))
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
   if (Object.hasOwn(marker, 'checkpoint')) {
     const cp = marker.checkpoint;

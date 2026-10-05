@@ -134,6 +134,12 @@ HISTORICAL（已被10-04两版策略替代）—2026-09-14发布收尾修正：�
 
 ## 1. 前置检查
 
+### 期刊编辑与原论文身份增量
+
+本增量含可空 `research_objects.original_doi` 字段和工作区索引，发布前沿既有双库备份流程备份，正常部署不得使用 `--skip-migrate`。它不改历史冻结出版记录，也不合并工作区或继承素材授权；回退应用时保留新增字段及数据，不执行删列。新期刊生成使用原生 Hermes 的 `journal-text` 工具配置，只有配置可用时才受理生成；未提供原页像素时不能声称看过 PDF 页。实际 Native 运行时及目录配对须核实，不能由单元测试推断已安装或已成功生成。
+
+新原生任务已提交后保留其 AgentTask 检查点、JournalJob、额度和源材料；未知提交不自动重发。回退前先等在途任务自然终态或经受控取消保留已付费结果，再切应用；旧 Worker 不应消费新 `journal-editor` 任务。发布仅更新应用，不自动生成或公开论文；真实生成验收须另有明确的测试授权。
+
 - [ ] 目标 release ref 已 CI 绿灯（lint/typecheck/unit/build）
 - [ ] 云上集成测试已全绿（`test:integration`，跑前全量 `build`）
 - [ ] `document-parser` 隔离解析 sidecar 已包含在生产 compose，`agent-worker` 仅通过 128 MiB `parser-jobs` tmpfs 卷交换请求；sidecar 必须使用自包含镜像，且保持无宿主源码/Secret 挂载、无网络、只读 rootfs、非 root 与 512MB/64 PID 上限

@@ -4,13 +4,13 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { nativeAgentSdkRequest } from '@openscience/ai-gateway';
 import { NativeAgentSessionError, type createNativeAgentSession, type NativeAgentSessionStore } from './session';
-import type { createNativePaperTools } from './paper-tools';
 
 type Config = { taskId: string; runtimeId: string; skillCatalogueId: string; model: string;
   goal: string; instructions: string; maxTurns: number; maxOutputTokens: number;
   sourceTools: readonly { name: string; description: string; parameters: Record<string, unknown> }[] };
+type ImageContent = Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
 type Slot = { id: string; name: string; args: unknown; sequence: number; authorized: boolean; called: boolean; result?: unknown;
-  images?: Awaited<ReturnType<ReturnType<typeof createNativePaperTools>['images']>>['content'] };
+  images?: ImageContent };
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 function blocked(): never { throw new Error('[blocked] Native task transport scope changed'); }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -33,8 +33,10 @@ function respond(res: ServerResponse, status: number, value: unknown) {
 export async function runHostedNativeTask(input: {
   inboxRoot: string; executionAttempt: number; config: Config; deadlineAt: number; maxInputBytes: number;
   session: ReturnType<typeof createNativeAgentSession>; store: NativeAgentSessionStore;
-  authorize: () => Promise<void>; paper: Omit<ReturnType<typeof createNativePaperTools>, 'call'> & {
-    call(name: string, args: unknown, sequence?: number, callId?: string): Promise<unknown> };
+  authorize: () => Promise<void>; paper: { readonly observedPassageIds: string[];
+    call(name: string, args: unknown, sequence?: number, callId?: string): Promise<unknown>;
+    images(args: unknown, result: unknown): Promise<{ content: ImageContent }>;
+    withAuthorizedToolCall?<T>(run: () => Promise<T>): Promise<T> };
   onStopped?: (error: unknown) => void;
 }): Promise<{ finalResponse: string; observedPassageIds: string[] }> {
   if (!uuid.test(input.config.taskId) || !Number.isSafeInteger(input.executionAttempt) || input.executionAttempt < 1) blocked();
@@ -89,9 +91,13 @@ export async function runHostedNativeTask(input: {
       }
       if (req.url === '/task/tools/call') {
         const slot = slots.find(s => s.authorized && !s.called && s.name.startsWith('paper_') && s.name === value.name && isDeepStrictEqual(s.args, value.arguments));
-        if (!slot) blocked(); slot.called = true;
-        slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence, slot.id);
-        return respond(res, 200, slot.result);
+        if (!slot) blocked();
+        const execute = async () => {
+          slot.called = true;
+          slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence, slot.id);
+          respond(res, 200, slot.result);
+        };
+        return input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(execute) : execute();
       }
       if (req.url === '/task/tools/images') {
         const slot = slots.find(s => s.id === value.callId && s.name === 'paper_view' && s.authorized && s.called);

@@ -51,7 +51,8 @@ const jobBody = z.object({ revision, language: z.enum(['zh', 'en']), requestKey,
 const memberRole = z.enum(['admin', 'editor', 'reviewer']);
 const role = (r: string) => ({ maintainer: 'admin', author: 'editor' }[r] ?? r);
 const pageQuery = z.object({ query: z.string().max(200).optional(), subject: z.string().max(100).optional(), cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) });
-type Deps = AuthDeps & { storage?: StorageAdapter; malwareScanner?: import('@openscience/storage').MalwareScanner; journalsEnabled?: boolean; publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
+type Deps = AuthDeps & { storage?: StorageAdapter; malwareScanner?: import('@openscience/storage').MalwareScanner; journalsEnabled?: boolean;
+  nativeAgentRuntime?: import('@openscience/domain').NativeAgentRuntimeConfig; publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
 
 /** Fixed-origin metadata lookup. Never fetch DOI destination, paper URL, proof URL or redirects. */
 export async function fetchJournalDoiMetadata(doiInput: string, fetcher: typeof fetch = fetch): Promise<JournalMetadata> {
@@ -83,6 +84,7 @@ function publicArticleMetadata(value: unknown) {
   return { title: m.title, doi: m.doi, authors: m.authors, publishedDate: m.publishedDate, journalTitle: m.journalTitle, issns: m.issns, originalUrl: m.originalUrl };
 }
 export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
+  const nativeGenerationReady = () => Boolean(deps.nativeAgentRuntime && process.env.HERMES_NATIVE_AGENT_INBOX?.trim());
   void app.register(multipart, { limits: { fileSize: JOURNAL_FILE_LIMIT, files: 1, fields: 2, parts: 3 } });
   app.addHook('preHandler', async (req, reply) => {
     if ((deps.journalsEnabled === false || process.env.JOURNALS_ENABLED === 'false') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return reply.code(503).send({ error: { code: 'JOURNALS_PAUSED', message: '期刊服务暂时停止新的操作，已有公开内容仍可访问' } });
@@ -163,7 +165,7 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     })));
     return { items };
   }));
-  app.get('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId) }; }));
+  app.get('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId), nativeGenerationReady: nativeGenerationReady() }; }));
   app.get('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return listJournalArticleSources(deps, uid, p.id, p.articleId); }));
   app.post('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return addJournalArticleSource(deps, uid, p.id, p.articleId, z.object({ revision, source: sourceRecord }).strict().parse(req.body)); }));
   app.patch('/journals/:id/articles/:articleId/sources/:sourceId/rights', member(async (req, uid) => { const p = articleIds.extend({ sourceId: z.string().min(1).max(200) }).parse(req.params); return updateJournalArticleSourceRights(deps, uid, p.id, p.articleId, p.sourceId, sourceRightsUpdate.parse(req.body)); }));
@@ -182,12 +184,12 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     return uploadJournalSource({ ...deps, storage: deps.storage }, uid, p.id, p.articleId, { ...input, ...file });
   }));
   app.patch('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); const body = z.object({ revision, metadata: metadata.optional(), directoryVisible: z.boolean().optional(), source: source.optional(), rights: rights.optional(), draft: z.unknown().optional() }).strict().parse(req.body); await updateJournalArticle(deps, uid, p.id, p.articleId, body as Parameters<typeof updateJournalArticle>[4]); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId) }; }));
-  app.post('/journals/:id/articles/:articleId/ai-drafts', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body)) }; }));
-  app.post('/journals/:id/articles/:articleId/processing-jobs', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body)) }; }));
+  app.post('/journals/:id/articles/:articleId/ai-drafts', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body), nativeGenerationReady()) }; }));
+  app.post('/journals/:id/articles/:articleId/processing-jobs', member(async (req, uid) => { const p = articleIds.parse(req.params); return { job: await submitJournalJob(deps, uid, p.id, p.articleId, jobBody.parse(req.body), nativeGenerationReady()) }; }));
   app.get('/journals/:id/processing-priorities', member(async (req, uid) => { const p = ids.parse(req.params); return listJournalProcessingPriorities(deps, uid, p.id, z.object({ cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict().parse(req.query)); }));
   app.post('/journals/:id/articles/:articleId/priority-override', member(async (req, uid) => { const p = articleIds.parse(req.params); return { priority: await setJournalPriorityOverride(deps, uid, p.id, p.articleId, z.object({ editorPriorityScore: z.number().int().min(0).max(10), deferredUntil: z.string().datetime().nullable().default(null), reason: z.string().trim().min(1).max(2000) }).strict().parse(req.body)) }; }));
   app.post('/journals/:id/jobs/:jobId/cancel', member(async (req, uid) => { const p = ids.extend({ jobId: z.string().uuid() }).parse(req.params); return { job: await cancelJournalJob(deps, uid, p.id, p.jobId) }; }));
-  app.post('/journals/:id/articles/:articleId/review', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await reviewJournalArticle(deps, uid, p.id, p.articleId, z.object({ revision, decision: z.enum(['submit', 'approve', 'request_changes']), note: z.string().max(5000).default('') }).strict().parse(req.body)) }; }));
+  app.post('/journals/:id/articles/:articleId/review', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await reviewJournalArticle(deps, uid, p.id, p.articleId, z.object({ revision, decision: z.enum(['submit', 'approve', 'request_changes', 'confirm']), note: z.string().max(5000).default(''), humanConfirmed: z.boolean().optional() }).strict().parse(req.body)) }; }));
   app.post('/journals/:id/articles/:articleId/reviewer', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await assignJournalReviewer(deps, uid, p.id, p.articleId, z.object({ revision, reviewerId: z.string().uuid() }).strict().parse(req.body)) }; }));
   app.post('/journals/:id/articles/:articleId/publish', member(async (req, uid) => { const p = articleIds.parse(req.params); return { release: await publishJournalArticle(deps, uid, p.id, p.articleId, { ...z.object({ revision, requestKey, humanConfirmed: z.literal(true) }).strict().parse(req.body), publicIdPrefix: deps.publicIdPrefix }) }; }));
   app.post('/journals/:id/articles/:articleId/feedback', member(async (req, uid) => {

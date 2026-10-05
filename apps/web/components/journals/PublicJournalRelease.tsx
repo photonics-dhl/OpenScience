@@ -2,6 +2,7 @@ import Link from 'next/link';
 import * as React from 'react';
 import type { JournalDraft } from '@/lib/journal-api';
 import { JournalFeedback } from './JournalFeedback';
+import { paperDoiPath } from '@/lib/paper-identity';
 
 export interface PublicJournalPackageData {
   articleId?: string;
@@ -44,6 +45,7 @@ export function PublicJournalRelease({ value }: { value: PublicJournalPackageDat
       <dt>原作者</dt><dd className="min-w-0 break-words">{value.metadata.authors.join('，')}</dd>
       <dt>原刊与日期</dt><dd className="min-w-0 break-words">{value.metadata.journalTitle || value.journal.name} · {value.metadata.publishedDate || '未提供'}</dd>
       <dt>原文主标识</dt><dd className="min-w-0 break-words">{value.metadata.doi ? <a href={`https://doi.org/${value.metadata.doi}`}>DOI {value.metadata.doi}</a> : <a href={value.metadata.originalUrl}>稳定原文地址</a>}</dd>
+      {value.metadata.doi ? <><dt>同篇公开解读</dt><dd><Link className="text-os-ink underline underline-offset-4" href={paperDoiPath(value.metadata.doi)}>查看这篇论文的其他公开解读</Link></dd></> : null}
       <dt>衍生版本</dt><dd className="min-w-0 break-words">OpenScience 固定解读版本 v{value.versionNo} · {value.publishedAt?.slice(0, 10) || '日期未提供'}</dd>
     </dl>
     {value.draft ? <>

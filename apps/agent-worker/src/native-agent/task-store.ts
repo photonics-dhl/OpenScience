@@ -32,6 +32,7 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
     if (bytes.length > MAX_STATE_BYTES) throw new Error('[blocked] Native checkpoint exceeds private storage capacity');
     const hash = sha(bytes); const objectKey = `derived/native-agent/${hash}.json`;
     const turn = state.turns.at(-1); const binding = state.binding;
+    if (binding.sourceKind === 'journal-text') blocked();
     if (!turn || binding.taskId !== input.taskId || binding.runtimeId !== input.execution.runtimeId
       || binding.skillCatalogueId !== input.execution.skillCatalogueId || binding.model !== input.execution.model) blocked();
     const reference: NativeAgentCheckpointReference = { taskId: input.taskId, objectKey, serializedSha256: hash, size: bytes.length,
@@ -92,6 +93,7 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
       if (size !== cp.size || sha(bytes) !== cp.serializedSha256) blocked();
       const state = JSON.parse(bytes.toString('utf8')) as NativeAgentSessionState;
       const turn = state.turns?.at(-1);
+      if (state.binding?.sourceKind === 'journal-text') blocked();
       if (state.kind !== 'hermes-native-agent' || state.binding?.taskId !== cp.taskId || state.binding.artifactId !== cp.artifactId
         || state.binding.documentSha256 !== cp.documentSha256 || state.binding.sourceMapHash !== cp.sourceMapHash
         || state.binding.runtimeId !== input.execution.runtimeId || state.binding.skillCatalogueId !== input.execution.skillCatalogueId
