@@ -12,14 +12,14 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
     scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations,
     sourceQuantityProse: options.sourceQuantityProse, sourceQuantityLocations: options.sourceQuantityLocations,
-    defaultPaperOriginalRef: options.defaultPaperOriginalRef, ...options.input };
+    defaultPaperOriginalRef: options.defaultPaperOriginalRef, scienceRepairCallIdFeedback: options.scienceRepairCallIdFeedback, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);
@@ -103,18 +103,24 @@ describe('native illustration selects actual private tool history', () => {
     f.complete(); expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
   });
   it('repairs only the rejected scene through the bounded science contract', () => {
-    const f = fixture({ quote: 'The reported output duration is 7 fs.', scienceFeedback: true });
+    const f = fixture({ quote: 'The reported output duration is 7 fs.', scienceFeedback: true, scienceRepairCallIdFeedback: true });
     const invalid = structuredClone(science); invalid.scenes[0]!.labels = ['7 fs'];
-    expect(f.invoke('paper_illustration_science', invalid, 'bad')).toMatchObject({
-      status: 'invalid_illustration', error: expect.stringContaining('labels[0]'),
-    });
+    const rejected = f.invoke('paper_illustration_science', invalid, 'actual-science-call');
+    expect(rejected).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('labels[0]'), scienceToolCallId: 'actual-science-call' });
     const repaired = structuredClone(invalid.scenes[0]!);
     repaired.subjects[0]!.description = 'The reported output duration is 7 fs.';
-    expect(f.invoke('paper_illustration_science_repair', { scienceToolCallId: 'bad', sceneIndex: 0, scene: repaired }, 'repair'))
+    expect(f.invoke('paper_illustration_science_repair', { scienceToolCallId: rejected.scienceToolCallId, sceneIndex: 0, scene: repaired }, 'repair'))
       .toMatchObject({ status: 'science_ready', scienceToolCallId: 'repair' });
     f.invoke('paper_illustration_art', { scienceToolCallId: 'repair', scenes: [{ layout: 'Put label 0 above subject 0.', treatment: 'Crisp ink on white paper.' }] }, 'art');
     f.invoke('paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Sources, geometry and caption agree.', corrections: [], issues: [] }, 'review');
     expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review"}').review.decision).toBe('accepted');
+  });
+  it('keeps the exact rejected science call ID out of legacy replay feedback', () => {
+    const f = fixture({ quote: 'The reported output duration is 7 fs.', scienceFeedback: true });
+    const invalid = structuredClone(science); invalid.scenes[0]!.labels = ['7 fs'];
+    expect(f.invoke('paper_illustration_science', invalid, 'legacy-science-call')).toEqual({
+      status: 'invalid_illustration', error: expect.stringContaining('labels[0]'),
+    });
   });
   it('does not let a repair tool choose an unrelated rejected candidate', () => {
     const f = fixture({ quote: 'The reported output duration is 7 fs.' });
@@ -130,9 +136,10 @@ const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must
 const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Recognized hyphenated scientific units in source prose or consecutive typed quantities are quantities, not subtraction; a complete parenthetical named-variable assignment remains distinct from arithmetic. Explicit local source symbols may have spaced subscripts and an is/of approximation statement; preserve their exact symbol identity, not aliases or arithmetic factors.';
 const PAID_PROSE_SCIENCE_DESCRIPTION = PAID_ANNOTATION_SCIENCE_DESCRIPTION + ' A bare expression reference can match only that exact whole expression explicitly reported in the same supporting quote. Ordinary complete predicates after a comparison are prose, not units; unknown units remain binding. Use exact case-sensitive source IDs, supports relations and complete supporting text of 12..12000 characters; page markers or qualifiers cannot serve as subject bases. If an independent comparison is written after prose, separate it with a semicolon instead of an ambiguous mathematical wrapper; never remove functions, factors, terms or units.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
-function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION): NativeAgentSessionState {
+function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION, repairCallIdFeedback = false): NativeAgentSessionState {
   const tools = nativeIllustrationToolProfile(null).sourceTools.map(tool => ({ type: 'function' as const,
     function: { ...structuredClone(tool), ...(tool.name === 'paper_illustration_science' ? { description } : {}),
+      ...(tool.name === 'paper_illustration_science_repair' && !repairCallIdFeedback ? { description: tool.description.replace(' (exact scienceToolCallId feedback)', '') } : {}),
       ...(tool.name === 'paper_illustration_context' ? { description: contextDescription } : {}) } }));
   return { kind: 'hermes-native-agent', binding: { taskId: 'task', artifactId: 'artifact', documentSha256: 'document', sourceMapHash: 'map',
     runtimeId: 'runtime', skillCatalogueId: 'catalogue', model: 'MiniMax-M3', allowedTools: tools.map(tool => tool.function.name),
@@ -176,7 +183,7 @@ describe('Native planner locates quantity repairs without changing paid science'
     const fresh = fixture({ ...nativeIllustrationToolProfile(null), quote });
     const old = fixture({ ...nativeIllustrationToolProfile(savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION)), quote });
     expect(fresh.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
-      error: 'unbound_numeric_7_fs_description Fields: narrative.mainMessage.' });
+      error: 'unbound_numeric_7_fs_description Fields: narrative.mainMessage.', scienceToolCallId: 'failed' });
     expect(old.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
       error: 'unbound_numeric_7_fs_description Fields: mainMessage.' });
   });
@@ -211,7 +218,7 @@ describe('Native planner locates quantity repairs without changing paid science'
     const http = vi.fn(() => { throw new Error('Unexpected HTTP'); }); vi.stubGlobal('fetch', http);
     const profile = nativeIllustrationToolProfile(null);
     const saved = savedProfile(profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description, false,
-      profile.sourceTools.find(tool => tool.name === 'paper_illustration_context')!.description);
+      profile.sourceTools.find(tool => tool.name === 'paper_illustration_context')!.description, true);
     const f = fixture({ ...profile, quote: 'The reported output duration is 7 fs.' });
     const value = structuredClone(science); value.scenes[0]!.labels = ['7 fs'];
     expect(f.invoke('paper_illustration_science', value, 'invalid').error).toContain('scenes[0].labels[0]');
@@ -343,7 +350,7 @@ describe('native illustration defers design guidance until science is saved', ()
     expect(context.paper).toMatchObject({ sourceContext: { excerpts: [{ id: 'P00001', text: 'The full original paragraph.', page: 2 }] } });
     const invalid = structuredClone(science); invalid.scenes[0]!.subjects[0]!.basis.sourceId = 'foreign';
     expect(f.invoke('paper_illustration_science', invalid, 'invalid')).toEqual({ status: 'invalid_illustration',
-      error: 'unknown_original_source: scenes[0].subjects[0].basis.sourceId must select an exact case-sensitive sourceId from paper_illustration_context. Do not invent or convert IDs.' });
+      error: 'unknown_original_source: scenes[0].subjects[0].basis.sourceId must select an exact case-sensitive sourceId from paper_illustration_context. Do not invent or convert IDs.', scienceToolCallId: 'invalid' });
     for (const id of ['first-science', 'revised-science']) {
       expect(f.invoke('paper_illustration_science', science, id)).toEqual({
         ...legacy.invoke('paper_illustration_science', science, id), designGuidance,
