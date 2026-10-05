@@ -101,7 +101,11 @@
   .tagline { margin-top: 24px; }
 }
 
-@media (max-width: 1100px) { .companion { display: none; } }
+@media (max-width: 1100px) {
+  /* Keep the compact companion owned by the auth surface on narrow screens. */
+  .companion { width: 196px; min-height: 156px; margin: 0 0 24px auto; }
+  .companion :global(.hermes-dock-anchor) { min-height: 156px; }
+}
 
 .shell [data-signup-profile] { border-block: 1px solid #e0e6e8; }
 .shell [data-signup-profile] summary { min-height: 44px; padding-block: 12px; font: 500 14px/1.6 var(--font-ui); }

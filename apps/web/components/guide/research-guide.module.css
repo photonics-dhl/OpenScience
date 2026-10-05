@@ -112,7 +112,10 @@
 }
 @media (max-width: 1100px) {
   .hero { grid-template-columns: minmax(0, 1fr); }
-  .companion { display: none; }
+  /* Keep the compact companion owned by the guide surface. The shell fallback
+     is reserved for public surfaces that have no page-owned anchor. */
+  .companion { width: 196px; min-height: 156px; margin-top: 8px; margin-left: auto; }
+  .companion :global(.hermes-dock-anchor) { min-height: 156px; }
 }
 @media (max-width: 800px) {
   .hero { grid-template-columns: minmax(0, 1fr); }
