@@ -8,7 +8,8 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
 ## 当前运行与真实验收
-- 生产版本 tuple：候选包含 Worker 修复 `4c5cd1c7`（精确 CI `37347672220` 已全绿）及后续已推送的页面微调 `456e550f`；线上仍为 `4ed53b71faa11692756bcf79d5b3504e57581b19`，回滚 `7d208827d0e0bc41811b46dc1bf67231daf8230a`。候选尚未部署，不能把本地定向测试或 CI 当作生产验收。
+- 生产版本 tuple：线上 `456e550f69652b00569d2435c5f8283df3534d9f`，回滚 `4c5cd1c7974301a0552b691b83f4f8fd1a103abf`；包含 Worker 解析修复与 Hermes 页面锚点修正。公网 `/__release`、服务器 `.release-id`、CAS 和 Nginx 已核对一致；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
 - 第二篇真实复测：RO 9067a2d5-42ad-4c06-b234-753728b71064、草稿 v13 f40576ee-44fc-44e0-8be9-ba050adaf2c9，Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf。SourceMap、paper-author六维/Claims、独立source-review均成功；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，6项字段审阅已接受。
@@ -19,7 +20,7 @@
 - 2026-10-06 独立复测 `73746a85-3c51-4d2e-8cec-fbdf2d70e2b6`：Synclip 调用审计为 `succeeded`、模型 `gpt-image-2`、约61秒；PNG 已保存为 draft，随后 MiniMax-M3 审校调用也返回 `stop`，但 Worker 在 Gateway 已解析通过后用窄 `JSON.parse` 再解析 `<think>`/代码围栏而失败。候选 `4c5cd1c7` 已统一解析器并加回归；原任务 native checkpoint 为 `started`，禁止盲目重发。
 
 ## 未完成与下一动作
-- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”至少有成功样本；在候选部署并完成第二篇独立真实复测前，不能称长期跨论文稳定。旧第二篇仍有3/4外部提交成功、1/4未知，且有1张被图像审阅阻断；本次独立复测暴露的审校解析断点待候选验证。
+- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”至少有成功样本；Worker 解析修复已部署，但仍不能称长期跨论文稳定。旧第二篇仍有3/4外部提交成功、1/4未知，且有1张被图像审阅阻断；新一轮跨论文真实复测仍待执行。
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
