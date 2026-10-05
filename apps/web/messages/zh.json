@@ -1538,6 +1538,7 @@
       "goalPlaceholder": "例如：面向初学者讲清核心思想，画面简洁，并解释必要术语。",
       "startFor": "开始制作完整图文：{source}",
       "runningDescription": "Hermes 正在服务器上完成内容与图片，内部审校会自动继续。你可以离开后再回来。",
+      "awaitingSourceReviewDescription": "解析已完成，正在等待你核对六项研究结构和原文来源。确认前不会开始图解和生图。",
       "planReadyDescription": "论文内容、构图和风格已整理为私有图解方案。生图服务接入后继续制作图片；当前不会生成或发布图片。",
       "completeDescription": "六维内容与整组图片已保存在研究中。请阅读最终成果；公开发布仍由你决定。",
       "incompleteDescription": "系统尚未完成这篇论文的完整成果。原始材料和已完成的内容均已保留，刷新页面不会重新提交生成请求。",
@@ -1553,6 +1554,7 @@
       "status": {
         "parsingIncomplete": "材料解析未完成",
         "understanding": "正在理解论文",
+        "awaitingSourceReview": "需要核对论文结构与来源",
         "planning": "正在组织视觉叙事",
         "planReady": "图解方案已就绪",
         "illustrating": "正在制作图片",

@@ -168,6 +168,17 @@ describe('Hermes research run panel', () => {
     expect(html).not.toContain('page 18');
   });
 
+  it.each(['en', 'zh'])('shows the source review gate instead of claiming understanding is still running (%s)', (locale) => {
+    translations.locale = locale;
+    const run = sourceRun(); run.status = 'awaiting_source_review'; run.error = null;
+    const html = renderRun(run);
+    const copy = (locale === 'zh' ? zh : en).hermesRun;
+    expect(html).toContain(copy.narrative.status.awaitingSourceReview);
+    expect(html).toContain(copy.narrative.awaitingSourceReviewDescription);
+    expect(html).not.toContain(copy.narrative.status.understanding);
+    expect(html).not.toContain(copy.narrative.runningDescription);
+  });
+
   it.each(['en', 'zh'])('shows the exact parser diagnostic and non-free recovery disclosure (%s)', (locale) => {
     translations.locale = locale;
     const run = sourceRun();

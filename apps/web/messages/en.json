@@ -1538,6 +1538,7 @@
       "chooseSource": "Choose the PDF for this request",
       "startFor": "Start complete content and illustrations: {source}",
       "runningDescription": "Hermes is preparing the content and images on the server. Internal review continues automatically; you can leave and return.",
+      "awaitingSourceReviewDescription": "Parsing is complete. Review the six research fields and original source passages before Hermes starts the storyboard and image work.",
       "planReadyDescription": "The paper content, composition and style are saved in a private illustration plan. Image production will continue when the image service is connected. No image is being generated or published yet.",
       "completeDescription": "The six research sections and complete image set are saved with this research. Read the final result; publication remains your decision.",
       "incompleteDescription": "The system has not completed the full result. Original sources and completed work are preserved; refreshing this page will not resubmit generation.",
@@ -1553,6 +1554,7 @@
       "status": {
         "parsingIncomplete": "Source parsing is incomplete",
         "understanding": "Understanding the paper",
+        "awaitingSourceReview": "Review paper structure and sources",
         "planning": "Shaping the visual narrative",
         "planReady": "Illustration plan ready",
         "illustrating": "Producing illustrations",
