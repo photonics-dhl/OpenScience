@@ -582,10 +582,11 @@ function isAcceptanceScientificReview(
 ): boolean {
   if (!isRecord(value) || !hasExactKeys(value, [
     'provider', 'model', 'kind', 'compositionSkill', 'contractVersion', 'status', 'attemptId',
-    'reviewedCandidateHash', 'semanticStage', 'promptHash', 'responseHash', 'usage', 'finishReason',
+    'reviewedCandidateHash', 'semanticStage', 'promptHash', 'responseHash', 'usage', 'finishReason', 'draftClaims',
   ]) || value.provider !== 'deterministic-acceptance' || value.model !== 'deterministic-acceptance-v2'
     || value.kind !== 'model_self_check' || value.contractVersion !== '4'
     || value.status !== 'blocked_scientific_review'
+    || !Array.isArray(value.draftClaims) || value.draftClaims.length !== 0
     || typeof value.attemptId !== 'string' || !value.attemptId
     || !/^[a-f0-9]{64}$/u.test(String(value.promptHash))
     || !/^[a-f0-9]{64}$/u.test(String(value.responseHash)) || value.finishReason !== 'stop') return false;
@@ -646,6 +647,7 @@ export function classifyAcceptanceHandlerResult(value: unknown, requireSemantic 
   }
   const hasEvidenceLocation = value.evidenceLocation !== undefined;
   const hasEvidenceSegments = value.evidenceSegments !== undefined;
+  const hasFigures = value.figures !== undefined;
   const hasSemanticResult = value.understandingSkill !== undefined
     || value.canonicalExtractionContract !== undefined || value.scientificReview !== undefined;
   const partialKeys = ['reason', 'fieldDiagnostics', 'fieldDiagnosticsDetails', 'unverifiedSummaries', 'unverifiedSourcePassageIds'];
@@ -654,11 +656,19 @@ export function classifyAcceptanceHandlerResult(value: unknown, requireSemantic 
     ...(hasSourceMapRef ? ['sourceMapRef'] : []),
     ...(hasEvidenceLocation ? ['evidenceLocation'] : []),
     ...(hasEvidenceSegments ? ['evidenceSegments'] : []),
+    ...(hasFigures ? ['figures'] : []),
     ...(hasSemanticResult ? ['understandingSkill', 'canonicalExtractionContract', 'scientificReview'] : []),
     ...(hasPartialResult ? partialKeys : [])];
   if (!hasExactKeys(value, expectedKeys)
     || !isRecord(value.core) || !isRecord(value.evidence)
     || !Array.isArray(value.needsMoreInformation)
+    || (hasFigures && (!Array.isArray(value.figures) || value.figures.length > 12
+      || value.figures.some((figure) => !isRecord(figure)
+        || !hasExactKeys(figure, ['id', 'caption', 'pageNumber', 'role'])
+        || typeof figure.id !== 'string' || !/^Fig\. [A-Z]?\d+[A-Z]?$/u.test(figure.id)
+        || typeof figure.caption !== 'string' || figure.caption.length > 280
+        || !Number.isInteger(figure.pageNumber) || Number(figure.pageNumber) < 1
+        || !['device', 'spectrum', 'flowchart', 'micrograph', 'comparison', 'other'].includes(String(figure.role)))))
     || (requireSemantic && hasSourceMapRef && !hasSemanticResult)
     || (hasSemanticResult && (!sourceMapRef
       || !isRecord(value.understandingSkill)

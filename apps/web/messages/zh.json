@@ -2208,7 +2208,28 @@
       "attaching": "正在保存材料…",
       "attach": "保存材料到草稿",
       "empty": "请先在上方选择文件。",
-      "committed": "材料已保存到私有草稿与编辑历史。"
+      "committed": "材料已保存到私有草稿与编辑历史。",
+      "doi": {
+        "title": "关联原论文 DOI",
+        "body": "可选。先核对 DOI，再将这项研究关联到原论文的书目身份；文件、授权和私有解读仍留在当前工作区。",
+        "label": "原论文 DOI",
+        "check": "核对 DOI",
+        "checking": "正在核对…",
+        "lookupError": "暂时无法核对 DOI，请重试。",
+        "existing": "当前工作区已有这篇论文。",
+        "continue": "前往继续处理或添加材料 →",
+        "publicMatch": "找到同一 DOI 的公开论文记录。你可以在当前工作区关联并继续整理。",
+        "noPublicMatch": "尚无同一 DOI 的公开记录；可在当前工作区关联这篇论文。",
+        "publicPage": "查看公开论文页",
+        "associate": "关联到当前研究",
+        "saving": "正在保存…",
+        "saved": "DOI 已关联到当前研究。",
+        "alreadySaved": "此 DOI 已关联到当前研究。",
+        "clear": "移除当前 DOI 关联",
+        "cleared": "当前 DOI 关联已移除；已公开的旧版本保持原样。",
+        "saveError": "保存 DOI 失败，请刷新后重试。",
+        "privacy": "这里只显示当前工作区中你可访问的记录，以及已经公开的版本；不会显示其他人的私有草稿。关联 DOI 不会确认作者身份或转移素材授权。"
+      }
     },
     "sandbox": {
       "kicker": "可复现实验",
@@ -3039,5 +3060,24 @@
   },
   "journalServiceLabels": {
     "basic": "基础服务"
+  },
+  "paperIdentity": {
+    "metaDescription": "原论文 DOI {doi} 的公开解读",
+    "notFound": "论文未找到",
+    "skip": "跳到内容",
+    "navigation": "主导航",
+    "journalDirectory": "期刊目录",
+    "originalPaper": "原论文",
+    "viewOriginal": "查看原论文",
+    "viewPaperPage": "查看这篇论文的其他公开解读",
+    "interpretations": "公开解读",
+    "independent": "不同工作区的解读各自发布和更新；平台解读不替代原论文。",
+    "noInterpretations": "这篇论文已有公开书目记录，当前暂无可阅读的公开解读。",
+    "journalEditor": "期刊编辑解读",
+    "contributor": "贡献者解读",
+    "updated": "更新于",
+    "version": "版本",
+    "readVersion": "阅读固定解读版本",
+    "moreAvailable": "还有更多公开解读，当前页面仅列出前 100 条贡献者解读。"
   }
 }

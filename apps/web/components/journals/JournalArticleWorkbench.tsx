@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import * as React from 'react';
 import { z } from 'zod';
+import { useLocale } from 'next-intl';
+import { journalEditorMessages } from '@/messages/journal-editor';
 import {
   assignJournalReviewer, cancelJournalJob, createAiDraft, getJournalArticle,
   getJournalDashboard, listJournalMembers, publishJournalArticle,
@@ -21,8 +23,33 @@ export function journalArticlePermissions(role: JournalRole) {
     edit: role !== 'reviewer',
     assign: role === 'owner' || role === 'admin',
     review: role === 'owner' || role === 'admin' || role === 'reviewer',
+    confirm: role !== 'reviewer',
     publish: role === 'owner' || role === 'admin',
   };
+}
+
+export function canConfirmJournalContent(article: Pick<JournalArticle, 'contentState' | 'draft' | 'reviewState'>, role: JournalRole, checked: boolean, dirty: boolean, busy: boolean) {
+  return journalArticlePermissions(role).confirm && article.contentState === 'active' && Boolean(article.draft) && article.reviewState !== 'approved' && checked && !dirty && !busy;
+}
+
+export function canPublishJournalContent(article: Pick<JournalArticle, 'contentState' | 'draft' | 'reviewState' | 'reviewedRevision' | 'revision'>, role: JournalRole, dirty: boolean, busy: boolean) {
+  return journalArticlePermissions(role).publish && article.contentState === 'active' && Boolean(article.draft) && article.reviewState === 'approved' && article.reviewedRevision === article.revision && !dirty && !busy;
+}
+
+export function journalGenerationIssues(article: Pick<JournalArticle, 'contentState' | 'source' | 'rights'>, canEdit: boolean, sourceBindingDirty: boolean, processing: boolean, copy: Record<string, string>, nativeGenerationReady?: boolean) {
+  return [
+    !canEdit && copy.readingOnly,
+    article.contentState !== 'active' && copy.inactive,
+    sourceBindingDirty && copy.needBinding,
+    (article.source.kind === 'metadata' || article.source.text.trim().length < 50) && copy.needText,
+    !article.rights.internalProcessing && copy.needInternal,
+    !article.rights.derivativeGeneration && copy.needDerivative,
+    !article.rights.externalProcessing && copy.needExternal,
+    !article.rights.license.trim() && copy.needLicense,
+    !article.rights.evidence.trim() && copy.needEvidence,
+    processing && copy.processing,
+    nativeGenerationReady === false && copy.nativeUnavailable,
+  ].filter(Boolean) as string[];
 }
 
 function DraftDetails({ draft, readOnly, onChange }: { draft: JournalDraft; readOnly: boolean; onChange: (draft: JournalDraft) => void }) {
@@ -46,11 +73,15 @@ const comparisonSchema = z.object({
 });
 
 export function JournalArticleWorkbench({ journalId, articleId }: { journalId: string; articleId: string }) {
+  const locale = useLocale();
+  const copy = journalEditorMessages[locale === 'en' ? 'en' : 'zh'];
   const [article, setArticle] = React.useState<JournalArticle | null>(null);
+  const [nativeGenerationReady, setNativeGenerationReady] = React.useState<boolean | undefined>(undefined);
   const [role, setRole] = React.useState<JournalRole | null>(null);
   const [members, setMembers] = React.useState<JournalMember[]>([]);
   const [reviewerId, setReviewerId] = React.useState('');
   const [reviewNote, setReviewNote] = React.useState('');
+  const [confirmedRevision, setConfirmedRevision] = React.useState<number | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState('');
@@ -58,12 +89,13 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
   const dirtyRef = React.useRef(false);
   const savedArticle = React.useRef<JournalArticle | null>(null);
   const [remoteDraft, setRemoteDraft] = React.useState<JournalDraft | null>(null);
-  function editArticle(value: JournalArticle) { dirtyRef.current = true; setDirty(true); setArticle(value); }
+  function editArticle(value: JournalArticle) { dirtyRef.current = true; setDirty(true); setConfirmedRevision(null); setArticle(value); }
 
   const load = React.useCallback(async () => {
     try {
       const [articleResult, dashboard] = await Promise.all([getJournalArticle(journalId, articleId), getJournalDashboard(journalId)]);
       savedArticle.current = articleResult.article; dirtyRef.current = false; setDirty(false); setRemoteDraft(null); setArticle(articleResult.article);
+      setNativeGenerationReady(articleResult.nativeGenerationReady);
       setRole(dashboard.membership.role);
       if (journalArticlePermissions(dashboard.membership.role).assign) {
         const result = await listJournalMembers(journalId);
@@ -79,8 +111,9 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
     if (!processing) return;
     let active = true;
     const timer = window.setInterval(() => {
-      void getJournalArticle(journalId, articleId).then(({ article: fresh }) => {
+      void getJournalArticle(journalId, articleId).then(({ article: fresh, nativeGenerationReady: ready }) => {
         if (!active) return;
+        setNativeGenerationReady(ready);
         if (dirtyRef.current) {
           setArticle((current) => current ? { ...current, jobs: fresh.jobs } : current);
           if (fresh.revision !== savedArticle.current?.revision) {
@@ -98,7 +131,8 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
   const awaitingSourceRights = article.jobs.some((job) => job.kind === 'source_parse' && stateOf(job) === 'staging');
   const comparison = article.jobs.find((job) => job.comparisonDraft)?.comparisonDraft;
   const parsedComparison = comparisonSchema.safeParse(comparison);
-  const canGenerate = permissions.edit && !sourceBindingDirty && article.source.kind !== 'metadata' && Boolean(article.source.text.trim()) && article.rights.internalProcessing && article.rights.derivativeGeneration && article.rights.externalProcessing && Boolean(article.rights.license.trim() && article.rights.evidence.trim()) && !processing;
+  const generationIssues = journalGenerationIssues(article, permissions.edit, sourceBindingDirty, processing, copy, nativeGenerationReady);
+  const canGenerate = generationIssues.length === 0;
 
   async function save() {
     if (!article) return null;
@@ -112,7 +146,7 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
         ...(article.draft && JSON.stringify(article.draft) !== JSON.stringify(savedArticle.current?.draft) ? { draft: article.draft } : {}),
       });
       savedArticle.current = result.article; dirtyRef.current = false; setDirty(false); setRemoteDraft(null); setArticle(result.article);
-      setMessage('已保存。来源或解读内容变更后，需要重新审核。');
+      setConfirmedRevision(null); setMessage(copy.saveHint);
       return result.article;
     } catch (error) { setMessage(error instanceof Error ? error.message : '保存失败'); return null; }
     finally { setBusy(false); }
@@ -129,7 +163,7 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
       setBusy(true);
       await uploadJournalSourceFile(journalId, articleId, { revision: saved.revision, requestKey: crypto.randomUUID(), file });
       setFile(null);
-      setMessage('来源文件已暂存。请进入来源与版权矩阵，核验此文件的许可、依据和内部加工权限后启动免费解析。');
+      setMessage(copy.staged);
       await load();
     } catch (error) { setMessage(error instanceof Error ? error.message : '来源文件上传失败'); }
     finally { setBusy(false); }
@@ -141,30 +175,30 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
     try {
       const saved = await save(); if (!saved) return; setBusy(true);
       await createAiDraft(journalId, articleId, { revision: saved.revision, language: 'zh', requestKey: crypto.randomUUID(), ...(retryOf ? { retryOf } : {}) });
-      setMessage('当前来源与授权已保存，AI 解读任务已进入队列。'); await load();
+      setMessage(copy.queued); await load();
     }
     catch (error) { setMessage(error instanceof Error ? error.message : '无法创建任务'); }
     finally { setBusy(false); }
   }
 
-  async function review(decision: 'submit' | 'approve' | 'request_changes') {
-    if (!article) return;
+  async function review(decision: 'submit' | 'approve' | 'request_changes' | 'confirm') {
+    if (!article || !role || busy || dirty || (decision === 'confirm' && !canConfirmJournalContent(article, role, confirmedRevision === article.revision, dirty, busy))) return;
     setBusy(true);
-    try { await reviewJournalArticle(journalId, articleId, { revision: article.revision, decision, note: reviewNote }); setReviewNote(''); await load(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : '审核操作失败'); }
+    try { await reviewJournalArticle(journalId, articleId, { revision: article.revision, decision, note: reviewNote, ...(decision === 'confirm' ? { humanConfirmed: true } : {}) }); setReviewNote(''); setConfirmedRevision(null); await load(); setMessage(decision === 'submit' ? copy.submitted : decision === 'request_changes' ? copy.changesRecorded : copy.confirmed); }
+    catch (error) { setMessage(error instanceof Error ? error.message : copy.confirmFailed); }
     finally { setBusy(false); }
   }
 
   async function assign() {
-    if (!article || !reviewerId) { setMessage('请选择审稿人。'); return; }
+    if (!article || !reviewerId) { setMessage(copy.selectColleague); return; }
     setBusy(true);
-    try { const result = await assignJournalReviewer(journalId, articleId, { revision: article.revision, reviewerId }); setArticle({ ...article, ...result.article }); setMessage('已指派审稿人，并刷新当前修订。'); await load(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : '无法指派审稿人'); }
+    try { const result = await assignJournalReviewer(journalId, articleId, { revision: article.revision, reviewerId }); setArticle({ ...article, ...result.article }); setConfirmedRevision(null); setMessage(copy.assigned); await load(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : copy.assignmentFailed); }
     finally { setBusy(false); }
   }
 
   async function publish() {
-    if (!article || dirty || !window.confirm('确认由人工审核后公开当前固定版本？公开后读者和工具可访问该版本。')) return;
+    if (!article || !role || !canPublishJournalContent(article, role, dirty, busy) || !window.confirm(copy.publishConfirm)) return;
     setBusy(true);
     try { const result = await publishJournalArticle(journalId, articleId, { revision: article.revision, requestKey: crypto.randomUUID() }); setMessage(`已发布固定版本 v${result.release.versionNo}。`); await load(); }
     catch (error) { setMessage(error instanceof Error ? error.message : '发布失败'); }
@@ -203,35 +237,37 @@ export function JournalArticleWorkbench({ journalId, articleId }: { journalId: s
     </header>
 
     <section className="mt-7">
-      <div className="flex flex-wrap items-baseline justify-between gap-3"><h2 className="text-xl font-normal">来源与授权</h2><Link className="text-sm underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>打开来源与授权矩阵</Link></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-3"><h2 className="text-xl font-normal">{copy.materials}</h2><Link className="text-sm underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>{copy.openMaterials}</Link></div>
+      <p className="mt-2 text-sm text-os-muted-paper">{copy.materialIntro}</p>
       {permissions.edit ? <>
         <label className="mt-3 grid gap-2 text-sm">处理范围<select value={article.source.kind} onChange={(event) => editArticle({ ...article, source: { ...article.source, kind: event.target.value as JournalArticle['source']['kind'] } })} className="min-h-10 border border-os-rule-paper bg-transparent px-3"><option value="metadata">仅元数据</option><option value="abstract">摘要</option><option value="fulltext">完整正文</option></select></label>
         <label className="mt-3 grid gap-2 text-sm">来源文本<textarea rows={5} value={article.source.text} onChange={(event) => editArticle({ ...article, source: { ...article.source, text: event.target.value } })} className="border border-os-rule-paper bg-transparent p-3" /></label>
-        <div className="mt-4 border border-os-rule-paper p-4"><label className="grid gap-2 text-sm">上传来源文件（PDF、DOCX、TXT、MD；不超过 50 MB）<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label><button disabled={busy || processing || !file} className="mt-3 border border-os-rule-paper px-3 py-2 text-sm disabled:opacity-50" onClick={() => void upload()}>暂存来源文件</button>{awaitingSourceRights ? <p className="mt-2 text-sm" role="status">来源等待授权核验。<Link className="underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>前往来源矩阵确认此文件权限</Link></p> : parsing ? <p className="mt-2 text-sm" role="status">来源解析中；解析免费，不消耗 AI 生成额度。</p> : null}</div>
+        <div className="mt-4 border border-os-rule-paper p-4"><label className="grid gap-2 text-sm">{copy.file}<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label><button disabled={busy || processing || !file} className="mt-3 border border-os-rule-paper px-3 py-2 text-sm disabled:opacity-50" onClick={() => void upload()}>{copy.upload}</button>{awaitingSourceRights ? <p className="mt-2 text-sm" role="status">{copy.waiting}。<Link className="underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>{copy.confirmMaterial}</Link></p> : parsing ? <p className="mt-2 text-sm" role="status">{copy.parsing}</p> : null}</div>
         <label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={article.directoryVisible} onChange={(event) => editArticle({ ...article, directoryVisible: event.target.checked })} />在期刊目录中显示</label>
-        <fieldset disabled={hasSourceMatrix}>{hasSourceMatrix ? <p className="mt-3 text-sm">已启用逐项来源矩阵。请在上方“来源与版权矩阵”入口修改授权；本页显示当前主要来源的有效权限。</p> : null}<div className="mt-3 grid gap-2 sm:grid-cols-2">{(['internalProcessing', 'derivativeGeneration', 'publicSource', 'publicDerivative', 'externalProcessing'] as const).map((key) => <label className="flex gap-2 text-sm" key={key}><input type="checkbox" checked={article.rights[key]} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, [key]: event.target.checked } })} />{({ internalProcessing: '允许内部加工', derivativeGeneration: '允许生成衍生解读', publicSource: '允许公开来源文本', publicDerivative: '允许公开衍生解读', externalProcessing: '允许发送至外部 AI 服务' })[key]}</label>)}</div>
-        <label className="mt-3 grid gap-2 text-sm">许可<input value={article.rights.license} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, license: event.target.value } })} className="min-h-10 border border-os-rule-paper bg-transparent px-3" /></label>
-        <label className="mt-3 grid gap-2 text-sm">授权或核验依据<textarea rows={3} value={article.rights.evidence} onChange={(event) => editArticle({ ...article, rights: { ...article.rights, evidence: event.target.value } })} className="border border-os-rule-paper bg-transparent p-3" /></label></fieldset>
+        <p className="mt-3 text-sm text-os-muted-paper">{hasSourceMatrix ? copy.bound : copy.legacyManage}</p>
       </> : <div className="mt-3 border border-os-rule-paper p-4 text-sm"><p>只读来源：{article.source.label}</p><p className="whitespace-pre-wrap">{article.source.text}</p></div>}
     </section>
 
     <section className="mt-8 border-t border-os-rule-paper pt-6">
-      <h2 className="text-xl font-normal">AI 解读与编辑审核</h2><p className="text-sm text-os-muted-paper">当前范围：{article.source.kind}。仅在解析得到来源文本后才能生成。</p>
-      {sourceBindingDirty ? <p className="mt-3 text-sm">来源内容已修改。请先保存，再到来源与版权矩阵确认当前材料的授权，重新建立加工依据。</p> : hasSourceMatrix && !article.rights.internalProcessing ? <p className="mt-3 text-sm">请先在来源与版权矩阵核验当前材料的加工权限。</p> : null}
-      {article.draft ? <DraftDetails draft={article.draft} readOnly={!permissions.edit} onChange={(draft) => editArticle({ ...article, draft })} /> : permissions.edit ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>生成 AI 解读草稿</button> : <p className="mt-3 text-sm">尚无可审核草稿。</p>}
-      {permissions.edit && article.draft ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>重新生成草稿（1 篇额度）</button> : null}
-      {permissions.assign ? <div className="mt-6 flex flex-wrap items-end gap-2 border-t border-os-rule-paper pt-4"><label className="grid gap-1 text-sm">指派审稿人<select aria-label="指派审稿人" value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} className="min-h-10 border border-os-rule-paper bg-transparent px-3"><option value="">请选择</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.email}（{member.role}）</option>)}</select></label><button disabled={busy || dirty || !reviewerId} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void assign()}>确认指派</button></div> : null}
-      {(permissions.edit || permissions.review) && article.draft ? <label className="mt-5 grid gap-2 text-sm">审核意见<textarea rows={3} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} className="border border-os-rule-paper bg-transparent p-3" /></label> : null}
-<p className="mt-3 text-sm" role="status">{dirty ? '有未保存修改，请先保存再审核或发布。' : ''}</p>
+      <h2 className="text-xl font-normal">{copy.generation}</h2><p className="text-sm text-os-muted-paper">{copy.generationHint}</p>
+      <div className="mt-3 text-sm" id="generation-readiness" aria-live="polite">{generationIssues.length ? <><p>{copy.readiness}</p><ul className="mt-2 list-disc pl-5">{generationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul><Link className="mt-2 inline-block underline" href={`/journals/manage/${journalId}/articles/${articleId}/sources`}>{copy.confirmMaterial}</Link></> : <p>{copy.ready}</p>}</div>
+      {article.draft ? <DraftDetails draft={article.draft} readOnly={!permissions.edit} onChange={(draft) => editArticle({ ...article, draft })} /> : permissions.edit ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>{copy.generate}</button> : <p className="mt-3 text-sm">尚无可审核草稿。</p>}
+      {permissions.edit && article.draft ? <button disabled={!canGenerate || busy} className="mt-4 min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void createDraft()}>{copy.regenerate}</button> : null}
+      {article.draft ? <section className="mt-6 border-t border-os-rule-paper pt-5" aria-labelledby="editor-confirm-title"><h3 id="editor-confirm-title" className="text-lg">{copy.confirmTitle}</h3><p className="mt-2 text-sm text-os-muted-paper">{copy.confirmHint}</p>{permissions.confirm && article.reviewState !== 'approved' ? <label className="mt-3 flex items-start gap-2 text-sm"><input className="mt-1" type="checkbox" disabled={busy || dirty} checked={confirmedRevision === article.revision} onChange={(event) => setConfirmedRevision(event.target.checked ? article.revision : null)} />{copy.confirmation}</label> : article.reviewState === 'approved' ? <p className="mt-3 text-sm" role="status">{copy.confirmed}</p> : null}</section> : null}
+      {permissions.assign ? <details className="mt-5 border-t border-os-rule-paper pt-4"><summary className="cursor-pointer text-sm">{copy.optionalTeam}</summary><p className="mt-2 text-sm text-os-muted-paper">{copy.assignHint}</p><div className="mt-3 flex flex-wrap items-end gap-2"><label className="grid gap-1 text-sm">{copy.collaborator}<select aria-label={copy.collaborator} value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} className="min-h-10 border border-os-rule-paper bg-transparent px-3"><option value="">—</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.email}</option>)}</select></label><button disabled={busy || dirty || !reviewerId} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void assign()}>{copy.assign}</button>{permissions.edit ? <button disabled={busy || dirty || !article.draft} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('submit')}>{copy.submit}</button> : null}</div></details> : null}
+      {(permissions.edit || permissions.review) && article.draft ? <label className="mt-5 grid gap-2 text-sm">{copy.note}<textarea rows={3} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} className="border border-os-rule-paper bg-transparent p-3" /></label> : null}
+      <p className="mt-3 text-sm" role="status">{dirty ? copy.dirty : ''}</p>
       <div className="mt-4 flex flex-wrap gap-3">
-        {permissions.edit ? <><button disabled={busy} className="min-h-10 border border-os-rule-paper px-4 text-sm" onClick={() => void save()}>保存修订</button><button disabled={busy || dirty || !article.draft} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('submit')}>提交审核</button></> : null}
-        {permissions.review ? <><button disabled={busy || dirty || article.reviewState !== 'submitted'} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('approve')}>批准当前修订</button><button disabled={busy || dirty || article.reviewState !== 'submitted'} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('request_changes')}>要求修改</button></> : null}
-        {permissions.publish ? <><button disabled={busy || dirty || article.reviewState !== 'approved'} className="min-h-10 bg-accent-primary-strong px-4 text-sm font-semibold text-os-black-0 disabled:opacity-50" onClick={() => void publish()}>人工确认并发布</button><button disabled={busy || dirty} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void changeVisibility('restricted')}>限制公开</button><button disabled={busy || dirty} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void changeVisibility('withdrawn')}>撤回解读</button></> : null}
+        {permissions.edit ? <button disabled={busy} className="min-h-10 border border-os-rule-paper px-4 text-sm" onClick={() => void save()}>{copy.save}</button> : null}
+        {permissions.confirm && article.draft && article.reviewState !== 'approved' ? <button disabled={!canConfirmJournalContent(article, role, confirmedRevision === article.revision, dirty, busy)} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('confirm')}>{busy ? copy.confirming : copy.confirm}</button> : null}
+        {permissions.review && role === 'reviewer' ? <><button disabled={busy || dirty || article.reviewState !== 'submitted'} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('approve')}>{copy.approve}</button><button disabled={busy || dirty || article.reviewState !== 'submitted'} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void review('request_changes')}>{copy.changes}</button></> : null}
+        {permissions.publish ? <><button disabled={!canPublishJournalContent(article, role, dirty, busy)} className="min-h-10 bg-accent-primary-strong px-4 text-sm font-semibold text-os-black-0 disabled:opacity-50" onClick={() => void publish()}>{copy.publish}</button><button disabled={busy || dirty} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void changeVisibility('restricted')}>限制公开</button><button disabled={busy || dirty} className="min-h-10 border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => void changeVisibility('withdrawn')}>撤回解读</button></> : null}
       </div>
+      <p className="mt-2 text-sm text-os-muted-paper">{copy.publishHint}</p>
+      {message ? <p className="mt-3 text-sm" role="status">{message}</p> : null}
       {article.jobs.map((job) => <p className="mt-2 text-sm" key={job.id}>作业 {job.kind ?? job.id}: {stateOf(job)} {permissions.edit && ['staging', 'pending', 'running'].includes(stateOf(job)) ? <button disabled={busy} className="ml-2 underline disabled:opacity-50" onClick={() => void cancel(job.id)}>取消</button> : null}{permissions.edit && job.kind === 'generate' && ['failed', 'cancelled'].includes(stateOf(job)) ? <button disabled={busy || dirty || !canGenerate} className="ml-3 underline disabled:opacity-50" onClick={() => void createDraft(job.id)}>重试此作业</button> : null}</p>)}
       {permissions.edit && comparison ? <details className="mt-5 border border-os-rule-paper p-4"><summary>查看未覆盖当前修订的生成结果</summary><p className="text-sm text-os-muted-paper">结果未写入当前草稿。采用前请核对来源；格式不完整时可复制有效段落手动合并。</p><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(comparison, null, 2)}</pre>{parsedComparison.success ? <button className="mt-3 border border-os-rule-paper px-3 py-2 text-sm" onClick={() => editArticle({ ...article, draft: parsedComparison.data })}>采用为待保存草稿</button> : null}</details> : null}
     </section>
     {remoteDraft ? <details className="mt-5 border border-os-rule-paper p-4"><summary>比较服务器的新草稿</summary><DraftDetails draft={remoteDraft} readOnly onChange={() => undefined} /><button className="mt-3 border px-3 py-2" onClick={() => { if (window.confirm('加载最新修订将放弃当前未保存修改，请先复制保留需要的内容。确认继续？')) void load(); }}>加载最新修订</button></details> : null}
-    {message ? <p className="mt-5" role="status">{message}</p> : null}
   </article>;
 }

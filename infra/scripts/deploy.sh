@@ -47,21 +47,23 @@ done
   exit 64
 }
 
-RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF")" \
-  || { echo "错误：部署源不是 release-ref 的干净精确 tree" >&2; exit 66; }
 ROLLBACK_SHA=""
+ANCESTRY_ARGS=()
 if [ -n "$ROLLBACK_REF" ]; then
   if [[ "$ROLLBACK_REF" =~ ^[0-9a-f]{40}$ ]]; then
-    # Another workstation may have deployed a commit not present locally. The
-    # locked remote transaction still requires exact active marker, immutable
-    # rollback source, capability/image identities and rollback Compose.
+    # The source guard below requires this exact active commit locally, too.
+    # Fetch and integrate other workstations' releases; never silently replace them.
     ROLLBACK_SHA="$ROLLBACK_REF"
   else
     ROLLBACK_SHA="$(git -C "$PROJECT_ROOT" rev-parse --verify "$ROLLBACK_REF^{commit}")" \
       || { echo "错误：rollback-ref '$ROLLBACK_REF' 不存在" >&2; exit 66; }
   fi
   [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "错误：rollback-ref 必须解析为完整 commit SHA" >&2; exit 66; }
+  ANCESTRY_ARGS=(--ancestor "$ROLLBACK_SHA")
 fi
+
+RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF" "${ANCESTRY_ARGS[@]}")" \
+  || { echo "错误：部署源必须是干净精确 tree，且包含当前线上版本；请先 fetch 并整合发布分支" >&2; exit 66; }
 
 [ -f "$ENV_FILE" ] || { echo "错误：未找到 .env（$ENV_FILE）" >&2; exit 66; }
 read_env() {
@@ -80,12 +82,15 @@ pick() {
 SSH_HOST="$(pick SERVER_HOST SSH_HOST 公网ip)" || { echo "错误：.env 缺少服务器地址" >&2; exit 66; }
 SSH_USER="$(pick SERVER_USER SSH_USER 用户名)" || { echo "错误：.env 缺少用户名" >&2; exit 66; }
 SSH_PORT="$(pick SERVER_PORT SSH_PORT SSH端口 || true)"; SSH_PORT="${SSH_PORT:-22}"
-SSH_KEY="$(native_tool_path "$HOME/.ssh/id_ed25519_xgs")"
+SSH_KEY="$(native_tool_path "${XGS_SSH_KEY:-$HOME/.ssh/id_ed25519_xgs}")"
 SSH_EXECUTABLE=ssh
 if [[ "${OS:-}" = Windows_NT ]]; then
   SSH_EXECUTABLE="${SYSTEMROOT:-${SystemRoot:-C:/Windows}}/System32/OpenSSH/ssh.exe"
 fi
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$SSH_KEY" -p "$SSH_PORT")
+if [ -n "${XGS_SSH_KNOWN_HOSTS:-}" ]; then
+  SSH_OPTS+=(-o "UserKnownHostsFile=\"$(native_tool_path "$XGS_SSH_KNOWN_HOSTS")\"" -o StrictHostKeyChecking=yes)
+fi
 
 log() { printf '%s\n' "$*"; }
 plan() { log "  [计划] $*"; }

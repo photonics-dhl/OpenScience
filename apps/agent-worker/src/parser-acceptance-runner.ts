@@ -99,7 +99,7 @@ export function buildAcceptanceProposal(gatewayArgs: unknown[]) {
     if (!first) throw new Error('deterministic acceptance composition has no canonical passage');
     const fields = emptyAcceptanceFields(() => ({ summary: '', sourcePassageIds: [] as string[] }));
     fields.problem = { summary: `验收来源记录：${first.text.slice(0, 180)}`, sourcePassageIds: [first.id] };
-    return { fields, needsMoreEvidence: [] };
+    return { fields, needsMoreEvidence: [], draftClaims: [] };
   }
 
   throw new Error('unrecognized deterministic acceptance structured stage');
@@ -286,7 +286,20 @@ async function main(): Promise<void> {
         payload: taskPayload,
         executionAttempt: 1,
       });
-      handlerStatus = classifyAcceptanceHandlerResult(handlerResult, true);
+      try {
+        handlerStatus = classifyAcceptanceHandlerResult(handlerResult, true);
+      } catch (error) {
+        // Synthetic acceptance corpus only: report shape, never source text.
+        console.error(`PARSER_ACCEPTANCE_HANDLER_SHAPE ${item.id}: ${JSON.stringify({
+          keys: Object.keys(handlerResult as Record<string, unknown>).sort(),
+          figureKeys: Array.isArray((handlerResult as Record<string, unknown>).figures)
+            ? Object.keys(((handlerResult as Record<string, unknown>).figures as unknown[])[0] ?? {}).sort() : [],
+          scientificReviewKeys: Object.keys(((handlerResult as Record<string, unknown>).scientificReview ?? {}) as Record<string, unknown>).sort(),
+          scientificReviewProvider: ((handlerResult as Record<string, unknown>).scientificReview as Record<string, unknown> | undefined)?.provider,
+          fieldDiagnosticsDetails: ((handlerResult as Record<string, unknown>).fieldDiagnosticsDetails as Record<string, unknown> | undefined)?.problem,
+        })}`);
+        throw error;
+      }
     } catch (error) {
       failureStatus = error instanceof Error ? 'handler-execution-failed' : 'unknown-failure';
       // This runner only consumes the canonical self-authored corpus in an

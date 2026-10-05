@@ -2208,7 +2208,28 @@
       "attaching": "Saving materials…",
       "attach": "Save materials to draft",
       "empty": "Choose one or more files above.",
-      "committed": "Materials saved to your private draft and edit history."
+      "committed": "Materials saved to your private draft and edit history.",
+      "doi": {
+        "title": "Connect the original paper DOI",
+        "body": "Optional. Check the DOI before linking this research to the paper's bibliography. Files, permissions and private interpretations stay in this workspace.",
+        "label": "Original paper DOI",
+        "check": "Check DOI",
+        "checking": "Checking…",
+        "lookupError": "Could not check this DOI. Please try again.",
+        "existing": "This paper is already in this workspace.",
+        "continue": "Continue or add materials →",
+        "publicMatch": "A public record with this DOI exists. You can link it here and continue in this workspace.",
+        "noPublicMatch": "No public record with this DOI yet. You can link this research in the current workspace.",
+        "publicPage": "View public paper page",
+        "associate": "Link to this research",
+        "saving": "Saving…",
+        "saved": "DOI linked to this research.",
+        "alreadySaved": "This DOI is already linked to this research.",
+        "clear": "Remove current DOI link",
+        "cleared": "Current DOI link removed. Earlier published versions are unchanged.",
+        "saveError": "Could not save the DOI. Refresh and try again.",
+        "privacy": "Only accessible records in this workspace and published versions appear here. Other people's private drafts stay hidden. Linking a DOI does not verify authorship or transfer material permissions."
+      }
     },
     "sandbox": {
       "kicker": "Reproducible execution",
@@ -3039,5 +3060,24 @@
   },
   "journalServiceLabels": {
     "basic": "Basic service"
+  },
+  "paperIdentity": {
+    "metaDescription": "Published interpretations of original paper DOI {doi}",
+    "notFound": "Paper not found",
+    "skip": "Skip to content",
+    "navigation": "Main navigation",
+    "journalDirectory": "Journal directory",
+    "originalPaper": "Original paper",
+    "viewOriginal": "View original paper",
+    "viewPaperPage": "View other published interpretations of this paper",
+    "interpretations": "Published interpretations",
+    "independent": "Interpretations from different workspaces are published and updated independently. They do not replace the original paper.",
+    "noInterpretations": "This paper has a public bibliography entry but no readable published interpretation at present.",
+    "journalEditor": "Journal editor interpretation",
+    "contributor": "Contributor interpretation",
+    "updated": "Updated",
+    "version": "Version",
+    "readVersion": "Read fixed interpretation version",
+    "moreAvailable": "More published interpretations exist. This page lists only the first 100 contributor interpretations."
   }
 }

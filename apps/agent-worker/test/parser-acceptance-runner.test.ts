@@ -39,12 +39,13 @@ describe('Task 8 acceptance runner production composition', () => {
     const value = buildAcceptanceProposal([undefined, [
       { role: 'system', content: 'scientific summary' },
       { role: 'user', content: '从下列原始P段重新组织六段研究精华\n\n[P00007 page:2 blocks:1 chars:17]\nMeasured fixture.\n[/P00007]' },
-    ]]) as { fields: Record<string, { summary: string; sourcePassageIds: string[] }>; needsMoreEvidence: unknown[] };
+    ]]) as { fields: Record<string, { summary: string; sourcePassageIds: string[] }>; needsMoreEvidence: unknown[]; draftClaims: unknown[] };
     expect(value.fields.problem).toEqual({
       summary: '验收来源记录：Measured fixture.', sourcePassageIds: ['P00007'],
     });
     expect(value.fields.results).toEqual({ summary: '', sourcePassageIds: [] });
     expect(value.needsMoreEvidence).toEqual([]);
+    expect(value.draftClaims).toEqual([]);
   });
 
   it.each([

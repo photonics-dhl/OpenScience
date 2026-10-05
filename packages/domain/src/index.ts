@@ -7,6 +7,7 @@ export * from './journal/publishing';
 export * from './journal/source-upload';
 export * from './journal/feedback';
 export * from './journal/enhancements';
+export * from './journal/paper-identity';
 export { WorkspaceError, type WorkspaceErrorCode } from './workspace/errors';
 export { now, type WorkspaceDeps } from './workspace/types';
 export { createPersonalWorkspace, type PersonalWorkspaceUser } from './workspace/personal';

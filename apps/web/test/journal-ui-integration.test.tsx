@@ -9,9 +9,9 @@ afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
 describe('journal role screens', () => {
   it('keeps an assigned reviewer read-only while retaining review decisions', () => {
-    expect(journalArticlePermissions('reviewer')).toEqual({ edit: false, assign: false, review: true, publish: false });
-    expect(journalArticlePermissions('owner')).toEqual({ edit: true, assign: true, review: true, publish: true });
-    expect(journalArticlePermissions('editor')).toEqual({ edit: true, assign: false, review: false, publish: false });
+    expect(journalArticlePermissions('reviewer')).toEqual({ edit: false, assign: false, review: true, confirm: false, publish: false });
+    expect(journalArticlePermissions('owner')).toEqual({ edit: true, assign: true, review: true, confirm: true, publish: true });
+    expect(journalArticlePermissions('editor')).toEqual({ edit: true, assign: false, review: false, confirm: true, publish: false });
   });
   it('offers first homepage publication only for an active unpublished journal', () => {
     expect(shouldOfferHomepageActivation({ status: 'active', homepagePublished: false })).toBe(true);

@@ -606,6 +606,36 @@ test('deployment publishes and verifies the exact immutable release identity', (
   assert.match(source, /verify-release-source\.mjs" --root "\$PROJECT_ROOT" --ref "\$RELEASE_REF"/);
   assert.match(source, /cas-active --marker '\$REMOTE_ROOT\/\.release-id' --expected '\$ROLLBACK_SHA' --next '\$RELEASE_SHA' --lock-fd 9/);
   assert.match(source, /expect_http_body .*\/__release "\$RELEASE_SHA"/);
+  assert.match(launcherSource, /ANCESTRY_ARGS=\(--ancestor "\$ROLLBACK_SHA"\)/);
+  assert.ok(launcherSource.indexOf('"${ANCESTRY_ARGS[@]}"') < launcherSource.indexOf('scripts/cloud-sync.mjs'));
+});
+
+test('release source guard accepts forward history and rejects missing, backward or sibling releases', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-release-ancestry-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const guard = fileURLToPath(new URL('../../scripts/verify-release-source.mjs', import.meta.url));
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init'); git('config', 'user.email', 'gate@example.invalid'); git('config', 'user.name', 'Release Gate');
+  git('commit', '--allow-empty', '-m', 'base');
+  const base = git('rev-parse', 'HEAD');
+  git('commit', '--allow-empty', '-m', 'active');
+  const active = git('rev-parse', 'HEAD');
+  git('commit', '--allow-empty', '-m', 'forward');
+  const forward = git('rev-parse', 'HEAD');
+  const check = ancestor => spawnSync(process.execPath, [guard, '--root', root, '--ref', 'HEAD', '--ancestor', ancestor], { encoding: 'utf8' });
+  assert.equal(check(active).status, 0);
+  assert.equal(check(forward).status, 0, 'same-SHA verification remains available');
+  git('checkout', '--detach', base);
+  assert.notEqual(check(active).status, 0, 'normal deployment cannot silently roll back');
+  git('commit', '--allow-empty', '-m', 'sibling');
+  const sibling = check(active);
+  assert.notEqual(sibling.status, 0);
+  assert.match(sibling.stderr, /integrate the current release/);
+  const missing = check('f'.repeat(40));
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /fetch its history/);
+  git('merge', '--no-ff', active, '-m', 'integrate active');
+  assert.equal(check(active).status, 0, 'integrating both branches restores forward deployment');
 });
 
 test('release source guard rejects dirty trees and refs other than HEAD', async () => {

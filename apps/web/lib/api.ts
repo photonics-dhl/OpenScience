@@ -73,6 +73,7 @@ export interface ResearchIdentityProfile extends ResearchIdentityProfileInput {
 }
 
 export interface ResearchObjectSummary {
+  originalDoi?: string | null;
   publicId?: string | null;
   id: string;
   workspaceId: string;

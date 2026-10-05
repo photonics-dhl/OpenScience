@@ -87,6 +87,17 @@ suite('journal enhancement HTTP and PostgreSQL boundaries', () => {
     expect(denied.statusCode, denied.body).toBe(403);
   });
 
+  it('rejects generation before reserving credit when native Hermes is not configured', async () => {
+    const managed = await app.inject({ url: path(), cookies: ownerCookie });
+    expect(managed.json().nativeGenerationReady).toBe(false);
+    const before = await prisma.journalGrant.findMany({ where: { journalId }, select: { id: true, reserved: true, consumed: true } });
+    const job = await app.inject({ method: 'POST', url: `${path()}/processing-jobs`, cookies: ownerCookie, payload: { revision, language: 'en', requestKey: randomUUID() } });
+    expect(job.json().error.code).toBe('INVALID_STATE');
+    expect(job.statusCode).toBeGreaterThanOrEqual(400);
+    expect(await prisma.journalJob.count({ where: { journalId } })).toBe(0);
+    expect(await prisma.journalGrant.findMany({ where: { journalId }, select: { id: true, reserved: true, consumed: true } })).toEqual(before);
+  });
+
   it('publishes a reviewed matrix-backed version and checks authorization expiry on anonymous reads', async () => {
     for (const decision of ['submit', 'approve']) {
       const reviewed = await app.inject({ method: 'POST', url: `${path()}/review`, cookies: ownerCookie, payload: { revision, decision, note: 'Synthetic scientific and rights review.' } });

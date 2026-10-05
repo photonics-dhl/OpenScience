@@ -2,8 +2,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse, type AiGateway, type GatewayCompletion,
   type ChatMessage, type TextGenerationOptions } from '@openscience/ai-gateway';
 
-export interface NativeAgentSessionBinding {
-  taskId: string; artifactId: string; documentSha256: string; sourceMapHash: string;
+export type NativeAgentSessionBinding = {
+  taskId: string;
   runtimeId: string; skillCatalogueId: string; model: string; allowedTools: string[];
   maxTurns: number; maxOutputTokens: number; maxTotalOutputTokens: number; maxInputBytes: number; deadlineAt: number;
   contextWindowTokens?: number;
@@ -11,7 +11,8 @@ export interface NativeAgentSessionBinding {
   generation?: Pick<TextGenerationOptions, 'thinking' | 'temperature' | 'topP'>;
   /** Private immutable review input; never included in the native host configuration. */
   sourceReview?: { sourceAgentTaskId: string; authorCheckpointSha256: string; boundDraft: unknown };
-}
+} & ({ sourceKind?: 'paper'; artifactId: string; documentSha256: string; sourceMapHash: string }
+  | { sourceKind: 'journal-text'; journalText: { jobId: string; sourceDigest: string; revision: number; sourceTextSha256: string } });
 type Target = { provider: string; model: string; promptHash: string };
 type Request = { messages: ChatMessage[]; options: TextGenerationOptions };
 type RejectedAttempt = { httpStatus: 529; maxOutputTokens: number };

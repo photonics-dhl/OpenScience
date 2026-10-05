@@ -134,6 +134,12 @@ HISTORICAL（已被10-04两版策略替代）—2026-09-14发布收尾修正：�
 
 ## 1. 前置检查
 
+### 期刊编辑与原论文身份增量
+
+本增量含可空 `research_objects.original_doi` 字段和工作区索引，发布前沿既有双库备份流程备份，正常部署不得使用 `--skip-migrate`。它不改历史冻结出版记录，也不合并工作区或继承素材授权；回退应用时保留新增字段及数据，不执行删列。新期刊生成使用原生 Hermes 的 `journal-text` 工具配置，只有配置可用时才受理生成；未提供原页像素时不能声称看过 PDF 页。实际 Native 运行时及目录配对须核实，不能由单元测试推断已安装或已成功生成。
+
+新原生任务已提交后保留其 AgentTask 检查点、JournalJob、额度和源材料；未知提交不自动重发。回退前先等在途任务自然终态或经受控取消保留已付费结果，再切应用；旧 Worker 不应消费新 `journal-editor` 任务。发布仅更新应用，不自动生成或公开论文；真实生成验收须另有明确的测试授权。
+
 - [ ] 目标 release ref 已 CI 绿灯（lint/typecheck/unit/build）
 - [ ] 云上集成测试已全绿（`test:integration`，跑前全量 `build`）
 - [ ] `document-parser` 隔离解析 sidecar 已包含在生产 compose，`agent-worker` 仅通过 128 MiB `parser-jobs` tmpfs 卷交换请求；sidecar 必须使用自包含镜像，且保持无宿主源码/Secret 挂载、无网络、只读 rootfs、非 root 与 512MB/64 PID 上限
@@ -184,6 +190,8 @@ infra/scripts/deploy.sh --confirm --no-tests \
 该选项不跳过 immutable source manifest、运行闭包权限归一化、生产 FD9 lock、active/rollback 精确匹配、durable journal、镜像构建与身份检查、模型 manifest 校验、数据库物理隔离和迁移（除非另有 `--skip-migrate`）、Parser/ScanSci/API/Web/Worker 与 embedding（启用时）的 Compose startup health、Nginx 配置检查、主页与 `/__release` 公网状态、capability publish、active CAS、失败回滚或 retention 安全检查。回滚仍恢复精确旧镜像并等待服务 healthy，只省略功能性 probe。
 
 ### 2.1 同步代码（`scripts/cloud-sync.mjs`）
+
+常规发版必须包含当前线上提交：先 fetch 最新发布分支并将功能 PR 整合至 `release/onchip-production-line`，不以独立分支覆盖其他发布。`deploy.sh` 在上传前核验本地具有 `--rollback-ref` 对应的完整提交，且它是候选 SHA 的祖先；缺历史、分叉或倒退均拒绝。随后远端锁内仍核对 active 精确相等，防止检查后有另一发布。保留功能分支、PR 与精确 CI 记录，不合并 main。失败部署的锁内自动回退不受此前向守卫影响；有意撤销成功发布应经明确恢复流程或在发布分支创建可审查的 revert 提交，不把倒退伪装为普通发版。
 
 ```bash
 infra/scripts/deploy.sh --rollback-ref <known-good-ref> <release-ref> # dry-run

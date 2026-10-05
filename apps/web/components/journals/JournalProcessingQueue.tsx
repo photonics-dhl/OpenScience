@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import * as React from 'react';
+import { useLocale } from 'next-intl';
+import { journalEditorMessages } from '@/messages/journal-editor';
 import { createJournalProcessingJob, listJournalProcessingPriorities, updateJournalPriorityOverride, type JournalProcessingPriorityItem, type JournalRecommendedAction } from '@/lib/journal-api';
 
 const actions: Record<JournalRecommendedAction, string> = { process_now: '建议优先加工', process_after_confirmation: '编辑确认后加工', request_more_sources: '建议补充来源', rights_review_required: '先核验授权', metadata_only: '当前仅展示书目', blocked: '当前不可加工' };
@@ -9,6 +11,7 @@ const dimensions: Record<string, string> = { recency: '发表时间', academicCe
 const buttonClass = 'border border-os-rule-paper px-3 py-2 disabled:opacity-50';
 
 export function JournalProcessingQueue({ journalId }: { journalId: string }) {
+  const locale = useLocale();
   const [items, setItems] = React.useState<JournalProcessingPriorityItem[]>([]);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState('');
@@ -71,7 +74,7 @@ export function JournalProcessingQueue({ journalId }: { journalId: string }) {
           <p>来源完整度 {priority.sourceCompletenessScore} · 授权清晰度 {priority.rightsClarityScore} · 发表时间 {priority.recencyScore} · 解析状态 {priority.parseSuccessScore} · 编辑权重 {priority.editorPriorityScore} · 主题匹配 {priority.topicMatchScore} · 学术中心性 {priority.academicCentralityScore} · 展示价值 {priority.showcaseValueScore}</p>
           {priority.unknownDimensions.length ? <p>尚无可靠数据：{priority.unknownDimensions.map((name) => dimensions[name] ?? name).join('、')}。缺失项不推测补分。</p> : null}
         </details>
-        <Link className="text-sm underline" href={`/journals/manage/${journalId}/articles/${article.id}/sources`}>检查来源与版权矩阵</Link>
+        <Link className="text-sm underline" href={`/journals/manage/${journalId}/articles/${article.id}/sources`}>{journalEditorMessages[locale === 'en' ? 'en' : 'zh'].openMaterials}</Link>
         <div className="mt-3 flex flex-wrap gap-2">
           <button className={buttonClass} disabled={disabled} onClick={() => void update(row, priority.editorPriorityScore > 0 ? 0 : 10, deferred)}>{priority.editorPriorityScore > 0 ? '取消重点' : '标记重点'}</button>
           <button className={buttonClass} disabled={disabled} onClick={() => void update(row, priority.editorPriorityScore, deferred ? null : new Date(Date.now() + 604800000).toISOString())}>{deferred ? '恢复处理' : '延后 7 天'}</button>

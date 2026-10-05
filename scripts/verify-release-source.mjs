@@ -8,6 +8,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 
 const root = resolve(args.get('--root') ?? '');
 const ref = args.get('--ref');
+const ancestor = args.get('--ancestor');
 if (!root || !ref) throw new Error('usage: verify-release-source.mjs --root <repo> --ref <ref>');
 
 const git = (...gitArgs) => execFileSync('git', ['-C', root, ...gitArgs], { encoding: 'utf8' }).trim();
@@ -16,6 +17,14 @@ const headSha = git('rev-parse', 'HEAD');
 if (releaseSha !== headSha) throw new Error(`release ref ${releaseSha} does not match source HEAD ${headSha}`);
 if (git('status', '--porcelain', '--untracked-files=normal') !== '') {
   throw new Error('release source must have no tracked or untracked changes');
+}
+
+if (ancestor) {
+  let activeSha;
+  try { activeSha = git('rev-parse', '--verify', `${ancestor}^{commit}`); }
+  catch { throw new Error('active release commit is missing locally; fetch its history before deploying'); }
+  try { git('merge-base', '--is-ancestor', activeSha, releaseSha); }
+  catch { throw new Error('candidate does not contain the active release; integrate the current release before deploying'); }
 }
 
 process.stdout.write(`${releaseSha}\n`);

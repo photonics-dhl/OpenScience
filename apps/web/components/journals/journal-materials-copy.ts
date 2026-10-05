@@ -1,0 +1,66 @@
+import { useLocale } from 'next-intl';
+
+const zh = {
+  page: '研究素材', intro: '管理这篇已出版论文的 PDF、摘要、图表及补充材料，并确认它们可以如何使用。',
+  list: '研究素材', add: '添加研究素材', material: '素材类型', title: '素材标题', url: '来源链接',
+  status: '这份素材获准如何使用？', statusHelp: '请根据论文版权声明或实际取得的授权选择；不确定时可先保存素材。选择状态不会自动授权任何操作。',
+  confidence: '核验状态', license: '使用许可／授权类型', licenseHelp: '如论文实际标注的 CC BY 4.0，或“出版社书面授权”。请勿照抄示例。',
+  required: '（必填）', optional: '（选填）',
+  evidence: '授权从哪里获得？', evidenceHelp: '填写版权声明链接、PDF 中声明所在页码，或授权文件的名称及日期。',
+  expiry: '授权到期时间', active: '纳入本论文的加工依据', activeHelp: '仅当前有效且获准处理的素材可作为解读依据；文本更新后保存此项可重新绑定。',
+  parseStartHelp: '保存并应用授权后，若此素材已有待处理的解析任务，系统将立即开始解析。',
+  tasks: '按任务确认用途', parse: '解析素材', parseHelp: '读取文件、提取文字，供当前工作区使用。',
+  private: '生成私有解读', privateHelp: '允许基于素材生成当前工作区的私有解读；还需单独确认是否允许外部 AI 处理。',
+  external: '发送给 Hermes 助手', externalHelp: 'Hermes 处理可能将论文文本发送至配置的外部模型服务；这不等于向公众公开。',
+  publicInterpretation: '公开解读', publicSource: '公开原文', figure: '复用原图', illustration: '制作衍生示意图',
+  publicHelp: '以下每一种公开或图表用途均需分别确认，默认关闭。',
+  needsEvidence: '尚未填写“授权从哪里获得？”，请补充版权声明链接或授权说明。',
+  needsLicense: '尚未填写“使用许可／授权类型”，请填写素材实际标注的许可或授权名称。',
+  statusMismatch: '当前权限状态不允许所选任务，请调整状态或取消该任务。',
+  abstractOnly: '摘要加工许可只适用于摘要素材。', figureOnly: '图表复用许可只适用于图表素材，且须选择“复用原图”。',
+  illustrationRequired: '衍生示意许可须选择“制作衍生示意图”。', activeInvalid: '此权限状态不能作为文字解读的主要来源。',
+  activeSourceTypeIssue: '此素材类型与当前论文文本不匹配。摘要请选择“摘要”，全文请选择全文或已解析文本。',
+  activeBindingIssue: '当前素材须使用此论文正在处理的同一文件或来源链接，才能纳入加工依据。',
+  parseReady: '开始解析：授权就绪', parseNotReady: '开始解析：尚未就绪', privateReady: '生成私有解读：授权就绪', privateNotReady: '生成私有解读：尚未就绪',
+  missingParse: '请先确认解析素材、填写授权依据，并保存。', missingPrivate: '请先确认生成私有解读与 AI 助手处理、填写许可及授权依据，并保存。',
+  save: '保存此项授权', saveNew: '添加素材并评估', saving: '保存中…', saved: '授权记录已保存并重新评估。', added: '研究素材已添加并重新评估。',
+  sourceEmpty: '尚未记录独立素材。添加后可查看可生成和可公开范围。', loading: '正在加载研究素材…', retry: '重试加载研究素材', denied: '当前账号没有查看这篇论文研究素材的权限。', loadFailed: '无法加载研究素材。', addFailed: '添加研究素材失败。', saveFailed: '保存授权记录失败。',
+  back: '返回论文工作台', reviewOnly: '审核人可查看已分配论文的研究素材，但不能修改这些记录。',
+  unknown: '授权待确认', metadata_only_allowed: '仅元数据', abstract_processing_allowed: '允许摘要处理', internal_processing_only: '仅内部处理', public_summary_allowed: '允许公开解读', figure_reuse_allowed: '允许图表复用', derivative_illustration_allowed: '允许衍生示意图', full_public_processing_allowed: '允许完整公开处理', restricted_blocked: '限制或阻断',
+  verified: '已核验', editor_claimed: '编辑声明', author_claimed: '作者声明', publicly_accessible: '公开可访问', machine_parsed_only: '仅机器解析', conflict: '存在冲突', expired: '已过期', revoked: '已撤回',
+} as const;
+
+const en: Record<keyof typeof zh, string> = {
+  page: 'Research materials', intro: 'Manage the PDF, abstract, figures, and supplements for this published paper and confirm how they may be used.',
+  list: 'Research materials', add: 'Add research material', material: 'Material type', title: 'Material title', url: 'Source URL',
+  status: 'How may this material be used?', statusHelp: 'Choose based on the copyright statement or permission received. You can save uncertain material first. A status never grants tasks automatically.',
+  confidence: 'Verification status', license: 'License or permission type', licenseHelp: 'For example, the actual CC BY 4.0 marking or written publisher permission. Do not copy the example.',
+  required: ' (required)', optional: ' (optional)',
+  evidence: 'Where was permission obtained?', evidenceHelp: 'Enter a copyright statement URL, its PDF page, or the name and date of an authorization document.',
+  expiry: 'Permission expiry', active: 'Use as a source for this paper', activeHelp: 'Only currently valid material permitted for processing can support an interpretation. Save again after the text changes to rebind it.',
+  parseStartHelp: 'After saving these rights, any pending parse for this material will start immediately.',
+  tasks: 'Confirm tasks', parse: 'Parse material', parseHelp: 'Read the file and extract text for this workspace.',
+  private: 'Generate a private interpretation', privateHelp: 'Permit a private interpretation in this workspace. External AI processing requires separate confirmation.',
+  external: 'Send to the Hermes assistant', externalHelp: 'Hermes processing may send paper text to a configured external model service. This does not make it public.',
+  publicInterpretation: 'Publish interpretation', publicSource: 'Publish original text', figure: 'Reuse original figures', illustration: 'Create derivative illustration',
+  publicHelp: 'Confirm each public or figure use separately. All are off initially.',
+  needsEvidence: 'Permission evidence is missing. Add a copyright statement URL or authorization details.',
+  needsLicense: 'License or permission type is missing. Enter the actual license or authorization.',
+  statusMismatch: 'The permission status does not allow a selected task. Change the status or deselect the task.',
+  abstractOnly: 'Abstract processing status applies only to abstract material.', figureOnly: 'Figure reuse status applies only to figure material and requires figure reuse.',
+  illustrationRequired: 'Derivative illustration status requires the illustration task.', activeInvalid: 'This status cannot be a primary interpretation source.',
+  activeSourceTypeIssue: 'Material type does not match the current paper text. Choose abstract for an abstract, or full text/parsed text for full text.',
+  activeBindingIssue: 'A primary material must use the same file or URL as the paper currently being processed.',
+  parseReady: 'Parsing: permission ready', parseNotReady: 'Parsing: not ready', privateReady: 'Private interpretation: permission ready', privateNotReady: 'Private interpretation: not ready',
+  missingParse: 'Confirm parsing, add permission evidence, and save first.', missingPrivate: 'Confirm private interpretation and AI processing, add license and evidence, and save first.',
+  save: 'Save these rights', saveNew: 'Add material and evaluate', saving: 'Saving…', saved: 'Rights saved and reevaluated.', added: 'Research material added and reevaluated.',
+  sourceEmpty: 'No independent materials recorded yet. Add material to see generation and publication scope.', loading: 'Loading research materials…', retry: 'Retry loading materials', denied: 'This account cannot view the research materials for this paper.', loadFailed: 'Could not load research materials.', addFailed: 'Could not add research material.', saveFailed: 'Could not save rights.',
+  back: 'Back to article workspace', reviewOnly: 'Reviewers can view assigned materials but cannot change these records.',
+  unknown: 'Permission pending', metadata_only_allowed: 'Metadata only', abstract_processing_allowed: 'Abstract processing', internal_processing_only: 'Internal processing only', public_summary_allowed: 'Public interpretation', figure_reuse_allowed: 'Figure reuse', derivative_illustration_allowed: 'Derivative illustration', full_public_processing_allowed: 'Full public processing', restricted_blocked: 'Restricted or blocked',
+  verified: 'Verified', editor_claimed: 'Editor claimed', author_claimed: 'Author claimed', publicly_accessible: 'Publicly accessible', machine_parsed_only: 'Machine parsed only', conflict: 'Conflict', expired: 'Expired', revoked: 'Revoked',
+};
+
+export type JournalMaterialsCopy = Record<keyof typeof zh, string>;
+export function useJournalMaterialsCopy(): JournalMaterialsCopy {
+  return useLocale().startsWith('zh') ? zh : en;
+}

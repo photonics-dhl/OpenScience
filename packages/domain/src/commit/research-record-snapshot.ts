@@ -139,7 +139,9 @@ async function writeResearchRecord(tx: Prisma.TransactionClient, input: {
     schemaVersion: '1.0.0', objectId: version.researchObjectId, versionId: version.id, versionNo: version.versionNo,
     recordState: 'recorded', citation: { uri: `urn:openscience:${version.researchObjectId}:version:${version.id}`, url: base,
       title: version.researchObject.title, createdAt: version.createdAt.toISOString() },
-    identity: { originalAuthors: { state: 'not_recorded', items: [] }, originalDoi: { state: 'not_recorded', value: null },
+    identity: { originalAuthors: { state: 'not_recorded', items: [] }, originalDoi: version.researchObject.originalDoi
+      ? { state: 'recorded', value: version.researchObject.originalDoi, source: 'workspace_bibliographic_declaration' }
+      : { state: 'not_recorded', value: null },
       platformAuthors: authors.sort((a,b) => a.sortOrder-b.sortOrder || compare(a.id,b.id)).map(a => ({ name: a.user?.displayName ?? null, affiliation: a.affiliation ?? null, isCorresponding: a.isCorresponding ?? false })),
       licenses: licenseTypes.flatMap(type => {
         const license = effectiveLicenses.find(l => l.licenseType === type);

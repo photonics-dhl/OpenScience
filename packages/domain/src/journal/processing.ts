@@ -20,7 +20,7 @@ function assertJobAllowed(job: { kind: string }, article: { source: unknown; rig
   const rights = article.rights as JournalRights; const source = article.source as JournalSource;
   if (job.kind !== 'source_parse' || article.contentState !== 'active' || !rights.internalProcessing || !rights.evidence || !source.artifactId) throw new JournalError('FORBIDDEN', '需要有效的内部来源处理授权');
 }
-export async function submitJournalJob(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string; manualConfirmation?: boolean }) {
+export async function submitJournalJob(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string; manualConfirmation?: boolean }, nativeReady = false) {
   return journalTransaction(deps, journalId, async (tx) => {
     await journalScope(tx, journalId, userId, JOURNAL_EDIT_ROLES, true);
     const previous = await tx.journalJob.findUnique({ where: { journalId_requestKey: { journalId, requestKey: input.requestKey } } });
@@ -31,6 +31,7 @@ export async function submitJournalJob(deps: WorkspaceDeps, userId: string, jour
     const article = await journalArticleInScope(tx, journalId, articleId);
     assertArticleRevision(article, input.revision);
     assertGenerationAllowed(article, moment(deps));
+    if (!nativeReady) throw new JournalError('INVALID_STATE', '原生 Hermes 当前不可用，尚未预留额度；请稍后再试');
     if (input.retryOf) {
       const failed = await tx.journalJob.findFirst({ where: { id: input.retryOf, journalId, articleId, state: { in: ['failed', 'cancelled'] } } });
       if (!failed) throw new JournalError('VALIDATION_ERROR', '只能显式重试本刊此论文的失败或取消作业');
@@ -58,6 +59,8 @@ async function settle(tx: JournalTx, now: Date, job: JournalJob, state: 'succeed
     if (expiredRelease) await tx.journalLedger.create({ data: { journalId: job.journalId, grantId: job.grantId, jobId: job.id, kind: 'expire', amount: 1, eventKey: `expire-release:${job.id}` } });
   }
   const updated = await tx.journalJob.update({ where: { id: job.id }, data: { state, error: error ?? null, ...(result === undefined ? {} : { result: journalJson(result) }), leaseToken: null, leaseExpiresAt: null } });
+  await tx.agentTask.updateMany({ where: { idempotencyKey: `journal-native-task:${job.id}`, kind: 'journal.generate' },
+    data: { status: succeeded ? 'succeeded' : 'failed', ...(succeeded ? { progress: 100 } : { error: error ?? 'Journal native job stopped' }) } });
   await tx.notification.create({ data: { userId: job.requestedBy, type: 'journal.job', payload: { journalId: job.journalId, articleId: job.articleId, jobId: job.id, state } } });
   return updated;
 }
@@ -70,12 +73,16 @@ export async function cancelJournalJob(deps: WorkspaceDeps, userId: string, jour
   });
 }
 /** Durable SQL queue: committed pending rows survive Redis/process outages. No public callback endpoint. */
-export async function claimJournalJob(deps: WorkspaceDeps) {
-  const candidates = await deps.prisma.$queryRaw<Array<{ id: string; journalId: string }>>`
-    SELECT q.id, q.journal_id AS "journalId" FROM journal_jobs q JOIN journals j ON j.id = q.journal_id
-    WHERE q.state = 'pending' AND (SELECT count(*) FROM journal_jobs running WHERE running.journal_id = q.journal_id AND running.state = 'running') < j.max_running_jobs
+export interface JournalNativeRuntime { runtimeId: string; skillCatalogueId: string; model: string }
+export async function claimJournalJob(deps: WorkspaceDeps, nativeRuntime?: JournalNativeRuntime) {
+  const candidates = await deps.prisma.$queryRaw<Array<{ id: string; journalId: string; kind: string }>>`
+    SELECT q.id, q.journal_id AS "journalId", q.kind FROM journal_jobs q JOIN journals j ON j.id = q.journal_id
+    WHERE q.state = 'pending' AND (${Boolean(nativeRuntime)} OR q.kind = 'source_parse')
+      AND (SELECT count(*) FROM journal_jobs running WHERE running.journal_id = q.journal_id AND running.state = 'running') < j.max_running_jobs
     ORDER BY q.created_at, q.id LIMIT 100`;
   for (const candidate of candidates) {
+    // Parsing stays local. A generation job cannot be claimed without the installed Agent.
+    if (candidate.kind === 'generate' && !nativeRuntime) continue;
     const claimed = await journalTransaction(deps, candidate.journalId, async (tx) => {
       const job = await tx.journalJob.findUniqueOrThrow({ where: { id: candidate.id } });
       if (job.state !== 'pending') return null;
@@ -86,7 +93,16 @@ export async function claimJournalJob(deps: WorkspaceDeps) {
         assertArticleRevision(article, job.revision);
         if (journalSourceDigest(article) !== job.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变');
         if (await tx.journalJob.count({ where: { journalId: job.journalId, state: 'running' } }) >= journal.maxRunningJobs) return null;
-        return tx.journalJob.update({ where: { id: job.id }, data: { state: 'running', leaseToken: randomUUID(), leaseExpiresAt: new Date(moment(deps).getTime() + JOURNAL_JOB_LEASE_MS) } });
+        const leaseToken = randomUUID();
+        const running = await tx.journalJob.update({ where: { id: job.id }, data: { state: 'running', leaseToken, leaseExpiresAt: new Date(moment(deps).getTime() + JOURNAL_JOB_LEASE_MS) } });
+        if (job.kind === 'generate') {
+          if (!nativeRuntime) throw new JournalError('INVALID_STATE', '原生 Hermes 暂不可用');
+          const session = await tx.agentSession.create({ data: { userId: job.requestedBy, kind: 'journal-editor', title: `Journal ${job.id}`, idempotencyKey: `journal-native-session:${job.id}` } });
+          await tx.agentTask.create({ data: { sessionId: session.id, kind: 'journal.generate', status: 'running', executionAttempt: 1,
+            idempotencyKey: `journal-native-task:${job.id}`, payload: { journalJobId: job.id, leaseToken, sourceDigest: job.sourceDigest, revision: job.revision },
+            result: { nativeAgentExecution: { kind: 'hermes-agent', profile: 'journal-editor', ...nativeRuntime } } } });
+        }
+        return running;
       } catch (error) {
         if (!(error instanceof JournalError)) throw error;
         await settle(tx, moment(deps), job, 'failed', error.message);
@@ -96,6 +112,37 @@ export async function claimJournalJob(deps: WorkspaceDeps) {
     if (claimed) return claimed;
   }
   return null;
+}
+/** Recheck the same live journal authority before every native tool and paid publication. */
+export async function requireJournalNativeAuthority(tx: JournalTx, input: { taskId: string; executionAttempt: number; jobId: string; leaseToken: string; sourceDigest: string; revision: number }) {
+  // Use the same journal lock as edits/cancel/settlement. Independent membership and user
+  // revocations are locked too, so a provider/tool response cannot start across a revoke.
+  const owners = await tx.$queryRaw<Array<{ workspaceId: string; requestedBy: string }>>`
+    SELECT j.workspace_id AS "workspaceId", q.requested_by AS "requestedBy"
+    FROM journals j JOIN journal_jobs q ON q.journal_id = j.id
+    WHERE q.id = ${input.jobId}::uuid FOR UPDATE OF j`;
+  if (owners.length !== 1) throw new JournalError('INVALID_STATE', '期刊 Hermes 作业不存在');
+  await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${owners[0]!.workspaceId}::uuid
+    AND user_id = ${owners[0]!.requestedBy}::uuid FOR SHARE`;
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${owners[0]!.requestedBy}::uuid FOR SHARE`;
+  const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
+  const job = await tx.journalJob.findUnique({ where: { id: input.jobId } });
+  if (!task || task.deletedAt || task.kind !== 'journal.generate' || task.status !== 'running' || task.executionAttempt !== input.executionAttempt
+    || task.idempotencyKey !== `journal-native-task:${input.jobId}` || task.session.deletedAt || task.session.status !== 'active'
+    || task.session.kind !== 'journal-editor' || task.session.userId !== job?.requestedBy || job?.kind !== 'generate'
+    || job.state !== 'running' || job.leaseToken !== input.leaseToken || !job.leaseExpiresAt || job.leaseExpiresAt <= new Date()
+    || job.revision !== input.revision || job.sourceDigest !== input.sourceDigest
+    || !task.payload || typeof task.payload !== 'object' || Array.isArray(task.payload)
+    || Object.keys(task.payload).sort().join(',') !== 'journalJobId,leaseToken,revision,sourceDigest'
+    || task.payload.journalJobId !== input.jobId || task.payload.leaseToken !== input.leaseToken
+    || task.payload.sourceDigest !== input.sourceDigest || task.payload.revision !== input.revision)
+    throw new JournalError('INVALID_STATE', '期刊 Hermes 作业绑定或租约已改变');
+  await journalScope(tx, job.journalId, job.requestedBy, JOURNAL_EDIT_ROLES, true);
+  const article = await journalArticleInScope(tx, job.journalId, job.articleId);
+  assertJobAllowed(job, article, new Date());
+  assertArticleRevision(article, job.revision);
+  if (journalSourceDigest(article) !== job.sourceDigest) throw new JournalError('REVISION_CONFLICT', '期刊来源或授权已改变');
+  return { task, job, source: article.source as unknown as JournalSource };
 }
 export async function journalJobInput(deps: WorkspaceDeps, jobId: string, leaseToken: string) {
   const job = await deps.prisma.journalJob.findUnique({ where: { id: jobId } });

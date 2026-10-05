@@ -28,6 +28,18 @@
   overflow-wrap: anywhere;
 }
 .description { max-width: 65ch; margin: 14px 0 0; color: var(--os-muted-paper); font-size: 16px; line-height: 1.85; overflow-wrap: anywhere; }
+.doiSection { margin-top: 30px; padding: 20px 0 24px; border-top: 1px solid var(--os-rule-paper); border-bottom: 1px solid var(--os-rule-paper); }
+.doiSection h2 { margin: 0; font: 500 21px/1.5 var(--font-reading-serif, Georgia, serif); }
+.doiHelp, .doiPrivacy { max-width: 68ch; color: var(--os-muted-paper); font-size: 14px; line-height: 1.75; }
+.doiPrivacy { margin: 14px 0 0; }
+.doiLabel { display: block; margin: 16px 0 8px; font-size: 14px; font-weight: 600; }
+.doiControls { display: flex; align-items: center; gap: 14px; }
+.doiControls input { flex: 1; min-width: 0; }
+.doiResult { margin-top: 18px; padding: 14px 18px; border-left: 2px solid var(--os-vermilion-ink); background: var(--craft-tint, #edf4f3); font-size: 14px; line-height: 1.7; }
+.doiResult p { margin: 0 0 8px; }
+.doiResult p:last-child { margin-bottom: 0; }
+.doiResult a { color: var(--os-vermilion-ink); text-decoration: underline; text-underline-offset: .2em; }
+.doiResult .saveAction { margin-top: 4px; }
 
 .savedMaterials { margin-top: 40px; }
 .materials .savedMaterials h2 { margin: 0; padding: 0 12px 16px; border-bottom: 1px solid var(--os-rule-paper); font: 500 22px/1.5 var(--font-reading-serif, Georgia, serif); letter-spacing: -.015em; }
@@ -104,6 +116,8 @@
 :global(.research-reading-surface[data-research-surface='files']) .materials .header h1:lang(zh) { letter-spacing: 0; }
 
 @media (max-width: 600px) {
+  .doiControls { align-items: stretch; flex-direction: column; }
+  .doiControls .textAction { align-self: flex-start; }
   .commitLabel { flex-basis: 100%; }
   .commitInput { font-size: 16px; }
   .saveAction { width: 100%; }

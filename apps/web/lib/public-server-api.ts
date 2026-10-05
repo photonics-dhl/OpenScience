@@ -1,6 +1,7 @@
 import type { PublicEvidenceSource, PublicResearchVersion } from './api';
 import type { EditorialCollectionApi, ResearchIndexPageApi } from './api';
 import type { JournalPublic, JournalSummary, PublicJournalArticle } from './journal-api';
+import type { PublicPaperIdentity } from '@openscience/domain';
 
 export class PublicServerApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -45,3 +46,4 @@ export function getServerPublicJournal(slug: string) {
 }
 export function getServerPublicJournals(cursor?: string, limit = 20) { return serverRequest<{ items: JournalSummary[]; nextCursor: string | null }>(`/journals?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`); }
 export function getServerPublicJournalArticles(id: string, cursor?: string, limit = 20) { return serverRequest<{ items: PublicJournalArticle[]; nextCursor: string | null }>(`/journals/${encodeURIComponent(id)}/articles?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`); }
+export function getServerPublicPaperByDoi(doi: string) { return serverRequest<{ paper: PublicPaperIdentity }>(`/papers/by-doi?doi=${encodeURIComponent(doi)}`); }
