@@ -437,7 +437,7 @@ WORKER_WAIT_STATUS="$(docker wait "$WORKER_NAME")" \
 
 [[ "$WORKER_RUNNER_STATUS" == 0 && "$WORKER_WAIT_STATUS" == 0 \
   && "$(docker inspect --format '{{.State.ExitCode}}' "$WORKER_NAME")" == 0 ]] \
-  || { echo 'acceptance worker failed' >&2; exit 70; }
+  || { echo "acceptance worker failed runner=$WORKER_RUNNER_STATUS wait=$WORKER_WAIT_STATUS" >&2; docker logs --tail 80 "$WORKER_NAME" >&2 || true; exit 70; }
 [[ -f "$DRAFT_REPORT" ]] || { echo 'acceptance draft report missing' >&2; exit 70; }
 [[ "$WORKER_ENV_COUNT" == 0 && "$PARSER_ENV_COUNT" == 0 ]] \
   || { echo 'acceptance container effective environment was not empty' >&2; exit 70; }

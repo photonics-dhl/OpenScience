@@ -30,6 +30,24 @@ describe('journal worker producer and validation boundary', () => {
     expect(complete).toHaveBeenCalledTimes(3);
     expect(domain.journalJobInput).toHaveBeenCalledTimes(3);
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', null, expect.any(String));
+    expect(complete.mock.calls[1]![0][1].content).toContain('预测或模拟证据不能标记为实验实现');
+  });
+  it('repairs PDF-only quote whitespace before the strict evidence check', async () => {
+    vi.mocked(domain.journalJobInput).mockResolvedValue({ source: { ...source, text: quote.replace('simulations predict', 'simulations\npredict') }, language: 'en', kind: 'generate', workspaceId: 'workspace', actorId: 'editor' } as Awaited<ReturnType<typeof domain.journalJobInput>>);
+    await processOneJournalJob(deps, gateway);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', expect.objectContaining({ claims: [expect.objectContaining({ evidence: { quote: quote.replace('simulations predict', 'simulations\npredict'), locator: 'Results' } })] }));
+  });
+  it('resolves selected source anchors before saving the private draft', async () => {
+    const selected = structuredClone(draft);
+    selected.claims[0]!.evidence = { quote: '', locator: 'J00001' };
+    selected.faq[0]!.evidence = { quote: '', locator: 'J00001' };
+    complete.mockResolvedValue({ text: JSON.stringify(selected) });
+    await processOneJournalJob(deps, gateway);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', expect.objectContaining({
+      claims: [expect.objectContaining({ evidence: { quote, locator: 'J00001' } })],
+    }));
   });
   it('performs local source parsing without calling a paid model', async () => {
     vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);

@@ -14,7 +14,8 @@ if (!releaseSha || !/^[0-9a-f]{40}$/.test(releaseSha)) {
 }
 const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
-const key = resolveSshIdentityPath(cfg.key);
+const key = resolveSshIdentityPath(process.env.XGS_SSH_KEY || cfg.key);
+const knownHosts = process.env.XGS_SSH_KNOWN_HOSTS || (cfg.knownHostsFile ? path.resolve(configRoot, cfg.knownHostsFile) : undefined);
 // Git's SSH may reinterpret apostrophes in Windows profile paths. Keep the
 // Windows identity path with the native OpenSSH executable.
 const sshExecutable = process.platform === 'win32'
@@ -27,7 +28,9 @@ const archive = spawn(
   { cwd: sourceRoot },
 );
 const remote = buildReleaseMaterializeCommand(releaseRoot, releaseSha);
-const ssh = spawn(sshExecutable, ['-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
+const sshOptions = ['-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port)];
+if (knownHosts) sshOptions.push('-o', `UserKnownHostsFile="${resolveSshIdentityPath(knownHosts)}"`, '-o', 'StrictHostKeyChecking=yes');
+const ssh = spawn(sshExecutable, [...sshOptions, `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
 
 archive.stdout.pipe(ssh.stdin);
 // If SSH rejects the connection, preserve its diagnostic instead of allowing

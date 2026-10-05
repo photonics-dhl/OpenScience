@@ -80,12 +80,15 @@ pick() {
 SSH_HOST="$(pick SERVER_HOST SSH_HOST 公网ip)" || { echo "错误：.env 缺少服务器地址" >&2; exit 66; }
 SSH_USER="$(pick SERVER_USER SSH_USER 用户名)" || { echo "错误：.env 缺少用户名" >&2; exit 66; }
 SSH_PORT="$(pick SERVER_PORT SSH_PORT SSH端口 || true)"; SSH_PORT="${SSH_PORT:-22}"
-SSH_KEY="$(native_tool_path "$HOME/.ssh/id_ed25519_xgs")"
+SSH_KEY="$(native_tool_path "${XGS_SSH_KEY:-$HOME/.ssh/id_ed25519_xgs}")"
 SSH_EXECUTABLE=ssh
 if [[ "${OS:-}" = Windows_NT ]]; then
   SSH_EXECUTABLE="${SYSTEMROOT:-${SystemRoot:-C:/Windows}}/System32/OpenSSH/ssh.exe"
 fi
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$SSH_KEY" -p "$SSH_PORT")
+if [ -n "${XGS_SSH_KNOWN_HOSTS:-}" ]; then
+  SSH_OPTS+=(-o "UserKnownHostsFile=\"$(native_tool_path "$XGS_SSH_KNOWN_HOSTS")\"" -o StrictHostKeyChecking=yes)
+fi
 
 log() { printf '%s\n' "$*"; }
 plan() { log "  [计划] $*"; }

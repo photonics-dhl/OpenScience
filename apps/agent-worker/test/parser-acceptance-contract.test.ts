@@ -612,6 +612,12 @@ describe('Task 8 acceptance contract', () => {
       needsMoreInformation: fields,
     };
     expect(classifyAcceptanceHandlerResult(completed)).toBe('completed');
+    expect(classifyAcceptanceHandlerResult({ ...completed, figures: [{
+      id: 'Fig. 1', caption: 'Figure 1 shows the apparatus.', pageNumber: 2, role: 'device',
+    }] })).toBe('completed');
+    expect(() => classifyAcceptanceHandlerResult({ ...completed, figures: [{
+      id: 'Fig. 1', caption: 'Figure 1 shows the apparatus.', pageNumber: 0, role: 'device',
+    }] })).toThrow(/handler result/i);
     expect(classifyAcceptanceHandlerResult({ status: 'needs_review', format: 'pdf', reason: 'corrupt' }))
       .toBe('needs_review');
     expect(() => classifyAcceptanceHandlerResult({ status: 'failed' })).toThrow(/handler result/i);
