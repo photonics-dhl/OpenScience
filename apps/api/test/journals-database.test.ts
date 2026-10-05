@@ -229,7 +229,7 @@ suite('journal HTTP lifecycle against isolated PostgreSQL', () => {
     });
     const secondImport = await app.inject({
       method: 'POST', url: `/journals/${journalId}/articles`, cookies: ownerCookie,
-      // The no-DOI editor form explicitly sends null, consistent with JournalMetadata.
+      // The no-DOI editor form sends null; the API normalizes it to an absent DOI.
       payload: { metadata: { ...metadata('Synthetic unassigned comparison'), doi: null } },
     });
     expect(
