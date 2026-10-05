@@ -28,6 +28,10 @@ export interface NativeAgentCheckpointReference {
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
   kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration'; checkpoint?: NativeAgentCheckpointReference;
 }
+/** Paper authors may need a bounded continuation to finish source reading and the saved review in one lease. */
+export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 32 | 48 {
+  return profile === 'paper-author' ? 48 : 32;
+}
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
 const text = (x: unknown): x is string => typeof x === 'string' && !!x.trim() && x.length <= 200;
@@ -122,7 +126,8 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
       || cp.objectKey !== `derived/native-agent/${cp.serializedSha256}.json`
       || !Number.isSafeInteger(cp.size) || Number(cp.size) < 1 || Number(cp.size) > 128 * 1024 * 1024
       || !Number.isSafeInteger(cp.executionAttempt) || Number(cp.executionAttempt) < 1
-      || !Number.isSafeInteger(cp.turnCount) || Number(cp.turnCount) < 1 || Number(cp.turnCount) > 32
+      || !Number.isSafeInteger(cp.turnCount) || Number(cp.turnCount) < 1
+      || Number(cp.turnCount) > nativeAgentMaxTurns(String(marker.profile) as NativeAgentExecution['profile'])
       || !record(cp.target) || !exact(cp.target, ['provider', 'model', 'promptHash']) || !text(cp.target.provider)
       || cp.target.model !== marker.model || !hash(cp.target.promptHash)
       || (cp.state === 'completed' && (!hash(cp.responseHash) || !['stop', 'length', 'tool_calls', 'other', 'unknown'].includes(String(cp.finishReason)) || typeof cp.hasToolCalls !== 'boolean'))) blocked();

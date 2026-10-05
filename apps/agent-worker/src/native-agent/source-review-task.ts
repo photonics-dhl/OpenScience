@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { NATIVE_IMAGE_REQUEST_MAX_BYTES, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
-import { readNativeAgentExecution, resolveSourceLocator, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference, type SourceLocator } from '@openscience/domain';
+import { nativeAgentMaxTurns, readNativeAgentExecution, resolveSourceLocator, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference, type SourceLocator } from '@openscience/domain';
 import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -423,7 +423,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
   const allowedTools = ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)];
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
-    model: execution.model, allowedTools, maxTurns: 32, maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
+    model: execution.model, allowedTools, maxTurns: nativeAgentMaxTurns(execution.profile), maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
     maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES, ...(execution.model === 'MiniMax-M3' ? { contextWindowTokens: 512_000 } : {}),
     generation: { thinking: SCIENTIFIC_SYNTHESIS_OPTIONS.thinking, temperature: SCIENTIFIC_SYNTHESIS_OPTIONS.temperature, topP: SCIENTIFIC_SYNTHESIS_OPTIONS.topP },
     sourceReview: { sourceAgentTaskId: input.sourceAgentTaskId, authorCheckpointSha256: input.authorCheckpointSha256, boundDraft: paper.boundDraft },
