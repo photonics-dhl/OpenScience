@@ -201,6 +201,33 @@ describe('workspace.guide handler', () => {
     expect(gateway.completeStructured).not.toHaveBeenCalled();
   });
 
+  it('authorizes a presentation-only context through the session research object', async () => {
+    const gateway = { completeStructured: vi.fn().mockResolvedValue({ ...result, nextSteps: [] }) } as unknown as AiGateway;
+    const deps = trustedDeps({ ingestionTaskIds: [] });
+    deps.prisma.agentTask.findUnique.mockResolvedValue({
+      id: 'guide-1', kind: 'workspace.guide', session: { userId: 'user-1', researchObjectId: 'ro-1' },
+    });
+    deps.prisma.agentTask.findFirst = vi.fn().mockResolvedValue(null);
+    deps.prisma.version = {
+      findFirst: vi.fn().mockResolvedValue({ id: 'version-1', researchObjectId: 'ro-1', manifest: { coreJson: null } }),
+    };
+    deps.prisma.presentationAsset = { findMany: vi.fn().mockResolvedValue([]) };
+    const presentationOnly = {
+      ...payload,
+      route: 'research-object-edit' as const,
+      context: {
+        tasks: [],
+        researchObjects: [],
+        presentation: { researchObjectId: 'ro-1', versionId: 'version-1' },
+      },
+    };
+
+    await expect(workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload: presentationOnly })).resolves.toEqual({ ...result, nextSteps: [] });
+    expect(gateway.completeStructured).toHaveBeenCalledOnce();
+    const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Array<{ role: string; content: string }>;
+    expect(messages.find((message) => message.role === 'user')?.content).toContain('Optical memory');
+  });
+
   it('registers workspace.guide instead of falling through to demo.echo', async () => {
     const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
     const handlers = createHandlers(gateway);

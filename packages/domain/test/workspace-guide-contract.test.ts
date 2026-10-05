@@ -22,4 +22,18 @@ describe('workspace guide route and semantic target contract', () => {
     expect(() => parseWorkspaceGuidePayload({ ...payload, target: 'arbitrary-dom-id' })).toThrow('target');
     expect(() => parseWorkspaceGuidePayload({ ...payload, fieldContents: { problem: 'private draft' } })).toThrow('未知字段');
   });
+
+  it('accepts a presentation-only context so the server can resolve the research object', () => {
+    const presentationOnly = {
+      ...payload,
+      context: {
+        tasks: [],
+        researchObjects: [],
+        presentation: { researchObjectId: 'ro-1', versionId: 'version-1' },
+      },
+    };
+    expect(parseWorkspaceGuidePayload(presentationOnly).context.presentation).toEqual({
+      researchObjectId: 'ro-1', versionId: 'version-1',
+    });
+  });
 });

@@ -104,7 +104,12 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
     const candidate = context.presentation as Record<string, unknown>;
     if (!hasOnlyKeys(candidate, ['researchObjectId', 'versionId']) || !shortString(candidate.researchObjectId, 100)
       || (candidate.versionId !== undefined && !shortString(candidate.versionId, 100))) throw new Error('workspace.guide presentation context 无效');
-    if (!researchObjects.some((item) => item.id === candidate.researchObjectId)) throw new Error('workspace.guide presentation context 不属于研究上下文');
+    // Presentation routes can carry only the canonical object identity. The worker
+    // resolves and authorizes that identity from the authenticated session; when a
+    // client also sends summaries, keep the consistency check for that richer form.
+    if (researchObjects.length > 0 && !researchObjects.some((item) => item.id === candidate.researchObjectId)) {
+      throw new Error('workspace.guide presentation context 不属于研究上下文');
+    }
     presentation = { researchObjectId: candidate.researchObjectId, ...(candidate.versionId ? { versionId: candidate.versionId } : {}) };
   }
   let editorDraft: WorkspaceEditorDraft | undefined;
