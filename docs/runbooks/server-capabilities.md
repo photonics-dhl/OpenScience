@@ -1,12 +1,12 @@
 # 服务器能力与复用清单
 
-新论文复用服务器PDF/OCR/SourceMap，由原生Hermes＋MiniMax-M3理解和审阅；旧GPT浏览器不是其前置。运行身份和真实质量统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，调用及消费缺口见[能力台账](hermes-capability-registry.md#原生agent当前入口与消费断点)。旧浏览器、renderer及兼容服务仍须按实际消费者和回滚依赖判断，不能仅因新入口已切换就删除。
+新论文复用服务器PDF/OCR/SourceMap，由原生Hermes＋MiniMax-M3理解和审阅；旧GPT浏览器不是其前置。2026-10-05 Synclip `gpt-image-2` 首次真实生图已成功保存私有PNG，网页ChatGPT浏览器链路随后已停用，登录态已删除，历史结果与证据保留。运行身份和真实质量统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，调用及消费缺口见[能力台账](hermes-capability-registry.md#原生agent当前入口与消费断点)。
 
 ## 单机运行架构与资源
 
 2026-10-03 22:42（北京时间）的只读快照覆盖24个运行容器、宿主服务和外部模型调用关系，见[架构图](assets/2026-10-03-server-architecture.svg)、[逐容器内存/上限与磁盘表](assets/2026-10-03-server-resources.md)及[可编辑 Mermaid 源](assets/2026-10-03-server-architecture.mmd)。图是有日期的观察，不是实时监控；当前运行身份与整改执行状态仅见CURRENT。
 
-当时网站Web/API/Worker合计0.96GiB，网页浏览器8.36GiB，开发诊断栈3.99GiB。前者是正常服务；浏览器须待图像API真实生成、审核、入库验收及旧任务排空后才能停用，保留登录资料/任务/spool；开发诊断服务可以按需启停，先停采集器并保留checkpoint及全部数据卷。ScanSci独立轻量浏览器、论文解析/检索和ClamAV仍是产品能力，不随网页生图替换停用。实际释放量须停用后重新测量，配置上限不是预留内存。
+当时网站Web/API/Worker合计0.96GiB，网页浏览器8.36GiB，开发诊断栈3.99GiB。2026-10-05已完成 API 生图真实成功后的浏览器下线：网页浏览器容器移除、bridge与image/review timer disabled、profile登录态删除；历史jobs/spool/review-spool/results保留。下线后可用内存约17.85GiB，较此前8.48GiB增加约9.37GiB。开发诊断服务可以按需启停，ScanSci独立轻量浏览器、论文解析/检索和ClamAV仍是产品能力，不随网页生图停用。配置上限不是预留内存。
 
 ## 历史操作观察（不作为当前版本或任务指令）
 
@@ -134,7 +134,7 @@
 | 完整图形 Chrome | 宿主 `/opt/openscience-tool-cache/playwright/chromium-1234/chrome-linux64/chrome`；ScanSci镜像内 `/opt/scansci-browsers/chromium-1234/chrome-linux64/chrome` | 已静态确认完整二进制。可复用现有镜像与配套资源；不是只存在 headless shell |
 | 无头 Chromium | 宿主 `/root/.cache/ms-playwright/chromium_headless_shell-1234/` 与共享缓存同名目录；ScanSci镜像 `/opt/scansci-browsers/chromium_headless_shell-1234/` | 现成截图/渲染资源；不能用“仅此目录存在”的旧记录推断没有完整浏览器 |
 | 浏览器运行依赖 / Xvfb | `openscience-scansci-mcp:7f8e47d931b751cc28c1000325128c2ca86566cb`；镜像 `/usr/bin/Xvfb` | 已有图形库与Xvfb；独立浏览器可派生镜像，不启动或修改生产ScanSci服务、不挂载其登录卷 |
-| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；`/opt/openscience-chatgpt-browser` | bundle `d1630135…`；原生Create image与6Pro科学审阅分开，b19核心图已取回并在正式RO公开。复用原浏览器/登录、独立图片及科学审阅锁；人工恢复参与与边界见[浏览器手册](chatgpt-browser.md) |
+| 网页远程桌面、生图与科学审阅 provider | `infra/chatgpt-browser/`；历史目录 `/opt/openscience-chatgpt-browser` | 2026-10-05网页浏览器容器、bridge、image/review timer与profile登录态已停用/删除；历史spool、jobs、review结果及证据保留。新的生图入口为Synclip API，网页ChatGPT链路不再是当前前置 |
 | Node / Python | 宿主 `/usr/bin/node`、`/usr/bin/python3`；现有 `node:22-bookworm`、`python:3.12-slim` 镜像 | 已有；必要时复用镜像中的Node。不要默认全局安装 |
 | 视频 / 字体 / FFmpeg | `openscience-media-demo:b361f4f7781b760583b3a312829877c4d6310e8a` 等已有media镜像；源码 `apps/media-demo/Dockerfile` | 镜像包含FFmpeg、CJK字体与无头浏览器；demo镜像可复用运行依赖，不代表Hermes完整视频产品链路通过 |
 | 语音模型 | `/opt/openscience-models/qwen3-tts-customvoice-0c0e305`；`openscience/tts-audition:qwen0.1.1` | 目录与镜像存在，本轮未调用；不要重复下载模型，也不推断生产已接入 |

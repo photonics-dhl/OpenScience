@@ -54,7 +54,7 @@
 - Computer Use读取Chrome窗口因不能可靠确认URL而被策略停止；未获得页面/截图、未点击或绕过。独立server/code路径继续，CI网页fixture不替代实际角色入口。本轮新API助手接口未做真实站内点击验收。
 
 ## 其他交付与保护
-- 运维/视频：用户选择现ECS先做好功能/展示，集群与异机存储后续；API真实生成/审核/入库前不退役旧浏览器。用户已授权视频会话协调，本次be5发布起止和资源保留已通知；新Native运行期间避免Worker并行发布。架构/资源定位见[服务器能力](../runbooks/server-capabilities.md)。
+- 运维/视频：用户选择现ECS先做好功能/展示，集群与异机存储后续。2026-10-05 Synclip `gpt-image-2` 首次真实任务已成功保存私有PNG并完成人工像素检查；用户随后授权停用旧网页浏览器链路。服务器已停止并移除 `openscience-chatgpt-browser` 容器，bridge及网页image/review timer均inactive/disabled，删除约1.04GiB浏览器profile登录态；历史jobs/spool/review结果、论文、媒体、备份和paid证据保留。可用内存约8.48→17.85GiB；ScanSci解析Xvfb保留。架构/资源定位见[服务器能力](../runbooks/server-capabilities.md)。
 - 10-04已清85旧app目录/300指定tag/73cap，回收42.04GiB；正常发布只留active+rollback，本次又按现有策略移除无依赖旧app789目录。Native独立runtime/catalogue789与旧61、论文/媒体/模型/数据卷/备份/profile/spool/paid保留。8个自有完成测试stage已同文件系统归档，保留2.25MiB证据/权限/恢复映射；此前自动审批拒绝的旧baseline/文档脚本仍保留且无重试。不能按年龄删他人worktree或唯一资产。 本轮4份临时tool参数副本已逐项证实与完整terminal paid记录相等且无引用后移除，完整记录和有效证据保留，native-tools-cleanup.json记录归属。
 - 运维未完成：对象定时、当前全量隔离恢复、独立站外/备份失败/欠费告警及测试站；恢复候选仍High NO-GO（Docker变更日志须有界），无云目标，不当完整灾备。crypto维持用户暂停，不新run/重试/合成key/读旧私钥或DPAPI；真实加密/传输/恢复未执行，KNOWN对照不改写旧失败根因。checkpoint在tmp/ops-readiness-20261003/crypto-phase-checkpoint.json；ops证据在tmp/ops-readiness-20261004/与服务器私有observations。日志轮转/开发历史保留另处理。
 - UI质感/Word/公司包已交付，全部角色/低频表单/长期性能与最终用户审美认可未完成。公司负责正式上线与年度运维，继续脱敏交接；期刊真实试用、权限/版权与额度见[期刊CURRENT](2026-09-15-journal-onboarding-handoff.md)。视频画面认可不等于旁白/成片，402任务边界、原片/Qwen/marker保留，视频会话继续。
