@@ -29,7 +29,7 @@ Use one dominant heading and one dominant surface per viewport. A section may be
 
 Every non-Landing surface uses the shared Hermes stage. The desktop stage is a stable 360px square; page code may change its anchor or reserved margin, never the character scale. At narrow widths the bottom dock is a compact 120px entry; activating it opens the same full companion surface in the available conversation area. Do not add page-local portraits, resize controls or alternate static copies.
 
-The stage must reserve its footprint before the actor or speech appears. The actor, carrier, WebGL fallback, menu and speech contour share that footprint. Speech uses the hat upper-left origin and a short tail; its box may move to avoid content, but its scale and origin rule stay shared. Idle, loading, reduced-motion and approval states must not change the page's layout geometry.
+The stage must reserve its footprint before the actor or speech appears. The actor, carrier, WebGL fallback, menu and speech contour share that footprint. Speech uses the hat upper-left origin and a short tail; its box may move to avoid content, but its scale and origin rule stay shared. On narrow screens the compact entry is a small lower-corner invitation with transparent surroundings; it never becomes a full-width footer, adds body padding, or covers the reading surface. Idle, loading, reduced-motion and approval states must not change the page's layout geometry.
 
 ## 4. Author motion with restraint
 

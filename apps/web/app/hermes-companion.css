@@ -1,8 +1,10 @@
 /* The global pet owns only its floating controls; page art and layouts stay local. */
-body[data-hermes-compact-navigation='true'] { padding-bottom: 128px; scroll-padding-bottom: 128px; }
-.hermes-compact-dock { --os-vermilion-ink: #125d66; --os-rule-paper: #dce3e5; position: fixed; bottom: 0; right: 0; z-index: 44; width: 252px; height: 128px; pointer-events: none; }
-.hermes-compact-invoke { position: absolute; left: 16px; bottom: 28px; display: grid; gap: 4px; padding: 8px 12px; border: 0; border-radius: 12px; background: #fff; color: var(--os-muted-paper); font: 500 12px/1.5 var(--font-ui); text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 2px 8px rgb(24 47 53 / .08); }
-.hermes-compact-invoke span { color: var(--os-vermilion-ink); font-size: 15px; }
+/* The compact companion is a small floating invitation, never a page-wide
+   footer. It must not reserve a blank strip or cover the reading surface. */
+body[data-hermes-compact-navigation='true'] { scroll-padding-bottom: 1.5rem; }
+.hermes-compact-dock { --os-vermilion-ink: #125d66; --os-rule-paper: #dce3e5; position: fixed; bottom: 12px; right: 12px; z-index: 44; width: 196px; height: 156px; pointer-events: none; }
+.hermes-compact-invoke { position: absolute; right: 128px; bottom: 10px; display: grid; gap: 2px; min-width: max-content; padding: 7px 11px; border: 1px solid var(--os-rule-paper); border-radius: 999px; background: rgb(255 255 255 / .94); color: var(--os-muted-paper); font: 500 11px/1.35 var(--font-ui); text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 4px 16px rgb(24 47 53 / .1); }
+.hermes-compact-invoke span { color: var(--os-vermilion-ink); font-size: 13px; }
 .hermes-compact-invoke:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
 .hermes-workspace-stage[data-hermes-compact='true'] { touch-action: manipulation; }
 .hermes-workspace-stage[data-hermes-compact='true'] .hermes-companion-actor { inset: 0; }
@@ -18,8 +20,8 @@ body[data-hermes-compact-navigation='true'] { padding-bottom: 128px; scroll-padd
 [data-hermes-in-conversation='true'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
 [data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
 @media (max-width: 1100px) {
-  .hermes-compact-dock { width: 100%; background: linear-gradient(to bottom, rgb(249 251 250 / .94), #f9fbfa 32%); border-top: 1px solid var(--os-rule-paper); }
-  .hermes-compact-invoke { left: auto; right: 144px; box-shadow: none; background: transparent; bottom: 28px; }
+  .hermes-compact-dock { width: 196px; height: 156px; background: transparent; border: 0; }
+  .hermes-compact-invoke { right: 128px; bottom: 10px; }
   .hermes-conversation [data-hermes-conversation-companion='true'] { display: grid; flex: none; place-items: center; height: min(300px, 30dvh); border-bottom: 1px solid var(--os-rule-paper); background: #f6f9f8; }
 }
 [data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
