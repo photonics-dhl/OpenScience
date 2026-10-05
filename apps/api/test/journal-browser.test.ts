@@ -184,7 +184,8 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
           await page.setViewportSize({ width: viewport.width, height: viewport.height });
           const response = await page.goto(`${baseUrl}${surface.path}`, { waitUntil: 'networkidle' });
           expect(response?.status(), `${surface.name} ${viewport.name}`).toBe(200);
-          for (const text of surface.expected) await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible' });
+          // The responsive navigation keeps a hidden desktop link in the DOM on mobile.
+          for (const text of surface.expected) await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible' });
           if (surface.name === 'directory') {
             await page.getByLabel('搜索期刊').fill(journalName);
             await page.getByRole('button', { name: '搜索' }).click();
