@@ -22,7 +22,7 @@
 ## 用户目标与其余交付
 
 - 原生Hermes科学正确、凝练、自动计划、完整prompt和风格适配须真实产物验收；少操作创建与布局体验、三篇论文整体验收仍有效。新的生成方式接入后继续像素审核与现有公开流程，不批量冷启动。
-- UI质感已合入并正式发布：2026-10-05 release `74306b897a4869743f89b3eae76036c34e6684c4` 补强非Landing页头、导航当前态、指南/探索/期刊/研究桌面层次与窄屏收紧；本地默认/390px和生产指南、探索、期刊、登录页均已实读，定向40/40、Web typecheck、Web build通过，生产`/__release`与容器健康通过。部署按`--no-tests --skip-migrate`执行，Parser/ScanSci/embedding/auth/admin功能探针仍未观察。手机单Live2D展开/关闭/焦点返回和字体激活通过；10页公司Word与新固定脱敏ZIP已完成全页排版/凭据/归档复核；全部角色、低频表单、长期性能及最终用户审美认可继续保留。运行身份和证据仅见CURRENT与[公司交接](handoff/2026-09-30-vendor-evaluation.md)。
+- UI质感已继续收敛并正式发布：2026-10-05 release `fcc8ad62357134cfe16238f6a04bf0e5b2598a64` 保持Landing不变，统一非Landing页的产品层次与Hermes视觉合同；桌面稳定360px，窄屏为120px入口，点击后展开300px对话区，导航静态提示收起，研究桌面/工作台使用共享层次标识。逐页工艺已固化到 `.agents/skills/product-story-design/references/ui-craft-protocol.md`。本地定向92/92、Skill校验、Web typecheck、Web build和Impeccable detector通过；生产 `/guide`、`/explore`、`/journals`、`/auth/login` 在1280px实读，390px Explore完成入口展开且无横溢出，生产`/__release`与容器健康匹配 `fcc8ad62357134cfe16238f6a04bf0e5b2598a64`。部署按`--no-tests --skip-migrate`执行，Parser/ScanSci/embedding/auth/admin功能探针仍未观察；用户最终审美认可与完整业务角色路径继续保留。运行身份和证据仅见CURRENT与[公司交接](handoff/2026-09-30-vendor-evaluation.md)。
 - 视频画面认可不等于旁白或论文成片认可；原片、402任务边界、Qwen与marker保留，独立视频会话继续。期刊真实试用及权限/版权见[期刊CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
 ## 历史与定位
