@@ -1383,7 +1383,9 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     onPointerLeave();
   };
 
-  const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock && !compact));
+  // Compact mode still belongs to a page-owned anchor when one is usable.
+  // Only a compact surface without an anchor should fall back to the viewport corner.
+  const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock));
   const stageCenterX = anchored && anchorRect ? anchorRect.left + anchorRect.width / 2 : position.x;
   const stageCenterY = anchored && anchorRect ? anchorRect.top + anchorRect.height / 2 : position.y;
   const fallbackBubbleHorizontal = viewportSize.width > 0 && stageCenterX < (viewportSize.left + viewportSize.right) / 2 ? 'right' : 'left';
