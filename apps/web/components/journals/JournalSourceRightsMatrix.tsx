@@ -319,7 +319,7 @@ function AddSourceForm({ form, currentSource, busy, setForm, onAdd }: {
     <section className="border-t border-os-rule-paper pt-6" aria-labelledby="add-source-heading">
       <h2 id="add-source-heading" className="text-xl font-normal">{t.add}</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">{t.material}<select className={inputClass} value={form.sourceType} onChange={(event) => setForm({ ...form, sourceType: event.target.value as JournalSourceType })}>{sourceTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label className="grid gap-1 text-sm">{t.material}<select aria-label={t.material} className={inputClass} value={form.sourceType} onChange={(event) => setForm({ ...form, sourceType: event.target.value as JournalSourceType })}>{sourceTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label className="grid gap-1 text-sm">{t.title}<input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
         <label className="grid gap-1 text-sm">{t.url}<input type="url" className={inputClass} value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} /></label>
         <div className="sm:col-span-2"><SourceRightsFields idPrefix="new-source" sourceType={form.sourceType} activeForGeneration={form.activeForGeneration} value={formToRights(form)} onChange={(value) => setForm((current) => ({ ...current, ...value }))} /></div>

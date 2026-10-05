@@ -278,7 +278,9 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         await editPage.getByRole('textbox', { name: '摘要', exact: true }).fill(changedSummary);
         await editPage.getByText('有未保存修改，请先保存，再确认内容或公开发布。').waitFor({ state: 'visible' });
         expect(await editPage.getByRole('button', { name: '公开发布已确认版本' }).isDisabled()).toBe(true);
-        expect(await editPage.getByRole('button', { name: '确认当前解读' }).isDisabled()).toBe(true);
+        // This published revision stays confirmed until the changed draft is saved.
+        // The confirmation action is absent, not merely disabled, for approved revisions.
+        expect(await editPage.getByRole('button', { name: '确认当前解读' }).count()).toBe(0);
         await editPage.waitForTimeout(2_500);
         expect(await editPage.getByRole('textbox', { name: '来源文本', exact: true }).inputValue()).toBe(changedSource);
         expect(await editPage.getByRole('textbox', { name: '摘要', exact: true }).inputValue()).toBe(changedSummary);
