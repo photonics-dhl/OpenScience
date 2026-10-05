@@ -35,6 +35,12 @@ function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boo
   return { tool, messages, invoke, complete, input, restore: () => createNativeIllustrationMaterializer(input) };
 }
 describe('Native designed scenes omit the nullable original reference', () => {
+  it('requires a compact direct science repair call after validator feedback', () => {
+    const description = nativeIllustrationToolProfile(null).sourceTools
+      .find(tool => tool.name === 'paper_illustration_science_repair')!.description;
+    expect(description).toContain('the next assistant message must be exactly one paper_illustration_science_repair tool call');
+    expect(description).toContain('no prose, explanation, full-science resubmission or art JSON');
+  });
   const omitted = () => { const value = structuredClone(science); Reflect.deleteProperty(value.scenes[0]!, 'paperOriginalAssetId'); return value; };
   it('advertises the nullable reference as optional only for fresh tasks', () => {
     const profile = nativeIllustrationToolProfile(null);
