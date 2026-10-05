@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeJournalDoi, validateJournalDraft, journalGenerationPrompt, type JournalDraft } from '../src/journal/content';
+import { journalEvidenceAnchors, normalizeJournalDoi, restoreJournalEvidenceAnchors, restoreJournalEvidenceWhitespace, validateJournalDraft, journalGenerationPrompt, type JournalDraft } from '../src/journal/content';
 import { validateJournalUploadContent } from '../src/journal/source-upload';
 
 const quote = 'Numerical simulations predict 14.7 TW peak power; full-system experiments have not been performed.';
@@ -15,6 +15,42 @@ describe('journal scientific source contracts', () => {
     expect(validateJournalDraft(draft, source)).toEqual(draft);
     expect(() => validateJournalDraft({ ...draft, claims: [{ ...draft.claims[0], evidence: { quote: 'Fabricated passage', locator: 'Fig. 4' } }] }, source)).toThrow();
     expect(() => validateJournalDraft({ ...draft, claims: [{ ...draft.claims[0], kind: 'experimental' }] }, source)).toThrow(/预测或模拟/);
+  });
+  it('restores only PDF whitespace in evidence, retaining an exact source span and rejecting changed facts', () => {
+    const pdfSource = { ...source, text: 'Numerical  simulations\npredict 14.7 TW peak power; full-system experiments have not been performed.' };
+    const whitespaceOnly = structuredClone(draft);
+    whitespaceOnly.claims[0]!.evidence.quote = quote;
+    whitespaceOnly.faq[0]!.evidence.quote = quote;
+    restoreJournalEvidenceWhitespace(whitespaceOnly, pdfSource);
+    expect(whitespaceOnly.claims[0]!.evidence.quote).toBe(pdfSource.text);
+    expect(validateJournalDraft(whitespaceOnly, pdfSource)).toEqual(whitespaceOnly);
+    const changedNumber = structuredClone(draft);
+    changedNumber.claims[0]!.evidence.quote = quote.replace('14.7', '17.4');
+    restoreJournalEvidenceWhitespace(changedNumber, pdfSource);
+    expect(() => validateJournalDraft(changedNumber, pdfSource)).toThrow(/精确定位/);
+  });
+  it('materializes only blank quotes bound to real numbered source spans', () => {
+    const anchors = journalEvidenceAnchors(source);
+    expect(anchors).toEqual([{ id: 'J00001', quote, start: 0, end: quote.length }]);
+    const selected = structuredClone(draft);
+    selected.claims[0]!.evidence = { quote: '', locator: 'J00001' };
+    selected.faq[0]!.evidence = { quote: '', locator: 'J00001' };
+    restoreJournalEvidenceAnchors(selected, source);
+    expect(validateJournalDraft(selected, source)).toEqual(selected);
+    const forged = structuredClone(draft);
+    forged.claims[0]!.evidence = { quote: '', locator: 'J99999' };
+    restoreJournalEvidenceAnchors(forged, source);
+    expect(() => validateJournalDraft(forged, source)).toThrow(/精确定位/);
+    const altered = structuredClone(draft);
+    altered.claims[0]!.evidence = { quote: quote.replace('14.7', '17.4'), locator: 'J00001' };
+    restoreJournalEvidenceAnchors(altered, source);
+    expect(() => validateJournalDraft(altered, source)).toThrow(/精确定位/);
+    expect(journalGenerationPrompt(source, 'en')).toContain('[J00001]');
+    const longSource = { ...source, text: `${quote} `.repeat(14) };
+    const spans = journalEvidenceAnchors(longSource);
+    expect(spans.length).toBeGreaterThan(1);
+    expect(spans.every(({ quote: span }) => span.length <= 480 && longSource.text.includes(span))).toBe(true);
+    expect(spans.map(({ id }) => id)).toEqual(spans.map((_, index) => `J${String(index + 1).padStart(5, '0')}`));
   });
   it('requires explicitly limited abstract scope, disallows abstract figure cards and metadata-only interpretation', () => {
     const abstract = { ...source, kind: 'abstract' as const };
