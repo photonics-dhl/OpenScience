@@ -8,7 +8,7 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
 ## 当前运行与真实验收
-- 生产版本 tuple：本地当前候选 `7d208827d0e0bc41811b46dc1bf67231daf8230a`；线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64；回滚 0454e931b3203c88c36d382432566b6e0bc15aa7。本轮未部署候选；线上版本历史部署使用 --no-tests --skip-migrate，Parser/ScanSci/embedding/auth/admin 功能探针未执行，不能把容器健康等同于完整验收。
+- 生产版本 tuple：本地当前文档候选 `81afe919`；线上 `4ed53b71faa11692756bcf79d5b3504e57581b19`；回滚 `7d208827d0e0bc41811b46dc1bf67231daf8230a`。线上 `/__release`、`.release-id` 已一致；发布沿 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层探针未执行，不能把容器健康等同于完整验收。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
 - 第二篇真实复测：RO 9067a2d5-42ad-4c06-b234-753728b71064、草稿 v13 f40576ee-44fc-44e0-8be9-ba050adaf2c9，Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf。SourceMap、paper-author六维/Claims、独立source-review均成功；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，6项字段审阅已接受。
@@ -22,7 +22,7 @@
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
-- 本地候选 `f52ee24c` 已将无 Cookie 的 `session-guard` 401 发送改为等待完成后再返回，并新增回归测试；定向 API 测试 16/16、文件级 ESLint 通过。尚未部署，线上风险仍待发布后验证；API 全包 typecheck 复现 journals/papers 的6个既有 HEAD错误。
+- `f52ee24c` 的无 Cookie `session-guard` 修复已包含在当前线上 `4ed53b71`；线上 `/auth/me` 未登录请求返回统一 401，发布后15分钟没有新的 `Reply was already sent`/`ERR_HTTP_HEADERS_SENT` 日志。定向 API 测试16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个既有 HEAD错误。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 
 ## 历史验证（不作为当前 next action）
