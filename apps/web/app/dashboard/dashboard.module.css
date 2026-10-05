@@ -51,6 +51,9 @@
 
 .heading > div { min-width: 0; }
 
+.desk .heading { position: relative; }
+.desk .heading::before { position: absolute; top: 0; left: 0; width: 48px; height: 2px; background: var(--os-vermilion-ink); content: ''; opacity: .75; }
+
 .eyebrow,
 .sectionLabel {
   margin: 0;
@@ -151,6 +154,10 @@
   align-items: start;
   gap: 2rem 2.5rem;
 }
+
+.desk .workSurface { position: relative; }
+.desk .continueResearch { overflow: hidden; }
+.desk .continueResearch::before { display: block; height: 4px; background: linear-gradient(90deg, var(--os-vermilion-ink), #81aead 58%, transparent); content: ''; opacity: .8; }
 
 .continueResearch {
   --continuation-padding: clamp(1.75rem, 3vw, 2.25rem);
@@ -506,6 +513,9 @@
 .literature :is(p, li) { overflow-wrap: anywhere; }
 
 .researchLibrary { padding-block: 2.75rem 0; }
+
+.desk .researchLibrary { position: relative; }
+.desk .researchLibrary::before { display: block; width: 56px; height: 1px; margin-bottom: 24px; background: var(--os-vermilion-ink); content: ''; opacity: .65; }
 
 .desk .researchLibrary h2.libraryTitle {
   margin: 0;
