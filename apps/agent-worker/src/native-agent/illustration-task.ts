@@ -140,7 +140,13 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
       }
       throw new Error('unknown_illustration_tool');
     } catch (error) {
-      let diagnostic = error instanceof Error ? error.message.slice(0, 500) : 'invalid_illustration';
+      // Fresh native science calls need the complete scene-scoped diagnostic:
+      // truncating after the first few quantities turns one repair into a
+      // one-field-per-turn loop and can exhaust the bounded native session.
+      // Saved/legacy receipts keep the historical compact 500-character
+      // contract so replay bytes and old provider behavior remain unchanged.
+      const diagnosticLimit = scienceFeedback ? 4_000 : 500;
+      let diagnostic = error instanceof Error ? error.message.slice(0, diagnosticLimit) : 'invalid_illustration';
       if (scienceFeedback && error instanceof UnboundNumericSourceError) {
         const hints = [
           ...(error.fields.length ? [` Fields: ${error.fields.join(', ')}.`] : []),
@@ -149,10 +155,10 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
             : ` Explicit source variable: ${error.expectedVariable}; do not infer an alias.`]),
           ...error.otherDiagnostics.map(detail => ` Also: ${detail}.`),
         ];
-        for (const hint of hints) if (diagnostic.length + hint.length <= 500) diagnostic += hint;
+        for (const hint of hints) if (diagnostic.length + hint.length <= diagnosticLimit) diagnostic += hint;
         const repair = ' For an independent prose comparison, use a semicolon; preserve all functions, factors, terms and units. Math wrappers must be complete.';
         if (sourceQuantityProse && [error.message, ...error.otherDiagnostics].some(detail => detail.includes('syntax'))
-          && diagnostic.length + repair.length <= 500) diagnostic += repair;
+          && diagnostic.length + repair.length <= diagnosticLimit) diagnostic += repair;
       }
       return { status: 'invalid_illustration', error: diagnostic,
         ...(scienceRepairCallIdFeedback && pendingScience?.rejected && (name === 'paper_illustration_science' || name === 'paper_illustration_science_repair')

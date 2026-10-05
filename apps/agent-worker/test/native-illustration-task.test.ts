@@ -635,6 +635,15 @@ describe('native illustration preserves paid quantity and feedback semantics', (
     const bibliography = structuredClone(science); bibliography.scenes[0]!.narration = 'See Table 3 / Fig. S4.';
     expect(() => materializeIllustrationScience(bibliography, old.input.claims, settings)).toThrow(/unbound_expression_/u);
   });
+  it('keeps the complete fresh numeric repair diagnostic so one repair can fix a scene in one turn', () => {
+    const f = fixture({ scienceFeedback: true });
+    const value = structuredClone(science);
+    value.scenes[0]!.labels = Array.from({ length: 12 }, (_, index) => `${index + 1} GHz`);
+    const result = f.invoke('paper_illustration_science', value, 'many-diagnostics');
+    expect(result).toMatchObject({ status: 'invalid_illustration' });
+    expect(result.error).toContain('unbound_numeric_12_ghz_description');
+    expect((result.error as string).length).toBeGreaterThan(500);
+  });
   it('distinguishes an explicitly absent source symbol from unavailable variable guidance and bounds many diagnostics', () => {
     const f = fixture({ scienceFeedback: true, quote: 'The width is 7 fs.' });
     const value = quantityScene('FWHM_S = 7 fs');
@@ -646,7 +655,7 @@ describe('native illustration preserves paid quantity and feedback semantics', (
     expect(result.error).toContain('narration'); expect(result.error).not.toContain('prose');
     value.scenes[0]!.labels = Array.from({ length: 15 }, (_, index) => `Frequency ${index + 100} GHz`);
     const many = unknown.invoke('paper_illustration_science', value, 'many');
-    expect(many.status).toBe('invalid_illustration'); expect((many.error as string).length).toBeLessThanOrEqual(500);
+    expect(many.status).toBe('invalid_illustration'); expect((many.error as string).length).toBeLessThanOrEqual(4_000);
   });
   it.each([false, true])('never defaults required nullable original metadata, mode %s', scienceFeedback => {
     const f = fixture({ scienceFeedback }); const value = structuredClone(science);
