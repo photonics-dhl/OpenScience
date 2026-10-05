@@ -14,6 +14,7 @@
 - 第二篇真实复测：RO 9067a2d5-42ad-4c06-b234-753728b71064、草稿 v13 f40576ee-44fc-44e0-8be9-ba050adaf2c9，Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf。SourceMap、paper-author六维/Claims、独立source-review均成功；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，6项字段审阅已接受。
 - 同一 run 的科学分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 成功，illustrationReview=accepted，保存4幕私有分镜和完整prompt：Bethe等效偶极子、Weyl传播/倏逝角谱、经典极限和远场截面极限。运行时在分镜成功后自动进入生图，未形成用户审核后才生图的停顿；无自动公开。
 - 第二篇四幕图像结果：36eeba50-7ce7-4207-8e43-f06e2886d43f、1614ec52-49e1-47bd-bf7a-5e90d22ac442、1961935e-f2af-453a-abf7-8613a3e92c1d 获 Synclip 成功回执，其中前两项 imageReview accepted，第三项 imageReview blocked；第四幕 28ab61b0-7931-41d3-8200-2d63c1f986ad 的 POST 状态为 UNCERTAIN，没有 task_id/receipt，run 最终 failed。PNG和尝试标记均保留，不重试。
+- 只读运行核查：Synclip timer 为 enabled/active，broker 以 Result=success 退出；第四幕只留下 submitted/request/started/attempt 标记，没有 receipt。使用同一私密凭据查询一个不存在的诊断任务返回 HTTP 404、约0.28秒，说明当前 API 可达且未表现为未授权；仍不能反推出 23:10 那次 POST 的具体失败原因。
 
 ## 未完成与下一动作
 - 当前链路已经证明“论文→Hermes→分镜→Synclip”可通，但跨论文尚未稳定：第二篇是3/4外部提交成功，1/4未知，且有1张被图像审阅阻断；第二篇三张结果尚未完成新的人工像素质量验收。

@@ -7,6 +7,7 @@
 - RO 9067a2d5-42ad-4c06-b234-753728b71064 的 Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf 完成全文来源、独立 source-review 和4幕科学分镜；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 为 succeeded/illustrationReview=accepted。
 - Synclip gpt-image-2 四幕结果为3次供应商成功、其中2次图像审阅接受、1次图像审阅阻断；第四次 task 28ab61b0-7931-41d3-8200-2d63c1f986ad 为 UNCERTAIN，没有可安全重试的 task_id/receipt，run 为 failed。
 - 真实结果说明传输链路已打通，但还不能称跨论文稳定：未知外部终态是当前主要断点，三张第二篇图片尚未完成新的人工像素验收。
+- 只读服务器核查显示 timer/broker 正常，当前 Synclip GET 诊断请求返回404且约0.28秒；本次证据排除了“服务整体不可达”，但客户端仍缺少第四次 POST 的原始错误分类。
 - 分镜完成后真实 run 自动开始了图像任务；如果产品要求用户先审核分镜，这个状态闸门仍需单独修复。无自动公开，失败和未知收据继续保留。
 
 ## 后续
