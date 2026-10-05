@@ -5,6 +5,7 @@
 ## 本轮检查点
 - 2026-10-05 Synclip 首次真实生图已完成：在已审核的 RO `c896802c-35dd-4b59-8db1-5f374f83a6d8` 四幕分镜第 1 幕通过现有 Presentation API 提交新幂等任务 `b3c023bf-ee0c-4ed8-9030-80ddf9cf6966`，Hermes 绑定的私有 draft asset 同 ID 最终 `succeeded/100%`；Synclip `gpt-image-2` 返回并正规化 PNG（602060 bytes），浏览器实际查看像素通过首轮人工观察，未自动审批或公开。首装发现宿主缺 GID 1000 导致 timer `216/GROUP`，已按原 broker 契约创建 `openscience-synclip` GID 1000 并恢复 timer；安装器补上缺组创建，10/10回归、CI `37289031854`通过，并随应用 release `3c368514bbde5cb17773e65fc8fc74cebd3804e1`及同 SHA bundle 发布。旧失败任务不重放。
 - 2026-10-05 第二篇论文 Synclip 稳定性复测尚未形成第二次有效生图：RO `9067a2d5-42ad-4c06-b234-753728b71064` 已安全恢复为当前私有草稿 v13，但恢复流程按契约不复制旧 Hermes 分镜，需重新生成并审核当前版本分镜；RO `714a0c2d-8c00-4471-a4f9-4a1270eafcdb` 缺平台管理员成员；D2NN RO `bcbf1586-b6bd-44b6-ab66-c675fcddce78` 的历史分镜缺 `sourceEvidenceIdentity`，被来源守卫拒绝。三次尝试均在任务/Provider 之前停止，无新增调用或扣费；跨论文稳定性仍未验收，收据保留且不重放未知键。
+- 2026-10-05 已定位并修复第二篇的通用前置断点：历史 `grounded-passages-v2` 已确认来源若没有 v5 `scientificReview`，旧 `analysisRefreshPolicy` 错把它拒绝为不可再分析，Hermes 因而不能为当前版本创建新叙事。Domain 现在沿既有确认来源再分析/收费/权限守卫进入新任务；Hermes 站内“开始图解”会先读来源、持久化独立再分析幂等键，再用新来源创建原生叙事，响应丢失可复用同键。候选已通过 Domain295、Web44定向测试、Domain build、Web typecheck、scoped ESLint；尚未发布或做第二次真实生图，旧 `research-run` 有一条与本改动无关的基线文案断言失败。
 - 2026-10-05运维收尾已完成：旧ChatGPT browser image/review链路已停止、禁用并清理，登录profile与浏览器镜像已移除；历史spool、任务结果、论文/媒体、付费证据和回滚资料保留，ScanSci Xvfb保留。当前生产生图只走Synclip，未启用自动浏览器回退。
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-5`：run `a7d6e204-87e8-44f3-a17f-8d420aa6de19`。应用release `8710b0ee0fb0d9fd70094828bbc05ebfd26ecde5`已部署并通过CI `37276825552`、active/public release与容器健康后验；Hermes `paper-author`六字段全`accepted`/6 Claims，`paper-source-review`完成（method/results/reproducibility accepted，insight/problem/limitations revised），`presentation.generate`第15轮成功并进入`awaiting_storyboard_review`，生成4幕私有科学分镜和完整提示词。Synclip仍关闭，未调用生图、未产生图片；当前只待用户审核分镜，不能据此宣称像素质量已验收。
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-4`：run `5d7f45cf-db32-43b2-9a00-ee09a275773c`。在已发布`f128a2dd2657a25d0b8701ca4bb221c4e7dafb43`上，Hermes原生完成SourceMap、paper-author六维全`accepted`/6 Claims和独立source-review（insight/results等已核，limitations按来源修订）；storyboard因逐场景科学修复循环在32-turn安全上限停止，无asset/图片/Synclip调用。失败根因是fresh native反馈截断至500字符，Hermes一次只能看到部分同场景诊断；当前候选把fresh反馈上限扩至4000，legacy历史回放保持500，新增回归后原生/自动风格/native generation `328/328`、Worker typecheck、scoped ESLint通过，待发布后再做一次独立验收，不重放`cds-4`。
@@ -20,7 +21,7 @@
 ## 用户目标与其余交付
 
 - 原生Hermes科学正确、凝练、自动计划、完整prompt和风格适配须真实产物验收；少操作创建与布局体验、三篇论文整体验收仍有效。新的生成方式接入后继续像素审核与现有公开流程，不批量冷启动。
-- UI质感已合入并正式发布，实际官网指南、桌面、编辑、账户与公开阅读路径已观察；手机单Live2D展开/关闭/焦点返回和字体激活通过。10页公司Word与新固定脱敏ZIP已完成全页排版/凭据/归档复核；全部角色、低频表单、长期性能及最终用户审美认可继续保留。运行身份和证据仅见CURRENT与[公司交接](handoff/2026-09-30-vendor-evaluation.md)。
+- UI质感已合入并正式发布：2026-10-05 release `74306b897a4869743f89b3eae76036c34e6684c4` 补强非Landing页头、导航当前态、指南/探索/期刊/研究桌面层次与窄屏收紧；本地默认/390px和生产指南、探索、期刊、登录页均已实读，定向40/40、Web typecheck、Web build通过，生产`/__release`与容器健康通过。部署按`--no-tests --skip-migrate`执行，Parser/ScanSci/embedding/auth/admin功能探针仍未观察。手机单Live2D展开/关闭/焦点返回和字体激活通过；10页公司Word与新固定脱敏ZIP已完成全页排版/凭据/归档复核；全部角色、低频表单、长期性能及最终用户审美认可继续保留。运行身份和证据仅见CURRENT与[公司交接](handoff/2026-09-30-vendor-evaluation.md)。
 - 视频画面认可不等于旁白或论文成片认可；原片、402任务边界、Qwen与marker保留，独立视频会话继续。期刊真实试用及权限/版权见[期刊CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 
 ## 历史与定位

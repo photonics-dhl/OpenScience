@@ -10,7 +10,7 @@
 - 新实际流程缺口：automatic-review.ts64–72把同上下文作者自检直接视为ready；结构/回执完整仍有实际案例失真。现有独立Native paper-source-review核对转述且需max9 run/step/audit/原作者CP真实绑定，不能直接refresh绕过。High GO方案仅在新max9创建中原子复用真实reviewer与普通收费；旧分类/历史语义保留，不加策略字段或暂停门禁。实际Native图像能力false，沿原hold维持0请求；实现及实际收益见CURRENT，作者84稿不重写或假审批。
 - 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。已部署增量仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
 - 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
-- Synclip应用接线、私密Key、host与broker已启用；ROc896的`gpt-image-2`首个真实任务成功并保存私有PNG。第二篇复测尚未形成有效调用：RO9067恢复后需重新规划当前版本分镜，RO714a缺平台管理员成员，D2NN历史分镜缺`sourceEvidenceIdentity`被来源守卫拒绝。跨论文稳定性仍待真实验收；科学方案/完整prompt/风格、像素核源与普通用户旅程仍按CURRENT判断。有效Skill、历史paid消费者及失败证据保留，不因新默认入口删除。
+- Synclip应用接线、私密Key、host与broker已启用；ROc896的`gpt-image-2`首个真实任务成功并保存私有PNG。第二篇复测尚未形成有效调用：RO9067恢复后需重新规划当前版本分镜，RO714a缺平台管理员成员，D2NN历史分镜缺`sourceEvidenceIdentity`被来源守卫拒绝。已确认来源缺 v5 `scientificReview` 的再分析断点已在 Domain 与 Hermes 站内入口候选中修复，复用既有来源、权限、收费和幂等合同；候选验证通过但尚未发布。跨论文稳定性仍待真实验收；科学方案/完整prompt/风格、像素核源与普通用户旅程仍按CURRENT判断。有效Skill、历史paid消费者及失败证据保留，不因新默认入口删除。
 
 ## 本机浏览器代理配置
 
