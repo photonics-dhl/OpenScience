@@ -39,6 +39,7 @@ exec 9<>"$root/runner.lock"
 # and no running paid task is stopped to install a new bundle.
 flock -n 9 || { echo 'SYNCLIP_RUNNER_ACTIVE; installation unchanged' >&2; exit 71; }
 [[ ! -e $bundle && ! -L $bundle ]] || exit 69
+if ! getent group 1000 >/dev/null 2>&1; then groupadd --system --gid 1000 openscience-synclip; fi
 install -d -o root -g root -m 0700 "$root/releases" "$root/spool" "$root/private"
 install -d -o 1000 -g 1000 -m 0700 "$root/spool/inbox"
 install -d -o root -g 1000 -m 2750 "$root/spool/results"
