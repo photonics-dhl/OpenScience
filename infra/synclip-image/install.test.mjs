@@ -64,6 +64,8 @@ async function fixture(existing = true) {
     chmod: ':',
     flock: '[[ ${BUSY_LOCK:-0} == 0 ]]',
     docker: '[[ ${BAD_RENDERER:-0} == 0 || $1 != run ]]',
+    getent: '[[ ${GROUP_1000:-0} == 1 ]]',
+    groupadd: ':',
     timeout: 'shift; "$@"',
     node: `if [[ \${2:-} == verify ]]; then [[ \${BAD_MANIFEST:-0} == 0 ]]; else "$REAL_NODE" "$@"; fi`,
     systemctl: `case "$1" in
@@ -101,7 +103,7 @@ test('installer rejects missing confirmation, noncanonical source, and mutable r
   assert.doesNotMatch(await f.calls(), /docker|systemctl|install </u); await unchanged(f);
 });
 
-test('deferred install stages a standalone runtime, private config and the correctly locked root:1000 oneshot', async () => {
+test('deferred install stages a standalone runtime and preserves the locked root:1000 oneshot', async () => {
   const f = await fixture(); successful(f.run()); const calls = await f.calls();
   assert.equal(await readFile(join(f.root, 'api-key'), 'utf8'), 'fixture-only-key');
   assert.deepEqual(JSON.parse(await readFile(join(f.root, 'config.json'), 'utf8')), {
@@ -114,6 +116,7 @@ test('deferred install stages a standalone runtime, private config and the corre
   assert.match(unit, /ProtectSystem=strict/u); assert.match(unit, /UMask=0027/u);
   assert.match(calls, /install <-d> <-o> <root> <-g> <1000> <-m> <2750>/u);
   assert.match(calls, /install <-d> <-o> <1000> <-g> <1000> <-m> <0700>/u);
+  assert.match(calls, /groupadd <--system> <--gid> <1000> <openscience-synclip>/u);
   assert.match(calls, /node .*<verify>.*<--sha>/u); assert.match(calls, /node <--input-type=module>/u);
   assert.match(calls, /systemctl <stop> <openscience-synclip-image.timer>/u);
   assert.doesNotMatch(calls, /systemctl <(?:enable|start)>|docker <(?:build|pull)>|chatgpt-web-image\.(?:timer|service)>/u);
