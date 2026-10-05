@@ -8,7 +8,7 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
 ## 当前运行与真实验收
-- 生产版本 tuple：线上 `456e550f69652b00569d2435c5f8283df3534d9f`，回滚 `4c5cd1c7974301a0552b691b83f4f8fd1a103abf`；包含 Worker 解析修复与 Hermes 页面锚点修正。公网 `/__release`、服务器 `.release-id`、CAS 和 Nginx 已核对一致；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- 生产版本 tuple：线上与公网 `/__release` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，回滚为 `456e550f69652b00569d2435c5f8283df3534d9f`；包含 Worker 解析修复与 Hermes 页面锚点修正。精确 CI `37349486195` 全绿；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
 - UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
@@ -18,9 +18,10 @@
 - 2026-10-06 新增一次真实站内复测：在同一已确认分镜上展开“详细制作指令”并生成第二幕，task/asset `ead639dc-e480-4520-8f0c-691402c8b739` 单次 succeeded/100%、retry0、attempt1、error=null；资产 generator 为 Synclip、`gpt-image-2`，contentHash `c451fa8a…`，私有 draft。现有 imageReview 与 Hermes/MiniMax-M3 nativeImageReview 均 accepted，页面和实际 PNG 均已核对，标注、传播/倏逝分区、Bessel 曲线和公式可读。该结果证明当前生图分支再次可运行，但不是新论文全文解析复测，也不能清除旧第四幕未知终态。
 - 只读运行核查：Synclip timer 为 enabled/active，broker 以 Result=success 退出；第四幕只留下 submitted/request/started/attempt 标记，没有 receipt。使用同一私密凭据查询一个不存在的诊断任务返回 HTTP 404、约0.28秒，说明当前 API 可达且未表现为未授权；仍不能反推出 23:10 那次 POST 的具体失败原因。
 - 2026-10-06 独立复测 `73746a85-3c51-4d2e-8cec-fbdf2d70e2b6`：Synclip 调用审计为 `succeeded`、模型 `gpt-image-2`、约61秒；PNG 已保存为 draft，随后 MiniMax-M3 审校调用也返回 `stop`，但 Worker 在 Gateway 已解析通过后用窄 `JSON.parse` 再解析 `<think>`/代码围栏而失败。候选 `4c5cd1c7` 已统一解析器并加回归；原任务 native checkpoint 为 `started`，禁止盲目重发。
+- 2026-10-06 发布后复测 `e8b6cb5d-f251-426a-8017-8d5b79354976`：同一 RO 第二幕仅提交一次，任务 100%/无错误，Synclip `gpt-image-2` 资产为私有 draft，MiniMax-M3 native image review 为 `completed/accepted`；页面实际显示两张图片。近10分钟 Worker 日志未再出现该 JSON 解析错误。原失败任务仍保留 `started`，不重放。
 
 ## 未完成与下一动作
-- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”至少有成功样本；Worker 解析修复已部署，但仍不能称长期跨论文稳定。旧第二篇仍有3/4外部提交成功、1/4未知，且有1张被图像审阅阻断；新一轮跨论文真实复测仍待执行。
+- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”在修复后再次真实成功；本次解析断点已关闭，但旧第四幕未知外部终态、被阻断图片和未验证的 Parser/ScanSci/Embedding 功能探针仍不能被一次成功覆盖。
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。

@@ -3,6 +3,7 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-06：修复随 `d6ddcd57` 发布后，用同一 RO 第二幕新任务 `e8b6cb5d-f251-426a-8017-8d5b79354976` 完成真实验证：Synclip `gpt-image-2` 产出私有 draft，MiniMax-M3 原生审校 `completed/accepted`，任务 100%/无错误；页面显示两张图片，未公开。公网 `/__release` 与 `.release-id` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，Worker 近10分钟无该解析错误。
 - 2026-10-06：最终 Hermes UI 修正随 `456e550f69652b00569d2435c5f8283df3534d9f` 部署，回滚为 `4c5cd1c7974301a0552b691b83f4f8fd1a103abf`。390px 线上验收确认指南与登录页使用页面自有 196×156 紧凑陪伴位，探索页使用公共 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、无横向溢出，点击展开 300px，桌面指南保持 360px。发布使用 `--no-tests`，Parser/ScanSci/embedding 深层功能探针未验证。
 - 2026-10-06：第二篇独立论文真实复测发现 Worker 在图片已由 Synclip `gpt-image-2` 成功保存后，因重复使用窄 `JSON.parse` 误拒绝 MiniMax-M3 返回的 `<think>`/代码围栏审校结果；任务 `73746a85-3c51-4d2e-8cec-fbdf2d70e2b6` 保留私有 draft PNG `6ac218…`，原生审校 checkpoint 保持 `started`，未盲目重发。修复提交 `4c5cd1c7`：Worker 复用 Gateway `parseStructuredJson`，定向回归 14/14、Worker typecheck 通过；CI `37347672220` 已全绿，尚未部署或再次真实验证。
 - 2026-10-06：线上 `4ed53b71faa11692756bcf79d5b3504e57581b19` 部署完成并通过 release/CAS、Nginx、容器启动健康和公网 `/__release` 复核，回退为 `7d208827d0e0bc41811b46dc1bf67231daf8230a`。Hermes 窄屏入口已改为右下角透明浮动邀请，不再生成全宽底栏；内容末尾保留透明安全区，390px 指南页滚动到底部与 CTA 重叠数为 0、无横向溢出，点击后展开 300px companion surface；桌面仍为 360px。Landing 保持不变。Parser/ScanSci/embedding 深层能力探针因本次 `--no-tests` 未验证。
@@ -17,5 +18,5 @@
 
 ## 后续
 - 不重放未知 task；先确认 Synclip 的幂等/客户端关联合同，再决定最小 transport 诊断或恢复改动。
-- 依照用户目标继续以Hermes作为论文理解与科学分镜主体；当前图像审阅由既有 imageReview/M3 步骤执行，Hermes独立像素核验尚未作为真实验收事实。图像API只处理已绑定的科学prompt；UI与 Worker 发布已完成，后续仍按既有计划处理 `/auth/me` race、Synclip 未知外部终态及真实跨论文复测，不重放旧未知任务或当前 `started` 审校任务。
+- 依照用户目标继续以Hermes作为论文理解与科学分镜主体；当前图像审阅由既有 imageReview/M3 步骤执行，Hermes独立像素核验尚未作为真实验收事实。图像API只处理已绑定的科学prompt；本次 Worker 解析断点已修复并完成一次生产复测，但长期跨论文稳定性仍需更多不同论文/分镜样本，不重放旧未知任务或当前 `started` 审校任务。
 - 旧失败运行、Skills审阅和安装记录保留在Git历史与ignored tmp，不作为当前入口。
