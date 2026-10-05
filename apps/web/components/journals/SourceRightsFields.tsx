@@ -84,7 +84,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
       </select>
     </label>
     <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-license`}>
-      {t.license}{licenseRequired ? ' *' : ''}<input id={`${idPrefix}-license`} aria-describedby={`${idPrefix}-license-help`} aria-required={licenseRequired} disabled={disabled} className="min-h-10 border border-os-rule-paper bg-transparent px-3" value={value.license} onChange={(event) => update({ license: event.target.value })} />
+      {t.license}{licenseRequired ? t.required : t.optional}<input id={`${idPrefix}-license`} aria-describedby={`${idPrefix}-license-help`} aria-required={licenseRequired} disabled={disabled} className="min-h-10 border border-os-rule-paper bg-transparent px-3" value={value.license} onChange={(event) => update({ license: event.target.value })} />
       <span id={`${idPrefix}-license-help`} className="text-sm leading-relaxed text-os-muted-paper">{t.licenseHelp}</span>
     </label>
     <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-expires`}>
@@ -106,7 +106,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
       </div>
     </fieldset>
     <label className="grid gap-1 text-sm sm:col-span-2" htmlFor={`${idPrefix}-evidence`}>
-      {t.evidence}{evidenceRequired ? ' *' : ''}<textarea id={`${idPrefix}-evidence`} aria-describedby={`${idPrefix}-evidence-help`} aria-required={evidenceRequired} disabled={disabled} rows={3} className="border border-os-rule-paper bg-transparent p-3" value={value.evidence} onChange={(event) => update({ evidence: event.target.value })} />
+      {t.evidence}{evidenceRequired ? t.required : t.optional}<textarea id={`${idPrefix}-evidence`} aria-describedby={`${idPrefix}-evidence-help`} aria-required={evidenceRequired} disabled={disabled} rows={3} className="border border-os-rule-paper bg-transparent p-3" value={value.evidence} onChange={(event) => update({ evidence: event.target.value })} />
       <span id={`${idPrefix}-evidence-help`} className="text-sm leading-relaxed text-os-muted-paper">{t.evidenceHelp}</span>
     </label>
     <div className="sm:col-span-2 text-sm" aria-live="polite">
