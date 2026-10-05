@@ -22,6 +22,7 @@
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
+- 本地候选 `f52ee24c` 已将无 Cookie 的 `session-guard` 401 发送改为等待完成后再返回，并新增回归测试；定向 API 测试 16/16、文件级 ESLint 通过。尚未部署，线上风险仍待发布后验证；API 全包 typecheck 复现 journals/papers 的6个既有 HEAD错误。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 
 ## 历史验证（不作为当前 next action）

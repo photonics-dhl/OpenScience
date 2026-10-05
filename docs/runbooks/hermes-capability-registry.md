@@ -11,6 +11,7 @@
 - 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。已部署增量仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
 - 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
 - Synclip应用接线、私密Key、host与broker已启用；ROc896首个真实gpt-image-2任务成功。RO9067第二篇已真实完成Hermes全文/独立source-review/4幕分镜；原4次Synclip尝试为3次有供应商成功回执（其中2次imageReview accepted、1次blocked），第4次为UNCERTAIN且无task_id/receipt，系统正确未重发。2026-10-06又在已确认分镜上通过站内真实入口完成 task `ead639dc-e480-4520-8f0c-691402c8b739`：单次/attempt1/retry0 成功，Synclip `gpt-image-2` 草稿与 imageReview/nativeImageReview 均 accepted，实际 PNG 已查看。该复测证明当前分支可运行，但不是新论文全文解析，也不能清除旧未知终态；跨论文长期稳定性仍未达标。另有生产 `/auth/me` `Reply was already sent`/HTTP 500 日志，尚未证明阻断生图，待单独按 API 缺陷处理。完整运行身份与证据只见CURRENT。
+- 2026-10-06 的最小 API候选修复为 `f52ee24c`：无 Cookie 的 `session-guard` 401 发送改为等待完成后返回，针对生产 `/auth/me` 重复响应日志新增回归；定向 API 16/16 与文件级 lint 通过，尚未部署，不能把本地候选当作线上已修复。
 
 ## 本机浏览器代理配置
 
