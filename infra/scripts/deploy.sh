@@ -47,21 +47,23 @@ done
   exit 64
 }
 
-RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF")" \
-  || { echo "错误：部署源不是 release-ref 的干净精确 tree" >&2; exit 66; }
 ROLLBACK_SHA=""
+ANCESTRY_ARGS=()
 if [ -n "$ROLLBACK_REF" ]; then
   if [[ "$ROLLBACK_REF" =~ ^[0-9a-f]{40}$ ]]; then
-    # Another workstation may have deployed a commit not present locally. The
-    # locked remote transaction still requires exact active marker, immutable
-    # rollback source, capability/image identities and rollback Compose.
+    # The source guard below requires this exact active commit locally, too.
+    # Fetch and integrate other workstations' releases; never silently replace them.
     ROLLBACK_SHA="$ROLLBACK_REF"
   else
     ROLLBACK_SHA="$(git -C "$PROJECT_ROOT" rev-parse --verify "$ROLLBACK_REF^{commit}")" \
       || { echo "错误：rollback-ref '$ROLLBACK_REF' 不存在" >&2; exit 66; }
   fi
   [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "错误：rollback-ref 必须解析为完整 commit SHA" >&2; exit 66; }
+  ANCESTRY_ARGS=(--ancestor "$ROLLBACK_SHA")
 fi
+
+RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF" "${ANCESTRY_ARGS[@]}")" \
+  || { echo "错误：部署源必须是干净精确 tree，且包含当前线上版本；请先 fetch 并整合发布分支" >&2; exit 66; }
 
 [ -f "$ENV_FILE" ] || { echo "错误：未找到 .env（$ENV_FILE）" >&2; exit 66; }
 read_env() {

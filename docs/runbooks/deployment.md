@@ -191,6 +191,8 @@ infra/scripts/deploy.sh --confirm --no-tests \
 
 ### 2.1 同步代码（`scripts/cloud-sync.mjs`）
 
+常规发版必须包含当前线上提交：先 fetch 最新发布分支并将功能 PR 整合至 `release/onchip-production-line`，不以独立分支覆盖其他发布。`deploy.sh` 在上传前核验本地具有 `--rollback-ref` 对应的完整提交，且它是候选 SHA 的祖先；缺历史、分叉或倒退均拒绝。随后远端锁内仍核对 active 精确相等，防止检查后有另一发布。保留功能分支、PR 与精确 CI 记录，不合并 main。失败部署的锁内自动回退不受此前向守卫影响；有意撤销成功发布应经明确恢复流程或在发布分支创建可审查的 revert 提交，不把倒退伪装为普通发版。
+
 ```bash
 infra/scripts/deploy.sh --rollback-ref <known-good-ref> <release-ref> # dry-run
 infra/scripts/deploy.sh --confirm --require-parser-acceptance --rollback-ref <known-good-ref> <release-ref>
