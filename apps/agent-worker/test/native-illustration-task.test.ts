@@ -102,6 +102,26 @@ describe('native illustration selects actual private tool history', () => {
     expect(f.invoke('paper_illustration_science', invalid, 'bad')).toMatchObject({ status: 'invalid_illustration', error: 'unknown_original_source' });
     f.complete(); expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
   });
+  it('repairs only the rejected scene through the bounded science contract', () => {
+    const f = fixture({ quote: 'The reported output duration is 7 fs.', scienceFeedback: true });
+    const invalid = structuredClone(science); invalid.scenes[0]!.labels = ['7 fs'];
+    expect(f.invoke('paper_illustration_science', invalid, 'bad')).toMatchObject({
+      status: 'invalid_illustration', error: expect.stringContaining('labels[0]'),
+    });
+    const repaired = structuredClone(invalid.scenes[0]!);
+    repaired.subjects[0]!.description = 'The reported output duration is 7 fs.';
+    expect(f.invoke('paper_illustration_science_repair', { scienceToolCallId: 'bad', sceneIndex: 0, scene: repaired }, 'repair'))
+      .toMatchObject({ status: 'science_ready', scienceToolCallId: 'repair' });
+    f.invoke('paper_illustration_art', { scienceToolCallId: 'repair', scenes: [{ layout: 'Put label 0 above subject 0.', treatment: 'Crisp ink on white paper.' }] }, 'art');
+    f.invoke('paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Sources, geometry and caption agree.', corrections: [], issues: [] }, 'review');
+    expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review"}').review.decision).toBe('accepted');
+  });
+  it('does not let a repair tool choose an unrelated rejected candidate', () => {
+    const f = fixture({ quote: 'The reported output duration is 7 fs.' });
+    const repaired = structuredClone(science.scenes[0]!);
+    expect(f.invoke('paper_illustration_science_repair', { scienceToolCallId: 'missing', sceneIndex: 0, scene: repaired }, 'repair'))
+      .toMatchObject({ status: 'invalid_illustration', error: 'science_repair_requires_latest_rejected_science' });
+  });
 });
 
 // Exact paid description from before the quantity/feedback correction. Its receipts are immutable.

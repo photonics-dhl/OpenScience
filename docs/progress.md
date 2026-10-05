@@ -3,7 +3,9 @@
 原生Hermes＋M3忠实理解论文、自校转述及自动私有分镜，用户最新Synclip接口授权和未完成验收，统一见[Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。本页不另维护接口或发布状态。
 
 ## 本轮检查点
-- 新独立Native核源真实完成但原文保真仍NO-GO，自动私有分镜在原预算内自然失败；0图片，四份公开冻结内容完整全等、原作者不变，Native实例归零并释放协调窗口。本地修复实际检索漏段与冗余空引用占位：459定向、2真实Map/paid零外呼、Worker TC/scopedlint通过；两项最终独立Code/Ops High GO，精确75步CI、正常发布及后验均通过；原生Hermes/资源限制/生图hold保持。准备一条新的正常私有自动前置验证，未重开旧任务。工具修复不等于内容合格；首张Synclip试图继续等待科学与完整prompt验收。
+- 已按用户要求检索Skills市场与Hermes官方目录：现有`baoyu-infographic`、OpenScience科学插画、`pdf`与证据绑定模式已覆盖当前任务；高安装量的`paper-context-resolver`不适合整篇论文理解，低可信第三方材料图包仅作为contract→storyboard gate参考，未安装。当前修复继续收敛科学分镜的有界场景修复，不改来源守卫。
+- 当前本地候选新增`paper_illustration_science_repair`，把已定位的单幕来源/数值拒收改成同一science合同内的局部修复，禁止整份方案重写；旧保存会话合同保持不变。相关Native插画、来源核对、会话回放和materializer共461项定向测试、Worker typecheck、scoped ESLint通过；候选尚未提交/发布，Synclip仍无调用。真实`68ab2a2c`失败收据保留且禁止重放，后续需用干净发布后的新一次任务观察是否越过当前断点。
+- 新独立Native核源真实完成但原文保真仍NO-GO，自动私有分镜在原预算内自然失败；0图片，四份公开冻结内容完整全等、原作者不变，Native实例归零并释放协调窗口。本地修复实际检索漏段与冗余空引用占位：459定向、2真实Map/paid零外呼、Worker TC/scopedlint通过；两项最终独立Code/Ops High GO，精确75步CI、正常发布及后验均通过；原生Hermes/资源限制/生图hold保持。已一次提交新的正常私有自动前置验证，running，未重开旧任务。工具修复不等于内容合格；首张Synclip试图继续等待科学与完整prompt验收。
 - 默认来源Skill补接已发布，Source独立v6/旧方法不变，16定向、TC/build/lint、High及精确CI通过，实际目录/任务消费新方法。新source4m45s完成，主机制和99as例基本忠实，辅助范围/绑定仍NO-GO。复用已有独立Hermes核源候选已实现并获Code High GO：新max9原子初始化真实reviewer；即时上传先等作者完成，再填同一审阅阶段，旧分类/paid/replay不改。Domain242定向通过，实际上传顺序→Claims→Native私有分镜→现有生图hold有离线编排证据；最终TC/build/scopedlint、精确75步CI及正常app-only发布通过，保留Native配对。现有作者的独立核源一次已运行，原稿及公开冻结记录保持；真实科学效果仍待验收。实际Native图像能力false，允许核源成功后的私有分镜并沿原机制暂停生图；身份、证据和完整剩余链路只见CURRENT。
 - 最新原文直写去掉坏父稿输入，技术完成且实际读源/看页，但终稿仍有量关系/对象/条件/范围失真，原文保真NO-GO；没有接分镜或图片。父稿锚定并非唯一原因，完整真实稿和paid已保留；旧失败任务不重开。
 - 已复现五次8000字符超限却收到generic错误的机械循环。已部署增量在新fresh描述下给精确总长，补用已装读者组织方法，减少辅助公式/算例，中文自然语言说明；原大小边界和科学/权限守卫保持。242定向及真实完整回执零外呼回放通过，Worker TC/build/scopedlint0；最终Code High及Native复用/一次source-only Ops GO；精确CI全部通过并正常发布，新同源source-only写稿2m27s技术完成、中文及方法确实送达，但几何/条件方向/范围/跨案例仍保真NO-GO，没有run或图；当前核默认SourceSkill的已装证据对齐方法消费缺口，不据工程检查解除NO-GO。

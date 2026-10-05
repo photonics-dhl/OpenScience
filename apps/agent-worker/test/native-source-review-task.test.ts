@@ -704,9 +704,7 @@ describe('independent native source review using the existing scientific materia
       calls++;
       const common = { model: 'MiniMax-M3', usage: { inputTokens: 20, outputTokens: 10 } };
       if (calls <= 3) {
-        const items = calls === 1 ? sourceCorrection
-          ? SDF_CORE_FIELDS.map(field => ({ id: `candidate-${field}`, name: 'paper_candidate', args: { view: field } }))
-          : [{ id: 'candidate', name: 'paper_candidate', args: {} }]
+        const items = calls === 1 ? SDF_CORE_FIELDS.map(field => ({ id: `candidate-${field}`, name: 'paper_candidate', args: { view: field } }))
           : calls === 2 ? [...SDF_CORE_FIELDS.map(field => ({ id: `field-${field}`, name: 'paper_review_field', args: { field, verdict: 'accepted' } })),
             ...(claimsDecision === 'replace' ? replacementClaims().map((claim, i) => ({ id: `claim-${i}`, name: 'paper_review_claim', args: claim })) : [])]
           : [{ id: 'commit', name: 'paper_review', args: { sourceAgentTaskId,
@@ -727,14 +725,18 @@ describe('independent native source review using the existing scientific materia
       expect(input.config.sourceTools.map(tool => tool.name)).toEqual(expect.arrayContaining(['paper_review', 'paper_review_field', 'paper_review_claim']));
       // Verify delivery/isolation at the real host boundary, not whether a fixture model understands the paper.
       expect(input.config.sourceTools.map(({ name, parameters }) => ({ name, parameters })))
-        .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.map(({ name, parameters }) => ({ name, parameters: sourceCorrection && name === 'paper_candidate'
+        .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.map(({ name, parameters }) => ({ name, parameters: name === 'paper_candidate'
           ? { type: 'object', additionalProperties: false, required: ['view'], properties: { view: { type: 'string', enum: [...SDF_CORE_FIELDS, 'claims'] } } }
           : parameters })));
       if (sourceCorrection) {
         expect(input.config.instructions).toContain(SCIENTIFIC_READER_ORGANIZATION);
         expect(input.config.sourceTools.find(tool => tool.name === 'paper_review_claim')!.description)
           .not.toBe(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.find(tool => tool.name === 'paper_review_claim')!.description);
-      } else expect(input.config.sourceTools).toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS);
+      } else {
+        expect(input.config.instructions).toContain(SCIENTIFIC_READER_ORGANIZATION);
+        expect(input.config.sourceTools.filter(tool => tool.name !== 'paper_candidate'))
+          .toEqual(STAGED_NATIVE_SOURCE_REVIEW_TOOLS.filter(tool => tool.name !== 'paper_candidate'));
+      }
       const request = { model: input.config.model, max_tokens: input.config.maxOutputTokens,
         messages: [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }] as unknown[],
         tools: [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object' } })),
@@ -786,6 +788,20 @@ describe('independent native source review using the existing scientific materia
     expect(nativeSourceReviewToolProfile(saved).legacyClaimsReview).toBe(false);
     expect(nativeSourceReviewToolProfile(saved).reviewMode).toBe('staged');
     expect(nativeSourceReviewToolProfile(saved).scopedCandidate).toBe(sourceCorrection);
+    expect(nativeSourceReviewToolProfile(saved).independentScopedCandidate).toBe(!sourceCorrection);
+    if (!sourceCorrection) {
+      for (const mutation of ['description', 'schema', 'missing-first', 'no-first'] as const) {
+        const unknown = structuredClone(saved)!;
+        if (mutation === 'no-first') unknown.turns = [];
+        else if (mutation === 'missing-first') unknown.turns[0]!.request.options.tools = [];
+        else {
+          const candidate = unknown.turns[0]!.request.options.tools!.find(tool => tool.function.name === 'paper_candidate')!.function;
+          if (mutation === 'description') candidate.description += ' Unknown revision.';
+          else candidate.parameters = { ...candidate.parameters, required: [] };
+        }
+        expect(nativeSourceReviewToolProfile(unknown).independentScopedCandidate).toBe(false);
+      }
+    }
     if (sourceCorrection) {
       const unknown = structuredClone(saved)!;
       unknown.turns[0]!.request.options.tools!.find(tool => tool.function.name === 'paper_candidate')!.function.description += ' Unknown revision.';

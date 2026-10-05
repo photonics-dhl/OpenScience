@@ -42,6 +42,9 @@ export const NATIVE_SOURCE_REVIEW_TOOLS = [
 
 const FIELD_REPAIR_DESCRIPTION = 'Invalid decisions report the failing field path and required repair.';
 const SCOPED_CANDIDATE_DESCRIPTION = 'Read one complete ORIGINAL saved field or the complete original Claim set using view. A field view includes complete Claims sharing its actual source passages, their actual parent closure and all selected original passages. Other field bodies remain on the server. This immutable baseline is not scientific evidence or approval. Check a complete object, case, conditions and comparison against the paper, then save the affected decision with the existing review tools; do not prepare a whole-candidate editorial plan before saving.';
+const INDEPENDENT_SCOPED_CANDIDATE_DESCRIPTION = SCOPED_CANDIDATE_DESCRIPTION + ' This view belongs to the independent paper-source-review task.';
+const SCOPED_CANDIDATE_PARAMETERS = { type: 'object', additionalProperties: false, required: ['view'],
+  properties: { view: { type: 'string', enum: [...SDF_CORE_FIELDS, 'claims'] } } };
 export const STAGED_NATIVE_SOURCE_REVIEW_TOOLS = [
   ...LEGACY_NATIVE_SOURCE_REVIEW_TOOLS.filter(tool => tool.name !== 'paper_review'),
   { name: 'paper_review_field',
@@ -79,6 +82,9 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
     ? LEGACY_NATIVE_PAPER_TOOLS.find(original => original.name === 'paper_search')! : tool);
   return { sourceTools, legacyClaimsReview, reviewMode,
     scopedCandidate: reviewMode === 'staged' && originalTools?.find(tool => tool.name === 'paper_candidate')?.description === SCOPED_CANDIDATE_DESCRIPTION,
+    independentScopedCandidate: reviewMode === 'staged'
+      && originalTools?.find(tool => tool.name === 'paper_candidate')?.description === INDEPENDENT_SCOPED_CANDIDATE_DESCRIPTION
+      && isDeepStrictEqual(originalTools.find(tool => tool.name === 'paper_candidate')?.parameters, SCOPED_CANDIDATE_PARAMETERS),
     fieldFeedback: !saved || originalTools?.find(tool => tool.name === 'paper_review_field')?.description.includes(FIELD_REPAIR_DESCRIPTION) === true,
     sourceFaithfulness: !saved || saved.initialMessages?.some(message => message.role === 'user' && message.content === SOURCE_FIDELITY_REVIEW_GOAL) };
 }
@@ -382,6 +388,8 @@ const PROGRESSIVE_SOURCE_CORRECTION_INSTRUCTIONS = [
   'accepted选择已读且全部拟保留的整段原字段；revised/blocked提交完整替换及真实来源与issue。需要修正或省略Claims时逐条保存完整保留集合及实际父主张，再选replace；unchanged须已读取并核对每条原Claim的statement、conditions和limitations，可用view:claims补全，不能因未调用Claim工具而默认保留。',
   '用paper_review选择六字段的实际保存ID及完整Claims决定，读回完整reviewedCandidate检查修改在字段和Claims中的一致性。有遗漏只保存受影响项并重新commit；后写或失败的最新commit不能退用旧成功。内容就绪后正常结束，不重复JSON；工具只校验结构和来源，不证明理解正确、不授权公开或生图。',
 ].join('\n');
+const PROGRESSIVE_INDEPENDENT_REVIEW_INSTRUCTIONS = PROGRESSIVE_SOURCE_CORRECTION_INSTRUCTIONS
+  .replace('你是原生Hermes本次新私有稿的作者。', '你是原生Hermes本次独立来源对照者。');
 const SOURCE_CORRECTION_TOOL_GUIDANCE: Readonly<Record<string, string>> = {
   paper_candidate: 'This immutable saved baseline is not evidence that its assertions are correct or must all be retained. Use the reader-facing main message and a condition-complete representative case to choose what to retain; trace each retained assertion to the paper.',
   paper_review_field: 'accepted retains the ENTIRE original field, including every comparison, parenthesis and scope qualifier; use it only after checking all retained assertions. A source-grounded correction may also omit whole secondary assertions, preserving necessary conditions without inventing an issue for mere polishing.',
@@ -403,16 +411,15 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
     throw new Error('[blocked] Native source revision differs from its saved execution');
   if (!/^[a-f0-9]{64}$/.test(input.authorCheckpointSha256)) throw new Error('[blocked] Native author checkpoint identity is absent');
   const profile = nativeSourceReviewToolProfile(saved);
-  const scopedCandidate = sourceCorrection && (!saved || profile.scopedCandidate);
+  const scopedCandidate = !saved || (sourceCorrection ? profile.scopedCandidate : profile.independentScopedCandidate);
   const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback, scopedCandidate,
     paperToolDefinitions: profile.sourceTools });
-  const sourceTools = sourceCorrection && !saved ? profile.sourceTools.map(tool => tool.name === 'paper_candidate' ? {
-    ...tool, description: SCOPED_CANDIDATE_DESCRIPTION,
-    parameters: { type: 'object', additionalProperties: false, required: ['view'],
-      properties: { view: { type: 'string', enum: [...SDF_CORE_FIELDS, 'claims'] } } },
-  } : ({ ...tool,
+  const sourceTools = !saved ? profile.sourceTools.map(tool => tool.name === 'paper_candidate' ? {
+    ...tool, description: sourceCorrection ? SCOPED_CANDIDATE_DESCRIPTION : INDEPENDENT_SCOPED_CANDIDATE_DESCRIPTION,
+    parameters: SCOPED_CANDIDATE_PARAMETERS,
+  } : sourceCorrection ? ({ ...tool,
     description: [tool.description.replace(/\bindependent\b/gu, 'source-fidelity'), SOURCE_CORRECTION_TOOL_GUIDANCE[tool.name]]
-      .filter(Boolean).join(' ') })) : profile.sourceTools;
+      .filter(Boolean).join(' ') }) : tool) : profile.sourceTools;
   const allowedTools = ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)];
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
@@ -431,6 +438,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
       sourceTools, instructions: sourceCorrection ? scopedCandidate ? PROGRESSIVE_SOURCE_CORRECTION_INSTRUCTIONS : profile.fieldFeedback ? SOURCE_FIRST_CORRECTION_INSTRUCTIONS
         : sourceFidelityReviewInstructions(STAGED_REVIEW_INSTRUCTIONS)
           .replace('你是原生Hermes的来源对照者。', '你是原生Hermes本次新私有稿的作者，旧稿仅作为不可变的修订基准。')
+        : scopedCandidate ? PROGRESSIVE_INDEPENDENT_REVIEW_INSTRUCTIONS
         : profile.sourceFaithfulness ? sourceFidelityReviewInstructions(profile.reviewMode === 'staged' ? STAGED_REVIEW_INSTRUCTIONS
         : profile.legacyClaimsReview ? REVIEW_INSTRUCTIONS : EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS)
         : profile.reviewMode === 'staged' ? STAGED_REVIEW_INSTRUCTIONS : profile.legacyClaimsReview ? REVIEW_INSTRUCTIONS : EXPLICIT_CLAIMS_REVIEW_INSTRUCTIONS,
