@@ -8,18 +8,20 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
 ## 当前运行与真实验收
-- 生产版本 tuple：本地候选 f53a2ea8e5fa1cf7e054cf54f5e2b1e9af9bd9c5；线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64；回滚 0454e931b3203c88c36d382432566b6e0bc15aa7。本轮部署使用 --no-tests --skip-migrate，Parser/ScanSci/embedding/auth/admin 功能探针未执行，不能把容器健康等同于完整验收。
+- 生产版本 tuple：本地当前候选 `7d208827d0e0bc41811b46dc1bf67231daf8230a`；线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64；回滚 0454e931b3203c88c36d382432566b6e0bc15aa7。本轮未部署候选；线上版本历史部署使用 --no-tests --skip-migrate，Parser/ScanSci/embedding/auth/admin 功能探针未执行，不能把容器健康等同于完整验收。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
 - 第二篇真实复测：RO 9067a2d5-42ad-4c06-b234-753728b71064、草稿 v13 f40576ee-44fc-44e0-8be9-ba050adaf2c9，Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf。SourceMap、paper-author六维/Claims、独立source-review均成功；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，6项字段审阅已接受。
 - 同一 run 的科学分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 成功，illustrationReview=accepted，保存4幕私有分镜和完整prompt：Bethe等效偶极子、Weyl传播/倏逝角谱、经典极限和远场截面极限。运行时在分镜成功后自动进入生图，未形成用户审核后才生图的停顿；无自动公开。
 - 第二篇四幕图像结果：36eeba50-7ce7-4207-8e43-f06e2886d43f、1614ec52-49e1-47bd-bf7a-5e90d22ac442、1961935e-f2af-453a-abf7-8613a3e92c1d 获 Synclip 成功回执，其中前两项 imageReview accepted，第三项 imageReview blocked；第四幕 28ab61b0-7931-41d3-8200-2d63c1f986ad 的 POST 状态为 UNCERTAIN，没有 task_id/receipt，run 最终 failed。PNG和尝试标记均保留，不重试。
+- 2026-10-06 新增一次真实站内复测：在同一已确认分镜上展开“详细制作指令”并生成第二幕，task/asset `ead639dc-e480-4520-8f0c-691402c8b739` 单次 succeeded/100%、retry0、attempt1、error=null；资产 generator 为 Synclip、`gpt-image-2`，contentHash `c451fa8a…`，私有 draft。现有 imageReview 与 Hermes/MiniMax-M3 nativeImageReview 均 accepted，页面和实际 PNG 均已核对，标注、传播/倏逝分区、Bessel 曲线和公式可读。该结果证明当前生图分支再次可运行，但不是新论文全文解析复测，也不能清除旧第四幕未知终态。
 - 只读运行核查：Synclip timer 为 enabled/active，broker 以 Result=success 退出；第四幕只留下 submitted/request/started/attempt 标记，没有 receipt。使用同一私密凭据查询一个不存在的诊断任务返回 HTTP 404、约0.28秒，说明当前 API 可达且未表现为未授权；仍不能反推出 23:10 那次 POST 的具体失败原因。
 
 ## 未完成与下一动作
-- 当前链路已经证明“论文→Hermes→分镜→Synclip”可通，但跨论文尚未稳定：第二篇是3/4外部提交成功，1/4未知，且有1张被图像审阅阻断；第二篇三张结果尚未完成新的人工像素质量验收。
+- 当前链路已经再次证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”可通；长期跨论文仍未稳定：旧第二篇为3/4外部提交成功、1/4未知，且有1张被图像审阅阻断，本次新图只覆盖同一分镜的单幕重测。
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
+- 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 
 ## 历史验证（不作为当前 next action）

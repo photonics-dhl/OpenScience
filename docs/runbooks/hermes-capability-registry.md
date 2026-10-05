@@ -10,7 +10,7 @@
 - 新实际流程缺口：automatic-review.ts64–72把同上下文作者自检直接视为ready；结构/回执完整仍有实际案例失真。现有独立Native paper-source-review核对转述且需max9 run/step/audit/原作者CP真实绑定，不能直接refresh绕过。High GO方案仅在新max9创建中原子复用真实reviewer与普通收费；旧分类/历史语义保留，不加策略字段或暂停门禁。实际Native图像能力false，沿原hold维持0请求；实现及实际收益见CURRENT，作者84稿不重写或假审批。
 - 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。已部署增量仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
 - 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
-- Synclip应用接线、私密Key、host与broker已启用；ROc896首个真实gpt-image-2任务成功。RO9067第二篇现已真实完成Hermes全文/独立source-review/4幕分镜，并触发4次Synclip尝试：3次有供应商成功回执（其中2次imageReview accepted、1次blocked），第4次为UNCERTAIN且无task_id/receipt，系统正确未重发。跨论文稳定性仍未达标；当前消费缺口是Synclip未知POST终态的幂等/客户端关联合同，以及分镜成功后是否必须等待用户审核的状态策略。完整运行身份与证据只见CURRENT。
+- Synclip应用接线、私密Key、host与broker已启用；ROc896首个真实gpt-image-2任务成功。RO9067第二篇已真实完成Hermes全文/独立source-review/4幕分镜；原4次Synclip尝试为3次有供应商成功回执（其中2次imageReview accepted、1次blocked），第4次为UNCERTAIN且无task_id/receipt，系统正确未重发。2026-10-06又在已确认分镜上通过站内真实入口完成 task `ead639dc-e480-4520-8f0c-691402c8b739`：单次/attempt1/retry0 成功，Synclip `gpt-image-2` 草稿与 imageReview/nativeImageReview 均 accepted，实际 PNG 已查看。该复测证明当前分支可运行，但不是新论文全文解析，也不能清除旧未知终态；跨论文长期稳定性仍未达标。另有生产 `/auth/me` `Reply was already sent`/HTTP 500 日志，尚未证明阻断生图，待单独按 API 缺陷处理。完整运行身份与证据只见CURRENT。
 
 ## 本机浏览器代理配置
 
