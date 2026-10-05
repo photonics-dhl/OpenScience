@@ -108,3 +108,59 @@
   .surface-product-app button:not(:disabled):active, .research-product button:not(:disabled):active { transform:none; }
   .surface-product-app [data-evidence-dropzone] { transition:none; }
 }
+
+/* Shared product chrome. The public Landing keeps its optical-black composition. */
+.surface-product-app > header {
+  position: sticky;
+  top: 0;
+  background: rgb(255 255 255 / .94);
+  box-shadow: 0 1px 0 rgb(24 47 53 / .06), 0 10px 24px rgb(24 47 53 / .035);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.surface-product-app > header::after {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgb(18 93 102 / .22) 18%, rgb(18 93 102 / .06) 68%, transparent 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.surface-product-app .product-main { position: relative; isolation: isolate; }
+.surface-product-app .product-main::before {
+  position: absolute;
+  top: 0;
+  left: clamp(20px, 4vw, 48px);
+  width: 56px;
+  height: 1px;
+  background: var(--craft-accent);
+  content: '';
+  opacity: .65;
+  pointer-events: none;
+}
+
+@keyframes product-surface-arrive {
+  from { opacity: .01; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.js .surface-product-app .product-main > * { animation: product-surface-arrive 520ms var(--craft-ease) both; }
+.js .surface-product-app .product-main > *:nth-child(2) { animation-delay: 45ms; }
+.js .surface-product-app .product-main > *:nth-child(3) { animation-delay: 90ms; }
+.js .surface-product-app .product-main > *:nth-child(4) { animation-delay: 135ms; }
+
+.surface-product-app :is(.surface-folio-sheet, [data-workspace-plane='56'], .sections) {
+  box-shadow: 0 1px 0 rgb(24 47 53 / .045), 0 18px 42px rgb(24 47 53 / .045);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .surface-product-app .product-main > * { animation: none; }
+}
+
+@media (max-width: 639px) {
+  .surface-product-app > header { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .surface-product-app .product-main::before { left: 20px; }
+}

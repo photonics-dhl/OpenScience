@@ -1,6 +1,8 @@
-.guide { --guide-gutter: 56px; max-width: 1440px; margin-inline: auto; padding: 40px var(--guide-gutter) 64px; color: var(--os-ink); font-family: var(--font-ui); }
+.guide { --guide-gutter: 56px; max-width: 1440px; margin-inline: auto; padding: 40px var(--guide-gutter) 64px; color: var(--os-ink); font-family: var(--font-ui); overflow-x: clip; }
 .guide :is(h1, h2, h3, p) { margin: 0; }
 .guide ::selection { background: #cce4df; color: #133b3c; }
+.guide .opening, .guide .scenes, .guide .support, .guide .invitation { position: relative; }
+.guide .opening::before { position: absolute; top: -40px; bottom: 24px; left: -20px; width: 1px; background: linear-gradient(180deg, var(--os-vermilion-ink), transparent 82%); content: ''; opacity: .32; }
 .opening { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(320px, .43fr) minmax(0, 1fr); gap: 64px; align-items: start; margin-bottom: 80px; }
 .opening > :is(.hero, .proof) { position: relative; z-index: 1; min-width: 0; }
 .opticalMargin { position: absolute; top: -112px; right: calc(-1 * var(--guide-gutter)); bottom: -24px; z-index: 0; width: min(400px, 36%); overflow: hidden; }
@@ -23,7 +25,8 @@
 .companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .chapterLink { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 14px; color: var(--os-ink); text-decoration: none; }
 .chapterLink svg { color: var(--os-vermilion-ink); }
-.proof { min-width: 0; margin: 0; padding: 36px; border: 1px solid #e5e7e4; border-radius: 6px; background: #fffefb; color: var(--os-ink); box-shadow: 0 24px 44px -24px rgb(34 70 74 / .22), 0 2px 5px rgb(34 70 74 / .04); }
+.proof { position: relative; min-width: 0; margin: 0; padding: 36px; border: 1px solid #e5e7e4; border-radius: 6px; background: linear-gradient(135deg, #fffefb 0%, #fff 68%, #f4f8f7 100%); color: var(--os-ink); box-shadow: 0 24px 44px -24px rgb(34 70 74 / .22), 0 2px 5px rgb(34 70 74 / .04); }
+.proof::after { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-top: 1px solid #9fbfc2; border-right: 1px solid #9fbfc2; content: ''; opacity: .6; pointer-events: none; }
 .proofMeta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid var(--os-rule-paper); color: var(--os-muted-paper); font-size: 13px; line-height: 1.7; }
 .proofMeta > span { overflow-wrap: anywhere; }
 .proofMeta > span:last-child { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
@@ -56,7 +59,7 @@
 .sceneCopy { display: grid; gap: 16px; }
 .sceneCopy h3 { font-size: 24px; line-height: 1.45; font-weight: 600; text-wrap: balance; }
 .sceneCopy p { color: var(--os-muted-paper); font-size: 15px; line-height: 1.9; text-wrap: pretty; }
-.demonstration { min-width: 0; background: #f2f6f5; border: 1px solid #dce6e3; border-radius: 6px; overflow: hidden; box-shadow: 0 12px 28px -20px rgb(25 63 67 / .16); }
+.demonstration { min-width: 0; background: #f2f6f5; border: 1px solid #dce6e3; border-radius: 6px; overflow: hidden; box-shadow: 0 12px 28px -20px rgb(25 63 67 / .16), 0 1px 0 rgb(255 255 255 / .72) inset; }
 .demoHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid #dbe7e5; background: #e6eeed; font-size: 12px; color: var(--os-muted-paper); }
 .demoHeader > span:first-child { color: var(--os-ink); font-size: 15px; font-weight: 600; letter-spacing: -.025em; }
 .workDemo { display: grid; gap: 24px; padding: 28px 32px; min-height: 224px; }

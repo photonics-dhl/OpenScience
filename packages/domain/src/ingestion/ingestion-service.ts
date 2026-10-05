@@ -115,7 +115,8 @@ function analysisRefreshPolicy(value: unknown, artifact: { id: string; blobSha25
       if (reference.parserStatus === 'succeeded' && reference.artifactId === artifact.id
         && reference.contentHash === artifact.blobSha256) {
         const review = result.scientificReview;
-        const reviewed = review && typeof review === 'object' && !Array.isArray(review)
+        if (review === undefined || review === null) return 'user_requested_reanalysis';
+        const reviewed = typeof review === 'object' && !Array.isArray(review)
           && (review as Record<string, unknown>).status === 'review_received';
         return reviewed ? 'user_requested_reanalysis' : 'scientific_review_v4';
       }

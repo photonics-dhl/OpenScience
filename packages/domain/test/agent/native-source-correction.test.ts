@@ -30,6 +30,18 @@ it('preserves the normal confirmed-source reanalysis entry without a correction 
     .toBe(`ingestion-analysis-reanalysis:${created.id}:${f.author.id}`);
 });
 
+it('reanalyses a confirmed grounded source when its historical record lacks the v5 scientific review', async () => {
+  const f = await nativeSourceCorrectionFixture();
+  delete f.author.result.nativeAgentExecution;
+  delete f.author.result.scientificReview;
+  f.db.ingestionTasks[0]!.state = 'confirmed';
+  const input = { userId: f.input.userId, taskId: f.input.taskId, sourceAgentTaskId: f.input.sourceAgentTaskId,
+    processingConsent: true, idempotencyKey: 'confirmed-grounded-without-v5-review' };
+  const created = await reanalyzeConfirmedIngestion(f.deps, input);
+  expect(created.id).not.toBe(f.ids.source);
+  expect(f.db.ingestionTasks[0]).toMatchObject({ state: 'confirmed', agentTaskId: f.author.id });
+});
+
 async function revisionFixture() {
   const f = await nativeSourceCorrectionFixture();
   const source = await reanalyzeConfirmedIngestion(f.deps, f.input);

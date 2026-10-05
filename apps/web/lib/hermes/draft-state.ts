@@ -42,6 +42,7 @@ export interface PendingHermesRunStart {
   generation: HermesNarrativeGeneration;
   savedAt: number;
   runId?: string;
+  sourceReanalysisKey?: string;
 }
 
 export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult['researchRunDraft'] | null {
@@ -69,11 +70,14 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
     if (value.version !== 1 || typeof value.key !== 'string' || !value.key || value.key.length > 200
       || typeof value.savedAt !== 'number' || !Number.isFinite(value.savedAt)
       || (value.runId !== undefined && (typeof value.runId !== 'string' || !value.runId || value.runId.length > 100))
+      || (value.sourceReanalysisKey !== undefined && (typeof value.sourceReanalysisKey !== 'string'
+        || !value.sourceReanalysisKey || value.sourceReanalysisKey.length > 64))
       || !generation || generation.profile !== 'visual-narrative-v1' || generation.maxAgentTasks !== 9
       || (generation.locale !== 'zh' && generation.locale !== 'en')
       || typeof generation.style !== 'string' || !generation.style.trim() || generation.style.length > 100
       || typeof generation.instruction !== 'string' || generation.instruction.length > 1_000) return null;
     return { key: value.key, savedAt: value.savedAt, ...(value.runId ? { runId: value.runId } : {}),
+      ...(value.sourceReanalysisKey ? { sourceReanalysisKey: value.sourceReanalysisKey } : {}),
       generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction } };
   } catch { return null; }
 }

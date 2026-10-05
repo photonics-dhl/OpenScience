@@ -479,7 +479,10 @@ export async function workspaceGuideHandler(
   const editorDraft = payload.context.editorDraft;
   if (editorDraft && ownerTask.session.researchObjectId !== editorDraft.researchObjectId) throw new Error('Workspace editor draft session mismatch');
   const requestedTaskIds = [...new Set(payload.context.tasks.map((item) => item.id))];
-  const requestedResearchIds = [...new Set(payload.context.researchObjects.map((item) => item.id))];
+  const requestedResearchIds = [...new Set([
+    ...payload.context.researchObjects.map((item) => item.id),
+    ...(payload.context.presentation ? [payload.context.presentation.researchObjectId] : []),
+  ])];
   const [trustedTasks, trustedResearch] = await Promise.all([
     deps.prisma.ingestionTask.findMany({
       where: {

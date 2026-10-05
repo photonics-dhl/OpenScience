@@ -23,6 +23,14 @@ describe('agent task payload boundary', () => {
   it('accepts the bounded workspace.guide contract', () => {
     expect(agentTaskBodySchema.parse(validGuide)).toEqual(validGuide);
     expect(agentTaskBodySchema.parse({
+      ...validGuide,
+      payload: {
+        ...validGuide.payload,
+        route: 'research-object-edit',
+        context: { tasks: [], researchObjects: [], presentation: { researchObjectId: validGuide.sessionId } },
+      },
+    })).toMatchObject({ payload: { context: { presentation: { researchObjectId: validGuide.sessionId } } } });
+    expect(agentTaskBodySchema.parse({
       sessionId: validGuide.sessionId,
       kind: 'review.analyze',
       payload: { versionId: validGuide.sessionId, coreText: 'Review this research object.' },

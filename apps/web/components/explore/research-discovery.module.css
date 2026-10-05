@@ -50,6 +50,7 @@
 .discovery[data-explore-index='true'] .heading h1 { color: var(--os-ink); font: 400 clamp(38px, 4.4vw, 54px)/1.25 var(--font-reading-serif); letter-spacing: -.025em; text-wrap: balance; }
 .discovery[data-explore-index='true'] .intro { max-width: 44em; font-size: 16px; line-height: 1.85; }
 .discovery[data-explore-index='true'] .search { max-width: 760px; gap: 12px; padding: 6px; background: #fff; border-radius: 12px; box-shadow: 0 6px 20px rgb(24 47 53 / .05); }
+.discovery[data-explore-index='true'] .search::before { align-self: stretch; width: 2px; border-radius: 2px; background: var(--os-vermilion-ink); content: ''; opacity: .7; }
 .discovery[data-explore-index='true'] .searchField { display: grid; position: relative; flex: 1; min-width: 0; }
 .discovery[data-explore-index='true'] .searchIcon { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); pointer-events: none; color: var(--os-muted-paper); }
 .discovery[data-explore-index='true'] .search input { height: 48px; padding-left: 44px; caret-color: var(--os-vermilion-ink); border-color: transparent; background: transparent; transition: border-color 160ms ease; }
@@ -62,6 +63,7 @@
 .discovery[data-explore-index='true'] .card { height: auto; padding-block: 32px; border: 0; border-bottom: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; overflow: visible; }
 .discovery[data-explore-index='true'] .cardLink { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: center; gap: 40px; }
 .discovery[data-explore-index='true'] .cover { padding: 20px; border: 0; border-radius: 12px; aspect-ratio: 16 / 10; }
+.discovery[data-explore-index='true'] .cover { background: linear-gradient(145deg, #fff, #edf4f3); box-shadow: inset 0 0 0 1px rgb(24 47 53 / .045); }
 .discovery[data-explore-index='true'] .cards > li:first-child .card { padding-block: 40px; }
 .discovery[data-explore-index='true'] .cards > li:first-child .cover { padding: 24px; box-shadow: 0 12px 32px rgb(24 47 53 / .055); }
 .discovery[data-explore-index='true'] .cardBody { min-width: 0; padding: 0; }
@@ -91,6 +93,7 @@
 }
 @media (max-width: 420px) {
   .discovery[data-explore-index='true'] .search { gap: 8px; }
+  .discovery[data-explore-index='true'] .search::before { display: none; }
   .discovery[data-explore-index='true'] .search button { padding-inline: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {

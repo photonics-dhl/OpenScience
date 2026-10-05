@@ -180,6 +180,8 @@
 .craft-journal .journal-directory-heading { padding-bottom: 32px; margin-bottom: 32px; border-bottom: 1px solid var(--craft-rule, #dce5e5); }
 .craft-journal .journal-directory-heading h1 { margin-block: 12px 16px; }
 .craft-journal .journal-directory-heading > p:last-child { max-width: 65ch; font-size: 1.0625rem; line-height: 1.75; }
+.craft-journal .journal-directory-heading > p:first-child { display: inline-flex; align-items: center; gap: 10px; color: var(--craft-accent, #125d66); font-size: .8125rem; letter-spacing: .045em; }
+.craft-journal .journal-directory-heading > p:first-child::before { width: 32px; height: 1px; background: currentColor; content: ''; }
 .craft-journal .journal-account-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--craft-rule, #dce5e5); }
 .craft-journal .journal-account-tools a { display: inline-flex; align-items: center; min-height: 44px; font-size: 0.875rem; color: var(--craft-accent, #125d66); }
 .craft-journal-invitation > section { max-width: 800px; }

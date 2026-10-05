@@ -1,16 +1,16 @@
 # 服务器架构与资源复核
 
-内存与容器采样：2026-10-04 09:27:02；磁盘清理前复核09:33–09:37，清理后复核11:03–11:07（北京时间）。发布身份以CURRENT为准；本报告的清理后快照早于下一次发布。完整元数据在 `tmp/ops-readiness-20261004/`。
+内存与容器采样：2026-10-04 09:27:02；磁盘清理前复核09:33–09:37，清理后复核11:03–11:07；网页浏览器下线后复核2026-10-05 17:43，浏览器镜像删除后复核17:50（北京时间）。发布身份以CURRENT为准；完整元数据在 `tmp/ops-readiness-20261004/` 与 `tmp/ops-readiness-20261005-browser-*.json`。
 
 架构PNG/SVG仍是2026-10-03 22:42的历史快照；本表内存仍为09:27采样，本轮按用户要求暂缓内存调整。配置上限不是预留内存，Docker工作集、RSS、systemd cgroup与Linux可用内存不能相加。
 
-总内存 **30.07 GiB**；Linux可用 **8.48 GiB**；swap使用 **3.999/4.00 GiB**，接近满。
+此前总内存 **30.07 GiB**、Linux可用 **8.48 GiB**、swap使用 **3.999/4.00 GiB**；下线网页浏览器后17:43复核总内存 **30.07 GiB**、可用 **17.85 GiB**、swap使用 **2.77/4.00 GiB**。
 
 公网首页HEAD返回HTTP200；Web/API/Worker/Postgres/SeaweedFS均running/healthy、RestartCount=0。此观察不代替登录和科研产品旅程验收。
 
 | 容器 | 作用 | 工作集 | 内存上限 | 腾出条件 |
 |---|---|---:|---:|---|
-| openscience-chatgpt-browser | 网页生图/历史审阅 | 8.95GiB | 10.00 GiB | API真实生成→审核→入库通过且旧任务排空后可停；保留profile/jobs/spool |
+| openscience-chatgpt-browser | 网页生图/历史审阅 | 9.377GiB（下线前）→0 | 10.00 GiB | 2026-10-05已停止并移除容器；bridge与image/review timer disabled，profile登录态已删除；历史jobs/spool保留 |
 | openscience-development-langfuse-clickhouse-1 | 开发模型调用诊断 | 2.76GiB | 3.00 GiB | 完成当前诊断后按需启停；保留全部数据卷 |
 | openscience-prod-paper-analysis-1 | Docling PDF/OCR/公式 | 1.108GiB | 8.00 GiB | 保留 |
 | openscience-prod-malware-scanner-1 | 上传病毒检测 | 898.1MiB | 3.00 GiB | 保留 |
@@ -35,9 +35,9 @@
 | openscience-prod-redis-1 | 队列/缓存 | 4.301MiB | 0.50 GiB | 保留 |
 | vnstat | 流量统计 | 1.078MiB | 0.12 GiB | 保留监控/管理 |
 
-网站三服务合计0.99 GiB；浏览器8.95 GiB；全部development容器4.51 GiB。后两项是有条件可释放的占用，尚未释放；生图API尚未完成真实验收。
+网站三服务合计0.99 GiB；下线前浏览器容器9.377 GiB；全部development容器4.51 GiB。2026-10-05 Synclip `gpt-image-2` 首次真实任务已成功并保存私有PNG，随后完成网页浏览器容器、bridge、两个网页任务timer和登录态下线；ScanSci的论文解析Xvfb独立保留。
 
-浏览器memory.events的oom_kill=4与前次相同，属于历史累计，不证明今早新增OOM。当前核心应用容器oom_kill=0。浏览器及Docling仍各有约1.5 GiB旧页在swap；swap不作为视频任务容量。Qwen未运行，12 GiB是本地Qwen语音执行上限，不是云MiniMax/H3请求需要的内存。
+浏览器memory.events的oom_kill=4是下线前历史累计，不证明本轮新增OOM。当前核心应用容器oom_kill=0；浏览器进程已清零，ScanSci Xvfb仍属于论文解析能力。swap不作为视频任务容量。Qwen未运行，12 GiB是本地Qwen语音执行上限，不是云MiniMax/H3请求需要的内存。
 
 ## 主要进程（RSS排序）
 
@@ -60,7 +60,7 @@
 
 ## 磁盘核算
 
-根文件系统ext4容量147.27 GiB；09:37使用117.06 GiB、可用24.01 GiB、df显示83%（09:33短暂84%）。清理完成后11:03使用75.02 GiB、可用66.05 GiB、54%，使用量减少42.04 GiB。只有一块150 GiB磁盘；清理前inode使用30%，无未挂载的大容量数据盘。约6.2 GiB为文件系统保留差额，不是隐藏业务文件。
+根文件系统ext4容量147.27 GiB；09:37使用117.06 GiB、可用24.01 GiB、df显示83%（09:33短暂84%）。清理完成后11:03使用75.02 GiB、可用66.05 GiB、54%，使用量减少42.04 GiB；浏览器镜像删除后的17:50复核为使用约77.06 GiB、可用约64.05 GiB、55%，期间应用发布构建仍在进行。只有一块150 GiB磁盘；清理前inode使用30%，无未挂载的大容量数据盘。约6.2 GiB为文件系统保留差额，不是隐藏业务文件。
 
 根因：2026-09-14正常发布为保护旧源码消费者改成空schema2保留计划，旧目录及带SHA标签的镜像全部保留；日常缓存timer不处理这些目标，10-04凌晨维护仅回收10MiB，却观察到86目录/44G。每次发布继续累积，属于此前提出的发布保留策略问题。
 
@@ -69,13 +69,13 @@
 | 类别 | 最新占用 | 说明 |
 |---|---:|---|
 | 发布目录 | 87→2个 | 当前＋一个回滚；未重跑整树du，不能把历史体积当当前值 |
-| Docker镜像 | 27.11→25.36GB，254→29个/21活跃 | 11:06 system df报告7.113GB可回收，其中仍有回滚/按需运行依赖，未做全局prune |
+| Docker镜像 | 27.11→25.36GB，254→29个/21活跃（清理后旧快照） | 11:06 system df报告7.113GB可回收；17:49又删除无容器引用的网页浏览器镜像，当前应用发布期间45秒system df超时，未做全局prune |
 | Docker数据卷 | 17.15GB，system df 37个/19活跃 | volume ls列38个，CreatedAt均早于清理；不同报告口径不当删除证据；卷均不在清理范围 |
 | Docker容器可写层 | 20.66MB | 25个容器，24运行；不是大头 |
 | Docker构建缓存 | 230kB | 不是大头；现有维护timer已触发 |
 | /opt/openscience-models | 5.160GB | Qwen/Docling等共享模型；另有卷内BGE，不包含在此项 |
 | /var/backups/openscience | 3.896GB | 数据库集合及967对象备份；同机器，非灾备 |
-| 浏览器文件目录 | 2.292GB | 登录与任务资料保留 |
+| 浏览器文件目录 | 1.281GB（登录态删除后） | 历史jobs/spool/review-spool/downloads保留；profile登录态已删除 |
 | /var/log | 0.619GB | journald约507.1M；不是空间大头 |
 | 容器stdout/stderr日志 | 0.084GB | 此项不含卷内应用日志；生产json-file尚无显式max-size/max-file |
 | 根设备已删除但打开的普通文件 | 4.28MB | /proc扫描完成；只涵盖根设备，不包含overlay/tmpfs |
@@ -97,15 +97,15 @@
 
 | 问题 | 当前状态 |
 |---|---|
-| 单机资源保护 | 核心容器上限、Redis384MiB/noeviction和4GiB持久swap已落实；浏览器/诊断仍重，Portainer未限，峰值资源未完全解决 |
+| 单机资源保护 | 核心容器上限、Redis384MiB/noeviction和4GiB持久swap已落实；网页浏览器链路已下线并释放约9.4GiB，开发诊断栈仍可按需启停，Portainer未限 |
 | 数据备份 | DB每日定时仍执行，最新03:00集合存在；967对象已逻辑导出及逐文件验证。对象定时尚未启用，当前全量隔离恢复未通过验收 |
 | 异机副本 | 用户尚无外部存储；真实备份加密/传输/恢复未执行，已有crypto暂停要求继续有效 |
 | 磁盘保留策略 | 已完成85目录/300旧标签/73 sidecar清理。恢复正常发布prune-unused1，RED→GREEN、High GO、精确CI37172325083 success；随后正常部署exit0且PREPARE/COMPLETE成功，11:13实读发布目录仍精确两版、pending/journal/failed均无，持续策略已首次线上观察 |
 | 监控告警 | Netdata与邮件投递有历史成功记录；独立于本机的可用性、备份失败和欠费告警未完成验收 |
 | 测试环境/扩容 | 独立隔离测试站与后台多副本去重尚未完成；现有worker保持单实例，不直接复制 |
-| 账号依赖/论文质量 | Synclip应用接线已部署但真实API生图未验收；论文链有仍未解决的真实科学/工具响应问题，不以healthy代替质量 |
+| 账号依赖/论文质量 | 网页ChatGPT账号链路已停用并删除登录态；Synclip首次真实API生图已成功保存私有PNG但尚未公开，论文链仍有科学/工具响应问题，不以healthy代替质量 |
 
-清理后25个容器ID/镜像ID与清理前一致；核心五容器healthy、RestartCount0/OOMfalse，生产cgroup oom_kill前后均0，首页HEAD200。原六个已审闭合runtime/catalogue/adapter目录、模型及jobs/spool/results目录仍在；旧8个备份集合名称/模式及数据库文件大小一致。数据卷、上传论文、已认可媒体、备份、模型、浏览器登录与paid记录不在删除范围；本轮无重启、Provider调用、备份导出或恢复。
+清理后核心五容器healthy、RestartCount0/OOMfalse，生产cgroup oom_kill前后均0，首页HEAD200。2026-10-05浏览器容器已移除，bridge与两个网页任务timer为inactive/disabled，profile目录已删除；17:49又删除无容器引用的浏览器运行镜像。历史jobs/spool/review-spool/results/downloads、上传论文、已认可媒体、备份、模型和paid记录保留。Synclip私有PNG及其任务/receipt保留；ScanSci解析Xvfb未删除。当前应用发布切换期间的核心容器最终状态由发布会话单独后验，本轮未干扰该事务。
 
 手动H3执行入口已从旧应用目录脱离，20文件/216317B Gateway复用复制到既有独立video bundle，稳定入口 `/opt/openscience-video/cloud`。旧应用源码删除后实际Node导入再次通过，0付费请求；原Native运行包和catalogue未替换。额外探测的历史Codex配置runtime路径不存在，未在此前六个闭合目录扫描内、也未被retention触及；不能据此宣称本次误删或Codex真实生成已验收。独立High收尾复核及具体元数据见post-cleanup.json、post-inventory.json、docker-df-after.json。
 

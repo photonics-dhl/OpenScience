@@ -21,6 +21,7 @@ import {
   type WorkspaceGuideResult,
 } from '@/lib/api';
 import { clearPendingHermesRunStart, getHermesDraftStorage, loadPendingHermesRunStart, readHermesResearchRunDraft, savePendingHermesRunStart, type PendingHermesRunStart } from '@/lib/hermes/draft-state';
+import { prepareHermesNarrativeSource } from '@/lib/hermes/start-paper-narrative';
 import { continueSourceReanalysis, isSourceReanalysisCurrent, loadSourceReanalysisIntent, SourceReanalysisIntentError,
   type SourceReanalysisIntent } from '@/lib/hermes/source-reanalysis-intent';
 
@@ -286,14 +287,18 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       // Persist before the paid mutation; all unknown outcomes retain this exact request.
       if (!savePendingHermesRunStart(storage, scope, request)) throw new Error(t('narrative.storageError'));
       setPendingRestored(true);
+      const prepared = request.runId ? { scope, pending: request } : await prepareHermesNarrativeSource({
+        scope, pending: request, storage, isCurrent: () => mounted.current && actorRef.current === actorId
+          && selectedTask.id === scope.ingestionTaskId, identityError: t('narrative.identityChanged'), storageError: t('narrative.storageError'),
+      });
       const result = request.runId ? await getHermesResearchRun(researchObjectId, request.runId)
-        : await createHermesResearchRun(researchObjectId, [selectedTask.id], request.key, request.generation);
+        : await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
       if (!mounted.current || actorRef.current !== actorId) return;
       if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId
-        || !result.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === selectedTask.id)) {
+        || !result.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === prepared.scope.ingestionTaskId)) {
         throw new Error(t('narrative.identityChanged'));
       }
-      savePendingHermesRunStart(storage, scope, { ...request, runId: result.run.id });
+      savePendingHermesRunStart(storage, prepared.scope, { ...prepared.pending, runId: result.run.id });
       setRun(result.run);
       onRunCreated(result.run);
     } catch (cause) {
