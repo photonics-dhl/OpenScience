@@ -1234,7 +1234,8 @@ async function inspectInitialHermesSourceReviewForPurpose(tx: Prisma.Transaction
       || !isDeepStrictEqual(task.payload, { artifactId: source.artifactId, researchObjectId: run.researchObjectId })) return null;
   }
   try {
-    if (!savedComposition && automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
+    if (reviewMode !== 'agent' && !savedComposition
+      && automaticIngestionReviewStage({ artifactId: source.artifactId, artifact: source.artifact, agentTask: composition }) !== 'source_review') return null;
     const reference = parseDocumentSourceMapReference(record(composition.result).sourceMapRef);
     if (metadata.sourceMapSha256 !== reference.serializedSha256) return null;
     if (reviewMode === 'agent') {

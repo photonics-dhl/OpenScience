@@ -7,7 +7,7 @@ import { requireActiveMembership } from '../workspace/helpers';
 import { now } from '../workspace/types';
 import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
-import { ensureHermesIngestionReview, materializeHermesIngestion, recoverHermesSourceReviewInTransaction, reviewHermesSavedCompositionInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
+import { ensureHermesIngestionReview, materializeHermesIngestion, initializeHermesNativeSourceReviewInTransaction, recoverHermesSourceReviewInTransaction, reviewHermesSavedCompositionInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
 import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, inspectHermesPrivateSourceReanalysis, readHermesPrivateSourceReanalysisReplay,
   requireNoPrivateSourceReanalysisWriter, inspectNativeSourceReviewInitializationRecovery,
   NATIVE_REVIEW_INITIALIZATION_ERROR, NATIVE_REVIEW_INITIALIZATION_RECOVERY, inspectNativeSourceReviewPreflightRecovery,
@@ -227,7 +227,7 @@ export async function createHermesResearchRun(
       if (replay.actorId !== input.actorId || replay.researchObjectId !== input.researchObjectId || replay.requestDigest !== digest) {
         throw new HermesResearchRunError('IDEMPOTENCY_CONFLICT', 'Idempotency key belongs to a different Hermes research run');
       }
-      return replay;
+      return { run: replay, reviewerTaskId: null };
     }
 
     if (settings) {
@@ -284,12 +284,18 @@ export async function createHermesResearchRun(
       metadata: { researchObjectId: researchObject.id, ingestionTaskCount: ordered.length,
         ...(settings ? { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9, intermediateReview: 'hermes', publicationAuthorized: false } : {}) },
     }, ctx);
-    return run;
+    const reviewerTaskId = settings && readNativeAgentExecution(ordered[0]!.agentTask!.result)?.profile === 'paper-author'
+      ? await initializeHermesNativeSourceReviewInTransaction(deps, tx,
+      { actorId: input.actorId, taskId: taskIds[0]!, runId: run.id }, ctx) : null;
+    const current = settings ? await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }) : run;
+    return { run: current, reviewerTaskId };
   }, { isolationLevel: 'Serializable' });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return toView(await createOnce());
+      const result = await createOnce();
+      if (result.reviewerTaskId) await dispatchAgentTask(deps, result.reviewerTaskId);
+      return toView(result.run);
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (code === 'P2034') {

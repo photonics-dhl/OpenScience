@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { fixture, fields } from './direct-source-review-fixture';
@@ -47,6 +48,290 @@ async function storedAuthorFixture() {
   f.author.result.sourceMapRef = ref; f.cp.sourceMapHash = ref.serializedSha256;
   return { ...f, deps: { ...f.deps, storage } };
 }
+async function newRunAuthorFixture() {
+  const f = await storedAuthorFixture();
+  f.author.result.scientificReview.profile = 'paper-author';
+  f.db.hermesResearchSteps.length = 0; f.db.hermesResearchRuns.length = 0;
+  f.db.researchObjects[0]!.visibility = 'private';
+  f.db.usageLedger.push({ id: 'author-debit', userId: f.input.actorId, resource: 'ai_credit', delta: -1,
+    kind: 'consume', reason: 'Agent task reservation sdf.extract', idempotencyKey: `agent-task-reserve:${f.author.id}`,
+    metadata: { taskId: f.author.id, kind: 'sdf.extract', policy: 'charged-on-submit' } });
+  Object.assign(f.prisma.hermesResearchRun, { findFirst: async ({ where }: { where: { actorId: string; researchObjectId: string; profile: string } }) =>
+    f.db.hermesResearchRuns.find(row => row.actorId === where.actorId && row.researchObjectId === where.researchObjectId && row.profile === where.profile) ?? null });
+  const create = f.prisma.hermesResearchRun.create.bind(f.prisma.hermesResearchRun);
+  vi.spyOn(f.prisma.hermesResearchRun, 'create').mockImplementation(async args => {
+    const run = await create(args);
+    // Mirror the database's nullable column defaults in the shared in-memory fixture.
+    for (const step of f.db.hermesResearchSteps) step.presentationAssetId ??= null;
+    for (const step of (run as unknown as { steps: Array<{ presentationAssetId: unknown }> }).steps) step.presentationAssetId ??= null;
+    return run;
+  });
+  const updateSteps = f.prisma.hermesResearchStep.updateMany.bind(f.prisma.hermesResearchStep);
+  vi.spyOn(f.prisma.hermesResearchStep, 'updateMany').mockImplementation(async args => {
+    const ids = (args.where?.id as { in?: string[] } | undefined)?.in;
+    if (!ids) return updateSteps(args);
+    const rows = f.db.hermesResearchSteps.filter(step => ids.includes(step.id)
+      && f.db.agentTasks.find(task => task.id === step.agentTaskId)?.status === 'succeeded');
+    for (const row of rows) Object.assign(row, args.data);
+    return { count: rows.length };
+  });
+  const request = { actorId: f.input.actorId, researchObjectId: f.ids.ro, ingestionTaskIds: [f.ids.source],
+    idempotencyKey: 'new-native-author-run', generation: { profile: 'visual-narrative-v1' as const,
+      maxAgentTasks: 9 as const, locale: 'en' as const, style: 'auto', instruction: 'Explain the paper' } };
+  return { ...f, request };
+}
+async function waitingAuthorFixture() {
+  const f = await newRunAuthorFixture(); const completed = structuredClone(f.author.result);
+  f.author.status = 'running'; f.author.result = initialNativeAgentExecution(runtime, 'paper-author');
+  f.db.ingestionTasks[0]!.state = 'parsing';
+  const run = await createHermesResearchRun(f.deps, f.request); f.ids.run = run.id;
+  f.author.status = 'succeeded'; f.author.result = completed; f.db.ingestionTasks[0]!.state = 'needs_review';
+  expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ advanced: 1, errors: 0 });
+  return { ...f, run };
+}
+
+describe('new automatic runs use the existing independent Native reviewer', () => {
+  it('atomically creates a real reviewer and canonical steps while preserving the paid author self-check', async () => {
+    const f = await newRunAuthorFixture(); const author = structuredClone(f.author);
+    const tx = vi.spyOn(f.prisma, '$transaction');
+    const run = await createHermesResearchRun(f.deps, f.request);
+    const reviewer = f.db.agentTasks.at(-1)!;
+    expect(reviewer.id).not.toBe(author.id);
+    expect(readNativeAgentExecution(reviewer.result)?.profile).toBe('paper-source-review');
+    expect(f.db.agentTasks[0]).toEqual(author);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(2);
+    expect(run).toMatchObject({ status: 'running', maxAgentTasks: 9, steps: [
+      { stage: 'source_ingestion', agentTaskId: reviewer.id, status: 'waiting' },
+      { stage: 'source_review', agentTaskId: reviewer.id, status: 'waiting' },
+    ] });
+    expect(tx).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
+    expect(f.db.ingestionTasks[0]).toMatchObject({ state: 'queued', agentTaskId: reviewer.id });
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+  });
+  it('returns the same persisted run without creating or charging another reviewer on request replay', async () => {
+    const f = await newRunAuthorFixture(); const run = await createHermesResearchRun(f.deps, f.request);
+    const before = structuredClone(f.db);
+    expect(await createHermesResearchRun(f.deps, f.request)).toEqual(run);
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+  });
+  it('rolls back the run, reviewer, session, debit and source change when the reviewer receipt fails', async () => {
+    const f = await newRunAuthorFixture(); const before = structuredClone(f.db);
+    const audit = f.deps.audit!.record.bind(f.deps.audit);
+    vi.spyOn(f.deps.audit!, 'record').mockImplementation(async (event, tx) => {
+      if (event.action === 'ingestion.task.system_analysis_refresh') throw new Error('receipt unavailable');
+      return audit(event, tx);
+    });
+    await expect(createHermesResearchRun(f.deps, f.request)).rejects.toThrow('receipt unavailable');
+    expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+  });
+  it('does not replace an already recorded historical run whose author was consumed directly', async () => {
+    const f = await newRunAuthorFixture();
+    const legacy = await createHermesResearchRun(f.deps, { ...f.request, generation: undefined });
+    Object.assign(f.db.hermesResearchRuns[0]!, { profile: f.request.generation.profile, maxAgentTasks: 9,
+      generationSettings: { locale: 'en', style: 'auto', instruction: 'Explain the paper' },
+      requestDigest: createHash('sha256').update(JSON.stringify({ actorId: f.request.actorId, researchObjectId: f.request.researchObjectId,
+        ingestionTaskIds: f.request.ingestionTaskIds, generation: f.request.generation })).digest('hex') });
+    const before = structuredClone(f.db);
+    expect(await createHermesResearchRun(f.deps, f.request)).toMatchObject({ id: legacy.id, steps: legacy.steps });
+    expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+  });
+  it('commits before dispatching and preserves the durable outbox when dispatch fails', async () => {
+    const f = await newRunAuthorFixture();
+    const transaction = f.prisma.$transaction.bind(f.prisma); let committed = false;
+    vi.spyOn(f.prisma, '$transaction').mockImplementation(async (...args) => {
+      const result = await transaction(...args); committed = true; return result;
+    });
+    f.redis.lpush.mockImplementationOnce(async () => { expect(committed).toBe(true); throw new Error('queue unavailable'); });
+    await expect(createHermesResearchRun(f.deps, f.request)).rejects.toThrow('queue unavailable');
+    expect(f.db.agentTasks).toHaveLength(2);
+    expect(f.db.agentTasks[1]!).toMatchObject({ status: 'pending', dispatchedAt: null });
+    const before = structuredClone(f.db);
+    await expect(createHermesResearchRun(f.deps, f.request)).resolves.toMatchObject({ id: f.db.hermesResearchRuns[0]!.id });
+    expect(f.db).toEqual(before);
+  });
+  it('serializes concurrent same-key requests into one reviewer and ordinary debit', async () => {
+    const f = await newRunAuthorFixture();
+    const results = await Promise.all([createHermesResearchRun(f.deps, f.request), createHermesResearchRun(f.deps, f.request)]);
+    expect(results[0]!.id).toBe(results[1]!.id); expect(f.db.agentTasks).toHaveLength(2);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(2);
+  });
+  it.each(['pending', 'running'] as const)('waits for the %s Native author without transferring its source, then initializes exactly one reviewer', async status => {
+    const f = await newRunAuthorFixture(); const completed = structuredClone(f.author.result);
+    f.author.status = status; f.author.result = initialNativeAgentExecution(runtime, 'paper-author');
+    f.db.ingestionTasks[0]!.state = status === 'pending' ? 'queued' : 'parsing';
+    const beforeLedger = structuredClone(f.db.usageLedger);
+    const run = await createHermesResearchRun(f.deps, f.request); f.ids.run = run.id;
+    expect(run.steps).toMatchObject([
+      { stage: 'source_ingestion', agentTaskId: f.author.id, status: 'waiting' },
+      { stage: 'source_review', agentTaskId: null, status: 'waiting' },
+    ]);
+    expect(f.db.agentTasks).toHaveLength(1); expect(f.db.usageLedger).toEqual(beforeLedger);
+    expect(f.redis.lpush).not.toHaveBeenCalled();
+    expect(f.db.ingestionTasks[0]!.agentTaskId).toBe(f.author.id);
+    expect(await createHermesResearchRun(f.deps, f.request)).toEqual(run);
+    f.author.status = 'running';
+    const findSource = f.prisma.ingestionTask.findUnique.bind(f.prisma.ingestionTask);
+    vi.spyOn(f.prisma.ingestionTask, 'findUnique').mockImplementation(args => {
+      const agentTaskId = args.where.agentTaskId;
+      if (!agentTaskId) return findSource(args);
+      const source = f.db.ingestionTasks.find(row => row.agentTaskId === agentTaskId);
+      return source ? findSource({ ...args, where: { id: source.id } }) : Promise.resolve(null);
+    });
+    await expect(requireNativeAgentExecutionAuthority(f.prisma as never, { taskId: f.author.id, executionAttempt: 1 })).resolves.toBeDefined();
+    expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ errors: 0, advanced: 0, failed: 0 });
+    f.author.status = 'succeeded'; f.author.result = completed; f.db.ingestionTasks[0]!.state = 'needs_review';
+    for (let i = 0; i < 2 && f.db.agentTasks.length === 1; i++)
+      expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ errors: 0, failed: 0 });
+    expect(f.db.agentTasks).toHaveLength(2); expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(2);
+    const reviewer = f.db.agentTasks[1]!;
+    expect(readNativeAgentExecution(reviewer.result)?.profile).toBe('paper-source-review');
+    expect(f.db.hermesResearchSteps.filter(step => step.stage === 'source_review')).toHaveLength(1);
+    expect(f.db.hermesResearchSteps.find(step => step.stage === 'source_ingestion')!.agentTaskId).toBe(reviewer.id);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.db.agentTasks).toHaveLength(2); expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    const execution = runningReviewerFixture(f);
+    await expect(requireHermesSourceReviewExecution(f.prisma as never, execution.binding)).resolves.toMatchObject({ mode: 'agent' });
+  });
+  it('serializes completion polling into one reviewer and fills the original waiting phase', async () => {
+    const f = await waitingAuthorFixture(); const phaseId = f.db.hermesResearchSteps.find(step => step.stage === 'source_review')!.id;
+    const input = { actorId: f.input.actorId, runId: f.ids.run, taskId: f.ids.source };
+    await Promise.all([ensureHermesIngestionReview(f.deps, input), ensureHermesIngestionReview(f.deps, input)]);
+    expect(f.db.agentTasks).toHaveLength(2); expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(2);
+    expect(f.db.hermesResearchSteps.filter(step => step.stage === 'source_review')).toHaveLength(1);
+    expect(f.db.hermesResearchSteps.find(step => step.id === phaseId)!.agentTaskId).toBe(f.db.agentTasks[1]!.id);
+    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+  });
+  it.each(['ordinal', 'source', 'artifact', 'error', 'asset', 'duplicate', 'foreign-task', 'family', 'checkpoint',
+    'membership', 'phase-cas', 'source-cas', 'run-cas', 'audit'] as const)(
+    'rejects %s drift without a reviewer debit or source transfer when filling the waiting phase', async change => {
+      const f = await waitingAuthorFixture(); const phase = f.db.hermesResearchSteps.find(step => step.stage === 'source_review')!;
+      if (change === 'ordinal') phase.ordinal = 1;
+      if (change === 'source') phase.ingestionTaskId = 'foreign';
+      if (change === 'artifact') phase.artifactId = 'foreign';
+      if (change === 'error') phase.error = 'changed';
+      if (change === 'asset') phase.presentationAssetId = 'foreign';
+      if (change === 'duplicate') f.db.hermesResearchSteps.push({ ...phase, id: 'duplicate' });
+      if (change === 'foreign-task') phase.agentTaskId = 'foreign';
+      if (change === 'family') f.author.result.nativeAgentExecution.profile = 'paper-understanding';
+      if (change === 'checkpoint') f.author.result.nativeAgentExecution.checkpoint.finishReason = 'length';
+      if (change === 'membership') f.db.memberships[0]!.role = 'viewer';
+      if (change === 'phase-cas') {
+        const update = f.prisma.hermesResearchStep.updateMany.bind(f.prisma.hermesResearchStep);
+        vi.spyOn(f.prisma.hermesResearchStep, 'updateMany').mockImplementation(args =>
+          args.where?.agentTaskId === null ? Promise.resolve({ count: 0 }) : update(args));
+      }
+      if (change === 'source-cas') vi.spyOn(f.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+      if (change === 'run-cas') vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
+      if (change === 'audit') {
+        const audit = f.deps.audit!.record.bind(f.deps.audit);
+        vi.spyOn(f.deps.audit!, 'record').mockImplementation(async (event, tx) => {
+          if (event.action === 'ingestion.task.system_analysis_refresh') throw new Error('receipt unavailable');
+          return audit(event, tx);
+        });
+      }
+      const before = structuredClone(f.db);
+      await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, runId: f.ids.run, taskId: f.ids.source })).rejects.toThrow();
+      expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    });
+  it('preserves a failed author and leaves the waiting reviewer uncharged', async () => {
+    const f = await newRunAuthorFixture();
+    f.author.status = 'running'; f.author.result = initialNativeAgentExecution(runtime, 'paper-author');
+    f.db.ingestionTasks[0]!.state = 'parsing';
+    await createHermesResearchRun(f.deps, f.request); const ledger = structuredClone(f.db.usageLedger);
+    f.author.status = 'failed'; f.author.error = 'author failed';
+    f.db.ingestionTasks[0]!.state = 'failed_blocked'; f.db.ingestionTasks[0]!.error = f.author.error;
+    expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ failed: 1, errors: 0 });
+    expect(f.db.agentTasks).toHaveLength(1); expect(f.db.usageLedger).toEqual(ledger);
+    expect(f.db.hermesResearchRuns[0]!.status).toBe('failed'); expect(f.redis.lpush).not.toHaveBeenCalled();
+  });
+  it.each(['checkpoint', 'author-response', 'source-map', 'map-bytes', 'membership', 'session', 'source-cas', 'run-cas',
+    'reviewer-cas', 'runtime', 'storage', 'audit', 'other-run'] as const)(
+    'does not leave a new run or debit when %s proof changes', async change => {
+      const f = await newRunAuthorFixture();
+      if (change === 'checkpoint') f.cp.finishReason = 'length';
+      if (change === 'author-response') f.author.result.scientificReview.responseHash = '9'.repeat(64);
+      if (change === 'source-map') f.db.artifacts[0]!.blobSha256 = '9'.repeat(64);
+      if (change === 'map-bytes') vi.spyOn(f.deps.storage, 'getObject').mockResolvedValue({ size: 3, body: Readable.from([Buffer.from('bad')]) });
+      if (change === 'membership') f.db.memberships[0]!.role = 'viewer';
+      if (change === 'session') f.db.agentSessions[0]!.status = 'closed';
+      if (change === 'source-cas') vi.spyOn(f.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+      if (change === 'run-cas') vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
+      if (change === 'reviewer-cas') vi.spyOn(f.prisma.agentTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+      if (change === 'other-run') vi.spyOn(f.prisma.hermesResearchStep, 'findFirst').mockResolvedValueOnce({ id: 'foreign-run-step' } as never);
+      const deps = { ...f.deps, ...(change === 'runtime' ? { nativeAgentRuntime: undefined } : {}),
+        ...(change === 'storage' ? { storage: undefined } : {}), ...(change === 'audit' ? { audit: undefined } : {}) };
+      const before = structuredClone(f.db);
+      await expect(createHermesResearchRun(deps, f.request)).rejects.toThrow();
+      expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    });
+  it('binds the reviewer to an author with a self-check and adopts only the actual independent terminal result', async () => {
+    const f = await newRunAuthorFixture(); const original = structuredClone(f.author);
+    const run = await createHermesResearchRun(f.deps, f.request); f.ids.run = run.id;
+    const review = runningReviewerFixture(f);
+    await expect(requireHermesSourceReviewExecution(f.prisma as never, review.binding)).resolves.toMatchObject({ mode: 'agent' });
+    await expect(requireNativeAgentExecutionAuthority(f.prisma as never, { taskId: review.reviewer.id, executionAttempt: 1 })).resolves.toBeDefined();
+    await markTaskProgress(f.deps, { taskId: review.reviewer.id, status: 'succeeded', expectedExecutionAttempt: 1, result: review.result });
+    await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: run.id })).resolves.toBe('ready');
+    expect(f.db.agentTasks[0]).toEqual(original);
+    expect(f.db.agentTasks[1]!.result.scientificReview).toMatchObject({ profile: 'paper-source-review', sourceAgentTaskId: original.id });
+  });
+  it('continues from the independent result to private Claims and a Native plan, then holds before any image task', async () => {
+    const f = await newRunAuthorFixture();
+    const map = await loadDocumentSourceMapReference(f.deps.storage, f.author.result.sourceMapRef);
+    const quote = map.pages[0]!.blocks[0]!.text!;
+    const locator = createBlockSourceLocator(map, 'source', { charRange: { start: 0, end: quote.length } });
+    Object.assign(f.author.result, { core: { schemaVersion: '0.1.0', ...fields(() => quote) },
+      evidence: fields(() => ({ quote, locator: 'passages:P00001' })),
+      evidenceSegments: fields(() => [{ quote, sourceLocator: locator }]),
+      evidenceLocation: fields(() => ({ status: 'located', matching: 'exact', sourceLocator: locator })),
+    });
+    f.author.result.scientificReview.fieldReviews = fields(() => ({ verdict: 'accepted', summary: quote, sourcePassageIds: ['P00001'], issues: [] }));
+    f.author.result.scientificReview.draftClaims[0].statement = quote; f.author.result.reviewedClaimSuggestions[0].statement = quote;
+    Object.assign(f.db.researchObjects[0]!, { version: 1 });
+    f.db.sdfDocuments.push({ id: 'doc', researchObjectId: f.ids.ro, coreJson: f.author.result.core });
+    f.db.sdfNodes.push(...Object.keys(f.author.result.scientificReview.fieldReviews).map(nodeType => ({ id: `node-${nodeType}`, sdfDocumentId: 'doc', nodeType, content: quote })));
+    f.db.branches.push({ id: 'main-branch', researchObjectId: f.ids.ro, name: 'main', headCommitId: null });
+    Object.assign(f.prisma.evidenceRecord, { createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+      f.db.evidenceRecords.push(...data); return { count: data.length };
+    } });
+    const deps = { ...f.deps, nativeSceneImageEnabled: false };
+    const completed = structuredClone(f.author.result);
+    f.author.status = 'running'; f.author.result = initialNativeAgentExecution(runtime, 'paper-author');
+    f.db.ingestionTasks[0]!.state = 'parsing';
+    const run = await createHermesResearchRun(deps, f.request); f.ids.run = run.id;
+    f.author.status = 'succeeded'; f.author.result = completed; f.db.ingestionTasks[0]!.state = 'needs_review';
+    for (let i = 0; i < 2; i++) expect(await reconcileHermesResearchRuns(deps)).toMatchObject({ errors: 0, failed: 0 });
+    const review = runningReviewerFixture(f);
+    await markTaskProgress(deps, { taskId: review.reviewer.id, status: 'succeeded', expectedExecutionAttempt: 1, result: review.result });
+    for (let i = 0; i < 3 && f.db.hermesResearchRuns[0]!.status !== 'awaiting_claim_review'; i++) {
+      expect(await reconcileHermesResearchRuns(deps)).toMatchObject({ errors: 0, failed: 0, stopped: 0 });
+    }
+    expect(f.db.hermesResearchRuns[0]!).toMatchObject({ status: 'awaiting_claim_review', maxAgentTasks: 9 });
+    expect(f.db.ingestionTasks[0]!).toMatchObject({ state: 'confirmed', agentTaskId: review.reviewer.id });
+    expect(f.db.claimNodes).toHaveLength(1); expect(f.db.evidenceRecords).toHaveLength(1);
+    expect(await reconcileHermesResearchRuns(deps)).toMatchObject({ errors: 0, advanced: 1 });
+    const planner = f.db.agentTasks.find(task => task.kind === 'presentation.generate')!;
+    expect(readNativeAgentExecution(planner.result)?.profile).toBe('paper-illustration');
+    expect(planner.payload.hermesRunAuthority).toMatchObject({ runId: run.id, stage: 'storyboard', profile: 'visual-narrative-v1' });
+    // Complete only the fixture's planner. This tests orchestration and cannot prove scientific/art quality.
+    planner.status = 'succeeded';
+    const row = f.db.hermesResearchRuns[0]!;
+    f.db.presentationAssets.push({ id: planner.id, researchObjectId: f.ids.ro, versionId: row.versionId, kind: 'interactive_html',
+      status: 'draft', contentHash: 'fixture-plan', provenance: {}, createdAt: new Date(), updatedAt: new Date() });
+    for (const claimId of row.sourceClaimIds) f.db.presentationAssetClaims.push({ presentationAssetId: planner.id,
+      claimId, researchObjectId: f.ids.ro, versionId: row.versionId });
+    expect(await reconcileHermesResearchRuns(deps)).toMatchObject({ errors: 0, advanced: 1 });
+    expect(await getHermesResearchRun(deps, { actorId: f.input.actorId, researchObjectId: f.ids.ro, runId: run.id }))
+      .toMatchObject({ status: 'awaiting_storyboard_review', generationHold: 'image-api-pending' });
+    const beforeTasks = structuredClone(f.db.agentTasks); const beforeLedger = structuredClone(f.db.usageLedger);
+    await reconcileHermesResearchRuns(deps);
+    f.db.presentationAssets[0]!.status = 'approved';
+    await reconcileHermesResearchRuns(deps);
+    expect(f.db.agentTasks).toEqual(beforeTasks); expect(f.db.usageLedger).toEqual(beforeLedger);
+    expect(f.db.hermesResearchSteps.some(step => step.stage === 'scene_image')).toBe(false);
+    expect(f.db.hermesResearchRuns[0]!.status).toBe('awaiting_storyboard_review');
+  });
+});
 async function queuedFixture(lose = false) {
   const f = await storedAuthorFixture();
   const before = structuredClone(f.db);
@@ -161,6 +446,9 @@ describe('native reviewer initialization failure recovery', () => {
 });
 async function runningFixture() {
   const f = await queuedFixture(); await f.request;
+  return runningReviewerFixture(f);
+}
+function runningReviewerFixture(f: Awaited<ReturnType<typeof storedAuthorFixture>>) {
   const reviewer = f.db.agentTasks.at(-1)!;
   reviewer.status = 'running'; reviewer.executionAttempt = 1;
   f.db.ingestionTasks[0]!.state = 'parsing';
@@ -447,8 +735,9 @@ describe('native independent author/reviewer domain contract', () => {
       ingestionTaskIds: [f.ids.source], idempotencyKey: 'native-independent-run', generation: {
         profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'auto', instruction: 'Explain the paper' } });
     for (const step of f.db.hermesResearchSteps) step.presentationAssetId ??= null;
-    expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ advanced: 1, errors: 0 });
-    expect(f.db.hermesResearchRuns[0]!.status).toBe('awaiting_source_review');
+    expect(run.steps.some(step => step.stage === 'source_review')).toBe(true);
+    expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ advanced: 0, errors: 0 });
+    expect(f.db.hermesResearchRuns[0]!.status).toBe('running');
     expect(await ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, taskId: f.ids.source, runId: run.id })).toBe('queued');
     expect(readNativeAgentExecution(f.db.agentTasks.at(-1)!.result)?.profile).toBe('paper-source-review');
     expect(f.db.hermesResearchRuns[0]!.maxAgentTasks).toBe(9);

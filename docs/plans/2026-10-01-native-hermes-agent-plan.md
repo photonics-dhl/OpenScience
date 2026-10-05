@@ -31,7 +31,7 @@
 
 ## Synclip替换图片通道
 
-默认作者自检会接受有源但条件／案例关系错误的转述；这在实际84f5稿的传播阈值、扫描因果及绑定上已复现。现有形状、回执与来源守卫不足以判断语义，下一增量复用已注册的独立Native source_review，不重生全文、不评议论文：仅新max9创建时同Serializable事务持久化真实reviewer/task/session、source步骤、普通扣费与审计；保留原作者稿／CP。Native agent初始binder以真实阶段／唯一审计／debit／作者CP／Map证明授权，历史classifier、model/web及旧run replay不改。范围为research-run.ts、ingestion-service.ts、source-review-recovery.ts；提交后dispatch，角色成功才能materialize／Claims／私有planner。沿已核实际nativeSceneImageEnabled=false与原image-api-pending暂停图像，不新建暂停字段或门禁；源稿和分镜质量必须实际验收，独立上下文收益尚未证明。
+默认作者自检会接受有源但条件／案例关系错误的转述；这在实际84f5稿的传播阈值、扫描因果及绑定上已复现。现有形状、回执与来源守卫不足以判断语义，下一增量复用已注册的独立Native source_review，不重生全文、不评议论文：仅新max9创建时同Serializable事务持久化真实reviewer/task/session、source步骤、普通扣费与审计；保留原作者稿／CP。Native agent初始binder以真实阶段／唯一审计／debit／作者CP／Map证明授权，历史classifier、model/web及旧run replay不改。范围为research-run.ts、ingestion-service.ts、source-review-recovery.ts；提交后dispatch，角色成功才能materialize／Claims／私有planner。沿已核实际nativeSceneImageEnabled=false与原image-api-pending暂停图像，不新建暂停字段或门禁；源稿和分镜质量必须实际验收，独立上下文收益尚未证明。即时上传会在作者未完成时创建run，因此新max9先记录既有ordinal0/waiting/null-agentTask的source_review，保留作者当前指针与执行授权；作者完成后ensure在旧classifier之前复核完整身份/CP/Map/权限，同事务普通扣费、创建reviewer并严格CAS填原步骤，之后dispatch。重复/畸形步骤拒绝，作者失败不扣审阅费；没有该空步骤的旧run保持原行为。此补接已获有界架构与最终Code High GO，实际上传顺序→核源→Claims→私有planner→旧image hold已离线验证；真实质量仍须观察。
 
 10-03用户提供[图片API](https://synclip.ai/dev/docs/image)，确认首试模型为gpt-image-2，2.5后续接入；不自动替换Nano Banana或Midjourney。原生Hermes继续负责科学、风格、完整prompt及像素审阅。Gateway接入独立Synclip image spool身份；host保存提交意图并调用POST /v1/image、GET /v1/tasks/:id，复用现有隔离图片正规化。具体实现/配置/真实结果仅见CURRENT。
 
