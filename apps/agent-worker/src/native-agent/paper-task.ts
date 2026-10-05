@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { CLAIM_KINDS, CLAIM_RELATIONS, MAX_CANONICAL_CORE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS, MAX_INGESTION_CLAIMS, readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference } from '@openscience/domain';
+import { CLAIM_KINDS, CLAIM_RELATIONS, MAX_CANONICAL_CORE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS, MAX_INGESTION_CLAIMS, nativeAgentMaxTurns, readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference } from '@openscience/domain';
 import type { StorageAdapter } from '@openscience/storage';
 import { NATIVE_IMAGE_REQUEST_MAX_BYTES, parseStructuredJson, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
 import type { Prisma } from '@prisma/client';
@@ -234,7 +234,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools,
-    maxTurns: 32, maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
+    maxTurns: nativeAgentMaxTurns(execution.profile), maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
     maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES,
     // M3's documented guaranteed floor, rather than the proxy endpoint's unknown-model fallback.
     // Native context management stays enabled and this value is retained in the original task binding.

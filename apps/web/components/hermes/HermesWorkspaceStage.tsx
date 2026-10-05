@@ -376,9 +376,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const assistantOpen = Boolean(presentation?.assistantOpen || fallbackAssistantOpen);
   const compactViewport = viewportSize.width > 0 && viewportSize.width <= 1100;
   const hasUsableAnchor = anchorRect !== null && hermesPresentationCanDock(presentation);
-  const anchorOutsideView = hasUsableAnchor && anchorRect && (anchorRect.top + anchorRect.height / 2 - 180 < viewportSize.top + 64
-    || anchorRect.top + anchorRect.height / 2 + 180 > viewportSize.bottom);
-  const compact = !guideTarget && !conversationAnchor && (compactViewport || Boolean(anchorOutsideView));
+  // A page's anchor may be below the fold, but that must not change Hermes'
+  // visual weight. Only the viewport class selects the compact dock; scrolling
+  // changes its placement, never the companion's scale.
+  const compact = !guideTarget && !conversationAnchor && compactViewport;
   const stageSize = conversationAnchor ? Math.min(360, conversationAnchor.clientWidth, conversationAnchor.clientHeight)
     : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
   const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });

@@ -33,6 +33,7 @@ function PublicShell({
         className,
       )}
       data-os-surface="public"
+      data-surface-role={tone === 'paper' ? 'public-reading' : 'public-workbench'}
       {...props}
     >
       <SkipLink tone={tone}>{skipLabel}</SkipLink>

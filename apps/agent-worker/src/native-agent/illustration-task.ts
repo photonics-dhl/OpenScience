@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { parseStructuredJson, NATIVE_IMAGE_REQUEST_MAX_BYTES, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
-import { readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference,
+import { nativeAgentMaxTurns, readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference,
   type PaperOriginalRef, type StoryboardRequest } from '@openscience/domain';
 import type { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
@@ -225,7 +225,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)],
-    maxTurns: 32, maxOutputTokens: 32_768, maxTotalOutputTokens: 98_304, maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES,
+    maxTurns: nativeAgentMaxTurns(execution.profile), maxOutputTokens: 32_768, maxTotalOutputTokens: 98_304, maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES,
     ...(execution.model === 'MiniMax-M3' ? { contextWindowTokens: 512_000 } : {}),
     generation: { thinking: 'adaptive' as const, temperature: 0.3 }, deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });

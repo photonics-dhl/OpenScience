@@ -114,6 +114,15 @@ describe('native Agent server-owned execution receipts', () => {
   it('does not fall back from a malformed native marker', () => {
     expect(() => readNativeAgentExecution({ nativeAgentExecution: { kind: 'model-native' } })).toThrow('binding');
   });
+  it('accepts the bounded paper-author continuation budget without extending other native profiles', () => {
+    const author = initialNativeAgentExecution(runtime, 'paper-author')!;
+    author.nativeAgentExecution.checkpoint = reference('completed', 33);
+    expect(readNativeAgentExecution(author)?.checkpoint?.turnCount).toBe(33);
+
+    const illustration = initialNativeAgentExecution(runtime, 'paper-illustration')!;
+    illustration.nativeAgentExecution.checkpoint = reference('completed', 33);
+    expect(() => readNativeAgentExecution(illustration)).toThrow('binding');
+  });
   it('starts after current authority was checked and completes the exact paid receipt after lease change', async () => {
     const f = fixture(); await compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: undefined, next: reference('started'), paidCompletion: false });
     f.task.executionAttempt = 2; f.task.status = 'failed';

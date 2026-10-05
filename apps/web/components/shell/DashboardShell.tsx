@@ -26,7 +26,7 @@ function DashboardShell({
   ...props
 }: DashboardShellProps) {
   return (
-    <div className={cn('surface-folio surface-product-app min-h-dvh', className)} data-os-surface="dashboard" {...props}>
+    <div className={cn('surface-folio surface-product-app min-h-dvh', className)} data-os-surface="dashboard" data-surface-role="research-desk" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
       <ShellHeader
         compactBrandOnMobile

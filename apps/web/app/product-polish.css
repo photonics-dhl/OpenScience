@@ -164,3 +164,76 @@
   .surface-product-app > header { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   .surface-product-app .product-main::before { left: 20px; }
 }
+
+/* Page hierarchy tokens from product-story-design/ui-craft-protocol.md.
+   These establish a shared rhythm while route-specific modules still own
+   their real content and workflow. */
+.surface-product-app {
+  --surface-gutter: clamp(1.25rem, 4vw, 3rem);
+  --surface-reading-measure: 72ch;
+  --surface-rule-strong: color-mix(in srgb, var(--craft-accent) 22%, var(--craft-rule));
+}
+
+.surface-product-app[data-surface-role='research-desk'] .product-main {
+  width: min(100%, 84rem);
+  margin-inline: auto;
+  padding-inline: var(--surface-gutter);
+}
+
+.surface-product-app[data-surface-role='research-desk'] .product-main > :is(header, [data-page-heading]) {
+  position: relative;
+  isolation: isolate;
+}
+
+.surface-product-app[data-surface-role='research-desk'] .product-main > :is(header, [data-page-heading])::after,
+.surface-product-app[data-surface-role='research-workspace'] [data-object-context-bar='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--surface-rule-strong), transparent 68%);
+  content: '';
+  pointer-events: none;
+}
+
+.surface-product-app[data-surface-role='research-workspace'] [data-object-context-bar='true'] {
+  position: relative;
+  background: color-mix(in srgb, var(--craft-tint) 55%, var(--craft-surface));
+}
+
+.surface-product-app[data-surface-role='research-workspace'] [data-workspace-planes] {
+  background: var(--craft-tint);
+}
+
+.surface-product-app[data-surface-role='research-workspace'] [data-workspace-plane='56'] {
+  margin: clamp(.75rem, 2vw, 1.5rem);
+  border: 1px solid color-mix(in srgb, var(--craft-rule) 85%, transparent);
+  border-radius: .5rem;
+  background: var(--craft-surface);
+  box-shadow: 0 1px 0 rgb(255 255 255 / .7) inset, 0 18px 42px rgb(24 47 53 / .055);
+}
+
+.surface-product-app[data-surface-role='research-workspace'] [data-workspace-plane='19'],
+.surface-product-app[data-surface-role='research-workspace'] [data-workspace-plane='25'] {
+  background: color-mix(in srgb, var(--craft-tint) 76%, var(--craft-surface));
+}
+
+.surface-product-app :is([data-research-create], [data-hermes-review-page], [data-product-recovery]) {
+  position: relative;
+}
+
+.surface-product-app :is([data-research-create], [data-hermes-review-page]) > header {
+  max-width: var(--surface-reading-measure);
+}
+
+.surface-product-app :is([data-research-create], [data-hermes-review-page]) > header :is(h1, h2) {
+  text-wrap: balance;
+}
+
+@media (max-width: 639px) {
+  .surface-product-app[data-surface-role='research-workspace'] [data-workspace-plane='56'] {
+    margin: .5rem;
+    border-radius: .375rem;
+  }
+}
