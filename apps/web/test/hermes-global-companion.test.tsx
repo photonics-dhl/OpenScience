@@ -87,11 +87,11 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('data-live2d-instance');
   });
 
-  it('registers floating actions without adding an inline image or a dock slot', () => {
+  it('registers floating actions with a collapsed compact host without adding an inline image', () => {
     const markup = renderToStaticMarkup(<HermesDockAnchor floating onInvoke={() => {}} state="idle" suggestion={suggestion} />);
     expect(markup).toContain('data-hermes-floating-owner="true"');
-    expect(markup).toContain('hidden');
-    expect(markup).not.toContain('hermes-dock-anchor"');
+    expect(markup).toContain('hermes-dock-anchor--floating');
+    expect(markup).not.toContain('hidden');
     expect(markup).not.toContain('<img');
     expect(markup).not.toContain('data-live2d-instance');
   });

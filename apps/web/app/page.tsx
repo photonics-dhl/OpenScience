@@ -14,6 +14,7 @@ export default async function Page() {
     <PublicShell
       headerActions={<SiteHeader context="public-product" tone="dark" />}
       headerUtilities={<PublicProductAccess tone="dark" />}
+      includeHermesDock={false}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}
       tone="dark"

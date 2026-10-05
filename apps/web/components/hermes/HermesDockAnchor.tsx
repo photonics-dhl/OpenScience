@@ -23,5 +23,5 @@ export function HermesDockAnchor({ assistantOpen = false, floating = true, onInv
     if (!anchor || !stage) return;
     return stage.register({ anchor, assistantOpen, floating, onInvoke, state, suggestion, workspaceId });
   }, [assistantOpen, floating, onInvoke, stage, state, suggestion, workspaceId]);
-  return <div className={floating ? undefined : 'hermes-dock-anchor'} data-hermes-companion-margin={floating ? undefined : 'true'} data-hermes-dock-anchor="true" data-hermes-floating-owner={floating ? 'true' : undefined} hidden={floating} ref={anchorRef} />;
+  return <div className={floating ? 'hermes-dock-anchor hermes-dock-anchor--floating' : 'hermes-dock-anchor'} data-hermes-companion-margin={floating ? undefined : 'true'} data-hermes-dock-anchor="true" data-hermes-floating-owner={floating ? 'true' : undefined} ref={anchorRef} />;
 }

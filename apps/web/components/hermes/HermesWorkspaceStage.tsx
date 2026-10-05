@@ -375,7 +375,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   });
   const assistantOpen = Boolean(presentation?.assistantOpen || fallbackAssistantOpen);
   const compactViewport = viewportSize.width > 0 && viewportSize.width <= 1100;
-  const hasUsableAnchor = anchorRect !== null && hermesPresentationCanDock(presentation);
+  const hasUsableAnchor = anchorRect !== null && (hermesPresentationCanDock(presentation) || compactViewport);
   // A page's anchor may be below the fold, but that must not change Hermes'
   // visual weight. Only the viewport class selects the compact dock; scrolling
   // changes its placement, never the companion's scale.
@@ -503,7 +503,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [motionSearch]);
 
   useEffect(() => {
-    if (!presentation?.anchor || !hermesPresentationCanDock(presentation)) { setAnchorRect(null); return; }
+    if (!presentation?.anchor || (!hermesPresentationCanDock(presentation) && !compactViewport)) { setAnchorRect(null); return; }
     const anchor = presentation.anchor;
     const sync = () => {
       const bounds = anchor.isConnected ? anchor.getBoundingClientRect() : null;
@@ -519,7 +519,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       window.removeEventListener('resize', sync);
       window.removeEventListener('scroll', sync, true);
     };
-  }, [presentation?.anchor, presentation?.floating]);
+  }, [compactViewport, presentation?.anchor, presentation?.floating]);
 
   useClientLayoutEffect(() => {
     if (!assistantOpen || (!compactViewport && !fallbackAssistantOpen)) { setConversationAnchor(null); return; }
@@ -533,8 +533,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   useEffect(() => {
     if (compactViewport) document.body.setAttribute('data-hermes-compact-navigation', 'true');
     else document.body.removeAttribute('data-hermes-compact-navigation');
-    return () => document.body.removeAttribute('data-hermes-compact-navigation');
-  }, [compactViewport]);
+    if (compactViewport && anchorRect === null) document.body.setAttribute('data-hermes-compact-fallback', 'true');
+    else document.body.removeAttribute('data-hermes-compact-fallback');
+    return () => {
+      document.body.removeAttribute('data-hermes-compact-navigation');
+      document.body.removeAttribute('data-hermes-compact-fallback');
+    };
+  }, [anchorRect, compactViewport]);
 
   useClientLayoutEffect(() => {
     const bubble = bubbleRef.current;
@@ -1403,7 +1408,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     top: stageCenterY - stageSize / 2,
     transition: settlingNewDock ? 'none' : undefined,
   };
-  if (compact) {
+  if (compact && !anchored) {
     style.left = viewportSize.right - stageSize - 12;
     style.top = viewportSize.bottom - stageSize - 8;
   }
@@ -1567,7 +1572,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       ) : null}
     </div>
   );
-  const element = compact ? <div className="hermes-compact-dock">
+  const element = compact ? <div className="hermes-compact-dock" data-hermes-compact-placement={anchored ? 'anchored' : 'fallback'}>
     <button type="button" className="hermes-compact-invoke" ref={compactInvokeRef} onClick={invokeHermes}>{t('compactLabel')}<span>Hermes ↗</span></button>
     {stageElement}
   </div> : stageElement;

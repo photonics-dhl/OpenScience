@@ -2,7 +2,10 @@
 /* The compact companion is a small floating invitation, never a page-wide
    footer. The end safe area is transparent and only keeps the fixed stage
    from covering the last reading action. */
-body[data-hermes-compact-navigation='true'] { padding-bottom: 176px; scroll-padding-bottom: 176px; }
+body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-padding-bottom: 176px; }
+.hermes-dock-anchor--floating { position: absolute; width: 1px; height: 1px; min-height: 0; pointer-events: none; }
+.hermes-compact-dock[data-hermes-compact-placement='anchored'] { position: relative; inset: auto; width: 196px; height: 156px; margin-left: auto; margin-right: 0; }
+.hermes-compact-dock[data-hermes-compact-placement='anchored'] .hermes-workspace-stage[data-hermes-placement='anchored'] { position: absolute; right: 0; bottom: 0; margin: 0; }
 .hermes-compact-dock { --os-vermilion-ink: #125d66; --os-rule-paper: #dce3e5; position: fixed; bottom: 12px; right: 12px; z-index: 44; width: 196px; height: 156px; pointer-events: none; }
 .hermes-compact-invoke { position: absolute; right: 128px; bottom: 10px; display: grid; gap: 2px; min-width: max-content; padding: 7px 11px; border: 1px solid var(--os-rule-paper); border-radius: 999px; background: rgb(255 255 255 / .94); color: var(--os-muted-paper); font: 500 11px/1.35 var(--font-ui); text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 4px 16px rgb(24 47 53 / .1); }
 .hermes-compact-invoke span { color: var(--os-vermilion-ink); font-size: 13px; }
@@ -21,6 +24,8 @@ body[data-hermes-compact-navigation='true'] { padding-bottom: 176px; scroll-padd
 [data-hermes-in-conversation='true'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
 [data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
 @media (max-width: 1100px) {
+  body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { position: relative; width: 100%; height: 156px; min-height: 156px; }
+  body[data-hermes-compact-navigation='true'] .hermes-dock-anchor:not(.hermes-dock-anchor--floating) { min-height: 156px; }
   .hermes-compact-dock { width: 196px; height: 156px; background: transparent; border: 0; }
   .hermes-compact-invoke { right: 128px; bottom: 10px; }
   .hermes-conversation [data-hermes-conversation-companion='true'] { display: grid; flex: none; place-items: center; height: min(300px, 30dvh); border-bottom: 1px solid var(--os-rule-paper); background: #f6f9f8; }

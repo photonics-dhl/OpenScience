@@ -2,10 +2,12 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
+import { HermesShellDockAnchor } from '@/components/hermes/HermesShellDockAnchor';
 
 interface PublicShellProps extends React.HTMLAttributes<HTMLDivElement> {
   headerActions?: React.ReactNode;
   headerUtilities?: React.ReactNode;
+  includeHermesDock?: boolean;
   mainClassName?: string;
   navigationLabel?: string;
   skipLabel: string;
@@ -18,6 +20,7 @@ function PublicShell({
   className,
   headerActions,
   headerUtilities,
+  includeHermesDock = true,
   mainClassName,
   navigationLabel,
   skipLabel,
@@ -39,6 +42,7 @@ function PublicShell({
       <SkipLink tone={tone}>{skipLabel}</SkipLink>
       <ShellHeader actions={headerActions} utilities={headerUtilities} navigationLabel={navigationLabel} tone={tone} wrapActionsOnMobile={wrapHeaderActionsOnMobile} />
       <main className={cn('min-h-[calc(100dvh-3.5rem)]', mainClassName)} id="main-content" tabIndex={-1}>
+        {includeHermesDock ? <HermesShellDockAnchor /> : null}
         {children}
       </main>
     </div>
