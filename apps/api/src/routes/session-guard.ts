@@ -35,7 +35,7 @@ export async function requireCurrentUser(
 ): Promise<CurrentUser | null> {
   const token = sessionTokenFrom(req);
   if (!token) {
-    void reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
+    await reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
     return null;
   }
   return getCurrentUser(deps, token);
