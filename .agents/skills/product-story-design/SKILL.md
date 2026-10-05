@@ -9,6 +9,8 @@ Read the current user decisions and the relevant page in [the product design](..
 
 Treat every surface as a visitor task. Public exploration invites reading; a research desk advances private work; a guide makes the first meaningful action understandable. For a changed area, identify what the reader wants, what the area lets them see or do, and what observable result supports its message. Use these answers to choose the composition, then write copy. A page can have one dominant action without turning every region into a CTA.
 
+For a full-page refinement, read [the UI craft protocol](references/ui-craft-protocol.md) before editing. It is the executable version of the earlier guide-page process: establish the page job, set the first-viewport reading order, reserve the Hermes footprint, then verify the actual route at desktop and narrow widths. Treat Landing as a preserved surface unless the user explicitly changes that scope.
+
 ## Narrative decisions
 
 - Start with the researcher's materials, question or discovery. Put the particular benefit beside an actual research artifact or an existing product action. “Continue”, “explore” and “understand” need an object in context.

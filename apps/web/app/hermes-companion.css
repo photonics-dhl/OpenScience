@@ -34,6 +34,13 @@ body[data-hermes-compact-navigation='true'] { padding-bottom: 128px; scroll-padd
   inset: var(--hermes-actor-inset);
 }
 
+/* Public navigation already explains the next step beside the companion.
+   Keep the persistent actor clean there; spoken feedback still uses the
+   shared hat-origin contour after an interaction. */
+[data-hermes-global-companion='true'][data-hermes-companion-surface='navigation'] .hermes-guide-nudge {
+  display: none;
+}
+
 .hermes-workspace-stage :is(.hermes-menu-feedback, .hermes-performance-bubble) {
   width: min(14rem, calc(var(--hermes-stage-size) * .72));
   max-width: calc(100vw - 1.5rem);
@@ -129,17 +136,22 @@ body[data-hermes-compact-navigation='true'] { padding-bottom: 128px; scroll-padd
 
 [data-hermes-global-companion='true'][data-hermes-placement='detached'] .hermes-motion-enable {
   top: auto;
-  right: 3.25rem;
+  right: 3.75rem;
   bottom: .25rem;
-  left: 3.25rem;
+  left: auto;
+  width: max-content;
+  max-width: min(13rem, calc(100vw - 6rem));
   min-height: 2.75rem;
   height: auto;
-  padding: .25rem;
+  padding: .45rem .7rem;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 999px;
   background: var(--os-paper-strong);
   color: var(--os-vermilion-ink);
   font-size: .6875rem;
   line-height: 1.35;
   white-space: normal;
+  box-shadow: 0 3px 12px rgb(24 47 53 / .1);
 }
 
 @media (max-width: 640px) {
