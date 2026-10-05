@@ -1,19 +1,28 @@
 # Hermes / 论文视觉叙事 CURRENT
-> 唯一交付树 `.worktrees/onchip-video-release`，分支 `release/onchip-production-line`；根 main 只作导航。
+> 唯一交付树 .worktrees/onchip-video-release，分支 release/onchip-production-line；根 main 只作导航。
 
 ## 目标与决定
-- 先完整验收生图前置：真实 NousResearch Hermes Agent 忠实理解论文并核对我们的转述，自动保存六维/Claims/Evidence、科学分镜、构图、完整可迁移提示词和1–2个合适风格；默认首选。用户10-03已给Synclip图像API文档并授权先用`gpt-image-2`试效果，2.5后续再接；不自动切Nano Banana/Midjourney。新接口应用接线、私密Key、host与broker均已启用并完成首个真实任务；旧image-api-pending只作为历史记录，不再代表当前路由。物理正确、读者能理解贡献和条件、艺术质量均须实际验收。10-04用户再明确：Hermes能力改进须通用，当前论文只是验收样本；不将其坐标、参数、正确答案固化进通用Skill，跨论文/研究类型验收仍保留。
-- 最新用户纠正：论文是事实来源，默认任务是忠实理解作者主旨、机制、算例和条件，并核对我们的摘要、Claims、prompt和图像有没有曲解/遗漏/添加；不是论文有效性、质量、偏倚或创新性的同行评议。Hermes＋MiniMax-M3负责理解与自身来源核对，critical-thinking完整能力保留给另行请求的评议；服务器GPT不参与新论文前置。旧paid路径与收据保留。
-- 目标链路：既有PDF/OCR/SourceMap → 原生Hermes理解/核源 → 六维/Claim/Evidence → 原生Hermes科学分镜/风格/完整prompt → Synclip `gpt-image-2` → Hermes像素核查 → 用户确认/现有发布流程 → 匿名读者页。Synclip应用、host与broker已启用并完成首个真实任务；旧ChatGPT浏览器生图/review链路已停用，不再作为自动回退。文档[入口](https://synclip.ai/dev/docs/image)为异步POST /v1/image＋GET /v1/tasks/:id；具体模型采用用户明确给定值。接口备忘`tmp/hermes-cleanup-20261003/synclip-image-api-notes.md`，未知提交不可盲重发。
-- 用户已认可第二篇物理正确图2cc5003f及细化图681ef614；其科学内容不重做。创建RO和效果展示需少操作；局部管理员/API成功不代表普通用户旅程通过。
-- 三篇整体验收、原文疑点回读、可复用经验与定量几何核验仍未全部完成。开源GPU生图第二通道暂停；视频及UI改造独立推进，局部返工不取消这些目标。
-- 保留原PDF、SourceMap、认可图片、旧公开版本及paid回答/失败/费用/期限。unknown不重发、失败任务不重开、不猜补科学内容、不放宽来源/Claims/权限守卫；人工核源brief只能作参照。
+- 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责图像生成。
+- 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
+- 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
-## 当前运行与实现
-- 2026-10-05运维收尾：旧`openscience-chatgpt-browser`容器、bridge、browser image/review timers、静态服务和登录profile已停止/禁用/移除；历史spool、任务结果、论文/媒体、付费证据与回滚资料保留，ScanSci Xvfb保留。当前生产生图只走Synclip，API/Worker/Native未受该清理影响。
-- 2026-10-05 Synclip 首次真实验收已完成：用户审核 RO `c896802c-35dd-4b59-8db1-5f374f83a6d8` 的四幕分镜后，从站内第一幕按钮提交新任务 `b3c023bf-ee0c-4ed8-9030-80ddf9cf6966`；应用、Worker、Synclip `gpt-image-2` broker 全链路最终 `succeeded/100%`，私有 draft asset 同 ID，PNG 602060 bytes，浏览器已实际检查画面，未自动批准/公开。首次安装暴露宿主无 GID 1000 的环境缺口（timer `216/GROUP`）；已创建 `openscience-synclip` GID 1000 并恢复 timer。安装器已补上缺组创建，回归10/10、CI `37289031854`通过；应用与同 SHA provider bundle 已发布为 `3c368514bbde5cb17773e65fc8fc74cebd3804e1`。旧失败 image tasks 不重放。
-- 2026-10-05 第二篇论文复测未达到 Synclip 调用：RO9067 已恢复到当前私有草稿 v13，但恢复不复制历史 Hermes 分镜，必须重新生成并审核当前版本；RO714a 无平台管理员成员；D2NN RO 的历史分镜缺 `sourceEvidenceIdentity`，被当前来源守卫拒绝。三次均在任务/Provider 前停止，无调用或扣费。当前仅 ROc896 有跨应用真实成功，跨论文稳定性仍待一篇具备当前 source-bound 分镜且有管理员成员的论文完成验收。
-- 2026-10-05 当前 release `d5a056ba3fcc63be3e74a942a0741221c9200395` 已部署并用于 RO9067 真实入口重试。该重试在 `workspace.guide` API 400 处停止，未创建 Hermes 任务、未调用 Provider、未扣费；根因是通用工作台路由只发送 `presentation.researchObjectId`，却发送空 `researchObjects`，旧解析器把合法最小上下文拒绝。候选修复允许 presentation-only 身份并由 Worker 将其加入当前会话的受信任研究对象查询，保留成员/会话/版本授权。Domain/Worker/API 定向回归、Domain build、Worker/API/Web typecheck、scoped ESLint均通过；待发布后重走同一入口，第二篇仍须真实生成并审核分镜后再调用 Synclip。
+## 当前运行与真实验收
+- 生产版本 tuple：本地候选 f53a2ea8e5fa1cf7e054cf54f5e2b1e9af9bd9c5；线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64；回滚 0454e931b3203c88c36d382432566b6e0bc15aa7。本轮部署使用 --no-tests --skip-migrate，Parser/ScanSci/embedding/auth/admin 功能探针未执行，不能把容器健康等同于完整验收。
+- 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
+- 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
+- 第二篇真实复测：RO 9067a2d5-42ad-4c06-b234-753728b71064、草稿 v13 f40576ee-44fc-44e0-8be9-ba050adaf2c9，Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf。SourceMap、paper-author六维/Claims、独立source-review均成功；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，6项字段审阅已接受。
+- 同一 run 的科学分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 成功，illustrationReview=accepted，保存4幕私有分镜和完整prompt：Bethe等效偶极子、Weyl传播/倏逝角谱、经典极限和远场截面极限。运行时在分镜成功后自动进入生图，未形成用户审核后才生图的停顿；无自动公开。
+- 第二篇四幕图像结果：36eeba50-7ce7-4207-8e43-f06e2886d43f、1614ec52-49e1-47bd-bf7a-5e90d22ac442、1961935e-f2af-453a-abf7-8613a3e92c1d 获 Synclip 成功回执，其中前两项 imageReview accepted，第三项 imageReview blocked；第四幕 28ab61b0-7931-41d3-8200-2d63c1f986ad 的 POST 状态为 UNCERTAIN，没有 task_id/receipt，run 最终 failed。PNG和尝试标记均保留，不重试。
+
+## 未完成与下一动作
+- 当前链路已经证明“论文→Hermes→分镜→Synclip”可通，但跨论文尚未稳定：第二篇是3/4外部提交成功，1/4未知，且有1张被图像审阅阻断；第二篇三张结果尚未完成新的人工像素质量验收。
+- 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
+- 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
+- read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
+
+## 历史验证（不作为当前 next action）
+
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-5`对应run `a7d6e204-87e8-44f3-a17f-8d420aa6de19`：应用已发布`8710b0ee0fb0d9fd70094828bbc05ebfd26ecde5`，CI `37276825552`成功，active/public release与容器健康后验通过。原生Hermes `paper-author`六字段全`accepted`/6 Claims；独立`paper-source-review`完成（method/results/reproducibility accepted，insight/problem/limitations revised）；`presentation.generate`第15轮成功，进入`awaiting_storyboard_review`并保存4幕私有科学分镜和完整提示词。Synclip仍`false`，未调用生图、未产生图片；当前待用户审核分镜，像素质量与新Synclip模型调用仍未验收。
 - 2026-10-05真实验证`native-tools-preimage-20261005-cds-4`对应run `5d7f45cf-db32-43b2-9a00-ee09a275773c`：应用release `f128a2dd2657a25d0b8701ca4bb221c4e7dafb43`已正常发布并通过构建、容器健康、active/public release、journal/retention验收；Synclip仍`false`，Hermes broker timer为`openscience-hermes-broker.timer`且enabled/active。paper-author六维全accepted/6 Claims成功，独立source-review成功（insight/results等accepted，limitations按来源revised）；storyboard在32-turn安全上限停止，32次中27次为逐场景`paper_illustration_science_repair`，根因是fresh native诊断500字符截断导致同一场景的后续问题逐项暴露。无asset/图片/Synclip调用，任务不重放。候选修复将fresh诊断上限扩到4000、旧保存/legacy回放仍500；328项原生/自动风格/native generation、Worker typecheck、scoped lint已通过，待发布后再做一次新key验收。
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-3`对应run `b85e53f7-64c6-4816-b8a7-ffff443fbf32`：SourceMap、paper-author六维/Claims和独立`paper-source-review`均成功，`presentation.generate`首次科学调用被证据关系拒收，随后用真实science调用ID进行repair；第二次绑定反馈后模型回合以`finishReason=length`结束，系统安全阻止自动付费修正，无asset/图片/Synclip调用。修复仅收紧`paper_illustration_science_repair`工具描述和Hermes repair guidance，要求下一条消息直接做单次有界repair调用，禁止解释、整份science或art重述；132项原生分镜测试与相关链路327项、Worker typecheck/scopedlint通过。修复已由CI `37270310067`验证并发布为`339ae64366cb05c12f969e7abadabb14b344e21d`，rollback为`d282064a04ab1b3af51c4ff09094a663f8e14f1f`；下一步只做一次新的独立生产验收，不重放失败任务。

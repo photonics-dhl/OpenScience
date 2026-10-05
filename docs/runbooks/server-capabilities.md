@@ -1,6 +1,6 @@
 # 服务器能力与复用清单
 
-新论文复用服务器PDF/OCR/SourceMap，由原生Hermes＋MiniMax-M3理解和审阅；旧GPT浏览器不是其前置。2026-10-05 Synclip `gpt-image-2` 首次真实生图已成功保存私有PNG，网页ChatGPT浏览器链路随后已停用，登录态已删除，历史结果与证据保留。运行身份和真实质量统一见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，调用及消费缺口见[能力台账](hermes-capability-registry.md#原生agent当前入口与消费断点)。
+新论文复用服务器PDF/OCR/SourceMap，由原生Hermes＋MiniMax-M3理解和审阅；旧GPT浏览器不是其前置。2026-10-05 Synclip gpt-image-2 已完成第一篇成功和第二篇3/4供应商成功的真实复测，但第二篇仍有一次未知外部终态、一次图像审阅阻断，跨论文稳定性未达标。网页ChatGPT浏览器链路已停用，登录态已删除，历史结果和证据保留。运行身份和真实质量统一见CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md），调用及消费缺口见能力台账（hermes-capability-registry.md#原生agent当前入口与消费断点）。
 
 ## 单机运行架构与资源
 
