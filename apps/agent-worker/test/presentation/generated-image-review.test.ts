@@ -20,6 +20,20 @@ it('retains full source text above the historical browser budget for a native He
   await expect(reviewGeneratedImage({ reviewScientific } as never, input as never)).resolves.toMatchObject({ model: 'MiniMax-M3' });
   expect(reviewScientific).toHaveBeenCalledOnce();
 });
+
+it('accepts a native review after Gateway strips provider thinking blocks', async () => {
+  const input = pixelInput();
+  Object.assign(input.illustrationContext, { imageReviewMode: 'model-native' });
+  const text = '<think>内部推理不属于审校 JSON。</think>\n```json\n{"decision":"accepted","summary":"The saved image matches the approved scene.","repairInstruction":null}\n```';
+  const reviewScientific = vi.fn(async (request: ScienceReviewInput) => ({
+    text, promptHash: nativeImageReviewPromptHash(request), responseHash: hash(text),
+    provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
+  }));
+  await expect(reviewGeneratedImage({ reviewScientific } as never, input as never)).resolves.toMatchObject({
+    decision: 'accepted', provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
+  });
+  expect(reviewScientific).toHaveBeenCalledOnce();
+});
 function pixelInput() {
   const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
   return { bytes, contentType: 'image/png', claims: [] as unknown[],

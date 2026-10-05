@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { nativeImageReviewPromptHash, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
+import { nativeImageReviewPromptHash, parseStructuredJson, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
 import { nativeImageReviewProvider } from '@openscience/domain';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput, type ScienceReviewAttachment } from '@openscience/ai-gateway';
@@ -89,7 +89,10 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     try { parseDecision(value); return true; } catch { return false; }
   });
   // A malformed/uncertain response keeps its original spool record; there is no model retry here.
-  const decision = parseDecision(JSON.parse(result.text.trim().replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')));
+  // Gateway validation already removes provider thinking blocks and code fences.
+  // Reuse that parser here so a valid Gateway result is not rejected a second
+  // time by a narrower JSON.parse call.
+  const decision = parseDecision(parseStructuredJson(result.text));
   const native = input.illustrationContext.imageReviewMode === 'model-native';
   if (result.promptHash !== (native ? nativeImageReviewPromptHash(request) : sha256(prompt)) || result.responseHash !== sha256(result.text)
     || (native ? !nativeImageReviewProvider(result.provider, result.model)
