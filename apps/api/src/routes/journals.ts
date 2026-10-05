@@ -34,7 +34,7 @@ const applicationBody = z.object({
   plannedArticleCount: z.number().int().min(0).max(1_000_000).optional(), requestedServices: z.array(z.string().max(100)).max(20).optional(),
   rightsDeclaration: z.string().max(4000).optional(), rightsDeclarationVersion: z.string().max(100).optional(),
 }).strict();
-const metadata = z.object({ title: z.string().trim().min(1).max(200), doi: z.string().max(300).optional(), authors: z.array(z.string().max(300)).max(200), publishedDate: z.string().max(10).optional(), journalTitle: z.string().max(300).optional(), issns: z.array(z.string().max(20)).max(5).default([]), originalUrl: safeUrl, abstract: z.string().max(50_000).optional() }).strict();
+const metadata = z.object({ title: z.string().trim().min(1).max(200), doi: z.string().max(300).nullish(), authors: z.array(z.string().max(300)).max(200), publishedDate: z.string().max(10).optional(), journalTitle: z.string().max(300).optional(), issns: z.array(z.string().max(20)).max(5).default([]), originalUrl: safeUrl, abstract: z.string().max(50_000).optional() }).strict();
 const source = z.object({ kind: z.enum(['metadata', 'abstract', 'fulltext']), text: z.string().max(200_000), url: safeUrl.or(z.literal('')), label: z.string().max(500) }).strict();
 const rights = z.object({ internalProcessing: z.boolean(), derivativeGeneration: z.boolean(), publicSource: z.boolean(), publicDerivative: z.boolean(), externalProcessing: z.boolean(), license: z.string().max(500), evidence: z.string().max(5000) }).strict();
 const sourcePermissions = z.object({ internalProcessing: z.boolean(), derivativeGeneration: z.boolean(), publicSource: z.boolean(), publicDerivative: z.boolean(), externalProcessing: z.boolean(), figureReuse: z.boolean(), derivativeIllustration: z.boolean() }).strict();
