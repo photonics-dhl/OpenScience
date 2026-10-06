@@ -1,5 +1,5 @@
 # Hermes / 论文视觉叙事 CURRENT
-> 唯一交付树 .worktrees/onchip-video-release，分支 release/onchip-production-line；根 main 只作导航。
+> 唯一交付树 .worktrees/onchip-video-release；本地 `codex/journal-shared-paper-understanding-20261006`，GitHub `photonics-dhl/OpenScience` 的 `frontend/nanqing`；不推送或合并 main。
 
 ## 目标与决定
 - 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
@@ -8,7 +8,7 @@
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 
 ## 当前运行与真实验收
-- 生产版本 tuple：线上与公网 `/__release` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，回滚为 `456e550f69652b00569d2435c5f8283df3534d9f`；包含 Worker 解析修复与 Hermes 页面锚点修正。精确 CI `37349486195` 全绿；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- 生产版本 tuple：线上 `.release-id` 与公网 `/__release` 均为代码 `da3045c10848f2e9998d1311aaa2f6006e301adf`，回滚 `.rollback-id` 为 `d6ddcd57fb8848328183460ae91783248915b604`；失败/事务标记均无，Web/API/Worker/Parser/ScanSci/BGE 六容器 healthy，首页 HTTP 200。精确[期刊 CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37410159861)、[Hermes CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37410159729)、同 SHA Parser 16 例验收、ScanSci 与 BGE 真实探针通过；公网 auth/admin 与真实期刊 PDF→Hermes 科学质量尚未验收。
 - UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
@@ -21,11 +21,10 @@
 - 2026-10-06 发布后复测 `e8b6cb5d-f251-426a-8017-8d5b79354976`：同一 RO 第二幕仅提交一次，任务 100%/无错误，Synclip `gpt-image-2` 资产为私有 draft，MiniMax-M3 native image review 为 `completed/accepted`；页面实际显示两张图片。近10分钟 Worker 日志未再出现该 JSON 解析错误。原失败任务仍保留 `started`，不重放。
 
 ## 未完成与下一动作
-- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”在修复后再次真实成功；本次解析断点已关闭，但旧第四幕未知外部终态、被阻断图片和未验证的 Parser/ScanSci/Embedding 功能探针仍不能被一次成功覆盖。
+- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”在旧任务修复后再次真实成功；本次发布补齐 Parser/ScanSci/BGE 部署探针，但旧第四幕未知外部终态、被阻断图片和新期刊 PDF→Hermes 的真实科学质量仍未由这些探针覆盖。
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
-- 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
-- `f52ee24c` 的无 Cookie `session-guard` 修复已包含在当前线上 `4ed53b71`；线上 `/auth/me` 未登录请求返回统一 401，发布后15分钟没有新的 `Reply was already sent`/`ERR_HTTP_HEADERS_SENT` 日志。定向 API 测试16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个既有 HEAD错误。
+- 旧 `/auth/me` 重复响应问题已在祖先提交 `f52ee24c` 修复，当时线上无 Cookie 请求统一返回 401、发布后15分钟未复现；本次发布未重跑 auth/admin 功能探针，不能用旧观察代替新验收。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 
 ## 历史验证（不作为当前 next action）
@@ -35,12 +34,9 @@
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-3`对应run `b85e53f7-64c6-4816-b8a7-ffff443fbf32`：SourceMap、paper-author六维/Claims和独立`paper-source-review`均成功，`presentation.generate`首次科学调用被证据关系拒收，随后用真实science调用ID进行repair；第二次绑定反馈后模型回合以`finishReason=length`结束，系统安全阻止自动付费修正，无asset/图片/Synclip调用。修复仅收紧`paper_illustration_science_repair`工具描述和Hermes repair guidance，要求下一条消息直接做单次有界repair调用，禁止解释、整份science或art重述；132项原生分镜测试与相关链路327项、Worker typecheck/scopedlint通过。修复已由CI `37270310067`验证并发布为`339ae64366cb05c12f969e7abadabb14b344e21d`，rollback为`d282064a04ab1b3af51c4ff09094a663f8e14f1f`；下一步只做一次新的独立生产验收，不重放失败任务。
 - 2026-10-05技能市场复核：Hermes官方已提供`pdf`、`grounded-citations`、`baoyu-infographic`与`concept-diagrams`；仓库已具备`baoyu-infographic`及OpenScience科学插画Skill，不新增平行论文理解链。`paper-context-resolver`仅适合复现缺口，不替代整篇论文理解；第三方材料图包的contract→storyboard gate→figure模式仅作参考，未安装低可信外部包。后续分镜按来源绑定contract、有限storyboard gate、再进入Synclip，继续保留原来源守卫。
 - 2026-10-05原生分镜修复增量已提交`dc1f70b46aa7c0bd15ec2e37afef6ed56ba2dde2`：新任务的`invalid_illustration`反馈携带真实拒收science工具调用ID，Hermes必须原样用于单场景修复；旧保存会话按首轮工具描述逐字回放，不追加字段。分镜/自动风格/原生图解326项定向回归、Worker typecheck、两文件scoped ESLint通过；全Worker套件另有90项既有parser/extractor/presentation fake与Windows权限基线失败，未命中本改动。真实run `02b9b621-1f8b-4e9b-8ee6-2e6162e85fe0`已完成上传、SourceMap、源审校和科学计划，随后因Hermes使用伪造修复ID、重复整份science并最终漏掉工具调用而blocked；无图片、无Synclip调用，once收据禁止重放。
-- 当前应用已发布`d06b7a6a6344ed23d6ee3ecee9d7beca11272e30`，rollback为`99fb1f67ccdfa6e5dec51cacc1f56e05967f95d3`；CI`37265790927`通过，Worker镜像标签与release identity一致，API/Web/Worker/Parser/Embedding healthy，原`openscience-hermes-broker.timer`仍enabled/active。部署按runbook使用`--no-tests --skip-migrate`，Parser、ScanSci、embedding/vector、auth/admin功能探针未执行；没有重放任何旧任务，也没有Synclip调用。发布源的精确后验保留在本轮终端收据和服务器release identity中。
 - 默认Source Skill v6已正常发布并切换新immutable Native：复用已装共享对象/双方向角度、传播/偏振/粒子/观测、宽度对象与定义、同算例条件、披露层级；替换泛化说明，不加入论文评议或样本答案。仅nativeSourceReviewVersion更新，critical/static/art v5及六份旧输出逐字不变，历史导出头回退v5。RED→16/16、Worker TC/build/scopedlint0、Code/Ops/producer High GO、精确CI全绿；实际目录Source6/critical5/两完整正文及共享引用全等，3064字符Source已确认。证据native-default-alignment-*；真实保真仍待下条新一次评价。
 - 已部署3文件补接已有读者摘要方法及Claims大小反馈：新fresh paper_draft实际描述启用精确serialized JSON长度，原8000边界/全部科学守卫不变；旧paid/缺首轮定义不升级。实际5817保存/草稿/终审全部回执逐字回放、0providers，明确五个超限批次；2项RED后边界/旧回执/缺首轮覆盖，Science124+Source113+Paper5=242通过，Worker TC/build/scopedlint0。写稿入口共享SCIENTIFIC_READER_ORGANIZATION、简洁中文自然语言主线，不固化样本答案；最终Code High及Native789复用Ops GO，saved回退三个旧flag的P2已真实RED→GREEN关闭；精确CI及正常部署通过，新真实耗时降至2m27s，但科学保真仍NO-GO，见下条。证据native-author-size-feedback-*及native-fresh-author-feedback-replay.*。
-- app已正常发布`8992376524b9a80f8fc02d143a4dea3b25e7c9f7`，rollback `df643f93031cb6a841bc2772ee8e862a1c93b42d`；Native/catalogue仍`36465bc953280ce919c3c6d44941d9cb3262ca88`，M3与Source6未重装。已创建新独立核源的旧run/paid不得用旧36465应用重解释；保留兼容应用前向修复。精确media CI37252496534 success/75steps，deploy exit0/public exact/retention PREPARE+COMPLETE/journalclear；后验核心7running/OOMfalse、API/Worker Memory2GiB/Swap4GiB、Native timer enabled/active、active0，无pending发布/retention。Synclipfalse/host未安装，API/Worker Native图像能力false；ScanSci/vector/auth-admin功能仍未观察。证据native-tools-{ci-result.json,deploy.log,runtime-after.json,capabilities-after.json}；开发HEAD按Git。
 - 新Native来源修订已接现有reanalyze/API、同源SourceMap及逐字段/Claim工具；仅新intent revise_saved_source生成新paper-author私有稿，保留旧版本。父稿/CP/Map/权限在执行、终态与采用重验，旧paid/历史私有恢复合同保持。Domain283/Worker142/实际HTTP41、Domain build及四包TC/scopedlint通过；profile/marker绕过和请求键namespace兼容两项High P2有真实RED→GREEN。API helper已接类型但无新UI入口，不称普通用户旅程通过。
-- 首份0c854 CI37218137751仅旧Synclip fixture两次Date.now造成期限偶发600001ms失败；测试统一时钟起点，生产600000限制保持，实际tick-clock RED→GREEN/transport15及最终Linux CI通过。失败证据保留；发布及新模型任务只用了最终be5。
 
 ## 真实来源修订与当前断点
 - 新独立核源已自然结束：oncekey native-independent-preimage-20261005-cds-1，run `f15f3dc7-d121-4f1f-ad77-179003b017dc` / reviewer `5148c160-4f33-431c-856c-88872bc9e755` succeeded/9帧，复用source d874/author84/CP90175b59/原PDF及Map，未重跑作者。实际paper-source-review/M3/Native36465，私有version `09189b44-18c4-48ae-b7b0-372ec88045d1`；原文High仍NO-GO：新增TE₀-like未报告误断，传播范围/扫描因果/损伤对象/Claim条件绑定失真仍在，不能据技术成功放行。自动planner `81805e64-4b2e-42d2-aea5-c302cd8d3359` 17帧/98304预算自然failed，无asset/图；未重开或扩预算。远端-fresh.json仍存在禁重发，完整paid只读hash核对保存；原actor沿既有每task+1fund/-1debit，无另行发放/退款/改角色。ROc896 draft/public，live稿仍私有，四份公开冻结版本前后完整全等、原作者CP不变；Native active0，视频协调窗口已释放。证据native-independent-preimage-{status-latest.json,source-result.json,source-check.md,paid-checkpoint.json,plan-checkpoint.json,public-after.json,terminal-runtime.json}。
@@ -70,7 +66,6 @@
 
 ## Capability linkage
 - 入口、调用与未消费能力见[能力台账](../runbooks/hermes-capability-registry.md)。新Native任务不走旧固定map/reduce/compose/GPT来源链；历史消费者、共同守卫、paid回放和控制测试有真实引用，不能整块删除。SourceMap/PDF/OCR及隔离science-worker继续复用；Native计算器适配尚缺，不裸开主机terminal，也不默认重算论文。
-- Computer Use读取Chrome窗口因不能可靠确认URL而被策略停止；未获得页面/截图、未点击或绕过。独立server/code路径继续，CI网页fixture不替代实际角色入口。本轮新API助手接口未做真实站内点击验收。
 
 ## 其他交付与保护
 - 运维/视频：用户选择现ECS先做好功能/展示，集群与异机存储后续。2026-10-05 Synclip `gpt-image-2` 首次真实任务已成功保存私有PNG并完成人工像素检查；用户随后授权停用旧网页浏览器链路。服务器已停止并移除 `openscience-chatgpt-browser` 容器，bridge及网页image/review timer均inactive/disabled，删除约1.04GiB浏览器profile登录态；历史jobs/spool/review结果、论文、媒体、备份和paid证据保留。可用内存约8.48→17.85GiB；ScanSci解析Xvfb保留。架构/资源定位见[服务器能力](../runbooks/server-capabilities.md)。
