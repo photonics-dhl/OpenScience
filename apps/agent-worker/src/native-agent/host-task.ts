@@ -97,7 +97,7 @@ export async function runHostedNativeTask(input: {
           slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence, slot.id);
           respond(res, 200, slot.result);
         };
-        return input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(execute) : execute();
+        return await (input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(execute) : execute());
       }
       if (req.url === '/task/tools/images') {
         const slot = slots.find(s => s.id === value.callId && s.name === 'paper_view' && s.authorized && s.called);
@@ -109,7 +109,7 @@ export async function runHostedNativeTask(input: {
           if (settled || Date.now() >= input.deadlineAt) blocked();
           slot.images = images.content; respond(res, 200, images);
         };
-        return input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(deliver) : deliver();
+        return await (input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(deliver) : deliver());
       }
       if (req.url === '/task/finish') {
         if (value.status === 'completed' && typeof value.finalResponse === 'string') {
