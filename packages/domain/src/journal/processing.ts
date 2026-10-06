@@ -5,6 +5,7 @@ import { JournalError } from './contracts';
 import { journalDigest, validateJournalDraft, validateJournalSource, type JournalRights, type JournalSource } from './content';
 import { assertArticleRevision, JOURNAL_EDIT_ROLES, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, type JournalTx } from './articles';
 import { assertJournalGenerationCapability, journalSourceMaterials } from './enhancements';
+import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 
 export const JOURNAL_JOB_LEASE_MS = 10 * 60_000;
 const terminal = (state: string) => ['succeeded', 'failed', 'cancelled'].includes(state);
@@ -169,10 +170,20 @@ export async function finishJournalJob(deps: WorkspaceDeps, jobId: string, lease
       assertArticleRevision(article, job.revision);
       if (journalSourceDigest(article) !== job.sourceDigest || !job.leaseExpiresAt || job.leaseExpiresAt <= moment(deps)) throw new JournalError('REVISION_CONFLICT', '来源、权限或作业期限已改变');
       if (job.kind === 'source_parse') {
-        const value = result as { text?: unknown };
+        const value = result as { text?: unknown; sourceMapRef?: unknown };
         const parsedText = typeof value?.text === 'string' ? value.text : '';
+        const sourceMapRef = value?.sourceMapRef === undefined ? undefined : parseDocumentSourceMapReference(value.sourceMapRef);
+        if (sourceMapRef) {
+          const currentSource = article.source as unknown as JournalSource;
+          const artifact = await tx.artifact.findUnique({ where: { id: currentSource.artifactId } });
+          if (sourceMapRef.parserStatus !== 'succeeded' || sourceMapRef.artifactId !== currentSource.artifactId
+            || !artifact || artifact.workspaceId !== (await tx.journal.findUniqueOrThrow({ where: { id: job.journalId } })).workspaceId
+            || sourceMapRef.contentHash !== artifact.blobSha256)
+            throw new JournalError('VALIDATION_ERROR', '解析页码映射与期刊原始文件不一致');
+        }
         const materials = journalSourceMaterials(article.source).map((item) => item.activeForGeneration ? { ...item, contentSha256: createHash('sha256').update(parsedText, 'utf8').digest('hex') } : item);
-        const source = { ...(article.source as unknown as JournalSource), text: parsedText, ...(materials.length ? { materials } : {}) };
+        const source = { ...(article.source as unknown as JournalSource), text: parsedText,
+          ...(sourceMapRef ? { sourceMapRef } : {}), ...(materials.length ? { materials } : {}) };
         validateJournalSource(source);
         await tx.journalArticle.update({ where: { id: article.id }, data: { source: journalJson(source), revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } });
         return settle(tx, moment(deps), job, 'succeeded', undefined, { characters: source.text.length, kind: 'source_parse' });

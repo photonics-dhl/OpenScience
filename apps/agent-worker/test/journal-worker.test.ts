@@ -36,10 +36,17 @@ describe('journal worker native producer and private delivery', () => {
   });
   it('performs local source parsing without calling the native model', async () => {
     vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
-    const parse = vi.fn().mockResolvedValue(quote);
+    const parse = vi.fn().mockResolvedValue({ text: quote });
     await processOneJournalJob(deps, generate, parse);
     expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', { text: quote });
+  });
+  it('passes the same private page-map reference from parsing to journal settlement', async () => {
+    vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
+    const sourceMapRef = { schemaVersion: 1 as const, parserStatus: 'succeeded' as const, artifactId: 'artifact',
+      contentHash: 'a'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100 };
+    await processOneJournalJob(deps, generate, vi.fn().mockResolvedValue({ text: quote, sourceMapRef }));
+    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', { text: quote, sourceMapRef });
   });
   it('blocks dispatch after current journal authorization fails', async () => {
     vi.mocked(domain.journalJobInput).mockRejectedValue(new Error('revoked'));

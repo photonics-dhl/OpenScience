@@ -30,7 +30,7 @@ M3原生像素传输在 `packages/ai-gateway/src/provider.ts` / `gateway.ts`；�
 
 图片管理沿 `MediaAssetActions.tsx` / 原 `/trash`；公开引用内存优化在 `packages/domain/src/trash/trash.ts`，回归在 `test/trash/content-list.test.ts`。局部分镜来源补接在 `apps/agent-worker/src/scientific-writing-source.ts` 和原 handler/planner/review，定向覆盖 `test/visual-source-context.test.ts`。源站与隧道区分沿 `infra/scripts/cloudflared-watchdog.sh`，操作边界见 [monitoring](docs/runbooks/monitoring.md)，实际结果只见 Hermes CURRENT。
 
-> 期刊增强已集成进 canonical 交付线，PR109 已合并；原 codex/journal-server-20260922 是历史功能分支。已有使用记录及未解决解析失败，业务状态/边界见 [期刊 CURRENT](docs/handoff/2026-09-15-journal-onboarding-handoff.md)，实时生产/回退统一从 Hermes CURRENT 读取。
+> 期刊增强已集成进 canonical 交付线，PR109 已合并；原 codex/journal-server-20260922 是历史功能分支。新期刊 PDF 共享解析/核源候选位于 `apps/agent-worker/src/journal-worker.ts`、`native-agent/journal-task.ts` 和 `journal-paper-projection.ts`，新解析保留私有页码映射并复用首页科学合同；候选/真实验收边界见 [期刊 CURRENT](docs/handoff/2026-09-15-journal-onboarding-handoff.md)，实时生产/回退统一从 Hermes CURRENT 读取。
 
 | 期刊增强文件 | 用途 | 状态 |
 |---|---|---|
