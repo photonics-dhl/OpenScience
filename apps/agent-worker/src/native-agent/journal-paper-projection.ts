@@ -31,7 +31,8 @@ export function projectReviewedPaperToJournalDraft(result: ExtractionResult, sou
     { question: language === 'zh' ? '主要结果是什么？' : 'What are the main results?', answer: core.results, evidence: evidenceFor('results') },
   ];
   // Figure cards require a separate editorial decision about actual figures and reuse rights.
-  const draft: JournalDraft = { summary: `${core.insight}\n${core.results}`.slice(0, 4000), core, claims, figures: [], faq,
+  const combinedSummary = `${core.insight}\n${core.results}`;
+  const draft: JournalDraft = { summary: combinedSummary.length <= 4000 ? combinedSummary : core.insight, core, claims, figures: [], faq,
     scope: 'fulltext', language };
   return validateJournalDraft(draft, source);
 }
