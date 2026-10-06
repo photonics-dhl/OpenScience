@@ -6,7 +6,8 @@
 - 2026-10-06 新决定：期刊 PDF 与首页上传共用带页码 SourceMap、Hermes 核源、六字段和 Claims；期刊编辑权限、逐项授权、FAQ/图卡整理、人工确认和发布审批继续独立。其他开发者对共享 parser/核源工具的后续修改应被新期刊 PDF 作业直接消费，不复制另一套解析器。
 - 原功能分支 codex/journal-onboarding 已推送至 Nanqing96/openscience 与 photonics-dhl/OpenScience：96e5e0c626ac44427e2e92684e104e4e5d4b0dfd。
 - 当前交付分支为 `release/onchip-production-line`；生产/回退的唯一实时锚点见 [Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md)。`codex/journal-server-20260922` 与 e05ca61c/c085b157 是 09-22 首次集成发布的历史身份，不再作为最新生产或下次部署基线。
-- 本轮未部署候选：`codex/journal-shared-paper-understanding-20261006`，代码锚点 `dbf9e8b1e09586e6b623e83cf8e56dcbefe2664e`，基于共享交付分支 `0a773d9322e5f56ab4d3a21b0fea8bf264c12ecd`；本轮代码/文档尚未成为生产能力。生产与回退仍按 Hermes CURRENT 的实时版本，不用本候选覆盖其他开发者更新。
+- 本轮未部署候选：`codex/journal-shared-paper-understanding-20261006`，最新代码锚点 `81ae7d2c`，基于共享交付分支 `0a773d9322e5f56ab4d3a21b0fea8bf264c12ecd`；本轮代码/文档尚未成为生产能力。2026-10-06 只读核实生产 `d6ddcd57fb8848328183460ae91783248915b604`、回退 `456e550f69652b00569d2435c5f8283df3534d9f`，候选包含线上祖先；无失败标记/残留事务，公网与容器健康，最近双库备份 2026-10-06 03:00 UTC。未切换生产。
+- 用户固定 GitHub 目标为 `photonics-dhl/OpenScience` 的 `frontend/nanqing`，禁止合并 `main`、强推。原 `Nanqing96/openscience` 三分支已原样复制到同仓 `archive/nanqing96/{codex-journal-onboarding,codex-journals-production,release-academic-identity-ror-20260902}`，远端 SHA 与源一致；旧 `frontend/nanqing@e5db5aea` 原样留在 `archive/frontend-nanqing-pre-integration-20261006`。用户同意旧版归档、现行代码作为活跃分支；归并只保留旧提交历史，不盲目带回旧文件。
 - 2026-09-22 20:10左右（Asia/Shanghai）首次 canonical deployment exit0；当时服务器/公网 release 与事务标记验证属于历史证据。2026-09-28 21:31 从实际容器挂载和发布目录确认 Domain 增强实现及来源矩阵、加工队列、服务页构建文件仍存在，未据此宣称登录后界面或业务流程通过。
 - [PR #109](https://github.com/photonics-dhl/OpenScience/pull/109) 已于 2026-09-23 01:25:50 UTC 合入共享交付分支，merge `a6a27ef543f3217a94b02ed4ee281e01e8e1e4a4`；原 e05 与合并提交均为当前生产祖先。本轮通过 GitHub 与 Git 核实，旧等待确认/合并事项失效。
 - 用户无法暂停其他发布；已保留生产更新至c085的所有代码，使用共享部署锁、精确active比较和回退事务完成发布，没有强推或覆盖并发版本。
@@ -14,6 +15,7 @@
 ## Done
 
 - 本轮代码候选：期刊 PDF 调用原 `parserCascade` 后持久化私有 SourceMap 引用；只有来源明确许可外部处理且留有许可/核验依据时，才启用共享解析器的外部 OCR。新 PDF 作业直接复用首页 P 段/P 页工具、`nativePaperToolProfile`、`createNativeScientificMaterializer` 与 `finishNativePaperReview`，把已核验六字段/Claims 投影为期刊私有编辑稿。FAQ 从已核验字段及原文证据投影；图卡留给具备图像复用许可的编辑确认，不自动声称看见/获准使用图片。旧 J 文本任务和旧付费回执保持原样。手工编辑改动原文会撤销 SourceMap 绑定；删除仍被期刊使用的 PDF 被保护。
+- 发布前 High 复核补闭两处权限断点：`paper_view` 渲染完成、响应页图前按期刊实时授权/租约和 native deadline 再检查；共享 OCR Gateway 识别期刊 `source_parse` 的当前租约/编辑身份/主来源矩阵/到期/文件绑定，并在每页、每供应商及 MiniMax 主备密钥每次真实外发前复核。仅复用同一 parser/Hermes 核源核心，期刊发布/许可边界仍独立。
 
 - 来源与版权矩阵：逐项操作权限、核验依据、许可/到期历史、主来源真实内容绑定、来源修改后的重新确认；辅助材料不能借权放行主来源。
 - 新上传先私有暂存，确认对应文件授权后解析；授权到期/撤销限制期刊与通用公开读取，原论文书目身份保留。
@@ -24,7 +26,7 @@
 ## Evidence / scope
 
 - 2026-09-28 只读生产元数据是历史快照：当时 1 个 active 期刊、1 篇私有 draft、1 个失败的 `source_parse`、2 个 submitted 服务申请、0 条发布记录；不能用它判断 2026-10-06 的在线状态。此轮未读取生产论文或重新触发模型。
-- 本轮共享理解候选的证据：本地 Domain/API/Worker 类型检查及期刊/来源保护定向测试通过；[期刊 CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37405423398) 与[共享 Hermes/媒体 CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37405423401)均在代码锚点成功，前者包含隔离 PostgreSQL 的编辑桌面/手机流程。没有真实 Hermes PDF 端到端或上线验收，不把合成测试/工具合同通过当作科学含义正确。
+- 本轮共享理解旧代码锚点 `dbf9e8b1` 的[期刊 CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37405423398) 与[共享 Hermes/媒体 CI](https://github.com/photonics-dhl/OpenScience/actions/runs/37405423401)均成功；它们不覆盖新权限修复 `81ae7d2c`。新增本地 Domain 权限14、Gateway OCR38、Worker 期刊6 项定向测试及 Domain/Gateway/Worker 类型检查通过；Windows 跳过 Unix socket 的 native-host 专测，须由 Linux CI 实跑。未做真实 Hermes PDF 端到端或上线验收，不把合成测试当科学正确。
 - 原96e分支历史回归：Domain574、API117、Web471+Node5、Worker4、真实Chromium2场景；不能替代当前集成版本的结果。
 - 已部署e05自动CI：后端/Web构建、Domain39、API23（2条browser在独立阶段执行）、Worker4、Web7、真实Chromium桌面/375px手机2场景全部通过；使用隔离PostgreSQL与合成材料。
 - 最终文档/业务CI：047dcbe8的[run35726751672](https://github.com/photonics-dhl/OpenScience/actions/runs/35726751672)整体success，包含上述全部业务/构建/真实浏览器阶段及docs-sync/Markdown检查。该提交相对已部署e05仅为文档与格式配置变化；本条结果记录无需重部署或重复触发CI。
@@ -48,6 +50,6 @@
 
 ## Next action
 
-1. 本轮候选的本地与 CI 守卫已通过；下一步须在明确授权和生产回退准备后，以一份合法 PDF 完成私有真实 Hermes 流程及人工科学核对，再考虑合入共享发布线和部署，不得直接发布。
+1. 先将修复及本次决策归并到 `frontend/nanqing`，对最终精确 SHA 跑期刊与 Linux native-host CI；核新版身份/设置入口未因旧分支归档回退。再按现有发布事务完成双库新备份、parser acceptance 与精确 active/rollback 检查后部署，私有真实 Hermes PDF 与人工科学核对仍须单独验收，不自动公开。
 2. 若要旧期刊 PDF 享用新 parser，设计显式同文件重解析入口，保持原版本/证据与编辑权限；不自动重跑或覆盖旧稿。
 3. 继续核对期刊图卡复用授权与原生 Claim 结构到编辑界面的表达；两项历史服务申请不由本候选代为批准。
