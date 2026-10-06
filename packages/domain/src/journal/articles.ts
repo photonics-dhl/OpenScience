@@ -123,8 +123,7 @@ export async function updateJournalArticle(deps: WorkspaceDeps, userId: string, 
     if (metadata.doi !== (article.metadata as unknown as JournalMetadata).doi) throw new JournalError('VALIDATION_ERROR', '更改 DOI 需要重新导入，以保留论文身份');
     const currentSource = article.source as unknown as JournalSource;
     const sameParsedSource = input.source && currentSource.sourceMapRef
-      && input.source.kind === currentSource.kind && input.source.text === currentSource.text
-      && input.source.url === currentSource.url;
+      && input.source.kind === currentSource.kind && input.source.text === currentSource.text;
     const source = input.source ? { ...input.source, ...(currentSource.artifactId ? { artifactId: currentSource.artifactId } : {}),
       ...(sameParsedSource ? { sourceMapRef: currentSource.sourceMapRef } : {}),
       ...(existingMaterials.length ? { materials: existingMaterials } : {}) } as JournalSource : currentSource;
