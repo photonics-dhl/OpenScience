@@ -25,8 +25,8 @@ async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 
     withAuthorizedToolCall?: <T>(run: () => Promise<T>) => Promise<T> }) {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
   let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
-  const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, options) => {
-    bodySizes.push(Buffer.byteLength(String(options!.body)));
+  const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, requestOptions) => {
+    bodySizes.push(Buffer.byteLength(String(requestOptions!.body)));
     const first = providerCalls++ === 0;
     return new Response(JSON.stringify({ model: 'MiniMax-M3', content: first ? [
       { type: 'thinking', thinking: 'x'.repeat(3000), signature: 'private' }, { type: 'text', text: 'x'.repeat(3000) },
