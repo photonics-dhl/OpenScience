@@ -4,7 +4,7 @@ import type { WorkspaceDeps } from '../workspace/types';
 import { JournalError } from './contracts';
 import { journalDigest, validateJournalDraft, validateJournalSource, type JournalRights, type JournalSource } from './content';
 import { assertArticleRevision, JOURNAL_EDIT_ROLES, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, type JournalTx } from './articles';
-import { assertJournalGenerationCapability, journalSourceMaterials } from './enhancements';
+import { assertJournalGenerationCapability, journalSourceMaterials, journalSourceProcessingAllowed } from './enhancements';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 
 export const JOURNAL_JOB_LEASE_MS = 10 * 60_000;
@@ -18,8 +18,34 @@ function assertGenerationAllowed(article: { source: unknown; rights: unknown; co
 }
 function assertJobAllowed(job: { kind: string }, article: { source: unknown; rights: unknown; contentState: string }, now = new Date()) {
   if (job.kind === 'generate') return assertGenerationAllowed(article, now);
-  const rights = article.rights as JournalRights; const source = article.source as JournalSource;
-  if (job.kind !== 'source_parse' || article.contentState !== 'active' || !rights.internalProcessing || !rights.evidence || !source.artifactId) throw new JournalError('FORBIDDEN', '需要有效的内部来源处理授权');
+  if (job.kind !== 'source_parse' || !journalSourceProcessingAllowed(article, false, now)) throw new JournalError('FORBIDDEN', '需要有效的内部来源处理授权');
+}
+
+/** Journal parse jobs have no AgentTask; authorize each external OCR page against the live lease and source. */
+export async function requireJournalExternalOcrAuthority(tx: JournalTx, context: { taskId: string; actorId: string; workspaceId: string }) {
+  const owners = await tx.$queryRaw<Array<{ journalId: string; workspaceId: string }>>`
+    SELECT j.id AS "journalId", j.workspace_id AS "workspaceId"
+    FROM journals j JOIN journal_jobs q ON q.journal_id = j.id
+    WHERE q.id = ${context.taskId}::uuid FOR UPDATE OF j`;
+  if (owners.length !== 1 || owners[0]!.workspaceId !== context.workspaceId) return false;
+  await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${context.workspaceId}::uuid
+    AND user_id = ${context.actorId}::uuid FOR SHARE`;
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${context.actorId}::uuid FOR SHARE`;
+  const job = await tx.journalJob.findUnique({ where: { id: context.taskId } });
+  if (!job || job.kind !== 'source_parse' || job.state !== 'running' || job.requestedBy !== context.actorId
+    || !job.leaseToken || !job.leaseExpiresAt || job.leaseExpiresAt <= new Date()) return false;
+  try {
+    await journalScope(tx, owners[0]!.journalId, context.actorId, JOURNAL_EDIT_ROLES, true);
+    const article = await journalArticleInScope(tx, job.journalId, job.articleId);
+    if (article.revision !== job.revision || journalSourceDigest(article) !== job.sourceDigest
+      || !journalSourceProcessingAllowed(article, true)) return false;
+    const source = article.source as unknown as JournalSource;
+    const artifact = await tx.artifact.findUnique({ where: { id: source.artifactId } });
+    return !!artifact && !artifact.deletedAt && artifact.workspaceId === context.workspaceId;
+  } catch (error) {
+    if (error instanceof JournalError) return false;
+    throw error;
+  }
 }
 export async function submitJournalJob(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string; manualConfirmation?: boolean }, nativeReady = false) {
   return journalTransaction(deps, journalId, async (tx) => {

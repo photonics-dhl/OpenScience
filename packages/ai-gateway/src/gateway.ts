@@ -621,18 +621,17 @@ export class AiGateway {
     throw new AiGatewayError('ALL_PROVIDERS_FAILED', '全部 AI Provider 失败', lastError);
   }
 
+  private async assertExternalOcrAllowed(context: OcrRequest['authorizationContext']): Promise<void> {
+    let decision: unknown = false;
+    try { decision = await this.externalProcessingPolicy?.(Object.freeze({ ...context })) ?? false; }
+    catch { decision = false; }
+    if (decision !== true) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
+  }
+
   /** Dedicated provider-neutral LLM OCR route; callers receive candidates, never replacement blocks. */
   async ocr(request: OcrRequest): Promise<OcrResult> {
     const canonical = validateAndSnapshotOcrRequest(request, this.ocrLimits);
-    let decision: unknown = false;
-    try {
-      decision = await this.externalProcessingPolicy?.(Object.freeze({ ...canonical.authorizationContext })) ?? false;
-    } catch {
-      decision = false;
-    }
-    if (decision !== true) {
-      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
-    }
+    await this.assertExternalOcrAllowed(canonical.authorizationContext);
 
     const pages: OcrPageOutcome[] = [];
     for (const page of canonical.pages) {
@@ -648,7 +647,7 @@ export class AiGateway {
         promptHash: sha256Text(prompt),
         inputContentHash: page.contentHash,
       };
-      pages.push(await this.routeOcrPage(providerRequest, canonical.source));
+      pages.push(await this.routeOcrPage(providerRequest, canonical.source, canonical.authorizationContext));
     }
     const succeeded = pages.filter((page) => page.status === 'succeeded').length;
     return {
@@ -826,6 +825,7 @@ export class AiGateway {
   private async routeOcrPage(
     request: OcrProviderPageRequest,
     source: { artifactId: string; documentSha256: string },
+    authorizationContext: OcrRequest['authorizationContext'],
   ): Promise<OcrPageOutcome> {
     const totalStart = Date.now();
     const fallbackNotes: string[] = [];
@@ -851,11 +851,14 @@ export class AiGateway {
         fallbackNotes.push(`${provider.name}:${reason}`);
         continue;
       }
+      // A batch may span several seconds or providers. A revoke must stop the next page/attempt.
+      await this.assertExternalOcrAllowed(authorizationContext);
       const attemptStart = Date.now();
       let estimate: OcrCostEstimate | undefined;
       try {
         estimate = validateCostEstimate(provider.estimate(request));
-        const result = canonicalizeProviderResult(await provider.recognize({ ...request, bytes: Uint8Array.from(request.bytes) }), this.ocrLimits.maxOutputChars ?? DEFAULT_OCR_LIMITS.maxOutputChars);
+        const result = canonicalizeProviderResult(await provider.recognize({ ...request, bytes: Uint8Array.from(request.bytes) },
+          () => this.assertExternalOcrAllowed(authorizationContext)), this.ocrLimits.maxOutputChars ?? DEFAULT_OCR_LIMITS.maxOutputChars);
         const fallbackReason = boundedFallbackReason(fallbackNotes);
         await this.record(ocrLog({
           request,
@@ -892,6 +895,7 @@ export class AiGateway {
           },
         };
       } catch (error) {
+        if (error instanceof AiGatewayError && error.code === 'OCR_EXTERNAL_PROCESSING_DENIED') throw error;
         const code = normalizeOcrProviderError(error);
         const status = code === 'provider_status' && error instanceof Error
           ? /^MiniMax vision status (\d{1,8})$/.exec(error.message)?.[1] : undefined;

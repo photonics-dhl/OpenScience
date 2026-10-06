@@ -102,8 +102,14 @@ export async function runHostedNativeTask(input: {
       if (req.url === '/task/tools/images') {
         const slot = slots.find(s => s.id === value.callId && s.name === 'paper_view' && s.authorized && s.called);
         if (!slot || !isDeepStrictEqual(slot.args, value.arguments) || !isDeepStrictEqual(slot.result, value.result)) blocked();
-        const images = await input.paper.images(value.arguments, value.result); slot.images = images.content;
-        return respond(res, 200, images);
+        // Rasterization may take seconds. Do not hold the journal lock while it runs;
+        // recheck live rights/lease immediately before any page pixels leave this socket.
+        const images = await input.paper.images(value.arguments, value.result);
+        const deliver = async () => {
+          if (settled || Date.now() >= input.deadlineAt) blocked();
+          slot.images = images.content; respond(res, 200, images);
+        };
+        return input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(deliver) : deliver();
       }
       if (req.url === '/task/finish') {
         if (value.status === 'completed' && typeof value.finalResponse === 'string') {

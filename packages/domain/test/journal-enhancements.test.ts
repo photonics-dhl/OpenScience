@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { calculateJournalArticlePriority, evaluateArticleProcessingCapability, type JournalArticleSourceRecord, type JournalSourcePermissions } from '../src/journal/enhancements';
+import { calculateJournalArticlePriority, evaluateArticleProcessingCapability, journalSourceProcessingAllowed, type JournalArticleSourceRecord, type JournalSourcePermissions } from '../src/journal/enhancements';
 
 const now = new Date('2026-09-22T00:00:00.000Z');
 const text = 'A bounded synthetic source paragraph long enough to establish a precise, testable source capability without external data.';
@@ -10,6 +10,26 @@ const main = (extra: Partial<JournalArticleSourceRecord> = {}): JournalArticleSo
 const article = (materials?: JournalArticleSourceRecord[]) => ({ id: 'article', contentState: 'active', metadata: { title: 'A method for deterministic testing', authors: ['A'], publishedDate: '2026', issns: [], originalUrl: 'https://example.test/paper' }, source: { kind: 'fulltext' as const, text, url: 'https://example.test/paper', label: 'paper', ...(materials ? { materials } : {}) }, rights: { internalProcessing: true, derivativeGeneration: true, publicSource: false, publicDerivative: true, externalProcessing: true, license: 'CC-BY-4.0', evidence: 'Publisher authorization for this source.' } });
 
 describe('journal source capability and priority', () => {
+  it('rechecks the bound primary PDF material when external OCR is requested', () => {
+    const source = article([main({ fileId: 'artifact' })]);
+    Object.assign(source.source, { artifactId: 'artifact' });
+    expect(journalSourceProcessingAllowed(source, true, now)).toBe(true);
+    const mismatched = article([main({ fileId: 'other' })]); Object.assign(mismatched.source, { artifactId: 'artifact' });
+    expect(journalSourceProcessingAllowed(mismatched, true, now)).toBe(false);
+    for (const sourceConfidence of ['revoked', 'expired', 'conflict'] as const) {
+      const changed = article([main({ fileId: 'artifact', sourceConfidence })]);
+      Object.assign(changed.source, { artifactId: 'artifact' });
+      expect(journalSourceProcessingAllowed(changed, true, now)).toBe(false);
+    }
+    const expired = article([main({ fileId: 'artifact', evidence: { statement: 'Permission', license: 'CC-BY-4.0', expiresAt: '2026-09-21T23:59:59.000Z' } })]);
+    Object.assign(expired.source, { artifactId: 'artifact' });
+    expect(journalSourceProcessingAllowed(expired, true, now)).toBe(false);
+    const legacy = article(); Object.assign(legacy.source, { artifactId: 'artifact' });
+    expect(journalSourceProcessingAllowed(legacy, true, now)).toBe(true);
+    legacy.rights.externalProcessing = false;
+    expect(journalSourceProcessingAllowed(legacy, true, now)).toBe(false);
+    expect(journalSourceProcessingAllowed(legacy, false, now)).toBe(true);
+  });
   it('keeps legacy publication compatible when external AI processing is disabled', () => {
     const value = article(); value.rights.externalProcessing = false;
     const capability = evaluateArticleProcessingCapability(value, now);

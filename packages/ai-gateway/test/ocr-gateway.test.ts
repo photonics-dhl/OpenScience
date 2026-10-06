@@ -147,6 +147,30 @@ describe('provider-neutral LLM OCR route', () => {
       .toEqual(['primary-1', 'fallback-2']);
   });
 
+  it('stops before sending a later OCR page when authorization is revoked mid-batch', async () => {
+    let allowed = true;
+    const calls: number[] = [];
+    const primary = visionProvider('primary', async input => {
+      calls.push(input.pageNumber);
+      allowed = false;
+      return { text: 'first page only' };
+    });
+    const gateway = new AiGateway({ providers: [textProvider()], ocrProviders: [primary], killSwitch: new MutableProviderKillSwitch(),
+      externalProcessingPolicy: async () => allowed });
+    await expect(gateway.ocr(request([page(1), page(2)]))).rejects.toThrow(/external processing denied/i);
+    expect(calls).toEqual([1]);
+  });
+
+  it('stops before a fallback provider when authorization is revoked after the first attempt', async () => {
+    let allowed = true;
+    const fallback = vi.fn(async () => ({ text: 'must not receive pixels' }));
+    const primary = visionProvider('primary', async () => { allowed = false; throw new Error('transient'); });
+    const gateway = new AiGateway({ providers: [textProvider()], ocrProviders: [primary, visionProvider('fallback', fallback)], killSwitch: new MutableProviderKillSwitch(),
+      externalProcessingPolicy: async () => allowed });
+    await expect(gateway.ocr(request())).rejects.toThrow(/external processing denied/i);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
   it('runtime kill switch immediately prevents the disabled provider from receiving calls', async () => {
     const primary = visionProvider('primary', vi.fn(async () => ({ text: 'primary' })));
     const fallback = visionProvider('fallback', vi.fn(async () => ({ text: 'fallback' })));
