@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as domain from '@openscience/domain';
 import type { WorkspaceDeps } from '@openscience/domain';
-import { processOneJournalJob } from '../src/journal-worker';
+import { journalParserExternalEligible, processOneJournalJob } from '../src/journal-worker';
 
 vi.mock('@openscience/domain', async (load) => ({
   ...await load<typeof import('@openscience/domain')>(), claimJournalJob: vi.fn(), journalJobInput: vi.fn(), finishJournalJob: vi.fn(), renewJournalJobLease: vi.fn(),
@@ -53,5 +53,13 @@ describe('journal worker native producer and private delivery', () => {
     await processOneJournalJob(deps, generate, undefined, runtime);
     expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', null, expect.any(String));
+  });
+  it('only enables the shared external OCR path with explicit journal processing rights and evidence', () => {
+    const rights = { internalProcessing: true, derivativeGeneration: true, publicSource: false, publicDerivative: false,
+      externalProcessing: true, license: 'CC-BY-4.0', evidence: 'Publisher authorization' };
+    expect(journalParserExternalEligible(rights)).toBe(true);
+    expect(journalParserExternalEligible({ ...rights, externalProcessing: false })).toBe(false);
+    expect(journalParserExternalEligible({ ...rights, evidence: '' })).toBe(false);
+    expect(journalParserExternalEligible({ ...rights, internalProcessing: false })).toBe(false);
   });
 });

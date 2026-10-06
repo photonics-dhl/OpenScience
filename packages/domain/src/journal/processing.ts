@@ -154,7 +154,8 @@ export async function journalJobInput(deps: WorkspaceDeps, jobId: string, leaseT
   assertArticleRevision(article, job.revision);
   if (journalSourceDigest(article) !== job.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变');
   const journal = await deps.prisma.journal.findUniqueOrThrow({ where: { id: job.journalId } });
-  return { source: article.source as unknown as JournalSource, language: job.language as 'zh' | 'en', kind: job.kind, workspaceId: journal.workspaceId, actorId: job.requestedBy };
+  return { source: article.source as unknown as JournalSource, rights: article.rights as unknown as JournalRights,
+    language: job.language as 'zh' | 'en', kind: job.kind, workspaceId: journal.workspaceId, actorId: job.requestedBy };
 }
 export async function finishJournalJob(deps: WorkspaceDeps, jobId: string, leaseToken: string, result: unknown, failure?: string) {
   const original = await deps.prisma.journalJob.findUniqueOrThrow({ where: { id: jobId } });

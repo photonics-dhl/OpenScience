@@ -7,8 +7,15 @@ import { sourceMapToManuscriptText } from './extractor';
 import { canonicalParserMediaType } from './parser-media-type';
 import { claimJournalJob, finishJournalJob, journalJobInput, nativeAgentRuntimeFromEnv, recoverJournalJobs, renewJournalJobLease,
   persistDocumentSourceMapReference, type DocumentSourceMapReference,
-  type JournalNativeRuntime, type JournalSource, type WorkspaceDeps } from '@openscience/domain';
+  type JournalNativeRuntime, type JournalRights, type JournalSource, type WorkspaceDeps } from '@openscience/domain';
 import { runNativeJournalTask } from './native-agent/journal-task';
+
+/** PDF OCR may call an external model only under the editor's current explicit source permission. */
+export function journalParserExternalEligible(rights: JournalRights): boolean {
+  return rights.internalProcessing === true && rights.externalProcessing === true
+    && typeof rights.license === 'string' && !!rights.license.trim()
+    && typeof rights.evidence === 'string' && !!rights.evidence.trim();
+}
 
 /** The installed Agent owns generation; the journal job owns permissions, leases and private delivery. */
 export async function processOneJournalJob(deps: WorkspaceDeps, generate: (input: { jobId: string; leaseToken: string;
@@ -87,7 +94,8 @@ export function startJournalWorker(deps: WorkerDeps, gateway: AiGateway, parserC
         const bytes = Buffer.concat(chunks);
         if (bytes.length !== Number(artifact.size) || createHash('sha256').update(bytes).digest('hex') !== artifact.blobSha256) throw new Error('Source integrity mismatch');
         await deps.malwareScanner(bytes);
-        const parsed = await parserCascade({ artifactId: artifact.id, contentHash: artifact.blobSha256, content: bytes, mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType) }, { trustedAuthorizationContext: { taskId: jobId, actorId: input.actorId, workspaceId: input.workspaceId }, externalProcessingEligible: false });
+        const externalProcessingEligible = journalParserExternalEligible(input.rights);
+        const parsed = await parserCascade({ artifactId: artifact.id, contentHash: artifact.blobSha256, content: bytes, mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType) }, { trustedAuthorizationContext: { taskId: jobId, actorId: input.actorId, workspaceId: input.workspaceId }, externalProcessingEligible });
         if (parsed.status !== 'succeeded') throw new Error('Source parsing requires editorial correction');
         const text = sourceMapToManuscriptText(parsed.sourceMap);
         if (artifact.mimeType !== 'application/pdf') return { text };

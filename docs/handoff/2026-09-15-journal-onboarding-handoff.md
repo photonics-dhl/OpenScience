@@ -13,7 +13,7 @@
 
 ## Done
 
-- 本轮代码候选：期刊 PDF 调用原 `parserCascade` 后持久化私有 SourceMap 引用；新 PDF 作业直接复用首页 P 段/P 页工具、`nativePaperToolProfile`、`createNativeScientificMaterializer` 与 `finishNativePaperReview`，把已核验六字段/Claims 投影为期刊私有编辑稿。FAQ 从已核验字段及原文证据投影；图卡留给具备图像复用许可的编辑确认，不自动声称看见/获准使用图片。旧 J 文本任务和旧付费回执保持原样。手工编辑改动原文会撤销 SourceMap 绑定；删除仍被期刊使用的 PDF 被保护。
+- 本轮代码候选：期刊 PDF 调用原 `parserCascade` 后持久化私有 SourceMap 引用；只有来源明确许可外部处理且留有许可/核验依据时，才启用共享解析器的外部 OCR。新 PDF 作业直接复用首页 P 段/P 页工具、`nativePaperToolProfile`、`createNativeScientificMaterializer` 与 `finishNativePaperReview`，把已核验六字段/Claims 投影为期刊私有编辑稿。FAQ 从已核验字段及原文证据投影；图卡留给具备图像复用许可的编辑确认，不自动声称看见/获准使用图片。旧 J 文本任务和旧付费回执保持原样。手工编辑改动原文会撤销 SourceMap 绑定；删除仍被期刊使用的 PDF 被保护。
 
 - 来源与版权矩阵：逐项操作权限、核验依据、许可/到期历史、主来源真实内容绑定、来源修改后的重新确认；辅助材料不能借权放行主来源。
 - 新上传先私有暂存，确认对应文件授权后解析；授权到期/撤销限制期刊与通用公开读取，原论文书目身份保留。
