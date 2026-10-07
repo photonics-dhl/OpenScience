@@ -2,8 +2,8 @@
 > 唯一交付树 .worktrees/onchip-video-release，分支 release/onchip-production-line；根 main 只作导航。
 
 ## 目标与决定
-- 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
-- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
+- 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2.5；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。生产仍是旧 release 的 gpt-image-2；本候选已把请求、spool identity、broker/transport 回执和 Hermes 图片能力说明统一为 `gpt-image-2.5`，尚未部署。博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 - 2026-10-08 当前发布锚点：应用 `784c6b25342c29bdc5c2db193258d34dfafd4e64`，回滚 `0c8fbf58824a59abc585643241a3083315b496df`，视频/媒体 CI `37652305743` 与媒体技能 CI `37652305759` 均通过；原生 Hermes catalogue/runtime 为 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`，API/Worker healthy，timer active/enabled。发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层 canary 与公网 auth/admin 探针未执行；这不改变 Synclip 图片与未接通视频的边界。
@@ -21,7 +21,7 @@
 - 2026-10-06 发布后复测 `e8b6cb5d-f251-426a-8017-8d5b79354976`：同一 RO 第二幕仅提交一次，任务 100%/无错误，Synclip `gpt-image-2` 资产为私有 draft，MiniMax-M3 native image review 为 `completed/accepted`；页面实际显示两张图片。近10分钟 Worker 日志未再出现该 JSON 解析错误。原失败任务仍保留 `started`，不重放。
 
 ## 未完成与下一动作
-- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”在修复后再次真实成功；本次解析断点已关闭，但旧第四幕未知外部终态、被阻断图片和未验证的 Parser/ScanSci/Embedding 功能探针仍不能被一次成功覆盖。
+- 当前链路已证明“已确认论文内容→Hermes分镜→Synclip→图像审阅→私有草稿”在修复后再次真实成功；本次解析断点已关闭，但旧第四幕未知外部终态、被阻断图片和未验证的 Parser/ScanSci/Embedding 功能探针仍不能被一次成功覆盖。本轮工作树新增未部署的 v18 风格/几何候选：自动路由已收敛，显式完整目录保留；相关定向验证通过，`scene-image` 旧规划分支3项失败仍单独保留。
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。

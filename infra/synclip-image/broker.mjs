@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { runOne, safeRead, atomicWrite, UUID } from '../codex-image-runner/core.mjs';
 import { validateCodexImageRequest, validateCodexImageResult } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
-import { validateSynclipTaskId } from '../../packages/ai-gateway/dist/synclip-image-api.js';
+import { SYNCLIP_IMAGE_MODEL, validateSynclipTaskId } from '../../packages/ai-gateway/dist/synclip-image-api.js';
 import { executeSynclipImage, resumeSynclipImage } from './transport.mjs';
 
 export const SYNCLIP_ROOT = '/opt/openscience-synclip';
@@ -57,7 +57,7 @@ async function recoveryCandidate(config, id, now) {
     || startedAt < request.createdAt || startedAt > now || startedAt >= request.deadlineAt) throw uncertain();
   const graceUntil = Math.min(request.deadlineAt, startedAt + 600000) + RECOVERY_GRACE_MS;
   if (now >= graceUntil) return null;
-  const identity = { schemaVersion: 1, requestId: id, promptHash: request.promptHash, model: 'gpt-image-2', aspectRatio: '16:9' };
+  const identity = { schemaVersion: 1, requestId: id, promptHash: request.promptHash, model: SYNCLIP_IMAGE_MODEL, aspectRatio: '16:9' };
   const attempt = JSON.parse((await safeRead(join(privateDir, 'synclip-attempt.json'), 2048)).toString('utf8'));
   const receipt = JSON.parse((await safeRead(join(privateDir, 'synclip-receipt.json'), 4096)).toString('utf8'));
   if (!isDeepStrictEqual(attempt, identity) || !isDeepStrictEqual(receipt, { ...identity, taskId: validateSynclipTaskId(receipt.taskId) })) throw uncertain();

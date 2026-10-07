@@ -4,6 +4,7 @@ import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ImageUsageLimitError, validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
+import { SYNCLIP_IMAGE_MODEL } from './synclip-image-api';
 export interface CodexSpoolImageConfig {
   inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>;
   withSubmission?: <T>(owner: { taskId: string; executionAttempt?: number; artifactId?: string; referenceContentHash?: string }, publish: () => Promise<T>) => Promise<T>;
@@ -213,6 +214,6 @@ export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
 export class SynclipSpoolImageProvider extends SpoolImageProvider {
   constructor(config: CodexSpoolImageConfig) { super(config); }
   readonly name = 'synclip';
-  readonly model = 'gpt-image-2';
+  readonly model = SYNCLIP_IMAGE_MODEL;
   protected readonly spoolProvider = 'synclip' as const;
 }

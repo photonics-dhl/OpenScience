@@ -53,7 +53,7 @@ M3原生像素传输在 `packages/ai-gateway/src/provider.ts` / `gateway.ts`；�
 
 后台索引恢复（历史能力入口）：`packages/search/src/embedder.ts`负责有界请求，`apps/agent-worker/src/search-indexer.ts`负责分片/批次，`packages/domain/src/agent/agent.ts`复用原任务鉴权恢复；显式补录脚本`--retry-incomplete`消费原Domain资格。当时的未部署候选与执行顺序属历史；当前状态只见 CURRENT。
 
-任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v5与原末审同轮检查明确艺术要求。部署、实际效果和未观察范围仅见CURRENT。
+任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v18、`openscience-research-illustration/references/style-taxonomy.md`与原末审同轮检查明确几何与艺术要求。部署、实际效果和未观察范围仅见CURRENT。
 
 视觉叙事方案：[`docs/proposals/2026-09-21-visual-narrative-review.html`](docs/proposals/2026-09-21-visual-narrative-review.html) 是用户要求的离线可审查实现稿：PDF→经审全文→叙事→逐图设计→制作→成品审阅→发布→阅读，含既有/拟改边界、数据传递、媒体选择、实施顺序和意见导出；不是生产界面或最终科学稿。执行状态只见CURRENT。
 

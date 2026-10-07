@@ -222,7 +222,7 @@ export function nativeMediaCapabilityGuidance(settings: Pick<StoryboardRequest, 
     '如果目标包含视频，先通过skills_list定位并用skill_view完整读取openscience-synclip-capabilities，再完整读取openscience-research-video；先从论文原文、Claims、Evidence和已确认分镜形成短镜头方案，只提交私有候选。不得在合同核验前调用未接通的 Synclip 视频 API，也不得从博客猜模型值、时长、参考图字段或重试规则。',
   ];
   return [
-    '若方案涉及图片，先通过skills_list定位并用skill_view完整读取openscience-synclip-capabilities，再按其中记录的已验证server contract选择通道。博客文章只能提供能力线索，不能替代API合同；当前服务器已接通的是Synclip gpt-image-2图片链路，视频请求必须另行完成合同核验，不得在此任务中自行调用未接通的Synclip视频适配器。',
+    '若方案涉及图片，先通过skills_list定位并用skill_view完整读取openscience-synclip-capabilities，再按其中记录的已验证server contract选择通道。博客文章只能提供能力线索，不能替代API合同；当前服务器已接通的是Synclip gpt-image-2.5图片链路，视频请求必须另行完成合同核验，不得在此任务中自行调用未接通的Synclip视频适配器。',
   ];
 }
 

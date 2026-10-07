@@ -50,7 +50,7 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '17' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '18' }));
     expect(science.instructions).toContain('encoding-feasibility failure');
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
@@ -95,7 +95,7 @@ describe('Hermes media skill stages', () => {
       expect(skill.instructions).toContain('原文定义、图注和实际提供的原图');
       expect(skill.instructions).toContain('每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例');
       expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
-      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '17',
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '18',
         resources: expect.arrayContaining(['SKILL.md#Scientific encoding']) }));
     }
   });
@@ -191,8 +191,10 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('auto', '', 'science');
     expect(science.instructions).not.toContain('NUMBERED HAND-DRAWN STYLE INDEX');
     const plan = loadInstalledMediaSkills('auto', '', 'plan');
-    expect(plan.instructions).toContain('#001 Playful Deadpan Doodle');
-    expect(plan.instructions).toContain('#277');
+    expect(plan.instructions).toContain('#002 Conceptual Continuous-Line Editorial');
+    expect(plan.instructions).toContain('#029 Geometric Diagrammatic Narrative');
+    expect(plan.instructions).not.toContain('#001 Playful Deadpan Doodle');
+    expect(plan.instructions).not.toContain('#277');
     expect(plan.instructions).not.toContain('#055 Chaotic Color Doodle Crowd');
     expect(plan.instructions).toContain('article:scientific');
     expect(plan.instructions).toContain('infographic:subway-map');
@@ -218,6 +220,31 @@ describe('Hermes media skill stages', () => {
     expect(automaticStyleTreatment('infographic:subway-map', 'Direct labels.')).toBe('BAOYU_STYLE=infographic:subway-map; Direct labels.');
     expect(automaticStyleTreatment('handdraw:#055', 'Unavailable style.')).toBeUndefined();
     expect(() => loadInstalledMediaSkills('auto', 'No selected marker', 'render')).toThrow('no valid selected style');
+  });
+
+  it('routes automatic art through a curated taxonomy without hiding explicit catalogue ids', () => {
+    const plan = loadInstalledMediaSkills('auto', '', 'plan');
+    expect(plan.instructions).toContain('STYLE TAXONOMY');
+    expect(plan.instructions).toContain('GEOMETRY GATE');
+    expect(plan.instructions).toContain('#029 Geometric Diagrammatic Narrative');
+    expect(plan.instructions).toContain('article:editorial');
+    expect(plan.instructions).not.toContain('#001 Playful Deadpan Doodle');
+    expect(plan.instructions).not.toContain('#277 ');
+    expect(plan.instructions).not.toContain('infographic:kawaii');
+
+    const explicit = loadInstalledMediaSkills('auto', 'HANDDRAW_STYLE=#277; user-selected reference.', 'render');
+    expect(explicit.instructions).toContain('#277');
+    expect(explicit.usage).toContainEqual(expect.objectContaining({
+      id: 'openscience-handdraw-style',
+      resources: expect.arrayContaining(['references/style-catalogue.json#277']),
+    }));
+  });
+
+  it('keeps the geometry and aesthetic quality contract in the rendered prompt', () => {
+    const render = loadInstalledMediaSkills('auto', 'HANDDRAW_STYLE=#029; precise diagrammatic line.', 'render');
+    expect(render.instructions).toContain('one focal relationship');
+    expect(render.instructions).toContain('material identity and object extent');
+    expect(render.instructions).toContain('Do not let a style reference decide the scientific geometry');
   });
 
   it('keeps the approved science and hand-drawn direction in the bounded image request', () => {

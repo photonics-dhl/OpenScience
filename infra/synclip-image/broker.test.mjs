@@ -51,7 +51,7 @@ async function fixture(taskId = id) {
       query: async task_id => { calls.push(['GET', task_id]); return { task_id, status: 'completed', output: { type: 'image', url: 'https://cdn.synclip.ai/original?private' }, url_expires_at: '2099-01-01T00:00:00Z' }; },
     }, download: async () => png, normalize: async (_config, _id, _raw, normalized) => { await mkdir(normalized, { recursive: true }); await writeFile(join(normalized, 'result.png'), png); return png; } },
   };
-  const identity = { schemaVersion: 1, requestId: taskId, promptHash: request.promptHash, model: 'gpt-image-2', aspectRatio: '16:9' };
+  const identity = { schemaVersion: 1, requestId: taskId, promptHash: request.promptHash, model: 'gpt-image-2.5', aspectRatio: '16:9' };
   async function claimed({ known = true, result = 'uncertain' } = {}) {
     await mkdir(privateDir); await writeFile(join(privateDir, 'request.json'), JSON.stringify(request));
     await writeFile(join(privateDir, 'started'), String(now - 1000));

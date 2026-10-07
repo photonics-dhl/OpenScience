@@ -53,7 +53,7 @@ function readMarkdown(relativePath: string): string {
   return text;
 }
 function projectIllustrationSkillVersion(): string {
-  const match = /^  version: "([1-9]\d*)"$/mu.exec(readMarkdown('openscience-research-illustration/SKILL.md'));
+  const match = /^ {2}version: "([1-9]\d*)"$/mu.exec(readMarkdown('openscience-research-illustration/SKILL.md'));
   if (!match) throw new Error('[blocked] Installed illustration skill version is unavailable');
   return match[1]!;
 }
@@ -109,7 +109,6 @@ function resolveStyle(raw: string | undefined): IllustrationStyleId {
   const infoPath = `baoyu-infographic/references/styles/${raw}.md`;
   if (fileExists(articlePath) || fileExists(infoPath)) return raw as IllustrationStyleId;
   // Unknown id — fall back, never throw, the planner is a research path, not a game.
-  // eslint-disable-next-line no-console
   console.warn(`[installed-media-skills] unknown style "${raw}"; falling back to "scientific". Available: article-illustrator styles (${listDir('baoyu-article-illustrator/references/styles').join(', ')}) + infographic styles (${listDir('baoyu-infographic/references/styles').join(', ')})`);
   return 'scientific';
 }
@@ -147,6 +146,13 @@ type Selection = Required<Pick<IllustrationStyleSelection, 'style'>> & Omit<Illu
 
 type HanddrawStyle = { number: string; group: string; name: string; traits: string };
 let handdrawStyles: HanddrawStyle[] | undefined;
+const CURATED_HANDDRAW_STYLE_NUMBERS = [
+  '002', '003', '029', '084', '129', '157', '165', '174', '229', '255', '258',
+] as const;
+const CURATED_BAOYU_STYLE_IDS = {
+  article: ['blueprint', 'editorial', 'elegant', 'ink-notes', 'minimal', 'scientific', 'sketch-notes', 'watercolor'],
+  infographic: ['aged-academia', 'hand-drawn-edu', 'morandi-journal', 'pop-laboratory', 'storybook-watercolor', 'subway-map', 'technical-schematic'],
+} as const;
 function handdrawCatalogue(): HanddrawStyle[] {
   if (handdrawStyles) return handdrawStyles;
   const path = resolve(SKILLS_ROOT, 'openscience-handdraw-style/references/style-catalogue.json');
@@ -208,13 +214,18 @@ export function automaticStyleReviewGuidance(treatment: string): string {
   return loadInstalledMediaSkills('auto', treatment, 'render').instructions;
 }
 
-function handdrawIndex(): string {
-  return handdrawCatalogue().filter(item => item.traits.trim()).map(item =>
-    `#${item.number} ${item.name} · ${item.group}: ${item.traits.trim()}`).join('\n');
+function curatedHanddrawIndex(): string {
+  const catalogue = handdrawCatalogue();
+  return CURATED_HANDDRAW_STYLE_NUMBERS.map(number => {
+    const item = catalogue.find(candidate => candidate.number === number && candidate.traits.trim());
+    if (!item) throw new Error(`[blocked] Curated hand-drawn style is unavailable: #${number}`);
+    return `#${item.number} ${item.name} · ${item.group}: ${item.traits.trim()}`;
+  }).join('\n');
 }
-function baoyuIndex(family: 'article' | 'infographic'): string {
+function baoyuIndex(family: 'article' | 'infographic', selectedIds?: readonly string[]): string {
   const skill = family === 'article' ? 'baoyu-article-illustrator' : 'baoyu-infographic';
-  return listDir(`${skill}/references/styles`).filter(name => name.endsWith('.md')).map(name => {
+  const selected = selectedIds ? new Set(selectedIds.map(id => `${id}.md`)) : undefined;
+  return listDir(`${skill}/references/styles`).filter(name => name.endsWith('.md') && (!selected || selected.has(name))).map(name => {
     const id = name.slice(0, -3);
     const reference = readMarkdown(`${skill}/references/styles/${name}`);
     const summary = reference.split('\n').find(line => line.trim() && !line.startsWith('#'))?.trim() ?? '';
@@ -288,16 +299,17 @@ export function loadInstalledMediaSkills(
   if (selection.style === 'auto' && (stage === 'plan' || stage === 'render')) {
     if (stage === 'plan') {
       include('openscience-research-illustration', 'SKILL.md', ['Planning', 'Visual craft']);
+      include('openscience-research-illustration', 'references/style-taxonomy.md');
       include('openscience-scientific-visual-clarity', 'SKILL.md', ['Art legibility']);
       include('openscience-handdraw-style', 'SKILL.md', ['Composition and material']);
       include('baoyu-infographic', 'SKILL.md', ['Layout Gallery (21)', 'Core Principles']);
       usage.find(item => item.id === 'openscience-handdraw-style')!.resources.push('references/style-catalogue.json#index');
       usage.push({ id: 'baoyu-article-illustrator', upstreamCommit: UPSTREAM_COMMIT, resources: ['references/styles/#index'] });
       usage.find(item => item.id === 'baoyu-infographic')!.resources.push('references/styles/#index');
-      excerpts.push('NUMBERED HAND-DRAWN STYLE INDEX (appearance only; select one per scene after science is fixed):\n' + handdrawIndex());
-      excerpts.push('BAOYU STYLE INDEX (appearance only; choose a family-qualified id):\n' + baoyuIndex('article') + '\n' + baoyuIndex('infographic'));
+      excerpts.push('NUMBERED HAND-DRAWN STYLE INDEX (curated automatic routes; explicit ids remain available):\n' + curatedHanddrawIndex());
+      excerpts.push('BAOYU STYLE INDEX (curated automatic routes; choose a family-qualified id):\n' + baoyuIndex('article', CURATED_BAOYU_STYLE_IDS.article) + '\n' + baoyuIndex('infographic', CURATED_BAOYU_STYLE_IDS.infographic));
       return { usage, instructions: [
-        'The sourced scientific relationship and exact labels decide the picture. Select a style only when it helps its reading path; a catalogue title is not a subject, apparatus, claim or visible label. Baoyu layouts are optional composition vocabulary, never fixed templates.',
+        'The sourced scientific relationship, geometry gate and exact labels decide the picture. Select one primary style and at most one materially different alternative only when each improves the reading path. A catalogue title is not a subject, apparatus, claim or visible label. Baoyu layouts are optional composition vocabulary, never fixed templates. The full installed catalogue remains available for explicit family-qualified choices; automatic selection uses this curated route to avoid choice overload.',
         ...excerpts,
       ].join('\n\n') };
     }
@@ -343,6 +355,7 @@ export function loadInstalledMediaSkills(
   // style before general guidance so truncation cannot leave only boilerplate.
   if (stage === 'render') include(artStyleSkill, `references/styles/${selection.style}.md`, ART_HEADINGS);
   include('openscience-research-illustration', 'SKILL.md', [stage === 'plan' ? 'Planning' : 'Execution', 'Visual craft']);
+  if (stage === 'plan') include('openscience-research-illustration', 'references/style-taxonomy.md', ['GEOMETRY GATE', 'Visual quality contract']);
   if (stage === 'plan') include('openscience-scientific-visual-clarity', 'SKILL.md', ['Art legibility']);
   if (handdrawTarget && stage === 'plan') include('openscience-handdraw-router', 'SKILL.md');
   if (handdrawTarget) include('openscience-handdraw-style', 'SKILL.md');

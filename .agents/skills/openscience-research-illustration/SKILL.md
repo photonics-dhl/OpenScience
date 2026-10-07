@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "17"
+  version: "18"
 ---
 
 # OpenScience research illustration
@@ -66,7 +66,7 @@ Produce a structured illustration brief, not a long drawing monologue:
 - `subjects`: the scientific elements and relationships needed for the takeaway, each linked to the supplied Claim and original passage. A description can establish a relationship or condition, not just name an object. Select supplied passage identifiers; the server resolves them to exact evidence, never manufacture a quotation.
 - `encoding`: the scientific meaning of each necessary mark, axis, region, arrow or color, kept separate from artwork in a v2 brief.
 - `composition`: focal scale, reading path, spacing and placement of existing subjects and labels; it cannot redefine their scientific meaning.
-- `treatment`: concrete material, palette, line/edge treatment and type hierarchy; select a relevant direction from [art-directions.md](references/art-directions.md).
+- `treatment`: concrete material, palette, line/edge treatment and type hierarchy; select a relevant direction from [art-directions.md](references/art-directions.md) and route it through [style-taxonomy.md](references/style-taxonomy.md).
 - `labels`: the exact short visible text. Essential symbols and conditions must survive intact. Put titles, long equations and derivations in the article unless indispensable to this picture.
 - `constraints`: the few source conditions and visual exclusions needed to prevent a wrong reading.
 
@@ -92,7 +92,7 @@ Before submitting a brief, read its subjects, labels and constraints together: t
 
 ## Visual craft
 
-Composition and treatment are design decisions, but they are not free-form. Use the concrete laws in [art-directions.md](references/art-directions.md); the following are the ones that most often fail on real submissions.
+Composition and treatment are design decisions, but they are not free-form. Use the concrete laws in [art-directions.md](references/art-directions.md) and the catalogue routing in [style-taxonomy.md](references/style-taxonomy.md); the following are the ones that most often fail on real submissions.
 
 **One ground.** The whole canvas is a single flat surface of one chosen colour. Two grounds, a recoloured panel, a band, a vignette or a wash falloff read to the viewer as a broken image, not as design. If the explanation genuinely needs panels, they share the identical ground and are separated by spacing and line work alone.
 
@@ -107,6 +107,12 @@ Composition and treatment are design decisions, but they are not free-form. Use 
 **Two label levels, fixed.** Primary labels carry variables, categories and boundary values; a smaller secondary level carries essential qualifiers. Do not introduce a third decorative level, and do not use text as ornament.
 
 **Check at reading size.** Verify the composition at single-column width. If the ground reads as two pieces or the hierarchy collapses, simplify rather than add.
+
+**Geometry before surface.** Resolve material identity, object extent, view, openings, path topology and dimension ownership before selecting texture, glow or a named style. A style may change linework and material finish; it cannot choose whether a source-defined object is a cylinder, disk, slab, sphere or cutaway. If the construction is unresolved, use a faithful conceptual or cross-section encoding and retain the limit.
+
+**Aesthetic choice is a bounded decision.** Choose one primary style and at most one genuinely different alternative from the installed taxonomy. State the ground, focal relation, reading path, palette roles, line/material behavior and two label levels in the treatment. Do not dump the full catalogue into the art brief, and do not use character, toy, meme, neon or dashboard defaults for a serious mechanism unless the user explicitly requests that register.
+
+The renderer must preserve **one focal relationship** and its declared reading path. Before surface treatment, resolve **material identity and object extent**, view, openings, path topology and dimension ownership. **Do not let a style reference decide the scientific geometry.**
 
 ## Scientific review
 
@@ -144,4 +150,4 @@ If a correction is needed, change the relevant structured field or select a diff
 
 ## References and reuse
 
-Use [art-directions.md](references/art-directions.md) for concrete art direction. The installed MIT-licensed `baoyu-article-illustrator`, `baoyu-cover-image` and `baoyu-infographic` provide original composition and style references; Hermes loads relevant design sections only. Scientific constraints and the user's current request take precedence over template defaults. `baoyu-image-gen` informed reference-image and execution separation; it does not itself provide our Chat webpage transport. Do not install or switch providers merely because an upstream example uses one.
+Use [art-directions.md](references/art-directions.md) for concrete art direction and [style-taxonomy.md](references/style-taxonomy.md) for the installed catalogue routing and geometry gate. The installed MIT-licensed `baoyu-article-illustrator`, `baoyu-cover-image` and `baoyu-infographic` provide original composition and style references; Hermes loads relevant design sections only. Scientific constraints and the user's current request take precedence over template defaults. `baoyu-image-gen` informed reference-image and execution separation; it does not itself provide our Chat webpage transport. Do not install or switch providers merely because an upstream example uses one.
