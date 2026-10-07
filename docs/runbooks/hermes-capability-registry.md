@@ -18,7 +18,7 @@
 
 - 统一指南位于项目 Skill [`openscience-synclip-capabilities`](../../.agents/skills/openscience-synclip-capabilities/SKILL.md)，覆盖博客页当前列出的 25 篇文章，并把模型/工作流宣传、官方 API 合同、项目实现和真实产物分开。原生 Hermes 安装器已将它加入 immutable catalogue 的 `ART_SKILLS`；当前运行中的 catalogue 仍以其已安装 release 为准，下一次受控 Native 安装才会带入此版本。
 - 当前实际只确认 Synclip `gpt-image-2` 图片 adapter：`packages/ai-gateway/src/synclip-image-api.ts` → `infra/synclip-image/` → 既有 image spool → Worker image review/CAS。请求为异步 text-only、16:9；图片 reference/edit、Composer、Nano Banana 和博客中的 Studio 行为不能直接套入服务器。
-- Synclip 视频博客已整理为候选选择表，但仓库没有 Synclip video adapter；现有论文视频/旁白仍是独立 MiniMax pilot/media renderer。没有官方 endpoint、model 值、异步状态、下载/幂等和一份真实私有产物前，不把 Synclip 视频标为可用、不替换现有视频路径、不自动生成或扣费。
+- Synclip 视频博客已整理为候选选择表。官方 text-to-video 页面已公开高层 `POST /v1/video` 与异步 job/poll/callback/retrieve 流程，但 exact model 值、认证、请求字段、状态/结果、下载/幂等和 reference contract 尚未确认；仓库仍没有 Synclip video adapter。现有论文视频/旁白仍是独立 MiniMax pilot/media renderer，不自动切换、不自动生成或扣费。
 
 ## 本机浏览器代理配置
 
@@ -456,7 +456,7 @@ Figma只读结果：本机figma-temp、figma-primary均enabled=false，当前会
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
 | Synclip `gpt-image-2` image | 已审科学分镜的私有图像候选 | `PRODUCTION` | 私密 provider key；由 AI Gateway 和既有 image policy 控制；不把 key 放入 Hermes 输入 | `packages/ai-gateway/src/synclip-image-api.ts` → `infra/synclip-image/` → image spool → Worker review/CAS；当前 text-only、16:9、异步 task | 已有多篇 RO 私有草稿及 accepted review；跨论文长期稳定性仍按 CURRENT 继续验收 |
-| Synclip video capability guide | 视频模型、提示词和工作流选择参考 | `PATTERN_ONLY / BLOCKED` | 博客能力不能替代 API 合同；无已确认 Synclip video endpoint/model/key route | 项目 Skill 已进入下一次 Hermes catalogue 安装；当前仓库没有 Synclip video adapter，现有视频仍走独立 MiniMax pilot | 没有可据此宣称的 Synclip 私有视频产物；需先完成合同、幂等、下载和真实私有结果验收 |
+| Synclip video capability guide | 视频模型、提示词和工作流选择参考 | `PATTERN_ONLY / BLOCKED` | 公开页面仅给出高层 `POST /v1/video` 异步流程；exact model/auth/request/status/download/idempotency/reference contract 未确认 | 项目 Skill 已进入下一次 Hermes catalogue 安装；当前仓库没有 Synclip video adapter，现有视频仍走独立 MiniMax pilot | 没有可据此宣称的 Synclip 私有视频产物；需先完成完整合同、幂等、下载和真实私有结果验收 |
 | ChatGPT web image/science review | 历史网页生图与独立科学复核 | `BLOCKED` | 旧浏览器 runner 已停用；不再作为当前生图或审阅通道 | 历史 runner、broker、profile 和回执保留作审计/回滚证据；当前图像改走 Synclip，当前 imageReview 使用既有 M3 路径 | 历史结果不代表当前可调用能力；未知外部提交不得重放 |
 | Tavily MCP/API | 通用网页发现 | `PRODUCTION / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
 | Semantic Scholar MCP/API | 论文、作者、引用关系 | `PRODUCTION` | 有效 Secret 由既有本地 Secret 安全注入；真实 Hermes 任务返回 3 sources，连续请求仍可能 429 | `source.retrieve` native-fetch adapter；provider schema 不越过 Domain | metadata/OA/rights accuracy、1 req/s、429 显式降级 |

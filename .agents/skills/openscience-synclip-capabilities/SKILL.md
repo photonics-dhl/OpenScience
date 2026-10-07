@@ -30,7 +30,7 @@ The current server image route is the Synclip adapter in `packages/ai-gateway/sr
 
 This current route has real private-draft evidence for `gpt-image-2` and accepted image review, but that proves the present image route can run; it does not prove every Synclip model, the video API, long-term cross-paper quality or the claims in the blog. The authoritative runtime state is the [Hermes CURRENT handoff](../../docs/handoff/2026-09-10-hermes-web-image-handoff.md).
 
-The current repository does **not** have a Synclip video adapter. The existing paper-video and narration paths use the separate MiniMax video/speech pilot and media renderer. Do not route a paper video into Synclip until the exact Synclip video endpoint, model value, authentication, asynchronous status, reference-file contract, download limits, idempotency behavior and one real private result are recorded. Blog support for a web Studio is not server API integration.
+The current repository does **not** have a Synclip video adapter. Synclip's public [text-to-video API page](https://synclip.ai/text-to-video-api) exposes a high-level `POST /v1/video` asynchronous job flow with polling or callbacks and asset retrieval, but it does not provide the exact model enum, request fields, authentication contract, status/result schema, reference-file rules, download limits or idempotency behavior needed by this repository. The existing paper-video and narration paths use the separate MiniMax video/speech pilot and media renderer. Do not route a paper video into Synclip until those details and one real private result are recorded. Blog or marketing support for a web Studio is not server API integration.
 
 ## Model and workflow selection
 
