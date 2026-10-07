@@ -11,7 +11,7 @@
 .hero { position: relative; padding-block: 20px 0; }
 .hero::before { position: absolute; top: 0; left: 0; width: 64px; height: 2px; background: var(--os-vermilion-ink); content: ''; opacity: .85; }
 .intro { display: grid; gap: 24px; align-items: start; }
-.intro h1 { max-width: 12ch; font: 500 clamp(42px, 3.85vw, 60px)/1.17 var(--font-reading-serif); letter-spacing: -.035em; text-wrap: balance; }
+.intro h1 { max-width: 12ch; font: 500 clamp(46px, 4.15vw, 68px)/1.12 var(--font-reading-serif); letter-spacing: -.045em; text-wrap: balance; }
 .intro h1 > span { display: block; }
 .titleAccent { color: var(--os-vermilion-ink); }
 :global(html[lang='zh-CN']) .intro h1 { max-width: none; font-family: var(--font-cjk-serif), serif; font-weight: 600; letter-spacing: -.025em; line-height: 1.3; }
@@ -26,16 +26,18 @@
 .companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .chapterLink { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 14px; color: var(--os-ink); text-decoration: none; }
 .chapterLink svg { color: var(--os-vermilion-ink); }
-.proof { position: relative; min-width: 0; margin: 0; padding: 20px 0 0; border: 0; border-top: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; color: var(--os-ink); }
+.proof { position: relative; isolation: isolate; min-width: 0; margin: 0; padding: 20px 0 0; border: 0; border-top: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; color: var(--os-ink); }
+.proof::before { position: absolute; top: 92px; right: -36px; bottom: 112px; left: -24px; z-index: 0; background: #e6efed; clip-path: polygon(3% 1%, 100% 0, 97% 97%, 0 100%); content: ''; opacity: .92; pointer-events: none; }
+.proof > * { position: relative; z-index: 1; }
 .proof::after { position: absolute; top: 20px; right: 0; width: 56px; height: 56px; border-top: 1px solid #9fbfc2; border-right: 1px solid #9fbfc2; content: ''; opacity: .6; pointer-events: none; }
-.proofMeta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid var(--os-rule-paper); color: var(--os-muted-paper); font-size: 13px; line-height: 1.7; }
+.proofMeta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid rgb(24 47 53 / .16); color: var(--os-muted-paper); font-size: 12px; line-height: 1.7; letter-spacing: .04em; text-transform: uppercase; }
 .proofMeta > span { overflow-wrap: anywhere; }
 .proofMeta > span:last-child { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
 .proofLayout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; }
 .proofCopy { display: grid; gap: 14px; min-width: 0; }
-.proof .researchTitle { font: 500 clamp(32px, 3.3vw, 46px)/1.16 var(--font-reading-serif); overflow-wrap: anywhere; letter-spacing: -.025em; text-wrap: pretty; }
-.readingHook { font-size: 16px; line-height: 1.85; text-wrap: pretty; }
-.scienceImage { display: grid; align-items: center; min-width: 0; padding: clamp(12px, 2vw, 24px); background: var(--os-paper-strong); box-shadow: 0 18px 42px -30px rgb(25 63 67 / .36), inset 0 0 0 1px rgb(25 63 67 / .06); }
+.proof .researchTitle { max-width: 18ch; font: 500 clamp(38px, 4.2vw, 62px)/1.08 var(--font-reading-serif); overflow-wrap: anywhere; letter-spacing: -.04em; text-wrap: pretty; }
+.readingHook { max-width: 48ch; font-size: 17px; line-height: 1.8; text-wrap: pretty; }
+.scienceImage { display: grid; align-items: center; min-width: 0; padding: clamp(18px, 3vw, 34px); border: 1px solid rgb(24 47 53 / .09); background: #f8f3e9; box-shadow: 18px 22px 0 rgb(18 93 102 / .08), 0 22px 42px -30px rgb(25 63 67 / .42); transform: rotate(-.55deg); }
 .scienceImage img { display: block; width: 100%; height: auto; object-fit: contain; }
 .proofFooter { display: grid; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--os-rule-paper); }
 .figureCaption { max-width: 72ch; color: var(--os-muted-paper); font-size: 14px; line-height: 1.8; }
