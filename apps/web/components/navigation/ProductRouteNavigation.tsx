@@ -9,6 +9,6 @@ export function ProductRouteNavigation({ active, variant = 'product' }: { active
   const t = useTranslations('productNavigation');
   const routes = variant === 'identity' ? PRODUCT_PRIMARY_ROUTES.filter(({ id }) => id === 'explore' || id === 'dashboard') : PRODUCT_PRIMARY_ROUTES;
   return <ul className={styles.primary} data-product-route-navigation="true" data-navigation-variant={variant}>
-    {routes.map(({ href, id }) => <li key={id}><Link href={href} className={styles.primaryLink} aria-current={active === id || (active === 'create' && id === 'dashboard') ? 'page' : undefined} data-reading-role="control">{t(id)}</Link></li>)}
+    {routes.map(({ href, id }) => <li key={id} data-route-item={id}><Link href={href} className={styles.primaryLink} aria-current={active === id || (active === 'create' && id === 'dashboard') ? 'page' : undefined} data-reading-role="control">{t(id)}</Link></li>)}
   </ul>;
 }

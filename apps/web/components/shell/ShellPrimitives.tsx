@@ -36,10 +36,11 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
   return (
     <header
       className={cn(
-        'flex min-h-14 min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 sm:gap-4 sm:px-6 lg:px-8',
+        'shell-header flex min-h-14 min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 sm:gap-4 sm:px-6 lg:px-8',
         wrapActionsOnMobile && 'py-1 xl:py-0',
         tone === 'dark' ? 'border-os-rule-dark' : 'border-os-rule-paper',
       )}
+      data-shell-header="true"
     >
       {compactBrandOnMobile ? (
         <>

@@ -237,3 +237,97 @@
     border-radius: .375rem;
   }
 }
+/* Product shell refinement: global/context/local hierarchy without changing the
+   approved Landing composition. The shared header remains in document flow so
+   reading surfaces never lose content behind a fixed bar. */
+.surface-product-app > .shell-header {
+  position: relative;
+  z-index: var(--z-header);
+  min-height: 4.25rem;
+  background: color-mix(in srgb, var(--os-paper-strong, #fff) 94%, transparent);
+  box-shadow: 0 1px 0 rgb(25 26 24 / .04);
+  backdrop-filter: blur(14px);
+}
+
+.surface-product-app > .shell-header::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--os-rule-paper), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.surface-product-app [data-product-route-navigation='true'] {
+  display: flex;
+  align-items: center;
+  min-height: 3.25rem;
+}
+
+.surface-product-app [data-product-route-navigation='true'] .primaryLink {
+  position: relative;
+  min-height: 3.25rem;
+  border-radius: 0;
+  color: color-mix(in srgb, var(--os-ink) 66%, var(--os-muted-paper));
+  transition: color var(--motion-focus) var(--ease-standard), background-color var(--motion-focus) var(--ease-standard);
+}
+
+.surface-product-app [data-product-route-navigation='true'] .primaryLink[aria-current='page'] {
+  background: transparent;
+  color: var(--os-vermilion-ink);
+  font-weight: 650;
+}
+
+.surface-product-app [data-product-route-navigation='true'] .primaryLink[aria-current='page']::after {
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  opacity: 1;
+}
+
+.surface-product-app [data-product-route-navigation='true'] .primaryLink:focus-visible {
+  outline-offset: -4px;
+}
+
+.surface-product-app .product-main,
+.surface-product-app [data-os-surface='dashboard'] main {
+  scroll-margin-top: 5rem;
+}
+
+.surface-product-app :is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.surface-product-app ::selection {
+  background: color-mix(in srgb, var(--os-vermilion-ink) 18%, var(--os-paper));
+  color: var(--os-ink);
+}
+
+@media (max-width: 639px) {
+  .surface-product-app > .shell-header {
+    min-height: 3.75rem;
+    padding-top: .25rem;
+    padding-bottom: .25rem;
+  }
+
+  .surface-product-app [data-product-route-navigation='true'] {
+    min-height: auto;
+    padding-block: .125rem;
+  }
+
+  .surface-product-app [data-product-route-navigation='true'] .primaryLink {
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-product-app > .shell-header,
+  .surface-product-app [data-product-route-navigation='true'] .primaryLink {
+    backdrop-filter: none;
+    transition: none;
+  }
+}
