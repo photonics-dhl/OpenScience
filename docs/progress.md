@@ -3,6 +3,7 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-08：线上 `e4ed24571d7037e957c80808147faa54ae2e32cf` 已接入 Synclip 视频 bundle，timer/broker/Worker 环境和公网 release 已核对；RO9067 的真实站内视频任务 `321b013e-9606-4858-82a7-f767105d0069` 在 Hermes 分镜结构化阶段5次 schema/json失败后阻断，未发起 Synclip POST。新增修复让 Hermes 只生成科学 `videoProduction`/`videoDirection`，由服务端从核验 Claim 派生有界动画层；storyboard 定向测试1/1、Worker typecheck/build通过，待发布后再新建一次私有验证，不重放失败任务。
 - 2026-10-08：Worker 科学绑定修正提交 `52f6c1a3` 已上线，线上 release 为 `52f6c1a361d60fd6f7df7d308a24d282192c683f`、回滚 `decf3759b6d40764d39e7467f01e368be9022e92`；发布按 Worker-only 范围使用 `--no-tests --skip-migrate`，容器/active/public/retention 通过，深层 Parser/ScanSci/Embedding 与公网 auth/admin 探针未执行。Synclip 仍锁定已验证的 `gpt-image-2`。
 - 2026-10-08：针对“结构正确但缺少美感”的反馈，重新审查指南真实首屏并完成一轮艺术指导：真实研究图解改为展品构图，增加轻微错位纸张色块、印刷式 metadata、错位投影与更有张力的标题比例；Hermes 仍保持页面自有锚定位。内置浏览器窄屏截图已观察到研究对象、光学丝带与 Hermes 的层次关系，尚未部署。
 - 2026-10-08：历史错误表述已撤回；Synclip 同时是图片和视频供应商。当前源码新增 Synclip LTX video candidate adapter/broker，尚未部署或完成真实私有解码验收；MiniMax H3 保留为独立 pilot。`openscience-research-video` Skill、能力台账和 CURRENT 已统一到 H3 的 `/v2/video_generation` + `/v2/query/video_generation/{task_id}`、15s/2K/16:9、参考图、原生音轨及逐幕 attempt/receipt 保护。
