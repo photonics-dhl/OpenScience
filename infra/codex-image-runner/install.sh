@@ -18,7 +18,7 @@ if [[ "${1:-}" = '--confirm-video' ]]; then
   install -d -o root -g root -m 0700 "$video_root/private"
   [[ ! -e "$video_bundle" ]] || { echo 'Video bundle already exists; inspect before reuse'; exit 69; }
   install -d -m 0755 "$video_bundle/infra/codex-image-runner" "$video_bundle/packages/ai-gateway/dist"
-  for file in core.mjs video-runner.mjs video-tts.py; do install -m 0444 "$source_root/infra/codex-image-runner/$file" "$video_bundle/infra/codex-image-runner/$file"; done
+  for file in core.mjs main-entry.mjs video-runner.mjs video-tts.py; do install -m 0444 "$source_root/infra/codex-image-runner/$file" "$video_bundle/infra/codex-image-runner/$file"; done
   find "$source_root/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -exec install -m 0444 -t "$video_bundle/packages/ai-gateway/dist" {} +
   node --input-type=module - "$video_bundle/infra/codex-image-runner/video-runner.mjs" <<'NODE'
 import { pathToFileURL } from 'node:url';
@@ -26,7 +26,7 @@ const runner = await import(pathToFileURL(process.argv[2]).href);
 if (typeof runner.runVideoOne !== 'function') throw Error('VIDEO_RUNNER_RUNTIME_INVALID');
 NODE
   script_digest="$({
-    printf '%s\0' "$video_bundle/infra/codex-image-runner/core.mjs" "$video_bundle/infra/codex-image-runner/video-runner.mjs" "$video_bundle/infra/codex-image-runner/video-tts.py"
+    printf '%s\0' "$video_bundle/infra/codex-image-runner/core.mjs" "$video_bundle/infra/codex-image-runner/main-entry.mjs" "$video_bundle/infra/codex-image-runner/video-runner.mjs" "$video_bundle/infra/codex-image-runner/video-tts.py"
     find "$video_bundle/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -print0
   } | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
   config="$video_root/config-$sha.json"
