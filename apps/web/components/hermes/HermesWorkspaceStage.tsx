@@ -594,9 +594,14 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     }
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, kind);
-    setDockStored(stored);
-    setCustomDock(stored);
-    if (stored || !hasUsableAnchor) {
+    // A page-owned anchor is part of the composition. Older releases could
+    // leave a dragged viewport position behind, which turned an anchored
+    // companion into a detached layer on the next visit. Restore preferences
+    // only for companions that genuinely belong to the viewport.
+    const useStoredDock = stored && !hasUsableAnchor;
+    setDockStored(useStoredDock);
+    setCustomDock(useStoredDock);
+    if (useStoredDock || !hasUsableAnchor) {
       const size = stageSize;
       const resolved = resolveHermesDock(preferences, viewportSize, { height: size, width: size }, true);
       positionRef.current = resolved;
