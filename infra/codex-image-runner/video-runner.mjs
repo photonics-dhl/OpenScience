@@ -57,12 +57,12 @@ function validateAnimation(value,sceneClaimIds){
 }
 function validateContentStoryboard(bytes,request){
  const raw=JSON.parse(bytes.toString());
- const value=strictObject(raw,['schemaVersion','title','scenes',...(Object.hasOwn(raw??{},'locale')?['locale']:[]),...(Object.hasOwn(raw??{},'style')?['style']:[])]);
+ const value=strictObject(raw,['schemaVersion','title','scenes',...(Object.hasOwn(raw??{},'locale')?['locale']:[]),...(Object.hasOwn(raw??{},'style')?['style']:[]),...(Object.hasOwn(raw??{},'videoProduction')?['videoProduction']:[])]);
  if(value.schemaVersion!==1||!Array.isArray(value.scenes)||value.scenes.length<3||value.scenes.length>6||value.scenes.length!==request.files.scenes.length)invalid();
  boundedText(value.title,120);
  const allowedClaims=new Set(request.sourceClaimIds);const covered=new Set();let hasDynamic=false;
  value.scenes.forEach(scene=>{
-  const item=strictObject(scene,['title','narration','visualAction','durationSeconds','sourceClaimIds','animation']);
+  const item=strictObject(scene,['title','narration','visualAction','durationSeconds','sourceClaimIds','animation',...(Object.hasOwn(scene??{},'videoDirection')?['videoDirection']:[])]);
   boundedText(item.title,120);boundedText(item.narration,600);boundedText(item.visualAction,1000);
   if(!Number.isInteger(item.durationSeconds)||item.durationSeconds<4||item.durationSeconds>20||!Array.isArray(item.sourceClaimIds)||item.sourceClaimIds.length<1||item.sourceClaimIds.length>12
    ||new Set(item.sourceClaimIds).size!==item.sourceClaimIds.length||item.sourceClaimIds.some(id=>typeof id!=='string'||!allowedClaims.has(id)))invalid();

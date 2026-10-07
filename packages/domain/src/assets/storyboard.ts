@@ -69,6 +69,35 @@ export interface IllustrationStyleRecommendations {
     selectedStyleId: string;
     choices: Array<{ styleId: string; name: string; reason: string }>;
 }
+export type VideoNarrativeArc = 'question-mechanism-takeaway' | 'question-evidence-limitations' | 'observation-mechanism-limitations';
+export type VideoAudioPolicy = 'native-first' | 'external-narration' | 'compare-before-publish';
+export type VideoModelPolicy = 'commercial-primary' | 'local-preview';
+export type VideoShotType = 'hook' | 'mechanism' | 'evidence' | 'transition' | 'takeaway' | 'hero';
+export type VideoReference = 'scene-artwork' | 'paper-original' | 'none';
+export type VideoFrameStrategy = 'start-reference' | 'start-end-reference' | 'text-only';
+export type VideoAudioMode = 'native' | 'external-narration' | 'silent' | 'hybrid';
+export type VideoSubtitleMode = 'burn-in' | 'sidecar' | 'none';
+export interface VideoProductionDirection {
+    schemaVersion: 1;
+    narrativeArc: VideoNarrativeArc;
+    visualContinuity: string;
+    audioPolicy: VideoAudioPolicy;
+    modelPolicy: VideoModelPolicy;
+}
+export interface VideoSceneDirection {
+    shotType: VideoShotType;
+    purpose: string;
+    subjectLock: string;
+    generatedElements: string;
+    motion: string;
+    camera: string;
+    reference: VideoReference;
+    frameStrategy: VideoFrameStrategy;
+    audioMode: VideoAudioMode;
+    subtitleMode: VideoSubtitleMode;
+    negativeConstraints: string[];
+    modelPolicy: VideoModelPolicy;
+}
 /** Optional display metadata must never invalidate an otherwise valid scientific plan. */
 export function parseIllustrationStyleRecommendations(value: unknown): IllustrationStyleRecommendations | undefined {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
@@ -91,6 +120,7 @@ export interface StoryboardDocument {
     schemaVersion: 1;
     title: string;
     narrative?: { mainMessage: string; audience: string };
+    videoProduction?: VideoProductionDirection;
     scenes: Array<{
         title: string;
         narration: string;
@@ -100,6 +130,7 @@ export interface StoryboardDocument {
         durationSeconds?: number;
         sourceClaimIds: string[];
         animation?: SceneAnimation;
+        videoDirection?: VideoSceneDirection;
         /**
          * Paper-original binding for figurePlan.reuse decisions: when the planner
          * finds a registered paper_original_figure asset for this scene's figureId,
@@ -152,6 +183,43 @@ function text(value: unknown, max: number, reason: string): string {
     const control = value.match(/[\u0000-\u001f]/);
     if (control) return invalid(`${reason}:control_u${control[0].charCodeAt(0).toString(16).padStart(4, '0')}`);
     return value;
+}
+function enumValue<T extends string>(value: unknown, allowed: readonly T[], reason: string): T {
+    if (typeof value !== 'string' || !allowed.includes(value as T)) return invalid(reason);
+    return value as T;
+}
+function parseVideoProductionDirection(value: unknown): VideoProductionDirection {
+    const v = object(value, 'video_production_shape');
+    keys(v, ['schemaVersion', 'narrativeArc', 'visualContinuity', 'audioPolicy', 'modelPolicy'], [], 'video_production_keys');
+    if (v.schemaVersion !== 1) return invalid('video_production_schema_version');
+    return {
+        schemaVersion: 1,
+        narrativeArc: enumValue(v.narrativeArc, ['question-mechanism-takeaway', 'question-evidence-limitations', 'observation-mechanism-limitations'], 'video_production_narrative_arc') as VideoNarrativeArc,
+        visualContinuity: text(v.visualContinuity, 600, 'video_production_visual_continuity'),
+        audioPolicy: enumValue(v.audioPolicy, ['native-first', 'external-narration', 'compare-before-publish'], 'video_production_audio_policy') as VideoAudioPolicy,
+        modelPolicy: enumValue(v.modelPolicy, ['commercial-primary', 'local-preview'], 'video_production_model_policy') as VideoModelPolicy,
+    };
+}
+function parseVideoSceneDirection(value: unknown, prefix: string): VideoSceneDirection {
+    const v = object(value, `${prefix}:video_direction_shape`);
+    keys(v, ['shotType', 'purpose', 'subjectLock', 'generatedElements', 'motion', 'camera', 'reference', 'frameStrategy', 'audioMode', 'subtitleMode', 'negativeConstraints', 'modelPolicy'], [], `${prefix}:video_direction_keys`);
+    if (!Array.isArray(v.negativeConstraints) || v.negativeConstraints.length > 0 && v.negativeConstraints.length > 8)
+        return invalid(`${prefix}:video_direction_negative_constraints`);
+    const negativeConstraints = v.negativeConstraints.map((item, index) => text(item, 160, `${prefix}:video_direction_negative_${index}`));
+    return {
+        shotType: enumValue(v.shotType, ['hook', 'mechanism', 'evidence', 'transition', 'takeaway', 'hero'], `${prefix}:video_direction_shot_type`) as VideoShotType,
+        purpose: text(v.purpose, 240, `${prefix}:video_direction_purpose`),
+        subjectLock: text(v.subjectLock, 360, `${prefix}:video_direction_subject_lock`),
+        generatedElements: text(v.generatedElements, 600, `${prefix}:video_direction_generated_elements`),
+        motion: text(v.motion, 600, `${prefix}:video_direction_motion`),
+        camera: text(v.camera, 300, `${prefix}:video_direction_camera`),
+        reference: enumValue(v.reference, ['scene-artwork', 'paper-original', 'none'], `${prefix}:video_direction_reference`) as VideoReference,
+        frameStrategy: enumValue(v.frameStrategy, ['start-reference', 'start-end-reference', 'text-only'], `${prefix}:video_direction_frame_strategy`) as VideoFrameStrategy,
+        audioMode: enumValue(v.audioMode, ['native', 'external-narration', 'silent', 'hybrid'], `${prefix}:video_direction_audio_mode`) as VideoAudioMode,
+        subtitleMode: enumValue(v.subtitleMode, ['burn-in', 'sidecar', 'none'], `${prefix}:video_direction_subtitle_mode`) as VideoSubtitleMode,
+        negativeConstraints,
+        modelPolicy: enumValue(v.modelPolicy, ['commercial-primary', 'local-preview'], `${prefix}:video_direction_model_policy`) as VideoModelPolicy,
+    };
 }
 export function parseStoryboardRequest(value: unknown): StoryboardRequest {
     const v = object(value, 'request_shape');
@@ -209,7 +277,7 @@ export function parseStoryboardRequest(value: unknown): StoryboardRequest {
 }
 export function parseStoryboardDocument(value: unknown, selected: readonly string[], output: StoryboardRequest['output'] = 'video'): StoryboardDocument {
     const v = object(value, 'document_shape');
-    keys(v, ['schemaVersion', 'title', 'scenes'], output === 'image' ? ['narrative'] : [], 'document_keys');
+    keys(v, ['schemaVersion', 'title', 'scenes'], output === 'image' ? ['narrative'] : ['videoProduction'], 'document_keys');
     if (v.schemaVersion !== 1) return invalid('schema_version');
     if (!Array.isArray(v.scenes) || v.scenes.length < (output === 'image' ? 1 : 3) || v.scenes.length > 6)
         return invalid('scene_count');
@@ -217,7 +285,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
     const scenes = v.scenes.map((raw, index) => {
         const prefix = `scene_${index}`;
         const s = object(raw, `${prefix}:shape`);
-        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation'] : ['illustration', 'paperOriginal', 'styleRecommendations'], `${prefix}:keys`);
+        keys(s, output === 'video' ? ['title', 'narration', 'visualAction', 'durationSeconds', 'sourceClaimIds'] : ['title', 'narration', 'visualAction', 'sourceClaimIds'], output === 'video' ? ['animation', 'videoDirection'] : ['illustration', 'paperOriginal', 'styleRecommendations'], `${prefix}:keys`);
         if (output === 'video' && (!Number.isInteger(s.durationSeconds) || Number(s.durationSeconds) < 4 || Number(s.durationSeconds) > 20))
             return invalid(`${prefix}:duration`);
         if (!Array.isArray(s.sourceClaimIds) || s.sourceClaimIds.length < 1 || s.sourceClaimIds.length > 12 || new Set(s.sourceClaimIds).size !== s.sourceClaimIds.length || s.sourceClaimIds.some(id => typeof id !== 'string' || !selected.includes(id)))
@@ -232,6 +300,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
                 throw error;
             }
         }
+        const videoDirection = output === 'video' && s.videoDirection !== undefined ? parseVideoSceneDirection(s.videoDirection, prefix) : undefined;
         const illustration = output === 'image' && s.illustration !== undefined ? parseIllustrationBrief(s.illustration, ids) : undefined;
         const styleRecommendations = output === 'image' ? parseIllustrationStyleRecommendations(s.styleRecommendations) : undefined;
         if (illustration && s.visualAction !== describeIllustrationBrief(illustration)) invalid(`${prefix}:illustration_description_mismatch`);
@@ -248,7 +317,7 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
             if (po.objectKey !== getBlobStorageKey(po.contentHash) && !legacyKey) invalid(`${prefix}:paper_original_values`);
             paperOriginal = { assetId: po.assetId, objectKey: po.objectKey, contentHash: po.contentHash };
         }
-        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(styleRecommendations ? { styleRecommendations } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(paperOriginal ? { paperOriginal } : {}) };
+        return { title: text(s.title, 120, `${prefix}:title`), narration: text(s.narration, 600, `${prefix}:narration`), visualAction: text(illustration ? describeIllustrationBrief(illustration) : s.visualAction, output === 'image' ? STORYBOARD_IMAGE_VISUAL_ACTION_MAX : STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, `${prefix}:visual_action`), ...(illustration ? { illustration } : {}), ...(styleRecommendations ? { styleRecommendations } : {}), ...(output === 'video' ? { durationSeconds: s.durationSeconds as number } : {}), sourceClaimIds: [...ids], ...(animation ? { animation } : {}), ...(videoDirection ? { videoDirection } : {}), ...(paperOriginal ? { paperOriginal } : {}) };
     });
     const duration = scenes.reduce((n, s) => n + (s.durationSeconds ?? 0), 0);
     if (output === 'video' && (duration < 24 || duration > 90)) return invalid('total_duration');
@@ -265,7 +334,8 @@ export function parseStoryboardDocument(value: unknown, selected: readonly strin
         keys(n, ['mainMessage', 'audience'], [], 'narrative_keys');
         narrative = { mainMessage: text(n.mainMessage, 240, 'narrative_main_message'), audience: text(n.audience, 160, 'narrative_audience') };
     }
-    return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes, ...(narrative ? { narrative } : {}) };
+    const videoProduction = output === 'video' && v.videoProduction !== undefined ? parseVideoProductionDirection(v.videoProduction) : undefined;
+    return { schemaVersion: 1, title: text(v.title, 120, 'title'), scenes, ...(narrative ? { narrative } : {}), ...(videoProduction ? { videoProduction } : {}) };
 }
 /** Never expose arbitrary provenance or a malformed saved plan. */
 export function presentationStoryboardView(asset: {

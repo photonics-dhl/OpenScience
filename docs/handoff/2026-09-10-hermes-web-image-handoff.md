@@ -3,7 +3,7 @@
 
 ## 目标与决定
 - 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
-- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 - 2026-10-07 当前发布锚点：应用 `0c8fbf58824a59abc585643241a3083315b496df`，回滚 `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`，CI `37643577812` 全绿；原生 Hermes catalogue/runtime 为 `project-catalogue-0c8fbf58824a59abc585643241a3083315b496df` / `installed-native-continuation-0c8fbf58824a59abc585643241a3083315b496df`，API/Worker healthy，timer active/enabled，Worker 绑定检查通过。发布使用 `--no-tests`，Parser/ScanSci/embedding 深层 canary 未执行；这不改变 Synclip 图片与未接通视频的边界。
@@ -25,6 +25,7 @@
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
+- 视频当前下一动作：先以这份 Hermes 导演简报合同完成 CI/发布前审查，再取得 Synclip 精确视频合同，最后只做一次私有短镜头验收；在此之前不发起视频请求、不把 Qwen WAV 当成 provider 输入、不退役本地预览链。
 - `f52ee24c` 的无 Cookie `session-guard` 修复已包含在当前线上 `4ed53b71`；线上 `/auth/me` 未登录请求返回统一 401，发布后15分钟没有新的 `Reply was already sent`/`ERR_HTTP_HEADERS_SENT` 日志。定向 API 测试16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个既有 HEAD错误。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 ## 历史验证（不作为当前 next action）

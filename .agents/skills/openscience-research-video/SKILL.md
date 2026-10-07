@@ -17,7 +17,7 @@ This is Hermes's planning and review method for research video. It converts the 
 
 ## Build a compact shot brief
 
-For each shot, write a bounded planning record. This is a Hermes handoff shape, not a new server schema:
+For each shot, write a bounded planning record. In the OpenScience server this maps to the existing storyboard document's optional `videoProduction` and per-scene `videoDirection` fields; it is not a second task chain or paper-analysis schema:
 
 ```text
 shot: stable local number and purpose
@@ -33,6 +33,8 @@ text: none by default; exact post-edit text only when the product path supports 
 references: numbered approved scene/frame/audio assets, one job per reference
 exclusions: plausible but unsupported objects, motion, labels or causal claims
 ```
+
+The persisted production fields are deliberately provider-neutral. `videoProduction` stores the narrative arc, global continuity bible, audio policy and commercial-first model policy. `videoDirection` stores the shot type, purpose, locked subject, generated elements, one motion beat, camera treatment, reference/frame strategy, audio mode, subtitle mode and bounded exclusions. Claims and reviewed passages remain the scientific authority; these fields only package that meaning for a commercial video model. Legacy storyboards without these optional fields remain readable by the local preview renderer, while new Hermes video plans must populate them.
 
 Use the shared directorial order when writing a prompt: `subject → environment → action → camera → style → audio → text → references → exclusions`. Describe motion as a transition between two readable states, not as a list of cinematic adjectives. Repeat identity, lighting, material and camera continuity across connected shots. One reference has one job: for example, `Image 1 = approved scene frame` or `Image 2 = approved endpoint`.
 
