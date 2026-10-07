@@ -102,3 +102,36 @@
   .discovery[data-explore-index='true'] .cardLink:hover .read > [aria-hidden='true'] { transform: none; }
   .discovery[data-explore-index='true'] .search button:active { transform: none; }
 }
+
+/* The index is a reading room, not a dashboard. Let the catalogue rhythm carry
+   the page and keep the search instrument quiet until it is used. */
+.discovery[data-explore-index='true'] .search {
+  max-width: none;
+  padding: 10px 0;
+  border-block: 1px solid var(--os-rule-paper);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.discovery[data-explore-index='true'] .search::before { display: none; }
+
+.discovery[data-explore-index='true'] .search input {
+  height: 46px;
+  border: 0;
+  background: transparent;
+}
+
+.discovery[data-explore-index='true'] .search input:focus-visible {
+  outline-offset: 0;
+}
+
+.discovery[data-explore-index='true'] .search button {
+  min-height: 46px;
+  border-radius: 3px;
+  padding-inline: 18px;
+}
+
+.discovery[data-explore-index='true'] .cover {
+  border-radius: 4px;
+}
