@@ -30,10 +30,11 @@ const taskParams = scopeParams.extend({ taskId: z.string().uuid() }).strict();
 
 const generationBody = z.object({
   kind: z.enum(['chart', 'interactive_html', 'image', 'video']),
-  storyboard: z.object({ output: z.enum(['image', 'video']).default('video'), locale: z.enum(['zh', 'en']), style: z.string().min(1).max(100), instruction: z.string().max(1000).trim().min(1), narrative: z.literal(true).optional(), baseAssetId: z.string().uuid().optional(), revisionTaskId: z.string().uuid().optional(), revisionMode: z.literal('art').optional(),
+  storyboard: z.object({ output: z.enum(['image', 'video']).default('video'), locale: z.enum(['zh', 'en']), style: z.string().min(1).max(100), instruction: z.string().max(1000).trim().min(1), narrative: z.literal(true).optional(), baseAssetId: z.string().uuid().optional(), revisionTaskId: z.string().uuid().optional(), revisionMode: z.literal('art').optional(), artSceneIndex: z.number().int().min(0).max(5).optional(),
     figurePlan: z.object({ figures: z.array(z.object({ id: z.string().min(1).max(200), decision: z.enum(['reuse', 're-render', 'abstract', 'skip']), styleId: z.string().min(1).max(100).optional(), caption: z.string().max(200).optional() }).strict()).max(12) }).strict().optional() }).strict()
     .refine(value => !value.revisionTaskId || (value.output === 'image' && !value.baseAssetId), { message: 'Storyboard revision requires image output and no base asset', path: ['revisionTaskId'] })
-    .refine(value => !value.revisionMode || (value.output === 'image' && Boolean(value.baseAssetId) && !value.revisionTaskId), { message: 'Art revision requires an image base asset', path: ['revisionMode'] }).optional(),
+    .refine(value => !value.revisionMode || (value.output === 'image' && Boolean(value.baseAssetId) && !value.revisionTaskId), { message: 'Art revision requires an image base asset', path: ['revisionMode'] })
+    .refine(value => value.artSceneIndex === undefined || (value.revisionMode === 'art' && value.output === 'image' && Boolean(value.baseAssetId) && value.narrative === true), { message: 'Scene art revision requires a narrative image base', path: ['artSceneIndex'] }).optional(),
   sceneImage: z.object({ storyboardAssetId: z.string().uuid(), sceneIndex: z.number().int().min(0).max(5), styleReferenceAssetId: z.string().uuid().optional() }).strict().optional(),
   video: z.object({
     storyboardAssetId: z.string().uuid(),

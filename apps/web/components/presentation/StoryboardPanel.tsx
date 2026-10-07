@@ -35,7 +35,8 @@ export function buildStoryboardRequest(input: {
     instruction: input.instruction.trim(),
     ...(input.baseAssetId ? {
       baseAssetId: input.baseAssetId,
-      ...(input.artOnly ? { revisionMode: 'art' as const, ...(input.storyboard?.narrative ? { narrative: true as const } : {}) } : {}),
+      ...(input.artOnly ? { revisionMode: 'art' as const, artSceneIndex: 0,
+        ...(input.storyboard?.narrative ? { narrative: true as const } : {}) } : {}),
     } : {}),
   };
 }

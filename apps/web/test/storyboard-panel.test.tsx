@@ -63,7 +63,7 @@ it('exposes the bounded art-only revision choice for an existing storyboard', as
 it('carries the existing narrative scope into an art-only revision payload', () => {
   const request = buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: ' preserve the art direction ',
     baseAssetId: 'base', artOnly: true, storyboard: { narrative: true } });
-  expect(request).toMatchObject({ baseAssetId: 'base', revisionMode: 'art', narrative: true, instruction: 'preserve the art direction' });
+  expect(request).toMatchObject({ baseAssetId: 'base', revisionMode: 'art', artSceneIndex: 0, narrative: true, instruction: 'preserve the art direction' });
   const legacy = buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: 'restyle', baseAssetId: 'base', artOnly: true });
   expect(legacy).not.toHaveProperty('narrative');
 });
