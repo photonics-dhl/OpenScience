@@ -18,33 +18,38 @@ function post(socketPath: string, path: string, value: unknown) {
     request.on('error', reject); request.end(JSON.stringify(value));
   });
 }
-async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3, thinkingOnly = false) {
+async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3, thinkingOnly = false,
+  options?: { firstTool?: { id: string; name: string; input: Record<string, unknown> };
+    renderPages?: Parameters<typeof createNativePaperTools>[1];
+    deadlineMs?: number;
+    withAuthorizedToolCall?: <T>(run: () => Promise<T>) => Promise<T> }) {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
   let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
-  const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, options) => {
-    bodySizes.push(Buffer.byteLength(String(options!.body)));
+  const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, requestOptions) => {
+    bodySizes.push(Buffer.byteLength(String(requestOptions!.body)));
     const first = providerCalls++ === 0;
     return new Response(JSON.stringify({ model: 'MiniMax-M3', content: first ? [
       { type: 'thinking', thinking: 'x'.repeat(3000), signature: 'private' }, { type: 'text', text: 'x'.repeat(3000) },
-      { type: 'tool_use', id: 'read-1', name: 'paper_read', input: { passageIds: ['P00001'] } },
+      { type: 'tool_use', ...(options?.firstTool ?? { id: 'read-1', name: 'paper_read', input: { passageIds: ['P00001'] } }) },
     ] : thinkingOnly ? [{ type: 'thinking', thinking: 'Unfinished private reasoning.', signature: 'original' }]
       : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : stopReason, usage: { input_tokens: 5, output_tokens: 5 } }));
   });
   const binding = { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
     runtimeId: thinkingOnly ? `installed-native-continuation-${'a'.repeat(40)}` : 'fixture',
     skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
-    maxTurns, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + 20_000 };
+    maxTurns, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + (options?.deadlineMs ?? 20_000) };
   const store = { async read() { return structuredClone(state); }, async compareAndSet(_expected: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async complete(_started: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async publish<T>(_started: unknown, submit: () => Promise<T>) { return submit(); } };
   const session = createNativeAgentSession({ gateway: new AiGateway({ providers: [provider] }), binding, store, authorize: async () => undefined });
   const parser = { name: 'fixture', version: '1' };
   const paper = createNativePaperTools({ artifactId: 'paper', contentHash: 'a'.repeat(64), parser, pages: [{ page: 1, width: 100, height: 100,
-    blocks: [{ id: 'one', kind: 'paragraph', text: 'Original evidence.', boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] }, async () => []);
+    blocks: [{ id: 'one', kind: 'paragraph', text: 'Original evidence.', boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] }, options?.renderPages ?? (async () => []));
   const sourceCalls: Array<{ name: string; sequence?: number; callId?: string }> = [];
   const final = runHostedNativeTask({ inboxRoot: root, executionAttempt: 1, config: { ...binding, goal: 'Read', instructions: 'Read', sourceTools: NATIVE_PAPER_TOOLS },
     deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize: async () => undefined,
-    paper: { ...paper, call: async (name, args, sequence, callId) => { sourceCalls.push({ name, sequence, callId }); return paper.call(name, args); } } });
+    paper: { ...paper, call: async (name, args, sequence, callId) => { sourceCalls.push({ name, sequence, callId }); return paper.call(name, args); },
+      ...(options?.withAuthorizedToolCall ? { withAuthorizedToolCall: options.withAuthorizedToolCall } : {}) } });
   void final.catch(() => undefined);
   const socketPath = join(root, `${taskId}-1`, 'worker.sock');
   for (let i = 0; i < 100; i++) { try { await access(join(root, `${taskId}-1`, 'request.json')); break; } catch { await new Promise(r => setTimeout(r, 10)); } }
@@ -54,6 +59,53 @@ async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 
     cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
 }
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
+  it('rechecks journal authority after page rasterization before sending pixels', async () => {
+    let begin!: () => void; let resume!: () => void; let allowed = true; let checks = 0;
+    const rendering = new Promise<void>(resolve => { begin = resolve; });
+    const release = new Promise<void>(resolve => { resume = resolve; });
+    const f = await fixture('final', 'end_turn', 3, false, {
+      firstTool: { id: 'view-1', name: 'paper_view', input: { pages: [1] } },
+      renderPages: async () => { begin(); await release; return [{ pageNumber: 1, mediaType: 'image/png', bytesBase64: 'private-pixels' }]; },
+      withAuthorizedToolCall: async run => { checks++; if (!allowed) throw new Error('[blocked] rights revoked'); return run(); },
+    });
+    try {
+      const first = await post(f.socketPath, '/v1/chat/completions', f.sdk); expect(first.status).toBe(200);
+      const args = { pages: [1] };
+      expect((await post(f.socketPath, '/task/tools/authorize', { name: 'paper_view', arguments: args })).status).toBe(200);
+      const view = await post(f.socketPath, '/task/tools/call', { name: 'paper_view', arguments: args });
+      expect(view.status).toBe(200);
+      const pending = post(f.socketPath, '/task/tools/images', { callId: 'view-1', arguments: args, result: view.body });
+      await rendering; allowed = false; resume();
+      const denied = await pending;
+      expect(denied.status).toBe(409);
+      expect(JSON.stringify(denied.body)).not.toContain('private-pixels');
+      expect(checks).toBe(2);
+      await expect(f.final).rejects.toThrow('stopped');
+    } finally { await f.cleanup(); }
+  });
+  it('never delivers rendered page pixels after the native task deadline', async () => {
+    let begin!: () => void; let resume!: () => void;
+    const rendering = new Promise<void>(resolve => { begin = resolve; });
+    const release = new Promise<void>(resolve => { resume = resolve; });
+    const f = await fixture('final', 'end_turn', 3, false, {
+      firstTool: { id: 'view-1', name: 'paper_view', input: { pages: [1] } }, deadlineMs: 1000,
+      renderPages: async () => { begin(); await release; return [{ pageNumber: 1, mediaType: 'image/png', bytesBase64: 'private-pixels' }]; },
+      withAuthorizedToolCall: async run => run(),
+    });
+    try {
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(200);
+      const args = { pages: [1] };
+      expect((await post(f.socketPath, '/task/tools/authorize', { name: 'paper_view', arguments: args })).status).toBe(200);
+      const view = await post(f.socketPath, '/task/tools/call', { name: 'paper_view', arguments: args });
+      const pending = post(f.socketPath, '/task/tools/images', { callId: 'view-1', arguments: args, result: view.body });
+      await rendering;
+      await expect(f.final).rejects.toThrow('deadline');
+      resume();
+      const denied = await pending;
+      expect(denied.status).toBe(409);
+      expect(JSON.stringify(denied.body)).not.toContain('private-pixels');
+    } finally { await f.cleanup(); }
+  });
   it('never completes from an empty thinking-only reply even when its saved provider stop is end_turn', async () => {
     const f = await fixture('', 'end_turn', 3, true);
     try {

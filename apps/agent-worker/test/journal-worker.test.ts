@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as domain from '@openscience/domain';
 import type { WorkspaceDeps } from '@openscience/domain';
-import { processOneJournalJob } from '../src/journal-worker';
+import { journalParserExternalEligible, processOneJournalJob } from '../src/journal-worker';
 
 vi.mock('@openscience/domain', async (load) => ({
   ...await load<typeof import('@openscience/domain')>(), claimJournalJob: vi.fn(), journalJobInput: vi.fn(), finishJournalJob: vi.fn(), renewJournalJobLease: vi.fn(),
@@ -36,15 +36,30 @@ describe('journal worker native producer and private delivery', () => {
   });
   it('performs local source parsing without calling the native model', async () => {
     vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
-    const parse = vi.fn().mockResolvedValue(quote);
+    const parse = vi.fn().mockResolvedValue({ text: quote });
     await processOneJournalJob(deps, generate, parse);
     expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', { text: quote });
+  });
+  it('passes the same private page-map reference from parsing to journal settlement', async () => {
+    vi.mocked(domain.claimJournalJob).mockResolvedValue({ id: 'job', kind: 'source_parse', leaseToken: 'lease' } as Awaited<ReturnType<typeof domain.claimJournalJob>>);
+    const sourceMapRef = { schemaVersion: 1 as const, parserStatus: 'succeeded' as const, artifactId: 'artifact',
+      contentHash: 'a'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100 };
+    await processOneJournalJob(deps, generate, vi.fn().mockResolvedValue({ text: quote, sourceMapRef }));
+    expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', { text: quote, sourceMapRef });
   });
   it('blocks dispatch after current journal authorization fails', async () => {
     vi.mocked(domain.journalJobInput).mockRejectedValue(new Error('revoked'));
     await processOneJournalJob(deps, generate, undefined, runtime);
     expect(generate).not.toHaveBeenCalled();
     expect(domain.finishJournalJob).toHaveBeenCalledWith(deps, 'job', 'lease', null, expect.any(String));
+  });
+  it('only enables the shared external OCR path with explicit journal processing rights and evidence', () => {
+    const rights = { internalProcessing: true, derivativeGeneration: true, publicSource: false, publicDerivative: false,
+      externalProcessing: true, license: 'CC-BY-4.0', evidence: 'Publisher authorization' };
+    expect(journalParserExternalEligible(rights)).toBe(true);
+    expect(journalParserExternalEligible({ ...rights, externalProcessing: false })).toBe(false);
+    expect(journalParserExternalEligible({ ...rights, evidence: '' })).toBe(false);
+    expect(journalParserExternalEligible({ ...rights, internalProcessing: false })).toBe(false);
   });
 });

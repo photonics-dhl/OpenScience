@@ -53,6 +53,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 ## 工作区与发布卫生
 
 - 唯一交付入口是 `.worktrees/onchip-video-release`，根 `main` 只作导航、不承载开发。交付树与根 main 在每轮收尾时 `git status --porcelain` 必须为空；出现未提交改动即当轮处置（提交、移入已忽略目录或按授权删除），不得留给下一个会话。
+- 用户指定 GitHub 协作目标为 `photonics-dhl/OpenScience` 的 `frontend/nanqing`；不推送/合并 `main`，不强推或覆盖旧分支。生产部署仍按精确已推 SHA、当前线上祖先与回退守卫执行；历史 Nanqing96 分支保留在 `archive/nanqing96/*`，旧前端快照保留在 `archive/frontend-nanqing-pre-integration-20261006`。
 - 部署源守卫要求「工作树完全干净且 HEAD == release ref」，所以每次部署都必须来自干净 worktree；不要为省事在脏树上直接发布。
 - worktree 生命周期：一个任务一个 worktree；任务结束后按结论处置——已发布且无需回滚引用 → 删除该 worktree 与本地分支；仍需回滚引用 → 保留到下一次成功发布后删除；未合并但有独立价值 → 先推送远端分支再删除本地 worktree。禁止长期堆积 detached-HEAD 的 `*-release-*` 目录。
 - 每轮收尾执行 `git worktree prune` 并核对 `git worktree list`；新增 worktree 必须说明用途与预期寿命，到期未清理视为债务。

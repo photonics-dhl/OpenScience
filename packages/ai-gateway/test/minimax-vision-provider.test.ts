@@ -15,6 +15,21 @@ const providerRequest = () => ({
 });
 
 describe('MiniMax Coding Plan VLM provider', () => {
+  it('rechecks live permission before a backup-key retry can resend page pixels', async () => {
+    let allowed = true; let checks = 0;
+    const fetcher = vi.fn(async () => {
+      allowed = false;
+      return new Response(JSON.stringify({ content: '', base_resp: { status_code: 1008, status_msg: 'quota' } }), { status: 200 });
+    });
+    const provider = new MiniMaxCodingPlanVisionProvider('minimax-vision', {
+      baseUrl: 'https://api.minimax.io', apiKey: 'primary', backupApiKey: 'backup', model: 'coding-plan-vlm',
+    }, fetcher as never);
+    await expect(provider.recognize(providerRequest(), async () => {
+      checks++; if (!allowed) throw new Error('permission revoked');
+    })).rejects.toThrow('permission revoked');
+    expect(checks).toBe(2);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('uses the official single-image VLM endpoint without a provider SDK', async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       content: 'recognized text',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { journalEvidenceAnchors, normalizeJournalDoi, restoreJournalEvidenceAnchors, restoreJournalEvidenceWhitespace, validateJournalDraft, journalGenerationPrompt, type JournalDraft } from '../src/journal/content';
+import { journalEvidenceAnchors, normalizeJournalDoi, restoreJournalEvidenceAnchors, restoreJournalEvidenceWhitespace, validateJournalDraft, validateJournalSource, journalGenerationPrompt, type JournalDraft } from '../src/journal/content';
 import { validateJournalUploadContent } from '../src/journal/source-upload';
 
 const quote = 'Numerical simulations predict 14.7 TW peak power; full-system experiments have not been performed.';
@@ -65,5 +65,13 @@ describe('journal scientific source contracts', () => {
     expect(() => validateJournalUploadContent('docx', Buffer.from('PK\x03\x04not a word container'))).toThrow();
     expect(() => validateJournalUploadContent('txt', Buffer.from([0xff, 0x00, 0x01]))).toThrow();
     expect(() => validateJournalUploadContent('md', Buffer.from('# 合成测试\n可读取文本'))).not.toThrow();
+  });
+  it('accepts longer parser-backed PDF text without relaxing manual source length or artifact binding', () => {
+    const text = quote.repeat(2_200);
+    const sourceMapRef = { schemaVersion: 1 as const, parserStatus: 'succeeded' as const, artifactId: 'uploaded-pdf',
+      contentHash: 'a'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 1_000 };
+    expect(() => validateJournalSource({ ...source, text })).toThrow();
+    expect(() => validateJournalSource({ ...source, text, artifactId: 'uploaded-pdf', sourceMapRef })).not.toThrow();
+    expect(() => validateJournalSource({ ...source, text, artifactId: 'another-file', sourceMapRef })).toThrow();
   });
 });

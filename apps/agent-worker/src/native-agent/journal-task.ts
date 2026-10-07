@@ -4,19 +4,26 @@ import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { journalEvidenceAnchors, requireJournalNativeAuthority, restoreJournalEvidenceAnchors,
   restoreJournalEvidenceWhitespace, validateJournalDraft, readNativeAgentExecution,
+  loadDocumentSourceMapReference, nativeAgentMaxTurns, parseDocumentSourceMapReference,
   type JournalSource, type WorkspaceDeps } from '@openscience/domain';
+import { NATIVE_IMAGE_REQUEST_MAX_BYTES } from '@openscience/ai-gateway';
+import { createNativeScientificMaterializer, sourceMapToManuscriptText } from '../extractor';
+import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { createNativeAgentSession } from './session';
 import { runHostedNativeTask } from './host-task';
 import { createJournalNativeTaskStore } from './journal-task-store';
 import { createNativeJournalTextTools, NATIVE_JOURNAL_TEXT_TOOLS } from './journal-text-tools';
-import { nativeSkillReads } from './paper-task';
+import { finishNativePaperReview, nativePaperToolProfile, nativeSkillReads } from './paper-task';
+import { createNativePaperTools, type NativePaperImage } from './paper-tools';
+import { projectReviewedPaperToJournalDraft } from './journal-paper-projection';
 
 const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 const stripJson = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/giu, '').replace(/^\s*```(?:json)?\s*|\s*```\s*$/giu, '').trim();
 
 /** One installed AIAgent run, bound to a journal job and its original source text. */
 export async function runNativeJournalTask(input: { deps: WorkspaceDeps & { storage: StorageAdapter }; gateway: AiGateway;
-  jobId: string; leaseToken: string; source: JournalSource; language: 'zh' | 'en'; inboxRoot: string }) {
+  jobId: string; leaseToken: string; source: JournalSource; language: 'zh' | 'en'; inboxRoot: string;
+  renderPages?: (pages: number[]) => Promise<NativePaperImage[]> }) {
   const task = await input.deps.prisma.agentTask.findUnique({ where: { idempotencyKey: `journal-native-task:${input.jobId}` } });
   const marker = readNativeAgentExecution(task?.result);
   if (!task || marker?.profile !== 'journal-editor') throw new Error('[blocked] Journal native task is unavailable');
@@ -34,6 +41,48 @@ export async function runNativeJournalTask(input: { deps: WorkspaceDeps & { stor
   const store = createJournalNativeTaskStore({ prisma: input.deps.prisma, storage: input.deps.storage,
     taskId: task.id, executionAttempt: task.executionAttempt, execution: marker, journalText, authorize: authorizeTransaction });
   const saved = await store.read();
+  if (input.source.sourceMapRef) {
+    if (!input.renderPages) throw new Error('[blocked] Journal PDF page renderer is unavailable');
+    const reference = parseDocumentSourceMapReference(input.source.sourceMapRef);
+    if (reference.parserStatus !== 'succeeded' || reference.artifactId !== input.source.artifactId)
+      throw new Error('[blocked] Journal PDF source map identity changed');
+    const sourceMap = await loadDocumentSourceMapReference(input.deps.storage, reference);
+    if (sourceMapToManuscriptText(sourceMap) !== input.source.text)
+      throw new Error('[blocked] Journal PDF text no longer matches its parsed pages');
+    const profile = nativePaperToolProfile(saved);
+    const binding = { taskId: task.id, sourceKind: 'journal-text' as const, journalText,
+      runtimeId: marker.runtimeId, skillCatalogueId: marker.skillCatalogueId, model: marker.model,
+      allowedTools: profile.allowedTools, maxTurns: nativeAgentMaxTurns(marker.profile),
+      maxOutputTokens: SCIENTIFIC_SYNTHESIS_OPTIONS.maxTokens!, maxTotalOutputTokens: 98_304,
+      maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES,
+      ...(marker.model === 'MiniMax-M3' ? { contextWindowTokens: 512_000 } : {}),
+      generation: { thinking: SCIENTIFIC_SYNTHESIS_OPTIONS.thinking, temperature: SCIENTIFIC_SYNTHESIS_OPTIONS.temperature,
+        topP: SCIENTIFIC_SYNTHESIS_OPTIONS.topP }, deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
+    const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
+    const source = createNativePaperTools(sourceMap, input.renderPages, profile.sourceTools);
+    const materializer = createNativeScientificMaterializer(sourceMap, () => source.observedPassageIds, profile);
+    const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
+      call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
+        : name === 'paper_claim' ? materializer.claim(args, sequence!, callId!) : name === 'paper_draft' ? materializer.draft(args, sequence, callId)
+        : name === 'paper_review' ? materializer.review(args, callId) : source.call(name, args),
+      withAuthorizedToolCall: <T>(run: () => Promise<T>) => input.deps.prisma.$transaction(async tx => {
+        await authorizeTransaction(tx); return run();
+      }, { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 20_000 }) };
+    const native = await runHostedNativeTask({ inboxRoot: input.inboxRoot, executionAttempt: task.executionAttempt,
+      config: { ...binding, goal: profile.goal,
+        instructions: `${profile.instructions}\n期刊编辑任务：科学理解、六字段和Claims使用与首页论文入口相同的核源流程；结果仅保存为待编辑确认的私有草稿，不代表授权复用图像或公开发布。`,
+        sourceTools: profile.sourceTools }, deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes,
+      session, store, authorize, paper });
+    await authorize();
+    const completed = await store.read();
+    const last = completed?.turns.at(-1);
+    if (!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length
+      || last.response.text !== native.finalResponse || last.response.model !== marker.model || last.target.model !== marker.model)
+      throw new Error('[blocked] Journal paper review final response changed');
+    const reviewed = finishNativePaperReview(materializer, last.request.messages, native.finalResponse,
+      { reviewToolCompletion: profile.reviewToolCompletion });
+    return projectReviewedPaperToJournalDraft(reviewed, input.source, input.language);
+  }
   const tools = createNativeJournalTextTools(input.source);
   const allowedTools = ['skills_list', 'skill_view', ...NATIVE_JOURNAL_TEXT_TOOLS.map(tool => tool.name)];
   const binding = { taskId: task.id, sourceKind: 'journal-text' as const, journalText,

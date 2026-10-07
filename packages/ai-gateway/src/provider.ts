@@ -550,21 +550,22 @@ export class MiniMaxCodingPlanVisionProvider implements OcrProvider {
     };
   }
 
-  async recognize(request: OcrProviderPageRequest): Promise<OcrProviderResult> {
+  async recognize(request: OcrProviderPageRequest, beforeSubmit?: () => Promise<void>): Promise<OcrProviderResult> {
     validateProviderPageRequest(request, this.maxPageBytes);
     try {
-      return await this.recognizeWithKey(request, this.cfg.apiKey);
+      return await this.recognizeWithKey(request, this.cfg.apiKey, beforeSubmit);
     } catch (error) {
       if (!(error instanceof OcrProviderError) || error.code !== 'provider_quota' || !this.cfg.backupApiKey) throw error;
-      return this.recognizeWithKey(request, this.cfg.backupApiKey);
+      return this.recognizeWithKey(request, this.cfg.backupApiKey, beforeSubmit);
     }
   }
 
-  private async recognizeWithKey(request: OcrProviderPageRequest, apiKey: string): Promise<OcrProviderResult> {
+  private async recognizeWithKey(request: OcrProviderPageRequest, apiKey: string, beforeSubmit?: () => Promise<void>): Promise<OcrProviderResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       let response: Response;
+      await beforeSubmit?.();
       try {
         response = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/coding_plan/vlm`, {
           method: 'POST',

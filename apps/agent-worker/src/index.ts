@@ -42,6 +42,7 @@ import {
   type HermesSavedSourceCompositionCandidate,
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
+  requireJournalExternalOcrAuthority,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -1012,7 +1013,14 @@ async function main(): Promise<void> {
       ? createSearchPrismaClient({ env: process.env }) : undefined;
     const deps = createWorkerDeps({ prisma, redis, storage, audit });
     // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-    const externalProcessingPolicy = buildIngestionExternalProcessingPolicy(prisma);
+    const ingestionExternalPolicy = buildIngestionExternalProcessingPolicy(prisma);
+    const externalProcessingPolicy: ExternalProcessingPolicy = async context => {
+      if (await ingestionExternalPolicy(context)) return true;
+      try {
+        return await prisma.$transaction(tx => requireJournalExternalOcrAuthority(tx, context),
+          { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 20_000 });
+      } catch { return false; }
+    };
     const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');
     const reviewSubmission = createSpoolSubmission(prisma, 'sdf.extract');
     const illustrationReviewPolicy: ExternalProcessingPolicy = async context => {

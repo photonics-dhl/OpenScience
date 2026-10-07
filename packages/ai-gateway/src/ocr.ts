@@ -80,7 +80,7 @@ export interface OcrProvider {
   readonly name: string;
   readonly model: string;
   estimate(request: OcrProviderPageRequest): OcrCostEstimate;
-  recognize(request: OcrProviderPageRequest): Promise<OcrProviderResult>;
+  recognize(request: OcrProviderPageRequest, beforeSubmit?: () => Promise<void>): Promise<OcrProviderResult>;
 }
 
 export interface ProviderCapabilityDecision {

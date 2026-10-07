@@ -1,12 +1,17 @@
 import { createHash } from 'node:crypto';
 import { JournalError } from './contracts';
+import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import type { DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 
-export const JOURNAL_CORE_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+/** Keep the editorial presentation contract on the same six scientific fields as paper ingestion. */
+export const JOURNAL_CORE_FIELDS = SDF_CORE_FIELDS;
 export interface JournalMetadata {
   title: string; doi?: string; authors: string[]; publishedDate?: string;
   journalTitle?: string; issns: string[]; originalUrl: string; abstract?: string;
 }
-export interface JournalSource { kind: 'metadata' | 'abstract' | 'fulltext'; text: string; url: string; label: string; artifactId?: string }
+export interface JournalSource { kind: 'metadata' | 'abstract' | 'fulltext'; text: string; url: string; label: string; artifactId?: string;
+  /** Private parser output for uploaded papers; never copied into a public release. */
+  sourceMapRef?: DocumentSourceMapReference }
 export interface JournalRights {
   internalProcessing: boolean; derivativeGeneration: boolean; publicSource: boolean;
   publicDerivative: boolean; externalProcessing: boolean; license: string; evidence: string;
@@ -33,7 +38,14 @@ export function journalDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 }
 export function validateJournalSource(source: JournalSource): void {
-  if (!['metadata', 'abstract', 'fulltext'].includes(source.kind) || typeof source.text !== 'string' || source.text.length > 200_000) throw new JournalError('VALIDATION_ERROR', '来源格式或长度无效（最多 200,000 字符）');
+  // Uploaded papers use bounded private SourceMap storage and P passages, not an in-prompt copy of this text.
+  // Preserve the exact extracted text so editorial evidence can still be checked against the original.
+  const parsedPaper = source.kind === 'fulltext' && source.artifactId && source.sourceMapRef;
+  const maximum = parsedPaper ? 8_000_000 : 200_000;
+  if (!['metadata', 'abstract', 'fulltext'].includes(source.kind) || typeof source.text !== 'string' || source.text.length > maximum)
+    throw new JournalError('VALIDATION_ERROR', `来源格式或长度无效（最多 ${maximum.toLocaleString('en-US')} 字符）`);
+  if (parsedPaper && (source.sourceMapRef!.parserStatus !== 'succeeded'
+    || source.sourceMapRef!.artifactId !== source.artifactId)) throw new JournalError('VALIDATION_ERROR', '来源页码映射与文件不一致');
   if (source.kind !== 'metadata' && source.text.trim().length < 50) throw new JournalError('VALIDATION_ERROR', '请提供可核验的摘要或全文');
   if (source.url) safeJournalUrl(source.url);
 }

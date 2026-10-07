@@ -384,6 +384,8 @@ async function eraseArtifact(tx: Tx, artifactId: string, entryId: string): Promi
 }
 
 async function artifactRetentionReason(tx: Tx, artifactId: string): Promise<string | null> {
+  if (await tx.journalArticle.count({ where: { source: { path: ['artifactId'], equals: artifactId } } }))
+    return '期刊论文仍引用此来源文件，请先替换或撤回期刊来源';
   const [manifests, evidence, ingestion, steps, originalMedia] = await Promise.all([
     tx.manifestEntry.findMany({ where: { artifactId }, include: { manifest: { include: { version: { select: { researchObjectId: true, publications: { select: { id: true } } } } } } } }),
     tx.evidenceRecord.findMany({ where: { artifactId }, include: { version: { select: { publications: { select: { id: true } } } } } }),
@@ -573,6 +575,7 @@ export async function cleanTrashObjects(deps: TrashDeps, trashEntryId?: string):
           OR EXISTS (SELECT 1 FROM manifest_entries m JOIN blobs b ON b.sha256 = m.blob_sha256 WHERE b.storage_key = ${item.objectKey})
           OR EXISTS (SELECT 1 FROM presentation_assets WHERE object_key = ${item.objectKey} OR provenance::text LIKE ${pattern})
           OR EXISTS (SELECT 1 FROM agent_tasks WHERE result::text LIKE ${pattern} OR payload::text LIKE ${pattern})
+          OR EXISTS (SELECT 1 FROM journal_articles WHERE source::text LIKE ${pattern})
           OR EXISTS (SELECT 1 FROM versions WHERE research_record::text LIKE ${pattern})
           OR EXISTS (SELECT 1 FROM version_manifests WHERE core_json::text LIKE ${pattern})
           OR EXISTS (SELECT 1 FROM sdf_documents WHERE core_json::text LIKE ${pattern})

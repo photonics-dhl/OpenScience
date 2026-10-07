@@ -81,6 +81,22 @@ export function journalSourceMaterials(source: unknown): JournalArticleSourceRec
   const materials = (source as MatrixSource | null)?.materials;
   return Array.isArray(materials) ? materials : [];
 }
+
+/** Re-evaluate the active source at call time; the denormalized rights can outlive an expiry. */
+export function journalSourceProcessingAllowed(article: { source: unknown; rights: unknown; contentState: string },
+  external: boolean, now = new Date()): boolean {
+  const source = article.source as MatrixSource;
+  const rights = article.rights as JournalRights;
+  if (article.contentState !== 'active' || !source?.artifactId || !rights?.internalProcessing || !rights.evidence?.trim()) return false;
+  const materials = journalSourceMaterials(source);
+  if (!materials.length) return !external || (rights.externalProcessing && !!rights.license?.trim());
+  const active = materials.find(item => item.activeForGeneration && mainTypes.has(item.sourceType));
+  if (!active || !validAt(active, now) || active.fileId !== source.artifactId
+    || active.contentSha256 !== digestText(source.text) || !STATUS_ALLOWED[active.rightsStatus]?.includes('internalProcessing')
+    || !active.permissions.internalProcessing || !active.evidence.statement?.trim()) return false;
+  return !external || (!!active.evidence.license?.trim() && !!rights.license?.trim() && rights.externalProcessing
+    && STATUS_ALLOWED[active.rightsStatus]?.includes('externalProcessing') && active.permissions.externalProcessing);
+}
 function legacySourceMaterial(article: { source: unknown; rights: unknown }, id: string, actorId: string | undefined, now: Date): JournalArticleSourceRecord | null {
   const source = article.source as JournalSource; const rights = article.rights as JournalRights;
   if (source.kind === 'metadata') return null;
