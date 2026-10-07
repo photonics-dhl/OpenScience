@@ -110,6 +110,7 @@ services:
       # Optional second image provider; empty keeps the single-provider behaviour.
       HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: ${HERMES_SCENE_IMAGE_FALLBACK_PROVIDER:-}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
+      HERMES_VIDEO_PROVIDER: ${HERMES_VIDEO_PROVIDER:-disabled}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
@@ -193,6 +194,8 @@ services:
       - /opt/openscience-codex/results:/codex-jobs/results:ro
       - /opt/openscience-video/inbox:/video-jobs/inbox:rw
       - /opt/openscience-video/results:/video-jobs/results:ro
+      - /opt/openscience-synclip-video/spool/inbox:/synclip-video-jobs/inbox:rw
+      - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
       - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:rw
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:rw
@@ -217,6 +220,7 @@ services:
       # Optional second image provider; empty keeps the single-provider behaviour.
       HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: ${HERMES_SCENE_IMAGE_FALLBACK_PROVIDER:-}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
+      HERMES_VIDEO_PROVIDER: ${HERMES_VIDEO_PROVIDER:-disabled}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
@@ -232,6 +236,9 @@ services:
       CODEX_SOL_REVIEW_RESULTS_DIR: /codex-sol-review-jobs/results
       HOST_VIDEO_INBOX_DIR: /video-jobs/inbox
       HOST_VIDEO_RESULTS_DIR: /video-jobs/results
+      SYNCLIP_VIDEO_ENABLED: ${SYNCLIP_VIDEO_ENABLED:-false}
+      SYNCLIP_VIDEO_INBOX_DIR: /synclip-video-jobs/inbox
+      SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results
       PRIVATE_CLEANUP_INBOX_DIR: /private-cleanup/inbox
       PRIVATE_CLEANUP_RESULTS_DIR: /private-cleanup/results
       S3_DRIVER: minio

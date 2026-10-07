@@ -93,3 +93,11 @@ export {
 
 export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, SynclipSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
 export * from './codex-image-protocol';
+export {
+  SYNCLIP_VIDEO_ORIGIN, SYNCLIP_VIDEO_MODELS, SYNCLIP_VIDEO_MODEL, SYNCLIP_VIDEO_DURATIONS,
+  SYNCLIP_VIDEO_MAX_REQUEST_BYTES, SYNCLIP_VIDEO_MAX_RESPONSE_BYTES, SYNCLIP_VIDEO_MAX_DOWNLOAD_BYTES,
+  SynclipVideoClient, SynclipVideoError, downloadSynclipVideo, validateSynclipVideoBytes,
+  validateSynclipVideoRequest, validateSynclipVideoTask, validateSynclipVideoTaskId,
+  type SynclipVideoClientConfig, type SynclipVideoRequest, type SynclipVideoTask, type SynclipVideoStatus,
+  type SynclipVideoModel, type SynclipVideoDuration,
+} from './synclip-video-api';

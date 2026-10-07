@@ -46,6 +46,9 @@ export interface HostVideoResult {
   runtime: { scriptDigest: string; ttsImage: string; rendererImage: string; modelRevision: string };
 }
 
+export interface PresentationVideoSpool {
+  generate(input: HostVideoInput): Promise<{ filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: string; generatorVersion: string; inputHash: string; narration: unknown; metrics: Record<string, unknown>; runtime: unknown }>;
+}
 function fail(message = 'INVALID_VIDEO_SPOOL_OUTPUT'): never { throw new Error(message); }
 
 async function requireDirectory(path: string): Promise<void> {

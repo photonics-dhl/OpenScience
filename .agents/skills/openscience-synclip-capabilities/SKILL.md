@@ -30,7 +30,7 @@ The current server image route is the Synclip adapter in `packages/ai-gateway/sr
 
 This current route has real private-draft evidence for `gpt-image-2` and accepted image review, but that proves the present image route can run; it does not prove every Synclip model, the video API, long-term cross-paper quality or the claims in the blog. The authoritative runtime state is the [Hermes CURRENT handoff](../../docs/handoff/2026-09-10-hermes-web-image-handoff.md).
 
-The current repository does **not** have a Synclip video adapter. Synclip's public [text-to-video API page](https://synclip.ai/text-to-video-api) exposes a high-level `POST /v1/video` asynchronous job flow with polling or callbacks and asset retrieval, but it does not provide the exact model enum, request fields, authentication contract, status/result schema, reference-file rules, download limits or idempotency behavior needed by this repository. The existing paper-video and narration paths use the separate MiniMax video/speech pilot and media renderer. Do not route a paper video into Synclip until those details and one real private result are recorded. Blog or marketing support for a web Studio is not server API integration.
+The repository now contains a Synclip video candidate adapter in `packages/ai-gateway/src/synclip-video-api.ts`, `apps/agent-worker/src/presentation/synclip-video-spool.ts` and `infra/synclip-video/`. It uses the official public `POST /v1/video` async shape, exact LTX model values `ltx23`/`ltx23fast`, 5/10/15-second durations, bounded HTTPS result download and a root-only broker with durable per-shot receipts. The route is not called stable until the immutable server bundle has passed one real private LTX task, decoded output review and audio decision. Veo/Sora/Grok/Seedance remain candidates until Synclip publishes or the account proves their exact server model values.
 
 ## Model and workflow selection
 
@@ -38,7 +38,7 @@ The current repository does **not** have a Synclip video adapter. Synclip's publ
 |---|---|---|---|
 | Scientific still or explainer image | GPT Image 2 | The deliverable is a single readable still; fix subject, relationship, layout, labels and exclusions in the brief | **Integrated:** current adapter uses `gpt-image-2`, text-only, 16:9 |
 | Image Studio template or image-to-image edit | Nano Banana Pro | Identity, restyling, mockup or repeatable template workflow | Blog/UI capability only; not the current server image adapter |
-| Reference-guided cinematic video | Veo 3.1 Fast/Pro | Use reference images for identity/style or first/last frames for a controlled transition | Blog/UI capability; exact Synclip API contract and server adapter are unverified |
+| Reference-guided cinematic video | LTX 2.3 (`ltx23`/`ltx23fast`) | Use the approved scene frame as the first reference; 5/10/15 seconds; Standard for final shots | **Adapter implemented:** server installation and one real private decoded result still pending |
 | Short video with one reference | Grok Video | One character/product/scene reference, 6/10/15 seconds, 3:2/2:3/1:1 | Blog/UI capability; unverified server adapter |
 | Connected multi-shot video | LTX 2.5 | A sequence needs continuity of subject, environment, lighting and voice | Latest blog capability; exact Synclip API contract is unverified |
 | Text/image/audio video in Video Studio | MiniMax H3 | A short shot needs optional image and audio references and explicit sound direction | Synclip blog says Video Studio only; repository has a separate MiniMax pilot, not this Synclip route |
@@ -118,4 +118,4 @@ The following is the complete 25-post set shown by the blog index on 2026-10-07.
 
 ## Handoff checklist
 
-Before a future Synclip adapter or real task is enabled, record the exact model and endpoint, request/response examples without secrets, reference limits, duration/resolution/ratio options, provider task states, idempotency/correlation behavior, download validation, credit semantics, rollback and one private result. Then update the capability registry and CURRENT. Do not add a fallback or second paid attempt merely because a blog model looks stronger.
+Before declaring the Synclip video route stable, deploy the immutable broker, record one redacted request/receipt/status/result contract, verify one real private LTX output and review decoded motion/crop/audio. Keep the original attempt on uncertain outcomes; do not add a fallback or second paid attempt merely because another blog model looks stronger.

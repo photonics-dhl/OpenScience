@@ -76,7 +76,8 @@ import { createTextExtractor, type TextStageAdapter } from './parsers/text-extra
 import type { ParserInput } from './parsers/types';
 import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
-import { HostVideoSpool } from './presentation/host-video-spool';
+import { HostVideoSpool, type PresentationVideoSpool } from './presentation/host-video-spool';
+import { SynclipVideoSpool } from './presentation/synclip-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
@@ -303,7 +304,7 @@ export function createHandlers(
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
-    videoSpool?: HostVideoSpool;
+    videoSpool?: PresentationVideoSpool;
     nativeAgentInboxRoot?: string;
   } = {},
 ): Record<string, TaskHandler> {
@@ -1072,14 +1073,13 @@ async function main(): Promise<void> {
       externalProcessingPolicy,
       searchIndexer: buildSearchIndexerFromEnv(process.env, globalThis.fetch, trashSearchClient),
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
-      ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HOST_VIDEO_INBOX_DIR?.trim()
-        && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
-          videoSpool: new HostVideoSpool({
-            inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(),
-            resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(),
-            withSubmission: imageSubmission,
-          }),
-        } : {}),
+      ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
+        && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
+          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission }),
+        } : process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'local'
+          && process.env.HOST_VIDEO_INBOX_DIR?.trim() && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
+            videoSpool: new HostVideoSpool({ inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(), withSubmission: imageSubmission }),
+          } : {}),
     });
     const workerConcurrency = configuredWorkerConcurrency(process.env);
     journalWorker = startJournalWorker(deps, gateway, parserCascade);

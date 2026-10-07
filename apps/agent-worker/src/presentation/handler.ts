@@ -19,7 +19,7 @@ import { hasStandaloneScienceDiagnostics, readStandaloneScienceRecovery } from '
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
 import { requirePresentationMediaGenerator, type PresentationMediaGenerator } from './minimax-admin';
-import { HostVideoSpool } from './host-video-spool';
+import { type PresentationVideoSpool } from './host-video-spool';
 import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { requireStyleReferenceImage } from '@openscience/domain';
@@ -590,7 +590,7 @@ async function resolveStoryboardOriginals(deps: Parameters<TaskHandler>[0], payl
   return paperOriginals;
 }
 
-export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: HostVideoSpool;
+export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: PresentationVideoSpool;
   nativeAgent?: { gateway: AiGateway; inboxRoot: string; renderPages(input: { artifactId: string; contentHash: string; content: Buffer; mediaType: 'application/pdf' }, pages: number[]): Promise<NativePaperImage[]> } } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
