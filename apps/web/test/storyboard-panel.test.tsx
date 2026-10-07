@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
-import { StoryboardPanel } from '../components/presentation/StoryboardPanel';
+import { buildStoryboardRequest, StoryboardPanel } from '../components/presentation/StoryboardPanel';
 
 it('shows separate spoken and visual plans with the parent comparison', () => {
   const scene = { title: 'Light', narration: 'Old narration', visualAction: 'Old visual', durationSeconds: 8, sourceClaimIds: ['claim'] };
@@ -58,4 +58,12 @@ it('exposes the bounded art-only revision choice for an existing storyboard', as
   expect(messages.default.presentation.storyboard.artOnly).toContain('构图');
   expect(messages.default.presentation.storyboard.artOnlyHint).toContain('科学字段');
   expect(markup).toContain('artOnly');
+});
+
+it('carries the existing narrative scope into an art-only revision payload', () => {
+  const request = buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: ' preserve the art direction ',
+    baseAssetId: 'base', artOnly: true, storyboard: { narrative: true } });
+  expect(request).toMatchObject({ baseAssetId: 'base', revisionMode: 'art', narrative: true, instruction: 'preserve the art direction' });
+  const legacy = buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: 'restyle', baseAssetId: 'base', artOnly: true });
+  expect(legacy).not.toHaveProperty('narrative');
 });

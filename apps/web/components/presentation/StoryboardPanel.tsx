@@ -19,6 +19,27 @@ interface Props {
 }
 const control = 'min-h-11 w-full rounded-control border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 
+export function buildStoryboardRequest(input: {
+  locale: StoryboardRequest['locale'];
+  style: StoryboardRequest['style'];
+  output: StoryboardRequest['output'];
+  instruction: string;
+  baseAssetId?: string;
+  artOnly: boolean;
+  storyboard?: Pick<StoryboardView, 'narrative'>;
+}): StoryboardRequest {
+  return {
+    locale: input.locale,
+    style: input.style,
+    output: input.output,
+    instruction: input.instruction.trim(),
+    ...(input.baseAssetId ? {
+      baseAssetId: input.baseAssetId,
+      ...(input.artOnly ? { revisionMode: 'art' as const, ...(input.storyboard?.narrative ? { narrative: true as const } : {}) } : {}),
+    } : {}),
+  };
+}
+
 export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selectedClaimIds = [], canGenerate, onGenerate, canGenerateImage = false, onGenerateImage }: Props) {
   const t = useTranslations('presentation.storyboard');
   const tw = useTranslations('workbench');
@@ -57,7 +78,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     {canGenerate && onGenerate ? <form className="mt-5 space-y-4 border-t border-os-rule-paper pt-5" onSubmit={(event) => {
       event.preventDefault();
       if (!selectedClaimIds.length || !instruction.trim()) return;
-      onGenerate(selectedClaimIds, { locale, style, output, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId, ...(artOnly ? { revisionMode: 'art' as const } : {}) } : {}) });
+      onGenerate(selectedClaimIds, buildStoryboardRequest({ locale, style, output, instruction, baseAssetId, artOnly, storyboard }));
     }}>
       <p className="m-0 text-sm font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
       <fieldset className="border-0 p-0">
