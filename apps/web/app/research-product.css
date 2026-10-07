@@ -110,7 +110,12 @@
 .pub-reading-surface.research-product .copy-btn { min-height: 44px; font-size: .875rem; border-color: var(--craft-rule, #dce5e5); }
 
 @media screen {
-  .pub-reading-surface.research-product .pub-reading-column { padding: clamp(32px, 4vw, 48px) clamp(24px, 4.5vw, 56px) 56px; box-shadow: 0 2px 6px rgb(24 47 53 / .035), 0 16px 40px rgb(24 47 53 / .055); }
+  .pub-reading-surface.research-product .pub-reading-column {
+    padding: clamp(32px, 4vw, 48px) clamp(24px, 4.5vw, 56px) 56px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
 }
 @media (hover: hover) and (pointer: fine) {
   [data-os-surface='public'] article:has(> section > [role='tabpanel'] > [data-scene-motion]) details > summary:hover,

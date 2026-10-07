@@ -45,7 +45,7 @@ describe('Research Folio product system', () => {
     const anchor = source('../components/hermes/HermesDockAnchor.tsx');
     const surface = source('../components/research/ResearchSurfaceShell.tsx');
     expect(stage).toContain('data-hermes-placement={anchored ? \'anchored\' : \'detached\'}');
-    expect(anchor).toContain('data-hermes-companion-margin="true"');
+    expect(anchor).toContain("data-hermes-companion-margin={floating ? undefined : 'true'}");
     expect(anchor).not.toContain('aria-hidden="true"');
     expect(surface).toContain('<HermesDockAnchor');
     expect(surface).toContain('<HermesAssistantDrawer');
@@ -57,13 +57,13 @@ describe('Research Folio product system', () => {
     expect(stage).toContain("if (event.pointerType !== 'touch') event.currentTarget.setPointerCapture(event.pointerId)");
     expect(stage).toContain('Math.hypot(dx, dy) > 10');
     expect(stage).toContain('if (!event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.setPointerCapture(event.pointerId)');
-    expect(stage).toContain('return presentation?.anchor ? createPortal(stageElement, presentation.anchor) : stageElement');
+    expect(stage).toContain('anchored && presentation?.anchor ? createPortal(element, presentation.anchor) : element');
     expect(adapter).toContain('router.push(href)');
     expect(adapter).not.toContain('window.location.assign');
     expect(stage).toContain('menuFeedbackTimerRef');
     expect(stage).toContain("setMenuFeedback({ ...feedback, source: 'menu', startedAtMs: Date.now() })");
     expect(stage).toContain('&& !presentation?.anchor');
-    expect(stage).toContain('promptSuppressed={anchored || Boolean(speech.cue) || Boolean(menuFeedback) || Boolean(guideTarget)}');
+    expect(stage).toContain('promptSuppressed={navigationOnly || anchored || Boolean(speech.cue) || Boolean(menuFeedback) || Boolean(guideTarget)}');
     expect(adapter).toContain('meshInputRef.current.action = action');
     expect(adapter).not.toContain('ignoreQuietActionChangeRef');
     expect(adapter).not.toContain('scrollIntoView');
