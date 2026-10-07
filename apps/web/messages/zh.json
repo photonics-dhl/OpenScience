@@ -1951,6 +1951,8 @@
       "ink": "墨线手绘",
       "instruction": "希望重点解释什么？",
       "feedback": "希望 Hermes 修改什么？",
+      "artOnly": "仅修改构图与风格",
+      "artOnlyHint": "保留已审核的科学字段、标签和来源，只让 Hermes 重做画面表达。",
       "charge": "每次提交扣除 1 AI credit，包括每次修订或新建重试任务。",
       "retained": "修订会创建独立草稿，原稿保持不变；请对比后再批准。",
       "generate": "生成分镜 · 1 AI credit",

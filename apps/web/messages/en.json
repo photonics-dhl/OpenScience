@@ -1951,6 +1951,8 @@
       "ink": "Ink drawing",
       "instruction": "What should the explanation emphasize?",
       "feedback": "What should Hermes change?",
+      "artOnly": "Change composition and style only",
+      "artOnlyHint": "Keep the reviewed science, labels and sources; ask Hermes to redesign the visual expression only.",
       "charge": "Submitting charges 1 AI credit, including each revision or new retry task.",
       "retained": "This creates a separate draft. The original stays unchanged; review the comparison before approving.",
       "generate": "Generate storyboard · 1 AI credit",

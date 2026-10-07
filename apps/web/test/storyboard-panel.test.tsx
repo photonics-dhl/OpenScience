@@ -49,3 +49,13 @@ it('defaults new image plans to narrative-driven style and hides internal style 
   expect(markup).toContain('precise ink');
   expect(markup).not.toContain('BAOYU_STYLE=');
 });
+
+it('exposes the bounded art-only revision choice for an existing storyboard', async () => {
+  const messages = await import('../messages/zh.json');
+  const scene = { title: 'Relation', narration: 'One connection', visualAction: 'Show the relation', sourceClaimIds: ['claim'] };
+  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene] }, locale: 'zh' as const, style: 'auto' };
+  const markup = renderToStaticMarkup(createElement(StoryboardPanel, { storyboard, baseAssetId: 'base', claims: [], canGenerate: true, selectedClaimIds: ['claim'], onGenerate: vi.fn() }));
+  expect(messages.default.presentation.storyboard.artOnly).toContain('构图');
+  expect(messages.default.presentation.storyboard.artOnlyHint).toContain('科学字段');
+  expect(markup).toContain('artOnly');
+});

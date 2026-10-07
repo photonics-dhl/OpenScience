@@ -25,6 +25,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
   const currentLocale = useLocale();
   const [locale, setLocale] = useState<'zh' | 'en'>(storyboard?.locale ?? (currentLocale === 'zh' ? 'zh' : 'en'));
   const [style, setStyle] = useState<StoryboardRequest['style']>(storyboard?.style ?? 'auto');
+  const [artOnly, setArtOnly] = useState(false);
   const output: StoryboardRequest['output'] = storyboard?.output ?? 'image';
   const [instruction, setInstruction] = useState(baseAssetId ? '' : tw('coreImageInstruction'));
   const names = new Map(claims.map((claim) => [claim.id, claim.statement]));
@@ -56,7 +57,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     {canGenerate && onGenerate ? <form className="mt-5 space-y-4 border-t border-os-rule-paper pt-5" onSubmit={(event) => {
       event.preventDefault();
       if (!selectedClaimIds.length || !instruction.trim()) return;
-      onGenerate(selectedClaimIds, { locale, style, output, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId } : {}) });
+      onGenerate(selectedClaimIds, { locale, style, output, instruction: instruction.trim(), ...(baseAssetId ? { baseAssetId, ...(artOnly ? { revisionMode: 'art' as const } : {}) } : {}) });
     }}>
       <p className="m-0 text-sm font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
       <fieldset className="border-0 p-0">
@@ -70,6 +71,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
           <label className="grid gap-2 text-sm">{t(baseAssetId ? 'feedback' : 'instruction')}<textarea className={`${control} min-h-24 resize-y`} maxLength={1000} required value={instruction} onChange={(event) => setInstruction(event.target.value)} /></label>
         </div>
       </details>
+      {baseAssetId ? <label className="flex items-start gap-3 rounded-control border border-os-rule-paper bg-os-paper px-3 py-3 text-sm"><input className="mt-1 size-4 accent-os-vermilion-ink" type="checkbox" checked={artOnly} onChange={(event) => setArtOnly(event.target.checked)} /><span><span className="block font-semibold">{t('artOnly')}</span><span className="mt-1 block text-xs leading-5 text-os-muted-paper">{t('artOnlyHint')}</span></span></label> : null}
       <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('charge')}</p>
       {baseAssetId ? <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('retained')}</p> : null}
       <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!selectedClaimIds.length || !instruction.trim()}>{t(baseAssetId ? 'revise' : 'generate')}</button>
