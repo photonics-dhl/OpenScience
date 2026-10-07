@@ -163,10 +163,11 @@
   --continuation-padding: clamp(1.75rem, 3vw, 2.25rem);
   min-width: 0;
   padding: 0;
-  border: 1px solid var(--os-rule-paper);
-  border-radius: 0.375rem;
+  border-block: 1px solid var(--os-rule-paper);
+  border-inline: 0;
+  border-radius: 0;
   background: var(--os-paper-strong);
-  box-shadow: 0 2px 4px rgb(24 47 53 / .025), 0 18px 40px rgb(24 47 53 / .065);
+  box-shadow: none;
 }
 
 .continuation {

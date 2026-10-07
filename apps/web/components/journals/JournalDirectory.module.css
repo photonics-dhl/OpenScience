@@ -40,6 +40,20 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 2px 4px rgb(24 47 53 / .08);
 }
 
+/* Treat search as a quiet instrument within the catalogue masthead. */
+.directory[data-journal-directory] .search {
+  padding-block: 10px;
+  border-block: 1px solid var(--craft-rule, #dce5e5);
+}
+
+.directory[data-journal-directory] .search input {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.directory[data-journal-directory] .search button { border-radius: 3px; }
+
 .directory[data-journal-directory] [data-journal-resources].resources {
   display: flex;
   flex-wrap: wrap;
@@ -81,6 +95,9 @@
   color: var(--craft-ink, #182f35);
   text-decoration: none;
 }
+
+.directory[data-journal-directory] .entries > li:first-child .entry { padding-top: 44px; }
+.directory[data-journal-directory] .entries > li:first-child h2 { font-size: clamp(28px, 3vw, 38px); }
 .body { min-width: 0; overflow-wrap: anywhere; }
 .directory[data-journal-directory] .entries [data-journal-entry] p { margin: 0; max-width: 70ch; }
 .directory[data-journal-directory] .entries [data-journal-entry] .subjects {
@@ -147,6 +164,7 @@
   .directory[data-journal-directory] .search { grid-template-columns: minmax(0, 1fr); }
   .directory[data-journal-directory] [data-journal-resources].resources { justify-content: flex-start; gap: 4px 16px; }
   .directory[data-journal-directory] .entries [data-journal-entry] { grid-template-columns: minmax(0, 1fr) 24px; gap: 16px; padding: 24px 4px; }
+  .directory[data-journal-directory] .entries > li:first-child .entry { padding-top: 32px; }
   .body { grid-column: 1; }
   .arrow { grid-column: 2; grid-row: 1; padding-top: 0; }
   .metadata { gap: 6px 16px; }
