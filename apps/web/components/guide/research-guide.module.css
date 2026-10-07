@@ -130,13 +130,16 @@
 }
 @media (max-width: 700px) {
   .guide { --guide-gutter: 20px; padding-block: 18px 40px; }
-  .hero { padding-block: 0; gap: 16px; }
-  .intro { gap: 20px; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(112px, 148px); align-items: end; column-gap: 14px; row-gap: 16px; padding-block: 0; }
+  .intro { grid-column: 1 / -1; gap: 20px; }
   .intro h1 { font-size: clamp(32px, 8.8vw, 42px); }
   .lead { font-size: 15px; line-height: 1.85; }
   .opening { gap: 24px; margin-bottom: 40px; }
   .opticalMargin { top: 18%; right: -20px; bottom: auto; width: 180px; height: 240px; opacity: .36; }
   .proof { padding-top: 14px; }
+  .companion { grid-column: 2; grid-row: 2; justify-self: end; width: 148px; min-height: 148px; margin: 0; padding-top: 6px; }
+  .companion :global(.hermes-dock-anchor) { min-height: 148px; }
+  .chapterLink { grid-column: 1; grid-row: 2; align-self: end; }
   .proofLoading { min-height: 320px; }
   .skeleton { margin-top: 48px; }
   .startNote { font-size: 14px; }
