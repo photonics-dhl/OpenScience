@@ -3,12 +3,13 @@
 .guide ::selection { background: #cce4df; color: #133b3c; }
 .guide .opening, .guide .scenes, .guide .support, .guide .invitation { position: relative; }
 .guide .opening::before { position: absolute; top: -40px; bottom: 24px; left: -20px; width: 1px; background: linear-gradient(180deg, var(--os-vermilion-ink), transparent 82%); content: ''; opacity: .32; }
-.opening { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(320px, .43fr) minmax(0, 1fr); gap: 64px; align-items: start; margin-bottom: 80px; }
+.opening { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(300px, .68fr) minmax(0, 1.32fr); gap: clamp(44px, 6vw, 96px); align-items: start; margin-bottom: clamp(64px, 8vw, 112px); }
 .opening > :is(.hero, .proof) { position: relative; z-index: 1; min-width: 0; }
 .opticalMargin { position: absolute; top: -112px; right: calc(-1 * var(--guide-gutter)); bottom: -24px; z-index: 0; width: min(400px, 36%); overflow: hidden; }
 .opticalMargin > div { width: 100%; height: 100%; }
 .opticalMargin img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: right top; }
-.hero { padding-block: 28px 0; }
+.hero { position: relative; padding-block: 20px 0; }
+.hero::before { position: absolute; top: 0; left: 0; width: 64px; height: 2px; background: var(--os-vermilion-ink); content: ''; opacity: .85; }
 .intro { display: grid; gap: 24px; align-items: start; }
 .intro h1 { max-width: 12ch; font: 500 clamp(42px, 3.85vw, 60px)/1.17 var(--font-reading-serif); letter-spacing: -.035em; text-wrap: balance; }
 .intro h1 > span { display: block; }
@@ -20,13 +21,13 @@
 .primary { display: inline-flex; align-items: center; justify-content: space-between; gap: 36px; min-height: 56px; padding: 14px 24px; border: 1px solid rgb(255 255 255 / .1); border-radius: 10px; background: var(--os-vermilion-ink); color: #fff; box-shadow: 0 2px 3px rgb(12 51 57 / .1), inset 0 1px 0 rgb(255 255 255 / .14); text-decoration: none; font-size: 16px; font-weight: 600; transition: background-color 160ms ease, transform 100ms ease-out, box-shadow 160ms ease; }
 .primary svg, .textLink svg { flex: none; transition: transform 160ms ease-out; }
 .primary:active { transform: scale(.98); }
-.companion { width: min(360px, 100%); min-height: 360px; margin-top: 24px; }
+.companion { width: min(360px, 100%); min-height: 360px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--os-rule-paper); }
 .companion :global(.hermes-dock-anchor) { min-height: 360px; }
 .companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .chapterLink { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 14px; color: var(--os-ink); text-decoration: none; }
 .chapterLink svg { color: var(--os-vermilion-ink); }
-.proof { position: relative; min-width: 0; margin: 0; padding: 36px; border: 1px solid #e5e7e4; border-radius: 6px; background: linear-gradient(135deg, #fffefb 0%, #fff 68%, #f4f8f7 100%); color: var(--os-ink); box-shadow: 0 24px 44px -24px rgb(34 70 74 / .22), 0 2px 5px rgb(34 70 74 / .04); }
-.proof::after { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-top: 1px solid #9fbfc2; border-right: 1px solid #9fbfc2; content: ''; opacity: .6; pointer-events: none; }
+.proof { position: relative; min-width: 0; margin: 0; padding: 20px 0 0; border: 0; border-top: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; color: var(--os-ink); }
+.proof::after { position: absolute; top: 20px; right: 0; width: 56px; height: 56px; border-top: 1px solid #9fbfc2; border-right: 1px solid #9fbfc2; content: ''; opacity: .6; pointer-events: none; }
 .proofMeta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid var(--os-rule-paper); color: var(--os-muted-paper); font-size: 13px; line-height: 1.7; }
 .proofMeta > span { overflow-wrap: anywhere; }
 .proofMeta > span:last-child { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
@@ -34,7 +35,7 @@
 .proofCopy { display: grid; gap: 14px; min-width: 0; }
 .proof .researchTitle { font: 500 clamp(32px, 3.3vw, 46px)/1.16 var(--font-reading-serif); overflow-wrap: anywhere; letter-spacing: -.025em; text-wrap: pretty; }
 .readingHook { font-size: 16px; line-height: 1.85; text-wrap: pretty; }
-.scienceImage { display: grid; align-items: center; min-width: 0; }
+.scienceImage { display: grid; align-items: center; min-width: 0; padding: clamp(12px, 2vw, 24px); background: var(--os-paper-strong); box-shadow: 0 18px 42px -30px rgb(25 63 67 / .36), inset 0 0 0 1px rgb(25 63 67 / .06); }
 .scienceImage img { display: block; width: 100%; height: auto; object-fit: contain; }
 .proofFooter { display: grid; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--os-rule-paper); }
 .figureCaption { max-width: 72ch; color: var(--os-muted-paper); font-size: 14px; line-height: 1.8; }
@@ -104,7 +105,7 @@
   .companion { min-height: 320px; margin-top: 0; }
   .chapterLink { grid-column: 1 / -1; }
   .opticalMargin { top: 240px; bottom: 0; width: 300px; }
-  .proof { padding: 28px; }
+  .proof { padding-top: 16px; }
   .proof .researchTitle { font-size: 38px; }
   .proofLoading { min-height: 480px; }
   .sceneContent { grid-template-columns: minmax(0, 1fr); gap: 24px; }
@@ -114,7 +115,7 @@
   .hero { grid-template-columns: minmax(0, 1fr); }
   /* Keep the compact companion owned by the guide surface. The shell fallback
      is reserved for public surfaces that have no page-owned anchor. */
-  .companion { width: 196px; min-height: 156px; margin-top: 8px; margin-left: auto; }
+  .companion { width: 196px; min-height: 156px; margin-top: 8px; margin-left: auto; padding-top: 8px; }
   .companion :global(.hermes-dock-anchor) { min-height: 156px; }
 }
 @media (max-width: 800px) {
@@ -128,14 +129,14 @@
   .support { grid-template-columns: minmax(0, 1fr); gap: 20px; }
 }
 @media (max-width: 700px) {
-  .guide { --guide-gutter: 20px; padding-block: 24px 40px; }
+  .guide { --guide-gutter: 20px; padding-block: 18px 40px; }
   .hero { padding-block: 0; gap: 16px; }
   .intro { gap: 20px; }
   .intro h1 { font-size: clamp(32px, 8.8vw, 42px); }
   .lead { font-size: 15px; line-height: 1.85; }
   .opening { gap: 24px; margin-bottom: 40px; }
-  .opticalMargin { top: 50%; width: 180px; opacity: .8; }
-  .proof { padding: 24px 20px; }
+  .opticalMargin { top: 18%; right: -20px; bottom: auto; width: 180px; height: 240px; opacity: .36; }
+  .proof { padding-top: 14px; }
   .proofLoading { min-height: 320px; }
   .skeleton { margin-top: 48px; }
   .startNote { font-size: 14px; }
