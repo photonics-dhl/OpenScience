@@ -1,7 +1,7 @@
 ---
 name: openscience-research-video
-description: Plan source-grounded research videos from Hermes paper understanding, accepted storyboards and approved scene assets; use for shot design, motion continuity, quota-safe Synclip handoff and private review.
-version: "2026-10-07"
+description: Plan source-grounded research videos from Hermes paper understanding, accepted storyboards and approved scene assets; use for shot design, motion continuity, quota-safe MiniMax H3 handoff and private review.
+version: "2026-10-08"
 ---
 
 # OpenScience research video
@@ -13,7 +13,7 @@ This is Hermes's planning and review method for research video. It converts the 
 1. Treat the PDF/OCR/SourceMap, `openscience-source-review`, saved six-dimensional understanding, Claims/Evidence and the accepted storyboard as the scientific authority. Read the original passage or figure again when a motion, condition, direction, object or qualifier is missing. A vendor blog, a style Skill and a generated frame cannot add a scientific fact.
 2. First reduce the paper to one reader outcome: the thesis, one mechanism or comparison, and the one condition or limitation that prevents overclaiming. Use two or three connected beats only when each beat changes what the reader understands. Do not turn every extracted detail into a shot.
 3. Keep source reasoning, visual direction and provider transport separate. The video model renders the approved brief; it does not interpret the paper, repair a Claim, choose unsupported geometry or review its own result.
-4. Load `openscience-synclip-capabilities` for the current provider boundary, then load only the relevant illustration/style Skills. Existing `openscience-research-illustration`, `baoyu-article-illustrator`, `baoyu-infographic` and installed media styles are reusable planning resources; they do not authorize a new provider call.
+4. Load only the relevant illustration/style Skills. `openscience-synclip-capabilities` describes the separate image route and explicitly does not authorize video. The current video executor is the configured MiniMax H3 pilot in `packages/ai-gateway/src/minimax-video.ts` and `infra/codex-image-runner/minimax-video-pilot.mjs`; existing media styles remain reusable planning resources and do not authorize a new provider call.
 
 ## Build a compact shot brief
 
@@ -43,12 +43,12 @@ Prefer a fixed camera and a single moving relation for scientific explainers. If
 ## Choose the least expensive useful route
 
 - If the reader needs one relationship, use a still image. The current production route is Synclip `gpt-image-2`; do not create a video to animate a detail that a reviewed image explains better.
-- If the reader needs a short transition, prepare one private shot or the smallest connected sequence allowed by the verified provider contract. Do not request variants, batch scenes or a full paper film by default.
-- If continuity across several shots is essential, LTX 2.5 is a product capability described by Synclip's current blog, but the exact developer model value and request contract must be verified before use. Never invent `ltx25`, `ltx25fast`, duration, resolution, reference or pricing fields.
+- If the reader needs a short transition, prepare one private MiniMax H3 shot or the smallest connected sequence allowed by the verified H3 contract. Do not request variants, batch scenes or a full paper film by default.
+- If continuity across several shots is essential, use the fixed paper-shot H3 contract: one approved reference image per shot, 15 seconds, 2K, 16:9, native audio, one durable state directory per shot, and no automatic retry. Never invent another model, duration, resolution, reference or pricing field.
 - The repository's `content-driven-v1` and `onchip-field-sampling-v1` paths are isolated OpenScience renderers with their own parent, claim and approved-scene gates. They are not Synclip video calls. Use them only through the existing `video.create` flow and its server checks.
 - A plan is free of provider cost. Before any paid request, show or record the exact model, estimated spend/credits, duration, reference inputs and the private-review destination. If the contract or estimate is unknown, stop at the brief.
 
-Never auto-fallback between Synclip models or to another provider after an uncertain submission. Keep the original intent, request marker, task ID, attempt and receipt; reconcile the same operation before any new POST. A timeout, missing receipt or ambiguous provider state is not permission to try again.
+Never auto-fallback between MiniMax H3 and another provider after an uncertain submission. Synclip video is not an enabled route. Keep the original intent, request marker, task ID, attempt and receipt; reconcile the same operation before any new POST. A timeout, missing receipt or ambiguous provider state is not permission to try again.
 
 ## Review before delivery
 
@@ -65,4 +65,4 @@ If a defect changes the paper meaning, return to the scientific brief or storybo
 
 ## Provider handoff checklist
 
-Before a Synclip video adapter or real video task is enabled, the video system must supply and verify: exact endpoint and model enum; authentication location; request/response examples without secrets; supported duration, ratio and resolution; reference-file limits; task states and terminal result; callback/poll behavior; idempotency/correlation lookup; credit semantics; bounded download validation; timeout and rollback behavior; and one private decoded result. Until then, Hermes may produce this brief and a cost-aware handoff, but must not claim that Synclip video generation is connected.
+Before each paid MiniMax H3 shot, the video system must record and verify: `https://api.minimax.cn/v2/video_generation`, model `MiniMax-H3`, 15-second/2K/16:9 settings, the approved reference image, the private review destination and expected spend. The saved task is queried through `/v2/query/video_generation/{task_id}`, downloaded only from its terminal result, bounded by MP4 checks, decoded and reviewed before adoption. A 402 balance rejection or uncertain submission retains its attempt and receipt and cannot be retried automatically. Synclip video remains disabled because its exact server contract is still unavailable.
