@@ -26,7 +26,10 @@ class InstallLifecycleTests(unittest.TestCase):
         install.copy_resources(Path(__file__).resolve().parent/'science-references', adapter/'science-references')
         skills = self.source/'.agents/skills'; skills.mkdir(parents=True)
         for name in install.ART_SKILLS:
-            (skills/name).mkdir(); (skills/name/'SKILL.md').write_text('fixture art resource')
+            if name == 'openscience-synclip-capabilities':
+                install.copy_resources(Path(__file__).resolve().parents[2]/'.agents/skills'/name, skills/name)
+            else:
+                (skills/name).mkdir(); (skills/name/'SKILL.md').write_text('fixture art resource')
         self.native = self.folder/'installed-agent'; self.native.mkdir()
         (self.native/'run_agent.py').write_text(native_fixture_source(), encoding='utf-8')
         (self.native/'pyproject.toml').write_text('[project]\nversion = "0.10.0"\n', encoding='utf-8')
@@ -144,6 +147,9 @@ class InstallLifecycleTests(unittest.TestCase):
         source_method=scope.resolve('openscience-source-review').read_text()
         self.assertIn('without peer-reviewing the paper', source_method)
         self.assertIn('separately requested critical assessment', source_method)
+        synclip = scope.resolve('openscience-synclip-capabilities')
+        self.assertIn('gpt-image-2', synclip.read_text())
+        self.assertIn('does **not** have a Synclip video adapter', synclip.read_text())
         self.assertEqual(reference.stat().st_mode & 0o222, 0)
         self.assertFalse(self.active)
 

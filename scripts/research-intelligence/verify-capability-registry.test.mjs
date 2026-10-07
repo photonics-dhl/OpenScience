@@ -9,9 +9,9 @@ test('CURRENT registry has complete rows and no credential-shaped values', async
   const result = verifyCapabilityRegistry(markdown);
 
   assert.ok(result.rows >= 20);
-  // BGE-M3, lexical search, ScanSci, deterministic SVG and interactive HTML
-  // left the candidate table after exact-SHA ECS production acceptance.
-  assert.equal(result.candidateRows, 6);
+  // BGE-M3, lexical search, ScanSci, deterministic SVG, interactive HTML and
+  // the old Docling wheel left the candidate table after production acceptance.
+  assert.equal(result.candidateRows, 5);
   assert.ok(result.capabilities.includes('BGE-M3'));
   assert.ok(result.capabilities.includes('ScanSci PDF'));
   assert.ok(result.capabilities.includes('Semantic Scholar MCP/API'));

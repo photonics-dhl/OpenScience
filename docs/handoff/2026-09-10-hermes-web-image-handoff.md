@@ -3,10 +3,9 @@
 
 ## 目标与决定
 - 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
-- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责图像生成。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities` Skill。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
-
 ## 当前运行与真实验收
 - 生产版本 tuple：线上与公网 `/__release` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，回滚为 `456e550f69652b00569d2435c5f8283df3534d9f`；包含 Worker 解析修复与 Hermes 页面锚点修正。精确 CI `37349486195` 全绿；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
 - UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
@@ -27,9 +26,7 @@
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
 - `f52ee24c` 的无 Cookie `session-guard` 修复已包含在当前线上 `4ed53b71`；线上 `/auth/me` 未登录请求返回统一 401，发布后15分钟没有新的 `Reply was already sent`/`ERR_HTTP_HEADERS_SENT` 日志。定向 API 测试16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个既有 HEAD错误。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
-
 ## 历史验证（不作为当前 next action）
-
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-5`对应run `a7d6e204-87e8-44f3-a17f-8d420aa6de19`：应用已发布`8710b0ee0fb0d9fd70094828bbc05ebfd26ecde5`，CI `37276825552`成功，active/public release与容器健康后验通过。原生Hermes `paper-author`六字段全`accepted`/6 Claims；独立`paper-source-review`完成（method/results/reproducibility accepted，insight/problem/limitations revised）；`presentation.generate`第15轮成功，进入`awaiting_storyboard_review`并保存4幕私有科学分镜和完整提示词。Synclip仍`false`，未调用生图、未产生图片；当前待用户审核分镜，像素质量与新Synclip模型调用仍未验收。
 - 2026-10-05真实验证`native-tools-preimage-20261005-cds-4`对应run `5d7f45cf-db32-43b2-9a00-ee09a275773c`：应用release `f128a2dd2657a25d0b8701ca4bb221c4e7dafb43`已正常发布并通过构建、容器健康、active/public release、journal/retention验收；Synclip仍`false`，Hermes broker timer为`openscience-hermes-broker.timer`且enabled/active。paper-author六维全accepted/6 Claims成功，独立source-review成功（insight/results等accepted，limitations按来源revised）；storyboard在32-turn安全上限停止，32次中27次为逐场景`paper_illustration_science_repair`，根因是fresh native诊断500字符截断导致同一场景的后续问题逐项暴露。无asset/图片/Synclip调用，任务不重放。候选修复将fresh诊断上限扩到4000、旧保存/legacy回放仍500；328项原生/自动风格/native generation、Worker typecheck、scoped lint已通过，待发布后再做一次新key验收。
 - 2026-10-05新真实验证`native-tools-preimage-20261005-cds-3`对应run `b85e53f7-64c6-4816-b8a7-ffff443fbf32`：SourceMap、paper-author六维/Claims和独立`paper-source-review`均成功，`presentation.generate`首次科学调用被证据关系拒收，随后用真实science调用ID进行repair；第二次绑定反馈后模型回合以`finishReason=length`结束，系统安全阻止自动付费修正，无asset/图片/Synclip调用。修复仅收紧`paper_illustration_science_repair`工具描述和Hermes repair guidance，要求下一条消息直接做单次有界repair调用，禁止解释、整份science或art重述；132项原生分镜测试与相关链路327项、Worker typecheck/scopedlint通过。修复已由CI `37270310067`验证并发布为`339ae64366cb05c12f969e7abadabb14b344e21d`，rollback为`d282064a04ab1b3af51c4ff09094a663f8e14f1f`；下一步只做一次新的独立生产验收，不重放失败任务。
@@ -80,5 +77,4 @@
 - 独立债务保留：第14页BGE表格dense超限、lexical已恢复69chunks；旧v11的58chunks保留。备用key已修，无当前余额耗尽证据，不重复鉴权。科学返工/经验/几何、悬空copy和三篇整体验收仍按上表，局部返工不取消目标。
 
 ## Read first / 历史
-- 启动读本页、Git和必要最新只读运行事实、能力台账对应入口；现有read-current-management-context/Taskmaster保存验收要求，不另建状态库。计划与详细方法见[原生接入计划](../plans/2026-10-01-native-hermes-agent-plan.md)。
-- 10-05检查点以前的完整执行记录在Git be5cc92b的本页及tmp/hermes-cleanup-20261003/，更早GPT菜单/收费/v1–v10记录在Git ce513eba及tmp/ro-journey-20260929/；它们不作当前next action。[09-18交接](2026-09-18-figure3-image-and-cleanup-handoff.md)的禁止重放和用户资产保护继续有效。
+- 启动读本页、Git和必要最新只读运行事实、能力台账对应入口；现有read-current-management-context/Taskmaster保存验收要求，不另建状态库。计划与详细方法见[原生接入计划](../plans/2026-10-01-native-hermes-agent-plan.md)。10-05检查点以前的完整执行记录在Git be5cc92b及tmp/hermes-cleanup-20261003/，更早GPT菜单/收费/v1–v10记录在Git ce513eba及tmp/ro-journey-20260929/；它们不作当前next action。[09-18交接](2026-09-18-figure3-image-and-cleanup-handoff.md)的禁止重放和用户资产保护继续有效。
