@@ -3,7 +3,8 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-07：已读取 Synclip 官方博客页当前列出的25篇文章，整理为项目 Skill `.agents/skills/openscience-synclip-capabilities/SKILL.md`，并接入原生 Hermes catalogue 安装清单。当前可用能力仍是已验证的 `gpt-image-2` 图片 adapter；博客中的视频能力已列为候选但尚未冒称服务器已接通。
+- 2026-10-07：已读取 Synclip 官方博客页当前列出的25篇文章，整理为 Synclip 总指南，并新增 `.agents/skills/openscience-research-video/SKILL.md`：Hermes 现在有基于论文原文/Claims/已确认分镜的短镜头规划、连续性审查和额度保护方法。两项 Skill 已加入原生 Hermes 安装清单，视频 Skill 待本次候选 release 安装；生产仍只确认 `gpt-image-2` 图片 adapter，Synclip 视频 exact API/model contract 尚未确认。
+- 2026-10-07：应用 release `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd` 已按既有发布事务成功上线，回滚为 `da3045c10848f2e9998d1311aaa2f6006e301adf`；CI `37576492728` 全绿。服务器原生 catalogue/runtime 已安装并读回 `project-catalogue-33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd` / `installed-native-continuation-33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`，API/Worker healthy、Hermes timer active/enabled。此次部署使用 `--no-tests`，Parser/ScanSci/embedding 深层 canary 仍未观察。
 - 2026-10-06：用户固定 GitHub 协作目标为 DHL 仓库 `frontend/nanqing`，不合并 `main`；Nanqing96 三条旧分支与旧前端 tip 已原样归档至 DHL `archive/*`，保留提交/文件。共享期刊 PDF 候选补实时页图和每次 OCR 外发授权修复 `81ae7d2c`，本地 Domain14、Gateway38、Worker6 与类型检查通过，独立 High 代码 GO；最终分支 CI、Linux socket、parser acceptance、服务器部署及真实 Hermes 科学验收尚未完成，详见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 - 2026-10-06：按用户要求建立期刊 PDF 与首页论文入口共用解析/核源候选：保留私有页码 SourceMap，新 PDF 调用首页 P 工具、六字段与 Claims 终审，期刊授权/编辑确认/发布仍独立；旧 J 检查点不变。基于共享分支 `0a773d93`，本地检查与期刊/共享 Hermes 两组 CI 成功；尚未做真实 Hermes PDF 或部署验收，运行收据与限制见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 - 2026-10-06：修复随 `d6ddcd57` 发布后，用同一 RO 第二幕新任务 `e8b6cb5d-f251-426a-8017-8d5b79354976` 完成真实验证：Synclip `gpt-image-2` 产出私有 draft，MiniMax-M3 原生审校 `completed/accepted`，任务 100%/无错误；页面显示两张图片，未公开。公网 `/__release` 与 `.release-id` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，Worker 近10分钟无该解析错误。

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile } from '../src/native-agent/illustration-task';
+import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile, nativeMediaCapabilityGuidance } from '../src/native-agent/illustration-task';
 import { materializeIllustrationScience } from '../src/presentation/illustration-planner';
 import { loadIllustrationStyleSkills } from '../src/presentation/illustration-styles';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
@@ -12,6 +12,23 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
+
+describe('Native media capability guidance', () => {
+  it('loads the Synclip and research-video skills for a fresh video intent', () => {
+    const guidance = nativeMediaCapabilityGuidance({ output: 'video' }, false).join('\n');
+    expect(guidance).toContain('openscience-synclip-capabilities');
+    expect(guidance).toContain('openscience-research-video');
+    expect(guidance).toContain('不得在合同核验前调用未接通的 Synclip 视频 API');
+  });
+
+  it('keeps the fresh image route on the verified still contract and does not add guidance to saved sessions', () => {
+    const image = nativeMediaCapabilityGuidance({ output: 'image' }, false).join('\n');
+    expect(image).toContain('gpt-image-2');
+    expect(image).toContain('openscience-synclip-capabilities');
+    expect(nativeMediaCapabilityGuidance({ output: 'video' }, true)).toEqual([]);
+  });
+});
+
 function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);

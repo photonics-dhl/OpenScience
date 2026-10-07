@@ -26,7 +26,7 @@ CODE_DIRECTORIES = ('.venv', 'agent', 'tools', 'hermes_cli', 'plugins', 'skills'
 ART_SKILLS = ('openscience-research-illustration', 'openscience-scientific-visual-clarity',
               'openscience-handdraw-style', 'openscience-handdraw-router',
               'baoyu-article-illustrator', 'baoyu-cover-image', 'baoyu-infographic',
-              'openscience-synclip-capabilities')
+              'openscience-synclip-capabilities', 'openscience-research-video')
 
 
 def command(argv, check=True, timeout=120):

@@ -26,7 +26,7 @@ class InstallLifecycleTests(unittest.TestCase):
         install.copy_resources(Path(__file__).resolve().parent/'science-references', adapter/'science-references')
         skills = self.source/'.agents/skills'; skills.mkdir(parents=True)
         for name in install.ART_SKILLS:
-            if name == 'openscience-synclip-capabilities':
+            if name in {'openscience-synclip-capabilities', 'openscience-research-video'}:
                 install.copy_resources(Path(__file__).resolve().parents[2]/'.agents/skills'/name, skills/name)
             else:
                 (skills/name).mkdir(); (skills/name/'SKILL.md').write_text('fixture art resource')
@@ -150,6 +150,9 @@ class InstallLifecycleTests(unittest.TestCase):
         synclip = scope.resolve('openscience-synclip-capabilities')
         self.assertIn('gpt-image-2', synclip.read_text())
         self.assertIn('does **not** have a Synclip video adapter', synclip.read_text())
+        video = scope.resolve('openscience-research-video')
+        self.assertIn('smallest provider-supported duration', video.read_text())
+        self.assertIn('must not claim that Synclip video generation is connected', video.read_text())
         self.assertEqual(reference.stat().st_mode & 0o222, 0)
         self.assertFalse(self.active)
 

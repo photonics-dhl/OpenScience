@@ -3,11 +3,12 @@
 
 ## 目标与决定
 - 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
-- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities` Skill。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。Synclip只负责当前图像生成；博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
+- 2026-10-07 当前发布锚点：应用 `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`，回滚 `da3045c10848f2e9998d1311aaa2f6006e301adf`，CI `37576492728` 全绿；原生 Hermes catalogue/runtime 为 `project-catalogue-33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd` / `installed-native-continuation-33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`，API/Worker healthy，timer active/enabled。发布使用 `--no-tests`，Parser/ScanSci/embedding 深层 canary 未执行；这不改变 Synclip 图片与未接通视频的边界。
 ## 当前运行与真实验收
-- 生产版本 tuple：线上与公网 `/__release` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，回滚为 `456e550f69652b00569d2435c5f8283df3534d9f`；包含 Worker 解析修复与 Hermes 页面锚点修正。精确 CI `37349486195` 全绿；发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- 生产版本 tuple：线上与公网 `/__release` 均为 `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`，回滚为 `da3045c10848f2e9998d1311aaa2f6006e301adf`；精确 CI `37576492728` 全绿，API/Worker healthy，原生 Hermes catalogue/runtime 已读回，timer active/enabled。发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行；本工作树当前候选还包含待随下一 release 安装的研究视频 Skill。
 - UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。

@@ -6,7 +6,7 @@ version: "2026-10-07"
 
 # Synclip capability guide
 
-This guide is the compact operational index for Synclip. It is derived from the 25 posts currently listed on the [Synclip blog](https://synclip.ai/blog), then separated from the current OpenScience implementation and real runtime evidence. Blog claims describe product or model behavior; they do not authorize a provider call and do not replace the API contract.
+This guide is the compact operational index for Synclip. It is derived from the 25 posts currently listed on the [Synclip blog](https://synclip.ai/blog), then separated from the current OpenScience implementation and real runtime evidence. Blog claims describe product or model behavior; they do not authorize a provider call and do not replace the API contract. For a paper-to-video brief and motion review, load the dedicated `openscience-research-video` Skill after this index.
 
 ## Rules for Hermes
 

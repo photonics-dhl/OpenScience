@@ -16,9 +16,10 @@
 
 ## Synclip 能力指南（2026-10-07）
 
-- 统一指南位于项目 Skill [`openscience-synclip-capabilities`](../../.agents/skills/openscience-synclip-capabilities/SKILL.md)，覆盖博客页当前列出的 25 篇文章，并把模型/工作流宣传、官方 API 合同、项目实现和真实产物分开。原生 Hermes 安装器已将它加入 immutable catalogue 的 `ART_SKILLS`；当前运行中的 catalogue 仍以其已安装 release 为准，下一次受控 Native 安装才会带入此版本。
+- 统一指南位于项目 Skill [`openscience-synclip-capabilities`](../../.agents/skills/openscience-synclip-capabilities/SKILL.md)，覆盖博客页当前列出的 25 篇文章，并把模型/工作流宣传、官方 API 合同、项目实现和真实产物分开；论文视频的短镜头规划、连续性审查与额度保护位于 [`openscience-research-video`](../../.agents/skills/openscience-research-video/SKILL.md)。两者均已加入 immutable catalogue 的 `ART_SKILLS`；当前运行中的 `project-catalogue-33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd` 已含 Synclip 总指南，新视频 Skill 随本次候选 release 安装。
 - 当前实际只确认 Synclip `gpt-image-2` 图片 adapter：`packages/ai-gateway/src/synclip-image-api.ts` → `infra/synclip-image/` → 既有 image spool → Worker image review/CAS。请求为异步 text-only、16:9；图片 reference/edit、Composer、Nano Banana 和博客中的 Studio 行为不能直接套入服务器。
 - Synclip 视频博客已整理为候选选择表。官方 text-to-video 页面已公开高层 `POST /v1/video` 与异步 job/poll/callback/retrieve 流程，但 exact model 值、认证、请求字段、状态/结果、下载/幂等和 reference contract 尚未确认；仓库仍没有 Synclip video adapter。现有论文视频/旁白仍是独立 MiniMax pilot/media renderer，不自动切换、不自动生成或扣费。
+- 市场 Skill 检索只发现通用视频/Manim/`inference.sh` 工作流，未发现与 Synclip API、论文来源守卫和现有 OpenScience spool 兼容且足以安装的高可信包；未安装第三方 Skill。已复用其可取的“镜头 brief→参考资产→连续性复核”方法，具体边界以 `openscience-research-video` 为准。
 
 ## 本机浏览器代理配置
 
