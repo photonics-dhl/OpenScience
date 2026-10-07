@@ -1,4 +1,5 @@
 import { lstat, mkdir, open } from 'node:fs/promises';
+import { isMainModule } from './main-entry.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { safeRead, atomicWrite } from './core.mjs';
@@ -104,7 +105,7 @@ export async function runNarrationPilot(options, dependencies = {}) {
   return {status:'succeeded',path:join(stateRoot,'audio.mp3'),bytes:result.audio.length,metadata:result.metadata,subtitlesSaved:false};
 }
 
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+if(isMainModule(process.argv[1],fileURLToPath(import.meta.url))) {
   const args=process.argv.slice(2);
   const valid=args.length===1&&['submit','status','subtitles'].includes(args[0])
     ||args.length===3&&args[0]==='prepare'&&args[1]==='--request-file';

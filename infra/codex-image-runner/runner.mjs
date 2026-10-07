@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isMainModule } from './main-entry.mjs';
 import { promisify } from 'node:util';
 import { mkdir, chown, chmod, lstat, readdir, realpath, utimes } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
@@ -70,4 +71,4 @@ async function main(){
  // An intentional drain finishes the current job and exits successfully, so
  // systemd Restart=on-failure cannot race the cleanup's provider leases.
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(()=>{console.error('RUNNER_START_FAILED');process.exitCode=1;});
+if(isMainModule(process.argv[1],fileURLToPath(import.meta.url)))main().catch(()=>{console.error('RUNNER_START_FAILED');process.exitCode=1;});

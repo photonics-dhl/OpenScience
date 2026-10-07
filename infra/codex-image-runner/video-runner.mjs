@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isMainModule } from './main-entry.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { chmod, chown, lstat, mkdir, open, readdir, rename, statfs, utimes } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -249,4 +250,4 @@ async function main(){
  const heartbeat=()=>publishVideoReadiness(config);await heartbeat();const timer=setInterval(()=>heartbeat().catch(()=>{stopped=true;}),15000);
  try{while(!stopped){const result=await runVideoOne(config);if(!result)await sleep(1000);else console.log(JSON.stringify(result));}}finally{clearInterval(timer);await atomicWrite(join(config.results,'.ready'),JSON.stringify({schemaVersion:1,updatedAt:0,runtime,accepting:false}));await utimes(join(config.results,'.ready'),0,0);}
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(()=>{console.error('VIDEO_RUNNER_FAILED_CLOSED');process.exitCode=1;});
+if(isMainModule(process.argv[1],fileURLToPath(import.meta.url)))main().catch(()=>{console.error('VIDEO_RUNNER_FAILED_CLOSED');process.exitCode=1;});

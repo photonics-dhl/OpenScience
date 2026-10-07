@@ -1,4 +1,5 @@
 import { lstat, mkdir, open, link, unlink } from 'node:fs/promises';
+import { isMainModule } from './main-entry.mjs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -226,7 +227,7 @@ export function parsePilotArgs(args) {
   return options;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(process.argv[1], fileURLToPath(import.meta.url))) {
   let options;
   try { options = parsePilotArgs(process.argv.slice(2)); } catch { /* handled below */ }
   if (!options) { console.error('PILOT_ARGUMENTS_INVALID'); process.exitCode = 64; }
