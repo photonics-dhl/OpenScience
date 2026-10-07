@@ -3,7 +3,7 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-08：应用 release `9011cae815b9fa9e72af9f564361a36b5192c387` 已上线；provider bundle 随后已切到同一 source，timer active/enabled，broker 最近执行成功。一次真实新任务 `2d470d8f-9433-45a9-bbf0-d34f02dd4ee4` 已进入 Synclip，但用户确认的裸 `gpt-image-2.5` 在创建阶段没有形成 receipt，结果为 `UNCERTAIN`；只读探针确认 key/路由可达，Synclip 未提供可复核模型清单。为保证可交付链路，当前稳定生产 model 恢复为历史真实成功的 `gpt-image-2`，不盲重试未知 POST；2.5 变体待供应商给出确切 API model 值后再单独切换验证。页面旧失败资产与本次新任务已分开保留。
+- 2026-10-08：应用 release `decf3759b6d40764d39e7467f01e368be9022e92` 已上线，回滚锚点为 `9011cae815b9fa9e72af9f564361a36b5192c387`；provider bundle 同源切换，timer active/enabled，broker 最近执行成功。一次真实新任务 `2d470d8f-9433-45a9-bbf0-d34f02dd4ee4` 证明裸 `gpt-image-2.5` 在创建阶段没有形成 receipt，结果为 `UNCERTAIN`；只读探针确认 key/路由可达，Synclip 未提供可复核模型清单。随后用已真实成功的 `gpt-image-2` 单次生成任务 `fc1c5474-6e16-4e37-93bf-ea5427c069eb` 成功，receipt 绑定远端 task `d9c3c9cc-d69c-4fa8-a6d9-63fcf89ae99f`，页面显示私有 draft，像素检查通过。2.5 变体待供应商给出确切 API model 值后再单独切换验证；未知 POST 不重试。
 - 2026-10-08：针对“结构正确但缺少美感”的反馈，重新审查指南真实首屏并完成一轮艺术指导：真实研究图解改为展品构图，增加轻微错位纸张色块、印刷式 metadata、错位投影与更有张力的标题比例；Hermes 仍保持页面自有锚定位。内置浏览器窄屏截图已观察到研究对象、光学丝带与 Hermes 的层次关系，尚未部署。
 - 2026-10-08：纠正视频供应商边界：当前唯一商业视频执行器是已配置并实际成功调用的 MiniMax H3；Synclip 仅是图片路线，Synclip video contract 未确认且明确不调用。`openscience-research-video` Skill、能力台账和 CURRENT 已统一到 H3 的 `/v2/video_generation` + `/v2/query/video_generation/{task_id}`、15s/2K/16:9、参考图、原生音轨及逐幕 attempt/receipt 保护。
 - 2026-10-08：用户纠正供应商边界：Synclip 同时是本项目的图片和视频供应商。已撤回“Synclip 不是视频供应商”的错误表述；正确状态是 Synclip 视频为目标主路线、待 exact server adapter 合同完成，MiniMax H3 为当前已有真实凭据和成功 hook 的受控 pilot，不是唯一供应商。
