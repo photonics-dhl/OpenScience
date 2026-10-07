@@ -15,7 +15,7 @@ const response = (data: unknown, status = 200) => new Response(JSON.stringify({ 
 });
 
 describe('Synclip fixed image API', () => {
-  it('submits exactly one text-only gpt-image-2.5 request to the fixed origin', async () => {
+  it('submits exactly one text-only gpt-image-2 request to the fixed origin', async () => {
     const fetcher = vi.fn(async () => response({ task_id: taskId, status: 'processing' }));
     const client = new SynclipImageClient({ apiKey, fetch: fetcher });
     await expect(client.create('Preserve the exact scientific labels.')).resolves.toEqual({ task_id: taskId, status: 'processing' });
@@ -24,7 +24,7 @@ describe('Synclip fixed image API', () => {
     expect(url).toBe('https://api.synclip.ai/v1/image');
     expect(init.method).toBe('POST'); expect(init.redirect).toBe('error');
     expect(init.headers).toMatchObject({ Authorization: `Bearer ${apiKey}` });
-    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Preserve the exact scientific labels.', model: 'gpt-image-2.5', aspectRatio: '16:9' });
+    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Preserve the exact scientific labels.', model: 'gpt-image-2', aspectRatio: '16:9' });
   });
   it('queries only the saved ID and checks the response identity', async () => {
     const fetcher = vi.fn(async () => response(completed()));

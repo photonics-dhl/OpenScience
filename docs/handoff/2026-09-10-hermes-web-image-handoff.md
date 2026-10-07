@@ -2,8 +2,8 @@
 > 唯一交付树 .worktrees/onchip-video-release，分支 release/onchip-production-line；根 main 只作导航。
 
 ## 目标与决定
-- 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip gpt-image-2.5；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
-- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。生产仍是旧 release 的 gpt-image-2；本候选已把请求、spool identity、broker/transport 回执和 Hermes 图片能力说明统一为 `gpt-image-2.5`，尚未部署。博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
+- 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip；论文是事实来源，不把图像模型或固定样本答案当作科学理解。
+- 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。当前稳定生产 model 恢复为已真实成功的 `gpt-image-2`；用户确认的 2.5 能力尚未获得 Synclip 可复核的确切 API model 值，最近一次 `gpt-image-2.5` 创建任务在无 receipt 情况下返回 `UNCERTAIN`，不再盲重试。博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
 - 2026-10-08 当前发布锚点：应用 `ef2d6cf4a04e13f43fe98c7602bf480c33f37d41`，回滚 `784c6b25342c29bdc5c2db193258d34dfafd4e64`；视频 CI `37685249300` 全绿，前一媒体 CI `37685041066` 全绿；原生 Hermes catalogue/runtime 沿用已验证的 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`。应用发布使用 `--no-tests --skip-migrate`，API/Web/Worker/Parser/ScanSci/Embedding healthy，Nginx、active/public release、retention journal 事务均通过；Parser/ScanSci/embedding 深层 canary 与公网 auth/admin 探针未执行。

@@ -23,7 +23,7 @@ describe('Native media capability guidance', () => {
 
   it('keeps the fresh image route on the verified still contract and does not add guidance to saved sessions', () => {
     const image = nativeMediaCapabilityGuidance({ output: 'image' }, false).join('\n');
-    expect(image).toContain('gpt-image-2.5');
+    expect(image).toContain('gpt-image-2');
     expect(image).toContain('openscience-synclip-capabilities');
     expect(nativeMediaCapabilityGuidance({ output: 'video' }, true)).toEqual([]);
   });

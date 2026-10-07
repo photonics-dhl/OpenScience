@@ -7,7 +7,10 @@ import { CODEX_IMAGE_MAX_JSON_BYTES } from './codex-image-protocol';
 import { encodedImageDimensions } from './ocr';
 
 export const SYNCLIP_IMAGE_ORIGIN = 'https://api.synclip.ai/v1';
-export const SYNCLIP_IMAGE_MODEL = 'gpt-image-2.5';
+// Synclip's current public image API has been verified with this model. Keep
+// the unverified 2.5 aliases out of the production path until Synclip exposes
+// an exact accepted model value through its API contract.
+export const SYNCLIP_IMAGE_MODEL = 'gpt-image-2';
 export const SYNCLIP_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
 export interface SynclipImageTask {
   task_id: string;
