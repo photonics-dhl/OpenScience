@@ -6,9 +6,10 @@
 - 当前生产图像通道只走 Synclip；旧 ChatGPT 浏览器生图链路已停用，不自动回退。Hermes/MiniMax-M3负责论文理解、来源核对和科学分镜，当前 imageReview 步骤由 M3 执行；尚未把 Hermes 独立像素核验作为已验收事实。生产仍是旧 release 的 gpt-image-2；本候选已把请求、spool identity、broker/transport 回执和 Hermes 图片能力说明统一为 `gpt-image-2.5`，尚未部署。博客能力与未接通视频边界见 `openscience-synclip-capabilities`，论文视频规划与额度保护见 `openscience-research-video`。候选分镜已沿既有 `StoryboardDocument` 补入 provider-neutral 的 `videoProduction`/`videoDirection`，尚未部署。
 - 目标链路：PDF/OCR/SourceMap → Hermes全文理解与核源 → 六维/Claim/Evidence → Hermes科学分镜/风格/完整prompt → Synclip → 当前imageReview科学审阅 → 用户确认/现有发布流程。Hermes独立像素核验仍是未完成能力；未知外部提交不可盲重发。
 - 保留原PDF、SourceMap、认可图片、旧公开版本及所有失败/费用/回执证据；用户已认可的第二篇物理正确图不重做。三篇整体验收和普通用户旅程仍未完成。
-- 2026-10-08 当前发布锚点：应用 `784c6b25342c29bdc5c2db193258d34dfafd4e64`，回滚 `0c8fbf58824a59abc585643241a3083315b496df`，视频/媒体 CI `37652305743` 与媒体技能 CI `37652305759` 均通过；原生 Hermes catalogue/runtime 为 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`，API/Worker healthy，timer active/enabled。发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层 canary 与公网 auth/admin 探针未执行；这不改变 Synclip 图片与未接通视频的边界。
+- 2026-10-08 当前发布锚点：应用 `ef2d6cf4a04e13f43fe98c7602bf480c33f37d41`，回滚 `784c6b25342c29bdc5c2db193258d34dfafd4e64`；视频 CI `37685249300` 全绿，前一媒体 CI `37685041066` 全绿；原生 Hermes catalogue/runtime 沿用已验证的 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`。应用发布使用 `--no-tests --skip-migrate`，API/Web/Worker/Parser/ScanSci/Embedding healthy，Nginx、active/public release、retention journal 事务均通过；Parser/ScanSci/embedding 深层 canary 与公网 auth/admin 探针未执行。
 ## 当前运行与真实验收
-- 生产版本 tuple：线上与公网 `/__release` 均为 `784c6b25342c29bdc5c2db193258d34dfafd4e64`，回滚为 `0c8fbf58824a59abc585643241a3083315b496df`；视频/媒体 CI `37652305743`、`37652305759` 全绿，API/Worker healthy，原生 Hermes catalogue/runtime 已读回，timer active/enabled。发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- 生产版本 tuple：线上与公网 `/__release` 均为 `ef2d6cf4a04e13f43fe98c7602bf480c33f37d41`，回滚为 `784c6b25342c29bdc5c2db193258d34dfafd4e64`；API/Web/Worker/Parser/ScanSci/Embedding healthy，Nginx 与发布保留事务通过。发布使用 `--no-tests --skip-migrate`，Parser/ScanSci/embedding 深层功能探针及公网 auth/admin 功能探针未执行。
+- 2026-10-08 视频真实结果：服务器独立云视频 bundle `cloud` 已切换到 `86d5295cbf19fc89d8bcd198991d9b50aae2ad8c`，修复了通过符号链接启动 pilot 时静默不输出的问题；通过 `cloud` 符号链接只读回放 H3 `hook` 任务 `447219218062265` 成功，原片 5,654,125 bytes，FFprobe 为 2560×1440、15.084 秒、H.264/AAC 双声道 32 kHz。帧检查显示双结构/真空缝保持、单一青色电子连续通过；原生音轨存在，但尚未获得人工自然度认可。`mechanism` 已保存 `402 / insufficient_balance_error` 拒绝，未重发；`mapping`/`result` 尚未提交。该链路是 MiniMax-H3 独立 pilot，不是 Synclip video adapter，不能据此宣称四幕最终片完成。
 - UI 真实验收：390px 指南与登录页的页面自有 Hermes 陪伴位均为 196×156，探索页使用 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、横向溢出 0，点击展开后的 Hermes 为 300×300，桌面指南为 360×360。
 - 旧 openscience-chatgpt-browser、bridge、网页 image/review timer 与登录profile已停用/清理；历史 spool、任务、论文、媒体和回滚资料保留。当前 API/Worker 的实际图像环境为 SYNCLIP_IMAGE_ENABLED=true、HERMES_SCENE_IMAGE_PROVIDER=synclip、模型 gpt-image-2，没有自动备用 provider。
 - 第一篇 RO c896802c-35dd-4b59-8db1-5f374f83a6d8 的首幕 Synclip 任务 b3c023bf-ee0c-4ed8-9030-80ddf9cf6966 已真实成功，私有PNG 602060 bytes，用户已做首轮像素观察，未自动审批或公开。
@@ -25,7 +26,7 @@
 - 断点在 Synclip POST 的未知外部终态：本地一次性提交保护正确阻止重复扣费，但供应商没有被当前客户端确认的幂等/按客户端键查询合同。下一步只能先取得 Synclip 对 request correlation/idempotency 的明确合同，再做最小可恢复增强；不得为补齐4/4而盲重发 28ab61b0。
 - 另外确认产品策略：分镜成功后是否应强制用户审核再生图。当前真实 run 自动继续了；若要求审核闸门，应修复该状态转换并用新任务验证。无论选择哪种策略，图像保持私有草稿，公开仍需现有确认流程。
 - 生产日志另见 `/auth/me` 的 `Reply was already sent`/HTTP 500，尚未证明阻断本次生图；应按独立 API 稳定性缺陷处理，修复后再做定向回归。
-- 视频当前下一动作：先以这份 Hermes 导演简报合同完成 CI/发布前审查，再取得 Synclip 精确视频合同，最后只做一次私有短镜头验收；在此之前不发起视频请求、不把 Qwen WAV 当成 provider 输入、不退役本地预览链。
+- 视频当前下一动作：保留 H3 hook、402 拒绝和本地执行收据，待供应商余额恢复后先对账再显式恢复指定镜头；不要删除或重建已有 attempt。补齐四幕前仍需逐幕确认真实音画质量、后期连续性和私有 RO 资产接入。Synclip exact video contract 尚未确认，不把其博客模型或 H3 pilot 自动接入 Synclip，也不把 Qwen WAV 冒充商业模型原生音轨。
 - `f52ee24c` 的无 Cookie `session-guard` 修复已包含在当前线上 `4ed53b71`；线上 `/auth/me` 未登录请求返回统一 401，发布后15分钟没有新的 `Reply was already sent`/`ERR_HTTP_HEADERS_SENT` 日志。定向 API 测试16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个既有 HEAD错误。
 - read-first：先读本文件、docs/progress.md、docs/runbooks/hermes-capability-registry.md；完整终端证据在 tmp/second-paper-native-author-deploy.log 及本轮忽略目录，旧记录只作历史回溯。
 ## 历史验证（不作为当前 next action）
