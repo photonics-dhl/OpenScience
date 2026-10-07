@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through Hermes and Chat image generation, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "18"
+  version: "19"
 ---
 
 # OpenScience research illustration
@@ -40,6 +40,8 @@ When the takeaway is a classification, each region needs its source-supported ca
 Reconstruct the physical subjects from the supplied original definitions, captions and available figure pixels before choosing their marks. Establish material identity, the actual entity, its extent and which part or section the image shows. A circular section of an extended object does not establish a sphere; a projected silhouette does not establish a different three-dimensional shape. Keep the source's material and entity meaning in the subject description. A caption or an earlier generated image is not evidence that the original figure pixels were inspected. If the required spatial evidence is unavailable, identify what is missing or select a narrower supported explanation.
 
 Establish the source-supported coordinate basis and viewing plane, then project the physical subjects into that view. Distinguish field propagation, polarization, particle trajectory and observer direction; these are separate relationships even when one drawing places their arrows near each other. For an angle, identify both directions and the reference axis or frame. Rotate the whole construction consistently when changing the view; do not infer a physical relationship from page orientation. Describe object extents and openings in that frame, distinguish in-plane from out-of-plane directions, and trace each physical path through the open region. A logical correspondence line is not a physical trajectory. Put the necessary frame or projection indicators in the visible labels. When the sources do not establish a consistent construction, retain the information gap rather than inventing geometry.
+
+For every measured width, name the source-defined profile and measurement axis before drawing it. A width of `S(z)` or another z-dependent spatial profile is measured along z; it must not be replaced by the convenient short axis of a 2-D envelope or by a transverse y width. Put FWHM endpoints on the same profile at its half-maximum level, and keep a particle trajectory or propagation arrow visually separate from that measurement mark. If the source defines a temporal FWHM, keep it separate from every spatial FWHM.
 
 When saved images and formal pixel review repeatedly show the same impossible spatial connectivity despite a correct source-bound intent, treat it as an encoding-feasibility failure. Stop cycling art-only corrections or longer prohibitions. Replan the visual encoding with the same reviewed Claim and original passages: show the supported causal relation through a faithful conceptual representation if an exact physical cross-section cannot be rendered reliably. Preserve the essential subject, variables, conditions, result and model/experimental boundary; do not label valid source science as invalid or invent a new claim. The revised plan still needs normal scientific review, a new real image and pixel review, while failed images remain private evidence.
 

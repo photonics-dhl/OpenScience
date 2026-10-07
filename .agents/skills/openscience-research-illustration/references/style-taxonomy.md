@@ -53,7 +53,10 @@ Complete this check before style selection and again before rendering:
    intersect in a way the source does not support.
 3. Assign every width or dimension to its owner and endpoints. A geometric
    opening, field width and temporal width remain different quantities even if
-   their units look similar.
+   their units look similar. If the source defines a profile such as `S(z)`,
+   measure its FWHM along z and place both endpoints on that profile at half
+   maximum; never substitute the envelope's convenient short axis, a y-width
+   or a slit opening.
 4. Mark non-scaled conceptual geometry explicitly. Never make a shape look
    proportional merely because a numeric label is present.
 5. Give every semantic color one job. Texture, glow and gradients are artistic

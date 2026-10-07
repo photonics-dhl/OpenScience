@@ -50,7 +50,7 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '18' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '19' }));
     expect(science.instructions).toContain('encoding-feasibility failure');
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
@@ -81,7 +81,9 @@ describe('Hermes media skill stages', () => {
       scenario: 'a gap, spatial field width and temporal pulse width in one explanation',
       request: 'Retain the sourced gap and pulse conditions without interchanging the transverse gap and longitudinal field width.',
       required: ['object, physical quantity, axis, definition and case',
-        'A geometric opening, the spatial width of field amplitude or intensity, and a temporal pulse width are different quantities'],
+        'A geometric opening, the spatial width of field amplitude or intensity, and a temporal pulse width are different quantities',
+        '若原文定义的是 S(z) 或其他带轴的空间剖面',
+        'FWHM_S ≥ λ₀/2 与 FWHM_S ≪ λ₀/2 必须分别绑定'],
     },
     {
       scenario: 'a caption refers to an original figure absent from the input',
@@ -95,7 +97,7 @@ describe('Hermes media skill stages', () => {
       expect(skill.instructions).toContain('原文定义、图注和实际提供的原图');
       expect(skill.instructions).toContain('每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例');
       expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
-      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '18',
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '19',
         resources: expect.arrayContaining(['SKILL.md#Scientific encoding']) }));
     }
   });
