@@ -564,3 +564,15 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/surface-shells.test.tsx -t "review-only preflight recovery"
       - run: npx pnpm@9.15.0 docs:lint
+      - name: Preserve synthetic browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-browser-failure-evidence
+          path: |
+            tmp/illustrated-creation-browser/
+            tmp/hermes-entry-browser/
+            tmp/storyboard-lifecycle-browser/
+            tmp/presentation-retry-browser/
+          if-no-files-found: ignore
+          retention-days: 7
