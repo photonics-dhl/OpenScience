@@ -72,6 +72,11 @@ describe('server-bound Hermes native pixel review', () => {
     await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow();
     expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.checkpoint).toHaveBeenCalledOnce();
   });
+  it('classifies malformed native JSON as an explicit review-only recovery', async () => {
+    const f = setup('{"decision":"accepted"');
+    await expect(f.gateway.reviewScientific(input(), guard)).rejects.toThrow('Native image review response invalid JSON; explicit review retry required');
+    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.checkpoint).toHaveBeenCalledOnce();
+  });
 
   it('never accepts valid-looking JSON from an output cut off at the thinking/output ceiling', async () => {
     const f = setup(); f.fetcher.mockImplementation(async () => new Response(JSON.stringify({ model: 'MiniMax-M3',

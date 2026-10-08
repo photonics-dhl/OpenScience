@@ -229,8 +229,17 @@ export class AiGateway {
         },
         submitProvider: (target, submit) => this.nativeImageReviewSubmission!(input, target, submit),
       });
-      if (result.finishReason !== 'stop' || !guard(parseStructuredJson(result.text)))
-        throw new AiGatewayError('SCHEMA_VALIDATION', 'Incomplete or invalid native image review response');
+      let parsed: unknown;
+      try {
+        parsed = parseStructuredJson(result.text);
+      } catch (cause) {
+        // The image and its review reservation are already durable. Preserve a
+        // stable, narrowly recoverable error so the operator can retry only the
+        // malformed review response without submitting the image again.
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image review response invalid JSON; explicit review retry required', cause);
+      }
+      if (result.finishReason !== 'stop' || !guard(parsed))
+        throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image review response failed schema validation; explicit review retry required');
       return { text: result.text, promptHash: result.promptHash, responseHash: sha256Text(result.text), provider: result.provider, model: result.model };
     }
     if ('kind' in input.source && input.source.kind === 'illustration-plan') {

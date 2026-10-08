@@ -199,8 +199,21 @@ function evaluateAgentTaskRetryEligibility(
   const latePaidImageRecovery = task.kind === 'presentation.generate'
     && task.error === '[blocked] Previous paid image attempt has no saved result; explicit new generation is required'
     && isJsonRecord(payload.sceneImage) && !('hermesRunAuthority' in payload);
+  // MiniMax native pixel review can return a completed HTTP response whose
+  // JSON is malformed. The image draft and the paid review reservation are
+  // already durable; one explicit retry may reset only the review checkpoint.
+  // Keep this manual-task-only and exact so transport uncertainty remains
+  // permanently non-retryable.
+  const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
+    && task.retryCount === 0
+    && !('hermesRunAuthority' in payload)
+    && (task.error === 'Native image review response invalid JSON; explicit review retry required'
+      || task.error === 'Native image review response failed schema validation; explicit review retry required'
+      || task.error === 'structured output is not JSON'
+      || /^Expected ',' or '\}' after property value in JSON at position [0-9]+$/u.test(task.error ?? ''));
   if (task.status !== 'failed' || task.retryCount !== 0
-    || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)) {
+    || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
+    || (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
     return { authorityValid: true, canRetry: false };
   }
   if (task.kind === 'sdf.extract') {
@@ -208,7 +221,10 @@ function evaluateAgentTaskRetryEligibility(
   }
   if (task.kind === 'presentation.generate') {
     // Managed runs must restore their task, step and run together through retry-generation.
-    try { if (readNativeImageReviewCheckpoint(task.result)?.state === 'started') return { authorityValid: true, canRetry: false }; }
+    try {
+      if (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)
+        return { authorityValid: true, canRetry: false };
+    }
     catch { return { authorityValid: true, canRetry: false }; }
     return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) };
   }
@@ -966,7 +982,26 @@ export async function retryAgentTask(
         }
         const sourceSearch = isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
-        if (nativeReview?.state === 'started') throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
+        const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
+          && task.retryCount === 0
+          && !('hermesRunAuthority' in (task.payload as Record<string, unknown>))
+          && (task.error === 'Native image review response invalid JSON; explicit review retry required'
+            || task.error === 'Native image review response failed schema validation; explicit review retry required'
+            || task.error === 'structured output is not JSON'
+            || /^Expected ',' or '\}' after property value in JSON at position [0-9]+$/u.test(task.error ?? ''));
+        if (nativeReview?.state === 'started' && !nativeImageReviewSchemaRecovery)
+          throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
+        if (nativeImageReviewSchemaRecovery) {
+          const image = await tx.presentationAsset.findUnique({ where: { id: task.id } });
+          const provenance = isJsonRecord(image?.provenance) ? image.provenance : {};
+          if (!nativeReview || nativeReview.state !== 'started' || !image || image.deletedAt || image.kind !== 'image' || image.status !== 'draft'
+            || image.contentHash !== nativeReview.contentHash || provenance.taskId !== task.id
+            || provenance.source !== 'approved_storyboard_scene' || provenance.imageReview !== undefined
+            || provenance.parentIdentity !== nativeReview.parentIdentity
+            || provenance.sourceEvidenceIdentity !== nativeReview.sourceEvidenceIdentity) {
+            throw new AgentError('ILLEGAL_TRANSITION', 'Native image review retry is not safe');
+          }
+        }
         const nativeSource = readNativeSourceReview(task.result);
         if (nativeSource?.attempts.some(a => a.state === 'started')) throw new AgentError('ILLEGAL_TRANSITION', 'Native source review outcome is unconfirmed');
         const nativeAgent = readNativeAgentExecution(task.result);
@@ -996,7 +1031,8 @@ export async function retryAgentTask(
           },
           data: {
             status: 'pending', progress: 0,
-            result: nativeAgent ? task.result as Prisma.InputJsonValue
+            result: nativeImageReviewSchemaRecovery ? { nativeImageReview: { mode: 'model-native', state: 'not_started' } } as Prisma.InputJsonValue
+              : nativeAgent ? task.result as Prisma.InputJsonValue
               : nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
               : nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
               : scienceRecovery ? task.result as Prisma.InputJsonValue : task.kind === 'presentation.generate' && isJsonRecord(task.payload)
