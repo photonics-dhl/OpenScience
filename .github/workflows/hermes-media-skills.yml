@@ -5,11 +5,13 @@ name: Hermes media pipeline
 on:
   workflow_dispatch:
   push:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
+      - '.agents/skills/openscience-research-video/**'
+      - '.agents/skills/openscience-synclip-capabilities/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/src/skills/scientific-critical-thinking.ts'
       - 'apps/agent-worker/src/scientific-writing-source.ts'
@@ -189,11 +191,13 @@ on:
       - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
   pull_request:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
+      - '.agents/skills/openscience-research-video/**'
+      - '.agents/skills/openscience-synclip-capabilities/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/src/skills/scientific-critical-thinking.ts'
       - 'apps/agent-worker/src/scientific-writing-source.ts'
@@ -432,6 +436,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only|local budget|local-budget"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "replaces one failed review-only request"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "rearms only a receipted manual PNG review"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "preserves diagnostics during bounded native review recovery|keeps malformed native review checkpoints readable"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "prevents retrying a failed image source"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "current platform admin can submit"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
