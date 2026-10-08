@@ -154,7 +154,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         { name: 'processing-redirect', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['期刊工作台', '草稿箱'] },
         { name: 'services', context: ownerContext, path: `/journals/manage/${journalId}/services`, expected: ['服务包与额度', '可用 AI 草稿额度'] },
         { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['论文与文件', '上传论文文件', '查看原文', 'Hermes 助手 AI 解读', '审批与发布'] },
-        { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['材料授权与公开范围', '加工与公开范围'] },
+        { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['研究素材', '加工与公开范围'] },
         { name: 'admin', context: adminContext, path: '/admin/journals', expected: ['期刊核验与运营', '期刊运营状态'] },
       ];
 
@@ -188,10 +188,9 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
           // The responsive navigation keeps a hidden desktop link in the DOM on mobile.
           for (const text of surface.expected) await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible' });
           if (surface.name === 'directory') {
-            // The directory heading is localized. Verify the visible page landmark,
-            // named directory and real result instead of a historical English slogan.
+            // The directory's primary browse heading is intentional in both locales.
             const main = page.getByRole('main');
-            await main.getByRole('heading', { level: 1 }).waitFor({ state: 'visible' });
+            await main.getByRole('heading', { level: 1, name: 'Browse all journals', exact: true }).waitFor({ state: 'visible' });
             const directory = main.locator('[data-journal-directory]');
             await directory.waitFor({ state: 'visible' });
             expect(await directory.getAttribute('aria-label')).toBeTruthy();
@@ -401,9 +400,9 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       await page.getByRole('link', { name: '管理研究素材与授权' }).click();
       const sourceForm = page.getByText('添加研究素材', { exact: true });
       await sourceForm.click();
-      await page.getByLabel('材料类型', { exact: true }).selectOption('supplementary');
-      await page.getByLabel('材料名称', { exact: true }).fill('Synthetic supplementary registration');
-      await page.getByLabel('来源地址', { exact: true }).fill('https://journal.example.invalid/supplementary');
+      await page.getByLabel('素材类型', { exact: true }).selectOption('supplementary');
+      await page.getByLabel('素材标题', { exact: true }).fill('Synthetic supplementary registration');
+      await page.getByLabel('来源链接', { exact: true }).fill('https://journal.example.invalid/supplementary');
       const registration = page.locator('details').filter({ hasText: '添加研究素材' }).locator('form');
       expect(await registration.getByRole('checkbox', { name: /允许 Hermes 助手 AI 解读/ }).isChecked()).toBe(false);
       expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
@@ -412,10 +411,16 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
       expect(await registration.getByRole('checkbox', { name: /公开原文/ }).isChecked()).toBe(false);
       await registration.getByLabel('这份素材获准如何使用？').selectOption('unknown');
+      expect(await registration.getByRole('button', { name: '添加素材并评估', exact: true }).isDisabled()).toBe(true);
       await registration.getByLabel(/^授权从哪里获得/).fill('Synthetic material registration; this record does not authorize the main source.');
+      expect(await registration.getByRole('button', { name: '添加素材并评估', exact: true }).isEnabled()).toBe(true);
       const addedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/sources`));
       await registration.getByRole('button', { name: '添加素材并评估', exact: true }).click();
       const added = await addedResponse;
+      const submittedSource = added.request().postDataJSON() as { source: { evidence: Record<string, unknown>; permissions: typeof noPermissions } };
+      expect(submittedSource.source.evidence).toMatchObject({ statement: 'Synthetic material registration; this record does not authorize the main source.' });
+      expect(submittedSource.source.evidence).not.toHaveProperty('expiresAt');
+      expect(submittedSource.source.permissions).toEqual(noPermissions);
       expect(added.status(), await added.text()).toBe(200);
       const matrix = await added.json() as { sources: Array<{ sourceType: string; title: string; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } };
       expect(matrix.sources.find((item) => item.title === 'Synthetic supplementary registration')).toMatchObject({ sourceType: 'supplementary', permissions: noPermissions });
@@ -431,6 +436,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       const reboundResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes(`/articles/${fresh.id}/sources/`) && response.url().endsWith('/rights'));
       await timed.getByRole('button', { name: '保存此项授权', exact: true }).click();
       const rebound = await reboundResponse;
+      expect((rebound.request().postDataJSON() as { evidence: { expiresAt?: string } }).evidence.expiresAt).toBe(expiry);
       expect(rebound.status(), await rebound.text()).toBe(200);
       const savedSource = (await rebound.json() as { sources: Array<{ title: string; evidence: { expiresAt?: string }; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } }).sources.find((item) => item.title === 'Time-limited supplementary record');
       expect(savedSource?.evidence.expiresAt).toBe(expiry);
