@@ -3,7 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-09 01:10：精确8ea的4项CI中视频及期刊PR/push通过；媒体在Worker video admission的普通sdf.extract用例失败（trusted classifier期望handler1次实际0），Gateway46/Domain96通过，后续媒体浏览器未执行。原日志保留，视频owner基于8ea接最小根因修复，未重发模型或发布。
+- 2026-10-09 01:10：精确8ea的4项CI中视频及期刊PR/push通过；媒体在Worker video admission的普通sdf.extract用例失败（trusted classifier期望handler1次实际0），Gateway46/Domain96通过，后续媒体浏览器未执行。原日志保留；cb092测试修复全等集入a12b，31/31，真实产品逻辑未改；原CI补足七个直接入口（本地7/7）。待新批CI，未重发模型或发布。
 - 2026-10-09：合并期刊共享管线与视频新收费守卫，保留期刊私有working RO/赞助额度及原ACK/未知任务；新phase消费P1已由af4和真实helper回归闭合，Web增量High GO，canonical相关3文件61/61、完整WebTC0。后续500期刊修正也已保留，完整Webbuild0、授权字段5/5；代码语义合并High GO，已正常推送协作分支并触发精确CI，现网/五项回收均未动。
 - 2026-10-09 00:42：只读确认期刊显式回滚已生效，服务healthy、M3保持，当前运行身份见CURRENT。已收reader/CSS两尺寸2PASS、helper58及组件50；真实消费新增phase P1由UI闭合。远端新增六期刊提交与本批重叠，先合并/High再精确CI；未发布/未操作Fig2。自有Next缓存清理被自动审批阻断、0删除，证据保留。
 - 2026-10-09：UI540/165已全等集入79ca/ab3，68例保留、52个fixture函数/TC已过，资源ID补差未发布。剩余版本原文缺口授生图两文件；视频转Web请求/存储helper，UI专注组件，写权互斥。root High明确legacy本地key闭合时不可盲POST，采用prepared scope只读恢复→资格→mutation、保留paid source/key，不加拒绝marker；整体P1/CI未GO，五项仍0写。
