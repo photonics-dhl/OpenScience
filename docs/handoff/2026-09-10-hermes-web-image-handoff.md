@@ -11,8 +11,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责三线写权/依赖/集成/发布与CURRENT/progress/index，各owner保留原任务和专属计划。线程心跳`openscience`已ACTIVE，每10分钟检查三线；完成、idle或受阻时及时补派有用且已授权的独立下一步，状态不变不通知，不用无关检查充数。
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 独占hermes-dashboard.spec.ts，修真实CI入口/fixture差额，保留有效行为保障 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`；具体分支以Git为准 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 目录83c及option状态f90已收；真实交互/375坐标待下一批CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/journal-refinement-option-ci` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 原spec唯一writer；入口/fixture已修，4代表2过2败，未提交 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/hermes-dashboard-ci` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 只读分析生图reload SyntaxError原trace；f90已收待CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/journal-refinement-option-ci` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 586七图核看完成；画布/回退/卸载失败独立只读High进行中，不写生图spec | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
 - 写权按当前三线文件归属互斥；root统一共享CI、CURRENT/progress/index与合并。未知付费保护不取消独立实现任务；不并行发布/资产写。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
@@ -30,8 +30,8 @@
 - 离线wire只证明已有PNG/prompt传递，不能证明科学正确；有效accepted曾漏矛盾，cb第6轮超时未定因。Gaussian/tau/时空/virtual-real仍须修订；原证据保留生图tmp/pixel-review-wire-receipt.json、first-scene-native-diagnostics.json，0新外呼。
 - 视频主候选及host3603→92bf已集入/High闭合，原验证保留、Linux host32/32；renderer已有codec，未切生产。[视频合同](../plans/2026-09-05-hermes-presentation-assets-plan.md)14fd→c07c：LTX有原生声/多镜头，分段不强制外置TTS，当前换轨会替代原声/音乐/环境声。无合格原生实片，暂不改模式；账户权限/音色、坏镜头与实际音画待验。
 - 视频收费守卫b705→b328、Web helper/组件及phase af4已收且High闭合；legacy无output原key closed hold，已知run先读，prepared B按读run→fresh capability→原key/body POST，保留paid A/B。期刊语义合并与后端CI已通过，完整测试证据保留原tmp/PR。API账户层级不能证明服务端Key的LTX访问能力，不开付费探测。
-- UI540/165、reader5d→dedb、CSS515→d551、spec1256→126757及版式14d→c962已收，原High/Edge两尺寸2PASS/24单测/TC/build复用，未带bc996。586指南组通过；artifact11579945240七PNG/四JSON已由UI全部实看：full角色/中文可见，en320按钮自然两行；zh375 reduced为可见静态回退（starting/lastDraw0），不称WebGL画帧。对话迁移单角色、桌面/手机审批页无遮挡；旧空槽描述已过时。403捕获High GO不代替产品生命周期审查；版本阅读PNG仍缺。
-- 68e→47c72b在be426期刊CI通过，artifact11574126501实看闭合摘要遮挡、六组锚点/首帧有效。948仅归零捕获视口、保留焦点/JSON，未改SkipLink；586因option测试先败，后续新图仍待。目录0d→63b有效条件折叠，15单测/TC0；83c→ee2e保留Enter、URL、Back/Forward/375坐标。root tmp/session-coordination-20261008保留全部日志/PNG/JSON；导航13失败由生图与UI分查，不能全部认定旧测试或全部认定产品故障。
+- 已收reader/CSS/版式126757/c962；原High、两尺寸Edge2PASS及24单测/TC/build复用，未带bc996。586指南组通过；artifact11579945240七PNG/四JSON已由UI全看：full角色/中文可见，en320按钮两行；zh375 reduced为可见静态回退（starting/lastDraw0），不称WebGL画帧。对话迁移单角色、桌面/手机审批页无遮挡；旧空槽描述过时。403捕获High GO不代替生命周期审查；版本阅读PNG仍缺。
+- 68e→47c72b在be426期刊CI通过，artifact11574126501闭合摘要遮挡/六组首帧。948只归零捕获视口、保留焦点/JSON，未改SkipLink；586新图待option修复。目录0d→63b有15单测/TC0；83c→ee2e保留原交互/375断言。导航13失败分查；生图新代表同task轮询/同key重开2过，reload语法错及approval→idle未换canvas2败，不能等同真正context-loss失败。原证据在root tmp/session-coordination-20261008与生图tmp/hermes-dashboard-ci；视频只读查reload，UI同一High查生命周期，不改产品/延时掩盖。
 - Task4长表格57c→aa0已收/High GO，Search29/Worker25已CI通过；行窗口失败保lexical。恢复f427→79050保留原retry/双预算/CAS/fence，CLI03b3→3a3faa显式UUID、scope current take2、唯一后严格owner。10-08 21:29只读：当前96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27有69 active/0 vector，6368来源/确认/manifest/模型/owner/budgets当时满足；旧049c/be071已非current、不得apply。真实BGE未跑，许可与freshread仍需分别核；原回执在生图tmp/source-index-token-limit-recovery/。
 - Fig.2五项属e77已发布v8/OSR-2026-000023-v2的excluded sealed history；d508为68B、929缺行、77b对象缺失，后两项不扩scope。方案High GO，用户已允许exact5软回收并接受成员直链404/初始30天条件，授权持续有效，禁purge/补源/改封存。10-08 23:03:59 fresh五项live/42fe稳定；生图缺认证、UI正常管理入口缺精确ID，双方0写释放，无writer。行标识165已集入ab3但未发布，正常发布后fresh核对再按原授权操作。截图UI tmp/ui-art-20261008/37-fig2-content-manager-identity-gap.png，原方案/zero-write在生图tmp/fig2-cleanup/；实际回收/GET/HEAD/entry.lastError均待。
 - 生图浏览器getState及唯一reset后的getState均为request-header policy错误，已停循环；不绕过、不据此判产品故障或宣称实点。UI先前预览启动也曾被自动审批拒绝；按各自真实观察范围记录。
