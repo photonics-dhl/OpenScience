@@ -44,7 +44,7 @@ const responses = [
   ['review', 'paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Source, scientific relationship and layout agree.', corrections: [], issues: [] }],
 ] as const;
 
-async function fixture(automaticRun = false) {
+async function fixture(automaticRun = false, nativeVideo = false) {
   let transactionError: unknown;
   const { prisma, db } = createFakePrisma(); seedUser(db, { id: id(1), platformRole: 'user' });
   db.workspaces.push({ id: id(2), status: 'active' }); db.memberships.push({ userId: id(1), workspaceId: id(2), role: 'author' });
@@ -79,7 +79,7 @@ async function fixture(automaticRun = false) {
       getObject: async (key: string) => { const data = objects.get(key); if (!data) throw new Error('Missing fixture object'); return { body: Readable.from([data]), size: data.length }; } } };
   const session = await createAgentSession(deps as never, { userId: id(1), researchObjectId: id(3), kind: 'visualization' });
   let payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'interactive_html', sourceClaimIds: [id(5)],
-    storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image', narrative: true, narrativeSceneLimit: 1 } };
+    storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: nativeVideo ? 'video' : 'image', narrative: true, narrativeSceneLimit: nativeVideo ? 3 : 1 } };
   const submit = () => submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'native-plan', dispatch: false });
   if (automaticRun) {
     const findTasks = prisma.agentTask.findMany.bind(prisma.agentTask);
@@ -120,7 +120,18 @@ async function fixture(automaticRun = false) {
   prisma.agentTask.findUniqueOrThrow = async args => (await prisma.agentTask.findUnique(args))!;
   const fetcher = vi.fn(async () => {
     const step = responses[fetcher.mock.calls.length - 1];
-    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+    let input: unknown = step?.[2];
+    if (nativeVideo && step?.[1] === 'paper_illustration_science') input = { ...science,
+      videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway', visualContinuity: 'Keep the same connected regions.',
+        audioPolicy: 'external-narration', modelPolicy: 'commercial-primary' },
+      scenes: Array.from({ length: 3 }, () => ({ ...science.scenes[0], durationSeconds: 10,
+        videoDirection: { shotType: 'mechanism', purpose: 'Explain the connection', subjectLock: 'The connected regions',
+          generatedElements: 'Only the source-supported regions', motion: 'Reveal the connection while keeping its endpoints fixed', camera: 'Fixed view',
+          reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration', subtitleMode: 'none',
+          negativeConstraints: ['Do not invent a measurement'], modelPolicy: 'commercial-primary' } })) };
+    if (nativeVideo && step?.[1] === 'paper_illustration_art') input = { scienceToolCallId: 'science',
+      scenes: Array.from({ length: 3 }, () => ({ layout: 'Place label 0 above subject 0.', treatment: 'Crisp ink on plain white paper.' })) };
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input }]
       : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
   });
   const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('minimax-key-1-model-1', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, fetcher)] });
@@ -152,6 +163,21 @@ async function failedNativeImage() {
 }
 
 describe('ordinary-user native illustration through real task/store/asset boundaries', () => {
+  it('authorizes a native video plan through the real handler and retains its accepted full video document at adoption', async () => {
+    const f = await fixture(false, true);
+    const result = await f.handler(f.deps as never, f.task() as never);
+    expect(result).toMatchObject({ assetId: f.owner.id, status: 'draft', storyboardReview: { decision: 'accepted' } });
+    const asset = f.db.presentationAssets.find(row => row.id === f.owner.id)!;
+    expect(asset.provenance.storyboardDocument).toMatchObject({ narrative: science.narrative,
+      videoProduction: { audioPolicy: 'external-narration' }, scenes: Array.from({ length: 3 }, () => ({ durationSeconds: 10,
+        illustration: { schemaVersion: 2 }, videoDirection: { frameStrategy: 'start-reference' } })) });
+    expect(f.owner.result.illustrationPrompts).toHaveLength(3);
+    expect(f.owner.result.illustrationPrompts[0].videoPrompt).toContain('Reveal the connection');
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    expect(f.owner.status).toBe('succeeded');
+    expect(f.oldPlan).not.toHaveBeenCalled(); expect(f.oldReview).not.toHaveBeenCalled(); expect(f.generate).not.toHaveBeenCalled();
+  });
+
   it('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay', async () => {
     const f = await failedNativeImage();
     const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, result: structuredClone(f.image.result) };

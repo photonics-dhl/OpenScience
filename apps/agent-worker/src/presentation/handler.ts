@@ -1,7 +1,7 @@
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity } from '@openscience/domain';
 import { planSceneImagePrompt } from './scene-image';
 import { getBlobStorageKey } from '@openscience/storage';
-import { readNativeAgentExecution, requireNativeAgentExecutionAuthority } from '@openscience/domain';
+import { readNativeAgentExecution, requireNativeAgentExecutionAuthority, supportsNativeIllustration } from '@openscience/domain';
 import { runNativeIllustrationTask } from '../native-agent/illustration-task';
 import type { NativePaperImage } from '../native-agent/paper-tools';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
@@ -382,6 +382,11 @@ function needsGeneratedImageReview(payload: PresentationGenerationPayload): bool
   return Boolean(payload.sceneImage && generatedSceneImageRequiresPixelReview(payload));
 }
 
+function authorizedIllustrationPlan(payload: PresentationGenerationPayload, result: unknown): boolean {
+  return payload.kind === 'interactive_html' && (payload.storyboard?.output === 'image'
+    || (supportsNativeIllustration(payload) && readNativeAgentExecution(result)?.profile === 'paper-illustration'));
+}
+
 /** Separate from ingestion/OCR authorization: only the current illustration task may send its sources. */
 export async function requireIllustrationReviewAuthority(prisma: Prisma.TransactionClient, context: Readonly<OcrAuthorizationContext>) {
   const owner = await prisma.agentTask.findUnique({ where: { id: context.taskId },
@@ -394,7 +399,7 @@ export async function requireIllustrationReviewAuthority(prisma: Prisma.Transact
   }
   const payload = parsePresentationGenerationPayload(owner.payload);
   if (payload.researchObjectId !== ro.id
-    || !((payload.kind === 'interactive_html' && payload.storyboard?.output === 'image')
+    || !(authorizedIllustrationPlan(payload, owner.result)
       || (payload.kind === 'image' && needsGeneratedImageReview(payload)))) {
     throw new Error('[blocked] Illustration review requires an authorized illustration task');
   }
@@ -437,7 +442,7 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
   else if (source.kind === 'illustration-plan' && !planningContinuation && !savedOutputResume && (owner.executionAttempt > 3
     || (owner.executionAttempt === 3 && owner.retryCount !== 2))) throw new Error('[blocked] Illustration review continuation is unavailable');
   if (source.kind === 'illustration-image' ? !needsGeneratedImageReview(payload)
-    : payload.kind !== 'interactive_html' || payload.storyboard?.output !== 'image') {
+    : !authorizedIllustrationPlan(payload, owner.result)) {
     throw new Error('[blocked] Illustration review source does not match its task');
   }
   if (owner.executionAttempt !== snapshot.executionAttempt || payload.researchObjectId !== source.researchObjectId || payload.versionId !== source.versionId
