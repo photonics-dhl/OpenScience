@@ -612,7 +612,7 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - name: Hermes navigation and existing research entry
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-workspace-stage.spec.ts hermes-dashboard.spec.ts auth-dashboard.spec.ts research-continuation.spec.ts --config playwright.config.ts --workers 1 --max-failures=1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-entry-browser
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-workspace-stage.spec.ts hermes-dashboard.spec.ts auth-dashboard.spec.ts research-continuation.spec.ts --config playwright.config.ts --workers 1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-entry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx

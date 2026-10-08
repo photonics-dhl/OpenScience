@@ -247,12 +247,17 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
                 stageBounds: bounds(stage), anchorBounds: bounds(inlineAnchor),
               };
             }, anchorSelector);
+            let warmed: Awaited<ReturnType<typeof readCompanion>> | null = null;
             try {
               await expect.poll(readCompanion, { timeout: 20_000 }).toMatchObject({
                 stageCount: 1, anchorCount: 1, anchored: 'true', dockReady: 'true', rigStatus: 'ready', carrierAtAnchor: true,
               });
+              warmed = await readCompanion();
+              // Full-page capture at a restored scroll offset can paint an offscreen fixed skip link over page content.
+              // Keep the real focus state while using a declared top-of-page capture viewport.
+              await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
             } finally {
-              await writeFile(resolve(outputDir, `${surface.name}-${viewport.name}-companion.json`), JSON.stringify({ before, after: await readCompanion() }, null, 2));
+              await writeFile(resolve(outputDir, `${surface.name}-${viewport.name}-companion.json`), JSON.stringify({ before, warmed, after: await readCompanion() }, null, 2));
             }
             if (surface.name === 'release') {
               const stageBox = await page.locator('[data-hermes-workspace-stage="true"]').boundingBox();
