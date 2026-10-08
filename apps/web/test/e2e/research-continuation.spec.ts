@@ -330,6 +330,7 @@ test('selected snapshot and original evidence remain scoped across version switc
   await expect(page.getByRole('link', { name: 'Research API', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Export fixed record', exact: true })).toHaveAttribute('href', '/api/research-objects/journey-ro/versions/confirmed-version/record/export');
   await expect(page.locator('[data-selected-version="confirmed-version"]').getByText(core.results, { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test/visual/out/research-continuation/version-reading-desktop.png' });
   await openVersionEvidence(page);
   await expect(page.getByText('Exact original quotation', { exact: true })).toBeVisible();
   await expect(page.getByText('Exact original quotation', { exact: true })).toBeInViewport({ ratio: 1 });
