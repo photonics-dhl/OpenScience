@@ -422,7 +422,7 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   });
   await page.addInitScript(() => {
     window.addEventListener('error', (event) => {
-      const diagnosticWindow = window as Window & { __recordHermesReloadError(entry: { message: string; filename: string; line: number; column: number }): Promise<void> };
+      const diagnosticWindow = window as unknown as Window & { __recordHermesReloadError(entry: { message: string; filename: string; line: number; column: number }): Promise<void> };
       void diagnosticWindow.__recordHermesReloadError({ message: event.message, filename: event.filename,
         line: event.lineno, column: event.colno }).catch(() => undefined);
     });
@@ -612,15 +612,29 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toBeVisible();
   await expect.poll(() => textureRequested).toBe(true);
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'initializing');
   const offscreenStyle = await page.addStyleTag({ content: '[data-hermes-rig="live2d-wanko"] { transform: translateY(1800px) !important; }' });
-  await page.waitForTimeout(120);
-  releaseTexture?.();
-  await page.waitForTimeout(600);
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
-  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
-
-  await offscreenStyle.evaluate((style) => (style as HTMLStyleElement).remove());
+  let offscreenDrawAt = 0;
+  try {
+    await expect.poll(() => rig.evaluate((node) => node.getBoundingClientRect().top >= window.innerHeight)).toBe(true);
+    releaseTexture?.();
+    // Initialization started while visible, so its first frame may finish offscreen.
+    await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+    offscreenDrawAt = Number(await rig.getAttribute('data-hermes-last-draw-at'));
+    expect(offscreenDrawAt).toBeGreaterThan(0);
+    await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveAttribute('data-hermes-head', /.+/);
+    // The owner stays running while suspended; a stable draw timestamp proves
+    // no continuous drawing in this interval, not an exact initialization frame count.
+    await page.waitForTimeout(600);
+    await expect(rig).toHaveAttribute('data-hermes-last-draw-at', String(offscreenDrawAt));
+  } finally {
+    releaseTexture?.();
+    await offscreenStyle.evaluate((style) => (style as HTMLStyleElement).remove());
+  }
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(offscreenDrawAt);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
 });
 
 test('Hermes aborts and releases a pending initialization on SPA unmount', async ({ page }) => {
