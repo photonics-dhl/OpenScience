@@ -2489,7 +2489,9 @@
       "sdf-limitations": "Make sample, method, generalisation, and unverified boundaries explicit.",
       "hermes-diff": "Check evidence and wording one change at a time. Only accepted changes are written.",
       "commit": "Confirm the version note and scope before committing; published versions are never overwritten."
-    }
+    },
+    "entryHint": "Shape the next step together",
+    "openConversation": "Open conversation"
   },
   "researchWorkbenchReview": {
     "backHome": "Return to OpenScience",
@@ -3106,7 +3108,8 @@
         "title": "Where can I find the original paper?",
         "body": "Open the materials area on the research reading page for the original paper and sources. You can return to the text while viewing its figures."
       }
-    }
+    },
+    "viewFigure": "View full research figure"
   },
   "journalServiceLabels": {
     "basic": "Basic service"

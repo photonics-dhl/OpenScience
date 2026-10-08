@@ -2489,7 +2489,9 @@
       "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
       "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
       "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
-    }
+    },
+    "entryHint": "一起梳理下一步",
+    "openConversation": "打开对话"
   },
   "researchWorkbenchReview": {
     "backHome": "返回 OpenScience",
@@ -3106,7 +3108,8 @@
         "title": "在哪里找到论文原文？",
         "body": "在研究阅读页的资料区域打开原文与来源；查看图文时可以随时回到正文。"
       }
-    }
+    },
+    "viewFigure": "查看完整研究图"
   },
   "journalServiceLabels": {
     "basic": "基础服务"

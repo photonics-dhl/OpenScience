@@ -25,12 +25,12 @@
 .primary svg, .textLink svg, .chapterLink svg { flex: none; transition: transform 160ms ease-out; }
 .primary:active { transform: translateY(1px); }
 .chapterLink { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; color: var(--guide-muted); text-decoration: none; }
-.companionDock { width: 120px; max-width: 100%; min-height: 140px; margin: 24px 0 0; }
+.companionDock { width: 100%; max-width: 408px; min-height: 140px; margin: 32px 0 0; padding-top: 20px; border-top: 1px solid var(--guide-rule); }
 .companionDock :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
 .companionDock :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 
 /* The research folio has its own hierarchy inside the invitation. */
-.proof { position: relative; min-width: 0; margin: 0; padding: 28px; background: #fff; color: var(--guide-ink); border: 1px solid #d4ded9; border-top: 2px solid #173f43; border-radius: 2px; }
+.proof { position: relative; min-width: 0; margin: 0; padding: 24px 0 0; background: transparent; color: var(--guide-ink); border: 0; border-top: 1px solid var(--guide-rule); border-radius: 0; }
 .proofMeta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; padding-bottom: 20px; margin-bottom: 24px; border-bottom: 1px solid #dde5e0; color: var(--guide-muted); font: 400 11px/1.7 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
 .proofMeta > span { overflow-wrap: anywhere; }
 .proofMeta > span:last-child { flex: none; font-variant-numeric: tabular-nums; }
@@ -38,8 +38,9 @@
 .proofLayout { gap: 24px; }
 .proof .researchTitle { max-width: 24ch; font: 400 clamp(28px, 2.5vw, 34px)/1.15 var(--font-reading-serif); letter-spacing: -.018em; text-wrap: pretty; overflow-wrap: anywhere; }
 .readingHook { color: #445e58; font-size: 15px; line-height: 1.85; text-wrap: pretty; }
-.scienceImage { display: grid; align-items: center; min-width: 0; padding: 0; background: #f7f2e7; }
+.scienceImage { display: grid; align-items: center; min-width: 0; padding: 0; background: transparent; color: var(--guide-muted); text-decoration: none; }
 .scienceImage img { display: block; width: 100%; height: auto; object-fit: contain; }
+.figureOpen { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding-top: 8px; color: #21665f; font-size: 13px; }
 .proofFooter { display: grid; gap: 10px; margin-top: 20px; }
 .figureCaption { color: #576a63; font-size: 13px; line-height: 1.8; }
 .authors { color: #63766d; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
@@ -108,20 +109,21 @@
   .intro h1 { font-size: 48px; }
   .intro { gap: 22px; }
   .proof { padding: 24px; }
-  .companionDock, .companionDock :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
+  .companionDock { width: 100%; min-height: 140px; }
+  .companionDock :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
   .scenes { grid-template-columns: 180px minmax(0, 1fr); gap: 0 32px; }
   .sceneContent { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }
 @media (max-width: 760px) {
   .guide { padding: 32px 20px 40px; }
   .opening { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 196px; }
-  .intro { grid-column: 1 / -1; gap: 20px; }
+  .hero { display: block; }
+  .intro { display: grid; gap: 20px; }
   .intro h1 { font-size: clamp(42px, 9vw, 58px); }
   .lead { font-size: 16px; max-width: 28em; }
   .actions { gap: 8px 20px; }
-  .companionDock { grid-column: 2; margin: 12px 0 0; }
-  .proof { padding: 22px; }
+  .companionDock { margin: 24px 0 0; }
+  .proof { padding: 20px 0 0; }
   .proof .researchTitle { font-size: 30px; }
   .scienceImage { padding: 0; }
   .proofLoading { min-height: 400px; }
@@ -142,14 +144,4 @@
   .skeleton { animation: none; }
   .primary, .primary svg, .textLink svg, .chapterLink svg, .tabs button, .tabs button::before, .support summary svg { transition: none; }
   .primary:active, .primary:hover svg, .textLink:hover svg, .chapterLink:hover svg { transform: none; }
-}
-
-@media (max-width: 760px) {
-  .hero { grid-template-columns: minmax(0, 1fr) 120px; gap: 20px 12px; align-items: center; }
-  .intro { display: contents; }
-  .eyebrow, .intro h1, .lead { grid-column: 1 / -1; }
-  .actions { grid-column: 1; display: grid; justify-items: start; gap: 8px; }
-  .primary { gap: 16px; padding-inline: 16px; }
-  .chapterLink { font-size: 12px; gap: 6px; }
-  .companionDock, .companionDock :global(.hermes-dock-anchor) { grid-column: 2; width: 120px; min-height: 140px; margin: 0; }
 }

@@ -101,7 +101,10 @@ export function ResearchGuide() {
               {example?.authors.length ? <p className={styles.authors}>{example.authors.map(author => author.displayName).join(' · ')}</p> : null}
               {example?.version.core.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.version.core.insight, 180)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
             </div>
-            {image ? <div className={styles.scienceImage}>{image}</div> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
+            {image && illustration ? <a className={styles.scienceImage} href={illustration.url} target="_blank" rel="noopener noreferrer">
+              {image}
+              <span className={styles.figureOpen}>{t('viewFigure')}<ArrowRight size={16} aria-hidden="true" /></span>
+            </a> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
           </div>
           <figcaption className={styles.proofFooter}>
             {loadState === 'unavailable' || imageFailed ? <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('retryExample')}</button> : <ScientificText as="p" hideSourceMarkers className={styles.figureCaption}>{illustration?.reader?.narration || illustrationTitle || t('figureLabel')}</ScientificText>}

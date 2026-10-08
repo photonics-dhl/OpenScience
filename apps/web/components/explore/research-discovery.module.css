@@ -44,12 +44,13 @@
 /* The discovery route is a catalogue. Landing keeps the rules above. */
 .discovery[data-explore-index='true'] { padding: 32px 48px 80px; background: #f5f7f6; }
 .discovery[data-explore-index='true'] .inner { max-width: 1184px; }
-.discovery[data-explore-index='true'] .heading { display: grid; grid-template-columns: minmax(0,1fr) 120px; align-items: center; gap: 40px; margin-bottom: 24px; }
+.discovery[data-explore-index='true'] .heading { display: grid; grid-template-columns: minmax(0,1fr) 320px; align-items: center; gap: 40px; margin-bottom: 24px; }
 .discovery[data-explore-index='true'] .eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 11px; font-weight: 500; color: #54686b; letter-spacing: .1em; }
 .discovery[data-explore-index='true'] .eyebrow::before { width: 24px; height: 1px; background: #54686b; content: ''; }
 .discovery[data-explore-index='true'] .heading h1 { max-width: 16ch; color: #153b40; font: 400 clamp(44px,4.4vw,64px)/1.2 var(--font-reading-serif); letter-spacing: -.04em; text-wrap: balance; }
 .discovery[data-explore-index='true'] .intro { max-width: 34em; margin-top: 20px; color: #54686b; font-size: 16px; line-height: 1.85; }
-.companion, .companion :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
+.companion { width: 100%; max-width: 320px; min-height: 140px; }
+.companion :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
 .discovery[data-explore-index='true'] .search { max-width: none; gap: 16px; padding: 8px 0; border-block: 1px solid #bccdca; border-radius: 0; background: transparent; }
 .discovery[data-explore-index='true'] .searchField { position: relative; flex: 1; min-width: 0; }
 .discovery[data-explore-index='true'] .searchIcon { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); color: #597370; pointer-events: none; }
@@ -84,14 +85,14 @@
 }
 @media (max-width:1100px) {
  .discovery[data-explore-index='true'] { padding-inline: 32px; }
- .discovery[data-explore-index='true'] .heading { grid-template-columns: minmax(0,1fr) 120px; gap: 24px; padding-block: 20px; }
- .companion, .companion :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
+ .discovery[data-explore-index='true'] .heading { grid-template-columns: minmax(0,1fr) 280px; gap: 24px; padding-block: 20px; }
+ .companion :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
 }
 @media (max-width:760px) {
  .discovery[data-explore-index='true'] { padding: 32px 20px 48px; }
- .discovery[data-explore-index='true'] .heading { grid-template-columns: minmax(0,1fr); gap: 0; padding: 0; }
+ .discovery[data-explore-index='true'] .heading { display: block; padding: 0; }
  .discovery[data-explore-index='true'] .heading h1 { font-size: 42px; }
- .companion { justify-self: end; }
+ .companion { margin-top: 24px; }
  .discovery[data-explore-index='true'] .cardLink, .discovery[data-explore-index='true'] .cardBody:only-child { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
  .discovery[data-explore-index='true'] .cardBody:only-child h2 { font-size: 30px; }
  .discovery[data-explore-index='true'] .cardBody:only-child .meta { margin-bottom: 0; }
@@ -102,19 +103,12 @@
 @media (prefers-reduced-motion:reduce) {
  .discovery[data-explore-index='true'] .search button, .discovery[data-explore-index='true'] .read > [aria-hidden] { transition: none; }
 }
-@media (max-width: 760px) {
-  .discovery[data-explore-index='true'] .heading { grid-template-columns: minmax(0,1fr) 120px; gap: 18px 12px; }
-  .discovery[data-explore-index='true'] .heading > div:first-child { display: contents; }
-  .discovery[data-explore-index='true'] :is(.heading h1,.eyebrow) { grid-column: 1 / -1; margin: 0; }
-  .discovery[data-explore-index='true'] .intro { grid-column: 1; margin-top: 0; font-size: 14px; }
-  .companion, .companion :global(.hermes-dock-anchor) { grid-column: 2; width: 120px; min-height: 140px; }
-}
 @media (min-width: 1101px) {
   .discovery[data-explore-index='true'] .inner { position: relative; }
-  .discovery[data-explore-index='true'] .heading { display: block; min-height: 164px; margin-bottom: 16px; border: 0; padding: 20px 176px 0 0; }
+  .discovery[data-explore-index='true'] .heading { min-height: 164px; margin-bottom: 16px; border: 0; padding: 20px 0 0; }
   .discovery[data-explore-index='true'] .heading h1 { max-width: none; font-size: 52px; }
-  .discovery[data-explore-index='true'] .companion { position: absolute; top: 0; right: 0; }
   .discovery[data-explore-index='true'] .inner > section > form { max-width: none; }
   .discovery[data-explore-index='true'] .count { margin-top: 32px; }
 }
+
 .discovery[data-explore-index='true'] .heading { border-bottom: 0; }
