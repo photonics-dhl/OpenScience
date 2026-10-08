@@ -3,7 +3,7 @@ name: Journal onboarding
 on:
   pull_request:
   push:
-    branches: [codex/journal-onboarding]
+    branches: [codex/journal-onboarding, frontend/nanqing]
 
 permissions:
   contents: read
@@ -40,6 +40,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify draft workbench port rules and route regression
+        run: node --test scripts/test-journal-workbench.mjs
       - name: Apply all core migrations to the isolated database
         run: pnpm exec prisma migrate deploy --schema infra/schema.prisma
       - name: Generate database clients before parallel consumers compile
