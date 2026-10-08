@@ -68,6 +68,7 @@ on:
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
+      - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
@@ -261,6 +262,7 @@ on:
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
+      - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
@@ -429,7 +431,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition|Synclip"
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts test/presentation/style-recommendations.test.ts test/presentation/selected-scene-art.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
