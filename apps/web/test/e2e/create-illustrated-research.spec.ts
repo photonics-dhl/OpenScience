@@ -32,7 +32,12 @@ async function setup(page: Page, loseResponse = false) {
     return route.fulfill({ json: { tasks: [], claims: [], evidence: [], user: null } });
   });
   await page.goto('/dashboard');
-  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
+  const createEntry = page.getByRole('main').locator('a[data-action-priority="primary"]');
+  await expect(createEntry).toHaveCount(1);
+  await expect(createEntry).toBeVisible();
+  await expect(createEntry).toHaveAccessibleName('创建研究');
+  await expect(createEntry).toHaveAttribute('href', '/research-objects/new?mode=import');
+  await createEntry.click();
   await expect(page).toHaveURL(/research-objects\/new\?mode=import$/);
   return { writes };
 }
@@ -62,8 +67,8 @@ test('illustrated creation recovers a lost committed response without duplicate 
 });
 
 test('illustrated creation remains optional and readable at phone width', async ({ page }) => {
-  const { writes } = await setup(page);
   await page.setViewportSize({ width: 375, height: 812 });
+  const { writes } = await setup(page);
   await page.locator('input[type=file]').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 controlled fixture') });
   await page.getByRole('checkbox', { name: '同时生成图文解读' }).uncheck();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

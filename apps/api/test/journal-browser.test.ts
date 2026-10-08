@@ -200,6 +200,12 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalName, exact: true }) });
             await result.waitFor({ state: 'visible' });
             expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
+            await result.click();
+            await page.waitForURL(`${baseUrl}/journals/${slug}`, { waitUntil: 'networkidle' });
+            await page.getByRole('heading', { level: 1, name: journalName, exact: true }).waitFor({ state: 'visible' });
+            await page.goBack({ waitUntil: 'networkidle' });
+            await directory.waitFor({ state: 'visible' });
+            await directory.getByRole('heading', { name: journalName, exact: true }).waitFor({ state: 'visible' });
           }
           if (surface.name === 'release') {
             const sourceLink = page.getByRole('link', { name: /查看原始来源/ });
