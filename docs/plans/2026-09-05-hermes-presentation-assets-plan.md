@@ -283,3 +283,24 @@ UI High 发现既有 workspace.guide 未接受／保存 `researchRunDraft.output
 本轮保持已审 external 路线，不启用新模式；权限待真实核实，音色／语速偏好未代选，保留旧 paid／unknown。仅此合同与取舍说明更新，不改 Web、共享 CI/CURRENT、Gateway／Worker 工厂或检索能力。
 
 Avicenna 对上述合同差额独立 High 复核为 GO、无 P1/P2；复核只读，未重新执行模型、codec 或 CI。
+
+### 2026-10-08 账户权限／目录只读前置核实（20:06–20:09 CST）
+
+复用 Chrome 已有登录态，通过正常 Audio Studio 页面观察已经发出的 `GET /api/users/profile`、`GET /api/voices` 响应，仅提取权限与目录字段，不读取 Cookie／认证头／Key，不调用猜测的私有路径。网页资料明确返回 `tier=free,isAdmin=false`；但网页账户尚未与服务器 Key 归属关联，**这不是服务器 Key 无 LTX 权限的证据**。
+
+目录 HTTP200、共77项、`hasMore=false`；其中zh16项／en40项，均标为active且UI id等于providerVoiceId，没有同时标记zh+en的音色。完整56项实际ID／名称／Premium标记在忽略证据 `tmp/synclip-contract-audit/account-voices-readonly.json`。示例：中文 `Chinese_male_yunxia`（文博）、`Chinese_female_xiaoxiao`（静雅）；英文 `English_male_michael`（Nathan）、`British_female_emma`（Olivia）。这些是**实际网页目录ID，尚非服务端 Key 的 `/v1/voices` 有效ID证明**，不直接填入配置。相关56项原始 `sampleUrls` 全为空数组，未取得已有试听链接，未点试听／生成或代选偏好；Premium标记不证明本账户的额度、权限或单价。
+
+[官方 Audio 文档](https://synclip.ai/dev/docs/audio)定义只读目录 `GET /v1/voices`；[Usage & Limits](https://synclip.ai/dev/docs/usage)定义 `GET /v1/usage`，返回Key所属账户余额和在途任务数，未给Admin／LTX权限字段。[General](https://synclip.ai/dev/docs)将收费关联到生成任务完成，目录查询不创建生成任务，未列独立查询收费；这不是本账户已认证GET的计费实测。本轮没有手工调用上述v1接口。当前公开合同及既有客户端未找到可只读核实Key的LTX entitlement接口，不能用付费POST来替代。
+
+20:06 CST通过既有SSH wrapper只读配置字段和文件元数据：配置root:0600、`adminModelsEnabled=false`、整个audio字段缺失；实际broker仍为既有运行包，包内没有 `synclip-audio-api.js`；入口盘点仅限provider根目录及其bin/scripts的.sh/.mjs文件，未见查询入口。共享Key仅stat确认root:root／0600／普通非symlink文件，不读取内容。短证据为 `tmp/synclip-host-readonly/audio-preconditions.json`，生产没有改动。源码虽已有 `SynclipAudioClient.listVoices()`，它需要调用方提供认证；已装broker CLI只执行队列并更新心跳，不能为查目录启动它，且本轮不写临时凭据脚本绕过缺少只读入口的问题。
+
+| 激活前置 | 当前确切缺口与可执行接续 |
+|---|---|
+| Key权限与账户对应 | 通过供应商已有控制台／私密交接核对**服务器现用Key所属账户**及Admin/LTX授权；网页登录用户非Admin、图片成功、配置false均不替代此证明，不擅自新建或替换Key |
+| 受保护的只读API查询 | 复用现有Gateway客户端与host受保护认证边界，先取得服务器Key实际 `GET /v1/voices` 和 `GET /v1/usage` 结果；当前已核Synclip入口没有独立只读CLI可直接运行，不启动会消费spool的broker，不新建凭据脚本 |
+| 当前external的声音配置 | `audio.provider=synclip` 已定；voice须由实际API目录确认、匹配旁白语言，speed与音色偏好仍未选定。网页目录没有可复用试听链接；不以宣传或ID名称验收自然度 |
+| 已审候选／host激活 | 总控沿已交付的defer升级／回滚安装器切换同源应用与含audio客户端的host bundle，保护旧队列与回执；填完受保护配置并取得权限证据后才显式启用，当前未执行安装、重启、配置写入或付费请求 |
+
+上述前置不新增模式、供应商或收费重试。旧paid／unknown未触碰，媒体／CI测试继续复用既有通过证据；真实声音与论文成片尚未验收。
+
+Avicenna独立High仅复核本节及两份短证据，GO、无P1/P2；未运行模型、SSH或测试。
