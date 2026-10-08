@@ -3,7 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-08：总控已集入模型角色隔离、review21校准与Native视频/真实时长音轨候选，独立High与定向证据按块保留，正在并入现有CI。生图正例lineage/源/像素输入已闭合，仍非新Native实测；视频补普通对话草稿/查询output，UI继续前端和审美。
+- 2026-10-08：集成0b71ef9f已推，媒体/视频/期刊6项CI全通过。新增guide/query/API为21/26/23，Linux host恢复32、broker/reference114均无跳过，真实编解码与权限实跑；安装授权仅临时CI。UI已并入期刊并接普通对话视频，生图在High通过的长表格dense方案上实现，视频核LTX音轨/整片合同。共享入口/index已同步，生产仍42fe，未新增付费请求或部署。
 - 2026-10-08 18:28：Worker短暂not-running后，总控实核生产已由远端期刊授权发布到42fe，API/Worker Native也为42fe、M3保持、服务healthy；fetch后身份可解析，无盲重启或改标记。并入远端9eb8全部代码与交接，保留新期刊功能，下一发布基线按新运行事实。
 - 2026-10-08 期刊部署完成：目录交互/来源绑定/草稿权限与可访问名称修复、精确四CI、原事务与Native配对及站内桌面/窄屏路径见[期刊交接](handoff/2026-10-08-journal-workbench-handoff.md)。Synclip视频host v2仍不接受新任务；期刊科学理解及其它产品质量未由此验收。
 - 2026-10-08：生图真实PNG离线发送块已实核，2ef原promptHash与PNG一致、fc只证明PNG/来源一致而原prompt不一致，零模型外呼；用户认可图缺Native审阅身份，未冒称审图成功。上线配对报告仍是源代码预分析，已明确让owner直接完成授权内live只读取证；主模型、旧paid与生产不改，避免重复安装和重复传输测试。

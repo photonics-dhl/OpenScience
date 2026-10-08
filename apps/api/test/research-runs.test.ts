@@ -9,6 +9,10 @@ const RO_ID = '00000000-0000-4000-8000-000000000100';
 const INGESTION_ID = '00000000-0000-4000-8000-000000000200';
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+type RunQuery = { where?: { actorId?: string; researchObjectId?: string; profile?: string;
+  generationSettings?: { equals: unknown }; steps?: { some: { stage: string; ingestionTaskId: string } } };
+  orderBy?: Array<{ createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' }>;
+  cursor?: { id: string }; skip?: number; take?: number };
 
 async function fixture(role = 'author') {
   const { prisma, db } = createFakePrisma();
@@ -22,24 +26,55 @@ async function fixture(role = 'author') {
   db.artifacts.push({ id: 'artifact', workspaceId: 'workspace', logicalPath: 'paper.pdf' });
   db.agentTasks.push({ id: 'agent-task', status: 'running' });
   db.ingestionTasks.push({ id: INGESTION_ID, batchId: 'batch', artifactId: 'artifact', agentTaskId: 'agent-task', state: 'parsing', error: null });
-  // The shared fake lacks this existing Prisma reader; keep its transaction rollback and real run writer.
-  prisma.hermesResearchRun.findFirst = async args => {
-    const where = args.where as { actorId?: string; researchObjectId?: string; profile?: string;
-      generationSettings?: { equals: unknown }; steps?: { some: { stage: string; ingestionTaskId: string } } };
-    const row = db.hermesResearchRuns.find(candidate => (!where.actorId || candidate.actorId === where.actorId)
+  // Query the shared fake's durable rows, including ordering and cursor pages.
+  // This reader deliberately has no output-intent selection behavior.
+  const queryRows = (args: RunQuery) => {
+    const where = args.where ?? {};
+    const rows = db.hermesResearchRuns.filter(candidate => (!where.actorId || candidate.actorId === where.actorId)
       && (!where.researchObjectId || candidate.researchObjectId === where.researchObjectId) && (!where.profile || candidate.profile === where.profile)
       && (!where.generationSettings || candidate.generationSettings?.output === where.generationSettings.equals)
       && (!where.steps || db.hermesResearchSteps.some(step => step.runId === candidate.id
         && step.stage === where.steps!.some.stage && step.ingestionTaskId === where.steps!.some.ingestionTaskId)));
+    rows.sort((left, right) => {
+      for (const order of args.orderBy ?? []) {
+        for (const [field, direction] of Object.entries(order)) {
+          const a = field === 'createdAt' ? +left.createdAt : left.id, b = field === 'createdAt' ? +right.createdAt : right.id;
+          if (a !== b) return (a < b ? -1 : 1) * (direction === 'asc' ? 1 : -1);
+        }
+      }
+      return 0;
+    });
+    const offset = args.cursor ? rows.findIndex(row => row.id === args.cursor!.id) : 0;
+    return offset < 0 ? [] : rows.slice(offset + (args.skip ?? 0), args.take === undefined ? undefined : offset + (args.skip ?? 0) + args.take);
+  };
+  prisma.hermesResearchRun.findFirst = async args => {
+    const row = queryRows(args as RunQuery)[0];
     return row ? prisma.hermesResearchRun.findUnique({ where: { id: row.id }, include: args.include }) : null;
   };
+  prisma.hermesResearchRun.findMany = async args => Promise.all(queryRows(args as RunQuery).map(row =>
+    prisma.hermesResearchRun.findUnique({ where: { id: row.id }, include: args.include })));
   prisma.hermesResearchRun.findUniqueOrThrow = async args => {
     const row = await prisma.hermesResearchRun.findUnique(args); if (!row) throw new Error('Missing API run fixture'); return row;
   };
   const app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, storage: {} as StorageAdapter });
   const errors: Error[] = []; app.addHook('onError', async (_request, _reply, error) => { errors.push(error); });
   apps.push(app);
-  return { app, db, errors, cookies: { openscience_session: token } };
+  return { app, db, errors, actorId: user.id, cookies: { openscience_session: token } };
+}
+
+const querySettings = { locale: 'en', style: 'scientific', instruction: 'Explain the reviewed paper.' };
+function storedRun(f: Awaited<ReturnType<typeof fixture>>, generationSettings: unknown = querySettings,
+  changes: { actorId?: string; researchObjectId?: string; ingestionTaskId?: string; profile?: string; status?: string; createdAt?: Date } = {}) {
+  const id = `00000000-0000-4000-8000-${String(300 + f.db.hermesResearchRuns.length).padStart(12, '0')}`;
+  const row = { id, actorId: changes.actorId ?? f.actorId, researchObjectId: changes.researchObjectId ?? RO_ID,
+    versionId: '00000000-0000-4000-8000-000000000400', profile: changes.profile ?? 'visual-narrative-v1', maxAgentTasks: 9,
+    generationSettings, sourceClaimIds: [], sourceReviewDigest: null, status: changes.status ?? 'succeeded', version: 7,
+    error: null, idempotencyKey: `original-once-key:${id}`, requestDigest: `original-digest:${id}`,
+    createdAt: changes.createdAt ?? new Date('2026-10-08T00:00:00Z'), updatedAt: new Date('2026-10-08T01:00:00Z') };
+  f.db.hermesResearchRuns.push(row);
+  f.db.hermesResearchSteps.push({ id: `source:${id}`, runId: id, stage: 'source_ingestion', ordinal: 0, status: 'succeeded',
+    ingestionTaskId: changes.ingestionTaskId ?? INGESTION_ID, artifactId: 'artifact', agentTaskId: null, presentationAssetId: null, error: null });
+  return row;
 }
 
 describe('Hermes research run API contract', () => {
@@ -141,5 +176,76 @@ describe('Hermes research run API contract', () => {
       } });
     expect(response.statusCode).toBe(400);
     expect(response.headers['cache-control']).toBe('private, no-store');
+  });
+});
+
+describe('existing Hermes run query output contract', () => {
+  it('defaults to image and independently retrieves video in the same actor/RO/source scope', async () => {
+    const f = await fixture();
+    const image = storedRun(f), video = storedRun(f, { ...querySettings, output: 'video' });
+    for (const changes of [{ actorId: RO_ID }, { researchObjectId: INGESTION_ID }, { ingestionTaskId: RO_ID }, { profile: 'content-driven-v1' }]) {
+      storedRun(f, querySettings, changes); storedRun(f, { ...querySettings, output: 'video' }, changes);
+    }
+    storedRun(f, querySettings, { createdAt: new Date('2026-10-07T00:00:00Z') });
+    const before = structuredClone(f.db.hermesResearchRuns);
+    for (const [suffix, expected] of [['', image], ['&output=image', image], ['&output=video', video]] as const) {
+      const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}${suffix}`, cookies: f.cookies });
+      expect(read.statusCode, read.body).toBe(200);
+      expect(read.json().run).toMatchObject({ id: expected.id, versionId: expected.versionId, maxAgentTasks: 9 });
+      expect(read.headers['cache-control']).toBe('private, no-store');
+    }
+    expect(f.db.hermesResearchRuns).toEqual(before);
+  });
+
+  it.each([['missing output', querySettings], ['null settings', null], ['explicit image', { ...querySettings, output: 'image' }]])(
+    'retrieves legacy image rows without a query output: %s', async (_label, generationSettings) => {
+    const f = await fixture(), image = storedRun(f, generationSettings);
+    const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}`, cookies: f.cookies });
+    expect(read.statusCode, read.body).toBe(200);
+    expect(read.json()).toMatchObject({ run: { id: image.id, generationSettings: generationSettings === null ? null : querySettings } });
+  });
+
+  it.each(['image', 'video'] as const)('retrieves an older %s after more than two pages of the other intent', async output => {
+    const f = await fixture();
+    const target = storedRun(f, output === 'video' ? { ...querySettings, output } : querySettings);
+    for (let index = 0; index < 61; index++) storedRun(f, output === 'video' ? querySettings : { ...querySettings, output: 'video' });
+    const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}&output=${output}`, cookies: f.cookies });
+    expect(read.statusCode, read.body).toBe(200); expect(read.json().run.id).toBe(target.id);
+  });
+
+  it.each([['image', 'failed'], ['image', 'unknown'], ['video', 'failed'], ['video', 'unknown']] as const)(
+    'returns the newest %s run even when its outcome is %s', async (output, status) => {
+    const f = await fixture(), generationSettings = output === 'video' ? { ...querySettings, output } : querySettings;
+    storedRun(f, generationSettings); const target = storedRun(f, generationSettings, { status });
+    const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}&output=${output}`, cookies: f.cookies });
+    expect(read.statusCode, read.body).toBe(200); expect(read.json().run).toMatchObject({ id: target.id, status });
+  });
+
+  it('returns the unchanged null response when no scoped run matches the requested intent', async () => {
+    const f = await fixture(); storedRun(f, { ...querySettings, output: 'audio' });
+    storedRun(f, querySettings, { ingestionTaskId: RO_ID });
+    for (const suffix of ['', '&output=image', '&output=video']) {
+      const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}${suffix}`, cookies: f.cookies });
+      expect(read.statusCode, read.body).toBe(200); expect(read.json()).toEqual({ run: null });
+    }
+  });
+
+  it.each(['audio', 'Video', '', 'video&output=image'])('rejects malformed query output %j with 400', async output => {
+    const f = await fixture(); storedRun(f);
+    const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}&output=${output}`, cookies: f.cookies });
+    expect(read.statusCode).toBe(400);
+  });
+
+  it('keeps unauthenticated and lost-membership query boundaries at 401 and 404', async () => {
+    const f = await fixture(); storedRun(f); storedRun(f, { ...querySettings, output: 'video' });
+    for (const suffix of ['', '&output=image', '&output=video']) {
+      const url = `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}${suffix}`;
+      expect((await f.app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    }
+    f.db.memberships.length = 0;
+    for (const suffix of ['', '&output=image', '&output=video']) {
+      const read = await f.app.inject({ method: 'GET', url: `/research-objects/${RO_ID}/hermes-runs?ingestionTaskId=${INGESTION_ID}${suffix}`, cookies: f.cookies });
+      expect(read.statusCode, read.body).toBe(404);
+    }
   });
 });

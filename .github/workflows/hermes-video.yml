@@ -72,9 +72,19 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prepare codecs for narrated-video acceptance
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter '@openscience/ai-gateway...' build
+      - name: Synclip host update and rollback in isolated shell fixtures
+        run: node --test infra/synclip-video/install.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/minimax-video.test.ts test/minimax-video-download.test.ts test/minimax-speech.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-video-api.test.ts test/synclip-audio-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/synclip-video-spool.test.ts
