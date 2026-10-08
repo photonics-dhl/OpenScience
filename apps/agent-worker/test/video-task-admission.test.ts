@@ -85,7 +85,10 @@ function queueFixture() {
     }),
   };
   const prisma = { agentTask, hermesResearchRun: { findMany: vi.fn(async () => []) },
-    ingestionTask: { findFirst: vi.fn(async () => null) }, auditLog: { findMany: vi.fn(async () => []) } };
+    ingestionTask: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+    auditLog: { findMany: vi.fn(async () => []) } };
+  // Ordinary extraction now also enters the shared source-authorization transaction.
+  Object.assign(prisma, { $transaction: vi.fn(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma)) });
   const deps = { prisma, redis, videoEnabled: true, readVideoReadiness: vi.fn(async () => state.ready) } as unknown as WorkerDeps;
   execution.claim.mockImplementation(async (_deps, id: string) => {
     const row = tasks.get(id); if (!row || row.status !== 'pending') return null;
@@ -98,6 +101,24 @@ function queueFixture() {
   return { task, tasks, lists, state, agentTask, redis, deps, handler,
     poll: async () => (await createPollOnce({ 'presentation.generate': handler, 'sdf.extract': handler }, { runMaintenance: false }))(deps),
     dispatch: () => dispatchAgentTask(deps, task.id), outbox: () => recoverUndispatchedAgentTasks(deps) };
+}
+
+function ordinaryIngestionFixture(role = 'author') {
+  const f = queueFixture(); f.task.kind = 'sdf.extract';
+  f.task.payload = { researchObjectId: 'ro', artifactId: 'artifact', requestedOutput: 'video' };
+  const source = async () => ({ id: 'ingestion', artifactId: 'artifact',
+    artifact: { workspaceId: 'workspace' },
+    batch: { userId: 'actor', researchObjectId: 'ro',
+      researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } },
+    agentTask: { ...f.task, session: { ...f.task.session, status: 'active' } } });
+  const journalArticle = { findUnique: vi.fn(async () => null) };
+  Object.assign(f.deps.prisma, {
+    ingestionTask: { findFirst: vi.fn(source), findUnique: vi.fn(source) },
+    agentSession: { findUnique: vi.fn(async () => ({ ...f.task.session, status: 'active' })) },
+    membership: { findUnique: vi.fn(async () => ({ workspaceId: 'workspace', userId: 'actor', role })) },
+    journalArticle,
+  });
+  return { ...f, journalArticle };
 }
 
 function barrier() {
@@ -214,8 +235,27 @@ describe('Worker native video pending admission', () => {
   it('requires the trusted video classifier instead of a client requestedOutput hint', async () => {
     const f = queueFixture(); f.task.kind = 'sdf.extract';
     f.task.payload = { researchObjectId: 'ro', artifactId: 'artifact', requestedOutput: 'video' };
-    await f.poll(); expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+    await f.poll();
+    expect(execution.progress).toHaveBeenCalledWith(f.deps, expect.objectContaining({ status: 'succeeded' }));
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
     expect(f.task.error).toBeNull(); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('executes an authorized ordinary ingestion while video readiness is closed', async () => {
+    const f = ordinaryIngestionFixture();
+    await f.poll();
+    expect(f.task.status).toBe('succeeded'); expect(f.task.executionAttempt).toBe(1);
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(execution.progress).toHaveBeenCalledWith(f.deps, expect.objectContaining({ status: 'succeeded' }));
+    expect(f.journalArticle.findUnique).toHaveBeenCalledWith({ where: { workingResearchObjectId: 'ro' }, include: { journal: true } });
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('still rejects unauthorized ordinary ingestion while video readiness is closed', async () => {
+    const f = ordinaryIngestionFixture('viewer');
+    await f.poll();
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).not.toHaveBeenCalled();
+    expect(execution.progress).toHaveBeenCalledWith(f.deps, expect.objectContaining({ status: 'failed',
+      error: '[blocked] Source processing authorization changed before claim execution' }));
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it('preserves the old image path while video readiness is closed', async () => {
     const f = queueFixture(); f.task.payload = { ...f.task.payload, kind: 'interactive_html', storyboard: { output: 'image' } };
