@@ -24,6 +24,42 @@ test('draft deletion permits only editable unsubmitted work', () => { assert.equ
 test('archive marker is revision-bound and rejects malformed values', () => { assert.equal(policy.archivedAtRevision({ revision: 2 }, 2), true); for (const item of [null, [], {}, { revision: '2' }, { revision: 1 }]) assert.equal(policy.archivedAtRevision(item, 2), false); });
 test('reviewer cannot delete and active jobs block deletion', () => { assert.equal(model.canDeleteDraft(article, 'editor'), true); assert.equal(model.canDeleteDraft(article, 'reviewer'), false); assert.equal(model.canDeleteDraft({ ...article, jobs: [{ state: 'running' }] }, 'owner'), false); });
 test('completed and published are independent per-paper views', () => { const done = { ...article, processingCompleted: true, publicInterpretation: false }; assert.equal(model.matchesWorkbenchView(done, 'completed'), true); assert.equal(model.matchesWorkbenchView(done, 'published'), false); assert.equal(model.matchesWorkbenchView({ ...done, publicInterpretation: true }, 'published'), true); });
+test('workbench route counts successful interpretation generation, not source parsing, as completed', async () => {
+  const journalId = '11111111-1111-4111-8111-111111111111';
+  const articleId = '22222222-2222-4222-8222-222222222222';
+  let jobs = [];
+  let list;
+  const route = load('apps/api/src/routes/journal-workbench.ts', {
+    zod: createRequire(path.join(root, 'apps/api/package.json'))('zod'),
+    '@openscience/domain': {
+      journalScope: async () => ({ membership: { role: 'owner' } }),
+      getManagedJournalArticle: async () => ({ ...article, id: articleId, jobs: [] }),
+      evaluateArticleProcessingCapability: () => ({ canExposeViaApi: false }),
+    },
+    './session-guard': { requireCurrentUser: async () => ({ userId: 'editor' }) },
+    './journal-draft-policy': policy,
+  });
+  route.registerJournalWorkbenchRoutes({
+    get: (path, handler) => { if (path.endsWith('/workbench-articles')) list = handler; },
+    delete() {}, post() {},
+  }, { prisma: {
+    journalArticle: { findMany: async () => [{ id: articleId }] },
+    journalEvent: { findMany: async () => [] },
+    journalJob: { findMany: async () => jobs },
+  } });
+  const read = async () => {
+    const result = await list({ params: { id: journalId }, query: {} }, { header() { return this; } });
+    return result.items[0];
+  };
+  jobs = [{ id: 'parse', articleId, kind: 'source_parse', state: 'succeeded' }];
+  const parsed = await read();
+  assert.equal(parsed.processingCompleted, false);
+  assert.equal(model.matchesWorkbenchView(parsed, 'completed'), false);
+  jobs = [...jobs, { id: 'interpretation', articleId, kind: 'generate', state: 'succeeded' }];
+  const generated = await read();
+  assert.equal(generated.processingCompleted, true);
+  assert.equal(model.matchesWorkbenchView(generated, 'completed'), true);
+});
 test('archived drafts stay outside the draft box', () => { assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'drafts'), false); assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'archived'), true); });
 test('unknown OA is not classified as closed access', () => { const items = [{ id: 'a', nameZh: 'A', subjects: ['Optics'], publicArticleCount: 2 }, { id: 'b', nameZh: 'B', subjects: [], publicArticleCount: 1, openAccess: false }]; assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'closed', sort: 'az' }).length, 1); assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'unknown', sort: 'az' })[0].id, 'a'); });
 test('URL policy rejects script schemes and embedded credentials', () => { assert.equal(model.safePublicUrl('javascript:alert(1)'), null); assert.equal(model.safePublicUrl('https://user:pass@example.com'), null); assert.equal(model.safePublicUrl('https://doi.org/10.1/example'), 'https://doi.org/10.1/example'); });

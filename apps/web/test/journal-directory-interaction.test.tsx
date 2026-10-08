@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { JournalSummary } from '../lib/journal-api';
 
 const api = vi.hoisted(() => ({ listJournals: vi.fn(), listMyJournals: vi.fn() }));
@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('next-intl', async importOriginal => {
   const actual = await importOriginal<typeof import('next-intl')>();
   const { default: messages } = await import('../messages/zh.json');
-  return { ...actual, useTranslations: (namespace: 'journalDirectory') => actual.createTranslator({ locale: 'zh', messages, namespace }) };
+  return { ...actual, useLocale: () => 'zh', useTranslations: (namespace: 'journalDirectory') => actual.createTranslator({ locale: 'zh', messages, namespace }) };
 });
 vi.mock('@/components/shell/DashboardShell', () => ({ DashboardShell: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 vi.mock('react', async importOriginal => {
@@ -20,7 +20,11 @@ vi.mock('react', async importOriginal => {
 import { JournalDirectory } from '../components/journals/JournalDirectory';
 import MyJournalsPage from '../app/journals/manage/page';
 
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(React.useEffect).mockImplementation(() => {}); });
+beforeEach(() => {
+  vi.clearAllMocks(); vi.mocked(React.useEffect).mockImplementation(() => {});
+  vi.stubGlobal('window', { location: { href: 'https://example.test/journals', search: '' }, history: { pushState: vi.fn() }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 // An isolated Node hook host runs the component's actual event handlers.
 // The existing project tests use this approach without a browser/DOM dependency.
@@ -72,64 +76,95 @@ const deferred = <T,>() => {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-async function settle() { await Promise.resolve(); await Promise.resolve(); }
+async function settle() { for (let turn = 0; turn < 8; turn++) await Promise.resolve(); }
 const submit = (tree: React.ReactNode) => find(tree, element => element.type === 'form').props.onSubmit!({ preventDefault: vi.fn() });
 
-it('disables search while pending and ignores a repeated submit before React rerenders', async () => {
+it('filters the complete directory locally without using an unsubmitted query', () => {
+  const render = mountDirectory([journal('one', 'Optics Journal'), journal('two', 'Photonics Journal')]);
+  find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'Photonics' } });
+  expect(renderToStaticMarkup(render())).toContain('Optics Journal');
+  submit(render());
+  expect(renderToStaticMarkup(render())).not.toContain('Optics Journal');
+  expect(renderToStaticMarkup(render())).toContain('Photonics Journal');
+  expect(api.listJournals).not.toHaveBeenCalled();
+  const saved = vi.mocked(window.history.pushState).mock.calls.at(-1)![2];
+  expect(String(saved)).toContain('q=Photonics');
+});
+
+it('disables filtering while the full directory loads and retains initial entries', async () => {
   const request = deferred<{ items: JournalSummary[]; nextCursor: null }>();
   api.listJournals.mockReturnValue(request.promise);
-  const render = mountDirectory([journal('one', 'Optics Journal')]);
+  let load!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
+  const render = mountDirectory([journal('one', 'Optics Journal')], 'more');
   const tree = render();
+  load();
   submit(tree); submit(tree);
   expect(api.listJournals).toHaveBeenCalledTimes(1);
   expect(find(render(), element => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(true);
+  expect(renderToStaticMarkup(render())).toContain('Optics Journal');
+  expect(renderToStaticMarkup(render())).toContain('完整目录加载后');
+  expect(window.history.pushState).not.toHaveBeenCalled();
   request.resolve({ items: [journal('two', 'Photonics Journal')], nextCursor: null });
   await settle();
   expect(find(render(), element => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(false);
   expect(renderToStaticMarkup(render())).toContain('Photonics Journal');
 });
 
-it('retains the previous directory on failure and permits retry with the entered query', async () => {
+it('retains loaded entries on failure and ignores repeated retry before React rerenders', async () => {
   const request = deferred<{ items: JournalSummary[]; nextCursor: null }>();
   api.listJournals.mockReturnValueOnce(request.promise).mockResolvedValueOnce({ items: [journal('two', 'Photonics Journal')], nextCursor: null });
-  const render = mountDirectory([journal('one', 'Optics Journal')]);
+  let load!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
+  const render = mountDirectory([journal('one', 'Optics Journal')], 'more');
+  render(); load();
   find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'Photonics' } });
   submit(render());
   request.reject(new Error('Directory unavailable'));
   await settle();
   expect(renderToStaticMarkup(render())).toContain('Optics Journal');
   const alert = find(render(), element => element.props.role === 'alert');
-  find(alert, element => element.type === 'button').props.onClick!();
+  const retry = find(alert, element => element.type === 'button').props.onClick!;
+  retry(); retry();
   await settle();
-  expect(api.listJournals).toHaveBeenLastCalledWith({ query: 'Photonics', limit: 20, cursor: undefined });
+  expect(api.listJournals).toHaveBeenCalledTimes(2);
+  expect(api.listJournals).toHaveBeenLastCalledWith({ limit: 100, cursor: undefined });
+  submit(render());
   expect(renderToStaticMarkup(render())).toContain('Photonics Journal');
 });
 
-it('appends a cursor page once without duplicating entries or using an unsubmitted query', async () => {
-  api.listJournals.mockResolvedValue({ items: [journal('one', 'Optics Journal'), journal('two', 'Photonics Journal')], nextCursor: null });
+it('collects all cursor pages without duplicate entries or using an unsubmitted query', async () => {
+  api.listJournals.mockResolvedValueOnce({ items: [journal('one', 'Optics Journal')], nextCursor: 'next-page' })
+    .mockResolvedValueOnce({ items: [journal('one', 'Optics Journal'), journal('two', 'Photonics Journal')], nextCursor: null });
+  let load!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
   const render = mountDirectory([journal('one', 'Optics Journal')], 'next-page');
   find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'unsubmitted' } });
-  find(render(), element => element.type === 'button' && element.props.children === '加载更多期刊').props.onClick!();
+  load();
   await settle();
-  expect(api.listJournals).toHaveBeenCalledWith({ query: '', limit: 20, cursor: 'next-page' });
+  expect(api.listJournals).toHaveBeenCalledWith({ limit: 100, cursor: 'next-page' });
   const markup = renderToStaticMarkup(render());
   expect(markup.match(/href="\/journals\/one"/g)).toHaveLength(1);
   expect(markup).toContain('Photonics Journal');
 });
 
-it('retries the failed cursor page and preserves existing entries despite edits to the search field', async () => {
+it('refetches the complete directory after a cursor failure without claiming partial totals', async () => {
   const request = deferred<{ items: JournalSummary[]; nextCursor: null }>();
-  api.listJournals.mockReturnValueOnce(request.promise)
-    .mockResolvedValueOnce({ items: [journal('two', 'Photonics Journal')], nextCursor: null });
+  api.listJournals.mockResolvedValueOnce({ items: [journal('one', 'Optics Journal')], nextCursor: 'next-page' })
+    .mockReturnValueOnce(request.promise)
+    .mockResolvedValueOnce({ items: [journal('one', 'Optics Journal'), journal('two', 'Photonics Journal')], nextCursor: null });
+  let load!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
   const render = mountDirectory([journal('one', 'Optics Journal')], 'next-page');
   find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'unsubmitted' } });
-  find(render(), element => element.type === 'button' && element.props.children === '加载更多期刊').props.onClick!();
+  load(); await settle();
   request.reject(new Error('Page unavailable'));
   await settle();
   const alert = find(render(), element => element.props.role === 'alert');
+  expect(renderToStaticMarkup(render())).toContain('完整目录加载后');
   find(alert, element => element.type === 'button').props.onClick!();
   await settle();
-  expect(api.listJournals).toHaveBeenLastCalledWith({ query: '', limit: 20, cursor: 'next-page' });
+  expect(api.listJournals).toHaveBeenLastCalledWith({ limit: 100, cursor: undefined });
   const markup = renderToStaticMarkup(render());
   expect(markup).toContain('Optics Journal');
   expect(markup).toContain('Photonics Journal');

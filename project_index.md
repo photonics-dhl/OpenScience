@@ -1,5 +1,9 @@
 # OpenScience (XGS) 项目文件索引
 
+`docs/handoff/2026-10-08-journal-workbench-handoff.md`：期刊工作台改版、定向修复、CI 与服务器部署收据。
+
+期刊改版与服务器续部署见 [期刊工作台交接](docs/handoff/2026-10-08-journal-workbench-handoff.md)：`apps/api/src/routes/journal-{core-routes,workbench,draft-policy,draft-guard}.ts` 保留原授权并提供草稿归档/恢复；`apps/web/lib/journal-{workbench-model,workbench-api,rights-form}.ts` 与 `components/journals/` 承接目录、草稿视图与显式来源授权；`scripts/test-journal-workbench.mjs`、Web journal 测试与 `apps/api/test/journal-browser.test.ts` 验证改版，精确 CI/部署事实见交接。
+
 并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。
 
 Synclip图像与视频接入：图像由`packages/ai-gateway/src/synclip-image-api.ts`与`infra/synclip-image/`收口；视频候选由`packages/ai-gateway/src/synclip-video-api.ts`、`apps/agent-worker/src/presentation/synclip-video-spool.ts`和`infra/synclip-video/`收口，复用现有Hermes分镜/Claims/Evidence及私有媒体资产流。视频固定先接官方可复核的LTX异步模型值，逐镜提交、receipt恢复、首帧引用、MP4下载/拼接；服务器安装与真实私有解码验收仍单独记录。Synclip总指南见[openscience-synclip-capabilities](.agents/skills/openscience-synclip-capabilities/SKILL.md)，视频规划/审查见[openscience-research-video](.agents/skills/openscience-research-video/SKILL.md)；版本、凭据配置状态及真实效果只见[CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。

@@ -30,14 +30,16 @@ describe('journal directory presentation', () => {
     expect(markup).not.toContain('<img');
   });
 
-  it('bounds a long source description without splitting Unicode characters', () => {
+  it('keeps directory cards focused on identity without rendering long source descriptions', () => {
     const description = '🔬'.repeat(219) + '🌌' + '完整简介'.repeat(1200);
-    const markup = renderDirectory([{ ...journal, description }]);
-    expect(markup).toContain('🔬'.repeat(219) + '🌌…');
+    const markup = renderDirectory([{ ...journal, description, publisherName: 'Optics Publisher' }]);
+    expect(markup).toContain('Optics Publisher');
+    expect(markup).toContain('Optics Review');
+    expect(markup).not.toContain('🔬');
     expect(markup).not.toContain('完整简介');
     expect(markup).not.toContain('\ufffd');
     expect(markup).toContain('href="/journals/optics"');
-    expect(markup).toContain('公开论文 8 篇');
+    expect(markup).toContain('平台收录篇数');
     expect(description).toContain('完整简介');
   });
 });

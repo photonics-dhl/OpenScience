@@ -55,7 +55,7 @@ export function registerJournalWorkbenchRoutes(app: FastifyInstance, deps: Deps)
       return {
         ...article, jobs: [...article.jobs, ...extraActive],
         draftArchived: archivedAtRevision(archive?.after, article.revision),
-        processingCompleted: statusJobs.some((job) => job.articleId === row.id && job.state === 'succeeded'),
+        processingCompleted: statusJobs.some((job) => job.articleId === row.id && job.kind === 'generate' && job.state === 'succeeded'),
         publicInterpretation: publicReleases.length > 0,
       };
     }));

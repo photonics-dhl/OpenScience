@@ -22,21 +22,23 @@ function JournalEntry({ journal }: { journal: Item }) {
 }
 export function JournalDirectory({ initial = [], initialNextCursor = null }: { initial?: JournalSummary[]; initialNextCursor?: string | null }) {
   const t = useTranslations('journalDirectory'); const english = useLocale() === 'en';
-  const [items, setItems] = React.useState<Item[]>(initialNextCursor ? [] : initial);
+  const [items, setItems] = React.useState<Item[]>(initial);
   const [loading, setLoading] = React.useState(!!initialNextCursor || !initial.length);
   const [error, setError] = React.useState(''); const [filters, setFilters] = React.useState<Filters>(defaults);
   const [term, setTerm] = React.useState(''); const [page, setPage] = React.useState(1);
-  const generation = React.useRef(0); const abort = React.useRef<AbortController | null>(null);
+  const generation = React.useRef(0); const abort = React.useRef<AbortController | null>(null); const inFlight = React.useRef(false);
   const load = React.useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     const request = ++generation.current; abort.current?.abort(); const controller = new AbortController(); abort.current = controller;
     setLoading(true); setError('');
     try {
       const all = await collectAllPages((cursor) => listJournals({ limit: 100, cursor }), { signal: controller.signal });
       if (request === generation.current) setItems(all);
-    } catch (cause) { if (request === generation.current) { setItems([]); setError(cause instanceof Error ? cause.message : 'Unable to load journals.'); } }
-    finally { if (request === generation.current) setLoading(false); }
+    } catch (cause) { if (request === generation.current) setError(cause instanceof Error ? cause.message : 'Unable to load journals.'); }
+    finally { if (request === generation.current) { setLoading(false); inFlight.current = false; } }
   }, []);
-  React.useEffect(() => { if (initialNextCursor || !initial.length) void load(); return () => { generation.current += 1; abort.current?.abort(); }; }, [initial.length, initialNextCursor, load]);
+  React.useEffect(() => { if (initialNextCursor || !initial.length) void load(); return () => { generation.current += 1; abort.current?.abort(); inFlight.current = false; }; }, [initial.length, initialNextCursor, load]);
   React.useEffect(() => {
     function restore() {
       const params = new URLSearchParams(window.location.search);
@@ -58,10 +60,10 @@ export function JournalDirectory({ initial = [], initialNextCursor = null }: { i
   const results = selectDirectory(items, effective); const pages = Math.max(1, Math.ceil(results.length / 20)); const current = Math.min(page, pages);
   const control = 'min-h-11 max-w-full border border-os-rule-paper bg-transparent px-3 text-sm disabled:opacity-50';
   return <section data-journal-directory className={styles.directory} aria-label={t('title')}>
-    <form aria-busy={loading} data-hermes-protected="true" className={styles.search} onSubmit={(event) => { event.preventDefault(); update({ query: term }); }}>
-      <label className="sr-only" htmlFor="journal-search">{t('searchLabel')}</label><input id="journal-search" type="search" value={term} onChange={(event) => setTerm(event.target.value)} placeholder={t('searchPlaceholder')} /><button disabled={loading} type="submit">{t('search')}</button>
+    <form aria-busy={loading} data-hermes-protected="true" className={styles.search} onSubmit={(event) => { event.preventDefault(); if (!loading && !error) update({ query: term }); }}>
+      <label className="sr-only" htmlFor="journal-search">{t('searchLabel')}</label><input id="journal-search" type="search" value={term} onChange={(event) => setTerm(event.target.value)} placeholder={t('searchPlaceholder')} /><button disabled={loading || !!error} type="submit">{t('search')}</button>
     </form>
-    <fieldset disabled={loading} className="my-5 flex min-w-0 flex-wrap gap-4 border-0 p-0" data-hermes-protected="true">
+    <fieldset disabled={loading || !!error} className="my-5 flex min-w-0 flex-wrap gap-4 border-0 p-0" data-hermes-protected="true">
       <label className="grid min-w-0 gap-2 text-sm">{english ? 'Subject' : '学科'}<select className={control} value={filters.subject} onChange={(event) => update({ subject: event.target.value })}><option value="">{english ? 'All subjects' : '全部学科'}</option>{filters.subject && !subjects.includes(filters.subject) ? <option value={filters.subject}>{filters.subject}</option> : null}{subjects.map((subject) => <option value={subject} key={subject}>{subject}</option>)}</select></label>
       <label className="grid min-w-0 gap-2 text-sm">Open Access<select className={control} value={filters.access} onChange={(event) => update({ access: event.target.value as AccessFilter })}><option value="all">{english ? 'All access types' : '全部获取方式'}</option><option value="open">{english ? 'Open Access only' : '仅开放获取'}</option><option value="closed">{english ? 'Non-OA' : '非开放获取'}</option><option value="unknown">{english ? 'Unknown' : '状态未知'}</option></select></label>
       <label className="grid min-w-0 gap-2 text-sm">Sort by<select className={control} value={effective.sort} onChange={(event) => update({ sort: event.target.value as DirectorySort })}><option value="az">A–Z</option><option value="paper_count">{english ? 'Paper count (on this platform)' : 'Paper count（平台收录篇数）'}</option><option value="citation_count" disabled={!citationAvailable}>{english ? 'Citation count' : 'Citation count（被引次数）'}</option></select></label>
@@ -69,7 +71,9 @@ export function JournalDirectory({ initial = [], initialNextCursor = null }: { i
     <p className="text-sm text-os-muted-paper">{english ? 'Unknown Open Access status is not classified as non-OA. Citation sorting requires a verified data source.' : '开放获取状态未知不等于非开放获取；引用量排序在接入可靠数据后启用。'}</p>
     {loading ? <p className={styles.loading} role="status">{t('loading')}</p> : null}
     {error ? <div className={styles.feedback} role="alert"><p>{error}</p><button type="button" disabled={loading} onClick={() => void load()}>{t('retry')}</button></div> : null}
-    {!loading && !error ? <><p className="text-sm text-os-muted-paper">{results.length} {english ? 'journals' : '本期刊'}</p>{!results.length ? <div className={styles.empty} role="status" data-hermes-protected="true"><BookOpen size={44} strokeWidth={1} aria-hidden="true" /><h2>{t('noMatches')}</h2><button type="button" onClick={() => { setTerm(''); update(defaults); }}>{t('clearSearch')}</button></div> : null}<ul data-journal-entries className={styles.entries}>{results.slice((current - 1) * 20, current * 20).map((journal) => <JournalEntry journal={journal} key={journal.id} />)}</ul>{pages > 1 ? <nav aria-label={english ? 'Journal pages' : '期刊分页'} className="my-6 flex items-center gap-4"><button className={control} disabled={current === 1} onClick={() => setPage(current - 1)}>{english ? 'Previous' : '上一页'}</button><span>{current} / {pages}</span><button className={control} disabled={current === pages} onClick={() => setPage(current + 1)}>{english ? 'Next' : '下一页'}</button></nav> : null}</> : null}
+    {!loading && !error ? <><p className="text-sm text-os-muted-paper">{results.length} {english ? 'journals' : '本期刊'}</p>{!results.length ? <div className={styles.empty} role="status" data-hermes-protected="true"><BookOpen size={44} strokeWidth={1} aria-hidden="true" /><h2>{t('noMatches')}</h2><button type="button" onClick={() => { setTerm(''); update(defaults); }}>{t('clearSearch')}</button></div> : null}</> : items.length ? <p className="text-sm text-os-muted-paper">{english ? 'Showing loaded journals. Filters and totals are available after the full directory loads.' : '暂时显示已加载的期刊；完整目录加载后可筛选并查看总数。'}</p> : null}
+    <ul data-journal-entries className={styles.entries}>{results.slice((current - 1) * 20, current * 20).map((journal) => <JournalEntry journal={journal} key={journal.id} />)}</ul>
+    {!loading && !error && pages > 1 ? <nav aria-label={english ? 'Journal pages' : '期刊分页'} className="my-6 flex items-center gap-4"><button className={control} disabled={current === 1} onClick={() => setPage(current - 1)}>{english ? 'Previous' : '上一页'}</button><span>{current} / {pages}</span><button className={control} disabled={current === pages} onClick={() => setPage(current + 1)}>{english ? 'Next' : '下一页'}</button></nav> : null}
     <details className={styles.dataResources}><summary>{t('dataResources')}</summary><p data-journal-resources className={styles.resources}><a href="/journals-openapi.json">{t('openapi')}</a><a href="/journals/sitemap.xml">{t('sitemap')}</a></p></details>
   </section>;
 }
