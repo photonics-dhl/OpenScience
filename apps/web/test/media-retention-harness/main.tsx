@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { PresentationWorkbench } from '@/components/presentation/PresentationWorkbench';
 import type { PresentationAsset } from '@/lib/api';
 import english from '../../messages/en.json';
+import { StoryboardLifecycle } from './StoryboardLifecycle';
 
 const initial: PresentationAsset[] = ['a', 'b'].map((id) => ({
   id: `image-${id}`, researchObjectId: 'ro', versionId: 'published-version', kind: 'image', status: 'approved',
@@ -20,4 +21,5 @@ function Harness() {
     onAssetDeleted={(asset) => setAssets((current) => current.filter((item) => item.id !== asset.id))} /></NextIntlClientProvider>;
 }
 
-createRoot(document.getElementById('root')!).render(<Harness />);
+createRoot(document.getElementById('root')!).render(new URLSearchParams(window.location.search).has('storyboards')
+  ? <NextIntlClientProvider locale="en" messages={english}><StoryboardLifecycle /></NextIntlClientProvider> : <Harness />);

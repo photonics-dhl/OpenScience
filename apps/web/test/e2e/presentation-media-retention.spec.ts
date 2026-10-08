@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, openSync, readdirSync, closeSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'playwright/test';
+import english from '../../messages/en.json';
 
 const harnessUrl = 'http://127.0.0.1:3037';
 let harness: ChildProcess | undefined;
@@ -27,6 +28,44 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(() => { harness?.kill(); if (log !== undefined) closeSync(log); });
+
+for (const embedded of [false, true]) test(`storyboard refresh preserves the exact selected parent and scene (embedded=${embedded})`, async ({ page }) => {
+  await page.goto(`${harnessUrl}/?storyboards&embedded=${embedded}`);
+  await page.getByLabel('Choose another plan').selectOption('old');
+  await page.getByLabel('Choose a scene to generate').selectOption('2');
+  await page.getByRole('button', { name: 'Begin refresh', exact: true }).click();
+  await expect(page.locator('[data-scene-image]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Finish refresh', exact: true }).click();
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'old');
+  await expect(page.locator('[data-scene-image]')).toHaveAttribute('data-scene-image', '2');
+  await page.locator('[data-scene-image]').click();
+  await expect(page.locator('[data-image-request]')).toHaveText(JSON.stringify({ claimIds: ['claim-old'], request: { storyboardAssetId: 'old', sceneIndex: 2 } }));
+});
+
+for (const action of ['Remove newest', 'Reject newest']) test(`storyboard new-result focus does not resurrect superseded selection after ${action}`, async ({ page }) => {
+  await page.goto(`${harnessUrl}/?storyboards`);
+  await page.getByLabel('Choose another plan').selectOption('old');
+  await page.getByRole('button', { name: 'Add newest', exact: true }).click();
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'newest');
+  await page.getByRole('button', { name: action, exact: true }).click();
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'current');
+});
+
+test('storyboard video selection resets for a different parent with more scenes', async ({ page }) => {
+  await page.goto(`${harnessUrl}/?storyboards&video=true`);
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'old');
+  await page.getByRole('button', { name: 'Add current', exact: true }).click();
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'current');
+  const selects = page.getByRole('region', { name: english.mechanismVideo.title }).locator('select');
+  await expect(selects).toHaveCount(4);
+  for (let index = 0; index < 4; index++) await selects.nth(index).selectOption(`current-${index}-1`);
+  const generate = page.getByRole('region', { name: english.mechanismVideo.title }).getByRole('button', { name: english.mechanismVideo.generate });
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect(page.locator('[data-video-request]')).toHaveText(JSON.stringify({ claimIds: ['claim-current'], request: {
+    profile: 'content-driven-v1', storyboardAssetId: 'current', sceneImageAssetIds: [0, 1, 2, 3].map(index => `current-${index}-1`),
+  } }));
+});
 
 test('an owner keeps or deletes the selected published image with recoverable errors and a single pending submission', async ({ page }) => {
   const errors: string[] = [];
