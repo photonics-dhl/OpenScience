@@ -92,7 +92,7 @@
 - [x] Set Taskmaster Task 11 to `done` only after deterministic production acceptance. Production RO `OSR-2026-000019` replayed SVG/HTML hashes exactly (`8d5f8f23…c640` / `b20f83cc…1198`), served the safe HTML publicly, and enforced `presentation_not_evidence`.
 - [x] Sync CURRENT docs and run docs gates.
 
-## 2026-10-08 原生论文视频接线（设计候选，源码仍只读）
+## 2026-10-08 原生论文视频接线（已审设计，候选实现中；未部署）
 
 ### 目标、基线与复用边界
 
@@ -116,7 +116,7 @@
 
 `parseStoryboardDocument` 增一个内部解析选项，由已验证的 settings.narrative 与 output 共同选择新视频形状；默认旧调用的键集合和校验语义不变。`presentationStoryboardView` 从原 provenance.storyboardSettings 传该选项；`handler.readStoryboardCheckpoint` 必须去掉新分支固定按 image 解析的假设，并从已验证的 expected.payload.storyboard 取得同一模式。science/ART 物化、保存视图、checkpoint 恢复、终态采用及帧/视频父项消费均传同一模式；checkpoint 内保存的 payload、父计划模式或调用者模式不一致即拒绝，不能丢掉视频字段再当图片读取。新分支同时执行既有插图来源校验及视频方向校验，不放宽 sourceNotation/数值/空间关系规则。
 
-不新增一个视频规划工具或最终提交接口。现有 `illustrationPrompts` 每项保持 `{sceneIndex,prompt}`，新视频项仅扩展 `videoPrompt`；旧图片消费者继续用 prompt。`compileShotPrompt` 从现有 spool 私有函数变为同文件导出的确定性函数，供原生 ART/REVIEW 和 spool 共用；不能在审阅之后另写一套镜头提示词。
+不新增一个视频规划工具或最终提交接口。现有 `illustrationPrompts` 每项保持 `{sceneIndex,prompt}`，新视频项扩展 `videoPrompt`；当前新增的视频工具合同同时保存该帧实际 `renderResources`（既有 Skill id/version/upstreamCommit/resources），用于避免单幕风格改变污染其他帧的资源资格。旧图片和原 Stage A 三字段视频回执均不改写；历史缺逐帧元数据时仍保守比较原整份资源，实际消费前完整回放私有工具记录。`compileShotPrompt` 从现有 spool 私有函数变为同文件导出的确定性函数，供原生 ART/REVIEW 和 spool 共用；不能在审阅之后另写一套镜头提示词。
 
 ### 原调用链与完整消费绑定
 
@@ -176,8 +176,30 @@ TTS 先于首次视频 POST 做实际时长检查；过长不能重新打开已 
 4. 按改动范围运行 Native/Domain/API/Worker 的既有定向测试、类型检查及对应 Linux CI。复用未变视频接口/路径/权限证据；不为了本设计重跑旧验证或模型任务。
 5. 独立 High 先审本设计与新增差额，协调写权后才实施；发版复用原发布/回退流程。真实论文的科学与艺术、连续运动、语音自然度和最终用户采用仍须以实际产物验收，计划/CI 不能代替。
 
-### 设计审查记录与写权请求
+### UI 接线与 Linux 最小验收
+
+普通用户复用既有 `POST /research-objects/:id/hermes-runs`，保留同一意图的 `Idempotency-Key`，请求如下（ID 替换为用户当前已上传论文的真实 ingestion task）：
+
+```json
+{"ingestionTaskIds":["<ingestion-task-uuid>"],"generation":{"profile":"visual-narrative-v1","maxAgentTasks":9,"locale":"zh","style":"auto","instruction":"为未读论文的人讲清主旨、机制与成立条件，形成自然旁白和连贯镜头的私有讲解视频。","output":"video"}}
+```
+
+同视频意图已存在时读取既有 run，不能换键绕过 failed/unknown；已审图片意图的论文理解可复用，原图片 grant 不升级。中间 draft 计划/帧按真实技术回执自动推进，最终沿原 `awaiting_video_review`/资产 review 入口由用户决定采用。
+
+既有资产列表 `GET /research-objects/:researchObjectId/versions/:versionId/presentation-assets` 新增可选、有序 `videoFrameAssetIds`；原 `canGenerateSceneImage/canGenerateVideo` 共用资格校验。客户端不要再单凭 `status=approved` 选帧，也不要制造新父项别名。管理员手动沿原 generations 路由提交 `kind=video`、当前 `sourceClaimIds`、`video={profile:"content-driven-v1",storyboardAssetId,sceneImageAssetIds:videoFrameAssetIds}`；普通用户仍由 Hermes run 自动执行。现有 `videoEnabled/sceneImageEnabled` 和用户角色边界保留。
+
+总控复用现有视频 CI 执行 `node --test infra/synclip-video/broker.test.mjs infra/synclip-video/image-reference.test.mjs`，并核日志确认 **existing ffmpeg decodes, aligns and muxes real synthetic media through the narrated broker path** 实际运行；`CI=true` 下缺可用 ffmpeg/ffprobe 直接失败，不跳过，既有 sudo 步骤须保留该环境值。另一平台用例 **result directory and files are worker-readable despite restrictive inherited permissions** 需 Linux 权限环境。现有 codec 需要 MP3 decoder、PCM s16le、AAC、libx264；合成测试另用 libmp3lame 造可解码测试音，复用 loudnorm/adelay/apad/alimiter/scale/pad/fps/setsar。测试音只验证编码/时序，不证明自然人声或真实论文视频质量；无需本机安装新二进制或新建 workflow。
+
+### 设计审查与实现检查点
 
 2026-10-08 独立 High（Avicenna，`01a11988-3321-7e33-b76b-e771098c92a7`）对照上述固定源码身份审查并复核增量，结论为 **Bounded design GO**。四项 P2 已闭合：完整能力元组恢复、长音频后的权威修订/旧任务不可支付、局部修订与跨父复用的全局 prompt/资源约束、checkpoint 到消费的解析模式传递；未发现新增 P1/P2 设计阻断。该结论只批准进入协调后的实现，不证明代码、原子防陈旧提交、回放相等或真实音画已完成。
 
-申请总控按上表分配 Native/Domain/Worker/自动推进及 API 意图的精确符号写权，并确定音频适配后续 owner；实施前独立树须从最终已集成生图基线续接。当前只改本文，未触碰共享源码、CI、全局状态文档或生产；没有模型/视频/TTS请求，也未重跑已通过检查。
+总控已分配 Native/Domain/Worker/自动推进/API 与 Synclip 音频适配的实现写权；独立候选树已合入上述最终生图基线。当前不改 Web、CI、全局状态文档和生产，不执行真实模型/视频/TTS 请求；旧 unknown/paid 任务继续保留。
+
+实现检查点：`e660e5bf` 完成视频 science/art/review 形状；`5f0a80e9` 修复 handler 旧 image-only 权限阻断，32/32 离线真实 handler 回归且 High 闭合。`c3ae6f68` 是音频适配提交（179/179、source/test TC、lint、独立 High GO）。`bf627c59` 完成显式 video intent、来源复用、九任务预算、私有技术草稿自动推进、完整父链回放、逐帧资源与有序帧投影、TTS 时长诊断及追加式修订，以及完整解码/音视频时间线校验。High 新发现的完整 video-parent identity 与 storyboard-only identity 错配已修正并 RED→GREEN 57/57；Domain 父项/投影 175/175、Native 兼容/局部资源 13/13、旧 v19 paid 重放 15/15、API 合同 7/7。代码候选的 High 增量已收口；未部署、无真实模型/TTS/视频请求。总控从已集成 7755 基线顺序取上述四个新实现提交，不重取历史 828/ec/a4 或合并旧交付线；UI 调用及 Linux 验收按上一节接线。
+
+最终增量 High：Carson 闭合完整父身份 P1、逐帧资源及原 Stage A 回放 P2；Avicenna 闭合完整 PCM 解码、实际音视频时间线与 stdout 尾部样本 P2。Worker 定向 67/67、Domain 父项/投影 175/175、run-owner 57/57、API 7/7；Domain/Worker/API TC、定向 lint、docs:lint/audit:docs-sync、脚本语法与 diff 检查通过。扩大到既有大型文件的 lint 仍有 43 项未改行历史错误，未扩入本次修复，不能称全仓 lint 通过。
+
+音轨 broker 当前离线 39/41 通过，另两项因本机无可用 ffmpeg/ffprobe 和非 POSIX 环境跳过；完整 PCM 解码按 stdout 全部排空及 child close 后的样本数计时，不另落 PCM 文件；最终分别核对真实帧时间线上的视频/AAC 起点、跨度与缺口。实际 codec/mux 及 Linux 权限仍须由总控在既有 CI 补验，不冒称音画合格。执行仅 start-reference + scene-artwork + external-narration + 无字幕；sidecar/burn-in/native audio/start-end 在付费前拒绝，音色来自当前目录且须支持旁白语言。未知收费与旧任务/回执继续保留。
+
+共享 Skill 依赖：`createNativeIllustrationMaterializer.reconstruct/finish`、`replayNativeVideoPlan`、handler `readVerifiedVideoPlan`、Domain `requireNativeVideoSceneImage` 校验真实完整回执/逐帧版本资源；当前候选按 Skill20，视频不开放 v19 fallback，原 Stage A 三字段回执按原 context 恢复。20→21 必须先保留 v20/v19 paid 的 science/plan/review/render 消费语义；不能只检查 pixel checkpoint。详细证据在忽略目录 `tmp/synclip-video-contract/`；Web、CI、CURRENT/progress/index 和生产由总控定序，本会话不改共享 Skill、`gateway.ts`、`provider.ts` 或 Worker `index.ts`。
