@@ -12,7 +12,7 @@
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | role/校准已交；Task4长表格dense保真设计/修复进行，无新模型/生产索引 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/search-long-table-dense` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | guide/query与host候选已交；核LTX原生音轨/整片合同及权限/音色未决，不发付费请求 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/synclip-video-delivery` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | LTX原生声/多镜头合同已核；已续派账户权限与实际voices只读取证，不代选偏好/发付费请求 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/synclip-video-delivery` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 指南、探索、期刊、研究桌面等全站构图、字体和视觉节奏；真实桌面/窄屏入口验收 | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
 - 视频确认无共用文件在途写入后，生图另获GatewayOptions/constructor/native PNG分支/completeWithControls局部provider选择与Worker `buildGateway`可选审图模型构造、对应测试；不改provider.ts、Native/Text或全局M3。视频保留其余已授Native/Domain/Worker/音频，Web归UI；未知付费保护只约束具体任务，不扩成整线待命。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
@@ -30,7 +30,7 @@
 - 校准54c77dd3→c3029264四文件全等集入，High GO：只改Scientific review优先级，root21时未变science/plan/render归属仍20、review21、历史19优先，未来版本不自动降级。直接升版会漂移provenance，现52例完整输出/finish回放及原completed/started2例通过；来源在生图tmp/pixel-review-calibration-*。视频消费者已确认此方案兼容，仍须本批CI；科学改善未实测。
 - wire离线证据：生图tmp/pixel-review-wire-receipt.json的2ef原/重建promptHash5d424、PNG6ebb一致；fc仅PNGf0e/sourceIdentity一致，promptHash21eca→7ed745，不能认作原packet。0模型外呼，不是历史外网抓包。fc有效accepted承认轴冲突却列非阻塞；普通audit succeeded不等于accepted，传输/结构合格不证明科学正确。
 - cb科学诊断见生图tmp/first-scene-native-diagnostics.json：第6轮1,721,322bytes/20消息低于本机上限，仅排除本地oversize，超时未定因；完成turn的压缩空messages不是原请求尺寸。20/500/77nm、1MeV/0.94c错来源及Gaussian1.8、tau/时空/virtual-real问题仍须Native修订，不由代码补论文答案。
-- 视频主候选及9914已集入、High阻断项闭合，原Worker67/Domain175/run57/API7/音频179证据保留；新Linux结果见上。host更新/回退3603a426→92bfaf0c全等集入、High GO，原23组现在Linux含子案例32/32；生产原renderer已有codec，未安装/切换。[视频计划](../plans/2026-09-05-hermes-presentation-assets-plan.md)存命令/合同。当前start-reference/scene-artwork/external-narration/无字幕是实现范围，不冒充API固有限制；权限、音色、坏镜头及真实音画待验。
+- 视频主候选及9914已集入、High闭合，原Worker67/Domain175/run57/API7/音频179证据保留；新CI见上。host3603→92bf全等集入、High GO，Linux含子项32/32；原renderer已有codec，未生产切换。[视频计划](../plans/2026-09-05-hermes-presentation-assets-plan.md)的合同14fd→c07c已集入：LTX原生声/多镜头存在，15秒分段不推出必须外置TTS，当前换轨会替代原生人声/音乐/环境声；这是实现取舍。原生合格实片尚缺，暂不改模式，现只读核账户权限/音色；坏镜头及真实音画待验。
 - 普通视频沿原hermes-runs、output=video与9任务授权，旧image grant不升级；有序videoFrameAssetIds由后端派生。16003486→68edf1cf六文件全等集入、High GO：guide draft可选output:video；旧GET按output=image|video分离同源任务，省略为image，旧null/无output兼容，failed/unknown不跳过。Guide21/Domain26/API23通过，已交UI接原普通对话入口；不新建队列/端点或伪造中间批准。
 - a3355eef分镜选择/生命周期随42fe上线，原19单测/5RED→GREEN和Linux6/6保留，专属入口未验。UI的8137/d8e5/5c7832/c2aa0b55候选仍独立，3a96dbdc已并入a55期刊；正接普通对话video合同及工作页审美，未总控整合/部署。桌面完整Hermes工作席、阅读设置按场景收起，主任务/最终成果优先；构建/截图不能代替用户认可。
 - 生图浏览器getState及唯一reset后的getState均为request-header policy错误，已停循环；不绕过、不据此判产品故障或宣称实点。UI先前预览启动也曾被自动审批拒绝；按各自真实观察范围记录。
