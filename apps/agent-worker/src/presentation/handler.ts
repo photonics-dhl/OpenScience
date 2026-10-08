@@ -194,7 +194,8 @@ function readStoryboardCheckpoint(result: unknown, expected: StoryboardCheckpoin
     throw new Error('[blocked] Saved storyboard provenance is invalid');
   }
   return {
-    document: parseStoryboardDocument(planned.document, expected.payload.sourceClaimIds, 'image'),
+    document: parseStoryboardDocument(planned.document, expected.payload.sourceClaimIds, expected.payload.storyboard?.output ?? 'image',
+      { nativeNarrativeVideo: expected.payload.storyboard?.output === 'video' && expected.payload.storyboard.narrative === true }),
     promptHash: planned.promptHash,
     designSkills: readDesignSkillUsage(planned.designSkills),
     ...(planned.reviewFormat === 2 ? { reviewFormat: 2 as const } : {}),
@@ -1034,7 +1035,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         const parentPayload = parsePresentationGenerationPayload(parentTask.payload);
         const saved = parentTask.result as Record<string, unknown>;
         if (parentPayload.researchObjectId !== payload.researchObjectId || parentPayload.versionId !== payload.versionId
-          || !isDeepStrictEqual(parentPayload.sourceClaimIds, payload.sourceClaimIds) || parentPayload.storyboard?.output !== 'image'
+          || !isDeepStrictEqual(parentPayload.sourceClaimIds, payload.sourceClaimIds)
+          || !(parentPayload.storyboard?.output === 'image' || (parentPayload.storyboard?.output === 'video' && parentPayload.storyboard.narrative === true))
           || saved.assetId !== parentTask.id || saved.contentHash !== sceneParent.contentHash)
           throw new Error('[blocked] Native image plan scope changed');
         const context = saved.nativeIllustrationContext as StoryboardCheckpointIdentity | undefined;

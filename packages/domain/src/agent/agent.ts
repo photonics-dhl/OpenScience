@@ -616,6 +616,10 @@ async function persistAgentTaskCoreInTransaction(
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
       ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
+  if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
+    && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
+    throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
+  }
   try {
     task = await tx.agentTask.create({
       data: {

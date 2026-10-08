@@ -10,7 +10,7 @@ import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, normalizeScientificSourceNotation, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
 
-type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
+type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string }; durationSeconds?: number; videoDirection?: StoryboardDocument['scenes'][number]['videoDirection'] };
 // New candidates only: stored historical briefs stay readable, but a freshly
 // generated plan must not send a nonexistent visible label to image rendering.
 function requireLabelReferencesInRange(brief: IllustrationBrief): void {
@@ -496,7 +496,8 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
+  const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -512,7 +513,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
   const inputKeys = Object.keys(input);
   const root = inputKeys.length === SCIENCE_SCENE_KEYS.length && SCIENCE_SCENE_KEYS.every(key => inputKeys.includes(key))
     ? { title: input.title, scenes: [input] } : input;
-  keys(root, settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
+  keys(root, nativeVideo ? ['title', 'narrative', 'scenes', 'videoProduction'] : settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
   let narrative: StoryboardDocument['narrative'];
   if (settings.narrative) {
     const n = object(root.narrative); keys(n, ['mainMessage', 'audience'], 'narrative');
@@ -530,7 +531,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     throw new Error(`figure_plan_scene_count_expected_${eligibleFigures.length}_actual_${root.scenes.length}`);
   }
   const scenes = root.scenes.map((raw, sceneIndex) => {
-    const scene = object(raw); keys(scene, settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
+    const scene = object(raw); keys(scene, nativeVideo ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId', 'durationSeconds', 'videoDirection'] : settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
     if (!Array.isArray(scene.subjects) || scene.subjects.length < 1 || scene.subjects.length > subjectLimit) throw new Error('subject_count');
     if (!Array.isArray(scene.labels)) throw new Error('labels:array_required');
     if (!Array.isArray(scene.constraints) || scene.constraints.length > 2) throw new Error('constraint_count');
@@ -561,12 +562,16 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     const quantityFields: Array<readonly [string, string]> = [['title', String(scene.title)], ['narration', String(scene.narration)],
       ['message', illustration.message], ['encoding', illustration.encoding],
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
-      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])];
+      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint]),
+      ...(nativeVideo ? Object.entries(object(scene.videoDirection)).flatMap(([field, value]): Array<readonly [string, string]> =>
+        typeof value === 'string' ? [[`videoDirection.${field}`, value]] : field === 'negativeConstraints' && Array.isArray(value)
+          ? value.map((text, index) => [`videoDirection.negativeConstraints[${index}]`, String(text)] as const) : []) : [])];
     requireBoundNumericalResults(sourceQuantityLocations ? quantityFields.map(([field, value]) => [`scenes[${sceneIndex}].${field}`, value] as const) : quantityFields,
     illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
-    return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
+    return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, nativeVideo ? 120 : settings.narrative ? 600 : 120, 'narration'), illustration,
+      ...(nativeVideo ? { durationSeconds: scene.durationSeconds as number, videoDirection: scene.videoDirection as ScientificScene['videoDirection'] } : {}),
       ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
       sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
   });
@@ -574,6 +579,13 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
     sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
+  if (nativeVideo) {
+    const candidate = parseStoryboardDocument({ schemaVersion: 1, title: root.title, narrative, videoProduction: root.videoProduction,
+      scenes: scenes.map(scene => ({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) })) }, claimIds, 'video', { nativeNarrativeVideo: true });
+    requireBoundNumericalResults([['videoProduction.visualContinuity', candidate.videoProduction!.visualContinuity]],
+      scenes.flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+    return { title: candidate.title, scenes, narrative, videoProduction: candidate.videoProduction };
+  }
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
 }
 
@@ -651,8 +663,10 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
     ...claimIds,
     ...paperOriginalScenes.flatMap((s) => s.sourceClaimIds),
   ]));
+  const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const document = parseStoryboardDocument({ schemaVersion: 1, title: intent.title, scenes,
-    ...(intent.narrative ? { narrative: intent.narrative } : {}) }, extendedClaimIds, 'image');
+    ...(intent.narrative ? { narrative: intent.narrative } : {}), ...(nativeVideo ? { videoProduction: intent.videoProduction } : {}) },
+  extendedClaimIds, nativeVideo ? 'video' : 'image', { nativeNarrativeVideo: nativeVideo });
   storyboardSceneStyles(settings, document.scenes);
   return document;
 }

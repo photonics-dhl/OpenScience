@@ -241,6 +241,6 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
 export function supportsNativeIllustration(payload: unknown): boolean {
   if (!record(payload) || payload.kind !== 'interactive_html' || !record(payload.storyboard)) return false;
   const settings = payload.storyboard;
-  return settings.output === 'image' && settings.narrative === true
+  return (settings.output === 'image' || settings.output === 'video') && settings.narrative === true
     && !['baseAssetId', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined);
 }
