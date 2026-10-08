@@ -210,7 +210,7 @@ function evaluateAgentTaskRetryEligibility(
     && (task.error === 'Native image review response invalid JSON; explicit review retry required'
       || task.error === 'Native image review response failed schema validation; explicit review retry required'
       || task.error === 'structured output is not JSON'
-      || /^Expected ',' or '\}' after property value in JSON at position [0-9]+$/u.test(task.error ?? ''));
+      || /^Expected ',' or '\}' after property value in JSON at position [0-9]+(?: \(line [0-9]+ column [0-9]+\))?$/u.test(task.error ?? ''));
   if (task.status !== 'failed' || task.retryCount !== 0
     || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
     || (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
@@ -988,7 +988,7 @@ export async function retryAgentTask(
           && (task.error === 'Native image review response invalid JSON; explicit review retry required'
             || task.error === 'Native image review response failed schema validation; explicit review retry required'
             || task.error === 'structured output is not JSON'
-            || /^Expected ',' or '\}' after property value in JSON at position [0-9]+$/u.test(task.error ?? ''));
+            || /^Expected ',' or '\}' after property value in JSON at position [0-9]+(?: \(line [0-9]+ column [0-9]+\))?$/u.test(task.error ?? ''));
         if (nativeReview?.state === 'started' && !nativeImageReviewSchemaRecovery)
           throw new AgentError('ILLEGAL_TRANSITION', 'Native review outcome is unconfirmed');
         if (nativeImageReviewSchemaRecovery) {
