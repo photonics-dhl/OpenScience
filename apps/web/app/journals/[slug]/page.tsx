@@ -3,13 +3,13 @@ import { notFound } from 'next/navigation';
 import { PublicShell } from '@/components/shell/PublicShell';
 import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { JournalShareButton } from '@/components/journals/JournalShareButton';
-import { safePublicUrl } from '@/lib/journal-workbench-model';
+import { directoryName, safePublicUrl } from '@/lib/journal-workbench-model';
 import { getServerPublicJournal, getServerPublicJournalArticles, PublicServerApiError } from '@/lib/public-server-api';
 export default async function JournalHome({ params, searchParams }: { params: { slug: string }; searchParams?: { cursor?: string } }) {
   let journal; let page;
   try { journal = (await getServerPublicJournal(params.slug)).journal; page = await getServerPublicJournalArticles(journal.id, searchParams?.cursor); }
   catch (error) { if (error instanceof PublicServerApiError && error.status === 404) notFound(); throw error; }
-  const name = journal.nameEn || journal.nameZh; const official = safePublicUrl(journal.websiteUrl);
+  const name = directoryName(journal); const official = safePublicUrl(journal.websiteUrl);
   return <PublicShell mainClassName="craft-journal craft-journal-public" tone="paper" skipLabel="跳到内容" navigationLabel="主导航" wrapHeaderActionsOnMobile headerActions={<SiteHeader active="journals" context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}>
     <article className="mx-auto max-w-[78rem] break-words px-5 py-10 sm:px-8"><Link className="journal-back-link" href="/journals">← 期刊目录</Link>
       <header data-journal-masthead><div><h1 className="font-reading text-5xl font-normal tracking-[-.04em]">{name}</h1>{journal.nameZh && journal.nameEn ? <p className="text-xl text-os-muted-paper">{journal.nameZh}</p> : null}<p className="text-sm text-os-muted-paper">Topics：{journal.subjects.join(' · ') || '未分类'}</p><p className="mt-5 max-w-3xl leading-7 text-os-muted-paper">{journal.description}</p></div>

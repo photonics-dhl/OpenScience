@@ -3,7 +3,7 @@ export type WorkbenchView = 'drafts' | 'processing' | 'review' | 'completed' | '
 export type AccessFilter = 'all' | 'open' | 'closed' | 'unknown';
 export type DirectorySort = 'az' | 'paper_count' | 'citation_count';
 export interface DirectoryRecord {
-  id: string; nameZh: string; nameEn?: string | null; publisherName?: string | null;
+  id: string; nameZh?: string | null; nameEn?: string | null; publisherName?: string | null;
   subjects: string[]; pIssn?: string | null; eIssn?: string | null; publicArticleCount: number;
   openAccess?: boolean | null; citationCount?: number | null;
 }
@@ -38,7 +38,8 @@ export function canDeleteDraft(article: WorkbenchRecord, role: string): boolean 
     !article.draftArchived && !isProcessing(article) && article.releases.length === 0 &&
     !['submitted', 'approved'].includes(article.reviewState);
 }
-export function directoryName(journal: DirectoryRecord): string { return journal.nameEn?.trim() || journal.nameZh; }
+/** Legacy records may omit either name. The fallback is a label, never saved metadata. */
+export function directoryName(journal: DirectoryRecord): string { return journal.nameEn?.trim() || journal.nameZh?.trim() || 'Unnamed journal'; }
 export function selectDirectory<T extends DirectoryRecord>(items: T[], input: { query: string; subject: string; access: AccessFilter; sort: DirectorySort }): T[] {
   const term = input.query.trim().toLocaleLowerCase();
   const normalizedIssn = term.replace(/-/g, '');
