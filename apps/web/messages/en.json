@@ -186,6 +186,7 @@
     "prepareVersionFailed": "The current draft could not be prepared as a usable version. See the specific reason before continuing.",
     "productionSubmitted": "The server has received the production task. Results will appear on the left; you can keep editing in the meantime.",
     "openResearchRun": "Open content and illustration creation",
+    "openResearchVideoRun": "Prepare this paper's video",
     "published": "Published successfully. You can open the public research page.",
     "undone": "Requested undo of the last edit. The text and save status are shown on the left.",
     "cancelled": "Cancelled the arrangement awaiting confirmation.",
@@ -1513,6 +1514,17 @@
     "manualEdit": "Continue manually in the editor"
   },
   "hermesRun": {
+    "video": {
+      "title": "A video for your research",
+      "startDescription": "Turn the paper's central ideas into a visual story with narration. Watch the finished video, then tell Hermes what you would like to refine.",
+      "startFor": "Create a research video: {source}",
+      "composing": "Bringing the scenes and narration together",
+      "ready": "Your video is ready to watch",
+      "runningDescription": "Hermes is shaping the story, preparing the scenes and composing the narration. You can return here when it is ready.",
+      "readyDescription": "Watch the complete video, share your feedback and decide whether to use it.",
+      "preview": "Your research video",
+      "viewResult": "Open the video and give feedback"
+    },
     "sourceReanalysis": {
       "start": "Start new paid analysis",
       "continue": "Continue analysis",

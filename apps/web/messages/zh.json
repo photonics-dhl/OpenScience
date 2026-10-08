@@ -186,6 +186,7 @@
     "prepareVersionFailed": "当前正文尚未整理成可用版本，请查看具体原因后继续。",
     "productionSubmitted": "制作任务已交给服务器，成果会回到左侧。任务完成前仍可编辑正文。",
     "openResearchRun": "打开图文制作",
+    "openResearchVideoRun": "准备这篇论文的视频",
     "published": "已公开发布，可以打开正式研究页面。",
     "undone": "已请求撤销上次修改；正文和保存状态显示在左侧。",
     "cancelled": "已取消这次待确认的安排。",
@@ -1513,6 +1514,17 @@
     "manualEdit": "打开编辑器手动完善"
   },
   "hermesRun": {
+    "video": {
+      "title": "把研究讲成一支视频",
+      "startDescription": "让论文的核心思想成为连贯的画面与旁白。完成后先看整支视频，再告诉 Hermes 你想打磨的地方。",
+      "startFor": "开始制作研究视频：{source}",
+      "composing": "正在把画面与旁白串成故事",
+      "ready": "视频已就绪，来看看吧",
+      "runningDescription": "Hermes 正在梳理故事、制作画面并组织旁白。完成后，回到这里就能观看。",
+      "readyDescription": "看完完整视频，给出你的意见，再决定是否采用。",
+      "preview": "研究讲解视频",
+      "viewResult": "打开视频，给出反馈"
+    },
     "sourceReanalysis": {
       "start": "新建付费分析并继续",
       "continue": "继续分析",

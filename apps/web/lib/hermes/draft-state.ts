@@ -51,9 +51,9 @@ export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const draft = value as Record<string, unknown>;
   const uuid = (id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id);
-  if (Object.keys(draft).some(key => !['researchObjectId', 'ingestionTaskId', 'locale', 'style', 'instruction'].includes(key))
+  if (Object.keys(draft).some(key => !['researchObjectId', 'ingestionTaskId', 'locale', 'style', 'instruction', 'output'].includes(key))
     || !uuid(draft.researchObjectId) || (draft.ingestionTaskId !== undefined && !uuid(draft.ingestionTaskId))
-    || (draft.locale !== 'zh' && draft.locale !== 'en')
+    || (draft.locale !== 'zh' && draft.locale !== 'en') || (draft.output !== undefined && draft.output !== 'video')
     || typeof draft.style !== 'string' || !draft.style.trim() || draft.style.length > 100
     || typeof draft.instruction !== 'string' || !draft.instruction.trim() || draft.instruction.length > 1000) return null;
   return draft as unknown as NonNullable<WorkspaceGuideResult['researchRunDraft']>;

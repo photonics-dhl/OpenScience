@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadHermesPresentationDraft, saveHermesPresentationDraft, loadPendingHermesRunStart, savePendingHermesRunStart } from '../lib/hermes/draft-state';
+import { loadHermesPresentationDraft, saveHermesPresentationDraft, loadPendingHermesRunStart, savePendingHermesRunStart, readHermesResearchRunDraft } from '../lib/hermes/draft-state';
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -10,6 +10,13 @@ const runScope = { userId: 'user', researchObjectId: 'paper', ingestionTaskId: '
 const generation = { profile: 'visual-narrative-v1' as const, maxAgentTasks: 9 as const, locale: 'zh' as const, style: 'auto', instruction: 'Explain this paper' };
 
 describe('video intent persistence', () => {
+  it('accepts only the server guide video intent or a legacy illustration draft', () => {
+    const draft = {researchObjectId:'c896802c-35dd-4b59-8db1-5f374f83a6d8',ingestionTaskId:'d98862b0-0cf3-47a6-872f-1842a9308e7e',locale:'zh',style:'auto',instruction:'把这篇论文做成视频'};
+    expect(readHermesResearchRunDraft({...draft,output:'video'})).toEqual({...draft,output:'video'});
+    expect(readHermesResearchRunDraft(draft)).toEqual(draft);
+    expect(readHermesResearchRunDraft({...draft,output:'image'})).toBeNull();
+    expect(readHermesResearchRunDraft({...draft,output:'other'})).toBeNull();
+  });
   it('retains an explicit local video revision without adding a scope to old drafts', () => {
     const storage = memoryStorage();
     const draft = { action: 'storyboard.revise' as const, instruction: 'Fix scene three', style: 'auto', language: 'zh' as const, selected: ['claim'], parentId: 'base', scene: 2, revisionSceneIndex: 2 };

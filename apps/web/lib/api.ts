@@ -539,8 +539,8 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
-export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun | null }> {
-  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}`, { signal });
+export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}${output ? `&output=${output}` : ''}`, { signal });
 }
 
 export interface HermesArtStyleCapability {
@@ -1438,6 +1438,7 @@ export interface WorkspaceGuideResult {
     locale: 'zh' | 'en';
     style: string;
     instruction: string;
+    output?: 'video';
   };
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {

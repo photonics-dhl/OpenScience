@@ -717,7 +717,7 @@ function HermesAssistantDrawerContent({
           </div>}
           {!submitting && result && <div className="hermes-message hermes-message-assistant">
             <ScientificText as="p">{result.summary}</ScientificText>
-            {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc('openResearchRun')} →</Link> : null}
+            {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc(result?.researchRunDraft?.output === 'video' ? 'openResearchVideoRun' : 'openResearchRun')} →</Link> : null}
             {result.draftEdit && <div className="hermes-conversation-change">
               <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
               {Boolean(editOutcome?.applied) && onUndoDraftEdit && <button type="button" onClick={() => { onUndoDraftEdit(); setEditOutcome(null); }}>{tw('undo')}</button>}

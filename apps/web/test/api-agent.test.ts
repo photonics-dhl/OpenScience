@@ -6,6 +6,15 @@ afterEach(() => {
 });
 
 describe('workspace.guide API client contract', () => {
+  it('qualifies video recovery without changing the legacy image query', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({run:null}), {status:200}));
+    vi.stubGlobal('fetch',fetchMock);
+    const {getExistingHermesResearchRun}=await import('../lib/api');
+    await getExistingHermesResearchRun('paper','source');
+    await getExistingHermesResearchRun('paper','source',undefined,'video');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/research-objects/paper/hermes-runs?ingestionTaskId=source');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/research-objects/paper/hermes-runs?ingestionTaskId=source&output=video');
+  });
   it('binds RO guidance to the existing authorized session context', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf' }), { status: 200 }))
