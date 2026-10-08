@@ -28,7 +28,9 @@
 - Restored explicit file/URL/type identity when adding an active source; uploaded full text sends its existing artifact ID. This does not grant permissions implicitly.
 - Updated browser acceptance to the approved draft-first UI: visible navigation, archive/restore, rights and historical expiry, public permissions, fixed publication, and single-paper quota reservation/cancellation.
 - Only successful generation jobs count as completed interpretation; source parsing alone does not. The real route handler regression is covered.
-- Initial local Web journal tests and 20 draft-workbench tests passed. Final exact-commit CI and production acceptance are still required; do not treat these initial checks as deployment evidence.
+- Local Web journal tests (32) and draft-workbench tests (20) passed. Added explicit accessible names to source permission selects after the first browser run exposed ambiguous label matching.
+- `c4cea550865e268adc537dc2371b52a81f05748c` passed journal push/PR runs `37758400785`/`37758407759`, media `37758407887`, and video `37758407725`, including real isolated browser workflows.
+- Two full server builds completed, but the first runtime snapshot changed after repeated dependency installation. Both private logs and the original snapshot are retained under `/opt/openscience/observations/journal-20261008-c4cea550865e268adc537dc2371b52a81f05748c/`; no production switch or Native/video installation occurred. Prepare a fresh exact SHA with dependency convergence before fixing its deployment snapshot.
 
 ## Release and rollback boundaries
 
