@@ -39,7 +39,7 @@ export function permittedSourcePermissions(status: JournalRightsStatus, permissi
 export function sourceRightsIssues(value: SourceRightsValue, sourceType?: JournalSourceType, activeForGeneration = false): Array<keyof JournalMaterialsCopy> {
   const issues: Array<keyof JournalMaterialsCopy> = [];
   const p = value.permissions;
-  if ((Object.values(p).some(Boolean) || value.rightsStatus !== 'unknown') && !value.evidence.trim()) issues.push('needsEvidence');
+  if (!value.evidence.trim()) issues.push('needsEvidence');
   if ((p.derivativeGeneration || p.publicDerivative || p.publicSource || p.figureReuse || p.derivativeIllustration) && !value.license.trim()) issues.push('needsLicense');
   if ((Object.keys(p) as Array<keyof SourcePermissions>).some((key) => p[key] && !statusPermissions[value.rightsStatus].includes(key))) issues.push('statusMismatch');
   if (sourceType && value.rightsStatus === 'abstract_processing_allowed' && sourceType !== 'abstract') issues.push('abstractOnly');
@@ -65,7 +65,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
   const aiPartial = !aiChecked && aiKeys.some((key) => p[key]);
   const aiRef = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { if (aiRef.current) aiRef.current.indeterminate = aiPartial; }, [aiPartial]);
-  const evidenceRequired = Object.values(p).some(Boolean) || value.rightsStatus !== 'unknown';
+  const evidenceRequired = true;
   const licenseRequired = p.derivativeGeneration || p.publicDerivative || p.publicSource || p.figureReuse || p.derivativeIllustration;
   const update = (part: Partial<SourceRightsValue>) => onChange({ ...value, ...part });
   const task = (key: keyof SourcePermissions, label: string, help?: string) => (

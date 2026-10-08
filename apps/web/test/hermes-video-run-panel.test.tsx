@@ -4,7 +4,7 @@ import { HermesResearchRunPanel } from '../components/hermes/HermesResearchRunPa
 import { loadPendingHermesRunStart, savePendingHermesRunStart } from '../lib/hermes/draft-state';
 import type { HermesResearchRun } from '../lib/api';
 
-const api=vi.hoisted(() => ({ApiClientError:class extends Error {status=0;},getCurrentUser:vi.fn(),getAgentTask:vi.fn(),getExistingHermesResearchRun:vi.fn(),getHermesResearchRun:vi.fn(),createHermesResearchRun:vi.fn(),authorizeHermesGenerationGrant:vi.fn(),retryHermesGeneration:vi.fn(),SESSION_CHANGED_EVENT:'session-changed',SESSION_INVALIDATED_EVENT:'session-invalidated',presentationAssetContentUrl:(ro:string,version:string,id:string) => `/media/${ro}/${version}/${id}`}));
+const api=vi.hoisted(() => ({ApiClientError:class extends Error {status=0;},getCurrentUser:vi.fn(),getAgentTask:vi.fn(),getExistingHermesResearchRun:vi.fn(),getHermesVideoReadiness:vi.fn(),getHermesResearchRun:vi.fn(),createHermesResearchRun:vi.fn(),authorizeHermesGenerationGrant:vi.fn(),retryHermesGeneration:vi.fn(),SESSION_CHANGED_EVENT:'session-changed',SESSION_INVALIDATED_EVENT:'session-invalidated',presentationAssetContentUrl:(ro:string,version:string,id:string) => `/media/${ro}/${version}/${id}`}));
 const copy=vi.hoisted(() => (key:string,values?:{source?:string}) => values?.source && key.endsWith('startFor') ? `${key}:${values.source}` : key);
 vi.mock('@/lib/api',() => api);
 vi.mock('next-intl',() => ({useLocale:() => 'en',useTranslations:() => copy}));
@@ -76,6 +76,7 @@ beforeEach(() => {
   api.getCurrentUser.mockResolvedValue({userId:'user'});
   api.getAgentTask.mockResolvedValue({task:{id:'guide',researchObjectId:ro,kind:'workspace.guide',status:'succeeded',result:{researchRunDraft:{researchObjectId:ro,ingestionTaskId:source,locale:generation.locale,style:generation.style,instruction:generation.instruction,output:'video'},needsMoreInformation:false,nextSteps:[]}}});
   api.getExistingHermesResearchRun.mockResolvedValue({run:null});
+  api.getHermesVideoReadiness.mockResolvedValue({available:true});
   api.getHermesResearchRun.mockResolvedValue({run:videoRun});
   api.createHermesResearchRun.mockResolvedValue({run:videoRun});
 });
@@ -88,8 +89,18 @@ describe('ordinary video workflow from the existing guide',() => {
     expect(api.getExistingHermesResearchRun).toHaveBeenCalledWith(ro,source,expect.any(AbortSignal),'video');
     const button=find(host.tree(),element => element.type==='button' && element.props.children==='video.startFor:paper.pdf');
     expect(button.props.disabled).toBe(false);button.props.onClick!();await host.flush();
+    expect(api.getHermesVideoReadiness).toHaveBeenCalledWith(ro);
     expect(api.createHermesResearchRun).toHaveBeenCalledWith(ro,[source],`hermes-guide-run:user:guide:${source}:video`,generation);
     expect(host.onRunCreated).toHaveBeenCalledWith(videoRun);
+  });
+  it('blocks a new video before creating a charged run when the host is unavailable',async () => {
+    api.getHermesVideoReadiness.mockResolvedValue({available:false});
+    const host=mount();await host.flush();
+    find(host.tree(),element => element.type==='button' && element.props.children==='video.startFor:paper.pdf').props.onClick!();await host.flush();
+    expect(api.getHermesVideoReadiness).toHaveBeenCalledWith(ro);
+    expect(api.createHermesResearchRun).not.toHaveBeenCalled();
+    expect(host.onRunCreated).not.toHaveBeenCalled();
+    expect(find(host.tree(),element => element.props.children==='video.unavailable')).toBeTruthy();
   });
   it('shows and replays the original unknown video intent without replacing an image request',async () => {
     const host=mount();
