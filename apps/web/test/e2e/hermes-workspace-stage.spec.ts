@@ -388,6 +388,11 @@ test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage',
   await page.mouse.click(interactionBox!.x + interactionBox!.width / 2, interactionBox!.y + interactionBox!.height / 2);
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(rig).toHaveAttribute('data-hermes-wanko-presentation', /quiet|evidence|trail|celebrate|missing/u);
+  // Ready and presentation can survive a carrier move; capture a frame drawn after opening.
+  const conversationVisibleAt = await page.evaluate(() => performance.now());
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0), { timeout: 20_000 })
+    .toBeGreaterThan(conversationVisibleAt);
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
   await page.screenshot({ path: 'test/visual/out/hermes-live2d/wanko-dashboard.png', fullPage: true });
 });
 
