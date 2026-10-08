@@ -6,6 +6,8 @@
 
 并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。
 
+冻结版本原文：`VersionRecord.tsx`复用`WorkbenchClaimReader`及已有冻结source API；`research-continuation.spec.ts`覆盖换版本/迟到请求与双语窄屏，`globals.css`仅重置原文sheet局部translate。`useHermesViewerId.ts`复用SessionProvider使制作入口随真实跨标签身份变化；验收及上线状态见CURRENT。
+
 视频执行资格：Gateway `synclip-video-readiness.ts`读取已有host heartbeat；Domain `agent/video-readiness.ts`识别受授权视频意图并在新收费前检查；Worker `video-task-admission.ts`复用任务与outbox暂停/恢复。API `research-runs.ts`的`hermes-video-capability`供Web在来源准备前消费，原重分析的`output`只限制、不扩权；相关同名单测及原media CI覆盖边界，实际交付状态只见CURRENT。
 
 精确内容管理：`ResearchContentManager.tsx`与`TrashActionButton.tsx`将原DTO的resourceId/kind绑定到行、按钮和确认框，避免同名媒体被误选；权限/API/回收语义不变，已授权五项操作的排程与结果只见CURRENT。

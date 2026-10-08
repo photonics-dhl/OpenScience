@@ -171,6 +171,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed history，`publicationIncluded=false`也受`trash.ts`的`publicAssetReferences`保护，旧私有归属结论不能沿用。已审soft-trash方案保留对象/封存，成员直链恢复前404，初始30天恢复有权限/状态条件；禁止purge/补造源/改封存。实际操作另遇`ResearchContentManager`管理行缺资源身份，重复标题无法对应exact UUID；由UI复用原DTO补行标识，不改权限/回收语义，最新授权/写权/证据只见CURRENT。
 
+视频收费前检查：Gateway读取现有host heartbeat，API/Worker同源注入；Web普通及Native入口在新来源/分镜/帧/视频费用前消费可用性，并保持已知run读取与原key/body恢复。供应商网页free/isAdmin不能证明服务器Key无LTX权限；实际Key的模型访问尚未核实，现有host关闭/audio缺项与此分开记录。新期刊共享管线的合并、Panel phase消费差额与最终验证见CURRENT，不以单测成功宣称视频可交付。
+
 视频配音与复用：新候选沿原Native science/art/review形成完整视频计划、逐帧prompt/renderResources和原旁白；`research-run.ts`在既有授权内自动推进，Domain同一技术资格派生videoFrameAssetIds并约束局部返工。Gateway `synclip-audio-api.ts`及既有broker保存每幕TTS/视频回执，完整解码测时、核最终视频/AAC时间线再合成；未知提交不重发，长旁白走有预算的新父修订。仅实现start-reference/scene-artwork/external-narration/无字幕，其余策略付费前拒绝；Linux codec/权限及真实自然度仍需对应证据。旧Qwen/Serena和H3试镜是历史/回退材料，不代表新RO链路通过，也不在听验前删除。
 
 2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。已部署实现复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。

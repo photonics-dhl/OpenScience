@@ -3,6 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-09 00:42：只读确认期刊显式回滚已生效，服务healthy、M3保持，当前运行身份见CURRENT。已收reader/CSS两尺寸2PASS、helper58及组件50；真实消费新增phase P1由UI闭合。远端新增六期刊提交与本批重叠，先合并/High再精确CI；未发布/未操作Fig2。自有Next缓存清理被自动审批阻断、0删除，证据保留。
 - 2026-10-09：UI540/165已全等集入79ca/ab3，68例保留、52个fixture函数/TC已过，资源ID补差未发布。剩余版本原文缺口授生图两文件；视频转Web请求/存储helper，UI专注组件，写权互斥。root High明确legacy本地key闭合时不可盲POST，采用prepared scope只读恢复→资格→mutation、保留paid source/key，不加拒绝marker；整体P1/CI未GO，五项仍0写。
 - 2026-10-08：视频b705后端P1全等集入b328（33代码/测试/infra文件，保留账户与P1文档）；组件High/29业务/API74证据复用，原CI补readiness，待Web/CI/整体High。Fig.2用户已批准exact5，但生图缺认证通道、UI真实管理列表缺精确行身份，双方0写释放；UI修原DTO资源标识，正常发布后沿原授权继续，当前未回收。
 - 2026-10-08 22:45–22:47：Fig.2五项已被公开v8的sealed history引用，即使publicationIncluded=false仍受保护；旧私有/0公开refs已降历史。soft-trash会使五项成员直链404，匿名冻结列表原本不含它们；软回收方案仍需明确保留对象/封存、30天恢复条件及真实GET验证。另77b源对象缺失但不扩scope；无生产写，证据见CURRENT。
