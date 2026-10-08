@@ -21,6 +21,14 @@ const renderDirectory = (initial: JournalSummary[]) => renderToStaticMarkup(crea
   { locale: 'zh', messages, timeZone: 'Asia/Shanghai', children: createElement(JournalDirectory, { initial }) }));
 
 describe('journal directory presentation', () => {
+  it('keeps unsupported access classifications unavailable for the real API shape', () => {
+    // JournalSummary currently carries no authoritative Open Access field.
+    const markup = renderDirectory([journal]);
+    expect(markup).toMatch(/<option(?=[^>]*value="open")(?=[^>]*disabled)[^>]*>/);
+    expect(markup).toMatch(/<option(?=[^>]*value="closed")(?=[^>]*disabled)[^>]*>/);
+    expect(markup).toContain('<option value="unknown">');
+    expect(markup).toContain('Optics Review');
+  });
   it('retains journal identity and navigation without loading arbitrary external logos', () => {
     const markup = renderDirectory([{ ...journal, logoUrl: 'https://tracking.example/visitor.gif' }]);
     expect(markup).toContain('Optics Review');

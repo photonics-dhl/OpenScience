@@ -15,6 +15,8 @@
     "emptyTitle": "Discovery starts with a paper.",
     "emptyBody": "The directory grows as journals join. Explore public research while you are here.",
     "noMatches": "No matching journals",
+    "accessUnavailable": "Open Access information is not available for this directory yet",
+    "showAllAccess": "Show all access types",
     "noMatchesBody": "Try the full journal name, an ISSN or a research field.",
     "clearSearch": "View all journals",
     "explore": "Explore public research",

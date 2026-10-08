@@ -15,6 +15,8 @@
     "emptyTitle": "发现，先从一篇研究开始。",
     "emptyBody": "期刊目录将随入驻期刊逐步丰富。现在也可以从公开研究开始阅读。",
     "noMatches": "没有找到匹配的期刊",
+    "accessUnavailable": "当前目录暂未提供开放获取信息",
+    "showAllAccess": "显示全部获取方式",
     "noMatchesBody": "试试期刊全名、ISSN 或研究领域。",
     "clearSearch": "查看全部期刊",
     "explore": "浏览公开研究",

@@ -79,6 +79,20 @@ const deferred = <T,>() => {
 async function settle() { for (let turn = 0; turn < 8; turn++) await Promise.resolve(); }
 const submit = (tree: React.ReactNode) => find(tree, element => element.type === 'form').props.onSubmit!({ preventDefault: vi.fn() });
 
+it('recovers an unsupported access link while retaining the requested search', () => {
+  Object.assign(window.location, {href:'https://example.test/journals?q=Optics&access=open',search:'?q=Optics&access=open'});
+  let restore!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(() => {}).mockImplementationOnce(effect => {restore=effect as () => void;});
+  const render=mountDirectory([journal('one','Optics Journal')]);
+  render();restore();
+  expect(renderToStaticMarkup(render())).toContain('当前目录暂未提供开放获取信息');
+  find(render(),element => element.type==='button' && element.props.children==='显示全部获取方式').props.onClick!();
+  expect(renderToStaticMarkup(render())).toContain('Optics Journal');
+  const saved=new URL(String(vi.mocked(window.history.pushState).mock.calls.at(-1)![2]));
+  expect(saved.searchParams.get('access')).toBeNull();expect(saved.searchParams.get('q')).toBe('Optics');
+  expect(api.listJournals).not.toHaveBeenCalled();
+});
+
 it('filters the complete directory locally without using an unsubmitted query', () => {
   const render = mountDirectory([journal('one', 'Optics Journal'), journal('two', 'Photonics Journal')]);
   find(render(), element => element.props.id === 'journal-search').props.onChange!({ target: { value: 'Photonics' } });
