@@ -145,8 +145,8 @@ export default function MyProfilePage() {
           <div className="account-shortcuts"><Link href="#research-profile">{meT('editProfile')}</Link><Link href="#identity">{meT('verifyIdentity')}</Link></div>
           <Link href="/settings" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('settingsTitle')}</Link>
         </section>
-        <MyResearchProjects key={user.userId} />
-        <div key={user.userId} id="identity" className="account-identity">
+        <MyResearchProjects />
+        <div id="identity" className="account-identity">
           {callbackFailed ? <p role="status" className="mb-4 text-sm text-os-vermilion-ink">{meT('callbackHelp')}</p> : null}
           <AcademicIdentityControl />
         </div>
