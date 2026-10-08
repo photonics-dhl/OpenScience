@@ -3,6 +3,7 @@
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-08：建立并提交 `aaf24e29` 的 OpenScience 全站审美工作流（`.agents/skills/openscience-aesthetic-design/`，含能力台账与 eval prompts），并补入全站公共阅读分栏构图；Hermes 360px detached 舞台在路由渲染时强制收敛到可见视口，`/me` 重复 React key 随 `7d4f4731` 修正。真实 Chrome 巡检 `/guide`、`/explore`、`/journals`、`/developers`、`/auth/login`、公开研究阅读页、`/dashboard`、`/me`：均有 h1、无横向溢出、无页面错误；detached Hermes `top=70..430` 完整在视口内，指南/登录为 anchored。Web typecheck、Hermes 定向 25/25、Impeccable detector、docs lint 与 docs-sync 通过；本轮仍是候选，尚未部署或用户审美确认。Figma 账号连接已恢复，但尚未选定具体 file key，暂不宣称 Figma 文件级证据。
 - 2026-10-08：线上 `e4ed24571d7037e957c80808147faa54ae2e32cf` 已接入 Synclip 视频 bundle，timer/broker/Worker 环境和公网 release 已核对；RO9067 的真实站内视频任务 `321b013e-9606-4858-82a7-f767105d0069` 在 Hermes 分镜结构化阶段5次 schema/json失败后阻断，未发起 Synclip POST。新增修复让 Hermes 只生成科学 `videoProduction`/`videoDirection`，由服务端从核验 Claim 派生有界动画层；storyboard 定向测试1/1、Worker typecheck/build通过，待发布后再新建一次私有验证，不重放失败任务。
 - 2026-10-08：Worker 科学绑定修正提交 `52f6c1a3` 已上线，线上 release 为 `52f6c1a361d60fd6f7df7d308a24d282192c683f`、回滚 `decf3759b6d40764d39e7467f01e368be9022e92`；发布按 Worker-only 范围使用 `--no-tests --skip-migrate`，容器/active/public/retention 通过，深层 Parser/ScanSci/Embedding 与公网 auth/admin 探针未执行。Synclip 仍锁定已验证的 `gpt-image-2`。
 - 2026-10-08：针对“结构正确但缺少美感”的反馈，重新审查指南真实首屏并完成一轮艺术指导：真实研究图解改为展品构图，增加轻微错位纸张色块、印刷式 metadata、错位投影与更有张力的标题比例；Hermes 仍保持页面自有锚定位。内置浏览器窄屏截图已观察到研究对象、光学丝带与 Hermes 的层次关系，尚未部署。
