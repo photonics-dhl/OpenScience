@@ -125,6 +125,29 @@ on:
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
       - 'apps/web/app/research-objects/new/page.tsx'
       - 'apps/web/lib/hermes/start-paper-narrative.ts'
+      - 'apps/web/lib/hermes/stage-portal.ts'
+      - 'apps/web/lib/hermes/companion-surface.ts'
+      - 'apps/web/lib/hermes/draft-state.ts'
+      - 'apps/web/lib/hermes/presentation-action.ts'
+      - 'apps/web/components/hermes/HermesAssistantDrawer.tsx'
+      - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
+      - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
+      - 'apps/web/components/hermes/HermesPresentationAction.tsx'
+      - 'apps/web/test/hermes-video-*.test.*'
+      - 'apps/web/test/hermes-stage-portal.test.ts'
+      - 'apps/web/test/hermes-companion-surface.test.ts'
+      - 'apps/web/test/hermes-global-companion.test.tsx'
+      - 'apps/web/test/api-agent.test.ts'
+      - 'apps/web/test/auth-dashboard.test.tsx'
+      - 'apps/web/test/e2e/hermes-workspace-stage.spec.ts'
+      - 'apps/web/test/e2e/hermes-dashboard.spec.ts'
+      - 'apps/web/test/e2e/auth-dashboard.spec.ts'
+      - 'apps/web/test/e2e/research-continuation.spec.ts'
+      - 'packages/search/src/chunker.ts'
+      - 'packages/search/test/chunker.test.ts'
+      - 'packages/search/test/fixtures/long-docling-table.json'
+      - 'apps/agent-worker/src/search-indexer.ts'
+      - 'apps/agent-worker/test/search-indexer.test.ts'
       - 'apps/web/lib/presentation/**'
       - 'apps/web/components/presentation/IllustrationStyleChoices.tsx'
       - 'apps/web/components/presentation/ManagedIllustrationStyleChoices.tsx'
@@ -324,6 +347,29 @@ on:
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
       - 'apps/web/app/research-objects/new/page.tsx'
       - 'apps/web/lib/hermes/start-paper-narrative.ts'
+      - 'apps/web/lib/hermes/stage-portal.ts'
+      - 'apps/web/lib/hermes/companion-surface.ts'
+      - 'apps/web/lib/hermes/draft-state.ts'
+      - 'apps/web/lib/hermes/presentation-action.ts'
+      - 'apps/web/components/hermes/HermesAssistantDrawer.tsx'
+      - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
+      - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
+      - 'apps/web/components/hermes/HermesPresentationAction.tsx'
+      - 'apps/web/test/hermes-video-*.test.*'
+      - 'apps/web/test/hermes-stage-portal.test.ts'
+      - 'apps/web/test/hermes-companion-surface.test.ts'
+      - 'apps/web/test/hermes-global-companion.test.tsx'
+      - 'apps/web/test/api-agent.test.ts'
+      - 'apps/web/test/auth-dashboard.test.tsx'
+      - 'apps/web/test/e2e/hermes-workspace-stage.spec.ts'
+      - 'apps/web/test/e2e/hermes-dashboard.spec.ts'
+      - 'apps/web/test/e2e/auth-dashboard.spec.ts'
+      - 'apps/web/test/e2e/research-continuation.spec.ts'
+      - 'packages/search/src/chunker.ts'
+      - 'packages/search/test/chunker.test.ts'
+      - 'packages/search/test/fixtures/long-docling-table.json'
+      - 'apps/agent-worker/src/search-indexer.ts'
+      - 'apps/agent-worker/test/search-indexer.test.ts'
       - 'apps/web/lib/presentation/**'
       - 'apps/web/components/presentation/IllustrationStyleChoices.tsx'
       - 'apps/web/components/presentation/ManagedIllustrationStyleChoices.tsx'
@@ -435,6 +481,10 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
+      - name: Source-preserving long table indexing
+        run: |
+          npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/chunker.test.ts test/embedder.test.ts
+          npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/search-indexer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
@@ -478,11 +528,17 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-presentation-action.test.ts test/api-agent.test.ts
+      - name: Hermes surface lifetime and dashboard behavior
+        run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/auth-dashboard.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+      - name: Hermes navigation and existing research entry
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-workspace-stage.spec.ts hermes-dashboard.spec.ts auth-dashboard.spec.ts research-continuation.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/hermes-entry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
