@@ -59,7 +59,7 @@ Synclip图像与视频接入：图像沿`packages/ai-gateway/src/synclip-image-a
 
 能力补接入口：`scripts/read-current-management-context.mjs`同读Git/Taskmaster/CURRENT指针；`infra/development-platform/code-intelligence/snapshot_identity.py`绑定成功MCP返回的源码版本。`packages/search/src/runtime-config.ts`共享BGE身份配置；`apps/api/src/{search-runtime,research-object-search}.ts`供私有ResearchList的POST全文检索；`packages/domain/src/agent/search-index-source.ts`及原ingestion确认事务绑定解析来源并提交索引；`scripts/index-confirmed-research-sources.cjs`仅补录本次授权的两篇真实论文，默认列计划、`--apply`复用同一producer。部署及实际效果见[CURRENT任务4](docs/handoff/2026-09-10-hermes-web-image-handoff.md)，不复制任务状态。2026-09-23 用户澄清：新 Skill/链路要运行定向测试和必要 CI，避免无关的重复测试；当前细则见交付树 AGENTS.md。
 
-后台索引恢复入口：`packages/search/src/chunker.ts`为超限Docling表格构造保留原分区的临时窗口，`apps/agent-worker/src/search-indexer.ts`逐窗口核向量并归并，`embedder.ts`原合同不变；原chunker/embedder/search-indexer测试及`packages/search/test/fixtures/long-docling-table.json`定位原表回归，全文/页定位不改。Domain `agent.ts`与补录脚本`--retry-incomplete`保留原鉴权恢复资格；旧执行顺序属历史，状态只见CURRENT，稳定验收仍在Taskmaster当前tag。
+后台索引：`packages/search/src/chunker.ts`和Worker `search-indexer.ts`保留原表/分区并以临时完整行窗口归并向量，Embedder/Storage原合同不变；原chunker/embedder/search-indexer测试及`long-docling-table.json`定位回归。Domain `agent.ts`的内部sourceIndexRecovery与`scripts/index-confirmed-research-sources.cjs`指定task分支保留原鉴权/CAS/预算；相邻CJS test、agent source-index组和indexing-storage测试覆盖参数与恢复，普通retry/公开canRetry不变。具体执行/CI/未验仅见CURRENT。
 
 任务纠偏入口：`AGENTS.md`与`.agents/skills/docs-sync/SKILL.md`对齐既有Taskmaster当前tag与未完成交付项；`infra/development-platform/catalog/catalog-info.yaml`导航交付源码与需求，`telemetry/query.mjs --task`按原任务关联定位调用。`workspace-guide.ts`艺术路由保留原要求，Hermes结果/草稿/操作组件传递明确art/baseAssetId；自有配图Skill v18、`openscience-research-illustration/references/style-taxonomy.md`与原末审同轮检查明确几何与艺术要求。部署、实际效果和未观察范围仅见CURRENT。
 

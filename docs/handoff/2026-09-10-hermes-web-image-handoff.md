@@ -11,7 +11,7 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责三线写权/依赖/集成/发布与CURRENT/progress/index，各owner保留原任务和专属计划。线程心跳`openscience`已ACTIVE，每10分钟检查三线；完成、idle或受阻时及时补派有用且已授权的独立下一步，状态不变不通知，不用无关检查充数。
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | dense已交；High B方案下实现原retryAgentTask/CLI内部指定task恢复，不生产索引 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/search-long-table-dense` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | dense/内部恢复均已交；定向只读核049c与真实storage owner当前资格，无生产apply | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/search-long-table-dense` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 优先P1：付费前server-owned视频资格；账户只读取证存检查点，不碰agent.ts | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/synclip-video-delivery` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 优先期刊真实浏览器失败＋视频付费前资格消费；在途版本页等保留，不扩新视觉 | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
 - 视频确认无共用文件在途写入后，生图另获GatewayOptions/constructor/native PNG分支/completeWithControls局部provider选择与Worker `buildGateway`可选审图模型构造、对应测试；不改provider.ts、Native/Text或全局M3。视频保留其余已授Native/Domain/Worker/音频，Web归UI；未知付费保护只约束具体任务，不扩成整线待命。
@@ -32,8 +32,8 @@
 - cb科学诊断见生图tmp/first-scene-native-diagnostics.json：第6轮1,721,322bytes/20消息低于本机上限，仅排除本地oversize，超时未定因；完成turn的压缩空messages不是原请求尺寸。20/500/77nm、1MeV/0.94c错来源及Gaussian1.8、tau/时空/virtual-real问题仍须Native修订，不由代码补论文答案。
 - 视频主候选及9914已集入、High闭合，原Worker67/Domain175/run57/API7/音频179证据保留；新CI见上。host3603→92bf全等集入、High GO，Linux含子项32/32；原renderer已有codec，未生产切换。[视频计划](../plans/2026-09-05-hermes-presentation-assets-plan.md)的合同14fd→c07c已集入：LTX原生声/多镜头存在，15秒分段不推出必须外置TTS，当前换轨会替代原生人声/音乐/环境声；这是实现取舍。原生合格实片尚缺，暂不改模式，现只读核账户权限/音色；坏镜头及真实音画待验。
 - 普通video沿原hermes-runs/9任务授权，旧image不升级；guide output、GET按image/video恢复、旧null兼容及failed/unknown不跳过已随160→68集入，21/26/23通过。集成High发现P1：UI可先付费重分析，Domain可先分镜/成图，直到最终spool才拒绝已知不可用host。视频owner补fresh readiness与服务端收费前检查，UI在source准备前消费；原run/key/paid与最终spool保护保留。不把admin=true当权限证据。精确审查在tmp/session-coordination-20261008/integration-high-c3ebf728.md。
-- UI已提交的fe12ea28全等合入2265da91，含8137/d8e5/5c7832/c2aa/90977、期刊语义合并及普通视频对话。High记录无P1/P2；手动视频23/普通入口25/期刊18通过，最终构建与导航进本批CI。其他工作页仍由UI在途修改，未收入。a335旧分镜选择已随42上线；新布局/普通入口未部署或视觉验收。
-- Task4长表格57c→aa0五文件全等、High闭3P2，Search29/Worker25与TC/lint通过；原分区后才对token拒绝table划同源完整行窗口并mean-normalize，失败保原lexical。原表3051/607离线通过，非真实BGE，线上69段仍lexical。现查明旧049c succeeded/token_limit无合法零代码恢复；High B方案GO后授生图仅agent.ts原retry内部mode+exact-task CLI/测试，保留公开canRetry、双预算/CAS/fence，禁止先enqueue再比对或生产apply。原证据在生图tmp/long-table-dense/。
+- UI fe12→2265含构图/普通视频/期刊，块内High与23/25/18定向保留，c3新build/单测通过。浏览器失败差额c7ed/2123/3decb→1369/6a87/4a60已全等集入：核真实可见创建入口、搜索期刊后点击并返回，保留幂等/多PDF/窄屏/权限；OA元数据缺失时禁用相应筛选并保留恢复入口，11定向通过。浏览器待下一CI；P1资格前置另修，其它视觉在途未收，新UI未部署或验收。
+- Task4长表格57c→aa0五文件全等，High闭3P2，Search29/Worker25已CI实跑；原分区后才划同源行窗口，失败保lexical。内部恢复f427→79050五文件另集入，High参数P2关闭，Domain34/CLI23/Storage16本地通过，原六项any旧lint未扩修。仅指定049c读原owner后走原retry，公开canRetry/双预算/CAS/fence不变，禁止先enqueue或生产apply；现由owner只读核当前资格，旧09-28快照不能填新字段。原表3051/607仍仅离线，真实BGE/69段恢复未验；回执在生图tmp/{long-table-dense,source-index-token-limit-recovery}/。
 - 生图浏览器getState及唯一reset后的getState均为request-header policy错误，已停循环；不绕过、不据此判产品故障或宣称实点。UI先前预览启动也曾被自动审批拒绝；按各自真实观察范围记录。
 - RO9067 第四幕 `28ab61b0-7931-41d3-8200-2d63c1f986ad` 的供应商 POST 终态未知且无receipt；需可核实的关联/幂等查询合同恢复，不为补齐4/4重发。用户已要求减少中间人工审核；按此接产品流程，公开确认边界不变。
 
