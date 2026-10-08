@@ -1526,8 +1526,7 @@
       "runningDescription": "Hermes 正在梳理故事、制作画面并组织旁白。完成后，回到这里就能观看。",
       "readyDescription": "看完完整视频，给出你的意见，再决定是否采用。",
       "preview": "研究讲解视频",
-      "viewResult": "打开视频，给出反馈",
-      "unavailable": "视频生成当前不可用，未启动新的付费分析。"
+      "viewResult": "打开视频，给出反馈"
     },
     "sourceReanalysis": {
       "start": "新建付费分析并继续",

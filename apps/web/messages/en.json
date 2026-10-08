@@ -1526,8 +1526,7 @@
       "runningDescription": "Hermes is shaping the story, preparing the scenes and composing the narration. You can return here when it is ready.",
       "readyDescription": "Watch the complete video, share your feedback and decide whether to use it.",
       "preview": "Your research video",
-      "viewResult": "Open the video and give feedback",
-      "unavailable": "Video generation is currently unavailable. No paid analysis was started."
+      "viewResult": "Open the video and give feedback"
     },
     "sourceReanalysis": {
       "start": "Start new paid analysis",
