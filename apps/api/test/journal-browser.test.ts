@@ -146,7 +146,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       await adminContext.addCookies([{ name: 'openscience_session', value: adminToken, url: baseUrl, sameSite: 'Lax' }]);
 
       const surfaces = [
-        { name: 'directory', context: publicContext, path: '/journals', expected: ['Browse all journals'] },
+        { name: 'directory', context: publicContext, path: '/journals', expected: [] },
         { name: 'homepage', context: publicContext, path: `/journals/${slug}`, expected: ['编辑部身份已核验', 'Synthetic evidence comparison paper', '解析版本 · v1'] },
         { name: 'release', context: publicContext, path: releaseUrl, expected: ['期刊解读', '14.7 TW'] },
         { name: 'workbench', context: ownerContext, path: `/journals/manage/${journalId}`, expected: ['期刊工作台', '草稿箱', '已完成处理', '已公开解读'] },
@@ -187,9 +187,19 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
           // The responsive navigation keeps a hidden desktop link in the DOM on mobile.
           for (const text of surface.expected) await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible' });
           if (surface.name === 'directory') {
-            await page.getByLabel('搜索期刊').fill(journalName);
-            await page.getByRole('button', { name: '搜索' }).click();
-            await page.getByText(journalName).waitFor({ state: 'visible' });
+            // The directory heading is localized. Verify the visible page landmark,
+            // named directory and real result instead of a historical English slogan.
+            const main = page.getByRole('main');
+            await main.getByRole('heading', { level: 1 }).waitFor({ state: 'visible' });
+            const directory = main.locator('[data-journal-directory]');
+            await directory.waitFor({ state: 'visible' });
+            expect(await directory.getAttribute('aria-label')).toBeTruthy();
+            await directory.getByRole('searchbox').fill(journalName);
+            await directory.getByRole('button', { name: '搜索', exact: true }).click();
+            await directory.getByRole('heading', { name: journalName, exact: true }).waitFor({ state: 'visible' });
+            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalName, exact: true }) });
+            await result.waitFor({ state: 'visible' });
+            expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
           }
           if (surface.name === 'release') {
             const sourceLink = page.getByRole('link', { name: /查看原始来源/ });
