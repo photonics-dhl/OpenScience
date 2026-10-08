@@ -107,6 +107,90 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('explicit source-index token-limit recovery reuses the original owner and remaining budget', async () => {
+    const { deps, user, task, source, db, redis } = await makeSourceIndexRecovery();
+    Object.assign(task, { status: 'succeeded', error: null, progress: 100, retryCount: 1, executionAttempt: 2,
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    const payload = structuredClone(task.payload);
+    Object.assign(deps, { audit: { record: async (event: unknown) => { db.auditLogs.push(event); } } });
+    const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+    await expect(getAgentTask(deps, input)).resolves.toMatchObject({ canRetry: false });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
+    await expect(retryAgentTask(deps, input)).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 2 });
+    expect(task.executionAttempt).toBe(2);
+    expect(db.agentTasks.find(row => row.id === task.id)?.payload).toEqual(payload);
+    expect(db.agentTasks.find(row => row.id === source.id)?.executionAttempt).toBe(1);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+    expect(db.auditLogs).toEqual(expect.arrayContaining([expect.objectContaining({
+      action: 'agent.task.retry', targetId: task.id, metadata: expect.objectContaining({
+        creditPolicy: 'not-applicable-deterministic', sourceIndexRecovery: 'token-limit-after-upgrade',
+      }),
+    })]));
+    await claimAgentTask(deps, task.id);
+    expect(db.agentTasks.find(row => row.id === task.id)?.executionAttempt).toBe(3);
+    await markTaskProgress(deps, { taskId: task.id, status: 'succeeded',
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    await expect(retryAgentTask(deps, input)).rejects.toThrow();
+    expect(db.agentTasks.find(row => row.id === task.id)?.retryCount).toBe(2);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+  });
+
+  it.each(['stale-attempt', 'changed-reference', 'deleted-source', 'membership', 'owner', 'artifact',
+    'manifest', 'producer-owner', 'cas', 'failed-status', 'wrong-code', 'already-dense', 'inline-source', 'exhausted', 'unknown-mode'])(
+    'explicit source-index token-limit recovery rejects %s without dispatch', async (failure) => {
+      const { deps, user, task, source, db, redis, prisma } = await makeSourceIndexRecovery();
+      Object.assign(task, { status: 'succeeded', error: null, retryCount: 1, executionAttempt: 2,
+        result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+      const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+      if (failure === 'stale-attempt') source.executionAttempt += 1;
+      if (failure === 'changed-reference') source.result = { sourceMapRef: { ...source.result.sourceMapRef, size: 124 } };
+      if (failure === 'deleted-source') source.deletedAt = new Date();
+      if (failure === 'membership') db.memberships.length = 0;
+      if (failure === 'owner') db.agentSessions[0].userId = 'another-user';
+      if (failure === 'artifact') prisma.artifact.findFirst.mockResolvedValue(null);
+      if (failure === 'manifest') prisma.version.findFirst.mockResolvedValue(null);
+      if (failure === 'producer-owner') {
+        const findUnique = prisma.agentTask.findUnique;
+        prisma.agentTask.findUnique = vi.fn(async (query) => query.where.idempotencyKey
+          ? { ...task, id: '55555555-5555-4555-8555-555555555555' } : findUnique(query));
+      }
+      if (failure === 'cas') prisma.agentTask.updateMany = vi.fn(async () => ({ count: 0 }));
+      if (failure === 'failed-status') {
+        task.status = 'failed';
+        task.error = 'indivisible block exceeds embedding token limit';
+      }
+      if (failure === 'wrong-code') Object.assign(task.result, { errorCode: 'embedding_unavailable' });
+      if (failure === 'already-dense') Object.assign(task.result, { status: 'succeeded' });
+      if (failure === 'inline-source') task.payload = { artifactId: task.payload.artifactId, sourceMap: {} };
+      if (failure === 'exhausted') task.retryCount = 2;
+      if (failure === 'unknown-mode') input.sourceIndexRecovery = 'unknown' as never;
+      await expect(retryAgentTask(deps, input)).rejects.toThrow();
+      expect(db.agentTasks.find(row => row.id === task.id)?.retryCount).toBe(failure === 'exhausted' ? 2 : 1);
+      expect(redis.lists.get('agent:queue') ?? []).toEqual([]);
+      expect(db.agentTasks).toHaveLength(2);
+      expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+      if (failure === 'cas') expect(prisma.agentTask.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: task.id, status: 'succeeded', retryCount: 1, executionAttempt: 2,
+          result: { equals: expect.objectContaining({ errorCode: 'token_limit_exceeded' }) } }),
+      }));
+    });
+
+  it('concurrent explicit source-index token-limit recovery dispatches only one original owner', async () => {
+    const { deps, user, task, db, redis } = await makeSourceIndexRecovery();
+    Object.assign(task, { status: 'succeeded', error: null, retryCount: 1, executionAttempt: 2,
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+    const outcomes = await Promise.allSettled([retryAgentTask(deps, input), retryAgentTask(deps, input)]);
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1);
+    expect(task.retryCount).toBe(2);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+    expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+  });
+
   it.each(['token_limit_exceeded', 'embedding_unavailable'] as const)(
     'recovers the original source-index failure and honors the real succeeded/%s terminal result', async (errorCode) => {
     const { deps, user, task, db, redis } = await makeSourceIndexRecovery();

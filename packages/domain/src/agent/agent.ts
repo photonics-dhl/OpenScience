@@ -154,11 +154,15 @@ function retryAuthorityInclude(userId: string) {
   } as const;
 }
 
-function isRetryableSourceSearchIndex(task: Pick<AgentTask, 'kind' | 'status' | 'result' | 'payload' | 'error'>): boolean {
+function isRetryableSourceSearchIndex(
+  task: Pick<AgentTask, 'kind' | 'status' | 'result' | 'payload' | 'error'>,
+  tokenLimitRecovery = false,
+): boolean {
   if (task.kind !== 'search.index') return false;
   const incomplete = task.status === 'succeeded' && isJsonRecord(task.result)
-    && task.result.status === 'needs_review' && task.result.errorCode === 'embedding_unavailable';
-  const transientFailure = task.status === 'failed' && [
+    && task.result.status === 'needs_review'
+    && task.result.errorCode === (tokenLimitRecovery ? 'token_limit_exceeded' : 'embedding_unavailable');
+  const transientFailure = !tokenLimitRecovery && task.status === 'failed' && [
     'embedding_worker_worker_busy', 'embedding_transport_unavailable', 'embedding_response_unavailable',
     'indivisible block exceeds embedding token limit',
   ].includes(task.error ?? '');
@@ -943,7 +947,7 @@ export async function getAgentTask(
 /** Model tasks retain one retry; deterministic source indexes allow two explicit recoveries. */
 export async function retryAgentTask(
   deps: AgentDeps,
-  input: { userId: string; taskId: string },
+  input: { userId: string; taskId: string; sourceIndexRecovery?: 'token-limit-after-upgrade' },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
   let updated: AgentTask | null | undefined;
@@ -956,7 +960,15 @@ export async function retryAgentTask(
         if (!task || task.deletedAt || task.session.deletedAt || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
         if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-        if (!eligibility.canRetry) {
+        // Internal operator recovery after the windowing fix; public canRetry and
+        // default retry keep the deterministic token-limit terminal unchanged.
+        const sourceIndexRecovery = input.sourceIndexRecovery === 'token-limit-after-upgrade'
+          && task.retryCount < 2 && Boolean(task.session.researchObjectId)
+          && isRetryableSourceSearchIndex(task, true);
+        if (input.sourceIndexRecovery !== undefined && !sourceIndexRecovery) {
+          throw new AgentError('ILLEGAL_TRANSITION', 'Token-limit source-index recovery is not available');
+        }
+        if (!eligibility.canRetry && !sourceIndexRecovery) {
           if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
           if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
           throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
@@ -984,7 +996,7 @@ export async function retryAgentTask(
             throw new AgentError('ILLEGAL_TRANSITION', 'Manual image review is not safe to resume');
           }
         }
-        const sourceSearch = isRetryableSourceSearchIndex(task);
+        const sourceSearch = sourceIndexRecovery || isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
         const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
           && task.retryCount < 2
@@ -1055,6 +1067,7 @@ export async function retryAgentTask(
         await recordAudit(deps, tx, {
           actorId: input.userId, action: 'agent.task.retry', workspaceId,
           targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: task.retryCount + 1, ...scienceRecovery,
+            ...(sourceIndexRecovery ? { sourceIndexRecovery: input.sourceIndexRecovery } : {}),
             creditPolicy: sourceSearch ? 'not-applicable-deterministic' : 'reuse-original-reservation' },
         }, ctx);
         return tx.agentTask.findUnique({ where: { id: task.id } });

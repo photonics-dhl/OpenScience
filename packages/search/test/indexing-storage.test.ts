@@ -75,6 +75,73 @@ function vectorDraft() {
 }
 
 describe('leased index generation storage', () => {
+  it('recovers a current needs-review generation with a newer epoch of the same owner', async () => {
+    const row = task({ status: 'needs_review', errorCode: 'embedding_unavailable', attemptCount: 2,
+      fenceOwnerAttempt: 2, isCurrent: true, leaseToken: null, leaseExpiresAt: null });
+    const observedUpdates: unknown[] = [];
+    const updateMany = vi.fn(async (input: unknown) => { observedUpdates.push(input); return { count: 1 }; });
+    const transaction = {
+      $queryRaw: vi.fn(async () => [{ id: MODEL_IDENTITY.modelVersionId }]),
+      searchIndexTask: { upsert: vi.fn(async () => row), updateMany },
+    };
+    const storage = new SearchStorage({
+      $transaction: async (run: (value: typeof transaction) => Promise<unknown>) => run(transaction),
+    } as never);
+    await expect(storage.beginIndexTask({
+      taskId: TASK, tenantId: TENANT, researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT,
+      sourceVersionId: SOURCE_VERSION, sourceVersionNo: 1, contentHash: CONTENT_HASH,
+      sourceGenerationSha256: SOURCE_MAP_HASH, sourceCreatedAt: SOURCE_CREATED_AT,
+      leaseToken: LEASE, executionAttempt: 3, modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: TASK, leaseToken: LEASE });
+    expect(updateMany).toHaveBeenCalledOnce();
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: TASK, status: 'needs_review', attemptCount: 2 },
+      data: expect.objectContaining({ status: 'running', attemptCount: { increment: 1 },
+        fenceOwnerTaskId: TASK, fenceOwnerAttempt: 3, leaseToken: LEASE }),
+    });
+    expect(observedUpdates[0]).not.toHaveProperty('data.isCurrent');
+  });
+
+  it('does not reset an exhausted current needs-review generation for a newer owner epoch', async () => {
+    const updateMany = vi.fn();
+    const transaction = {
+      $queryRaw: vi.fn(async () => [{ id: MODEL_IDENTITY.modelVersionId }]),
+      searchIndexTask: { upsert: vi.fn(async () => task({
+        status: 'needs_review', errorCode: 'embedding_unavailable', attemptCount: 3,
+        fenceOwnerAttempt: 2, isCurrent: true, leaseToken: null, leaseExpiresAt: null,
+      })), updateMany },
+    };
+    const storage = new SearchStorage({
+      $transaction: async (run: (value: typeof transaction) => Promise<unknown>) => run(transaction),
+    } as never);
+    await expect(storage.beginIndexTask({
+      taskId: TASK, tenantId: TENANT, researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT,
+      sourceVersionId: SOURCE_VERSION, sourceVersionNo: 1, contentHash: CONTENT_HASH,
+      sourceGenerationSha256: SOURCE_MAP_HASH, sourceCreatedAt: SOURCE_CREATED_AT,
+      leaseToken: LEASE, executionAttempt: 3, modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'skip', taskId: TASK, status: 'needs_review', errorCode: 'embedding_unavailable' });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('preserves current lexical rows while staging (partition drift=%s)', async (drift) => {
+    const deleteMany = vi.fn();
+    const create = vi.fn();
+    const transaction = {
+      searchIndexTask: { findUnique: vi.fn(async () => task({ isCurrent: true })) },
+      searchChunk: { findMany: vi.fn(async () => [{ id: CHUNK, active: true }]), deleteMany, create },
+    };
+    const storage = new SearchStorage({
+      $transaction: async (run: (value: typeof transaction) => Promise<unknown>) => run(transaction),
+    } as never);
+    const operation = storage.stageIndexGeneration({
+      taskId: TASK, leaseToken: LEASE, chunks: [{ ...chunk(), id: drift ? 'f'.repeat(64) : CHUNK }],
+    });
+    if (drift) await expect(operation).rejects.toThrow('current index generation does not match staged chunks');
+    else await expect(operation).resolves.toBeUndefined();
+    expect(deleteMany).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('claims a model-bound generation with a content-free lease', async () => {
     const row = task();
     const transaction = {
