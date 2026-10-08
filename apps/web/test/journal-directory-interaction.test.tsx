@@ -54,6 +54,9 @@ type EventProps = {
   type?: string;
   id?: string;
   disabled?: boolean;
+  open?: boolean;
+  value?: string;
+  'data-journal-refinement'?: boolean;
   role?: string;
 };
 function find(node: React.ReactNode, match: (element: React.ReactElement<EventProps>) => boolean): React.ReactElement<EventProps> {
@@ -78,6 +81,59 @@ const deferred = <T,>() => {
 };
 async function settle() { for (let turn = 0; turn < 8; turn++) await Promise.resolve(); }
 const submit = (tree: React.ReactNode) => find(tree, element => element.type === 'form').props.onSubmit!({ preventDefault: vi.fn() });
+
+it('keeps optional filters collapsed while search and journal results stay in the main path', () => {
+  const render = mountDirectory([journal('one', 'Optics Journal')]);
+  const tree = render();
+  const disclosure = find(tree, element => element.type === 'details' && element.props['data-journal-refinement'] === true);
+  expect(disclosure.props.open).toBeUndefined();
+  const summary = find(disclosure, element => element.type === 'summary');
+  expect(renderToStaticMarkup(summary)).toContain('筛选与排序');
+  expect(renderToStaticMarkup(summary)).toContain('全部学科');
+  expect(renderToStaticMarkup(disclosure).match(/<select\b/g)).toHaveLength(3);
+  expect(maybeFind(disclosure, element => element.props.id === 'journal-search')).toBeUndefined();
+  expect(renderToStaticMarkup(disclosure)).not.toContain('Optics Journal');
+  expect(renderToStaticMarkup(tree)).toContain('Optics Journal');
+});
+
+it('keeps active filters explicit when a URL is restored or changed through history', () => {
+  Object.assign(window.location, { href: 'https://example.test/journals?subject=Optics&access=open&sort=paper_count', search: '?subject=Optics&access=open&sort=paper_count' });
+  let restoreEffect!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(() => {}).mockImplementationOnce(effect => { restoreEffect = effect as () => void; });
+  const entries = [
+    Object.assign(journal('one', 'Optics Journal'), { openAccess: true, publicArticleCount: 9 }),
+    Object.assign(journal('two', 'Photonics Journal'), { subjects: ['Photonics'], openAccess: false, publicArticleCount: 2 }),
+  ];
+  const render = mountDirectory(entries);
+  render(); restoreEffect();
+  const getSummary = () => renderToStaticMarkup(find(render(), element => element.type === 'summary'));
+  expect(getSummary()).toContain('Optics');
+  expect(getSummary()).toContain('开放获取');
+  expect(getSummary()).toContain('平台收录篇数');
+  expect(renderToStaticMarkup(render())).toContain('Optics Journal');
+  expect(renderToStaticMarkup(render())).not.toContain('Photonics Journal');
+  Object.assign(window.location, { href: 'https://example.test/journals?subject=Photonics&access=closed', search: '?subject=Photonics&access=closed' });
+  const popstate = vi.mocked(window.addEventListener).mock.calls.find(([event]) => event === 'popstate')![1] as () => void;
+  popstate();
+  expect(getSummary()).toContain('Photonics');
+  expect(getSummary()).toContain('非开放获取');
+  expect(getSummary()).not.toContain('平台收录篇数');
+  expect(renderToStaticMarkup(render())).toContain('Photonics Journal');
+  expect(api.listJournals).not.toHaveBeenCalled();
+});
+
+it('explains unavailable citation sorting without pretending it is active', () => {
+  Object.assign(window.location, { href: 'https://example.test/journals?sort=citation_count', search: '?sort=citation_count' });
+  let restoreEffect!: () => void;
+  vi.mocked(React.useEffect).mockImplementationOnce(() => {}).mockImplementationOnce(effect => { restoreEffect = effect as () => void; });
+  const render = mountDirectory([journal('one', 'Optics Journal')]);
+  render(); restoreEffect();
+  const disclosure = find(render(), element => element.type === 'details' && element.props['data-journal-refinement'] === true);
+  expect(renderToStaticMarkup(find(disclosure, element => element.type === 'summary'))).toContain('引用量暂不可用，当前按 A–Z 排序');
+  const sort = find(disclosure, element => element.type === 'select' && element.props.value === 'az');
+  expect(find(sort, element => element.type === 'option' && element.props.value === 'citation_count').props.disabled).toBe(true);
+  expect(api.listJournals).not.toHaveBeenCalled();
+});
 
 it('recovers an unsupported access link while retaining the requested search', () => {
   Object.assign(window.location, {href:'https://example.test/journals?q=Optics&access=open',search:'?q=Optics&access=open'});
