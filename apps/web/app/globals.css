@@ -1663,6 +1663,7 @@ textarea::placeholder {
   max-height: 82dvh;
   padding: 1.25rem !important;
   overflow: auto;
+  translate: none;
   transform: translateX(-50%) !important;
   border-radius: 1.25rem 1.25rem 0 0 !important;
 }
