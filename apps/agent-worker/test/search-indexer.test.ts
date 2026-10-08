@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { DocumentSourceMap } from '@openscience/domain';
-import { tokenizeSearchText } from '@openscience/search';
+import { parseDocumentSourceMap, type DocumentSourceMap } from '@openscience/domain';
+import { EmbeddingClient, tokenizeSearchText } from '@openscience/search';
 
 import type { AiGateway } from '@openscience/ai-gateway';
 
@@ -95,6 +98,92 @@ function dependencies() {
 }
 
 describe('search indexer', () => {
+  function windowedTable(rows = 3) {
+    const text = Array.from({ length: rows }, (_, i) => `[row ${i + 1}, column 1] symbol\n[row ${i + 1}, column 2] definition`).join('\n');
+    const map = sourceMap(text); map.pages[0]!.blocks[0]!.kind = 'table';
+    const deps = dependencies();
+    deps.embedder.tokenCounts.mockImplementation(async ({ texts }) =>
+      new Set(texts[0]!.match(/\[row \d+,/gu)).size === 1 ? [100] : undefined);
+    deps.embedder.embed.mockImplementation(async ({ texts }) => ({
+      ...MODEL_IDENTITY, dimension: 1024 as const,
+      vectors: texts.map(text => text.startsWith('[row 1,') ? unitVector() : [0, 1, ...Array.from({ length: 1022 }, () => 0)]),
+    }));
+    return { deps, map, text, indexer: createSearchIndexer({ ...deps, modelIdentity: MODEL_IDENTITY }) };
+  }
+  it('pools validated windows across the existing two-item batches into one original chunk vector', async () => {
+    const { deps, map, text, indexer } = windowedTable();
+    await expect(indexer.index(job(map))).resolves.toEqual({ status: 'succeeded', chunkCount: 1, denseChunkCount: 1, activated: true });
+    expect([...deps.lexical.values()]).toMatchObject([{ text, locators: [{ blockId: 'paragraph-1' }], claimIds: ['claim-1'] }]);
+    expect(deps.embedder.embed.mock.calls.map(([input]) => input.texts.length)).toEqual([2, 1]);
+    const sent = deps.embedder.embed.mock.calls.flatMap(([input]) => input.texts);
+    expect(sent.join('')).toBe(text);
+    const pooled = [...deps.dense.values()][0] as { vector: Buffer; vectorSha256: string; norm: number };
+    expect(pooled.vector.readFloatLE(0)).toBeCloseTo(1 / Math.sqrt(5), 6);
+    expect(pooled.vector.readFloatLE(4)).toBeCloseTo(2 / Math.sqrt(5), 6);
+    expect(pooled.norm).toBeCloseTo(1, 10);
+    expect(pooled.vectorSha256).toBe(createHash('sha256').update(pooled.vector).digest('hex'));
+  });
+  it('replays the real page14 source through indexing without changing its lexical chunk or source binding', async () => {
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, '../../../packages/search/test/fixtures/long-docling-table.json'), 'utf8'));
+    const map = parseDocumentSourceMap(fixture.sourceMap), table = map.pages[0]!.blocks[0]!, deps = dependencies();
+    // Replay the actual HTTP client/decoder against a local fixture boundary,
+    // not a live BGE tokenizer or an invented historical production response.
+    const encoded = Buffer.alloc(1024 * Float32Array.BYTES_PER_ELEMENT); encoded.writeFloatLE(1, 0);
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const request = JSON.parse(String(init?.body));
+      if (String(url).endsWith('/v1/tokenize')) {
+        if (request.texts.includes(table.text)) return new Response(JSON.stringify({ schemaVersion: 1, error: 'token_limit_exceeded' }),
+          { status: 422, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ schemaVersion: 1, tokenCounts: request.texts.map(() => 1024) }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ schemaVersion: 1, modelRevision: MODEL_IDENTITY.modelRevision,
+        sourceSha256: MODEL_IDENTITY.sourceSha256, packageFreezeSha256: MODEL_IDENTITY.packageFreezeSha256,
+        modelManifestSha256: MODEL_IDENTITY.modelManifestSha256, dimension: 1024, encoding: 'base64-f32le',
+        vectors: request.texts.map(() => encoded.toString('base64')) }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const embedder = new EmbeddingClient({ baseUrl: 'http://embedding-worker:8080', fetchImpl });
+    const input = { ...job(map), artifactId: map.artifactId, contentHash: map.contentHash, claimIdsByBlockId: { [table.id]: ['claim-1'] } };
+    await expect(createSearchIndexer({ ...deps, embedder, modelIdentity: MODEL_IDENTITY }).index(input))
+      .resolves.toEqual({ status: 'succeeded', chunkCount: 1, denseChunkCount: 1, activated: true });
+    expect([...deps.lexical.values()]).toMatchObject([{ text: table.text, tokenCount: 607, claimIds: ['claim-1'], locators: [{
+      artifactId: map.artifactId, contentHash: map.contentHash, blockId: table.id, page: 14, boundingBox: table.boundingBox,
+    }] }]);
+    const embeddingCalls = fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/v1/embeddings'));
+    expect(embeddingCalls).toHaveLength(1);
+    expect(JSON.parse(String(embeddingCalls[0]![1]?.body)).texts.join('')).toBe(table.text);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/v1/tokenize'))).toHaveLength(3);
+  });
+  it.each(['second-batch', 'identity', 'norm', 'zero-pool'])('keeps whole lexical content and writes no partial dense after %s failure', async mode => {
+    const { deps, map, text, indexer } = windowedTable(mode === 'zero-pool' ? 2 : 3);
+    const valid = deps.embedder.embed.getMockImplementation()!;
+    if (mode === 'second-batch') deps.embedder.embed.mockImplementationOnce(valid).mockRejectedValueOnce(new Error('connection lost'));
+    else if (mode === 'identity') deps.embedder.embed.mockImplementationOnce(valid).mockImplementationOnce(async input => ({ ...await valid(input), sourceSha256: 'f'.repeat(64) }));
+    else if (mode === 'norm') deps.embedder.embed.mockImplementation(async input => ({ ...await valid(input), vectors: input.texts.map(() => [2, ...Array.from({ length: 1023 }, () => 0)]) }));
+    else deps.embedder.embed.mockImplementation(async input => ({ ...await valid(input), vectors: input.texts.map((_, i) => [i === 0 ? 1 : -1, ...Array.from({ length: 1023 }, () => 0)]) }));
+    await expect(indexer.index(job(map))).resolves.toEqual({ status: 'needs_review', chunkCount: 1, errorCode: 'embedding_unavailable' });
+    expect(deps.embedder.embed).toHaveBeenCalledTimes(mode === 'second-batch' || mode === 'identity' ? 2 : 1);
+    expect(deps.storage.finalizeIndexGeneration).toHaveBeenCalledWith(expect.objectContaining({ embeddings: [] }));
+    expect([...deps.lexical.values()]).toMatchObject([{ text }]);
+    expect(deps.dense.size).toBe(0);
+  });
+  it('does not turn a source-authority failure after pooling into a lexical success', async () => {
+    const { deps, map, indexer } = windowedTable(); let writes = 0;
+    const authority = async <T>(operation: () => Promise<T>): Promise<T> => {
+      if (++writes === 3) throw new Error('source authority changed');
+      return operation();
+    };
+    await expect(indexer.index(job(map), authority)).rejects.toThrow('source authority changed');
+    expect(deps.dense.size).toBe(0);
+  });
+  it('does not encode new windows for an already finalized generation fence', async () => {
+    const { deps, map, indexer } = windowedTable();
+    deps.storage.beginIndexTask.mockResolvedValue({ action: 'skip', status: 'needs_review', errorCode: 'embedding_unavailable' } as never);
+    await expect(indexer.index(job(map))).resolves.toEqual({ status: 'needs_review', chunkCount: 0, errorCode: 'embedding_unavailable' });
+    expect(deps.embedder.embed).not.toHaveBeenCalled();
+    expect(deps.storage.stageIndexGeneration).not.toHaveBeenCalled();
+    expect(deps.storage.finalizeIndexGeneration).not.toHaveBeenCalled();
+  });
   it('stages complete lexical table chunks and finalizes needs_review after tokenizer overflow', async () => {
     const deps = dependencies();
     const text = Array.from({ length: 607 }, (_, index) => `cell${index}`).join(' ');

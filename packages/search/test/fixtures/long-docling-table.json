@@ -1,0 +1,44 @@
+{
+  "note": "Saved page14 Docling table source, unchanged 3051 UTF-16 characters / 607 project lexical tokens. BGE count was not captured; tests mock only the external tokenization boundary.",
+  "sourceMap": {
+    "artifactId": "72abd165-3382-4600-8ed5-b2bf6d427baa",
+    "contentHash": "bb517f00b632f8c6133b187f057cd8eaf29b0260f91973d2ae2da9ec212072b8",
+    "parser": {
+      "name": "openscience-parser-cascade",
+      "version": "1.0.0"
+    },
+    "pages": [
+      {
+        "page": 14,
+        "width": 595.3200073242188,
+        "height": 841.9199829101562,
+        "blocks": [
+          {
+            "id": "block:bb517f00b632f8c6133b187f057cd8eaf29b0260f91973d2ae2da9ec212072b8:14:3",
+            "kind": "table",
+            "boundingBox": {
+              "x": 74.25065934076795,
+              "y": 71.59775611502118,
+              "width": 434.1486929146737,
+              "height": 626.945167488491
+            },
+            "parser": {
+              "name": "docling-serve-cpu",
+              "version": "1.30.0"
+            },
+            "transformations": [
+              {
+                "stage": "extract_text",
+                "processor": {
+                  "name": "docling-serve-cpu",
+                  "version": "1.30.0"
+                }
+              }
+            ],
+            "text": "[row 1, column 1] g( t g )\n[row 1, column 2] t g -dependent envelope\n[row 2, column 1] B driving\n[row 2, column 2] magnetic field of the driving field\n[row 3, column 1] w\n[row 3, column 2] slit width of the nano-slit structure\n[row 4, column 1] P mode\n[row 4, column 2] average mode power, i.e., P mode = E p0 / τ 0\n[row 5, column 1] S ( 𝒛𝒛 , 𝒚𝒚 )\n[row 5, column 2] Poynting vector along the propagation direction\n[row 6, column 1] P(z)\n[row 6, column 2] z-dependent power density distribution, i.e., P(z)= ∫ 𝑺𝑺 ( 𝒛𝒛 , 𝒚𝒚 ) 𝑑𝑑𝑑𝑑 𝑤𝑤 /2 -𝑤𝑤 /2 / 𝑤𝑤\n[row 7, column 1] FWHM S\n[row 7, column 2] spatial FWHM of the intensity distribution along the z-axis\n[row 8, columns 1–2] Incident electron/electron bunch\n[row 9, column 1] E e\n[row 9, column 2] electron energy\n[row 10, column 1] V e\n[row 10, column 2] electron speed\n[row 11, column 1] β\n[row 11, column 2] normalized V e over c , i.e., β =V e / c\n[row 12, column 1] γ\n[row 12, column 2] Lorentz factor, i.e., γ= � 1/(1 -𝛽𝛽 2 )\n[row 13, column 1] τ e\n[row 13, column 2] pulse width of the electron bunch\n[row 14, column 1] N e\n[row 14, column 2] electron number\n[row 15, columns 1–2] ICS pulse\n[row 16, column 1] ν\n[row 16, column 2] optical frequency\n[row 17, column 1] T c1\n[row 17, column 2] oscillation period\n[row 18, column 1] λ 1\n[row 18, column 2] wavelength\n[row 19, column 1] N SP\n[row 19, column 2] photon number\n[row 20, column 1] ν peak\n[row 20, column 2] peak frequency\n[row 21, column 1] T peak\n[row 21, column 2] oscillation period at the peak frequency\n[row 22, column 1] τ 1 /FWHM T\n[row 22, column 2] pulse width/temporal FWHM\n[row 23, column 1] n ( t, θ )\n[row 23, column 2] ICS photon number received at time t and angle θ\n[row 24, column 1] n(t)\n[row 24, column 2] ICS photon number received at time t , i.e., 𝑛𝑛 ( 𝑡𝑡 ) = ∫𝑛𝑛 ( 𝑡𝑡 , 𝜃𝜃 ) 𝑑𝑑𝑑𝑑\n[row 25, column 1] I ( t, θ )\n[row 25, column 2] ICS pulse intensity received at time t and angle θ , i.e., 𝐼𝐼 ( 𝑡𝑡 , 𝜃𝜃 ) = 𝑛𝑛 ( 𝑡𝑡 , 𝜃𝜃 ) ∙ ℎ𝜈𝜈\n[row 26, column 1] I(t)\n[row 26, column 2] ICS pulse intensity received at time t , i.e., 𝐼𝐼 ( 𝑡𝑡 ) = ∫𝐼𝐼 ( 𝑡𝑡 , 𝜃𝜃 ) 𝑑𝑑𝑑𝑑\n[row 27, column 1] E ( t, θ )\n[row 27, column 2] electric field of the ICS pulse at time t and angle θ\n[row 28, column 1] E ( t )\n[row 28, column 2] electric field of the ICS pulse at time t , i.e., 𝑬𝑬 ( 𝒕𝒕 ) = ∫𝑬𝑬 ( 𝒕𝒕 , 𝜽𝜽 ) 𝑑𝑑𝑑𝑑\n[row 29, column 1] E ( ν )\n[row 29, column 2] Fourier spectrum of E ( t )\n[row 30, columns 1–2] Constants\n[row 31, column 1] c\n[row 31, column 2] speed of light\n[row 32, column 1] h\n[row 32, column 2] Planck constant\n[row 33, column 1] σ T\n[row 33, column 2] Thomson scattering cross-section\n[row 34, column 1] e\n[row 34, column 2] elementary charge\n[row 35, column 1] m 0\n[row 35, column 2] electron mass\n[row 36, column 1] ε 0\n[row 36, column 2] vacuum dielectric constant\n[row 37, column 1] μ 0\n[row 37, column 2] vacuum permeability\n[row 38, columns 1–2] Degree of temporal confinement\n[row 39, column 1] ζ\n[row 39, column 2] temporal confinement factor"
+          }
+        ]
+      }
+    ]
+  }
+}
