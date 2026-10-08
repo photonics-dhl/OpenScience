@@ -202,7 +202,11 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
-  it('allows bounded explicit review-only retries after a malformed native review response', async () => {
+  it.each([
+    [0, 'Native image review response invalid JSON; explicit review retry required'],
+    [1, "Expected ',' or '}' after property value in JSON at position 153 (line 1 column 154)"],
+    [2, 'Native image review response invalid JSON; explicit review retry required'],
+  ] as const)('preserves diagnostics during bounded native review recovery (retry=%s)', async (retryCount, error) => {
     const { deps, user, ro, db, redis } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
     const taskId = 'native-review-schema-recovery';
@@ -211,25 +215,54 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const sourceEvidenceIdentity = 'e'.repeat(64);
     db.agentTasks.push({
       id: taskId, sessionId: session.id, kind: 'presentation.generate', status: 'failed', progress: 10,
-      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(),
+      retryCount, executionAttempt: 1, dispatchedAt: new Date(),
       payload: { kind: 'image', researchObjectId: ro.id, versionId: 'version-1', sourceClaimIds: ['claim-1'],
         sceneImage: { storyboardAssetId: 'storyboard-1', sceneIndex: 0 } },
       interestContext: null, idempotencyKey: null,
-      result: { nativeImageReview: { mode: 'model-native', state: 'started', executionAttempt: 1,
+      result: { scienceDiagnostics: { receiptId: 'saved-science-receipt', issues: ['preserve original issue'] },
+        nativeImageReview: { mode: 'model-native', state: 'started', executionAttempt: 1,
         requestId: taskId, contentHash, sourceEvidenceIdentity, parentIdentity,
         provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'b'.repeat(64) } },
-      error: 'Native image review response invalid JSON; explicit review retry required',
+      error,
       createdAt: new Date(), updatedAt: new Date(), deletedAt: null,
     });
     db.presentationAssets.push({ id: taskId, researchObjectId: ro.id, versionId: 'version-1', kind: 'image', status: 'draft',
       objectKey: 'image.png', contentHash, provenance: { taskId, source: 'approved_storyboard_scene', parentIdentity, sourceEvidenceIdentity },
       createdAt: new Date(), updatedAt: new Date(), deletedAt: null });
 
+    if (retryCount === 2) {
+      const before = structuredClone(db.agentTasks.find(task => task.id === taskId)!.result);
+      await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ canRetry: false });
+      await expect(retryAgentTask(deps, { userId: user.id, taskId })).rejects.toThrow();
+      expect(db.agentTasks.find(task => task.id === taskId)?.result).toEqual(before);
+      expect(redis.lists.get('agent:queue') ?? []).not.toContain(taskId);
+      return;
+    }
     await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ canRetry: true });
-    await expect(retryAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, status: 'pending', retryCount: 1 });
-    expect(db.agentTasks.find((task) => task.id === taskId)?.result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, status: 'pending', retryCount: retryCount + 1 });
+    expect(db.agentTasks.find((task) => task.id === taskId)?.result).toEqual({
+      scienceDiagnostics: { receiptId: 'saved-science-receipt', issues: ['preserve original issue'] },
+      nativeImageReview: { mode: 'model-native', state: 'not_started' },
+    });
     expect(redis.lists.get('agent:queue')?.filter((id) => id === taskId)).toHaveLength(1);
     expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
+  it('keeps malformed native review checkpoints readable but never retryable', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
+    const taskId = 'malformed-native-review-checkpoint';
+    db.agentTasks.push({ id: taskId, sessionId: session.id, kind: 'presentation.generate', status: 'failed', progress: 10,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(),
+      payload: { kind: 'image', researchObjectId: ro.id, versionId: 'version-1', sourceClaimIds: ['claim-1'],
+        sceneImage: { storyboardAssetId: 'storyboard-1', sceneIndex: 0 } },
+      interestContext: null, idempotencyKey: null, result: { nativeImageReview: { mode: 'model-native', state: 'started' } },
+      error: 'Native image review response invalid JSON; explicit review retry required',
+      createdAt: new Date(), updatedAt: new Date(), deletedAt: null });
+    await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, canRetry: false });
+    await expect(listAgentTasks(deps, { userId: user.id })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId, canRetry: false })]));
+    await expect(retryAgentTask(deps, { userId: user.id, taskId })).rejects.toThrow();
+    expect(redis.lists.get('agent:queue') ?? []).not.toContain(taskId);
   });
 
   it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
