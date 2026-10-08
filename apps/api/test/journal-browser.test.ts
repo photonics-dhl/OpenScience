@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -221,6 +221,50 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '草稿箱' }).click();
           }
           if (surface.name === 'processing-redirect') expect(new URL(page.url()).searchParams.get('view')).toBe('drafts');
+          if (['directory', 'homepage', 'release'].includes(surface.name)) {
+            // Back navigation can restore scroll/focus before the deferred Live2D first frame.
+            // A loaded heading and the overflow check below do not establish actor visibility.
+            const before = await page.evaluate(() => ({ scrollY, activeTag: document.activeElement?.tagName, activeText: document.activeElement?.textContent?.trim().slice(0, 100) }));
+            const readingScope = surface.name === 'homepage' ? '[data-journal-reading-companion="home"] '
+              : surface.name === 'release' ? '[data-journal-reading-companion="release"] ' : '';
+            const anchorSelector = `${readingScope}[data-hermes-dock-anchor="true"][data-hermes-companion-margin="true"]`;
+            const anchor = page.locator(anchorSelector);
+            await anchor.scrollIntoViewIfNeeded();
+            const readCompanion = () => page.evaluate((selector) => {
+              const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+              const inlineAnchor = document.querySelector<HTMLElement>(selector);
+              const carrier = stage?.closest('[data-hermes-portal-carrier="true"]');
+              const bounds = (element: Element | null | undefined) => element?.getBoundingClientRect().toJSON() ?? null;
+              return {
+                stageCount: document.querySelectorAll('[data-hermes-workspace-stage="true"]').length,
+                anchorCount: document.querySelectorAll('[data-hermes-dock-anchor="true"]').length,
+                anchored: stage?.dataset.hermesAnchored,
+                dockReady: stage?.dataset.hermesDockReady,
+                rigStatus: stage?.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]')?.dataset.hermesRigStatus,
+                carrierAtAnchor: Boolean(inlineAnchor && carrier?.parentElement === inlineAnchor),
+                scrollY, activeTag: document.activeElement?.tagName,
+                activeText: document.activeElement?.textContent?.trim().slice(0, 100),
+                stageBounds: bounds(stage), anchorBounds: bounds(inlineAnchor),
+              };
+            }, anchorSelector);
+            try {
+              await expect.poll(readCompanion, { timeout: 20_000 }).toMatchObject({
+                stageCount: 1, anchorCount: 1, anchored: 'true', dockReady: 'true', rigStatus: 'ready', carrierAtAnchor: true,
+              });
+            } finally {
+              await writeFile(resolve(outputDir, `${surface.name}-${viewport.name}-companion.json`), JSON.stringify({ before, after: await readCompanion() }, null, 2));
+            }
+            if (surface.name === 'release') {
+              const stageBox = await page.locator('[data-hermes-workspace-stage="true"]').boundingBox();
+              const summaryBox = await page.getByText(draft.summary, { exact: true }).boundingBox();
+              expect(stageBox).not.toBeNull(); expect(summaryBox).not.toBeNull();
+              // A floating actor can cover text while every element remains within scrollWidth.
+              const overlap = stageBox && summaryBox && stageBox.x < summaryBox.x + summaryBox.width
+                && stageBox.x + stageBox.width > summaryBox.x && stageBox.y < summaryBox.y + summaryBox.height
+                && stageBox.y + stageBox.height > summaryBox.y;
+              expect(overlap, `journal summary is obscured at ${viewport.width}px`).toBe(false);
+            }
+          }
           await page.screenshot({ path: resolve(outputDir, `${surface.name}-${viewport.name}.png`), fullPage: true });
           const layout = await page.evaluate(() => ({
             width: window.innerWidth,
