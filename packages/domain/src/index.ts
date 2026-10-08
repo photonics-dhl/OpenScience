@@ -5,6 +5,7 @@ export * from './journal/articles';
 export * from './journal/processing';
 export * from './journal/publishing';
 export * from './journal/source-upload';
+export * from './journal/shared-workspace';
 export * from './journal/feedback';
 export * from './journal/enhancements';
 export * from './journal/paper-identity';
@@ -264,7 +265,7 @@ export {
   type UpdateEvidenceInput,
   type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, createIngestionBatchFromArtifact, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export { MAX_CANONICAL_CORE_CHARS, MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
 export { findSavedIngestionCommit, type SavedIngestionOrigin } from './ingestion/saved-source-commit';
 export { ensureHermesIngestionReview } from './ingestion/ingestion-service';

@@ -45,6 +45,8 @@ import {
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
   requireJournalExternalOcrAuthority,
+  journalSourceProcessingAllowed,
+  journalDigest,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -938,6 +940,17 @@ export async function createPollOnce(
       claimed = await claimAgentTask(deps, taskId);
       if (!claimed) return true;
       const executionClaim = claimed;
+      if (task.kind === 'sdf.extract') {
+        const allowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId },
+            include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!allowed) throw new Error('[blocked] Source processing authorization changed before claim execution');
+      }
       const handler = handlers[task.kind];
       if (!handler) throw new Error('unsupported agent task kind');
       const result = await spoolTaskExecution.run({ taskId: task.id, executionAttempt: executionClaim.executionAttempt }, () => handler(deps, {
@@ -949,6 +962,16 @@ export async function createPollOnce(
         ...(executionClaim.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       }));
       handlerCompleted = true;
+      if (task.kind === 'sdf.extract') {
+        const stillAllowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId }, include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!stillAllowed) throw new Error('[blocked] Source processing authorization changed before result write');
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -985,7 +1008,7 @@ export async function createPollOnce(
   };
 }
 
-function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership'>): ExternalProcessingPolicy {
+function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership' | 'journalArticle' | 'journalSharedBinding' | 'user'>): ExternalProcessingPolicy {
   return async (context) => {
     const task = await prisma.ingestionTask.findUnique({
       where: { agentTaskId: context.taskId },
@@ -1008,8 +1031,22 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
     const membership = await prisma.membership.findUnique({
       where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
     });
-    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
-      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+    if (!membership || membership.workspaceId !== context.workspaceId || membership.userId !== context.actorId
+      || !INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role)) return false;
+    const article = await prisma.journalArticle.findUnique({ where: { workingResearchObjectId: task.batch.researchObjectId },
+      include: { journal: true } });
+    if (!article) return true;
+    const binding = await prisma.journalSharedBinding.findUnique({ where: { articleId: article.id } });
+    const user = await prisma.user.findUnique({ where: { id: context.actorId }, select: { status: true } });
+    return article.journal.workspaceId === context.workspaceId && article.journal.operationalState === 'active'
+      && !!user && !['suspended', 'deleted', 'invited'].includes(user.status)
+      && ['owner', 'maintainer', 'author'].includes(membership.role)
+      && !!binding && binding.actorId === context.actorId && binding.ingestionTaskId === task.id
+      && binding.sourceArtifactId === task.artifactId && binding.sourceBlobSha256 === task.artifact.blobSha256
+      && binding.sourceRevision === article.revision
+      && binding.sourceDigest === journalDigest(article.source)
+      && (article.source as { artifactId?: string }).artifactId === task.artifactId
+      && journalSourceProcessingAllowed(article, true);
   };
 }
 

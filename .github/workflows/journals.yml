@@ -51,7 +51,7 @@ jobs:
       - name: Build backend dependencies and applications
         run: pnpm --filter @openscience/api... build
       - name: Verify source, tenancy, concurrency and immutable publication
-        run: pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000
+        run: pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000 --no-file-parallelism
       - name: Verify HTTP boundary and public data contracts
         run: pnpm --filter @openscience/api exec vitest run journal test/research-routes.test.ts --testTimeout=20000 --no-file-parallelism
       - name: Verify worker validation and retries

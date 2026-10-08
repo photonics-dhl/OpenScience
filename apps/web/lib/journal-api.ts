@@ -4,7 +4,7 @@ export type JournalRole = 'owner' | 'admin' | 'editor' | 'reviewer';
 export type JournalArticleState = 'draft' | 'needs_source' | 'processing' | 'review' | 'published' | 'corrected' | 'retracted';
 
 export interface JournalSummary { id: string; slug: string; nameZh?: string | null; nameEn?: string | null; description?: string | null; logoUrl?: string | null; subjects: string[]; pIssn?: string | null; eIssn?: string | null; websiteUrl?: string | null; publisherName?: string | null; sponsorName?: string | null; publicArticleCount: number; homepagePublished: boolean; status: string; revision?: number; }
-export interface JournalArticle { id: string; journalId: string; researchObjectId: string | null; workId: string; metadata: { title: string; doi?: string | null; authors: string[]; publishedDate?: string | null; journalTitle?: string | null; issns: string[]; originalUrl: string; abstract?: string | null }; directoryVisible: boolean; contentState: 'active' | 'restricted' | 'withdrawn'; revision: number; source: { kind: 'metadata' | 'abstract' | 'fulltext'; text: string; url: string; label: string; materials?: JournalArticleSourceRecord[] }; rights: ArticleRights; draft: JournalDraft | null; reviewState: 'draft' | 'submitted' | 'approved' | 'changes_requested'; reviewedRevision: number | null; reviewNote?: string | null; releases: Array<{ versionNo: number; publicId: string; url: string; publishedAt: string }>; jobs: Array<{ id: string; kind?: string; state?: string; status?: string; createdAt?: string; comparisonDraft?: unknown }> }
+export interface JournalArticle { id: string; journalId: string; researchObjectId: string | null; workId: string; metadata: { title: string; doi?: string | null; authors: string[]; publishedDate?: string | null; journalTitle?: string | null; issns: string[]; originalUrl: string; abstract?: string | null }; directoryVisible: boolean; contentState: 'active' | 'restricted' | 'withdrawn'; revision: number; source: { kind: 'metadata' | 'abstract' | 'fulltext'; text: string; url: string; label: string; artifactId?: string; materials?: JournalArticleSourceRecord[] }; rights: ArticleRights; draft: JournalDraft | null; reviewState: 'draft' | 'submitted' | 'approved' | 'changes_requested'; reviewedRevision: number | null; reviewNote?: string | null; releases: Array<{ versionNo: number; publicId: string; url: string; publishedAt: string }>; jobs: Array<{ id: string; kind?: string; state?: string; status?: string; createdAt?: string; comparisonDraft?: unknown }> }
 export interface PublicJournalArticle { id: string; contentState: 'active' | 'restricted' | 'withdrawn'; metadata: Pick<JournalArticle['metadata'], 'title' | 'doi' | 'authors' | 'publishedDate' | 'originalUrl'>; interpretationKind: 'abstract' | 'fulltext' | null; releases: Array<{ versionNo: number; publicId: string; url: string; publishedAt: string }>; }
 export interface JournalPublic extends JournalSummary { publisherName?: string | null; sponsorName?: string | null; verifiedAt?: string | null; articles?: PublicJournalArticle[]; about?: string | null; }
 export interface JournalApplicationInput { nameZh?: string; nameEn: string; pIssn?: string; eIssn?: string; websiteUrl: string; publisherName: string; sponsorName?: string; subjects: string[]; description: string; logoUrl?: string; applicantName: string; applicantTitle: string; applicantEmail: string; representationEvidence: string; plannedArticleCount: number; requestedServices: string[]; rightsDeclaration: string; rightsDeclarationVersion: string; }
@@ -24,6 +24,9 @@ export interface JournalArticlePriority { journalArticleId: string; sourceComple
 export interface JournalProcessingPriorityItem { article: { id: string; title: string; publishedDate?: string | null; revision: number; reviewState: JournalArticle['reviewState']; sourceKind: string }; priority: JournalArticlePriority; }
 export interface JournalServicePlan { planChoice: 'free' | 'starter' | 'pro' | 'premium' | 'custom'; requestedPlanChoice?: 'free' | 'starter' | 'pro' | 'premium' | 'custom' | null; commercialModel: 'manual_quote'; validUntil: string | null; credits: { available: number; reserved: number; consumed: number; expired: number; monthlyUsed: number }; grants: Array<{ id: string; amount: number; remaining: number; reserved: number; consumed: number; expiresAt: string | null }>; ledger: Array<{ id: string; kind: string; amount: number; createdAt: string; note?: string | null }>; storage: { usedBytes: string; limitBytes: string }; serviceRequests: Array<JournalServiceRequest & { planChoice?: string }>; }
 export interface JournalMember { userId: string; email: string; displayName: string; role: JournalRole; joinedAt: string; }
+export type JournalAttachmentCategory = 'supplementary' | 'data' | 'code' | 'figure';
+export interface JournalSharedFile { artifactId: string; logicalPath: string; category: JournalAttachmentCategory | 'source'; }
+export interface JournalSharedFiles { researchObjectId: string | null; publishedResearchObjectId?: string | null; articleRevision: number; versionId: string | null; files: JournalSharedFile[]; sourceArtifactId: string | null; processing?: { ingestionTaskId: string; state: string; agentStatus: string | null; progress: number | null; error: string | null; hermesRunId: string | null; confirmedVersionId: string | null } | null; }
 export interface JournalImportPreview { input: string; status: 'ready' | 'imported' | 'duplicate' | 'failed'; metadata?: JournalArticle['metadata']; articleId?: string; error?: string; }
 
 function query(input: Record<string, string | number | undefined>) { const p = new URLSearchParams(); Object.entries(input).forEach(([k, v]) => { if (v !== undefined && v !== '') p.set(k, String(v)); }); return p.toString() ? `?${p}` : ''; }
@@ -46,6 +49,45 @@ export function transferJournalOwner(id: string, input: { newOwnerId: string; re
 export function getJournalArticle(id: string, articleId: string) { return apiRequest<{ article: JournalArticle; nativeGenerationReady?: boolean }>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}`); }
 export function updateJournalArticle(id: string, articleId: string, input: { revision: number; metadata?: Partial<JournalArticle['metadata']>; directoryVisible?: boolean; source?: JournalArticle['source']; rights?: ArticleRights; draft?: JournalDraft }) { return apiRequest<{ article: JournalArticle }>(`/api/journals/${id}/articles/${articleId}`, { method: 'PATCH', body: JSON.stringify(input) }); }
 export async function uploadJournalSourceFile(id: string, articleId: string, input: { revision: number; requestKey: string; file: File }) { const xhr = new XMLHttpRequest(); await prepareProtectedXhr(xhr, 'POST', `/api/journals/${id}/articles/${articleId}/source-file`); const body = new FormData(); body.append('revision', String(input.revision)); body.append('requestKey', input.requestKey); body.append('file', input.file, input.file.name); return new Promise<{ job: { id: string; state: string } }>((resolve, reject) => { xhr.onerror = () => reject(new Error('来源文件上传失败')); xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText) as { job: { id: string; state: string } }); else reject(new Error('来源文件上传失败')); }; xhr.send(body); }); }
+export function getJournalSharedFiles(id: string, articleId: string) { return apiRequest<JournalSharedFiles>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-files`); }
+export function journalSharedFileDownloadUrl(id: string, articleId: string, artifactId: string) { return `/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-files/${encodeURIComponent(artifactId)}/download`; }
+export async function uploadJournalSharedSource(id: string, articleId: string, input: { revision: number; requestKey: string; file: File }, onProgress?: (value: number) => void) {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', `/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-source`);
+  const body = new FormData();
+  body.append('revision', String(input.revision)); body.append('requestKey', input.requestKey); body.append('file', input.file, input.file.name);
+  return new Promise<{ artifactId: string; versionId: string; articleRevision: number }>((resolve, reject) => {
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100)); };
+    xhr.onerror = () => reject(new Error('论文正文上传失败，请重试。'));
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText)); else reject(new Error(xhr.responseText || '论文正文上传失败，请重试。')); };
+    xhr.send(body);
+  });
+}
+export function startJournalSharedProcessing(id: string, articleId: string, input: { revision: number; requestKey: string; processingConsent: true }) {
+  return apiRequest<{ batchId: string; researchObjectId: string; tasks: unknown[]; run: { id: string; status: string } }>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-process`, { method: 'POST', body: JSON.stringify(input) });
+}
+export function retryJournalSharedProcessing(id: string, articleId: string, input: { revision: number; requestKey: string; processingConsent: true }) {
+  return apiRequest<{ task: { id: string; state: string }; run: { id: string; status: string } }>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-retry`, { method: 'POST', body: JSON.stringify(input) });
+}
+export interface JournalSharedCandidate { articleRevision: number; ingestionTaskId: string; runId: string; core: JournalDraft['core']; draft: JournalDraft; }
+export function getJournalSharedCandidate(id: string, articleId: string, language: 'zh' | 'en') {
+  return apiRequest<JournalSharedCandidate>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/shared-candidate?language=${language}`);
+}
+export function confirmJournalSharedInterpretation(id: string, articleId: string, input: { revision: number; language: 'zh' | 'en' }) {
+  return apiRequest<{ articleRevision: number; versionId: string; runId: string; draft: JournalDraft }>(`/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/confirm-interpretation`, { method: 'POST', body: JSON.stringify(input) });
+}
+export async function uploadJournalAttachment(id: string, articleId: string, input: { revision: number; requestKey: string; category: JournalAttachmentCategory; file: File }, onProgress?: (value: number) => void) {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', `/api/journals/${encodeURIComponent(id)}/articles/${encodeURIComponent(articleId)}/attachments`);
+  const body = new FormData();
+  body.append('revision', String(input.revision)); body.append('requestKey', input.requestKey); body.append('category', input.category); body.append('file', input.file, input.file.name);
+  return new Promise<{ artifact: { artifactId: string; logicalPath: string }; versionId: string; articleRevision: number }>((resolve, reject) => {
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100)); };
+    xhr.onerror = () => reject(new Error('附件上传失败，请重试。'));
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText)); else reject(new Error(xhr.responseText || '附件上传失败，请重试。')); };
+    xhr.send(body);
+  });
+}
 export function importJournalDois(id: string, dois: string[]) { return apiRequest<{ items: Array<{ input: string; status: 'imported' | 'duplicate' | 'failed'; articleId?: string; error?: string }> }>(`/api/journals/${id}/articles/import`, { method: 'POST', body: JSON.stringify({ dois }) }); }
 export function previewJournalDois(id: string, dois: string[]) { return apiRequest<{ items: JournalImportPreview[] }>(`/api/journals/${id}/articles/preview`, { method: 'POST', body: JSON.stringify({ dois }) }); }
 export function createAiDraft(id: string, articleId: string, input: { revision: number; language: 'zh' | 'en'; requestKey: string; retryOf?: string }) { return apiRequest<{ job: { id: string; status: string } }>(`/api/journals/${id}/articles/${articleId}/ai-drafts`, { method: 'POST', body: JSON.stringify(input) }); }

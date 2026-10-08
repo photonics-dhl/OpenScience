@@ -35,7 +35,8 @@ export function matchesWorkbenchView(article: WorkbenchRecord, view: WorkbenchVi
 }
 export function canDeleteDraft(article: WorkbenchRecord, role: string): boolean {
   return ['owner', 'admin', 'editor'].includes(role) && article.contentState === 'active' &&
-    !article.draftArchived && !isProcessing(article) && article.releases.length === 0 &&
+    !article.draftArchived && !isProcessing(article) &&
+    article.releases.every((release) => release.revision !== undefined && release.revision !== article.revision) &&
     !['submitted', 'approved'].includes(article.reviewState);
 }
 /** Legacy records may omit either name. The fallback is a label, never saved metadata. */

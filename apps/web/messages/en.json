@@ -1526,7 +1526,8 @@
       "runningDescription": "Hermes is shaping the story, preparing the scenes and composing the narration. You can return here when it is ready.",
       "readyDescription": "Watch the complete video, share your feedback and decide whether to use it.",
       "preview": "Your research video",
-      "viewResult": "Open the video and give feedback"
+      "viewResult": "Open the video and give feedback",
+      "unavailable": "Video generation is currently unavailable. No paid analysis was started."
     },
     "sourceReanalysis": {
       "start": "Start new paid analysis",
@@ -1539,7 +1540,8 @@
       "uncertain": "The response could not be confirmed. Continue analysis to restore this same request. Earlier processing may already have been charged.",
       "contextError": "The account, source or workflow version changed. Reload progress for the current account before continuing; the saved request is preserved.",
       "storageError": "This browser could not retain the request for recovery. Enable session storage and reload progress before continuing. Saved processing is preserved.",
-      "responseError": "The returned analysis or workflow does not match this source and account. Reload progress before continuing; the saved request is preserved."
+      "responseError": "The returned analysis or workflow does not match this source and account. Reload progress before continuing; the saved request is preserved.",
+      "videoError": "Video generation is currently unavailable. No new paid analysis was started; the saved request is preserved."
     },
     "narrative": {
       "correctionGrantDescription": "This image needs a scientific correction. The existing workflow has used 8 tasks. A one-time increase from 9 to 11 total tasks permits at most one revised plan, one new image and one internal correction of either the plan or its rendering, charged by actual use. Existing papers, images and published versions remain; nothing is published automatically.",

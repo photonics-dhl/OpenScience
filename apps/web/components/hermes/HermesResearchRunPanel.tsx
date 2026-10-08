@@ -26,6 +26,8 @@ import { clearPendingHermesRunStart, getHermesDraftStorage, loadPendingHermesRun
 import { hasHermesRunOutput, prepareHermesNarrativeSource } from '@/lib/hermes/start-paper-narrative';
 import { continueSourceReanalysis, isSourceReanalysisCurrent, loadSourceReanalysisIntent, SourceReanalysisIntentError,
   type SourceReanalysisIntent } from '@/lib/hermes/source-reanalysis-intent';
+import { journalEditorMessages } from '@/messages/journal-editor';
+import type { JournalArticle, JournalSharedFiles } from '@/lib/journal-api';
 
 function isNativeSourceReviewResume(run: HermesResearchRun): boolean {
   return run.generationRecovery === 'source-review-fresh' && run.chargeableAttempts === 0;
@@ -46,7 +48,7 @@ function reviewHref(researchObjectId: string, run: HermesResearchRun): string {
   return `/research-objects/${encodeURIComponent(researchObjectId)}/hermes?${query.toString()}`;
 }
 
-export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTaskId = '', activeTaskId, onRunCreated, onRunUpdated }: {
+type GenericRunProps = {
   researchObjectId: string;
   tasks: DashboardTaskApi[];
   runId: string;
@@ -54,7 +56,36 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   activeTaskId?: string;
   onRunCreated(run: HermesResearchRun): void;
   onRunUpdated?(run: HermesResearchRun): void;
-}) {
+};
+export interface JournalRunScope {
+  journalId: string; articleId: string; researchObjectId: string | null;
+  sourceLabel: string; sourceRevision: number;
+  jobs: JournalArticle['jobs']; hasDraft: boolean; canStart: boolean; busy: boolean;
+  processing?: JournalSharedFiles['processing'];
+  issues: string[]; onStart(retryOf?: string): void | Promise<void>; onCancel(jobId: string): void | Promise<void>;
+}
+function JournalScopedHermesPanel({ scope }: { scope: JournalRunScope }) {
+  const locale = useLocale();
+  const copy = journalEditorMessages[locale === 'en' ? 'en' : 'zh'];
+  const [processingConsent, setProcessingConsent] = React.useState(false);
+  React.useEffect(() => { setProcessingConsent(false); }, [scope.articleId, scope.sourceRevision]);
+  const generationJobs = scope.jobs.filter((job) => job.kind === 'generate');
+  const current = generationJobs.at(-1);
+  const state = current?.state ?? current?.status;
+  const active = state === 'staging' || state === 'pending' || state === 'running';
+  const status = state === 'succeeded' ? copy.hermesJobDone : state === 'failed' ? copy.hermesJobFailed : state === 'cancelled' ? copy.hermesJobCancelled : active ? copy.hermesJobRunning : current ? copy.hermesJobUnknown : '';
+  const sharedState = scope.processing?.state;
+  const sharedStatus = sharedState === 'needs_review' ? copy.sharedReview : sharedState === 'failed_retryable' || sharedState === 'failed_blocked' ? copy.sharedFailed : sharedState === 'written' || sharedState === 'confirmed' ? copy.sharedReady : sharedState ? copy.sharedPreparing : '';
+  return <div className="min-w-0" aria-busy={scope.busy || active}>
+    <p className="max-w-2xl text-sm leading-6 text-os-muted-paper">{copy.hermesDisclosure}</p>
+    {scope.issues.length ? <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4" id="generation-readiness"><p className="text-sm font-medium">{copy.scopeBlocked}</p><ul className="mt-2 list-disc pl-5 text-sm text-os-muted-paper">{scope.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : <p className="mt-4 text-sm text-os-muted-paper" id="generation-readiness">{copy.scopeAllowed}</p>}
+    <label className="mt-5 flex max-w-2xl items-start gap-3 text-sm leading-6"><input className="mt-1 accent-teal-700" type="checkbox" disabled={!scope.canStart || scope.busy} checked={processingConsent} onChange={(event) => setProcessingConsent(event.target.checked)} /><span>{copy.processingConsent} <strong className="font-medium">{scope.sourceLabel || copy.sourceFile}</strong></span></label>
+    <div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" disabled={!scope.canStart || !processingConsent || scope.busy} className="min-h-11 bg-os-ink px-5 text-sm font-medium text-paper-bg disabled:opacity-50" onClick={() => { setProcessingConsent(false); void scope.onStart(); }}>{sharedState === 'failed_retryable' || sharedState === 'failed_blocked' ? copy.handToHermesRetry : scope.hasDraft ? copy.handToHermesAgain : copy.handToHermes}</button>{active && current ? <button type="button" className="min-h-11 border border-os-rule-paper px-4 text-sm" disabled={scope.busy} onClick={() => void scope.onCancel(current.id)}>{locale === 'en' ? 'Cancel task' : '取消任务'}</button> : null}</div>
+    {sharedStatus ? <p className="mt-4 text-sm" role="status">{sharedStatus}{typeof scope.processing?.progress === 'number' && sharedState !== 'needs_review' ? ` · ${Math.round(scope.processing.progress)}%` : ''}</p> : status ? <p className="mt-4 text-sm" role="status">{status}</p> : null}
+    {scope.processing?.error ? <p className="mt-2 text-sm text-state-danger" role="alert">{scope.processing.error}</p> : null}
+  </div>;
+}
+function GenericHermesResearchRunPanel({ researchObjectId, tasks, runId, guideTaskId = '', activeTaskId, onRunCreated, onRunUpdated }: GenericRunProps) {
   const t = useTranslations('hermesRun');
   const sourceStatus = useTranslations('ingestion.status');
   const locale = useLocale().startsWith('zh') ? 'zh' : 'en';
@@ -309,7 +340,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
         if (!capability.canGenerateVideo) throw new Error(t('video.unavailable'));
       }
       const guideKey = guided ? `hermes-guide-run:${actorId}:${guideTaskId}:${selectedTask.id}${output === 'video' ? ':video' : ''}` : null;
-      const request: PendingHermesRunStart = pending ?? { key: guideKey ?? crypto.randomUUID(), generation, savedAt: Date.now() };
+      const request: PendingHermesRunStart = pending ?? { key: guideKey ?? crypto.randomUUID(), generation, savedAt: Date.now(), phase: 'source' };
       // Persist before the paid mutation; all unknown outcomes retain this exact request.
       if (!savePendingHermesRunStart(storage, scope, request)) throw new Error(t('narrative.storageError'));
       setPendingRestored(true);
@@ -558,4 +589,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       </nav>
     </div> : null}
   </section>;
+}
+
+export function HermesResearchRunPanel(props: GenericRunProps | { journalScope: JournalRunScope }) {
+  if ('journalScope' in props) return <JournalScopedHermesPanel scope={props.journalScope} />;
+  return GenericHermesResearchRunPanel(props);
 }

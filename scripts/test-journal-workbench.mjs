@@ -19,6 +19,14 @@ function load(file, dependencies = {}) {
 const policy = load('apps/api/src/routes/journal-draft-policy.ts');
 const model = load('apps/web/lib/journal-workbench-model.ts');
 const rights = load('apps/web/lib/journal-rights-form.ts');
+test('a new private revision may be archived while its fixed public revision stays protected', () => {
+  const paper = { id: 'article', revision: 4, contentState: 'active', reviewState: 'draft', jobs: [],
+    releases: [{ versionNo: 1, publishedAt: '2026-10-01', revision: 3 }] };
+  assert.equal(model.canDeleteDraft(paper, 'editor'), true);
+  assert.equal(model.canDeleteDraft({ ...paper, revision: 3 }, 'editor'), false);
+  assert.equal(model.canDeleteDraft({ ...paper, jobs: [{ state: 'running' }] }, 'editor'), false);
+  assert.equal(model.canDeleteDraft({ ...paper, releases: [{ versionNo: 1, publishedAt: '2026-10-01' }] }, 'editor'), false);
+});
 const article = { id: 'a', revision: 1, contentState: 'active', reviewState: 'draft', jobs: [], releases: [] };
 test('draft deletion permits only editable unsubmitted work', () => { assert.equal(policy.draftDeletionBlock({ ...article, releaseCount: 0, activeJobCount: 0 }), null); for (const change of [{ releaseCount: 1 }, { activeJobCount: 1 }, { reviewState: 'submitted' }, { reviewState: 'approved' }, { contentState: 'restricted' }, { contentState: 'withdrawn' }]) assert.equal(typeof policy.draftDeletionBlock({ ...article, releaseCount: 0, activeJobCount: 0, ...change }), 'string'); });
 test('archive marker is revision-bound and rejects malformed values', () => { assert.equal(policy.archivedAtRevision({ revision: 2 }, 2), true); for (const item of [null, [], {}, { revision: '2' }, { revision: 1 }]) assert.equal(policy.archivedAtRevision(item, 2), false); });
@@ -35,6 +43,7 @@ test('workbench route counts successful interpretation generation, not source pa
       journalScope: async () => ({ membership: { role: 'owner' } }),
       getManagedJournalArticle: async () => ({ ...article, id: articleId, jobs: [] }),
       evaluateArticleProcessingCapability: () => ({ canExposeViaApi: false }),
+      txReleases: async () => [],
     },
     './session-guard': { requireCurrentUser: async () => ({ userId: 'editor' }) },
     './journal-draft-policy': policy,
@@ -46,6 +55,7 @@ test('workbench route counts successful interpretation generation, not source pa
     journalArticle: { findMany: async () => [{ id: articleId }] },
     journalEvent: { findMany: async () => [] },
     journalJob: { findMany: async () => jobs },
+    journalSharedBinding: { findUnique: async () => null },
   } });
   const read = async () => {
     const result = await list({ params: { id: journalId }, query: {} }, { header() { return this; } });
@@ -59,6 +69,11 @@ test('workbench route counts successful interpretation generation, not source pa
   const generated = await read();
   assert.equal(generated.processingCompleted, true);
   assert.equal(model.matchesWorkbenchView(generated, 'completed'), true);
+  jobs = [{ id: 'shared-run', articleId, kind: 'shared_ingestion', state: 'running' }];
+  const sharedRunning = await read();
+  assert.equal(sharedRunning.jobs.some((job) => job.id === 'shared-run'), true);
+  assert.equal(model.matchesWorkbenchView(sharedRunning, 'processing'), true);
+  assert.equal(model.matchesWorkbenchView(sharedRunning, 'completed'), false);
 });
 test('archived drafts stay outside the draft box', () => { assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'drafts'), false); assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'archived'), true); });
 test('unknown OA is not classified as closed access', () => { const items = [{ id: 'a', nameZh: 'A', subjects: ['Optics'], publicArticleCount: 2 }, { id: 'b', nameZh: 'B', subjects: [], publicArticleCount: 1, openAccess: false }]; assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'closed', sort: 'az' }).length, 1); assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'unknown', sort: 'az' })[0].id, 'a'); });

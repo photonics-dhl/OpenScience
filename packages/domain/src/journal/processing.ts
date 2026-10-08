@@ -6,6 +6,10 @@ import { journalDigest, validateJournalDraft, validateJournalSource, type Journa
 import { assertArticleRevision, JOURNAL_EDIT_ROLES, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, type JournalTx } from './articles';
 import { assertJournalGenerationCapability, journalSourceMaterials, journalSourceProcessingAllowed } from './enhancements';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { requireNativePaperAuthor } from '../ingestion/native-paper-author';
+import { loadDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
+import { projectSharedPaperToJournalDraft } from './shared-projection';
+import type { StorageAdapter } from '@openscience/storage';
 
 export const JOURNAL_JOB_LEASE_MS = 10 * 60_000;
 const terminal = (state: string) => ['succeeded', 'failed', 'cancelled'].includes(state);
@@ -96,6 +100,7 @@ export async function cancelJournalJob(deps: WorkspaceDeps, userId: string, jour
     await journalScope(tx, journalId, userId, JOURNAL_EDIT_ROLES);
     const job = await tx.journalJob.findFirst({ where: { id: jobId, journalId } });
     if (!job) throw new JournalError('JOURNAL_NOT_FOUND', '作业不存在');
+    if (job.kind === 'shared_ingestion') throw new JournalError('INVALID_STATE', '共享论文解析请通过期刊工作区管理');
     return settle(tx, moment(deps), job, 'cancelled', '编辑取消了此作业');
   });
 }
@@ -104,7 +109,7 @@ export interface JournalNativeRuntime { runtimeId: string; skillCatalogueId: str
 export async function claimJournalJob(deps: WorkspaceDeps, nativeRuntime?: JournalNativeRuntime) {
   const candidates = await deps.prisma.$queryRaw<Array<{ id: string; journalId: string; kind: string }>>`
     SELECT q.id, q.journal_id AS "journalId", q.kind FROM journal_jobs q JOIN journals j ON j.id = q.journal_id
-    WHERE q.state = 'pending' AND (${Boolean(nativeRuntime)} OR q.kind = 'source_parse')
+    WHERE q.state = 'pending' AND q.kind IN ('generate', 'source_parse') AND (${Boolean(nativeRuntime)} OR q.kind = 'source_parse')
       AND (SELECT count(*) FROM journal_jobs running WHERE running.journal_id = q.journal_id AND running.state = 'running') < j.max_running_jobs
     ORDER BY q.created_at, q.id LIMIT 100`;
   for (const candidate of candidates) {
@@ -226,11 +231,61 @@ export async function finishJournalJob(deps: WorkspaceDeps, jobId: string, lease
     }
   });
 }
-export async function recoverJournalJobs(deps: WorkspaceDeps) {
-  const expired = await deps.prisma.journalJob.findMany({ where: { OR: [{ state: 'running', leaseExpiresAt: { lt: moment(deps) } }, { state: { in: ['staging', 'pending'] }, createdAt: { lt: new Date(moment(deps).getTime() - 24 * 60 * 60_000) } }] }, take: 100 });
+export async function recoverJournalJobs(deps: WorkspaceDeps & { storage?: StorageAdapter }) {
+  const expired = await deps.prisma.journalJob.findMany({ where: { kind: { in: ['generate', 'source_parse'] }, OR: [{ state: 'running', leaseExpiresAt: { lt: moment(deps) } }, { state: { in: ['staging', 'pending'] }, createdAt: { lt: new Date(moment(deps).getTime() - 24 * 60 * 60_000) } }] }, take: 100 });
   for (const candidate of expired) await journalTransaction(deps, candidate.journalId, async (tx) => {
     const job = await tx.journalJob.findUniqueOrThrow({ where: { id: candidate.id } });
     if ((job.state === 'running' && job.leaseExpiresAt && job.leaseExpiresAt < moment(deps)) || (['staging', 'pending'].includes(job.state) && job.createdAt.getTime() < moment(deps).getTime() - 24 * 60 * 60_000)) await settle(tx, moment(deps), job, 'failed', '作业执行超时或工作进程中断；额度已释放，可显式重试');
+  });
+  const shared = await deps.prisma.journalJob.findMany({ where: { kind: 'shared_ingestion', state: 'running' },
+    orderBy: { createdAt: 'asc' }, take: 100 });
+  for (const candidate of shared) await journalTransaction(deps, candidate.journalId, async (tx) => {
+    const job = await tx.journalJob.findUnique({ where: { id: candidate.id } });
+    if (!job || job.state !== 'running') return;
+    const article = await tx.journalArticle.findUnique({ where: { id: job.articleId } });
+    const binding = await tx.journalSharedBinding.findUnique({ where: { articleId: job.articleId } });
+    const task = binding?.ingestionTaskId ? await tx.ingestionTask.findUnique({ where: { id: binding.ingestionTaskId },
+      include: { artifact: true, agentTask: true, batch: true } }) : null;
+    const run = binding?.hermesRunId ? await tx.hermesResearchRun.findUnique({ where: { id: binding.hermesRunId },
+      include: { steps: true } }) : null;
+    const matchingRun = !!run && !!article && !!binding && !!task
+      && run.actorId === job.requestedBy && run.researchObjectId === article.workingResearchObjectId
+      && run.profile === null
+      && run.steps.filter((step) => step.stage === 'source_ingestion').length === 1
+      && run.steps.some((step) => step.stage === 'source_ingestion' && step.ingestionTaskId === task.id
+        && step.agentTaskId === task.agentTaskId && step.artifactId === task.artifactId);
+    const rightsChanged = !!article && (article.revision !== job.revision || journalDigest(article.source) !== job.sourceDigest);
+    const strandedAfterRevocation = rightsChanged && !run && !!task && !!article?.workingResearchObjectId
+      && task.batch.researchObjectId === article.workingResearchObjectId
+      && task.batch.userId === job.requestedBy;
+    if (task?.state === 'needs_review' && article && binding?.actorId === job.requestedBy
+      && (matchingRun || strandedAfterRevocation)
+      && (job.result as { ingestionTaskId?: string } | null)?.ingestionTaskId === task.id
+      && task.agentTask && task.artifactId === binding.sourceArtifactId
+      && task.artifact.blobSha256 === binding.sourceBlobSha256) {
+      try {
+        const author = requireNativePaperAuthor(task.agentTask);
+        if (deps.storage && author.sourceMapRef.artifactId === task.artifactId
+          && author.sourceMapRef.contentHash === task.artifact.blobSha256) {
+          const map = await loadDocumentSourceMapReference(deps.storage, author.sourceMapRef);
+          const text = map.pages.flatMap((page) => page.blocks.flatMap((block) => block.text?.trim() ? [block.text.trim()] : [])).join('\n');
+          projectSharedPaperToJournalDraft(task.agentTask.result, {
+            kind: 'fulltext', text, url: '', label: 'Shared paper', artifactId: task.artifactId,
+            sourceMapRef: author.sourceMapRef } as JournalSource, 'zh');
+          await settle(tx, moment(deps), job, 'succeeded', undefined, {
+            ingestionTaskId: task.id,
+            ...(rightsChanged || (run && ['failed', 'stopped'].includes(run.status))
+              ? { rightsChangedOrRunStopped: true } : {}) });
+          return;
+        }
+      } catch { /* Incomplete candidates retain their reservation until safe recovery or timeout. */ }
+    }
+    // A source/rights edit does not prove an already dispatched provider task was free.
+    // Keep its reservation while the task is active or the external result is unknown.
+    const terminalFailure = task?.state === 'failed_blocked'
+      || (task?.state === 'failed_retryable' && job.createdAt.getTime() < moment(deps).getTime() - 24 * 60 * 60_000);
+    if (terminalFailure && job.createdAt.getTime() < moment(deps).getTime() - 60_000)
+      await settle(tx, moment(deps), job, 'failed', '共享正文或授权已变化，期刊额度已释放');
   });
   const grants = await deps.prisma.$queryRaw<Array<{ id: string; journalId: string }>>`SELECT id, journal_id AS "journalId" FROM journal_grants WHERE expires_at <= ${moment(deps)} AND remaining > reserved LIMIT 100`;
   for (const candidate of grants) await journalTransaction(deps, candidate.journalId, async (tx) => {

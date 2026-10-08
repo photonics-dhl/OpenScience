@@ -5,11 +5,12 @@ import { loadPendingHermesRunStart, savePendingHermesRunStart } from '../lib/her
 import { prepareHermesNarrativeSource } from '../lib/hermes/start-paper-narrative';
 import type { HermesResearchRun } from '../lib/api';
 
-const api=vi.hoisted(() => ({ApiClientError:class extends Error {status=0;},getCurrentUser:vi.fn(),getAgentTask:vi.fn(),getExistingHermesResearchRun:vi.fn(),getHermesResearchRun:vi.fn(),getHermesVideoCapability:vi.fn(),createHermesResearchRun:vi.fn(),authorizeHermesGenerationGrant:vi.fn(),retryHermesGeneration:vi.fn(),SESSION_CHANGED_EVENT:'session-changed',SESSION_INVALIDATED_EVENT:'session-invalidated',presentationAssetContentUrl:(ro:string,version:string,id:string) => `/media/${ro}/${version}/${id}`}));
+const api=vi.hoisted(() => ({ApiClientError:class extends Error {constructor(public code:string,message=code,public status=0) {super(message);}},getCurrentUser:vi.fn(),getAgentTask:vi.fn(),getExistingHermesResearchRun:vi.fn(),getHermesResearchRun:vi.fn(),getHermesVideoCapability:vi.fn(),getIngestionTask:vi.fn(),isConfirmedIngestionReanalysisSource:vi.fn(),reanalyzeConfirmedIngestion:vi.fn(),createHermesResearchRun:vi.fn(),authorizeHermesGenerationGrant:vi.fn(),retryHermesGeneration:vi.fn(),SESSION_CHANGED_EVENT:'session-changed',SESSION_INVALIDATED_EVENT:'session-invalidated',presentationAssetContentUrl:(ro:string,version:string,id:string) => `/media/${ro}/${version}/${id}`}));
+const realNarrative=vi.hoisted(() => ({prepare:null as typeof import('../lib/hermes/start-paper-narrative')['prepareHermesNarrativeSource'] | null}));
 const copy=vi.hoisted(() => (key:string,values?:{source?:string}) => values?.source && key.endsWith('startFor') ? `${key}:${values.source}` : key);
 vi.mock('@/lib/api',() => api);
 vi.mock('next-intl',() => ({useLocale:() => 'en',useTranslations:() => copy}));
-vi.mock('@/lib/hermes/start-paper-narrative',async original => ({...await original<typeof import('../lib/hermes/start-paper-narrative')>(),prepareHermesNarrativeSource:vi.fn(async ({scope,pending}) => ({scope,pending}))}));
+vi.mock('@/lib/hermes/start-paper-narrative',async original => {const actual=await original<typeof import('../lib/hermes/start-paper-narrative')>();realNarrative.prepare=actual.prepareHermesNarrativeSource;return {...actual,prepareHermesNarrativeSource:vi.fn(async ({scope,pending}) => ({scope,pending}))};});
 vi.mock('react',async original => ({...await original<typeof React>(),useState:vi.fn(),useRef:vi.fn(),useEffect:vi.fn(),useMemo:vi.fn(),useCallback:vi.fn()}));
 
 const ro='c896802c-35dd-4b59-8db1-5f374f83a6d8';
@@ -84,6 +85,9 @@ beforeEach(() => {
   api.getExistingHermesResearchRun.mockResolvedValue({run:null});
   api.getHermesResearchRun.mockResolvedValue({run:videoRun});
   api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:true});
+  api.getIngestionTask.mockResolvedValue({researchObjectId:ro,version:1,task:{id:source,artifactId:'artifact',agentTaskId:'source-agent',state:'confirmed',result:{canonicalExtractionContract:'grounded-passages-v2',sourceMapAvailable:true}}});
+  api.isConfirmedIngestionReanalysisSource.mockReturnValue(true);
+  api.reanalyzeConfirmedIngestion.mockResolvedValue({id:nextSource,artifactId:'artifact',state:'queued'});
   api.createHermesResearchRun.mockResolvedValue({run:videoRun});
 });
 afterEach(() => {vi.unstubAllGlobals();});
@@ -228,6 +232,27 @@ describe('ordinary video workflow from the existing guide',() => {
     find(host.tree(),element => element.type==='button' && element.props.children==='video.startFor:paper.pdf').props.onClick!();await host.flush();
     expect(find(host.tree(),element => element.props.children==='narrative.identityChanged')).toBeTruthy();
     expect(host.onRunCreated).not.toHaveBeenCalled();expect(api.createHermesResearchRun).not.toHaveBeenCalled();
+  });
+  it('starts a fresh source phase through the real helper and creates the video for its prepared source',async () => {
+    vi.mocked(prepareHermesNarrativeSource).mockImplementation(realNarrative.prepare!);
+    api.createHermesResearchRun.mockResolvedValue({run:{...videoRun,steps:[{id:'next-source-step',stage:'source_ingestion',ingestionTaskId:nextSource,status:'succeeded',ordinal:0}]}});
+    const host=mount();await host.flush();
+    find(host.tree(),element => element.type==='button' && element.props.children==='video.startFor:paper.pdf').props.onClick!();await host.flush();
+    expect(api.reanalyzeConfirmedIngestion).toHaveBeenCalledWith(source,'source-agent',expect.any(String),undefined,'video');
+    expect(api.getHermesVideoCapability.mock.invocationCallOrder[0]).toBeLessThan(api.reanalyzeConfirmedIngestion.mock.invocationCallOrder[0]);
+    expect(api.createHermesResearchRun).toHaveBeenCalledWith(ro,[nextSource],`hermes-guide-run:user:guide:${source}:video`,generation);
+    expect(loadPendingHermesRunStart(host.storage,videoScope)).toMatchObject({phase:'source',sourceReanalysisOutput:'video'});
+    expect(loadPendingHermesRunStart(host.storage,{...videoScope,ingestionTaskId:nextSource})).toMatchObject({phase:'run',runId:'video-run'});
+  });
+  it('holds a legacy source key through the real helper while video is unavailable without changing its original body',async () => {
+    vi.mocked(prepareHermesNarrativeSource).mockImplementation(realNarrative.prepare!);
+    api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false});
+    const host=mount();const pending={key:'legacy-run-key',sourceReanalysisKey:'legacy-source-key',generation,savedAt:1};
+    savePendingHermesRunStart(host.storage,videoScope,pending);await host.flush();
+    find(host.tree(),element => element.type==='button' && element.props.children==='narrative.resumePending').props.onClick!();await host.flush();
+    expect(api.getHermesVideoCapability).toHaveBeenCalled();expect(api.reanalyzeConfirmedIngestion).not.toHaveBeenCalled();expect(api.createHermesResearchRun).not.toHaveBeenCalled();
+    expect(loadPendingHermesRunStart(host.storage,videoScope)).toEqual(pending);
+    expect(find(host.tree(),element => element.props.children==='video.unavailable')).toBeTruthy();
   });
   it('does not reopen a mismatched image response or send a replacement',async () => {
     api.getExistingHermesResearchRun.mockResolvedValue({run:{...videoRun,generationSettings:{...generation,output:undefined}}});

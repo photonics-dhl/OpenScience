@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { createSession } from '@openscience/auth';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
@@ -99,6 +99,12 @@ suite('journal enhancement HTTP and PostgreSQL boundaries', () => {
   });
 
   it('publishes a reviewed matrix-backed version and checks authorization expiry on anonymous reads', async () => {
+    const expiresAt = new Date(Date.now() + 60 * 60_000);
+    const beforeReview = await prisma.journalArticle.findUniqueOrThrow({ where: { id: articleId } });
+    const sourceWithExpiry = beforeReview.source as Record<string, unknown> & { materials: Array<{ id: string; evidence: Record<string, unknown> }> };
+    sourceWithExpiry.materials = sourceWithExpiry.materials.map((material) => material.id === mainSourceId
+      ? { ...material, evidence: { ...material.evidence, expiresAt: expiresAt.toISOString() } } : material);
+    await prisma.journalArticle.update({ where: { id: articleId }, data: { source: sourceWithExpiry as Prisma.InputJsonValue } });
     for (const decision of ['submit', 'approve']) {
       const reviewed = await app.inject({ method: 'POST', url: `${path()}/review`, cookies: ownerCookie, payload: { revision, decision, note: 'Synthetic scientific and rights review.' } });
       expect(reviewed.statusCode, reviewed.body).toBe(200);
@@ -107,17 +113,17 @@ suite('journal enhancement HTTP and PostgreSQL boundaries', () => {
     expect(published.statusCode, published.body).toBe(200);
     const release = published.json().release; publicPath = `/research/${release.publicId}/v/${release.versionNo}`;
     expect((await app.inject({ url: publicPath })).statusCode).toBe(200);
-    // Simulate time passing without invoking any mutation/cleanup hook: the read path must enforce expiry.
-    const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: articleId } });
-    const value = current.source as Record<string, unknown> & { materials: Array<{ id: string; evidence: Record<string, unknown> }> };
-    value.materials = value.materials.map((material) => material.id === mainSourceId ? { ...material, evidence: { ...material.evidence, expiresAt: new Date(Date.now() - 1000).toISOString() } } : material);
-    await prisma.journalArticle.update({ where: { id: articleId }, data: { source: value as Prisma.InputJsonValue } });
-    expect((await app.inject({ url: publicPath })).statusCode).toBe(404);
-    const directory = await app.inject({ url: `/journals/${journalId}/articles` });
-    expect(directory.statusCode).toBe(200);
-    expect(directory.json().items.find((item: { id: string }) => item.id === articleId).releases).toEqual([]);
-    const job = await app.inject({ method: 'POST', url: `${path()}/processing-jobs`, cookies: ownerCookie, payload: { revision, language: 'en', requestKey: randomUUID(), manualConfirmation: true } });
-    expect(job.statusCode, job.body).toBe(403);
+    // The release freezes this expiry. Advancing the clock does not mutate its source or review.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(expiresAt.getTime() + 1000));
+    try {
+      expect((await app.inject({ url: publicPath })).statusCode).toBe(404);
+      const directory = await app.inject({ url: `/journals/${journalId}/articles` });
+      expect(directory.statusCode).toBe(200);
+      expect(directory.json().items.find((item: { id: string }) => item.id === articleId).releases).toEqual([]);
+      const job = await app.inject({ method: 'POST', url: `${path()}/processing-jobs`, cookies: ownerCookie, payload: { revision, language: 'en', requestKey: randomUUID(), manualConfirmation: true } });
+      expect(job.statusCode, job.body).toBe(403);
+    } finally { vi.useRealTimers(); }
   });
 
   it('excludes expired credits before background reconciliation and keeps reads free', async () => {

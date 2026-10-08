@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-`docs/handoff/2026-10-08-journal-workbench-handoff.md`：期刊工作台改版、定向修复、CI 与服务器部署收据。
+`docs/handoff/2026-10-08-journal-workbench-handoff.md`：期刊完整重做、共用论文管线、显式回滚与后续发布的唯一执行状态；需求见期刊设计的 2026-10-08 节。
 
 期刊改版与服务器续部署见 [期刊工作台交接](docs/handoff/2026-10-08-journal-workbench-handoff.md)：`apps/api/src/routes/journal-{core-routes,workbench,draft-policy,draft-guard}.ts` 保留原授权并提供草稿归档/恢复；`apps/web/lib/journal-{workbench-model,workbench-api,rights-form}.ts` 与 `components/journals/` 承接目录、草稿视图与显式来源授权；`scripts/test-journal-workbench.mjs`、Web journal 测试与 `apps/api/test/journal-browser.test.ts` 验证改版，精确 CI/部署事实见交接。
 

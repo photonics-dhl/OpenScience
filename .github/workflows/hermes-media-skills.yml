@@ -144,6 +144,7 @@ on:
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
       - 'apps/web/test/hermes-video-*.test.*'
       - 'apps/web/test/hermes-viewer-session.test.tsx'
+      - 'apps/web/test/hermes-research-run-panel.test.tsx'
       - 'apps/web/test/hermes-stage-portal.test.ts'
       - 'apps/web/test/hermes-companion-surface.test.ts'
       - 'apps/web/test/hermes-global-companion.test.tsx'
@@ -380,6 +381,7 @@ on:
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
       - 'apps/web/test/hermes-video-*.test.*'
       - 'apps/web/test/hermes-viewer-session.test.tsx'
+      - 'apps/web/test/hermes-research-run-panel.test.tsx'
       - 'apps/web/test/hermes-stage-portal.test.ts'
       - 'apps/web/test/hermes-companion-surface.test.ts'
       - 'apps/web/test/hermes-global-companion.test.tsx'
@@ -568,7 +570,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/api-agent.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/api-agent.test.ts
       - name: Hermes surface lifetime and dashboard behavior
         run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/auth-dashboard.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx

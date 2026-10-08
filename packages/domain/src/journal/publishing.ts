@@ -7,7 +7,7 @@ import { freezeResearchRecord, recordValue } from '../commit/research-record-sna
 import { JournalError } from './contracts';
 import { journalDigest, validateJournalDraft, type JournalMetadata, type JournalRights, type JournalSource } from './content';
 import { articleReviewDigest, assertArticleRevision, journalArticleEvent, journalArticleInScope, journalJson, journalScope, journalTransaction, txReleases } from './articles';
-import { assertJournalPublishCapability } from './enhancements';
+import { assertJournalPublishCapability, journalSourceMaterials } from './enhancements';
 
 export async function publishJournalArticle(deps: WorkspaceDeps, userId: string, journalId: string, articleId: string, input: { revision: number; requestKey: string; humanConfirmed: boolean; publicIdPrefix?: string }) {
   return journalTransaction(deps, journalId, async (tx) => {
@@ -60,6 +60,7 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
       metadata: publicMetadata, draft, source: { kind: source.kind, label: source.label, url: source.url,
         textSha256: createHash('sha256').update(source.text, 'utf8').digest('hex'), revision: article.revision,
         ...(rights.publicSource ? { text: source.text } : {}) },
+      authorization: { expiresAt: journalSourceMaterials(source).find((material) => material.activeForGeneration)?.evidence.expiresAt ?? null },
       license: rights.license, journal: { id: journal.id, slug: journal.slug, name: journal.nameEn || journal.nameZh },
       review: { method: 'editorial-content-confirmation', revision: article.revision }, publishedAt: publishedAt.toISOString(),
       versionNo, url: `/research/${publicId}/v/${versionNo}`,

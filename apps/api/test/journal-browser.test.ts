@@ -153,7 +153,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         { name: 'workbench', context: ownerContext, path: `/journals/manage/${journalId}`, expected: ['期刊工作台', '草稿箱', '已完成处理', '已公开解读'] },
         { name: 'processing-redirect', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['期刊工作台', '草稿箱'] },
         { name: 'services', context: ownerContext, path: `/journals/manage/${journalId}/services`, expected: ['服务包与额度', '可用 AI 草稿额度'] },
-        { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['研究素材', '上传研究素材', '查看原文'] },
+        { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['论文与文件', '上传论文文件', '查看原文', 'Hermes 助手 AI 解读', '审批与发布'] },
         { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['材料授权与公开范围', '加工与公开范围'] },
         { name: 'admin', context: adminContext, path: '/admin/journals', expected: ['期刊核验与运营', '期刊运营状态'] },
       ];
@@ -200,6 +200,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
             const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalNameEn, exact: true }) });
             await result.waitFor({ state: 'visible' });
+            await result.getByText(journalName, { exact: true }).waitFor({ state: 'visible' });
             expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
             await result.click();
             await page.waitForURL(`${baseUrl}/journals/${slug}`, { waitUntil: 'networkidle' });
@@ -297,11 +298,12 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       try {
         const editPage = await ownerContext.newPage();
         await editPage.goto(`${baseUrl}/journals/manage/${journalId}/articles/${articleId}`, { waitUntil: 'networkidle' });
+        await editPage.getByText('核对提取的论文文本', { exact: true }).click();
         await editPage.getByRole('textbox', { name: '来源文本', exact: true }).waitFor({ state: 'visible', timeout: 10000 }).catch(async (error) => { await editPage.screenshot({ path: resolve(outputDir, 'article-edit-failure.png'), fullPage: true }); throw new Error(String(error) + '\nPAGE: ' + (await editPage.locator('body').innerText()).slice(0, 1800)); });
         const changedSource = `${sourceSentence} Local editor verification.`;
         const changedSummary = `${draft.summary} Local editor verification.`;
         await editPage.getByRole('textbox', { name: '来源文本', exact: true }).fill(changedSource);
-        await editPage.getByRole('textbox', { name: '摘要', exact: true }).fill(changedSummary);
+        await editPage.getByRole('textbox', { name: '解读摘要', exact: true }).fill(changedSummary);
         await editPage.getByText('有未保存修改，请先保存，再确认内容或公开发布。').waitFor({ state: 'visible' });
         expect(await editPage.getByRole('button', { name: '公开发布已确认版本' }).isDisabled()).toBe(true);
         // This published revision stays confirmed until the changed draft is saved.
@@ -309,7 +311,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         expect(await editPage.getByRole('button', { name: '确认当前解读' }).count()).toBe(0);
         await editPage.waitForTimeout(2_500);
         expect(await editPage.getByRole('textbox', { name: '来源文本', exact: true }).inputValue()).toBe(changedSource);
-        expect(await editPage.getByRole('textbox', { name: '摘要', exact: true }).inputValue()).toBe(changedSummary);
+        expect(await editPage.getByRole('textbox', { name: '解读摘要', exact: true }).inputValue()).toBe(changedSummary);
         await editPage.getByRole('button', { name: '保存私有修订' }).click();
         await editPage.getByText('已保存；修改素材或解读后，需要重新确认内容。').waitFor({ state: 'visible' });
         const originalPublication = await fetch(`${baseUrl}${releaseUrl}`);
@@ -325,7 +327,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         const confirmed = await confirmedResponse;
         expect(confirmed.status(), await confirmed.text()).toBe(200);
         expect(confirmed.request().postDataJSON()).toMatchObject({ decision: 'confirm', humanConfirmed: true });
-        await editPage.getByText(/fulltext · approved · 修订/).waitFor({ state: 'visible' });
+        await editPage.getByText(/解读已确认 · 当前修订/).waitFor({ state: 'visible' });
         await editPage.screenshot({ path: resolve(outputDir, 'article-edit-saved-submitted.png'), fullPage: true });
         const restricted = editPage.waitForResponse((response) => response.url().includes(`/journals/${journalId}/articles/${articleId}/restrict`) && response.ok());
         editPage.once('dialog', (dialog) => { void dialog.accept('Synthetic browser restriction verification'); });
@@ -397,52 +399,50 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       await draftRow.getByRole('link', { name: '继续编辑' }).click();
       await page.getByRole('heading', { name: title, exact: true }).waitFor({ state: 'visible' });
       await page.getByRole('link', { name: '管理研究素材与授权' }).click();
-      const sourceForm = page.getByText('登记来源与授权依据', { exact: true });
+      const sourceForm = page.getByText('添加研究素材', { exact: true });
       await sourceForm.click();
       await page.getByLabel('材料类型', { exact: true }).selectOption('supplementary');
       await page.getByLabel('材料名称', { exact: true }).fill('Synthetic supplementary registration');
       await page.getByLabel('来源地址', { exact: true }).fill('https://journal.example.invalid/supplementary');
-      const registration = page.locator('details').filter({ hasText: '登记来源与授权依据' }).locator('form');
-      expect(await registration.getByRole('checkbox', { name: /Hermes 助手 AI 解读/ }).isChecked()).toBe(false);
-      expect(await registration.getByRole('checkbox', { name: /公开文字解读/ }).isChecked()).toBe(false);
-      expect(await registration.getByRole('checkbox', { name: /公开原始材料/ }).isChecked()).toBe(false);
-      await registration.getByLabel('材料许可范围').selectOption('full_public_processing_allowed');
-      expect(await registration.getByRole('checkbox', { name: /公开文字解读/ }).isChecked()).toBe(false);
-      expect(await registration.getByRole('checkbox', { name: /公开原始材料/ }).isChecked()).toBe(false);
-      await registration.getByLabel('材料许可范围').selectOption('unknown');
+      const registration = page.locator('details').filter({ hasText: '添加研究素材' }).locator('form');
+      expect(await registration.getByRole('checkbox', { name: /允许 Hermes 助手 AI 解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开原文/ }).isChecked()).toBe(false);
+      await registration.getByLabel('这份素材获准如何使用？').selectOption('full_public_processing_allowed');
+      expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开原文/ }).isChecked()).toBe(false);
+      await registration.getByLabel('这份素材获准如何使用？').selectOption('unknown');
       await registration.getByLabel(/^授权从哪里获得/).fill('Synthetic material registration; this record does not authorize the main source.');
       const addedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/sources`));
-      await registration.getByRole('button', { name: '保存来源与授权', exact: true }).click();
+      await registration.getByRole('button', { name: '添加素材并评估', exact: true }).click();
       const added = await addedResponse;
       expect(added.status(), await added.text()).toBe(200);
       const matrix = await added.json() as { sources: Array<{ sourceType: string; title: string; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } };
       expect(matrix.sources.find((item) => item.title === 'Synthetic supplementary registration')).toMatchObject({ sourceType: 'supplementary', permissions: noPermissions });
       expect(matrix.capability.canGenerateFullSixFields).toBe(true);
       await page.reload({ waitUntil: 'networkidle' });
-      await page.getByText('Synthetic supplementary registration · 权限未知').waitFor({ state: 'visible' });
+      await page.getByText('Synthetic supplementary registration · 授权待确认').waitFor({ state: 'visible' });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       await page.screenshot({ path: resolve(outputDir, 'sources-supplementary-mobile-375.png'), fullPage: true });
-      const timed = page.locator('details').filter({ hasText: 'Time-limited supplementary record · 权限未知' });
+      const timed = page.locator('details').filter({ hasText: 'Time-limited supplementary record · 授权待确认' });
       await timed.locator('summary').click();
-      await timed.getByText('历史授权记录有效至').waitFor({ state: 'visible' });
+      expect(await timed.getByLabel('授权到期时间').count()).toBe(0);
       await timed.getByLabel(/^授权从哪里获得/).fill('Synthetic time-limited record checked again; original expiry remains.');
       const reboundResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes(`/articles/${fresh.id}/sources/`) && response.url().endsWith('/rights'));
-      await timed.getByRole('button', { name: '保存授权记录', exact: true }).click();
+      await timed.getByRole('button', { name: '保存此项授权', exact: true }).click();
       const rebound = await reboundResponse;
       expect(rebound.status(), await rebound.text()).toBe(200);
       const savedSource = (await rebound.json() as { sources: Array<{ title: string; evidence: { expiresAt?: string }; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } }).sources.find((item) => item.title === 'Time-limited supplementary record');
       expect(savedSource?.evidence.expiresAt).toBe(expiry);
       expect(savedSource?.permissions).toEqual(noPermissions);
       await page.getByRole('link', { name: '返回论文工作台' }).click();
-      await page.getByRole('button', { name: '请 Hermes 生成私有解读', exact: true }).waitFor({ state: 'visible' });
-      expect(await page.getByRole('button', { name: '请 Hermes 生成私有解读', exact: true }).isEnabled()).toBe(true);
+      await page.getByRole('button', { name: '交给 Hermes 解读', exact: true }).waitFor({ state: 'visible' });
+      expect(await page.getByRole('button', { name: '交给 Hermes 解读', exact: true }).isDisabled()).toBe(true);
+      await page.getByText('上传论文正文文件', { exact: true }).first().waitFor({ state: 'visible' });
       const before = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as { available: number; reserved: number; consumed: number };
-      page.once('dialog', (dialog) => { void dialog.accept(); });
-      const queuedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/ai-drafts`));
-      await page.getByRole('button', { name: '请 Hermes 生成私有解读', exact: true }).click();
-      const queued = await queuedResponse;
-      expect(queued.status(), await queued.text()).toBe(200);
-      submittedJobId = (await queued.json() as { job: { id: string } }).job.id;
+      const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: fresh.id } });
+      const queued = await submitJournalJob({ prisma, mailer: createFakeMailer() }, ownerId, journalId, fresh.id, { requestKey: `browser-quota-${randomUUID()}`, revision: current.revision, language: 'zh' }, true);
+      submittedJobId = queued.id;
       const during = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as typeof before;
       expect(during.available).toBe(before.available - 1);
       expect(during.reserved).toBe(before.reserved + 1);

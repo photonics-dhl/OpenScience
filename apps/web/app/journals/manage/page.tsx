@@ -12,11 +12,12 @@ export default function MyJournalsPage() {
   const router = useRouter();
   const t = useTranslations('journalDirectory.management');
   const [items, setItems] = React.useState<JournalSummary[]>([]);
+  const [redirecting, setRedirecting] = React.useState(false);
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const load = React.useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems((await listMyJournals()).items); }
+    try { const journals = (await listMyJournals()).items; setItems(journals); if (journals.length === 1) { setRedirecting(true); router.replace(`/journals/manage/${encodeURIComponent(journals[0]!.id)}`); } }
     catch (cause) {
       if (cause instanceof ApiClientError && cause.status === 401) router.replace('/auth/login?returnTo=%2Fjournals%2Fmanage');
       else setError(cause instanceof Error ? cause.message : t('loadFailed'));
@@ -29,7 +30,7 @@ export default function MyJournalsPage() {
       <h1>{t('title')}</h1>
       <p className="text-os-muted-paper">{t('intro')}</p>
     </header>
-    {loading ? <p className="mt-8" role="status">{t('loading')}</p> : null}
+    {loading || redirecting ? <p className="mt-8" role="status">{t('loading')}</p> : null}
     {error ? <div className="mt-6" role="alert"><p>{error}</p><button type="button" className="border border-os-rule-paper px-4" disabled={loading} onClick={() => void load()}>{t('retry')}</button></div> : null}
     {!loading && !error && !items.length ? <section className="journal-managed-empty" aria-labelledby="journal-empty-title">
       <div>
@@ -46,7 +47,7 @@ export default function MyJournalsPage() {
         <path d="M154 10V1m-17 12-6-6m40 6 6-6" stroke="currentColor" />
       </svg>
     </section> : null}
-    {items.length ? <ul className="journal-managed-list" aria-busy={loading}>{items.map((item) => <li key={item.id}>
+    {items.length > 1 && !redirecting ? <ul className="journal-managed-list" aria-busy={loading}>{items.map((item) => <li key={item.id}>
       <Link href={'/journals/manage/' + item.id}>
         <div><h2>{item.nameEn || item.nameZh}</h2><p className="text-os-muted-paper">{item.subjects.join(' · ')}</p></div>
         <span className="journal-list-action">{t('open')} →</span>

@@ -26,6 +26,10 @@ test('editor confirms a private interpretation before the owner can publish it',
       await route.fulfill({ json: { release: { versionNo: 1, publicId: 'synthetic-1', url: '/research/synthetic-1/v/1' } } });
     } else if (url.pathname === '/api/journals/journal-1/articles/article-1') {
       await route.fulfill({ json: { article, nativeGenerationReady: true } });
+    } else if (url.pathname === '/api/journals/journal-1/articles/article-1/sources') {
+      await route.fulfill({ json: { sources: [], articleRevision: article.revision, history: [], capability: { canGenerateFullSixFields: false, canPublishPublicSummary: false, canPublishFigures: false, limitations: [], blockingReasons: [] } } });
+    } else if (url.pathname === '/api/journals/journal-1/articles/article-1/shared-files') {
+      await route.fulfill({ json: { researchObjectId: null, articleRevision: article.revision, versionId: null, files: [], sourceArtifactId: null, processing: null } });
     } else if (url.pathname === '/api/journals/journal-1/manage') {
       await route.fulfill({ json: { membership: { role: 'owner' } } });
     } else if (url.pathname === '/api/journals/journal-1/members') {

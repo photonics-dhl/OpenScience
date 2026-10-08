@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, persistJournalSponsoredPaperTaskInTransaction, persistHistoricalSourceTaskInTransaction, persistSourceMapSearchIndexInTransaction, projectAgentTaskResult, type AgentDeps } from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { initialNativeAgentExecution, readNativeAgentExecution } from '../agent/native-agent-execution';
 import { requireNativePaperAuthor } from './native-paper-author';
@@ -297,6 +297,56 @@ export async function createIngestionBatch(
     for (const taskId of saved.taskIds) await dispatchAgentTask(deps, taskId);
     return getIngestionBatch(deps, { userId: input.userId, batchId: saved.batchId });
   }
+}
+
+/** Reuse a staged private Artifact without re-uploading bytes or changing its identity. */
+export async function createIngestionBatchFromArtifact(deps: IngestionDeps, input: {
+  userId: string; researchObjectId: string; artifactId: string; idempotencyKey: string;
+  journalSponsorship?: { reserve: (tx: Prisma.TransactionClient) => Promise<string> };
+  beforeDispatch: (tx: Prisma.TransactionClient, ingestionTaskId: string) => Promise<void>;
+}, ctx: AuditContext = {}): Promise<IngestionBatchView> {
+  if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200) throw new IngestionError('VALIDATION_ERROR', 'Missing ingestion request key');
+  const { researchObject: ro } = await authorizeIngestionWrite(deps, input);
+  const artifact = await deps.prisma.artifact.findUnique({ where: { id: input.artifactId } });
+  if (!artifact || artifact.deletedAt || artifact.workspaceId !== ro.workspaceId) throw new IngestionError('INGESTION_NOT_FOUND', 'Source artifact unavailable');
+  const requestDigest = createHash('sha256').update(JSON.stringify({ artifactId: artifact.id, sha256: artifact.blobSha256 })).digest('hex');
+  const saved = await deps.prisma.$transaction(async (tx) => {
+    await lockTrashReferences(tx);
+    await tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${ro.workspaceId}::uuid AND user_id = ${input.userId}::uuid FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${ro.workspaceId}::uuid FOR SHARE`;
+    const { researchObject: currentRo } = await authorizeIngestionWrite({ ...deps, prisma: tx } as IngestionDeps, input);
+    if (currentRo.workspaceId !== ro.workspaceId || currentRo.status !== 'draft') throw new IngestionError('INGESTION_NOT_FOUND', 'Private working research object unavailable');
+    const currentArtifact = await tx.artifact.findUnique({ where: { id: artifact.id } });
+    if (!currentArtifact || currentArtifact.deletedAt || currentArtifact.workspaceId !== ro.workspaceId || currentArtifact.blobSha256 !== artifact.blobSha256)
+      throw new IngestionError('INGESTION_NOT_FOUND', 'Source artifact changed');
+    let batch = await tx.ingestionBatch.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (batch && (batch.researchObjectId !== ro.id || batch.userId !== input.userId || batch.requestDigest !== requestDigest))
+      throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another source');
+    if (!batch) batch = await tx.ingestionBatch.create({ data: { researchObjectId: ro.id, userId: input.userId,
+      idempotencyKey: input.idempotencyKey, requestDigest } });
+    let sessionId = batch.agentSessionId;
+    if (!sessionId) {
+      const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: input.userId, researchObjectId: ro.id,
+        kind: 'ingestion', title: `Ingestion ${batch.id}`, idempotencyKey: `${input.idempotencyKey}:session` }, ctx);
+      await tx.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
+      sessionId = session.id;
+    }
+    const agentInput = { sessionId, userId: input.userId, kind: 'sdf.extract' as const,
+      payload: { artifactId: artifact.id, researchObjectId: ro.id }, idempotencyKey: `${input.idempotencyKey}:extract:0` };
+    const sponsorshipId = await input.journalSponsorship?.reserve(tx);
+    const { task } = sponsorshipId
+      ? await persistJournalSponsoredPaperTaskInTransaction(deps, tx, agentInput, sponsorshipId, ctx)
+      : await persistAgentTaskInTransaction(deps, tx, agentInput, ctx);
+    let ingestion = await tx.ingestionTask.findUnique({ where: { batchId_artifactId: { batchId: batch.id, artifactId: artifact.id } } });
+    if (!ingestion) ingestion = await tx.ingestionTask.create({ data: { batchId: batch.id, artifactId: artifact.id, agentTaskId: task.id, state: 'queued' } });
+    if (ingestion.agentTaskId !== task.id) throw new IngestionError('VALIDATION_ERROR', 'Source ingestion changed');
+    await input.beforeDispatch(tx, ingestion.id);
+    await recordAudit(deps, tx, { actorId: input.userId, action: 'ingestion.batch.create', workspaceId: ro.workspaceId,
+      targetType: 'ingestion_batch', targetId: batch.id, metadata: { researchObjectId: ro.id, fileCount: 1, stagedArtifactId: artifact.id } }, ctx);
+    return { batchId: batch.id, agentTaskId: task.id };
+  }, { isolationLevel: 'Serializable', timeout: 30_000 });
+  await dispatchAgentTask(deps, saved.agentTaskId);
+  return getIngestionBatch(deps, { userId: input.userId, batchId: saved.batchId });
 }
 
 function planLogicalPaths(filenames: string[]): string[] {
@@ -1806,8 +1856,10 @@ export async function confirmIngestionTask(
   deps: IngestionDeps,
   input: { userId: string; taskId: string; version: number; sourceAgentTaskId: string; core: Record<string, string> },
   ctx: AuditContext = {},
+  journalHooks?: { before: (tx: Prisma.TransactionClient) => Promise<void>;
+    after: (tx: Prisma.TransactionClient, confirmation: IngestionConfirmation) => Promise<void> },
 ): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
-  return saveIngestionTask(deps, input, ctx);
+  return saveIngestionTask(deps, input, ctx, undefined, journalHooks);
 }
 
 /** Internal execution under a durable user grant; never records a human confirmation. */
@@ -1825,10 +1877,13 @@ async function saveIngestionTask(
   input: { userId: string; taskId: string; version: number; sourceAgentTaskId: string; core: Record<string, string> },
   ctx: AuditContext,
   internalRunId?: string,
+  journalHooks?: { before: (tx: Prisma.TransactionClient) => Promise<void>;
+    after: (tx: Prisma.TransactionClient, confirmation: IngestionConfirmation) => Promise<void> },
 ): Promise<{ task: IngestionTaskView; sdf: SdfDocumentView; confirmation: IngestionConfirmation }> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       const saved = await deps.prisma.$transaction(async tx => {
+        await journalHooks?.before(tx);
         const scoped = { ...deps, prisma: tx as IngestionDeps['prisma'] };
         const task = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
           include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
@@ -1909,9 +1964,11 @@ async function saveIngestionTask(
           }
         }
         const core = commit.snapshot.core as Record<string, string>;
+        const confirmation = confirmationView(commit, internalRunId ? { executor: 'hermes', runId: internalRunId } : undefined);
+        await journalHooks?.after(tx, confirmation);
         return { task: { ...taskToView(task), state: 'confirmed' as const, error: null },
           sdf: { core, nodes: SDF_NODE_TYPES.map(nodeType => ({ nodeType, content: core[nodeType] ?? '' })) },
-          confirmation: confirmationView(commit, internalRunId ? { executor: 'hermes', runId: internalRunId } : undefined),
+          confirmation,
           indexTaskId };
       }, { isolationLevel: 'Serializable', timeout: 30_000 });
       const { indexTaskId, ...response } = saved;

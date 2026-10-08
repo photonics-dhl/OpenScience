@@ -535,7 +535,8 @@ model ResearchObject {
   @@index([workspaceId])
   @@index([workspaceId, originalDoi])
   @@map("research_objects")
-  journalArticle JournalArticle?
+  journalArticle JournalArticle? @relation("JournalPublishedResearchObject")
+  workingJournalArticle JournalArticle? @relation("JournalWorkingResearchObject")
 }
 
 // --- Hermes Research Intelligence Task 10：外部检索、权利判定与临时文档生命周期 ---
@@ -1700,6 +1701,7 @@ model JournalArticle {
   journalId String @map("journal_id") @db.Uuid
   workId String @map("work_id") @db.Uuid
   researchObjectId String @unique @map("research_object_id") @db.Uuid
+  workingResearchObjectId String? @unique @map("working_research_object_id") @db.Uuid
   metadata Json
   source Json
   rights Json
@@ -1717,12 +1719,30 @@ model JournalArticle {
   updatedAt DateTime @updatedAt @map("updated_at")
   journal Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
   work JournalWork @relation(fields: [workId], references: [id], onDelete: Restrict)
-  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
+  researchObject ResearchObject @relation("JournalPublishedResearchObject", fields: [researchObjectId], references: [id], onDelete: Restrict)
+  workingResearchObject ResearchObject? @relation("JournalWorkingResearchObject", fields: [workingResearchObjectId], references: [id], onDelete: Restrict)
+  sharedBinding JournalSharedBinding?
   jobs JournalJob[]
   releases JournalRelease[]
   @@unique([journalId,workId])
   @@index([journalId,directoryVisible,createdAt])
   @@map("journal_articles")
+}
+
+model JournalSharedBinding {
+  articleId String @id @map("article_id") @db.Uuid
+  sourceArtifactId String? @map("source_artifact_id") @db.Uuid
+  sourceBlobSha256 String? @map("source_blob_sha256") @db.Char(64)
+  sourceDigest String? @map("source_digest") @db.Char(64)
+  sourceRevision Int? @map("source_revision")
+  actorId String? @map("actor_id") @db.Uuid
+  ingestionTaskId String? @map("ingestion_task_id") @db.Uuid
+  hermesRunId String? @map("hermes_run_id") @db.Uuid
+  confirmedVersionId String? @map("confirmed_version_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  article JournalArticle @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  @@map("journal_shared_bindings")
 }
 
 model JournalJob {
