@@ -4,7 +4,7 @@ import { AiGateway, AnthropicCompatProvider, type TextProvider } from '@openscie
 import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionStore } from '../src/native-agent/session';
 import type * as NativeModule from '../src/native-agent/illustration-task';
 
-const resources = vi.hoisted(() => ({ old: false, missingLegacy: false, corruptLegacy: false }));
+const resources = vi.hoisted(() => ({ old: false, missingLegacy: false, corruptLegacy: false, root: undefined as '20' | '21' | undefined }));
 vi.mock('node:fs', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs')>();
   const section = (text: string) => {
@@ -25,8 +25,10 @@ vi.mock('node:fs', async importOriginal => {
       const legacy = String(actual.readFileSync(path.replace(/SKILL\.md$/u, 'references/legacy-execution-v19.md'), 'utf8'));
       // These are the actual v19 consumed Execution bytes, not a handwritten prompt.
       // Planning/Visual craft were independently compared equal across v19/v20.
-      return current.replace(section(current), section(legacy)).replace('version: "20"', 'version: "19"');
+      return current.replace(section(current), section(legacy)).replace(/^ {2}version: "[1-9]\d*"$/mu, '  version: "19"');
     }
+    if (resources.root && path.endsWith('/openscience-research-illustration/SKILL.md'))
+      return String(actual.readFileSync(...args)).replace(/^ {2}version: "[1-9]\d*"$/mu, `  version: "${resources.root}"`);
     return actual.readFileSync(...args);
   } };
 });
@@ -49,8 +51,9 @@ const calls = [
 ] as const;
 const finalResponse = '{"reviewToolCallId":"review"}';
 
-async function load(old: boolean) {
+async function load(old: boolean, root?: '20' | '21') {
   resources.old = old;
+  resources.root = root;
   vi.resetModules();
   return import('../src/native-agent/illustration-task');
 }
@@ -83,8 +86,8 @@ async function runSdk(session: ReturnType<typeof createNativeAgentSession>, mate
   }
   throw new Error('Fixture did not stop');
 }
-async function capture(style = 'aged-academia', withRepair = false) {
-  const old = await load(true), fresh = old.nativeIllustrationToolProfile(null);
+async function capture(style = 'aged-academia', withRepair = false, original: '19' | '20' = '19') {
+  const old = await load(original === '19', original === '20' ? '20' : undefined), fresh = old.nativeIllustrationToolProfile(null);
   const tools = fresh.sourceTools.map(tool => ({ type: 'function' as const, function: structuredClone(tool) }));
   const definition = tools.find(tool => tool.function.name === 'paper_illustration_science')!.function;
   definition.description = definition.description.slice(0, definition.description.indexOf(' Complete numbered Fig'));
@@ -114,12 +117,12 @@ async function capture(style = 'aged-academia', withRepair = false) {
   const saved = await store.read();
   expect(saved).not.toBeNull();
   const completed = materializer.finish(saved!.turns.at(-1)!.request.messages, finalResponse);
-  expect(completed.prompts[0]!.prompt).toContain('authorized Chat reference-image path');
+  expect(completed.prompts[0]!.prompt).toContain(original === '19' ? 'authorized Chat reference-image path' : 'selected Synclip model contract');
   expect(producer.complete).toHaveBeenCalledTimes(selectedCalls.length + 1);
   return { input, state: saved!, prompts: completed.prompts };
 }
-async function replay(captured: Awaited<ReturnType<typeof capture>>) {
-  const current = await load(false), state = structuredClone(captured.state);
+async function replay(captured: Awaited<ReturnType<typeof capture>>, root?: '20' | '21') {
+  const current = await load(false, root), state = structuredClone(captured.state);
   const readOnlyStore = { read: async () => structuredClone(state), compareAndSet: vi.fn(async () => { throw new Error('Unexpected replay write'); }),
     complete: vi.fn(async () => { throw new Error('Unexpected replay completion'); }),
     publish: vi.fn(async () => { throw new Error('Unexpected replay publication'); }) };
@@ -136,7 +139,44 @@ function replayBeforeArt(materializer: Materializer) {
   materializer.call('paper_illustration_context', {}, 0, 'context');
   return materializer.call('paper_illustration_science', science, 1, 'science');
 }
-afterEach(() => { resources.old = false; resources.missingLegacy = false; resources.corruptLegacy = false; vi.resetModules(); });
+afterEach(() => { resources.old = false; resources.missingLegacy = false; resources.corruptLegacy = false; resources.root = undefined; vi.resetModules(); });
+
+describe('review-only v21 resource attribution', () => {
+  it.each([
+    ['19', 'aged-academia', false], ['19', 'auto', false], ['19', 'handdraw:#002', false],
+    ['20', 'aged-academia', false], ['20', 'auto', false], ['20', 'handdraw:#002', false],
+    ['19', 'handdraw:#002', true], ['20', 'handdraw:#002', true],
+  ] as const)('preserves the full paid v%s finish across v20/v21 (%s, repair=%s)', async (original, style, repair) => {
+    const captured = await capture(style, repair, original), before = structuredClone(captured.state);
+    const complete = async (root: '20' | '21') => {
+      const restored = await replay(captured, root);
+      expect(await runSdk(restored.session, restored.materializer, captured.state.turns[0]!.request.options.tools!))
+        .toMatchObject({ finalResponse });
+      const result = restored.materializer.finish(captured.state.turns.at(-1)!.request.messages, finalResponse);
+      expect(restored.provider.complete).not.toHaveBeenCalled();
+      expect(restored.readOnlyStore.compareAndSet).not.toHaveBeenCalled();
+      expect(restored.readOnlyStore.complete).not.toHaveBeenCalled();
+      expect(restored.readOnlyStore.publish).not.toHaveBeenCalled();
+      return result;
+    };
+    const previous = await complete('20'), current = await complete('21');
+    expect(current).toEqual(previous);
+    expect(current.designSkills.some(item => item.id === 'openscience-research-illustration' && item.version === '21')).toBe(false);
+    expect(captured.state).toEqual(before);
+  });
+  it.each(['19', '20'] as const)('does not resubmit an original started v%s turn under v21', async original => {
+    const captured = await capture('handdraw:#002', false, original), last = captured.state.turns.at(-1)!;
+    captured.state.turns[captured.state.turns.length - 1] = { state: 'started', target: last.target, request: last.request, effectiveOptions: last.effectiveOptions };
+    const before = structuredClone(captured.state), restored = await replay(captured, '21');
+    await expect(runSdk(restored.session, restored.materializer, captured.state.turns[0]!.request.options.tools!))
+      .rejects.toThrow(/outcome unknown/u);
+    expect(captured.state).toEqual(before);
+    expect(restored.provider.complete).not.toHaveBeenCalled();
+    expect(restored.readOnlyStore.compareAndSet).not.toHaveBeenCalled();
+    expect(restored.readOnlyStore.complete).not.toHaveBeenCalled();
+    expect(restored.readOnlyStore.publish).not.toHaveBeenCalled();
+  });
+});
 
 describe('v19 Execution resource compatibility', () => {
   it.each(['aged-academia', 'auto', 'handdraw:#002'])('replays paid SDK tools and final validation without a new model call (%s)', async style => {

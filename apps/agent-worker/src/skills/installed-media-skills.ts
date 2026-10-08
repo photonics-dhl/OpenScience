@@ -53,10 +53,12 @@ function readMarkdown(relativePath: string): string {
   }
   return text;
 }
-function projectIllustrationSkillVersion(): string {
+function projectIllustrationSkillVersion(stage: Stage): string {
   const match = /^ {2}version: "([1-9]\d*)"$/mu.exec(readMarkdown('openscience-research-illustration/SKILL.md'));
   if (!match) throw new Error('[blocked] Installed illustration skill version is unavailable');
-  return match[1]!;
+  // v21 changes only Scientific review. Preserve the unchanged selected-section
+  // attribution in paid Native planning/render results; future versions are not projected.
+  return match[1] === '21' && stage !== 'review' ? '20' : match[1]!;
 }
 function readMarkdownHeadings(relativePath: string, headings: readonly string[], historicalExecution = false): string {
   const text = readMarkdown(relativePath);
@@ -278,7 +280,7 @@ export function loadInstalledMediaSkills(
       const isVisualClarity = skill === 'openscience-scientific-visual-clarity';
       const isHanddrawStyle = skill === 'openscience-handdraw-style';
       const isHanddrawRouter = skill === 'openscience-handdraw-router';
-      entry = { id: skill, ...(isIllustration ? { version: historical ? '19' : projectIllustrationSkillVersion() } : isVisualClarity
+      entry = { id: skill, ...(isIllustration ? { version: historical ? '19' : projectIllustrationSkillVersion(stage) } : isVisualClarity
         ? { version: '1', upstreamCommit: SCIENTIFIC_VISUALIZATION_COMMIT }
         : isHanddrawStyle ? { version: '3', upstreamCommit: HANDDRAW_STYLE_COMMIT }
         : isHanddrawRouter ? { version: '1', upstreamCommit: HANDDRAW_ROUTER_COMMIT }

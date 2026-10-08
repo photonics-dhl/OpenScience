@@ -2,7 +2,7 @@
 name: openscience-research-illustration
 description: Plan and refine evidence-grounded research illustrations for OpenScience through native Hermes and Synclip, using structured briefs, source-scoped visual references and reusable art directions. Use for paper illustrations, scientific concept images and research covers; quantitative plots require a data renderer.
 metadata:
-  version: "20"
+  version: "21"
 ---
 
 # OpenScience research illustration
@@ -132,7 +132,7 @@ Review the proposed picture from its actual `encoding`, `composition`, `treatmen
 
 Assess the picture a reader can actually see: `labels` is its exclusive visible-text list, while other fields guide drawing. A necessary axis variable or boundary value present only in encoding is still missing from the picture; return a scientific-field correction upstream. A function drawn against coordinate axes asserts its shape, signs, zero crossings and relative extrema even without numeric ticks or with a conceptual disclaimer. Such a plot needs a data renderer. For Chat illustration, select a supported nonquantitative relationship rather than accepting an invented curve because its formula is correct.
 
-For every generated scene, compare the proposed `encoding`, `composition` and `treatment` mark by mark, including direction, connectivity, implied distances and all text callouts. Check vector operations and frequency/wavelength language against the exact original passage; do not accept a correct displayed equation beside a contradictory drawing or explanation. A reviewer summary must not substitute for this comparison.
+For every generated scene, compare the proposed `encoding`, `composition` and `treatment` mark by mark, including direction, connectivity, implied distances and all text callouts. Each essential comparison must retain its source-defined object, physical quantity, definition, axis or reference frame and conditions. Check vector operations and frequency/wavelength language against the exact original passage; a correct displayed equation does not neutralize a contradictory drawing or explanation. A confirmed conflict in scientific meaning with the bound source or the caller's approved scientific brief is a blocking scientific defect while it remains in the candidate. Do not classify it as a nonblocking aesthetic suggestion because the labels are readable or the general topic is recognizable. Artistic tolerance applies only when scientific meaning and essential readability are preserved; keep the caller's decision and summary consistent with that distinction. Use only the caller's existing permitted correction fields, preserving the supported science; do not add a review stage or assess the original paper's scientific validity.
 
 If encoding or narration prescribes a rejected decorative form while composition or treatment forbids it, return a blocked upstream issue naming both fields. Do not accept the candidate or claim an art-only correction can override unchanged science fields. Keep the supported relationship and label; revise only the misplaced visual-form instruction through the existing science planning path.
 
