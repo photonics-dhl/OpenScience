@@ -8,6 +8,7 @@ import { publishJournalArticle, restrictJournalArticle } from '../src/journal/pu
 import type { JournalDraft, JournalMetadata } from '../src/journal/content';
 import { uploadJournalSource } from '../src/journal/source-upload';
 import { updateJournalArticleSourceRights } from '../src/journal/enhancements';
+import { stageJournalSharedSource, startJournalSharedProcessing, repairJournalSharedRunBindings } from '../src/journal/shared-workspace';
 import type { WorkspaceDeps } from '../src/workspace/types';
 import type { StorageAdapter } from '@openscience/storage';
 
@@ -35,7 +36,7 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     while (true) {
       const active = await prisma.journalJob.findMany({
         where: {
-          state: { in: ['staging', 'pending', 'running'] },
+          kind: { in: ['generate', 'source_parse'] }, state: { in: ['staging', 'pending', 'running'] },
           ...(journalIds ? { journalId: { in: journalIds } } : { journal: { is: {
             nameEn: 'Synthetic Validation Journal',
             websiteUrl: 'https://journals.example.test',
@@ -155,12 +156,76 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
       async getObject() { throw new Error('not used'); }, async deleteObject() { throw new Error('not used'); },
     };
     const replacement = await uploadJournalSource({ ...deps, storage: replacementStorage }, ctx.owner.id, ctx.journal.id, item.id, { revision: edited.revision, requestKey: randomUUID(), filename: 'replacement.txt', content: replacementBytes });
-    expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('private');
-    expect((await prisma.version.findUniqueOrThrow({ where: { id: v1.versionId } })).status).toBe('restricted');
+    expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('public');
+    expect((await prisma.version.findUniqueOrThrow({ where: { id: v1.versionId } })).status).toBe('published');
     await cancelJournalJob(deps, ctx.owner.id, ctx.journal.id, replacement.job.id);
     await restrictJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { state: 'withdrawn', reason: 'Synthetic test withdrawal' });
     expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('private');
     expect((await prisma.version.findUniqueOrThrow({ where: { id: v1.versionId } })).status).toBe('withdrawn');
+  });
+  it('stages a new private working RO source without queueing or changing a fixed public release', async () => {
+    const ctx = await journal(); const item = await article(ctx);
+    const prepared = await updateJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: item.revision, draft });
+    await reviewJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: prepared.revision, decision: 'submit', note: 'Synthetic publication review' });
+    await reviewJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: prepared.revision, decision: 'approve', note: 'Synthetic publication review' });
+    const release = await publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: prepared.revision, requestKey: randomUUID(), humanConfirmed: true });
+    const released = await prisma.journalRelease.findUniqueOrThrow({ where: { id: release.id } });
+    const bytes = Buffer.from('This replacement paper is a staged private manuscript with numerical results and reproducible inputs.');
+    const objects = new Map<string, Buffer>();
+    const storage: StorageAdapter = {
+      async headObject(key) { const body = objects.get(key); return body ? { key, size: body.length, etag: key } : null; },
+      async putObject(key, body) { const data = Buffer.isBuffer(body) ? body : Buffer.from(body); objects.set(key, data); return { key, size: data.length, etag: key }; },
+      async getObject(key) { const body = objects.get(key); if (!body) throw new Error('missing synthetic object'); return body; },
+      async deleteObject(key) { objects.delete(key); },
+    };
+    const staged = await stageJournalSharedSource({ ...deps, storage }, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: prepared.revision, requestKey: randomUUID(), filename: 'replacement.txt', content: bytes });
+    const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: item.id } });
+    const work = await prisma.researchObject.findUniqueOrThrow({ where: { id: current.workingResearchObjectId! } });
+    expect(work.id).not.toBe(item.researchObjectId);
+    expect([work.visibility, work.status]).toEqual(['private', 'draft']);
+    expect((current.source as { artifactId: string }).artifactId).toBe(staged.artifactId);
+    expect(await prisma.ingestionTask.count({ where: { batch: { researchObjectId: work.id } } })).toBe(0);
+    expect(await prisma.journalJob.count({ where: { articleId: item.id, kind: 'shared_ingestion' } })).toBe(0);
+    expect((await prisma.researchObject.findUniqueOrThrow({ where: { id: item.researchObjectId } })).visibility).toBe('public');
+    expect((await prisma.version.findUniqueOrThrow({ where: { id: released.versionId } })).status).toBe('published');
+    expect((await prisma.journalRelease.findUniqueOrThrow({ where: { id: release.id } })).snapshot).toEqual(released.snapshot);
+    const material = (current.source as { materials: Array<{ id: string }> }).materials[0]!;
+    const permitted = await updateJournalArticleSourceRights(deps, ctx.owner.id, ctx.journal.id, item.id, material.id, {
+      revision: current.revision, rightsStatus: 'internal_processing_only', sourceConfidence: 'editor_claimed',
+      permissions: { internalProcessing: true, derivativeGeneration: true, externalProcessing: true,
+        publicSource: false, publicDerivative: false, figureReuse: false, derivativeIllustration: false },
+      evidence: { statement: 'Synthetic editor-controlled processing authorization', license: 'Synthetic test licence' },
+      activeForGeneration: true,
+    });
+    const queued: string[] = [];
+    const sharedDeps = { ...deps, storage, redis: { lpush: async (_key: string, value: string) => { queued.push(value); return 1; } } as never };
+    const key = randomUUID();
+    const started = await startJournalSharedProcessing(sharedDeps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: permitted.articleRevision, requestKey: key, processingConsent: true });
+    const startedAgain = await startJournalSharedProcessing(sharedDeps, ctx.owner.id, ctx.journal.id, item.id,
+      { revision: permitted.articleRevision, requestKey: key, processingConsent: true });
+    expect(startedAgain.run.id).toBe(started.run.id);
+    expect(await prisma.ingestionTask.count({ where: { batch: { researchObjectId: work.id } } })).toBe(1);
+    expect(await prisma.journalJob.count({ where: { articleId: item.id, kind: 'shared_ingestion' } })).toBe(1);
+    expect(queued).toHaveLength(1);
+    const sponsor = await prisma.journalJob.findFirstOrThrow({ where: { articleId: item.id, kind: 'shared_ingestion' } });
+    expect((sponsor.result as { ingestionTaskId: string }).ingestionTaskId).toBe(started.tasks[0]!.id);
+    await prisma.journalSharedBinding.update({ where: { articleId: item.id }, data: { hermesRunId: null } });
+    await repairJournalSharedRunBindings(sharedDeps);
+    expect((await prisma.journalSharedBinding.findUniqueOrThrow({ where: { articleId: item.id } })).hermesRunId).toBe(started.run.id);
+    expect(await prisma.agentTask.count({ where: { session: { researchObjectId: work.id } } })).toBe(1);
+    await recoverJournalJobs({ ...deps, storage });
+    expect((await prisma.journalJob.findUniqueOrThrow({ where: { id: sponsor.id } })).state).toBe('running');
+    await prisma.ingestionTask.update({ where: { id: started.tasks[0]!.id }, data: { state: 'failed_blocked' } });
+    await prisma.journalJob.update({ where: { id: sponsor.id }, data: { createdAt: new Date(Date.now() - 120_000) } });
+    await recoverJournalJobs({ ...deps, storage });
+    expect((await prisma.journalJob.findUniqueOrThrow({ where: { id: sponsor.id } })).state).toBe('failed');
+    expect((await prisma.journalLedger.count({ where: { jobId: sponsor.id, kind: 'release' } }))).toBe(1);
   });
   it('only one request can reserve the last credit; cancelling twice releases exactly once and expiration is not revived', async () => {
     const ctx = await journal(); const a = await article(ctx); const b = await article(ctx);

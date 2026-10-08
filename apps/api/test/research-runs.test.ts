@@ -14,7 +14,7 @@ type RunQuery = { where?: { actorId?: string; researchObjectId?: string; profile
   orderBy?: Array<{ createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' }>;
   cursor?: { id: string }; skip?: number; take?: number };
 
-async function fixture(role = 'author') {
+async function fixture(role = 'author', canStartNewVideo: () => Promise<boolean> = async () => true) {
   const { prisma, db } = createFakePrisma();
   const redis = createFakeRedis();
   const user = seedUser(db, { email: 'run@example.com', displayName: 'Run User' });
@@ -56,7 +56,8 @@ async function fixture(role = 'author') {
   prisma.hermesResearchRun.findUniqueOrThrow = async args => {
     const row = await prisma.hermesResearchRun.findUnique(args); if (!row) throw new Error('Missing API run fixture'); return row;
   };
-  const app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, storage: {} as StorageAdapter });
+  const app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
+    storage: {} as StorageAdapter, canStartNewVideo });
   const errors: Error[] = []; app.addHook('onError', async (_request, _reply, error) => { errors.push(error); });
   apps.push(app);
   return { app, db, errors, actorId: user.id, cookies: { openscience_session: token } };
@@ -78,6 +79,20 @@ function storedRun(f: Awaited<ReturnType<typeof fixture>>, generationSettings: u
 }
 
 describe('Hermes research run API contract', () => {
+  it('reports scoped fresh video readiness without starting a run', async () => {
+    let available = true;
+    const { app, db, cookies } = await fixture('author', async () => available);
+    const url = `/research-objects/${RO_ID}/hermes-video-readiness`;
+    const ready = await app.inject({ method: 'GET', url, cookies });
+    expect(ready.statusCode, ready.body).toBe(200);
+    expect(ready.headers['cache-control']).toBe('private, no-store');
+    expect(ready.json()).toEqual({ available: true });
+    available = false;
+    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ available: false });
+    db.memberships.length = 0;
+    expect((await app.inject({ method: 'GET', url, cookies })).statusCode).toBe(404);
+  });
+
   it('binds an explicit video intent to the original nine-task grant and replays the same run', async () => {
     const { app, db, errors, cookies } = await fixture();
     Object.assign(db.artifacts[0], { mimeType: 'application/pdf' }); Object.assign(db.agentTasks[0], { kind: 'sdf.extract' });

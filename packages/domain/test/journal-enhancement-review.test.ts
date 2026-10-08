@@ -88,7 +88,8 @@ describe('journal enhancement security boundaries', () => {
       journalArticle: {
         findUnique: async () => ({
           ...article(expired),
-          releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' } } }],
+          releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' }, authorization: { expiresAt: '2026-09-21T00:00:00.000Z' } },
+            version: { status: 'published', researchObject: { visibility: 'public', deletedAt: null } } }],
         }),
       },
     };
@@ -105,7 +106,8 @@ describe('journal enhancement security boundaries', () => {
       ...article(material('full_public_processing_allowed', {
         sourceConfidence: 'expired',
       })),
-      releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' } } }],
+      releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' }, authorization: { expiresAt: '2026-09-21T00:00:00.000Z' } },
+        version: { status: 'published', researchObject: { visibility: 'public', deletedAt: null } } }],
     };
     const prisma = {
       researchObject: {
@@ -137,7 +139,8 @@ describe('journal enhancement security boundaries', () => {
   it('closes frozen record and attachment consumers after journal authorization expires', async () => {
     const expiredArticle = {
       ...article(material('full_public_processing_allowed', { sourceConfidence: 'expired' })),
-      releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' } } }],
+      releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' }, authorization: { expiresAt: '2026-09-21T00:00:00.000Z' } },
+        version: { status: 'published', researchObject: { visibility: 'public', deletedAt: null } } }],
     };
     const researchObject = {
       id: 'journal-ro', workspaceId: 'journal-ws', publicId: 'OSR-2026-000001',
@@ -174,7 +177,8 @@ describe('journal enhancement security boundaries', () => {
       journalArticle: {
         findUnique: async () => ({
           ...article(derivativeOnly),
-          releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' } } }],
+          releases: [{ versionId: 'journal-v1', snapshot: { draft: { scope: 'fulltext' } },
+            version: { status: 'published', researchObject: { visibility: 'public', deletedAt: null } } }],
         }),
       },
     };

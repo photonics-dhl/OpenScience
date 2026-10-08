@@ -81,6 +81,7 @@ function fixture(output: 'video' | null = 'video') {
     try { return await transaction(callback); } catch (error) { errors.push(error); throw error; }
   } });
   const deps: HermesResearchRunDeps = { prisma, nativeSceneImageEnabled: true,
+    canStartNewVideo: async () => true,
     nativeAgentRuntime: { runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' },
     redis: { lpush: vi.fn(async () => 1) } as unknown as HermesResearchRunDeps['redis'], now: () => time };
   return { prisma, db, deps, sourceMapRef, step, errors,
@@ -197,6 +198,29 @@ async function timingReady(sourceCosts = 2) {
 }
 
 describe('explicit native video research run', () => {
+  it('pauses an existing run before a new paid presentation task when the host stops accepting', async () => {
+    const f = fixture();
+    f.deps.canStartNewVideo = async () => false;
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.run().status).toBe('awaiting_claim_review');
+    expect(f.generated()).toHaveLength(0);
+    expect(f.debits()).toHaveLength(0);
+  });
+
+  it('blocks a new paid video run before it creates any run or task, while replay remains readable', async () => {
+    const f = fixture();
+    f.db.hermesResearchRuns.splice(0); f.db.hermesResearchSteps.splice(0);
+    f.deps.canStartNewVideo = async () => false;
+    const input = { actorId: ids.actor, researchObjectId: ids.ro, ingestionTaskIds: [ids.ingestion],
+      idempotencyKey: 'video-readiness', generation: { ...grant, output: 'video' } as HermesNarrativeGrant };
+    await expect(createHermesResearchRun(f.deps, input)).rejects.toMatchObject({ code: 'SOURCE_NOT_READY' });
+    expect(f.db.hermesResearchRuns).toHaveLength(0);
+    expect(f.db.agentTasks).toHaveLength(1);
+    f.deps.canStartNewVideo = async () => true;
+    const created = await createHermesResearchRun(f.deps, input);
+    f.deps.canStartNewVideo = async () => false;
+    await expect(createHermesResearchRun(f.deps, input)).resolves.toEqual(created);
+  });
   it('persists the explicit video intent without creating another source analysis', async () => {
     const f = fixture(); f.db.hermesResearchRuns.length = 0; f.db.hermesResearchSteps.length = 0;
     const run = await createHermesResearchRun(f.deps, { actorId: ids.actor, researchObjectId: ids.ro,

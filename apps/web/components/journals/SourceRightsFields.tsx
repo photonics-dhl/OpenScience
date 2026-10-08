@@ -59,6 +59,12 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
 }) {
   const t = useJournalMaterialsCopy();
   const p = value.permissions;
+  const aiKeys = ['internalProcessing', 'derivativeGeneration', 'externalProcessing'] as const;
+  const aiAllowed = aiKeys.every((key) => statusPermissions[value.rightsStatus].includes(key));
+  const aiChecked = aiKeys.every((key) => p[key]);
+  const aiPartial = !aiChecked && aiKeys.some((key) => p[key]);
+  const aiRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => { if (aiRef.current) aiRef.current.indeterminate = aiPartial; }, [aiPartial]);
   const evidenceRequired = Object.values(p).some(Boolean) || value.rightsStatus !== 'unknown';
   const licenseRequired = p.derivativeGeneration || p.publicDerivative || p.publicSource || p.figureReuse || p.derivativeIllustration;
   const update = (part: Partial<SourceRightsValue>) => onChange({ ...value, ...part });
@@ -69,8 +75,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
     </label>
   );
   const issues = sourceRightsIssues(value, sourceType, activeForGeneration);
-  const parseReady = p.internalProcessing && Boolean(value.evidence.trim()) && !issues.length;
-  const privateReady = parseReady && p.derivativeGeneration && p.externalProcessing && Boolean(value.license.trim());
+  const privateReady = aiChecked && Boolean(value.evidence.trim()) && Boolean(value.license.trim()) && !issues.length;
 
   return <div className="grid gap-4 sm:grid-cols-2">
     <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-status`}>
@@ -87,16 +92,10 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
       {t.license}{licenseRequired ? t.required : t.optional}<input id={`${idPrefix}-license`} aria-describedby={`${idPrefix}-license-help`} aria-required={licenseRequired} disabled={disabled} className="min-h-10 border border-os-rule-paper bg-transparent px-3" value={value.license} onChange={(event) => update({ license: event.target.value })} />
       <span id={`${idPrefix}-license-help`} className="text-sm leading-relaxed text-os-muted-paper">{t.licenseHelp}</span>
     </label>
-    <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-expires`}>
-      {t.expiry}<input id={`${idPrefix}-expires`} type="datetime-local" disabled={disabled} className="min-h-10 border border-os-rule-paper bg-transparent px-3" value={value.expiresAt} onChange={(event) => update({ expiresAt: event.target.value })} />
-    </label>
     <fieldset className="sm:col-span-2" disabled={disabled}>
       <legend className="text-sm font-medium">{t.tasks}</legend>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        {task('internalProcessing', t.parse, t.parseHelp)}
-        {task('derivativeGeneration', t.private, t.privateHelp)}
-        {task('externalProcessing', t.external, t.externalHelp)}
-      </div>
+      <label className="mt-3 flex items-start gap-2 text-sm"><input ref={aiRef} className="mt-1 accent-teal-700" type="checkbox" disabled={disabled || !aiAllowed} checked={aiChecked} onChange={(event) => update({ permissions: { ...p, internalProcessing: event.target.checked, derivativeGeneration: event.target.checked, externalProcessing: event.target.checked } })} /><span><span className="block">{t.hermesCombined}</span><span className="mt-1 block text-sm leading-relaxed text-os-muted-paper">{t.hermesCombinedHelp}</span></span></label>
+      {aiPartial ? <p className="mt-2 text-sm text-os-muted-paper">{t.partialAiRights}</p> : null}
       <p className="mt-4 text-sm leading-relaxed text-os-muted-paper">{t.publicHelp}</p>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         {task('publicDerivative', t.publicInterpretation)}
@@ -110,8 +109,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
       <span id={`${idPrefix}-evidence-help`} className="text-sm leading-relaxed text-os-muted-paper">{t.evidenceHelp}</span>
     </label>
     <div className="sm:col-span-2 text-sm" aria-live="polite">
-      <p>{parseReady ? t.parseReady : t.parseNotReady} · {privateReady ? t.privateReady : t.privateNotReady}</p>
-      {!parseReady ? <p className="mt-1 text-os-muted-paper">{t.missingParse}</p> : null}
+      <p>{privateReady ? t.privateReady : t.privateNotReady}</p>
       {!privateReady ? <p className="mt-1 text-os-muted-paper">{t.missingPrivate}</p> : null}
       {issues.length ? <ul className="mt-2 space-y-1 text-os-vermilion-ink">{issues.map((issue) => <li key={issue}>{t[issue]}</li>)}</ul> : null}
     </div>

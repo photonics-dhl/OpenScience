@@ -8,6 +8,8 @@ import { parsePresentationGenerationPayload, requirePresentationWriteScope, requ
 import { requireHermesPresentationTaskAuthority } from './research-run';
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
 import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
+import { journalSourceProcessingAllowed } from '../journal/enhancements';
+import { journalDigest } from '../journal/content';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -85,6 +87,17 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   const source = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id }, include: { batch: true } });
   if (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || artifact.workspaceId !== workspace.id
     || !source || source.artifactId !== artifact.id || source.batch.userId !== task.session.userId || source.batch.researchObjectId !== ro.id) blocked();
+  const journalArticle = await tx.journalArticle.findUnique({ where: { workingResearchObjectId: ro.id }, include: { journal: true } });
+  if (journalArticle) {
+    const binding = await tx.journalSharedBinding.findUnique({ where: { articleId: journalArticle.id } });
+    if (journalArticle.journal.operationalState !== 'active' || journalArticle.journal.workspaceId !== workspace.id
+      || !['owner', 'maintainer', 'author'].includes(membership.role)
+      || binding?.actorId !== task.session.userId || binding.ingestionTaskId !== source.id
+      || binding.sourceArtifactId !== artifact.id || binding.sourceBlobSha256 !== artifact.blobSha256
+      || binding.sourceRevision !== journalArticle.revision || binding.sourceDigest !== journalDigest(journalArticle.source)
+      || (journalArticle.source as { artifactId?: string }).artifactId !== artifact.id
+      || !journalSourceProcessingAllowed(journalArticle, true)) blocked();
+  }
   if (marker.checkpoint && (!record(task.result) || task.result.sourceMapRef === undefined)) blocked();
   if (record(task.result) && task.result.sourceMapRef !== undefined) {
     const reference = parseDocumentSourceMapReference(task.result.sourceMapRef);

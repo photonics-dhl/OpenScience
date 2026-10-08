@@ -535,6 +535,10 @@ export function createHermesResearchRun(researchObjectId: string, ingestionTaskI
   });
 }
 
+export function getHermesVideoReadiness(researchObjectId: string): Promise<{ available: boolean }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-readiness`, { cache: 'no-store' });
+}
+
 export function getHermesResearchRun(researchObjectId: string, runId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }

@@ -1,67 +1,44 @@
-# Journal workbench deployment handoff
+# Journal workbench CURRENT
 
 ## Goal and source
 
-- The user requested the journal redesign and server deployment on 2026-10-08.
-- Collaboration target: `photonics-dhl/OpenScience`, `frontend/nanqing`; never force-push or update `main`.
-- Original feature: `Nanqing96/openscience@5305f4884ea583ce628c073d857dbc5ca740cff0`, based on `96e5e0c6`.
-- Port parent: `7755a5ef7ab0a6bfa5184b54dd93c4054f883be4`; current candidate identity is Git HEAD.
-- Deployment continuation began from pushed `d6105a8039647bf5466652c477a4568e764b5195` in a separate clone. Other local trees and uncommitted work are untouched.
-- Initial server/public release: `45a577a3a8f6bca78a063e7478fba131c5efb375`, an ancestor of the candidate. Fresh live identity is mandatory before switching.
-- Cross-team production and runtime state remains in [Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md); this file owns the journal increment and its acceptance evidence.
+- 2026-10-08 用户最新明确要求：先回滚线上到 `45a577a3`，按提供的完整期刊需求重新开发，再推送 `photonics-dhl/OpenScience` 的 `frontend/nanqing` 并部署。
+- 需求以 [期刊设计 2026-10-08 重做范围](../specs/2026-09-15-journal-onboarding-design.md) 为准；本文件仅记录执行状态，不缩小交付范围。
+- 开发继续保留最新协作代码，不 reset 分支、不强推、不改 main、不覆盖他人更新。工作 clone 位于本任务 `work/OpenScience`。
+- 其他产品未完成事项仍见 [Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md)，期刊回滚不撤销其需求或已存资产。
 
-## Delivered behavior
+## Version and production checkpoint
 
-- Directory: all-journal search, subject/OA/sort filters, name/publisher/subject cards, and apply/manage/invite/admin footer actions. Invitation shares the application link and does not send email.
-- Unknown OA stays unknown; citation sorting remains disabled without metadata. Paper counts mean platform-listed articles.
-- Public homepage: topics, print/electronic ISSNs, validated external links, public sharing, and separate original-paper and fixed-interpretation links.
-- Workbench: draft-first views, per-paper completion/publication metrics, DOI preview/import, continued editing, reversible archive/restore, and legacy processing-bookmark redirect.
-- Removed priority/postponement/batch queue controls and the manual no-DOI form; historical records and server authorization remain.
-- Rights: explicit processing/public permissions, mandatory evidence, existing expiry preserved, and no model call or publication when saving rights.
-- The target's Native Agent configuration, malware upload scanning, session-aware navigation, immutable publication and tenancy boundaries are retained.
-- No new database migration. Archiving appends an event and increments the draft revision; it does not remove files, research objects, processing history or published releases.
+- branch=`frontend/nanqing`；开发基线 `e43123db6877a1cc1c500ee33608152d2f17f40f`，新实现进行中，候选身份以实际 Git HEAD/diff 为准。
+- 2026-10-08 显式回滚完成：active=`45a577a3a8f6bca78a063e7478fba131c5efb375`；rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`。未回退数据库。
+- 原 FD9 生产锁、任务排空、Nginx 写门禁、durable journal、CAS、retention prepare/complete 全部通过，脚本 exit0，所有生产服务 healthy。公网 `/__release` 返回目标完整 SHA。
+- Native 从 42fe 安装时的 `previous/` 恢复 `784c6b25342c29bdc5c2db193258d34dfafd4e64` runtime/catalogue，与旧 API/Worker 匹配；timer 恢复 active。
+- 视频 v2 保留 `adminModelsEnabled=false` / `accepting=false`，未退回 v1；历史 paid/unknown 收据、素材、数据库和公开版本未改。
+- 私有恢复证据：`/opt/openscience/observations/journal-explicit-rollback-42fe1a974fb62e5a868d3a4f1da812065cb148b1-to-45a577a3a8f6bca78a063e7478fba131c5efb375/`；脚本 SHA256 `75f18950b37357e0f5b359be977ca4333db68f9018f55384f7a0bbcb9165bd29`。
+- 唯一等待人工核源的 run 创建于 2026-10-05，profile=`visual-narrative-v1`，source_ingestion succeeded；两应用间相关协议无差异。回滚不修改或重新提交该 run。
 
-## CI regressions and corrections
+## Rebuild work
 
-- Incoming `d6105a80` journal run `37754193718` passed backend build, Domain 66, API 26, Worker 6, and Web build; Web tests failed 5 cases. Media/video CI passed.
-- Updated directory tests for the new locale hook and complete-directory filtering. Incomplete or failed loading retains known entries, disables global filters/totals, and prevents repeated retry requests.
-- Restored explicit file/URL/type identity when adding an active source; uploaded full text sends its existing artifact ID. This does not grant permissions implicitly.
-- Updated browser acceptance to the approved draft-first UI: visible navigation, archive/restore, rights and historical expiry, public permissions, fixed publication, and single-paper quota reservation/cancellation.
-- Only successful generation jobs count as completed interpretation; source parsing alone does not. The real route handler regression is covered.
-- Local Web journal tests (32) and draft-workbench tests (20) passed. Added explicit accessible names to source permission selects after the first browser run exposed ambiguous label matching.
-- `c4cea550865e268adc537dc2371b52a81f05748c` passed journal push/PR runs `37758400785`/`37758407759`, media `37758407887`, and video `37758407725`, including real isolated browser workflows.
-- Two full server builds completed, but the first runtime snapshot changed after repeated dependency installation. Both private logs and the original snapshot are retained under `/opt/openscience/observations/journal-20261008-c4cea550865e268adc537dc2371b52a81f05748c/`; no production switch or Native/video installation occurred. Prepare a fresh exact SHA with dependency convergence before fixing its deployment snapshot.
+| 交付项 | 当前事实与剩余工作 |
+|---|---|
+| 目录、公开主页、草稿箱 | 旧增量有基本目录/筛选/DOI/归档功能；按新需求复核和完善。目录 CI 的中文 heading 假设与英文主标题结构冲突，前端 owner 修正真实断言，不延长超时或跳过。 |
+| 共用文件与 Native Hermes | 候选已接共用 ArtifactUploader、RO 文件版本、ingestion、Native 结果与原子确认；不再启动第二次 journal-text 生成。正在补 PostgreSQL 纵向与故障恢复验证。 |
+| 发布后重新编辑 | High 审查发现旧 source-upload/授权变更会限制旧公开版本；采用独立私有 working RO 与持久绑定，出版 RO 保持不变。新权限仅约束新稿，显式撤权另走原受控动作。 |
+| 权限与费用 | 上传先保管、显式授权后才进入共享管线；期刊 scoped source/revision/hash/actor/run 绑定及每次外发核权。共用任务使用期刊 grant，不扣个人额度，同锁限制并发；有效结果消费一次、未知 paid 保留、免费恢复不另扣。存储额度及故障恢复待最终 High。 |
+| 编辑及审批 | 五区连续页面、六字段编辑器、图卡/FAQ、私有确认与独立审批发布已接；统一 AI 授权，历史到期时间隐藏且保留。Web build 已过，待精确 CI 和部署后桌面/窄屏真实入口观察。 |
+| 推送与部署 | 尚未完成新候选。完成定向测试、真实隔离浏览器、独立 High 审查、精确 SHA CI 后按原前向发布流程部署。 |
 
-## Release and rollback boundaries
+## Checks and release constraints
 
-- Use the existing configuration, SSH key and canonical [deployment runbook](../runbooks/deployment.md); never print secrets.
-- Source must be clean, pushed and CI-passing, with current live release as an ancestor and exact rollback ref; retain the FD9 lock, journal, public identity and automatic rollback guards.
-- The incoming integrated branch also changes Native Skill resources and Synclip video receipt contracts. Pair required Native catalogue resources and inspect video compatibility before enabling affected new tasks.
-- Initial server video adapter is `synclip-video-v1`. Do not silently let it consume v2 receipt requests or enable unconfirmed LTX administrator capabilities.
-- Preserve all existing paid/unknown task receipts and source assets. Deployment does not authorize new model calls, real journal approval or publication.
-- Application deployment and browser usability are separate facts; both were observed as described below.
+- 基线 e431 的 CI：Journal `37782272375` 后端/单测/Web build 通过，浏览器 1/2 失败；video `37782272323` 成功，media `37782272316` cancelled。这些不能当新候选验收。
+- 旧 42fe 发布四 CI、构建收敛与站内浏览证据为历史，保存在 Git 前版和 `/opt/openscience/observations/journal-20261008-42fe1a974fb62e5a868d3a4f1da812065cb148b1/`，不能证明本次完整重做完成。
+- 最新协作候选的视频付费前 readiness P1 已修：新收费动作先检查真实 host 新鲜状态；不影响已付结果恢复。定向 Domain 211/211、API 24/24 已过，最终精确 SHA CI 尚待。
+- 本机 Web build exit0（日志 `tmp/check-logs/1791475440758-8ca01aa2-24e2-4363-976f-705ad3087771.log`）；CI 路由前置测试20/20。本机未运行 PostgreSQL 集成（Docker daemon 不可用），须由 GitHub 隔离库验证，不能把跳过记为通过。
+- 新发布编排候选 `tmp/deploy-journal-rebuild.candidate.sh` SHA256 `304074f9ae639ef1a17ce763980ca3f44409b8685d66b0bb7f183e2bdeaa7255` 已独立 High 条件 GO：先完成双库备份、精确 CI、运行快照收敛，再 Native/视频配对和原 canonical 迁移发布。尚未执行新部署。
+- 使用既有 .env/SSH，配置仅机械复用、不打印密钥；必要 additive 迁移按原备份和 migration CLI，不 reset 数据。
+- 精确已推 SHA、干净发布树、线上祖先及 rollback 校验、原 lock/journal/public identity/自动回滚守卫不可绕过；Native/视频资源配对后再开放写入。
+- 测试与部署不授权审批真实期刊、重发未知付费任务或公开新科研结果。验收用隔离数据和最小已授权真实站内路径；科研质量仍需实际产物及用户确认。
 
-## Verified production result
+## Next action
 
-- Deployed successfully on 2026-10-08 from `frontend/nanqing` at `42fe1a974fb62e5a868d3a4f1da812065cb148b1`; exact live/rollback identities remain in Hermes CURRENT. Later documentation-only commits do not require another application deployment.
-- Exact-SHA CI: journal push/PR `37759938589`/`37759945555`, media `37759945507`, video `37759945653` all succeeded. Server preparation converged after initial dependency setup: two full builds matched protected runtime snapshot `entryCount=96850`, `sha256=e4dc74db18d4e51be3d1586685fec829734f4b1f1e817d1ae438ee2e27cef8f6`; post-deployment verification matched the same receipt.
-- The reviewed orchestration reused the existing Native/video installers and canonical production transaction (`skip-migrate=1`, `no-tests=1`, unchanged capability-image reuse). Unrelated Parser/ScanSci/BGE functional canaries were not rerun; their startup health and the existing release guards remained enforced.
-- A temporary Nginx method guard covered the entire pairing window. The first immediate reload probe returned 405 before service shutdown; it recovered automatically with no application switch. A bounded wait then verified 503 and deployment completed with exit 0. Both attempts, the original snapshot, and private logs remain under `/opt/openscience/observations/journal-20261008-42fe1a974fb62e5a868d3a4f1da812065cb148b1/`.
-- Public `/__release` matched the deployed SHA, homepage returned 200, all production services were healthy, Native runtime/catalogue matched API and Worker, and its timer was active. Transaction/failure/pending markers and the temporary maintenance guard were absent.
-- Synclip video now uses v2 receipt verification with `adminModelsEnabled=false` and `accepting=false`; all historical receipts and previous units/config are preserved. This is not video-generation or scientific-quality acceptance. No new model call, paper edit, approval, or publication was submitted for this release.
-- Real signed-in navigation passed: directory → manage my journals → Ultrafast Science workbench → existing paper → sources/rights; directory → public journal homepage also passed. Desktop and 375px viewport were observed, with no horizontal overflow on the workbench/rights page. Source selectors had explicit accessible names and permissions remained unchecked.
-- Browser 418/423 hydration messages appeared only during the initial release transition; later full reloads of the directory and sources page did not reproduce them. Cause is unconfirmed; this observation does not justify a speculative code change.
-
-## Open product work
-
-- Shared file management and Native Hermes journal-scoped understanding/result binding remain incomplete; labels or links do not prove integration.
-- Preserve figure-card/FAQ editing and journal approval when accepting common results; DOI matches cannot grant access to private research objects.
-- Authoritative OA/citation sources, hierarchical subjects, independent directory inclusion and recommendation/writing tools remain future work.
-- Journal deployment and the scoped production navigation acceptance are complete. The broader product work above and scientific/video acceptance remain open.
-
-## Read first
-
-`apps/api/src/routes/journal-{core-routes,workbench,draft-policy,draft-guard}.ts`,
-`apps/web/lib/journal-{workbench-model,workbench-api,rights-form}.ts`,
-`apps/web/components/journals/`, `scripts/test-journal-workbench.mjs`,
-`apps/api/test/journal-browser.test.ts`, `.github/workflows/journals.yml`.
+完成共享管线与五区页面，先验真实生产者到确认/发布边界，再跑必要 CI、前向发布和桌面/窄屏观察；最后同步精确线上版本。当前仅“回滚”已完成，整项重做未交付。

@@ -121,6 +121,31 @@ suite('journal HTTP lifecycle against isolated PostgreSQL', () => {
     await prisma?.$disconnect();
   });
 
+  it('lists a publicly cataloged journal without an onboarding application, but hides it when unpublished', async () => {
+    const marker = randomUUID();
+    const name = `Independent catalog journal ${marker}`;
+    const workspace = await prisma.workspace.create({ data: { type: 'team', name, ownerId } });
+    const journal = await prisma.journal.create({ data: {
+      workspaceId: workspace.id, slug: `catalog-${marker}`, nameEn: name,
+      websiteUrl: 'https://journals.example.test/catalog', publisherName: 'Synthetic catalog publisher',
+      subjects: ['Validation'], verifiedAt: new Date(), homepagePublished: true,
+    } });
+    try {
+      expect(await prisma.journalApplication.count({ where: { journalId: journal.id } })).toBe(0);
+      const listed = await app.inject({ method: 'GET', url: `/journals?query=${encodeURIComponent(name)}&limit=10` });
+      expect(listed.statusCode, listed.body).toBe(200);
+      expect(listed.json().items.map((item: { id: string }) => item.id)).toContain(journal.id);
+
+      await prisma.journal.update({ where: { id: journal.id }, data: { homepagePublished: false } });
+      const hidden = await app.inject({ method: 'GET', url: `/journals?query=${encodeURIComponent(name)}&limit=10` });
+      expect(hidden.statusCode, hidden.body).toBe(200);
+      expect(hidden.json().items.map((item: { id: string }) => item.id)).not.toContain(journal.id);
+    } finally {
+      await prisma.journal.delete({ where: { id: journal.id } });
+      await prisma.workspace.delete({ where: { id: workspace.id } });
+    }
+  });
+
   it('authenticates application and verification routes and keeps Crossref on its fixed origin', async () => {
     const anonymous = await app.inject({ method: 'GET', url: '/journals/mine' });
     expect(anonymous.statusCode).toBe(401);

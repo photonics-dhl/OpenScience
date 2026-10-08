@@ -18,6 +18,7 @@
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
 
 ## 当前版本与观察边界
+- 2026-10-08 用户随后明确要求期刊回滚并全量重做：已按原生产锁/事务完成 active=`45a577a3a8f6bca78a063e7478fba131c5efb375`、rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1` 的显式恢复；Native恢复784配对、video v2仍disabled，DB/任务/公开资产保留。公网身份、服务healthy、事务清理均核实；下列18:28版本是历史。后续重做和发布证据见[期刊 CURRENT](2026-10-08-journal-workbench-handoff.md)，其他产品未完成目标不变。
 - 2026-10-08 18:28 CST总控实核：release=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；Web/API/Worker healthy、restart0/OOMfalse，API/Worker global/Native均M3，runtime/catalogue均42fe。证据`tmp/session-coordination-20261008/live-release-investigation.json`。此为远端期刊发布，不是总控本地候选切换；fetch后两SHA均可解析，短暂旧容器not-running未被误作需重启故障。
 - 期刊在用户指定独立克隆发布，远端frontend/nanqing已到9eb8bc01；精确42fe四项CI全success（37759938589/37759945555/37759945507/37759945653）。[期刊交接](2026-10-08-journal-workbench-handoff.md)记录原事务/Native配对exit0、公网身份/站内验收及视频host v2保持adminModelsEnabled=false/accepting=false。总控保留其全部代码并合入；不强推、不合并PR/main，不因期刊验收宣布其它产品完成。
 - 已推c3ebf728d0da22955554921b8d7eb4b4698756d0含UI2265/BGEaa0，发布NO-GO（下方P1），未部署。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)视频PR绿；期刊等旧Browse all journals失败，media四例等旧“上传PDF或资料”链接失败/其余23通过，均交UI保留真实入口/幂等验证后修。Search29/Worker25、新Web单测/构建已过，后续导航组未跑。0b六CI/host32/broker114为前批证据；原失败与日志在tmp/session-coordination-20261008。安装授权仅临时CI，非本机/生产。

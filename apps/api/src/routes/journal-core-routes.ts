@@ -1,14 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import multipart from '@fastify/multipart';
-import type { StorageAdapter } from '@openscience/storage';
+import { getBlob, type StorageAdapter } from '@openscience/storage';
 import type { AuthDeps } from '@openscience/auth';
 import {
   JournalError, activateJournalHomepage, addJournalMember, cancelJournalJob, changeJournalMemberRole,
   createJournalFeedback, createJournalServiceRequest, getManagedJournalArticle, grantJournalCredits, importJournalArticle, listJournalFeedback, previewJournalArticle,
   journalScope, listAdminApplications, listJournalMembers, listManagedJournals, listMyJournalApplications,
   normalizeJournalDoi, publishJournalArticle, removeJournalMember, restrictJournalArticle,
-  uploadJournalSource, JOURNAL_FILE_LIMIT,
+  uploadJournalSource, JOURNAL_FILE_LIMIT, getJournalSharedFiles, getJournalSharedFile, addJournalSharedAttachment, stageJournalSharedSource, startJournalSharedProcessing,
+  getJournalSharedCandidate, confirmJournalSharedInterpretation, retryJournalSharedProcessing, JOURNAL_ATTACHMENT_CATEGORIES,
   assignJournalReviewer,
   transferJournalOwnership, reopenJournalApplication,
   respondJournalFeedback, reviewJournalArticle, reviewJournalServiceRequest, saveJournalApplication, setJournalOperationalState, submitJournalApplication,
@@ -52,7 +53,8 @@ const memberRole = z.enum(['admin', 'editor', 'reviewer']);
 const role = (r: string) => ({ maintainer: 'admin', author: 'editor' }[r] ?? r);
 const pageQuery = z.object({ query: z.string().max(200).optional(), subject: z.string().max(100).optional(), cursor: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(100).default(20) });
 type Deps = AuthDeps & { storage?: StorageAdapter; malwareScanner?: import('@openscience/storage').MalwareScanner; journalsEnabled?: boolean;
-  nativeAgentRuntime?: import('@openscience/domain').NativeAgentRuntimeConfig; publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
+  nativeAgentRuntime?: import('@openscience/domain').NativeAgentRuntimeConfig; redis?: import('ioredis').default;
+  publicIdPrefix?: string; journalMetadataFetcher?: typeof fetch };
 
 /** Fixed-origin metadata lookup. Never fetch DOI destination, paper URL, proof URL or redirects. */
 export async function fetchJournalDoiMetadata(doiInput: string, fetcher: typeof fetch = fetch): Promise<JournalMetadata> {
@@ -166,6 +168,70 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     return { items };
   }));
   app.get('/journals/:id/articles/:articleId', member(async (req, uid) => { const p = articleIds.parse(req.params); return { article: await getManagedJournalArticle(deps, uid, p.id, p.articleId), nativeGenerationReady: nativeGenerationReady() }; }));
+  app.get('/journals/:id/articles/:articleId/shared-files', member(async (req, uid) => { const p = articleIds.parse(req.params); return getJournalSharedFiles(deps, uid, p.id, p.articleId); }));
+  app.get('/journals/:id/articles/:articleId/shared-files/:artifactId/download', member(async (req, uid, reply) => {
+    const p = articleIds.extend({ artifactId: z.string().uuid() }).parse(req.params);
+    if (!deps.storage) throw new JournalError('INVALID_STATE', '来源存储服务尚未配置');
+    const file = await getJournalSharedFile(deps, uid, p.id, p.articleId, p.artifactId);
+    const blob = await getBlob(deps.storage, file.blobSha256);
+    const filename = Buffer.from(file.logicalPath.split(/[\\/]/).pop() ?? '', 'utf8').toString('utf8')
+      .replace(/\p{Cc}/gu, '') || 'download';
+    const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
+    const encoded = encodeURIComponent(filename).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+    return reply.header('Content-Type', file.mimeType ?? 'application/octet-stream')
+      .header('Content-Disposition', `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`)
+      .header('Cache-Control', 'private, no-store').header('Content-Length', String(file.size)).send(blob.body);
+  }));
+  app.post('/journals/:id/articles/:articleId/attachments', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    await journalScope(deps.prisma, p.id, uid, ['owner', 'maintainer', 'author'], true);
+    if (!deps.storage) throw new JournalError('INVALID_STATE', '附件存储服务尚未配置');
+    let file: { filename: string; content: Buffer } | undefined; const fields: Record<string, unknown> = {};
+    for await (const part of req.parts()) {
+      if (part.type === 'file') { const content = await part.toBuffer(); if (part.file.truncated || content.length > JOURNAL_FILE_LIMIT) throw new JournalError('VALIDATION_ERROR', '附件超过 50 MB'); file = { filename: part.filename, content }; }
+      else fields[part.fieldname] = part.value;
+    }
+    if (!file) throw new JournalError('VALIDATION_ERROR', '请选择附件');
+    const input = z.object({ revision: z.coerce.number().int().positive(), requestKey, category: z.enum(JOURNAL_ATTACHMENT_CATEGORIES) }).strict().parse(fields);
+    return addJournalSharedAttachment({ ...deps, storage: deps.storage }, uid, p.id, p.articleId, { ...input, ...file });
+  }));
+  app.post('/journals/:id/articles/:articleId/shared-source', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    await journalScope(deps.prisma, p.id, uid, ['owner', 'maintainer', 'author'], true);
+    if (!deps.storage) throw new JournalError('INVALID_STATE', '来源存储服务尚未配置');
+    let file: { filename: string; content: Buffer } | undefined; const fields: Record<string, unknown> = {};
+    for await (const part of req.parts()) {
+      if (part.type === 'file') { const content = await part.toBuffer(); if (part.file.truncated || content.length > JOURNAL_FILE_LIMIT) throw new JournalError('VALIDATION_ERROR', '来源文件超过 50 MB'); file = { filename: part.filename, content }; }
+      else fields[part.fieldname] = part.value;
+    }
+    if (!file) throw new JournalError('VALIDATION_ERROR', '请选择论文正文文件');
+    const input = z.object({ revision: z.coerce.number().int().positive(), requestKey }).strict().parse(fields);
+    return stageJournalSharedSource({ ...deps, storage: deps.storage }, uid, p.id, p.articleId, { ...input, ...file });
+  }));
+  app.post('/journals/:id/articles/:articleId/shared-process', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    if (!deps.storage || !deps.redis) throw new JournalError('INVALID_STATE', '共享解析服务尚未配置');
+    return startJournalSharedProcessing({ ...deps, storage: deps.storage, redis: deps.redis }, uid, p.id, p.articleId,
+      z.object({ revision, requestKey, processingConsent: z.literal(true) }).strict().parse(req.body));
+  }));
+  app.post('/journals/:id/articles/:articleId/shared-retry', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    if (!deps.storage || !deps.redis) throw new JournalError('INVALID_STATE', '共享解析服务尚未配置');
+    return retryJournalSharedProcessing({ ...deps, storage: deps.storage, redis: deps.redis }, uid, p.id, p.articleId,
+      z.object({ revision, requestKey, processingConsent: z.literal(true) }).strict().parse(req.body));
+  }));
+  app.get('/journals/:id/articles/:articleId/shared-candidate', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    if (!deps.storage || !deps.redis) throw new JournalError('INVALID_STATE', '共享解析服务尚未配置');
+    const { language } = z.object({ language: z.enum(['zh', 'en']).default('zh') }).parse(req.query);
+    return getJournalSharedCandidate({ ...deps, storage: deps.storage, redis: deps.redis }, uid, p.id, p.articleId, language);
+  }));
+  app.post('/journals/:id/articles/:articleId/confirm-interpretation', member(async (req, uid) => {
+    const p = articleIds.parse(req.params);
+    if (!deps.storage || !deps.redis) throw new JournalError('INVALID_STATE', '共享解析服务尚未配置');
+    return confirmJournalSharedInterpretation({ ...deps, storage: deps.storage, redis: deps.redis }, uid, p.id, p.articleId,
+      z.object({ revision, language: z.enum(['zh', 'en']) }).strict().parse(req.body));
+  }));
   app.get('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return listJournalArticleSources(deps, uid, p.id, p.articleId); }));
   app.post('/journals/:id/articles/:articleId/sources', member(async (req, uid) => { const p = articleIds.parse(req.params); return addJournalArticleSource(deps, uid, p.id, p.articleId, z.object({ revision, source: sourceRecord }).strict().parse(req.body)); }));
   app.patch('/journals/:id/articles/:articleId/sources/:sourceId/rights', member(async (req, uid) => { const p = articleIds.extend({ sourceId: z.string().min(1).max(200) }).parse(req.params); return updateJournalArticleSourceRights(deps, uid, p.id, p.articleId, p.sourceId, sourceRightsUpdate.parse(req.body)); }));
@@ -224,11 +290,11 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
     const journal = await deps.prisma.journal.findFirst({ where: { id, homepagePublished: true } }); if (!journal) throw new JournalError('JOURNAL_NOT_FOUND', '期刊不存在');
     const rows = await deps.prisma.journalArticle.findMany({ where: { journalId: id, directoryVisible: true }, orderBy: { id: 'asc' }, take: q.limit + 1, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}) });
     return { items: await Promise.all(rows.slice(0, q.limit).map(async (a) => {
-      // Keep the public bibliography entry visible even when the current source
-      // rights do not permit exposing an interpretation. txReleases applies the
-      // current rights gate to each published release.
+      // A published interpretation is read from its fixed release, not the next private draft.
       const releases = a.contentState === 'active' ? await txReleases(deps.prisma, a.id, true, deps.now?.() ?? new Date()) : [];
-      return { id: a.id, journalId: id, workId: a.workId, metadata: publicArticleMetadata(a.metadata), directoryState: 'listed', contentState: a.contentState,
+      const latest = releases[0] ? await deps.prisma.journalRelease.findUnique({ where: { id: releases[0].id }, select: { snapshot: true } }) : null;
+      const frozenMetadata = (latest?.snapshot as { metadata?: unknown } | null)?.metadata;
+      return { id: a.id, journalId: id, workId: a.workId, metadata: publicArticleMetadata(frozenMetadata ?? a.metadata), directoryState: 'listed', contentState: a.contentState,
         interpretationKind: releases[0]?.scope ?? null, latestUrl: releases[0] ? `/research/${releases[0].publicId}` : null, releases };
     })), nextCursor: rows.length > q.limit ? rows[q.limit - 1]!.id : null };
   });
@@ -242,10 +308,13 @@ export function registerJournalRoutes(app: FastifyInstance, deps: Deps): void {
   });
 }
 async function journalStats(deps: Deps, journalId: string) {
-  const [articles, published, jobsSucceeded, metrics] = await Promise.all([
+  const [articles, published, succeededJobs, sharedConfirmed, metrics] = await Promise.all([
     deps.prisma.journalArticle.count({ where: { journalId } }),
     deps.prisma.journalArticle.count({ where: { journalId, contentState: 'active', releases: { some: { version: { status: 'published' } } } } }),
-    deps.prisma.journalJob.count({ where: { journalId, state: 'succeeded' } }), deps.prisma.journalMetric.findMany({ where: { journalId } }),
+    deps.prisma.journalJob.findMany({ where: { journalId, state: 'succeeded', kind: 'generate' }, select: { articleId: true } }),
+    deps.prisma.journalSharedBinding.findMany({ where: { article: { journalId }, confirmedVersionId: { not: null } }, select: { articleId: true } }),
+    deps.prisma.journalMetric.findMany({ where: { journalId } }),
   ]);
+  const jobsSucceeded = new Set([...succeededJobs.map((job) => job.articleId), ...sharedConfirmed.map((binding) => binding.articleId)]).size;
   return { articles, published, jobsSucceeded, pageViews: null, apiReads: metrics.filter((m) => m.kind === 'api_read').reduce((sum, m) => sum + m.count, 0), note: '访问与调用不能等同 AI 引用；页面访客统计尚未采集' };
 }

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
-  JournalError, assertArticleRevision, evaluateArticleProcessingCapability,
+  JournalError, assertArticleRevision,
   getManagedJournalArticle, journalArticleEvent, journalArticleInScope,
   journalScope, journalTransaction, txReleases,
 } from '@openscience/domain';
@@ -50,12 +50,12 @@ export function registerJournalWorkbenchRoutes(app: FastifyInstance, deps: Deps)
       const article = await getManagedJournalArticle(deps, user.userId, id, row.id);
       const archive = events.find((event) => event.targetId === row.id);
       const extraActive = statusJobs.filter((job) => job.articleId === row.id && activeStates.includes(job.state) && !article.jobs.some((existing) => existing.id === job.id));
-      const publicReleases = article.contentState === 'active' && evaluateArticleProcessingCapability(article).canExposeViaApi
-        ? await txReleases(deps.prisma, row.id, true) : [];
+      const publicReleases = article.contentState === 'active' ? await txReleases(deps.prisma, row.id, true) : [];
       return {
         ...article, jobs: [...article.jobs, ...extraActive],
         draftArchived: archivedAtRevision(archive?.after, article.revision),
-        processingCompleted: statusJobs.some((job) => job.articleId === row.id && job.kind === 'generate' && job.state === 'succeeded'),
+        processingCompleted: !!(await deps.prisma.journalSharedBinding.findUnique({ where: { articleId: row.id }, select: { confirmedVersionId: true } }))?.confirmedVersionId
+          || statusJobs.some((job) => job.articleId === row.id && job.kind === 'generate' && job.state === 'succeeded'),
         publicInterpretation: publicReleases.length > 0,
       };
     }));

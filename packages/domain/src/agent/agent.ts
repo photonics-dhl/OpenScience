@@ -525,7 +525,8 @@ async function persistAgentTaskCoreInTransaction(
   tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
-  billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string } = 'ai_credit',
+  billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string }
+    | { journalGrantJobId: string } = 'ai_credit',
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   await lockTrashReferences(tx);
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -664,7 +665,8 @@ async function persistAgentTaskCoreInTransaction(
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
     metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit'
-      : typeof billing === 'object' ? 'reuse-original-reservation' : 'not-applicable-deterministic',
+      : typeof billing === 'object' && 'journalGrantJobId' in billing ? 'journal-grant-reservation'
+        : typeof billing === 'object' ? 'reuse-original-reservation' : 'not-applicable-deterministic',
       ...(typeof billing === 'object' ? billing : {}),
       ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
   }, ctx);
@@ -685,6 +687,26 @@ export async function persistAgentTaskInTransaction(
     throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
   }
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Only a server-created, live journal grant reservation can sponsor one staged paper extraction. */
+export async function persistJournalSponsoredPaperTaskInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>, journalGrantJobId: string, ctx: AuditContext = {}) {
+  if (input.kind !== 'sdf.extract' || typeof input.payload.artifactId !== 'string'
+    || typeof input.payload.researchObjectId !== 'string') throw new AgentError('VALIDATION_ERROR', 'Journal sponsorship requires one bound paper artifact');
+  const job = await tx.journalJob.findUnique({ where: { id: journalGrantJobId }, include: { article: true, grant: true } });
+  if (!job || job.kind !== 'shared_ingestion' || !['running', 'succeeded'].includes(job.state) || job.requestedBy !== input.userId
+    || !job.grant || job.grant.journalId !== job.journalId || (job.state === 'running' && job.grant.reserved < 1)
+    || job.article.workingResearchObjectId !== input.payload.researchObjectId
+    || (job.article.source as { artifactId?: string }).artifactId !== input.payload.artifactId)
+    throw new AgentError('FORBIDDEN', 'Journal grant reservation changed');
+  if (job.state === 'succeeded') {
+    const replay = input.idempotencyKey ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } }) : null;
+    if (!replay || replay.kind !== 'sdf.extract' || replay.sessionId !== input.sessionId
+      || JSON.stringify(replay.payload) !== JSON.stringify(input.payload)) throw new AgentError('FORBIDDEN', 'Journal grant task replay changed');
+    return { task: replay, replayed: true };
+  }
+  return persistAgentTaskCoreInTransaction(deps, tx, input, ctx, { journalGrantJobId });
 }
 
 /** Package-internal historical operation after its caller validates the persisted correction/review proof.

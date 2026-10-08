@@ -98,10 +98,13 @@ export class HermesResearchRunError extends Error {
     this.name = 'HermesResearchRunError';
   }
 }
+const VIDEO_READINESS_ERROR = 'Synclip video host is unavailable before new paid work';
 
 export interface HermesResearchRunDeps extends AgentDeps {
   /** Server configuration of the replacement renderer; never accepted from a run payload. */
   nativeSceneImageEnabled?: boolean;
+  /** Host-owned fresh Synclip heartbeat; absent means new video work is disabled. */
+  canStartNewVideo?: () => Promise<boolean>;
   canRetrySourceReviewBeforeSubmission?: SourceReviewNotSubmittedVerifier;
   storage?: IngestionDeps['storage'];
   canResumeImageBeforeSubmission?: (requestId: string) => Promise<boolean>;
@@ -111,6 +114,16 @@ export interface HermesResearchRunDeps extends AgentDeps {
   inspectImageRecoveryState?: (requestId: string) => Promise<'before_submission' | 'not_submitted' | 'completed' | 'failed' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe'>;
 }
 export interface HermesSourceReviewDeps extends HermesResearchRunDeps { storage: IngestionDeps['storage'] }
+
+export async function getHermesVideoReadiness(deps: HermesResearchRunDeps,
+  input: { actorId: string; researchObjectId: string }): Promise<{ available: boolean }> {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro || ro.deletedAt) throw new HermesResearchRunError('NOT_FOUND', 'Research object not found');
+  const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
+    .catch(() => { throw new HermesResearchRunError('NOT_FOUND', 'Research object not found'); });
+  if (!WRITE_ROLES.has(authority.membership.role)) throw new HermesResearchRunError('FORBIDDEN', 'Research object write permission is required');
+  return { available: ro.status === 'draft' && Boolean(await deps.canStartNewVideo?.()) };
+}
 
 export interface HermesResearchRunView {
   id: string;
@@ -313,6 +326,9 @@ export async function createHermesResearchRun(
           reused = existing;
         }
       }
+    }
+    if (settings?.output === 'video' && !await deps.canStartNewVideo?.()) {
+      throw new HermesResearchRunError('SOURCE_NOT_READY', VIDEO_READINESS_ERROR);
     }
 
     const tasks = await tx.ingestionTask.findMany({
@@ -2367,7 +2383,11 @@ async function advanceAutomaticSources(deps: HermesResearchRunDeps, run: RunRow)
   const step = run.steps.find(item => item.stage === 'source_ingestion');
   if (!step?.ingestionTaskId) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Hermes source binding is missing');
   const scoped = { ...deps, storage: deps.storage };
-  if (await ensureHermesIngestionReview(scoped, { actorId: run.actorId, runId: run.id, taskId: step.ingestionTaskId }) === 'queued') return 'running';
+  if (await ensureHermesIngestionReview(scoped, { actorId: run.actorId, runId: run.id, taskId: step.ingestionTaskId }, async () => {
+    if (narrativeVideoRun(run) && !await deps.canStartNewVideo?.()) {
+      throw new HermesResearchRunError('SOURCE_NOT_READY', VIDEO_READINESS_ERROR);
+    }
+  }) === 'queued') return 'running';
   const saved = await materializeHermesIngestion(scoped, { actorId: run.actorId, runId: run.id, taskId: step.ingestionTaskId });
   const preview = await previewIngestionClaimEvidenceBridge(scoped, { userId: run.actorId, researchObjectId: run.researchObjectId,
     versionId: saved.confirmation.versionId, taskId: step.ingestionTaskId });
@@ -3148,6 +3168,9 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         }
         const plan = nativeImageRecovery ?? await inspectGenerationRecovery(tx, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState);
         if (!plan) throw new HermesResearchRunError('SOURCE_NOT_READY', 'This failed generation cannot be retried safely');
+        if (narrativeVideoRun(run) && plan.chargeable.length > 0 && !await deps.canStartNewVideo?.()) {
+          throw new HermesResearchRunError('SOURCE_NOT_READY', VIDEO_READINESS_ERROR);
+        }
 
         const fenced = await tx.hermesResearchRun.updateMany({ where: {
           id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
@@ -3315,6 +3338,9 @@ async function createPresentationSteps(
   pixelRecovery?: { [PIXEL_REPLAN_ELIGIBILITY]: true; runId: string; maxAgentTasks: number;
     replacesTaskId: string; payload: Record<string, unknown> },
 ): Promise<void> {
+  if (narrativeVideoRun(run) && inputs.length > 0 && !await deps.canStartNewVideo?.()) {
+    throw new HermesResearchRunError('SOURCE_NOT_READY', VIDEO_READINESS_ERROR);
+  }
   const renderAuthorized = renderRecovery?.[IMAGE_RENDER_ELIGIBILITY] === true && run.id === renderRecovery.runId
     && run.status === 'generating_scene_images' && run.maxAgentTasks === renderRecovery.previousMaxAgentTasks + 1
     && stage === 'scene_image' && inputs.length === 1 && inputs[0]!.ordinal === renderRecovery.step.ordinal
@@ -3752,6 +3778,10 @@ export async function reconcileHermesResearchRuns(
             return null;
           }
           if (run.status === 'awaiting_claim_review') {
+            if (narrativeVideoRun(run) && !await deps.canStartNewVideo?.()) {
+              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+              return null;
+            }
             const settings = run.profile === VISUAL_NARRATIVE_PROFILE ? narrativeSettings(run.generationSettings) : undefined;
             const sceneLimit = settings ? await narrativeSceneLimit(tx, run) : undefined;
             await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, payload: {
@@ -3960,6 +3990,10 @@ export async function reconcileHermesResearchRuns(
             const replacedImageTaskId = !pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13)
               ? run.steps.find(step => step.stage === 'scene_image' && step.ordinal === 0)?.agentTaskId : undefined;
             if (!pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && !replacedImageTaskId) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction image task binding is missing');
+            if (nativeVideo && !await deps.canStartNewVideo?.()) {
+              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+              return null;
+            }
             await createPresentationSteps(deps, tx, run, 'scene_image', nativeFrameInputs ?? Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal,
               ...(pixelAuthority ? { replacesTaskId: String(pixelAuthority.sceneReviews[ordinal]!.taskId) }
                 : replacedImageTaskId ? { replacesTaskId: replacedImageTaskId } : {}), payload: {
@@ -3974,6 +4008,10 @@ export async function reconcileHermesResearchRuns(
             const storyboard = (nativeVideo ? currentVideoStoryboard(run) : run.steps.find((step) => step.stage === 'storyboard'))?.presentationAssetId;
             if (!storyboard) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Storyboard binding is missing');
             const ordinal = nativeVideo ? Math.max(-1, ...run.steps.filter(step => step.stage === 'video').map(step => step.ordinal)) + 1 : 0;
+            if (nativeVideo && !await deps.canStartNewVideo?.()) {
+              await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
+              return null;
+            }
             await createPresentationSteps(deps, tx, run, 'video', [{ ordinal, payload: nativeVideoPayload ?? {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'video', sourceClaimIds: run.sourceClaimIds, video: { storyboardAssetId: storyboard,
@@ -3993,6 +4031,13 @@ export async function reconcileHermesResearchRuns(
       }
     }
     if (reconcileError) {
+      if (reconcileError instanceof HermesResearchRunError && reconcileError.code === 'SOURCE_NOT_READY'
+        && reconcileError.message === VIDEO_READINESS_ERROR) {
+        await deps.prisma.hermesResearchRun.updateMany({ where: {
+          id: candidate.id, status: candidate.status, version: candidate.version,
+        }, data: { lastReconciledAt: now(deps) } });
+        continue;
+      }
       if ((reconcileError as { code?: unknown })?.code === 'INSUFFICIENT_CREDIT') {
         const retryAt = new Date(now(deps).getTime() + 55_000);
         const recorded = await deps.prisma.$transaction(async (tx) => {

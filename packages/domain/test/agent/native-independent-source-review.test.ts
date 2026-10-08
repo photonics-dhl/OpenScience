@@ -201,6 +201,16 @@ describe('new automatic runs use the existing independent Native reviewer', () =
     expect(f.db.hermesResearchSteps.find(step => step.id === phaseId)!.agentTaskId).toBe(f.db.agentTasks[1]!.id);
     expect(f.redis.lpush).toHaveBeenCalledTimes(1);
   });
+  it('does not charge a new reviewer when the internal pre-charge guard denies it', async () => {
+    const f = await waitingAuthorFixture();
+    const input = { actorId: f.input.actorId, runId: f.ids.run, taskId: f.ids.source };
+    await expect(ensureHermesIngestionReview(f.deps, input, async () => { throw new Error('host unavailable'); }))
+      .rejects.toThrow('host unavailable');
+    expect(f.db.agentTasks).toHaveLength(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    expect(await ensureHermesIngestionReview(f.deps, input)).toBe('queued');
+    expect(f.db.agentTasks).toHaveLength(2);
+  });
   it.each(['ordinal', 'source', 'artifact', 'error', 'asset', 'duplicate', 'foreign-task', 'family', 'checkpoint',
     'membership', 'phase-cas', 'source-cas', 'run-cas', 'audit'] as const)(
     'rejects %s drift without a reviewer debit or source transfer when filling the waiting phase', async change => {

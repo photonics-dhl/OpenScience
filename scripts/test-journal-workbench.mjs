@@ -35,6 +35,7 @@ test('workbench route counts successful interpretation generation, not source pa
       journalScope: async () => ({ membership: { role: 'owner' } }),
       getManagedJournalArticle: async () => ({ ...article, id: articleId, jobs: [] }),
       evaluateArticleProcessingCapability: () => ({ canExposeViaApi: false }),
+      txReleases: async () => [],
     },
     './session-guard': { requireCurrentUser: async () => ({ userId: 'editor' }) },
     './journal-draft-policy': policy,
@@ -46,6 +47,7 @@ test('workbench route counts successful interpretation generation, not source pa
     journalArticle: { findMany: async () => [{ id: articleId }] },
     journalEvent: { findMany: async () => [] },
     journalJob: { findMany: async () => jobs },
+    journalSharedBinding: { findUnique: async () => null },
   } });
   const read = async () => {
     const result = await list({ params: { id: journalId }, query: {} }, { header() { return this; } });
@@ -59,6 +61,11 @@ test('workbench route counts successful interpretation generation, not source pa
   const generated = await read();
   assert.equal(generated.processingCompleted, true);
   assert.equal(model.matchesWorkbenchView(generated, 'completed'), true);
+  jobs = [{ id: 'shared-run', articleId, kind: 'shared_ingestion', state: 'running' }];
+  const sharedRunning = await read();
+  assert.equal(sharedRunning.jobs.some((job) => job.id === 'shared-run'), true);
+  assert.equal(model.matchesWorkbenchView(sharedRunning, 'processing'), true);
+  assert.equal(model.matchesWorkbenchView(sharedRunning, 'completed'), false);
 });
 test('archived drafts stay outside the draft box', () => { assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'drafts'), false); assert.equal(model.matchesWorkbenchView({ ...article, draftArchived: true }, 'archived'), true); });
 test('unknown OA is not classified as closed access', () => { const items = [{ id: 'a', nameZh: 'A', subjects: ['Optics'], publicArticleCount: 2 }, { id: 'b', nameZh: 'B', subjects: [], publicArticleCount: 1, openAccess: false }]; assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'closed', sort: 'az' }).length, 1); assert.equal(model.selectDirectory(items, { query: '', subject: '', access: 'unknown', sort: 'az' })[0].id, 'a'); });

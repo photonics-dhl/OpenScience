@@ -94,6 +94,7 @@ services:
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:ro
       - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
+      - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
       - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:ro
       - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
     command: ["node", "dist/index.js"]
@@ -118,6 +119,8 @@ services:
       SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
       SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
       SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
+      SYNCLIP_VIDEO_ENABLED: ${SYNCLIP_VIDEO_ENABLED:-false}
+      SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results
       CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
       CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
       BGE_M3_ENABLED: ${BGE_M3_ENABLED:-false}

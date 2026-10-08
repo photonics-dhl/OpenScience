@@ -14,6 +14,7 @@ function fixture() {
   const posted: Array<{ path: string; key: string; body: unknown; saved: Record<string, unknown> | null }> = [];
   let actor = ids.actor;
   let existing: HermesResearchRun | null = null;
+  let videoAvailable = true;
   const reads: string[] = [];
   const analysis = vi.fn(async () => json({ task: newTask }, 202));
   const create = vi.fn(async () => json({ run: newRun() }, 202));
@@ -23,6 +24,7 @@ function fixture() {
     else reads.push(path);
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/auth/me') return json({ userId: actor, email: 'researcher@example.test' });
+    if (path === `/api/research-objects/${ids.ro}/hermes-video-readiness`) return json({ available: videoAvailable });
     if (path === `/api/ingestion/${ids.oldIngestion}/reanalyze`) return analysis();
     if (path === `/api/research-objects/${ids.ro}/hermes-runs?ingestionTaskId=${ids.newIngestion}`) return json({ run: existing });
     if (path === `/api/research-objects/${ids.ro}/hermes-runs`) return create();
@@ -30,13 +32,22 @@ function fixture() {
   });
   vi.stubGlobal('fetch', fetcher);
   return { run, data, storage, posted, reads, analysis, create, fetcher,
-    setActor: (id: string) => { actor = id; }, setExisting: (value: HermesResearchRun | null) => { existing = value; },
+    setActor: (id: string) => { actor = id; }, setExisting: (value: HermesResearchRun | null) => { existing = value; }, setVideoAvailable: (value: boolean) => { videoAvailable = value; },
     input: { run, actorId: ids.actor, researchObjectId: ids.ro, storage, isCurrent: () => true },
     saved: () => JSON.parse([...data.values()][0]!),
   };
 }
 
 describe('bounded private source reanalysis intent', () => {
+  it('blocks a video source reanalysis before its first paid POST when video is unavailable', async () => {
+    const f = fixture(); f.setVideoAvailable(false);
+    const videoRun = { ...f.run, generationSettings: { ...f.run.generationSettings!, output: 'video' as const } };
+    const { continueSourceReanalysis } = await import('@/lib/hermes/source-reanalysis-intent');
+    await expect(continueSourceReanalysis({ ...f.input, run: videoRun })).rejects.toMatchObject({ reason: 'video' });
+    expect(f.analysis).not.toHaveBeenCalled();
+    expect(f.create).not.toHaveBeenCalled();
+    expect(f.reads).toContain(`/api/research-objects/${ids.ro}/hermes-video-readiness`);
+  });
   it('advances both phases once, preserving the exact generation and saving both keys before each POST', async () => {
     const f = fixture(); const original = JSON.stringify(f.run); const phases: string[] = [];
     const { continueSourceReanalysis } = await import('@/lib/hermes/source-reanalysis-intent');

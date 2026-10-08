@@ -181,6 +181,9 @@ async function journalForResearchObject(deps: JournalBoundaryDeps, researchObjec
   const row = await article.findUnique({
     where: { researchObjectId },
     select: { id: true, assignedReviewerId: true, journal: { select: { id: true, workspaceId: true } } },
+  }) ?? await article.findUnique({
+    where: { workingResearchObjectId: researchObjectId },
+    select: { id: true, assignedReviewerId: true, journal: { select: { id: true, workspaceId: true } } },
   });
   const journalId = relationId(row, 'journal', 'id');
   const workspaceId = relationId(row, 'journal', 'workspaceId');

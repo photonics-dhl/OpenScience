@@ -43,6 +43,9 @@ import {
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
   requireJournalExternalOcrAuthority,
+  journalSourceProcessingAllowed,
+  journalDigest,
+  synclipVideoAccepting,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -191,7 +194,7 @@ export type ParserCascadeRunner = ((
   renderPages(input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult>;
 };
 
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
+export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; canStartNewVideo?: () => Promise<boolean> };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -902,6 +905,17 @@ export async function createPollOnce(
       claimed = await claimAgentTask(deps, taskId);
       if (!claimed) return true;
       const executionClaim = claimed;
+      if (task.kind === 'sdf.extract') {
+        const allowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId },
+            include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!allowed) throw new Error('[blocked] Source processing authorization changed before claim execution');
+      }
       const handler = handlers[task.kind];
       if (!handler) throw new Error('unsupported agent task kind');
       const result = await spoolTaskExecution.run({ taskId: task.id, executionAttempt: executionClaim.executionAttempt }, () => handler(deps, {
@@ -913,6 +927,16 @@ export async function createPollOnce(
         ...(executionClaim.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       }));
       handlerCompleted = true;
+      if (task.kind === 'sdf.extract') {
+        const stillAllowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId }, include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!stillAllowed) throw new Error('[blocked] Source processing authorization changed before result write');
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -948,7 +972,7 @@ export async function createPollOnce(
   };
 }
 
-function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership'>): ExternalProcessingPolicy {
+function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership' | 'journalArticle' | 'journalSharedBinding' | 'user'>): ExternalProcessingPolicy {
   return async (context) => {
     const task = await prisma.ingestionTask.findUnique({
       where: { agentTaskId: context.taskId },
@@ -971,8 +995,22 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
     const membership = await prisma.membership.findUnique({
       where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
     });
-    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
-      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+    if (!membership || membership.workspaceId !== context.workspaceId || membership.userId !== context.actorId
+      || !INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role)) return false;
+    const article = await prisma.journalArticle.findUnique({ where: { workingResearchObjectId: task.batch.researchObjectId },
+      include: { journal: true } });
+    if (!article) return true;
+    const binding = await prisma.journalSharedBinding.findUnique({ where: { articleId: article.id } });
+    const user = await prisma.user.findUnique({ where: { id: context.actorId }, select: { status: true } });
+    return article.journal.workspaceId === context.workspaceId && article.journal.operationalState === 'active'
+      && !!user && !['suspended', 'deleted', 'invited'].includes(user.status)
+      && ['owner', 'maintainer', 'author'].includes(membership.role)
+      && !!binding && binding.actorId === context.actorId && binding.ingestionTaskId === task.id
+      && binding.sourceArtifactId === task.artifactId && binding.sourceBlobSha256 === task.artifact.blobSha256
+      && binding.sourceRevision === article.revision
+      && binding.sourceDigest === journalDigest(article.source)
+      && (article.source as { artifactId?: string }).artifactId === task.artifactId
+      && journalSourceProcessingAllowed(article, true);
   };
 }
 
@@ -981,6 +1019,9 @@ export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 's
   return { ...input,
     nativeAgentRuntime: nativeAgentRuntimeFromEnv(env),
     nativeSceneImageEnabled: env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env),
+    canStartNewVideo: () => env.HERMES_VIDEO_ENABLED === 'true' && env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
+      && env.SYNCLIP_VIDEO_ENABLED === 'true' && Boolean(env.SYNCLIP_VIDEO_RESULTS_DIR?.trim())
+      ? synclipVideoAccepting(env.SYNCLIP_VIDEO_RESULTS_DIR!.trim()) : Promise.resolve(false),
     malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };

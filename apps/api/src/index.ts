@@ -1,7 +1,7 @@
 import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
+import { createPersonalWorkspace, nativeAgentRuntimeFromEnv, synclipVideoAccepting } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
 import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
@@ -118,6 +118,11 @@ async function main(): Promise<void> {
       sceneImageEnabled: env.ai.sceneImageEnabled,
       nativeSceneImageEnabled: env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip',
       videoEnabled: env.ai.videoEnabled,
+      canStartNewVideo: () => process.env.HERMES_VIDEO_ENABLED === 'true'
+        && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
+        && process.env.SYNCLIP_VIDEO_ENABLED === 'true'
+        && Boolean(process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim())
+        ? synclipVideoAccepting(process.env.SYNCLIP_VIDEO_RESULTS_DIR!.trim()) : Promise.resolve(false),
       ...(inspectPooledImageRecoveryState && payerImageProvider ? {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
           ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,

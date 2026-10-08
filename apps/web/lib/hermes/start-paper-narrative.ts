@@ -1,4 +1,4 @@
-import { createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getIngestionTask,
+import { createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getHermesVideoReadiness, getIngestionTask,
   isConfirmedIngestionReanalysisSource, reanalyzeConfirmedIngestion, type HermesNarrativeGeneration, type HermesResearchRun } from '@/lib/api';
 import { loadPendingHermesRunStart, savePendingHermesRunStart, type HermesRunStartScope, type PendingHermesRunStart } from './draft-state';
 
@@ -30,6 +30,11 @@ export async function prepareHermesNarrativeSource(input: {
     return { scope: input.scope, pending: input.pending };
   }
   if (!detail.task.agentTaskId) throw new Error(input.identityError);
+  if (input.scope.output === 'video') {
+    const readiness = await getHermesVideoReadiness(input.scope.researchObjectId);
+    check();
+    if (!readiness.available) throw new Error('Video generation is currently unavailable; no new analysis was started.');
+  }
   const sourceReanalysisKey = input.pending.sourceReanalysisKey ?? crypto.randomUUID();
   const pendingWithKey = { ...input.pending, sourceReanalysisKey };
   if (!input.pending.sourceReanalysisKey
@@ -68,6 +73,11 @@ export async function startPaperNarrative(input: {
     return run;
   };
   if (existing.run) return verify(existing.run);
+  if (scope.output === 'video') {
+    const readiness = await getHermesVideoReadiness(scope.researchObjectId);
+    check();
+    if (!readiness.available) throw new Error('Video generation is currently unavailable; no new analysis was started.');
+  }
   // Preserve an uncertain submission's original scope, payload and key on every retry.
   const pending = loadPendingHermesRunStart(storage, scope)
     ?? { key: crypto.randomUUID(), generation: input.generation, savedAt: Date.now() };

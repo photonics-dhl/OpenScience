@@ -5,7 +5,7 @@ import { getBlob } from '@openscience/storage';
 import type { ParserCascadeRunner, WorkerDeps } from './index';
 import { sourceMapToManuscriptText } from './extractor';
 import { canonicalParserMediaType } from './parser-media-type';
-import { claimJournalJob, finishJournalJob, journalJobInput, nativeAgentRuntimeFromEnv, recoverJournalJobs, renewJournalJobLease,
+import { claimJournalJob, finishJournalJob, journalJobInput, nativeAgentRuntimeFromEnv, recoverJournalJobs, repairJournalSharedRunBindings, renewJournalJobLease,
   persistDocumentSourceMapReference, type DocumentSourceMapReference,
   type JournalNativeRuntime, type JournalRights, type JournalSource, type WorkspaceDeps } from '@openscience/domain';
 import { runNativeJournalTask } from './native-agent/journal-task';
@@ -110,7 +110,10 @@ export function startJournalWorker(deps: WorkerDeps, gateway: AiGateway, parserC
   const recovery = setInterval(() => {
     if (stopped || recovering) return;
     recovering = true;
-    void recoverJournalJobs(deps).catch(() => { console.error('journal lease reconciliation failed'); }).finally(() => { recovering = false; finishDraining(); });
+    void (async () => {
+      if (deps.storage) await repairJournalSharedRunBindings({ ...deps, storage: deps.storage });
+      await recoverJournalJobs(deps);
+    })().catch(() => { console.error('journal lease reconciliation failed'); }).finally(() => { recovering = false; finishDraining(); });
   }, 60_000);
   timer.unref(); recovery.unref();
   return {

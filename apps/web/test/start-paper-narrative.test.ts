@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getIngestionTask, isConfirmedIngestionReanalysisSource, reanalyzeConfirmedIngestion, type HermesResearchRun } from '@/lib/api';
+import { createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getHermesVideoReadiness, getIngestionTask, isConfirmedIngestionReanalysisSource, reanalyzeConfirmedIngestion, type HermesResearchRun } from '@/lib/api';
 import { startPaperNarrative } from '@/lib/hermes/start-paper-narrative';
 
-vi.mock('@/lib/api', () => ({ createHermesResearchRun: vi.fn(), getCurrentUser: vi.fn(), getExistingHermesResearchRun: vi.fn(), getIngestionTask: vi.fn(), isConfirmedIngestionReanalysisSource: vi.fn(), reanalyzeConfirmedIngestion: vi.fn() }));
+vi.mock('@/lib/api', () => ({ createHermesResearchRun: vi.fn(), getCurrentUser: vi.fn(), getExistingHermesResearchRun: vi.fn(), getHermesVideoReadiness: vi.fn(), getIngestionTask: vi.fn(), isConfirmedIngestionReanalysisSource: vi.fn(), reanalyzeConfirmedIngestion: vi.fn() }));
 const scope = { userId: 'user', researchObjectId: 'paper', ingestionTaskId: 'pdf' };
 const run = { id: 'run', actorId: 'user', researchObjectId: 'paper', steps: [{ stage: 'source_ingestion', ingestionTaskId: 'pdf' }] } as HermesResearchRun;
 function fixture() {
@@ -10,8 +10,16 @@ function fixture() {
   const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v); } } as Storage;
   return { scope, generation: { profile: 'visual-narrative-v1' as const, maxAgentTasks: 9 as const, locale: 'zh' as const, style: 'auto', instruction: '完整图文' }, storage, isCurrent: () => true, identityError: 'identity', storageError: 'storage' };
 }
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(getCurrentUser).mockResolvedValue({ userId: 'user' } as Awaited<ReturnType<typeof getCurrentUser>>); vi.mocked(getExistingHermesResearchRun).mockResolvedValue({ run: null }); vi.mocked(getIngestionTask).mockResolvedValue({ batchId: 'batch', researchObjectId: 'paper', version: 1, task: { id: 'pdf', artifactId: 'artifact', logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent', result: null } }); vi.mocked(isConfirmedIngestionReanalysisSource).mockReturnValue(false); vi.mocked(createHermesResearchRun).mockResolvedValue({ run }); });
+beforeEach(() => { vi.resetAllMocks(); vi.mocked(getCurrentUser).mockResolvedValue({ userId: 'user' } as Awaited<ReturnType<typeof getCurrentUser>>); vi.mocked(getExistingHermesResearchRun).mockResolvedValue({ run: null }); vi.mocked(getHermesVideoReadiness).mockResolvedValue({ available: true }); vi.mocked(getIngestionTask).mockResolvedValue({ batchId: 'batch', researchObjectId: 'paper', version: 1, task: { id: 'pdf', artifactId: 'artifact', logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent', result: null } }); vi.mocked(isConfirmedIngestionReanalysisSource).mockReturnValue(false); vi.mocked(createHermesResearchRun).mockResolvedValue({ run }); });
 describe('explicit creation of an illustrated paper', () => {
+  it('checks video availability before any paid source reanalysis or new run', async () => {
+    const input = fixture();
+    vi.mocked(getHermesVideoReadiness).mockResolvedValue({ available: false });
+    vi.mocked(isConfirmedIngestionReanalysisSource).mockReturnValue(true);
+    await expect(startPaperNarrative({ ...input, scope: { ...scope, output: 'video' }, generation: { ...input.generation, output: 'video' } })).rejects.toThrow('unavailable');
+    expect(reanalyzeConfirmedIngestion).not.toHaveBeenCalled();
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+  });
   it('creates and recovers a video intent separately, preserving its original payload', async () => {
     const input=fixture();
     const videoScope={...scope,output:'video' as const};

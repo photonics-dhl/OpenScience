@@ -56,6 +56,7 @@ export interface BuildAppOptions extends AuthRouteDeps {
   sceneImageEnabled?: boolean;
   nativeSceneImageEnabled?: HermesResearchRunDeps['nativeSceneImageEnabled'];
   videoEnabled?: boolean;
+  canStartNewVideo?: HermesResearchRunDeps['canStartNewVideo'];
   canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'];
   canResumeImageReviewFromCompletedResult?: HermesResearchRunDeps['canResumeImageReviewFromCompletedResult'];

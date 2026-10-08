@@ -5,6 +5,7 @@ export * from './journal/articles';
 export * from './journal/processing';
 export * from './journal/publishing';
 export * from './journal/source-upload';
+export * from './journal/shared-workspace';
 export * from './journal/feedback';
 export * from './journal/enhancements';
 export * from './journal/paper-identity';
@@ -172,7 +173,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getExistingHermesResearchRun, getHermesResearchRun, getHermesVideoReadiness, reconcileHermesResearchRuns, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,
@@ -184,6 +185,7 @@ export {
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
+export { synclipVideoAccepting } from './agent/synclip-video-readiness';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
@@ -263,7 +265,7 @@ export {
   type UpdateEvidenceInput,
   type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, createIngestionBatchFromArtifact, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export { MAX_CANONICAL_CORE_CHARS, MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
 export { findSavedIngestionCommit, type SavedIngestionOrigin } from './ingestion/saved-source-commit';
 export { ensureHermesIngestionReview } from './ingestion/ingestion-service';
