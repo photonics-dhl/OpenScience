@@ -153,7 +153,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         { name: 'processing-redirect', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['期刊工作台', '草稿箱'] },
         { name: 'services', context: ownerContext, path: `/journals/manage/${journalId}/services`, expected: ['服务包与额度', '可用 AI 草稿额度'] },
         { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['论文与文件', '上传论文文件', '查看原文', 'Hermes 助手 AI 解读', '审批与发布'] },
-        { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['材料授权与公开范围', '加工与公开范围'] },
+        { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['研究素材', '加工与公开范围'] },
         { name: 'admin', context: adminContext, path: '/admin/journals', expected: ['期刊核验与运营', '期刊运营状态'] },
       ];
 
@@ -401,9 +401,9 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       await page.getByRole('link', { name: '管理研究素材与授权' }).click();
       const sourceForm = page.getByText('添加研究素材', { exact: true });
       await sourceForm.click();
-      await page.getByLabel('材料类型', { exact: true }).selectOption('supplementary');
-      await page.getByLabel('材料名称', { exact: true }).fill('Synthetic supplementary registration');
-      await page.getByLabel('来源地址', { exact: true }).fill('https://journal.example.invalid/supplementary');
+      await page.getByLabel('素材类型', { exact: true }).selectOption('supplementary');
+      await page.getByLabel('素材标题', { exact: true }).fill('Synthetic supplementary registration');
+      await page.getByLabel('来源链接', { exact: true }).fill('https://journal.example.invalid/supplementary');
       const registration = page.locator('details').filter({ hasText: '添加研究素材' }).locator('form');
       expect(await registration.getByRole('checkbox', { name: /允许 Hermes 助手 AI 解读/ }).isChecked()).toBe(false);
       expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
