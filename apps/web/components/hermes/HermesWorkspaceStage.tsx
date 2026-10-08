@@ -1588,6 +1588,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
             return;
           }
           const preference = reducedMotion ? 'full' : 'reduced';
+          if (motionControl.action === 'enable') {
+            setRuntimeStatus((current) => current.generation === runtimeStatus.generation
+              ? reduceHermesRuntimeStatus(current, { type: 'retry' }) : current);
+          }
           saveHermesMotionPreference(window.localStorage, preference);
           setReducedMotion(preference === 'reduced');
         }}
