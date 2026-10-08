@@ -11,8 +11,8 @@ const scope = ['9067a2d5-42ad-4c06-b234-753728b71064', 'c896802c-35dd-4b59-8db1-
 const apply = process.argv.includes('--apply');
 const retryIncomplete = apply && process.argv.includes('--retry-incomplete');
 const recoverySelector = process.argv.indexOf('--recover-token-limit-task');
-const recoveryTaskId = '049c8b89-7cb0-431c-ae52-2e5303de4c30';
-const recoveryGenerationId = 'be0712f7-d039-4f9d-b257-3bc73c21885f';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const recoveryTaskId = recoverySelector === -1 ? undefined : process.argv[recoverySelector + 1]?.toLowerCase();
 let redis;
 let search;
 (async () => {
@@ -23,7 +23,7 @@ let search;
       throw new Error('source_index_arguments_invalid');
     }
     seen.add(option);
-    if (option === '--recover-token-limit-task' && process.argv[++index] !== recoveryTaskId) {
+    if (option === '--recover-token-limit-task' && !UUID.test(process.argv[++index] ?? '')) {
       throw new Error('token_limit_recovery_selector_invalid');
     }
   }
@@ -50,12 +50,15 @@ let search;
     const runtime = loadSearchIndexRuntimeConfig();
     if (!runtime.enabled) throw new Error('token_limit_recovery_model_unavailable');
     search = createSearchPrismaClient();
-    const generation = await search.searchIndexTask.findUnique({
-      where: { id: recoveryGenerationId }, include: { modelVersion: true },
+    const currentGenerations = await search.searchIndexTask.findMany({
+      where: { workspaceId: ro.workspaceId, researchObjectId: ro.id, artifactId: payload.artifactId, isCurrent: true },
+      include: { modelVersion: true }, take: 2,
     });
+    // A current row validates the requested owner; it never selects another task.
+    const generation = currentGenerations.length === 1 ? currentGenerations[0] : undefined;
     const identity = runtime.modelIdentity;
     const model = generation?.modelVersion;
-    if (!generation || generation.id !== recoveryGenerationId || !generation.isCurrent
+    if (!generation || !generation.isCurrent
       || generation.status !== 'needs_review' || generation.errorCode !== 'embedding_unavailable'
       || generation.attemptCount >= 3 || generation.fenceOwnerTaskId !== task.id
       || generation.fenceOwnerAttempt !== task.executionAttempt
