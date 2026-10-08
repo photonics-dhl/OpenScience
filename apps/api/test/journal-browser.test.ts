@@ -73,6 +73,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
   let articleId: string;
   let slug: string;
   let journalName: string;
+  const journalNameEn = 'Synthetic Open Science Journal';
   let releaseUrl: string;
 
   beforeAll(async () => {
@@ -93,7 +94,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
     adminToken = await createSession(redis, { userId: admin.id, status: admin.status });
     app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'isolated-journal-browser-test', secureCookies: false, journalsEnabled: true, publicIdPrefix: 'BRW', nativeAgentRuntime });
 
-    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: 'Synthetic Open Science Journal', pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
+    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: journalNameEn, pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
     expect(applicationResponse.statusCode, applicationResponse.body).toBe(200);
     const application = applicationResponse.json().application as { id: string; revision: number };
     const submitted = await app.inject({ method: 'POST', url: `/journals/applications/${application.id}/submit`, cookies: { openscience_session: ownerToken }, payload: { revision: application.revision, submissionKey: randomUUID() } });
@@ -196,16 +197,16 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             expect(await directory.getAttribute('aria-label')).toBeTruthy();
             await directory.getByRole('searchbox').fill(journalName);
             await directory.getByRole('button', { name: '搜索', exact: true }).click();
-            await directory.getByRole('heading', { name: journalName, exact: true }).waitFor({ state: 'visible' });
-            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalName, exact: true }) });
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalNameEn, exact: true }) });
             await result.waitFor({ state: 'visible' });
             expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
             await result.click();
             await page.waitForURL(`${baseUrl}/journals/${slug}`, { waitUntil: 'networkidle' });
-            await page.getByRole('heading', { level: 1, name: journalName, exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('heading', { level: 1, name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
             await page.goBack({ waitUntil: 'networkidle' });
             await directory.waitFor({ state: 'visible' });
-            await directory.getByRole('heading', { name: journalName, exact: true }).waitFor({ state: 'visible' });
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
           }
           if (surface.name === 'release') {
             const sourceLink = page.getByRole('link', { name: /查看原始来源/ });
