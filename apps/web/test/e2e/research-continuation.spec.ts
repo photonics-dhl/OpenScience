@@ -1,5 +1,6 @@
-import { expect, test, type Page, type Route } from 'playwright/test';
+import { expect, test, type Page, type Request, type Route } from 'playwright/test';
 import type { WorkspaceGuidePayload } from '../../lib/api';
+import type { ReadingRecord } from '../../components/research/WorkbenchClaimReader';
 
 const ro = { id: 'journey-ro', workspaceId: 'workspace-journey', publicId: 'OSR-JOURNEY', title: 'Research continuation', version: 1, status: 'draft', visibility: 'private' };
 const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', method: 'Measurement', results: 'Result', limitations: 'Limits', reproducibility: 'Data' };
@@ -297,25 +298,103 @@ test('saved materials survive Files refresh and same-name attachments create a m
   await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
 });
 
-test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
+async function versionEvidenceFixtures(page: Page) {
   await fixtures(page);
-  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'newer', versionNo: 3, status: 'draft' }, { versionId: 'confirmed-version', versionNo: 2, status: 'draft' }] } }));
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'newer', versionNo: 3, publicationNo: 3, status: 'published' }, { versionId: 'confirmed-version', versionNo: 2, publicationNo: 2, status: 'published' }] } }));
   await page.route('**/api/research-objects/journey-ro/versions/newer/record', route => route.fulfill({ json: { record: { objectId: ro.id, versionId: 'newer', recordState: 'recorded', sdf: { ...core, results: 'Newer result' }, manifest: [], claims: [], evidence: [] } } }));
-  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => route.fulfill({ json: { record: { objectId: ro.id, versionId: 'confirmed-version', recordState: 'recorded', sdf: core, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [{ id: 'claim', statement: 'Claim needing verification', assessment: 'missing' }], evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, kind: 'passage', relation: 'context', title: 'Original passage', locator: { page: 3 }, extractionConfidence: null, verified: false, extractionStatus: 'needs_review' }] } } }));
+  const contentHash = 'a'.repeat(64);
+  const record: ReadingRecord & { recordState: 'recorded' } = { objectId: ro.id, versionId: 'confirmed-version', recordState: 'recorded', sdf: core,
+    manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath, blobSha256: contentHash, mimeType: 'application/pdf' }],
+    claims: [{ id: 'claim', kind: 'core', statement: 'Claim needing verification', assessment: 'missing', conditions: [], limitations: [] }],
+    evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, contentHash, kind: 'passage', relation: 'context', title: 'Original passage', locator: { page: 3 }, extractionConfidence: null, verified: false }] };
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => route.fulfill({ json: { record } }));
+}
+
+async function openVersionEvidence(page: Page) {
+  const reader = page.locator('[data-version-claim-reader="confirmed-version"]');
+  await expect(reader).toBeVisible();
+  const narrative = reader.locator('[data-claim-narrative]');
+  await expect(narrative).not.toHaveAttribute('open', '');
+  await narrative.locator(':scope > summary').click();
+  const claim = reader.locator('[data-claim-id="claim"]');
+  await claim.locator(':scope > summary').click();
+  await claim.locator('details > summary').filter({ hasText: /^Evidence \(1\)$/ }).click();
+  await claim.locator('[data-evidence-id="evidence"] > summary').click();
+  await claim.getByRole('button', { name: 'View original source', exact: true }).click();
+}
+
+test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
+  await versionEvidenceFixtures(page);
   await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record/evidence/evidence/source', route => route.fulfill({ json: { source: { text: 'Exact original quotation', page: 3, region: null } } }));
   await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
-  await expect(page.getByRole('link', { name: 'Research API', exact: true })).toHaveAttribute('href', '/api/research-objects/journey-ro/versions/confirmed-version/record');
+  await expect(page.getByRole('link', { name: 'Research API', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Export fixed record', exact: true })).toHaveAttribute('href', '/api/research-objects/journey-ro/versions/confirmed-version/record/export');
-  await expect(page.getByText('Draft revision 1', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Open original passage: Original passage', exact: true }).click();
+  await expect(page.locator('[data-selected-version="confirmed-version"]').getByText(core.results, { exact: true })).toBeVisible();
+  await openVersionEvidence(page);
   await expect(page.getByText('Exact original quotation', { exact: true })).toBeVisible();
-  await expect(page.getByText('Region highlighting is unavailable for this source.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Exact original quotation', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('[data-source-region]')).toHaveCount(0);
   await expect(page.locator('dd').filter({ hasText: /^3$/ })).toBeVisible();
-  await page.screenshot({ path: 'test/visual/out/research-continuation/version-source-desktop.png', fullPage: true });
-  await page.getByRole('link', { name: 'Version 3', exact: true }).click();
+  await expect(page.locator('[data-evidence-sheet]').getByText(task.logicalPath, { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test/visual/out/research-continuation/version-source-desktop.png' });
+  await page.keyboard.press('Escape');
+  await page.locator('a[href="/research-objects/journey-ro/versions?version=newer"]').click();
   await expect(page.getByText('Newer result', { exact: true })).toBeVisible();
   await expect(page.getByText('Exact original quotation', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('No verified source location is available. Human review is needed.', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-evidence-sheet]')).toHaveCount(0);
+  await page.locator('[data-version-claim-reader="newer"] [data-claim-narrative] > summary').click();
+  await expect(page.getByText('This version has no published structured claims yet.', { exact: true })).toBeVisible();
+});
+
+test('late original evidence response cannot reopen the previous version after browser Back', async ({ page }) => {
+  await versionEvidenceFixtures(page);
+  let releaseSource!: () => void;
+  let sourceRequested!: () => void;
+  let sourceFinished!: () => void;
+  let handlerStarted = false;
+  const sourceGate = new Promise<void>(resolve => { releaseSource = resolve; });
+  const requested = new Promise<void>(resolve => { sourceRequested = resolve; });
+  const finished = new Promise<void>(resolve => { sourceFinished = resolve; });
+  const sourcePath = '/api/research-objects/journey-ro/versions/confirmed-version/record/evidence/evidence/source';
+  type Termination = { kind: 'finished' | 'failed'; request: Request };
+  let reportTermination!: (outcome: Termination) => void;
+  const terminated = new Promise<Termination>(resolve => { reportTermination = resolve; });
+  const matchesSource = (request: Request) => request.method() === 'GET' && new URL(request.url()).pathname === sourcePath;
+  const onFinished = (request: Request) => { if (matchesSource(request)) reportTermination({ kind: 'finished', request }); };
+  const onFailed = (request: Request) => { if (matchesSource(request)) reportTermination({ kind: 'failed', request }); };
+  page.on('requestfinished', onFinished);
+  page.on('requestfailed', onFailed);
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record/evidence/evidence/source', async route => {
+    handlerStarted = true;
+    sourceRequested();
+    try {
+      await sourceGate;
+      await route.fulfill({ json: { source: { text: 'Late old-version quotation', page: 3, region: null } } });
+    } finally { sourceFinished(); }
+  });
+  try {
+    await page.goto('/research-objects/journey-ro/versions?version=newer');
+    await expect(page.getByText('Newer result', { exact: true })).toBeVisible();
+    await page.locator('a[href="/research-objects/journey-ro/versions?version=confirmed-version"]').click();
+    await openVersionEvidence(page);
+    await requested;
+    await expect(page.locator('[data-evidence-sheet]')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/versions\?version=newer$/);
+    await expect(page.getByText('Newer result', { exact: true })).toBeVisible();
+    releaseSource();
+    const outcome = await terminated;
+    expect(outcome.kind).toBe('failed');
+    expect(outcome.request.failure()?.errorText).toMatch(/aborted/i);
+    await expect(page.getByText('Late old-version quotation', { exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-evidence-sheet]')).toHaveCount(0);
+    await expect(page.locator('[data-version-claim-reader]')).toHaveAttribute('data-version-claim-reader', 'newer');
+  } finally {
+    releaseSource();
+    page.off('requestfinished', onFinished);
+    page.off('requestfailed', onFailed);
+    if (handlerStarted) await finished;
+  }
 });
 
 test('confirmed review restores the saved user revision and exposes its exact version after refresh', async ({ page }) => {
@@ -334,10 +413,14 @@ test('selected version is readable on a narrow Chinese surface and unknown versi
   await fixtures(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ ...confirmation, status: 'draft' }] } }));
+  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ ...confirmation, status: 'draft', createdAt: '2026-10-08T00:00:00.000Z', commitMessage: '文献来源快照' }] } }));
   await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
-  await expect(page.getByRole('heading', { name: '快照版本 2', exact: true })).toBeVisible();
-  await expect(page.getByText('暂无可核查的原文定位，需要人工核查。', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-selected-version="confirmed-version"]').getByRole('heading', { name: /文献来源快照$/ })).toBeVisible();
+  const narrative = page.locator('[data-version-claim-reader="confirmed-version"] [data-claim-narrative]');
+  await expect(narrative).toBeVisible();
+  await expect(narrative).not.toHaveAttribute('open', '');
+  await narrative.locator(':scope > summary').click();
+  await expect(page.getByText('该版本尚未发布结构化主张。', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test/visual/out/research-continuation/version-mobile-zh.png', fullPage: true });
   await page.goto('/research-objects/journey-ro/versions?version=foreign');
