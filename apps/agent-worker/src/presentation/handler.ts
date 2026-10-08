@@ -985,6 +985,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
         ...(payload.video.profile === 'onchip-field-sampling-v1' ? { sceneRoles: payload.video.sceneRoles } : {}),
         sourceClaimIds: payload.sourceClaimIds, storyboard: videoParents.storyboardView.document, sceneImages,
+        sceneImageTaskIds: videoParents.orderedImages.map(asset => {
+          const provenance = asset.provenance as Record<string, unknown> | null;
+          return typeof provenance?.taskId === 'string' ? provenance.taskId : '';
+        }),
         locale: videoParents.storyboardView.locale, style: videoParents.storyboardView.style,
       });
       bytes = Buffer.alloc(0); contentType = result.contentType; extension = 'mp4';

@@ -13,13 +13,13 @@ const completed = (url = 'https://cdn.synclip.ai/video.mp4?signature=private') =
 describe('Synclip fixed video API', () => {
   it('submits one documented LTX request to the fixed endpoint', async () => {
     const fetcher = vi.fn(async () => response({ task_id: taskId, status: 'processing' }));
-    const client = new SynclipVideoClient({ apiKey, fetch: fetcher });
+    const client = new SynclipVideoClient({ apiKey, fetch: fetcher, adminModelsEnabled: true });
     await expect(client.create({ prompt: 'A controlled scientific transition.', model: 'ltx23', duration: 5, resolution: '720p' })).resolves.toEqual({ task_id: taskId });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('https://api.synclip.ai/v1/video'); expect(init.method).toBe('POST'); expect(init.redirect).toBe('error');
+    expect(url).toBe('https://api.synclip.ai/v1/video-admin'); expect(init.method).toBe('POST'); expect(init.redirect).toBe('error');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer ' + apiKey });
-    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'A controlled scientific transition.', model: 'ltx23', duration: 5, resolution: '720p' });
+    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'A controlled scientific transition.', model: 'ltx23', duration_seconds: 5, orientation: 'landscape' });
   });
   it('queries only the saved task and normalizes a succeeded alias', async () => {
     const fetcher = vi.fn(async () => response({ ...completed(), status: 'succeeded' }));
@@ -29,6 +29,27 @@ describe('Synclip fixed video API', () => {
   it('accepts independent first and last frame fields', () => {
     expect(validateSynclipVideoRequest({ prompt: 'bridge', model: 'ltx23fast', duration: 10, resolution: '720p', first_frame_url: 'https://assets.example/frame.png' })).toMatchObject({ model: 'ltx23fast', duration: 10, first_frame_url: 'https://assets.example/frame.png' });
   });
+  it('requires explicitly configured admin access for LTX before a paid submission', async () => {
+    const fetcher = vi.fn();
+    await expect(new SynclipVideoClient({ apiKey, fetch: fetcher }).create({ prompt: 'x', model: 'ltx23', duration: 5, resolution: '720p' }))
+      .rejects.toMatchObject({ code: 'SYNCLIP_VIDEO_ADMIN_ACCESS_REQUIRED', outcome: 'invalid' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('rejects inline frames instead of assuming undocumented base64 support', async () => {
+    const fetcher = vi.fn();
+    await expect(new SynclipVideoClient({ apiKey, fetch: fetcher, adminModelsEnabled: true }).create({ prompt: 'x', model: 'ltx23', duration: 5,
+      resolution: '720p', first_frame_url: 'data:image/png;base64,iVBORw0KGgo=' }))
+      .rejects.toMatchObject({ code: 'SYNCLIP_VIDEO_REQUEST_INVALID', outcome: 'invalid' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('rejects overlong or local reference links before POST', async () => {
+    const fetcher = vi.fn();
+    const client = new SynclipVideoClient({ apiKey, fetch: fetcher, adminModelsEnabled: true });
+    for (const first_frame_url of ['https://127.0.0.1/frame.png', 'https://cdn.synclip.ai/' + 'x'.repeat(8192), 'http://cdn.synclip.ai/frame.png']) {
+      await expect(client.create({ prompt: 'x', model: 'ltx23', duration: 5, resolution: '720p', first_frame_url })).rejects.toMatchObject({ code: 'SYNCLIP_VIDEO_REQUEST_INVALID' });
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it.each([4, 20])('rejects unsupported duration %s before POST', async duration => {
     const fetcher = vi.fn();
     await expect(new SynclipVideoClient({ apiKey, fetch: fetcher }).create({ prompt: 'x', model: 'ltx23', duration: duration as 5, resolution: '720p' })).rejects.toMatchObject({ code: 'SYNCLIP_VIDEO_REQUEST_INVALID', outcome: 'invalid' });
@@ -36,7 +57,7 @@ describe('Synclip fixed video API', () => {
   });
   it('does not retry an uncertain provider response', async () => {
     const fetcher = vi.fn(async () => new Response(apiKey + ': private provider details', { status: 429 }));
-    const error = await new SynclipVideoClient({ apiKey, fetch: fetcher }).create({ prompt: 'x', model: 'ltx23', duration: 5, resolution: '720p' }).catch(error => error);
+    const error = await new SynclipVideoClient({ apiKey, fetch: fetcher, adminModelsEnabled: true }).create({ prompt: 'x', model: 'ltx23', duration: 5, resolution: '720p' }).catch(error => error);
     expect(error).toMatchObject({ code: 'SYNCLIP_VIDEO_HTTP_FAILED', outcome: 'uncertain' }); expect(String(error)).not.toContain(apiKey); expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('downloads only an https public result through pinned DNS', async () => {

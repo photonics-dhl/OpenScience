@@ -31,6 +31,8 @@ export interface HostVideoInput {
   locale?: StoryboardView['locale'];
   style?: StoryboardView['style'];
   sceneImages: Buffer[];
+  /** Existing provider image tasks, ordered exactly like the approved scene images. */
+  sceneImageTaskIds?: string[];
 }
 
 export interface HostVideoResult {
