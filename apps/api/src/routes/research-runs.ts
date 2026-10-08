@@ -13,7 +13,8 @@ const readParamsSchema = z.object({ id: z.string().uuid(), runId: z.string().uui
 const existingRunQuerySchema = z.object({ ingestionTaskId: z.string().uuid() }).strict();
 const createSchema = z.object({ ingestionTaskIds: z.array(z.string().uuid()).min(1).max(20),
   generation: z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(9),
-    locale: z.enum(['zh', 'en']), style: z.string().trim().min(1).max(100), instruction: z.string().trim().min(1).max(1000) }).strict().optional(),
+    locale: z.enum(['zh', 'en']), style: z.string().trim().min(1).max(100), instruction: z.string().trim().min(1).max(1000),
+    output: z.literal('video').optional() }).strict().optional(),
 }).strict();
 const selectionSchema = ingestionClaimSelectionSchema.extend({
   attachSourceQuote: z.literal(true),

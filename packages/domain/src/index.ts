@@ -454,7 +454,7 @@ export {
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
 export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, STORYBOARD_STYLE_ALIASES, canonicalStoryboardStyle, parseIllustrationStyleRecommendations, type IllustrationStyleRecommendations, storyboardSceneStyles, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView, type VideoProductionDirection, type VideoSceneDirection, type VideoNarrativeArc, type VideoAudioPolicy, type VideoModelPolicy, type VideoShotType, type VideoReference, type VideoFrameStrategy, type VideoAudioMode, type VideoSubtitleMode } from './assets/storyboard';
-export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
 export { requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativeImageReplanSource, readNarrativePixelReplanAuthority, WRITE_ROLES } from './assets/presentation-asset';
@@ -468,7 +468,7 @@ export { requireMembership } from './workspace/helpers';
 export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, projectIllustrationEvidence, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
-export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority,
+export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority, supportsNativeIllustration,
   type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
 
 export { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, hasSingleReviewedVisualSource, readVisualNarrativeSource } from './assets/illustration-source';

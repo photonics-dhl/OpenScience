@@ -69,6 +69,8 @@ export interface AiGatewayOptions {
   scientificReviewProvider?: ScienceReviewProvider;
   /** Explicit pixel-only reviewer; all other review routes retain scientificReviewProvider. */
   illustrationImageReviewProvider?: ScienceReviewProvider;
+  /** Optional native PNG review role; unset preserves the primary text provider. */
+  nativeImageReviewProvider?: Provider;
   /** 缺省：第一条为 primary。 */
   primaryIndex?: number;
   /** §17 审计：调用日志落 AuditSink（action='ai.gateway.call'）；缺省 no-op。 */
@@ -155,6 +157,7 @@ export class AiGateway {
   private readonly imageProviders: ImageProvider[];
   private readonly scientificReviewProvider?: ScienceReviewProvider;
   private readonly illustrationImageReviewProvider?: ScienceReviewProvider;
+  private readonly nativeImageReviewProvider?: Provider;
   private readonly primaryIndex: number;
   private readonly audit?: AuditSink;
   private readonly logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -174,9 +177,11 @@ export class AiGateway {
     assertProviderPool(opts.imageProviders ?? [], 'image');
     if (opts.scientificReviewProvider) assertProviderPool([opts.scientificReviewProvider], 'scientific review');
     if (opts.illustrationImageReviewProvider) assertProviderPool([opts.illustrationImageReviewProvider], 'illustration image review');
+    if (opts.nativeImageReviewProvider) assertProviderPool([opts.nativeImageReviewProvider], 'native image review');
     this.imageProviders = [...(opts.imageProviders ?? [])];
     this.scientificReviewProvider = opts.scientificReviewProvider;
     this.illustrationImageReviewProvider = opts.illustrationImageReviewProvider;
+    this.nativeImageReviewProvider = opts.nativeImageReviewProvider;
     this.providers = [...opts.providers];
     this.ocrProviders = [...(opts.ocrProviders ?? [])];
     this.primaryIndex = opts.primaryIndex ?? 0;
@@ -228,7 +233,7 @@ export class AiGateway {
           await this.authorizeIllustrationReview!(input);
         },
         submitProvider: (target, submit) => this.nativeImageReviewSubmission!(input, target, submit),
-      });
+      }, this.nativeImageReviewProvider);
       let parsed: unknown;
       try {
         parsed = parseStructuredJson(result.text);
@@ -495,7 +500,7 @@ export class AiGateway {
     return this.completeWithControls(messages, opts, { ...controls, primaryProviderOnly: true, nativeAgent: true });
   }
 
-  private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}): Promise<GatewayCompletion> {
+  private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}, nativeImageReviewProvider?: Provider): Promise<GatewayCompletion> {
     messages = snapshotChatMessages(messages);
     opts = { ...opts, ...(opts.tools !== undefined ? { tools: snapshotToolDefinitions(opts.tools) } : {}) };
     validateToolHistory(messages, opts.tools);
@@ -504,9 +509,12 @@ export class AiGateway {
     const promptHash = sha256Text(JSON.stringify(opts.tools ? { messages, tools: opts.tools } : messages));
     let lastError: unknown;
     const fallbackNotes: string[] = [];
-    for (let i = 0; i < this.providers.length; i++) {
-      const provider = this.providers[i];
-      const isPrimary = i === this.primaryIndex;
+    // Per-call selection: overlapping native text turns keep their own primary.
+    const providers = nativeImageReviewProvider ? [nativeImageReviewProvider] : this.providers;
+    const primaryIndex = nativeImageReviewProvider ? 0 : this.primaryIndex;
+    for (let i = 0; i < providers.length; i++) {
+      const provider = providers[i];
+      const isPrimary = i === primaryIndex;
       if (controls.primaryProviderOnly && !isPrimary) continue;
       if (imageCount && provider.supportsImageInput !== true) {
         fallbackNotes.push(`${provider.name}:native_images_unsupported`);

@@ -3,9 +3,9 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage, type InstalledMediaSki
 
 /** Load each requested scene style once without repeating shared scientific/design guidance. */
 export function loadIllustrationStyleSkills(styles: readonly string[], instruction: string,
-  stage: 'plan' | 'review'): InstalledMediaSkills {
+  stage: 'plan' | 'review', historicalIllustrationRevision?: '19'): InstalledMediaSkills {
   const selected = [...new Set(styles.map(canonicalStoryboardStyle))]
-    .map(style => loadInstalledMediaSkills(style, instruction, stage));
+    .map(style => loadInstalledMediaSkills(style, instruction, stage, undefined, historicalIllustrationRevision));
   if (selected.length === 1) return selected[0]!;
   const blocks = [...new Set(selected.flatMap(skills => skills.instructions.split(/\n\n(?=SOURCE: )/u)))];
   return {

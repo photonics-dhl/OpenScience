@@ -1,7 +1,7 @@
 ---
 name: openscience-synclip-capabilities
 description: Use the Synclip image and video capability guide for evidence-grounded media planning, model selection, prompting, review, and safe handoff. This is a production guide, not a source of paper facts or an API key.
-version: "2026-10-07"
+version: "2026-10-08"
 ---
 
 # Synclip capability guide
@@ -30,7 +30,11 @@ The current server image route is the Synclip adapter in `packages/ai-gateway/sr
 
 This current route has real private-draft evidence for `gpt-image-2` and accepted image review, but that proves the present image route can run; it does not prove every Synclip model, the video API, long-term cross-paper quality or the claims in the blog. The authoritative runtime state is the [Hermes CURRENT handoff](../../docs/handoff/2026-09-10-hermes-web-image-handoff.md).
 
-The repository now contains a Synclip video candidate adapter in `packages/ai-gateway/src/synclip-video-api.ts`, `apps/agent-worker/src/presentation/synclip-video-spool.ts` and `infra/synclip-video/`. It uses the official public `POST /v1/video` async shape, exact LTX model values `ltx23`/`ltx23fast`, 5/10/15-second durations, bounded HTTPS result download and a root-only broker with durable per-shot receipts. The route is not called stable until the immutable server bundle has passed one real private LTX task, decoded output review and audio decision. Veo/Sora/Grok/Seedance remain candidates until Synclip publishes or the account proves their exact server model values.
+The video candidate lives in `packages/ai-gateway/src/synclip-video-api.ts`, `apps/agent-worker/src/presentation/synclip-video-spool.ts` and `infra/synclip-video/`. Current [public video documentation](https://synclip.ai/dev/docs/video) restricts `POST /v1/video` to `veo3.1-fast` / `veo3.1-pro`; Pro requires tier t2 or higher. The [admin video documentation](https://synclip.ai/dev/docs/video-admin) places `ltx23` / `ltx23fast` and `seedance2` / `seedance2fast` at `POST /v1/video-admin`, requiring an admin API key. Do not infer that permission from a successful image call. LTX uses `duration_seconds` (5/10/15) and `orientation`; the documented `resolution` field belongs to Seedance. The adapter retains its internal target-resolution field without claiming that LTX guarantees that resolution.
+
+Both interfaces document external frame URLs, not inline base64. The broker reuses the existing image task receipt: the saved normalized PNG must match the approved frame, the refreshed remote original must match the saved original, and the HTTPS link must remain valid through the video deadline. It creates no new image task or public storage endpoint. Missing receipts, watermarked references and uncertain submissions stay blocked. LTX submission is disabled until the account's admin access is explicitly configured. Decoded video quality, narration, timing and user acceptance remain separate from adapter tests and installation.
+
+The [audio documentation](https://synclip.ai/dev/docs/audio) provides `GET /v1/voices`, `POST /v1/audio` with `text`, `voice`, optional `speed`, and the same task polling route. Use an actual returned voice ID. Availability does not establish voice naturalness, native video sound, or permission to silently replace the selected narration strategy.
 
 ## Model and workflow selection
 
@@ -38,11 +42,12 @@ The repository now contains a Synclip video candidate adapter in `packages/ai-ga
 |---|---|---|---|
 | Scientific still or explainer image | GPT Image 2 | The deliverable is a single readable still; fix subject, relationship, layout, labels and exclusions in the brief | **Integrated:** current adapter uses `gpt-image-2`, text-only, 16:9 |
 | Image Studio template or image-to-image edit | Nano Banana Pro | Identity, restyling, mockup or repeatable template workflow | Blog/UI capability only; not the current server image adapter |
-| Reference-guided cinematic video | LTX 2.3 (`ltx23`/`ltx23fast`) | Use the approved scene frame as the first reference; 5/10/15 seconds; Standard for final shots | **Adapter implemented:** server installation and one real private decoded result still pending |
+| Reference-guided cinematic video | LTX (`ltx23`/`ltx23fast`; current admin docs call it 2.5) | Approved first/last frame links; 5/10/15 seconds | Admin-only adapter candidate; permission and private decoded quality still require verification |
+| Public text/image video | Veo 3.1 Fast / Pro | First/last frame or up to three reference images; do not mix those modes | Exact public API values documented; no integrated OpenScience adapter yet |
 | Short video with one reference | Grok Video | One character/product/scene reference, 6/10/15 seconds, 3:2/2:3/1:1 | Blog/UI capability; unverified server adapter |
-| Connected multi-shot video | LTX 2.5 | A sequence needs continuity of subject, environment, lighting and voice | Latest blog capability; exact Synclip API contract is unverified |
+| Connected multi-shot video | LTX 2.5 | A sequence needs continuity of subject, environment, lighting and voice | Admin API documented; multi-shot continuity and audio still need real verification |
 | Text/image/audio video in Video Studio | MiniMax H3 | A short shot needs optional image and audio references and explicit sound direction | Synclip blog says Video Studio only; repository has a separate MiniMax pilot, not this Synclip route |
-| Text-to-video with motion coherence | Seedance 2.0 | Consider only after Synclip marks it live and publishes a callable contract | The model article still labels it coming soon; no server route |
+| Text/image/audio video | Seedance 2.0 / Fast | Admin API supports reference images, videos and audio; 4–15 integer seconds | Exact admin contract documented; no integrated OpenScience adapter yet |
 | Script-to-storyboard-to-video workspace | VideoClaw | A film workflow needs characters, shots, storyboard images and selectable video models | Synclip product workflow only; no OpenScience adapter |
 
 When the route is eventually implemented, use the model whose control matches the failure to prevent: reference images for identity drift, first/last frames for a required transition, multi-shot for continuity, and a simple text shot for a single motion beat. Do not select by marketing quality claims alone.

@@ -17,7 +17,7 @@ import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
 import { requireAnimationSourceSupport } from './animation';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { validateSourceLocator } from '../research-intelligence/validation';
@@ -46,6 +46,7 @@ export interface PresentationAssetView {
   paperOriginal?: { figureId: string; caption?: string };
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
+  videoFrameAssetIds?: string[];
   canTransition: boolean;
   canApprove: boolean;
   canDelete: boolean;
@@ -380,6 +381,13 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
 export async function listPresentationAssets(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string;
 }): Promise<PresentationAssetView[]> {
+  const expectedNativeSourceFailure = (error: unknown) => error instanceof PresentationAssetError || (error instanceof Error && [
+    '[blocked] Each source Claim needs reviewed original evidence before scientific media planning',
+    '[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version',
+    '[blocked] Whole-paper narrative source is unavailable in this version',
+    '[blocked] Whole-paper narrative requires a completed internal scientific review; partial analysis is not a whole-paper source',
+    '[blocked] Whole-paper narrative SourceMap changed',
+  ].includes(error.message));
   const version = await requireScope(deps.prisma, input);
   const { workspace, membership } = await requireMembership(deps, version.researchObject.workspaceId, input.userId);
   const user = await deps.prisma.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
@@ -403,10 +411,12 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     }
   }
   const sceneImagesByStoryboard = new Map<string, typeof assets>();
+  const sceneImagesByIndex = new Map<number, typeof assets>();
   for (const candidate of assets) {
     const scene = presentationSceneImageView(candidate);
     if (!scene) continue;
     sceneImagesByStoryboard.set(scene.storyboardAssetId, [...(sceneImagesByStoryboard.get(scene.storyboardAssetId) ?? []), candidate]);
+    sceneImagesByIndex.set(scene.sceneIndex, [...(sceneImagesByIndex.get(scene.sceneIndex) ?? []), candidate]);
   }
   return Promise.all(assets.map(async (asset) => {
     const ids = asset.sourceClaims.map(source => source.claimId).sort();
@@ -428,16 +438,43 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
           try { requireAcceptedSceneImageReview(asset, parent, await sceneImageReviewTaskResult(deps.prisma, asset.id)); }
           catch (error) { if (!(error instanceof PresentationAssetError)) throw error; pixelReviewAccepted = false; }
         }
-      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; sceneValid = false; }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; sceneValid = false; }
     }
     const video = presentationVideoView(asset);
     if (video && claimsValid) {
       try {
         const parents = await requireVideoGenerationParents(deps.prisma, { ...input, sourceClaimIds: ids, video });
         videoValid = parents?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
-      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
     }
     const storyboardForVideo = presentationStoryboardView(asset, ids);
+    const nativeVideo = storyboardForVideo?.output === 'video' && storyboardForVideo.narrative === true;
+    const mayGenerate = claimsValid && canWrite && user?.platformRole === 'platform_admin';
+    let nativeProof: Awaited<ReturnType<typeof requireNativeVideoStoryboard>> | undefined;
+    let videoFrameAssetIds: string[] | undefined;
+    if (nativeVideo && mayGenerate) {
+      try {
+        nativeProof = await requireNativeVideoStoryboard(deps.prisma, asset, { ...input, sourceClaimIds: ids });
+        const selected: string[] = [];
+        for (let sceneIndex = 0; sceneIndex < storyboardForVideo.document.scenes.length; sceneIndex++) {
+          const candidates = [...(sceneImagesByIndex.get(sceneIndex) ?? [])].sort((left, right) =>
+            Number(presentationSceneImageView(left)?.storyboardAssetId !== asset.id) - Number(presentationSceneImageView(right)?.storyboardAssetId !== asset.id));
+          for (const candidate of candidates) {
+            try {
+              await requireNativeVideoSceneImage(deps.prisma, candidate, asset, nativeProof, { ...input, sourceClaimIds: ids }, sceneIndex);
+              selected.push(candidate.id);
+              break;
+            } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
+          }
+          if (selected.length !== sceneIndex + 1) break;
+        }
+        if (selected.length === storyboardForVideo.document.scenes.length) {
+          const parents = await requireVideoGenerationParents(deps.prisma, { ...input, sourceClaimIds: ids,
+            video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: asset.id, sceneImageAssetIds: selected } });
+          if (parents) videoFrameAssetIds = parents.orderedImages.map(frame => frame.id);
+        }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
+    }
     const storyboardIdentity = storyboardForVideo && JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids });
     const eligibleSceneIndexes = new Set((sceneImagesByStoryboard.get(asset.id) ?? []).flatMap((candidate) => {
       const scene = presentationSceneImageView(candidate);
@@ -448,19 +485,20 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         ? [scene.sceneIndex] : [];
     }));
     const canGenerateVideo = ids.length > 0 && ids.every(id => sourcedClaimIds.has(id)) && claimsValid && canWrite && user?.platformRole === 'platform_admin'
-      && asset.status === 'approved' && storyboardForVideo?.output === 'video' && storyboardForVideo.locale === 'zh'
+      && storyboardForVideo?.output === 'video' && (nativeVideo || storyboardForVideo.locale === 'zh')
       && storyboardForVideo.document.scenes.length >= 3 && storyboardForVideo.document.scenes.length <= 6
-      && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
       && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
-      && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index));
+      && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
+        && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
     const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
-    canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    canGenerateSceneImage: mayGenerate && (nativeVideo ? !!nativeProof : asset.status === 'approved' && !!storyboardForVideo),
     canGenerateVideo,
-    storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    ...(videoFrameAssetIds ? { videoFrameAssetIds } : {}),
+    storyboard: storyboardForVideo,
     canTransition,
     canApprove: canTransition && pixelReviewAccepted,
     canDelete: workspace.status === 'active' && (membership.role === 'owner'
@@ -682,6 +720,13 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
     const view = asset && presentationStoryboardView(asset, ids);
     if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || !['draft', 'approved'].includes(asset.status) || !view || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Base storyboard is invalid for these sources');
+    if (payload.storyboard?.output === 'video' && payload.storyboard.narrative === true
+        && (view.output !== 'video' || view.narrative !== true
+            || (payload.storyboard.revisionSceneIndex !== undefined && (view.locale !== payload.storyboard.locale
+                || view.style !== payload.storyboard.style || payload.storyboard.revisionSceneIndex >= view.document.scenes.length
+                || !isDeepStrictEqual(recordValue(asset.provenance).storyboardSettings
+                    && recordValue(recordValue(asset.provenance).storyboardSettings).figurePlan, payload.storyboard.figurePlan)))))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'A local video revision must retain the native base language, style and resources');
     if (payload.storyboard?.revisionMode === 'art' && (view.output !== 'image' || view.locale !== payload.storyboard.locale
         || Boolean(view.document.narrative) !== Boolean(payload.storyboard.narrative)
         || view.document.scenes.some(scene => scene.illustration?.schemaVersion !== 2 || (!view.document.narrative && scene.paperOriginal))))

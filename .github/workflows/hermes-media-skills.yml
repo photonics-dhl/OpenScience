@@ -5,11 +5,13 @@ name: Hermes media pipeline
 on:
   workflow_dispatch:
   push:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
+      - '.agents/skills/openscience-research-video/**'
+      - '.agents/skills/openscience-synclip-capabilities/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/src/skills/scientific-critical-thinking.ts'
       - 'apps/agent-worker/src/scientific-writing-source.ts'
@@ -22,6 +24,7 @@ on:
       - 'apps/agent-worker/test/native-host-task.test.ts'
       - 'apps/agent-worker/test/native-task-store.test.ts'
       - 'apps/agent-worker/test/native-illustration-task.test.ts'
+      - 'apps/agent-worker/test/native-illustration-skill-replay.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-materializer.test.ts'
       - 'scripts/release-input-manifest.mjs'
@@ -65,6 +68,7 @@ on:
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
+      - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
@@ -131,6 +135,12 @@ on:
       - 'apps/web/test/start-paper-narrative.test.ts'
       - 'apps/web/test/e2e/create-illustrated-research.spec.ts'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
+      - 'apps/web/components/presentation/StoryboardPlans.tsx'
+      - 'apps/web/test/presentation-storyboard-selection.test.tsx'
+      - 'apps/web/test/e2e/presentation-media-retention.spec.ts'
+      - 'apps/web/test/media-retention-harness/**'
+      - 'apps/web/messages/en.json'
+      - 'apps/web/messages/zh.json'
       - 'apps/web/components/presentation/ResearchPresentation.tsx'
       - 'apps/web/playwright.config.ts'
       - 'apps/web/test/e2e/presentation-workbench.spec.ts'
@@ -189,11 +199,13 @@ on:
       - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
   pull_request:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
+      - '.agents/skills/openscience-research-video/**'
+      - '.agents/skills/openscience-synclip-capabilities/**'
       - 'apps/agent-worker/src/skills/installed-media-skills.ts'
       - 'apps/agent-worker/src/skills/scientific-critical-thinking.ts'
       - 'apps/agent-worker/src/scientific-writing-source.ts'
@@ -206,6 +218,7 @@ on:
       - 'apps/agent-worker/test/native-host-task.test.ts'
       - 'apps/agent-worker/test/native-task-store.test.ts'
       - 'apps/agent-worker/test/native-illustration-task.test.ts'
+      - 'apps/agent-worker/test/native-illustration-skill-replay.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-materializer.test.ts'
       - 'scripts/release-input-manifest.mjs'
@@ -249,6 +262,7 @@ on:
       - 'apps/web/test/hermes-research-run-source-status.test.tsx'
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
+      - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
@@ -315,6 +329,12 @@ on:
       - 'apps/web/test/start-paper-narrative.test.ts'
       - 'apps/web/test/e2e/create-illustrated-research.spec.ts'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
+      - 'apps/web/components/presentation/StoryboardPlans.tsx'
+      - 'apps/web/test/presentation-storyboard-selection.test.tsx'
+      - 'apps/web/test/e2e/presentation-media-retention.spec.ts'
+      - 'apps/web/test/media-retention-harness/**'
+      - 'apps/web/messages/en.json'
+      - 'apps/web/messages/zh.json'
       - 'apps/web/components/presentation/ResearchPresentation.tsx'
       - 'apps/web/playwright.config.ts'
       - 'apps/web/test/e2e/presentation-workbench.spec.ts'
@@ -402,7 +422,7 @@ jobs:
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_install_lifecycle.py
       - run: node --check infra/hermes-agent/offline_host.cjs
       - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
@@ -411,7 +431,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts -t "boots with the global AI switch off|bounds VLM page recognition|Synclip"
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts test/presentation/style-recommendations.test.ts test/presentation/selected-scene-art.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
@@ -432,6 +452,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only|local budget|local-budget"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "replaces one failed review-only request"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "rearms only a receipted manual PNG review"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "preserves diagnostics during bounded native review recovery|keeps malformed native review checkpoints readable"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "prevents retrying a failed image source"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t "current platform admin can submit"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
@@ -445,7 +466,7 @@ jobs:
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
@@ -454,6 +475,11 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
+      - name: Storyboard selection lifecycle and media retention
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+          WEB_BASE_URL: http://127.0.0.1:3037
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only|rejected scene image remains" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome

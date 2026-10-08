@@ -213,9 +213,12 @@ function evaluateAgentTaskRetryEligibility(
       || task.error === 'Native image review response failed schema validation; explicit review retry required'
       || task.error === 'structured output is not JSON'
       || /^Expected ',' or '\}' after property value in JSON at position [0-9]+(?: \(line [0-9]+ column [0-9]+\))?$/u.test(task.error ?? ''));
+  let nativeCheckpoint: ReturnType<typeof readNativeImageReviewCheckpoint>;
+  try { nativeCheckpoint = readNativeImageReviewCheckpoint(task.result); }
+  catch { return { authorityValid: true, canRetry: false }; }
   if (task.status !== 'failed' || (task.retryCount !== 0 && !nativeImageReviewSchemaRecovery)
     || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
-    || (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
+    || (nativeCheckpoint?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
     return { authorityValid: true, canRetry: false };
   }
   if (task.kind === 'sdf.extract') {
@@ -223,11 +226,6 @@ function evaluateAgentTaskRetryEligibility(
   }
   if (task.kind === 'presentation.generate') {
     // Managed runs must restore their task, step and run together through retry-generation.
-    try {
-      if (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)
-        return { authorityValid: true, canRetry: false };
-    }
-    catch { return { authorityValid: true, canRetry: false }; }
     return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
@@ -618,6 +616,10 @@ async function persistAgentTaskCoreInTransaction(
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
       ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
+  if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
+    && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
+    throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
+  }
   try {
     task = await tx.agentTask.create({
       data: {
@@ -1033,7 +1035,8 @@ export async function retryAgentTask(
           },
           data: {
             status: 'pending', progress: 0,
-            result: nativeImageReviewSchemaRecovery ? { nativeImageReview: { mode: 'model-native', state: 'not_started' } } as Prisma.InputJsonValue
+            result: nativeImageReviewSchemaRecovery ? { ...(isJsonRecord(task.result) ? task.result : {}),
+              nativeImageReview: { mode: 'model-native', state: 'not_started' } } as Prisma.InputJsonValue
               : nativeAgent ? task.result as Prisma.InputJsonValue
               : nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
               : nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue

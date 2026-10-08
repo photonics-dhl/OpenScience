@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile, nativeMediaCapabilityGuidance } from '../src/native-agent/illustration-task';
 import { materializeIllustrationScience } from '../src/presentation/illustration-planner';
 import { loadIllustrationStyleSkills } from '../src/presentation/illustration-styles';
+import { normalizeScientificSourceNotation } from '../src/presentation/scientific-comparison';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
 import type { ChatMessage } from '@openscience/ai-gateway';
 
@@ -12,6 +13,140 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   title: 'A relation', narration: 'These regions are connected.', message: 'A conditional relation', domain: 'conceptual',
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
+
+describe('native source notation compatibility', () => {
+  const tex = String.raw`The model gives $$\tau_1 \approx \left(\frac{FWHM_S}{V_e}\right) \cdot (1 - \beta\cos\theta) \quad (1)$$.`;
+  const displayed = 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).';
+  function evaluate(source: string, expression: string, constraint = 'Conceptual, not to scale',
+    profile = nativeIllustrationToolProfile(null), describeExpression = true) {
+    const sourceClaims = [{ ...claims[0]!, sourcePassages: [{ ...claims[0]!.sourcePassages[0]!, text: source }] }];
+    const value = structuredClone(science);
+    value.scenes[0]!.encoding = expression;
+    if (describeExpression) value.scenes[0]!.subjects[0]!.description = expression;
+    value.scenes[0]!.labels = ['Supported relation'];
+    value.scenes[0]!.constraints = [constraint];
+    return createNativeIllustrationMaterializer({ claims: sourceClaims, settings, paperOriginals: new Map(),
+      ...profile }).call('paper_illustration_science', value, 0, 'science-notation');
+  }
+  it('recognizes the complete published TeX RHS when the same expression is displayed in Unicode', () => {
+    const source = String.raw`The model gives $$\\tau_1 \\approx \\left(\\frac{FWHM_S}{V_e}\\right) \\cdot (1 - \\beta\\cos\\theta) \\quad (1)$$.`;
+    const result = evaluate(source, 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).');
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
+  });
+  it('rejects an ambiguous display footer without an equation relation, retaining the full Eq.1 positive', () => {
+    const ambiguous = String.raw`$$ (FWHM_S/V_e) \cdot (1-\beta\cos\theta) \quad (2)$$`;
+    expect(normalizeScientificSourceNotation(ambiguous)).toEqual({ text: ambiguous,
+      unsupported: [{ start: 0, end: ambiguous.length, key: ambiguous, unsupported: true }] });
+    expect(evaluate(ambiguous, displayed)).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+    expect(evaluate(tex, ambiguous)).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_syntax') });
+    expect(normalizeScientificSourceNotation(tex).unsupported).toEqual([]);
+    expect(evaluate(tex, displayed)).toMatchObject({ status: 'science_ready' });
+  });
+  it('never matches a shortened product across an unsupported TeX factor', () => {
+    const source = String.raw`The model gives (FWHM_S/Ve)·(1−β $f(\theta)$ cosθ).`;
+    expect(evaluate(source, displayed)).toMatchObject({ status: 'invalid_illustration',
+      error: expect.stringContaining('_source') });
+    expect(evaluate(tex, source)).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_syntax') });
+    expect(evaluate(tex, displayed)).toMatchObject({ status: 'science_ready' });
+  });
+  it.each([
+    String.raw`The model gives (FWHM_S/Ve)·(1−βcosθ) $f(\theta)$.`,
+    String.raw`The model gives $f(\theta)$ (FWHM_S/Ve)·(1−βcosθ).`,
+  ])('does not recover the shorter product beside an unsupported factor: %s', source => {
+    expect(evaluate(source, displayed)).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+  });
+  it('does not bind a scalar while dropping an adjacent unsupported factor', () => {
+    const source = String.raw`The model gives τ1≈2 $f(\theta)$.`;
+    const description = nativeIllustrationToolProfile(null).sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    const paid = nativeIllustrationToolProfile(savedProfile(description.slice(0, description.indexOf(' Complete numbered Fig'))));
+    // This scalar-only hole already exists in the paid baseline. Preserve that
+    // replay behavior, while fresh notation must retain the failed factor.
+    expect(evaluate(source, 'The source gives τ1≈2.', undefined, paid)).toMatchObject({ status: 'science_ready' });
+    expect(evaluate(source, 'The source gives τ1≈2.')).toMatchObject({ status: 'invalid_illustration' });
+    expect(evaluate(String.raw`The model gives τ1≈2; separately $f(\theta)$ is unsupported.`, 'The source gives τ1≈2.'))
+      .toMatchObject({ status: 'science_ready' });
+  });
+  it.each([
+    [String.raw`The model gives τ1≈2 * $f(\theta)$.`, 'The source gives τ1≈2.'],
+    [String.raw`The model gives τ1≈2 nm $f(\theta)$.`, 'The source gives τ1≈2 nm.'],
+    [String.raw`The model gives $f(\theta)$ * 2.`, 'The source gives 2.'],
+    [String.raw`The model gives τ1≈2${' '.repeat(41)}$f(\theta)$.`, 'The source gives τ1≈2.'],
+  ])('keeps an adjacent opaque factor bound to its scalar: %s', (source, candidate) => {
+    expect(evaluate(source, candidate)).toMatchObject({ status: 'invalid_illustration' });
+  });
+  it('treats the complete Fig. 1b/1c reference as a reference, without inventing a speed-of-light quantity', () => {
+    const result = evaluate('Two regions are connected.', 'A link represents the supported relationship.', 'See Fig. 1b/1c for the illustrated relationship.');
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
+  });
+  it.each(['See Fig. 1b/1c.', 'See (Fig. 1b/1c).', 'See Fig. S1b/S1c for the relationship.'])(
+    'accepts a complete panel reference at a prose boundary: %s', constraint => {
+      expect(evaluate('Two regions are connected.', 'A supported relation', constraint)).toMatchObject({ status: 'science_ready' });
+    });
+  it.each([1, 2, 4])('keeps literal/escaped TeX command transport compatible (%i slashes)', width => {
+    const quote = tex.replaceAll('\\', '\\'.repeat(width));
+    const result = evaluate(quote, displayed);
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
+    const intent = result.intent as { scenes: Array<{ illustration: { subjects: Array<{ basis: { quote: string; claimId: string } }> } }> };
+    expect(intent.scenes[0]!.illustration.subjects[0]!.basis).toMatchObject({ quote, claimId: claims[0]!.id });
+  });
+  it.each(['Fig. 1b/0.94c', 'Fig. 1b/20nm', 'Fig. 1b/1MeV', 'Fig. 1b/1c; the speed is 1c',
+    'Fig. 1b/1c2', 'Fig. 1b/1cosθ', 'Fig. 1b/1c/20nm'])('does not hide a true quantity behind %s', reference => {
+    expect(evaluate('Two regions are connected.', 'A supported relation', `See ${reference}.`))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('unbound_') });
+  });
+  it.each([
+    '(FWHM_T/Ve)·(1−βcosθ)', '(FWHM_S/c)·(1−βcosθ)', '(FWHM_S/Ve)·(2−βcosθ)',
+    '(FWHM_S/Ve)·(1−βsinθ)', '(FWHM_S/Ve)·(1−βcosφ)', '(FWHM_S/Ve)·(1−βcosθ)·2',
+    '(FWHM_S/(Ve·β))·(1−βcosθ)', '(FWHM_S/Ve)·(1−βcosθ) nm',
+    '(FWHM_S/Ve)·(1−β f(θ))', '(FWHM_S/Ve)·(1−βcosθ',
+  ])('rejects a changed or unsupported candidate %s', candidate => {
+    expect(evaluate(tex, `The source gives ${candidate}.`))
+      .toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('unbound_') });
+  });
+  it.each([
+    tex.replace('V_e', 'c'), tex.replace('1 -', '2 -'), tex.replace('\\cos', '\\sin'),
+    tex.replace('V_e', 'V_e \\cdot \\beta'), tex.replace('\\quad (1)', '\\cdot (1)'),
+    tex.replace('\\quad (1)', '\\cdot (2)'), tex.replace('\\quad (1)', '\\quad (1) nm'),
+    tex.replace('\\cos', '\\cosh'), tex.replace('\\beta\\cos\\theta', '\\beta f(\\theta)'),
+    tex.replace('\\right)', '\\right) \\unknown'), tex.replace('$$.', '$.'),
+    tex.replace('\\beta', '\\\\beta'), tex.replace('\\right)', ')'),
+    tex.replace('1 -', `1 - ${'('.repeat(200)}β${')'.repeat(200)} -`),
+  ])('does not recover a supported prefix from altered/unsupported TeX %s', source => {
+    expect(evaluate(source, displayed)).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('unbound_') });
+  });
+  it('still requires the full expression in the subject description', () => {
+    expect(evaluate(tex, displayed, undefined, undefined, false)).toMatchObject({ status: 'invalid_illustration',
+      error: expect.stringContaining('_description') });
+  });
+  it('keeps the previously saved optional description and failed receipts unchanged', () => {
+    const fresh = nativeIllustrationToolProfile(null);
+    const description = fresh.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description;
+    const old = savedProfile(description.slice(0, description.indexOf(' Complete numbered Fig')));
+    const before = structuredClone(old), profile = nativeIllustrationToolProfile(old);
+    expect(profile).toMatchObject({ sourceNotation: false, sourceQuantityLocations: true, defaultPaperOriginalRef: true });
+    expect(profile.sourceTools).toEqual(before.turns[0]!.request.options.tools!.map(tool => tool.function));
+    expect(old).toEqual(before);
+    expect(evaluate(tex, displayed, undefined, profile)).toMatchObject({ status: 'invalid_illustration',
+      error: expect.stringContaining('_source') });
+    expect(evaluate('Two regions are connected.', 'A supported relation', 'See Fig. 1b/1c.', profile))
+      .toMatchObject({ status: 'invalid_illustration', error: 'unbound_numeric_1_c_description Fields: scenes[0].constraints[0].' });
+    const f = fixture({ ...profile, quote: tex });
+    const rejected = structuredClone(science);
+    rejected.scenes[0]!.encoding = displayed;
+    rejected.scenes[0]!.subjects[0]!.description = displayed;
+    expect(f.invoke('paper_illustration_science', rejected, 'paid-rejected')).toMatchObject({ status: 'invalid_illustration',
+      error: 'unbound_expression_((fwhms/ve)*(1-(β*cos(θ))))_source Fields: scenes[0].encoding.' });
+    f.complete();
+    const receipts = structuredClone(f.messages);
+    expect(f.restore().finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
+    expect(f.messages).toEqual(receipts);
+    expect(() => createNativeIllustrationMaterializer({ ...f.input, sourceNotation: true })
+      .finish(f.messages, '{"reviewToolCallId":"review-call"}')).toThrow(/history changed/u);
+    expect(nativeIllustrationToolProfile(savedProfile(description)).sourceNotation).toBe(true);
+    for (const saved of [savedProfile(PAID_SCIENCE_DESCRIPTION), savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION),
+      savedProfile('unknown saved science'), savedProfile(undefined, true)]) expect(nativeIllustrationToolProfile(saved).sourceNotation).toBe(false);
+  });
+});
 
 describe('Native media capability guidance', () => {
   it('loads the Synclip and research-video skills for a fresh video intent', () => {
@@ -29,14 +164,14 @@ describe('Native media capability guidance', () => {
   });
 });
 
-function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; quote?: string;
+function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean; quote?: string;
   input?: Partial<Parameters<typeof createNativeIllustrationMaterializer>[0]> } = {}) {
   const selectedClaims = structuredClone(claims);
   if (options.quote !== undefined) selectedClaims[0]!.sourcePassages[0]!.text = options.quote;
   const input = { claims: selectedClaims as never, settings, paperOriginals: new Map(), narrativeSource: undefined,
     scienceFeedback: options.scienceFeedback, deferDesignGuidance: options.deferDesignGuidance, sourceQuantityAnnotations: options.sourceQuantityAnnotations,
     sourceQuantityProse: options.sourceQuantityProse, sourceQuantityLocations: options.sourceQuantityLocations,
-    defaultPaperOriginalRef: options.defaultPaperOriginalRef, scienceRepairCallIdFeedback: options.scienceRepairCallIdFeedback, ...options.input };
+    defaultPaperOriginalRef: options.defaultPaperOriginalRef, scienceRepairCallIdFeedback: options.scienceRepairCallIdFeedback, sourceNotation: options.sourceNotation, ...options.input };
   const tool = createNativeIllustrationMaterializer(input); const messages: ChatMessage[] = [];
   const invoke = (name: string, args: unknown, id: string) => {
     const result = tool.call(name, args, messages.length, id);

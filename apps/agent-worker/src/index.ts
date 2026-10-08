@@ -1195,20 +1195,21 @@ export function buildGateway(
     (key, index, all): key is string => Boolean(key) && all.indexOf(key) === index,
   );
   const configuredKeys = keys.length > 0 ? keys : [''];
-  const providers = configuredKeys.flatMap((apiKey, keyIndex) => {
+  const buildProvider = (apiKey: string, keyIndex: number, model: string, modelIndex: number) => {
     const configuredMode = env.MINIMAX_API_MODE ?? 'auto';
     const tokenPlan = configuredMode === 'anthropic' || (configuredMode === 'auto' && apiKey.startsWith('sk-cp-'));
     const baseUrl = tokenPlan
       ? env.MINIMAX_TOKEN_PLAN_BASE_URL ?? 'https://api.minimax.io/anthropic'
       : env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
-    return models.map((model, modelIndex) => {
-      const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
-      const config = { baseUrl, apiKey, model };
-      return tokenPlan
-        ? new AnthropicCompatProvider(name, config, fetcher)
-        : new OpenAiCompatProvider(name, config, fetcher);
-    });
-  });
+    const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
+    const config = { baseUrl, apiKey, model };
+    return tokenPlan
+      ? new AnthropicCompatProvider(name, config, fetcher)
+      : new OpenAiCompatProvider(name, config, fetcher);
+  };
+  const providers = configuredKeys.flatMap((apiKey, keyIndex) => models.map((model, modelIndex) => buildProvider(apiKey, keyIndex, model, modelIndex)));
+  const pixelReviewModel = env.MINIMAX_IMAGE_REVIEW_MODEL?.trim();
+  const nativeImageReviewProvider = pixelReviewModel ? buildProvider(configuredKeys[0]!, 0, pixelReviewModel, 0) : undefined;
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
   const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
@@ -1307,6 +1308,7 @@ export function buildGateway(
     imageProviders,
     scientificReviewProvider,
     illustrationImageReviewProvider,
+    nativeImageReviewProvider,
     audit,
     logger: console,
     killSwitch,

@@ -101,3 +101,4 @@ export {
   type SynclipVideoClientConfig, type SynclipVideoRequest, type SynclipVideoTask, type SynclipVideoStatus,
   type SynclipVideoModel, type SynclipVideoDuration,
 } from './synclip-video-api';
+export * from './synclip-audio-api';

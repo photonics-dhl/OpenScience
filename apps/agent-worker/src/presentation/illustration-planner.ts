@@ -8,9 +8,9 @@ import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
-import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
+import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, normalizeScientificSourceNotation, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
 
-type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
+type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string }; durationSeconds?: number; videoDirection?: StoryboardDocument['scenes'][number]['videoDirection'] };
 // New candidates only: stored historical briefs stay readable, but a freshly
 // generated plan must not send a nonexistent visible label to image rendering.
 function requireLabelReferencesInRange(brief: IllustrationBrief): void {
@@ -47,8 +47,10 @@ const SOURCE_UNIT = '(?:da|[qryzafpnμumcdhkMGTPEZYRQ])?(?:Hz|eV|mol|rad|sr|Pa|s
 const SOURCE_HYPHENATED_UNIT = new RegExp(`^[-–]${SOURCE_UNIT}(?![\\p{L}\\p{N}_/%^+-])`, 'u');
 const NEXT_SOURCE_QUANTITY = new RegExp(`^[ \\t]+[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[-–]|[ \\t]+)${SOURCE_UNIT}(?![\\p{L}\\p{N}_/%^+-])`, 'u');
 const STRUCTURAL_REFERENCE_PATTERN = /\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b|(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/giu;
-function stripStructuralReferences(value: string, nativeQuantitySyntax = false): string {
-  if (nativeQuantitySyntax) value = value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_])/giu, ';');
+function stripStructuralReferences(value: string, nativeQuantitySyntax = false, sourceNotation = false): string {
+  if (nativeQuantitySyntax) value = sourceNotation
+    ? value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_]|\.\d)(?:\/[ \t]*S?\d+[a-z](?![\p{L}\p{N}_]|\.\d))*/giu, ';')
+    : value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_])/giu, ';');
   return value.replace(/\b(?:fig\.?|figure)\s*S\d+[a-z]?\s*\|/giu, ';')
     .replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
     const inner = group.slice(1, -1), remaining = inner.replace(STRUCTURAL_REFERENCE_PATTERN, '');
@@ -57,8 +59,8 @@ function stripStructuralReferences(value: string, nativeQuantitySyntax = false):
 }
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
-function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): ScientificQuantity[] {
-  const value = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): ScientificQuantity[] {
+  const formatted = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
     .replace(/(?<![\\*])(\*{1,2})([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*)\1(?!\*)/gu,
@@ -68,7 +70,20 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
-    .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax);
+    .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax, sourceNotation);
+  const normalized = sourceNotation ? normalizeScientificSourceNotation(formatted) : { text: formatted, unsupported: [] };
+  // Unsupported TeX is opaque to the existing AST: no interior/prefix may
+  // supply evidence for a different expression. Keep the failed range as a
+  // rejected expression and preserve all positions in the comparison copy.
+  // Keep non-prose math barriers at both ends: spaces alone could splice the
+  // operands around a failed factor into a different, shorter expression.
+  const characters = normalized.text.split('');
+  for (const range of normalized.unsupported) {
+    characters.fill(' ', range.start, range.end);
+    characters[range.start] = '$';
+    characters[range.end - 1] = '$';
+  }
+  const value = characters.join('');
   const ratioPattern = /(?<![\d.])\d+(?:\.\d+)?(?:[ \t]*:[ \t]*\d+(?:\.\d+)?){1,3}(?![\d.])/gu;
   const ratios = [...value.matchAll(ratioPattern)].map(match => ({
     value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', binding: null,
@@ -88,7 +103,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     const unit = sourceQuantityAnnotations ? SOURCE_HYPHENATED_UNIT.exec(after) : legacyHz;
     return unit ? [{ start: match.index!, end: match.index! + match[0].length + unit[0].length, legacyHz: !!legacyHz }] : [];
   }) : [];
-  const originalReferences = scientificExpressionReferences(scalarValue);
+  const originalReferences = scientificExpressionReferences(scalarValue, sourceNotation);
   // A hyphenated unit followed by a parenthetical variable assignment is source
   // prose, not subtraction followed by a function. Recognize only the complete
   // standalone prefix; enclosing arithmetic and operator continuations stay math.
@@ -147,20 +162,27 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
       ?? /\b(FWHM[_\s]*[ST])\s*\(\s*$/iu.exec(before)?.[1];
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
+    // A scalar next to opaque math is not an independent reported result.
+    // This is local adjacency only: a semicolon/punctuation boundary still
+    // allows complete quantities elsewhere in the same supporting quote.
+    const remaining = scalarValue.slice(match.index! + raw.length);
+    const afterUnit = remaining.slice(unitPattern.exec(remaining)?.[0].length ?? 0);
+    const opaqueFactor = sourceNotation && (/^[ \t]*(?:[-+*×·/^][ \t]*)?\$/u.test(afterUnit)
+      || /\$[ \t]*(?:[-+*×·/^][ \t]*)?$/u.test(scalarValue.slice(0, match.index!)));
     if (comparison) expressionRanges.push(comparison);
     results.push({ quantity: { value: normalizedNumber, unit,
-      binding: comparison?.prose ? null : comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null),
+      binding: opaqueFactor ? { kind: 'unsupported-expression' } : comparison?.prose ? null : comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null),
       ...(comparison?.prose && comparison.binding.kind !== 'unsupported-expression' ? { representations: [comparison.binding] } : {}) }, index: match.index! });
   }
   // Denominators and coefficients inside a parsed LHS are structure, not
   // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
-  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue) : originalReferences)
+  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue, sourceNotation) : originalReferences)
     .filter(reference => !hyphenatedUnits.some(range => range.legacyHz && reference.start === range.start && reference.end === range.end))
     .filter(reference => !expressionRanges.some(range => reference.start >= range.start
       && (reference.end <= range.end || reference.unsupported && reference.start < range.end)));
   const structuralRanges = [...expressionRanges, ...references];
   const equalities = scientificEqualityRelations(comparisonValue).map(([left, right]) => [representationKey(left), representationKey(right)] as [string, string]);
-  return [...ratios, ...references.map(reference => ({ value: reference.key, unit: '__expression__',
+  return [...ratios, ...[...references, ...normalized.unsupported].map(reference => ({ value: reference.key, unit: '__expression__',
     binding: reference.unsupported ? { kind: 'unsupported-expression' as const } : null })),
     ...results.filter(item => !structuralRanges.some(range => item.index >= range.start && item.index < range.end))
     .map(item => ({ ...item.quantity, equalities }))];
@@ -190,12 +212,12 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   }
   return true;
 }
-function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): void {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): void {
   const cache = new Map<string, ScientificQuantity[]>();
   const quantities = (text: string) => {
     const existing = cache.get(text);
     if (existing) return existing;
-    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
+    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
     cache.set(text, parsed);
     return parsed;
   };
@@ -474,7 +496,8 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
+  const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -490,7 +513,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
   const inputKeys = Object.keys(input);
   const root = inputKeys.length === SCIENCE_SCENE_KEYS.length && SCIENCE_SCENE_KEYS.every(key => inputKeys.includes(key))
     ? { title: input.title, scenes: [input] } : input;
-  keys(root, settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
+  keys(root, nativeVideo ? ['title', 'narrative', 'scenes', 'videoProduction'] : settings.narrative ? ['title', 'narrative', 'scenes'] : ['title', 'scenes'], 'science_root');
   let narrative: StoryboardDocument['narrative'];
   if (settings.narrative) {
     const n = object(root.narrative); keys(n, ['mainMessage', 'audience'], 'narrative');
@@ -508,7 +531,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     throw new Error(`figure_plan_scene_count_expected_${eligibleFigures.length}_actual_${root.scenes.length}`);
   }
   const scenes = root.scenes.map((raw, sceneIndex) => {
-    const scene = object(raw); keys(scene, settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
+    const scene = object(raw); keys(scene, nativeVideo ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId', 'durationSeconds', 'videoDirection'] : settings.narrative ? [...SCIENCE_SCENE_KEYS, 'paperOriginalAssetId'] : SCIENCE_SCENE_KEYS, 'science_scene');
     if (!Array.isArray(scene.subjects) || scene.subjects.length < 1 || scene.subjects.length > subjectLimit) throw new Error('subject_count');
     if (!Array.isArray(scene.labels)) throw new Error('labels:array_required');
     if (!Array.isArray(scene.constraints) || scene.constraints.length > 2) throw new Error('constraint_count');
@@ -539,19 +562,30 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     const quantityFields: Array<readonly [string, string]> = [['title', String(scene.title)], ['narration', String(scene.narration)],
       ['message', illustration.message], ['encoding', illustration.encoding],
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
-      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])];
+      ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint]),
+      ...(nativeVideo ? Object.entries(object(scene.videoDirection)).flatMap(([field, value]): Array<readonly [string, string]> =>
+        typeof value === 'string' ? [[`videoDirection.${field}`, value]] : field === 'negativeConstraints' && Array.isArray(value)
+          ? value.map((text, index) => [`videoDirection.negativeConstraints[${index}]`, String(text)] as const) : []) : [])];
     requireBoundNumericalResults(sourceQuantityLocations ? quantityFields.map(([field, value]) => [`scenes[${sceneIndex}].${field}`, value] as const) : quantityFields,
-    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
+    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
-    return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
+    return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, nativeVideo ? 120 : settings.narrative ? 600 : 120, 'narration'), illustration,
+      ...(nativeVideo ? { durationSeconds: scene.durationSeconds as number, videoDirection: scene.videoDirection as ScientificScene['videoDirection'] } : {}),
       ...(original ? { paperOriginal: { assetId: original.assetId, objectKey: original.objectKey, contentHash: original.contentHash } } : {}),
       sourceClaimIds: [...new Set(illustration.subjects.map(subject => subject.basis.claimId))] };
   });
   requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [[sourceQuantityLocations ? 'narrative.mainMessage' : 'mainMessage', narrative.mainMessage] as const] : [])],
     [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
-    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse);
+    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
+  if (nativeVideo) {
+    const candidate = parseStoryboardDocument({ schemaVersion: 1, title: root.title, narrative, videoProduction: root.videoProduction,
+      scenes: scenes.map(scene => ({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) })) }, claimIds, 'video', { nativeNarrativeVideo: true });
+    requireBoundNumericalResults([['videoProduction.visualContinuity', candidate.videoProduction!.visualContinuity]],
+      scenes.flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+    return { title: candidate.title, scenes, narrative, videoProduction: candidate.videoProduction };
+  }
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
 }
 
@@ -567,8 +601,11 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
   });
   const perSceneStyle = settings.revisionMode === 'art' ? storyboardSceneStyles(settings, intent.scenes)
     : intent.scenes.map((_, index) => eligibleFigures?.[index]?.styleId ?? settings.style);
+  const localSceneIndex = settings.output === 'video' && settings.narrative === true ? settings.revisionSceneIndex : settings.artSceneIndex;
+  if (localSceneIndex !== undefined && (!base || localSceneIndex >= base.document.scenes.length))
+    throw new Error('local_art_revision_requires_exact_base_scene');
   const generatedScenes = intent.scenes.flatMap((scene, index) => scene.paperOriginal
-    || (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) ? [] : [{ scene, index }]);
+    || (localSceneIndex !== undefined && index !== localSceneIndex) ? [] : [{ scene, index }]);
   const layoutLimit = ILLUSTRATION_BRIEF_MAX_CHARACTERS;
   const root = object(value); keys(root, ['scenes'], 'art_root');
   if (!Array.isArray(root.scenes) || root.scenes.length !== generatedScenes.length)
@@ -584,7 +621,7 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
   let artIndex = 0;
   for (let index = 0; index < intent.scenes.length; index += 1) {
     const scene = intent.scenes[index]!;
-    if (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) {
+    if (localSceneIndex !== undefined && index !== localSceneIndex) {
       scenes.push(structuredClone(base!.document.scenes[index]!) as typeof intent.scenes[number]);
       continue;
     }
@@ -629,8 +666,10 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
     ...claimIds,
     ...paperOriginalScenes.flatMap((s) => s.sourceClaimIds),
   ]));
+  const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const document = parseStoryboardDocument({ schemaVersion: 1, title: intent.title, scenes,
-    ...(intent.narrative ? { narrative: intent.narrative } : {}) }, extendedClaimIds, 'image');
+    ...(intent.narrative ? { narrative: intent.narrative } : {}), ...(nativeVideo ? { videoProduction: intent.videoProduction } : {}) },
+  extendedClaimIds, nativeVideo ? 'video' : 'image', { nativeNarrativeVideo: nativeVideo });
   storyboardSceneStyles(settings, document.scenes);
   return document;
 }

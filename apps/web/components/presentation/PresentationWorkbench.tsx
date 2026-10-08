@@ -8,7 +8,7 @@ import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { presentationAssetContentUrl, type PresentationAsset, type PresentationClaim, type VersionSummary } from '@/lib/api';
 import type { SceneImageRequest, StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
-import { MechanismVideoPanel } from './MechanismVideoPanel';
+import { StoryboardPlans } from './StoryboardPlans';
 import { PresentationResultGallery } from './PresentationResultGallery';
 import { ResearchMediaDeck, type ResearchMediaSlide } from './ResearchMediaDeck';
 import { MediaAssetActions } from './MediaAssetActions';
@@ -62,7 +62,6 @@ export function PresentationWorkbench({
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
-  const tw = useTranslations('workbench');
   const retryAction = task?.status === 'failed' && task.canRetry && canWrite && onRetryTask
     ? <button type="button" disabled={working} aria-busy={working} onClick={onRetryTask}
       className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-50 motion-reduce:transform-none">
@@ -75,7 +74,6 @@ export function PresentationWorkbench({
   const paperOriginals = useMemo(() => assets.filter((asset) => asset.generator === 'OpenScience paper-original figure'), [assets]);
   const mediaAssets = useMemo(() => assets.filter((asset) => asset.generator !== 'OpenScience paper-original figure'
     && !asset.storyboard && (asset.kind === 'image' || asset.kind === 'chart' || asset.kind === 'svg' || asset.kind === 'video')), [assets]);
-  const storyboardAssets = useMemo(() => assets.filter((asset) => Boolean(asset.storyboard)), [assets]);
 
   useEffect(() => { setDeletedTitle(''); }, [researchObjectId, version.versionId]);
 
@@ -147,6 +145,9 @@ export function PresentationWorkbench({
           <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} renderActions={renderActions} />
         </div>
         {deletionNotice}
+        {canWrite ? <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}
+          canWrite={canWrite} unavailable={working || loading || loadFailed} onGenerateStoryboard={onGenerateStoryboard}
+          onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} /> : null}
         {task && task.status !== 'succeeded' ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">
@@ -206,11 +207,9 @@ export function PresentationWorkbench({
 
             {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert">{error.includes('Storyboard output rejected:') ? <><p className="m-0 text-sm leading-6 text-state-danger">{t('briefNeedsRevision')}</p><details className="mt-2 text-xs leading-5"><summary className="cursor-pointer py-2">{t('failureDetails')}</summary><p className="break-words">{error}</p></details></> : <p className="m-0 text-sm leading-6 text-state-danger">{error}</p>}</div> : null}
             {loadFailed && onRetryData ? <button type="button" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onRetryData}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('retryScopeLoad')}</button> : null}
-          {storyboardAssets.length > 0 ? <details className="mt-7 border-t border-os-rule-paper pt-2">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink"><span id="presentation-plan-heading" className="text-sm font-semibold">{t('planningHistoryTitle')}</span><ChevronDown className="size-4 shrink-0" aria-hidden="true" /></summary>
-            <p className="m-0 mt-2 max-w-3xl text-pretty text-sm leading-6 text-os-muted-paper">{t('planningHistoryBody')}</p>
-            {storyboardAssets.map((asset) => <div className="mt-5 border-t border-os-rule-paper pt-4" key={asset.id}><StoryboardPanel storyboard={asset.storyboard} parent={assets.find((item) => item.id === asset.storyboard?.baseAssetId)?.storyboard} baseAssetId={asset.id} claims={claims} selectedClaimIds={asset.sourceClaimIds} canGenerate={canWrite && !loading && !loadFailed && !working && asset.status !== 'rejected'} onGenerate={onGenerateStoryboard} canGenerateImage={canWrite && !loading && !loadFailed && !working && asset.status === 'approved' && asset.canGenerateSceneImage === true} onGenerateImage={onGenerateSceneImage} />{canWrite && asset.status === 'draft' && asset.canTransition ? <div className="mt-4 flex flex-wrap gap-3"><button type="button" disabled={working} className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold disabled:opacity-50" onClick={() => onTransition(asset, 'approved')}>{tw('approvePlan')}</button><button type="button" disabled={working} className="min-h-11 rounded-control border border-os-rule-paper px-4 text-sm disabled:opacity-50" onClick={() => onTransition(asset, 'rejected')}>{t('reject')}</button></div> : null}{canWrite && onGenerateVideo ? <MechanismVideoPanel parent={asset} assets={assets} disabled={working || loading || loadFailed} onGenerate={onGenerateVideo} /> : null}</div>)}
-          </details> : null}
+          <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}
+            canWrite={canWrite} unavailable={working || loading || loadFailed} onGenerateStoryboard={onGenerateStoryboard}
+            onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} />
           <details className="mt-5 border-t border-os-rule-paper pt-2" data-source-tools="true">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-control py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">
               <span id="presentation-source-heading" className="text-sm font-semibold">{t('manualToolsTitle')}</span>

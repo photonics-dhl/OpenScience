@@ -6,6 +6,7 @@ const identifier = /^[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*$/u;
 const normalizeIdentifier = (value: string) => value.toLowerCase().replaceAll('_', '');
 const proseBoundary = /^[.,;:!?。；，、：！？“”‘’"'—–\u4e00-\u9fff]$/u;
 const mathSyntax = (token: Token | undefined) => token?.kind === 'other' && !proseBoundary.test(token.text);
+const scientificUnit = /^(?:da|[qryzafpnμumcdhkMGTPEZYRQ])?(?:Hz|eV|mol|rad|sr|Pa|s|m|g|C|J|W|V|A|K|N|T|L)$/u;
 function tokenize(value: string): Token[] {
   return [...value.matchAll(/[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\S/gu)]
     .map((match, index, matches) => ({ text: match[0], start: match.index!, end: match.index! + match[0].length,
@@ -78,6 +79,60 @@ function mathParser(tokens: Token[]) {
 }
 const representation = (value: Expression): ScientificRepresentation => ({ kind: value.symbol ? 'symbol' : 'expression', key: value.key });
 
+/** Comparison copies only. A small TeX subset must parse in full before it is used. */
+export function normalizeScientificSourceNotation(input: string): {
+  text: string; unsupported: Array<{ start: number; end: number; key: string; unsupported: true }>;
+} {
+  const unsupported: Array<{ start: number; end: number; key: string; unsupported: true }> = [];
+  // An unclosed wrapper owns the rest of its line; never recover a valid prefix
+  // from its interior. No source text or persisted tool arguments are rewritten.
+  const wrappers = /\$\$[^$]*(?:\$\$|(?=\n|$))|(?<!\$)\$[^$\n]*\$(?!\$)|\$[^\n]*/gu;
+  let text = '', previous = 0;
+  for (const match of input.matchAll(wrappers)) {
+    text += input.slice(previous, match.index);
+    const raw = match[0], delimiter = raw.startsWith('$$') ? '$$' : '$';
+    let body = raw.slice(delimiter.length, -delimiter.length);
+    let valid = raw.length >= delimiter.length * 2 && raw.endsWith(delimiter) && raw.length <= 2_000;
+    // Actual source transport has both literal and escaped command slashes.
+    // Accept only consistent, known encodings, never a partial command prefix.
+    const widths = [...body.matchAll(/\\+(?=[A-Za-z])/gu)].map(item => item[0].length);
+    valid &&= widths.every(width => width === widths[0] && [1, 2, 4].includes(width));
+    body = body.replace(/\\+(?=[A-Za-z])/gu, '\\');
+    const footer = delimiter === '$$' ? /\\quad[ \t]*\([1-9]\d*\)[ \t]*$/u.exec(body) : null;
+    // Tentatively separate the footer, but accept it only after parsing a full
+    // top-level equation. Without that relation the tail can be a real factor.
+    if (footer) body = body.slice(0, footer.index);
+    let paired = 0;
+    for (const command of body.matchAll(/\\(?:left\(|right\))/gu)) {
+      paired += command[0] === '\\left(' ? 1 : -1;
+      valid &&= paired >= 0;
+    }
+    valid &&= paired === 0;
+    body = body.replace(/_\{([A-Za-z\d]+)\}/gu, '_$1')
+      .replace(/\\left\(/gu, '(').replace(/\\right\)/gu, ')')
+      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, '(($1)/($2))');
+    const commands: Record<string, string> = { tau: 'τ', beta: 'β', theta: 'θ', lambda: 'λ', approx: '≈', cdot: '·', cos: 'cos', sin: 'sin', tan: 'tan' };
+    body = body.replace(/\\([A-Za-z]+)/gu, (command: string, name: string) => commands[name] ?? command);
+    const tokens = tokenize(body);
+    valid &&= body.length <= 160 && tokens.length <= 80;
+    const parse = mathParser(tokens);
+    let parsed = valid ? parse(0) : undefined, ambiguous = parsed?.ambiguousDivision, hasRelation = false;
+    while (parsed && ['=', '≈', '~'].includes(tokens[parsed.next]?.text ?? '')) {
+      hasRelation = true;
+      parsed = parse(parsed.next + 1);
+      ambiguous ||= parsed?.ambiguousDivision;
+    }
+    valid &&= !!parsed && !ambiguous && parsed.next === tokens.length && (!footer || hasRelation);
+    if (valid) text += body;
+    else {
+      unsupported.push({ start: text.length, end: text.length + raw.length, key: raw, unsupported: true });
+      text += raw;
+    }
+    previous = match.index! + raw.length;
+  }
+  return { text: text + input.slice(previous), unsupported };
+}
+
 /** Explicit local prose only; no translation, synonyms or inferred variable aliases. */
 function proseQuantity(before: string, offset: number) {
   const unsupported = () => ({ binding: { kind: 'unsupported-expression' as const }, start: offset + before.length, end: offset + before.length });
@@ -127,8 +182,9 @@ function groupBoundary(tokens: Token[], index: number): boolean {
   const earlier = tokens[index - 2];
   return !!earlier && earlier.kind === 'identifier' && earlier.end < previous.start;
 }
-function referenceBoundary(tokens: Token[], index: number): boolean {
+function referenceBoundary(tokens: Token[], index: number, sourceNotation = false): boolean {
   const previous = tokens[index - 1];
+  if (sourceNotation && tokens[index]!.text === '(' && ['=', '≈', '~'].includes(previous?.text ?? '')) return true;
   if (tokens[index]!.text === '(' && !groupBoundary(tokens, index)) return false;
   if (previous?.text === '(') return groupBoundary(tokens, index - 1);
   return !mathSyntax(previous) || ['=', '≈', '~', '<', '>', '≤', '≥', '≪'].includes(previous!.text);
@@ -245,14 +301,29 @@ export function scientificComparisonBinding(input: string, numberStart: number, 
 }
 
 /** Whole symbolic references with constants (e.g. λ0/2), never bare constants. */
-export function scientificExpressionReferences(input: string): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
+export function scientificExpressionReferences(input: string, sourceNotation = false): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
   const tokens = tokenize(input), result: Array<{ key: string; start: number; end: number; unsupported?: boolean }> = [];
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (tokens[index - 1]?.kind === 'number') continue;
-    if (!referenceBoundary(tokens, index)) continue;
+    if (!referenceBoundary(tokens, index, sourceNotation)) continue;
     const local = tokens.slice(index, index + 80);
     const value = mathParser(local)(0);
+    // A failed compound product may start with a symbolic-only fraction and
+    // have its constant in a later group. Do not silently lose that group or
+    // recover a shorter, valid interior expression in fresh native notation.
+    if (sourceNotation && !value && token.text === '(') {
+      const endIndex = local.findIndex(item => proseBoundary.test(item.text));
+      const span = local.slice(0, endIndex < 0 ? local.length : endIndex)
+        .filter(item => item.end - token.start <= 160);
+      if (span.some(item => item.kind === 'number') && span.some(item => item.kind === 'identifier')
+        && span.some(item => ['+', '-', '*', '/', '×', '·'].includes(item.text))) {
+        const end = span.at(-1)!.end;
+        result.push({ key: input.slice(token.start, end), start: token.start, end, unsupported: true });
+        index += span.length - 1;
+        continue;
+      }
+    }
     if (value?.ambiguousDivision) {
       const end = Math.min(local[value.next - 1]!.end, token.start + 160);
       result.push({ key: input.slice(token.start, end), start: token.start, end, unsupported: true });
@@ -288,6 +359,7 @@ export function scientificExpressionReferences(input: string): Array<{ key: stri
       continuation.start === last.end && continuation.kind !== 'other'
       || continuation.kind === 'number'
       || continuation.kind === 'identifier' && (/[\u0370-\u03ff]/u.test(continuation.text) || continuation.text.length === 1
+        || sourceNotation && scientificUnit.test(continuation.text)
         || /^(?:sin|cos|tan)$/u.test(continuation.text)
         || suffix?.symbol === false || tokens[index + value!.next + 1]?.text === '('));
     const incompleteProduct = value?.numeric && value.symbolic && local[value.next - 1]?.kind === 'identifier'

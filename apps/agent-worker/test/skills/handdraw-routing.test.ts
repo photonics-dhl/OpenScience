@@ -1,11 +1,96 @@
-import { describe, expect, it } from 'vitest';
-import { CODEX_IMAGE_MAX_JSON_BYTES, imageSpoolRequestByteUpperBound } from '@openscience/ai-gateway';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CODEX_IMAGE_MAX_JSON_BYTES, imageSpoolRequestByteUpperBound, nativeImageReviewPromptHash, type ScienceReviewInput } from '@openscience/ai-gateway';
 import type { IllustrationBrief } from '@openscience/domain';
 import { compileIllustrationImagePrompt } from '../../src/presentation/scene-image';
 import { automaticStyleReviewGuidance, automaticStyleTreatment, loadInstalledMediaSkills, selectedAutomaticArtStyle, selectedHanddrawStyle } from '../../src/skills/installed-media-skills';
 import { SCIENTIFIC_CRITICAL_THINKING_SKILL } from '../../src/skills/scientific-critical-thinking';
+import { reviewGeneratedImage } from '../../src/presentation/generated-image-review';
+
+const revision = vi.hoisted(() => ({ root: undefined as string | undefined }));
+vi.mock('node:fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, readFileSync: (...args: Parameters<typeof readFileSync>) => {
+    const result = actual.readFileSync(...args);
+    if (revision.root && String(args[0]).replaceAll('\\', '/').endsWith('/openscience-research-illustration/SKILL.md'))
+      return String(result).replace(/^ {2}version: "[1-9]\d*"$/mu, `  version: "${revision.root}"`);
+    return result;
+  } };
+});
+
+async function mediaAtRevision(root: string) {
+  revision.root = root;
+  vi.resetModules();
+  return import('../../src/skills/installed-media-skills');
+}
+afterEach(() => { revision.root = undefined; vi.resetModules(); });
 
 describe('Hermes media skill stages', () => {
+  it.each(['editorial', 'aged-academia', 'auto', 'handdraw:#002'])('preserves complete non-review projections for the review-only v21 revision (%s)', async style => {
+    const previous = await mediaAtRevision('20');
+    const instruction = previous.automaticStyleTreatment('article:editorial', 'Selected appearance')!;
+    const stages = ['science', 'plan', 'render'] as const;
+    // v21 changes only Scientific review; these exact selected sections remain v20.
+    const baseline = stages.map(stage => previous.loadInstalledMediaSkills(style, instruction, stage));
+    const current = await mediaAtRevision('21');
+    expect(stages.map(stage => current.loadInstalledMediaSkills(style, instruction, stage))).toEqual(baseline);
+  });
+  it('attributes handdraw review to review21 and unchanged render20', async () => {
+    const current = await mediaAtRevision('21');
+    const reviewed = current.loadInstalledMediaSkills('handdraw:#002', 'Check this supported relationship.', 'review');
+    const illustration = reviewed.usage.filter(item => item.id === 'openscience-research-illustration');
+    expect(illustration).toEqual([
+      { id: 'openscience-research-illustration', version: '21', resources: ['SKILL.md#Scientific encoding', 'SKILL.md#Scientific review', 'SKILL.md#Visual craft'] },
+      { id: 'openscience-research-illustration', version: '20', resources: ['SKILL.md#Execution', 'SKILL.md#Visual craft'] },
+    ]);
+  });
+  it('keeps historical Execution19 ahead of the v21 projection attribution', async () => {
+    const current = await mediaAtRevision('21');
+    const rendered = current.loadInstalledMediaSkills('handdraw:#002', '', 'render', undefined, '19');
+    expect(rendered.usage.filter(item => item.id === 'openscience-research-illustration')).toEqual([
+      { id: 'openscience-research-illustration', version: '19', resources: ['references/legacy-execution-v19.md#Execution', 'SKILL.md#Visual craft'] },
+    ]);
+    expect(rendered.instructions).toContain('authorized Chat reference-image path');
+  });
+  it('does not extend the v21 attribution to future resource revisions', async () => {
+    const future = await mediaAtRevision('22');
+    for (const stage of ['science', 'plan', 'render', 'review'] as const)
+      expect(future.loadInstalledMediaSkills('editorial', '', stage).usage.filter(item => item.id === 'openscience-research-illustration'))
+        .toEqual([expect.objectContaining({ version: '22' })]);
+  });
+  it('consumes scientific conflict priority in review without inserting it into planning or rendering', () => {
+    const reviewed = loadInstalledMediaSkills('editorial', 'Check this supported relationship.', 'review');
+    for (const criterion of [
+      'source-defined object, physical quantity, definition, axis or reference frame and conditions',
+      'a blocking scientific defect while it remains in the candidate',
+      'Do not classify it as a nonblocking aesthetic suggestion',
+      "keep the caller's decision and summary consistent",
+    ]) expect(reviewed.instructions).toContain(criterion);
+    expect(reviewed.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '21' }));
+    for (const stage of ['science', 'plan', 'render'] as const)
+      expect(loadInstalledMediaSkills('editorial', '', stage).instructions).not.toContain('Do not classify it as a nonblocking aesthetic suggestion');
+  });
+  it('places the calibration in the existing single pixel-review request', async () => {
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
+    const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+    const reviewScientific = vi.fn(async (request: ScienceReviewInput) => {
+      expect(request.prompt).toContain('A confirmed conflict in scientific meaning');
+      expect(request.prompt).toContain('Do not classify it as a nonblocking aesthetic suggestion');
+      // This is only a consumption fixture; it makes no claim about model judgment.
+      const text = JSON.stringify({ decision: 'blocked', summary: 'Fixture response for prompt consumption.', repairInstruction: null });
+      return { text, promptHash: nativeImageReviewPromptHash(request), responseHash: hash(text), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' };
+    });
+    await expect(reviewGeneratedImage({ reviewScientific } as never, {
+      bytes, contentType: 'image/png', claims: [],
+      settings: { locale: 'en', style: 'editorial', instruction: 'Explain the relation.', output: 'image' },
+      document: { schemaVersion: 1, title: 'Saved scene', scenes: [{ title: 'Two regions', narration: 'A qualified relation.',
+        visualAction: 'The source-defined arrow.', sourceClaimIds: [] }] }, sceneIndex: 0,
+      authorizationContext: { taskId: 'review' }, illustrationContext: { imageReviewMode: 'model-native' }, researchObjectId: 'ro', versionId: 'version',
+      identity: { requestId: 'review', contentHash: hash(bytes), sourceEvidenceIdentity: 'b'.repeat(64), parentIdentity: 'parent' },
+    } as never)).resolves.toMatchObject({ decision: 'blocked' });
+    expect(reviewScientific).toHaveBeenCalledOnce();
+  });
   it('provides paper fidelity without routing the default method through paper appraisal', () => {
     const method = SCIENTIFIC_CRITICAL_THINKING_SKILL.nativeSourceReviewInstructions;
     expect(method).toContain('论文正文、图注、公式和附录是本任务的事实来源');
@@ -50,7 +135,11 @@ describe('Hermes media skill stages', () => {
     const science = loadInstalledMediaSkills('editorial', '', 'science');
     expect(science.instructions).toContain('one-sentence takeaway');
     expect(science.instructions).toContain('A dot-product condition constrains a projection');
-    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '19' }));
+    expect(science.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '20' }));
+    expect(science.instructions).toContain('sN` identifies one supplied supporting fragment');
+    expect(science.instructions).toContain('do not delete essential factors, units or conditions merely to pass a parser');
+    const review = loadInstalledMediaSkills('editorial', 'Check the same source-bound comparison.', 'review');
+    expect(review.instructions).toContain('sN` identifies one supplied supporting fragment');
     expect(science.instructions).toContain('encoding-feasibility failure');
     expect(science.instructions).toContain('A replaceable artistic container is not scientific encoding');
     expect(science.instructions).toContain('reader-facing scientific explanation');
@@ -97,7 +186,7 @@ describe('Hermes media skill stages', () => {
       expect(skill.instructions).toContain('原文定义、图注和实际提供的原图');
       expect(skill.instructions).toContain('每个尺寸或宽度须对应具体对象、物理量、方向、定义和算例');
       expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'scientific-critical-thinking', version: '5' }));
-      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: '19',
+      expect(skill.usage).toContainEqual(expect.objectContaining({ id: 'openscience-research-illustration', version: stage === 'review' ? '21' : '20',
         resources: expect.arrayContaining(['SKILL.md#Scientific encoding']) }));
     }
   });

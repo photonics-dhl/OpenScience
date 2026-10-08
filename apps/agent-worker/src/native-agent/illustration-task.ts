@@ -2,14 +2,15 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { parseStructuredJson, NATIVE_IMAGE_REQUEST_MAX_BYTES, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
 import { nativeAgentMaxTurns, readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference,
-  type PaperOriginalRef, type StoryboardRequest } from '@openscience/domain';
+  type PaperOriginalRef, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
 import type { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import { materializeIllustrationScience, materializeIllustrationArt, UnboundNumericSourceError } from '../presentation/illustration-planner';
 import { materializeIllustrationReview } from '../presentation/illustration-review';
 import { compileIllustrationImagePrompt } from '../presentation/scene-image';
+import { compileShotPrompt } from '../presentation/synclip-video-spool';
 import { loadIllustrationStyleSkills } from '../presentation/illustration-styles';
-import { loadInstalledMediaSkills, mergeDesignSkillUsage } from '../skills/installed-media-skills';
+import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import type { PresentationClaim } from '../presentation/chart-generator';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 import { createNativeTaskStore } from './task-store';
@@ -45,8 +46,9 @@ const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must
 const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Recognized hyphenated scientific units in source prose or consecutive typed quantities are quantities, not subtraction; a complete parenthetical named-variable assignment remains distinct from arithmetic. Explicit local source symbols may have spaced subscripts and an is/of approximation statement; preserve their exact symbol identity, not aliases or arithmetic factors.';
 const PAID_PROSE_SCIENCE_DESCRIPTION = PAID_ANNOTATION_SCIENCE_DESCRIPTION + ' A bare expression reference can match only that exact whole expression explicitly reported in the same supporting quote. Ordinary complete predicates after a comparison are prose, not units; unknown units remain binding. Use exact case-sensitive source IDs, supports relations and complete supporting text of 12..12000 characters; page markers or qualifiers cannot serve as subject bases. If an independent comparison is written after prose, separate it with a semicolon instead of an ambiguous mathematical wrapper; never remove functions, factors, terms or units.';
 const PAID_LOCATION_SCIENCE_DESCRIPTION = PAID_PROSE_SCIENCE_DESCRIPTION + ' Tell the smallest coherent visual story: do not make a scene for every summary field or auxiliary example. Each displayed quantity or complete expression must be explicitly described by a subject and supported by that subject\'s own quote; quoting it alone does not describe its object or meaning. Separate a standalone comparison from explanatory prose with a semicolon, retaining its operator, value and units. Quantity feedback names scenes[index] or narrative.mainMessage so repair that exact field and its subject basis. Only availableOriginals supplies original asset IDs; if empty, design a scene with paperOriginalAssetId null. sN is for subject bases; original paper_read uses P IDs. Keep the source case and its necessary conditions together.';
-const SCIENCE_DESCRIPTION = PAID_LOCATION_SCIENCE_DESCRIPTION.replace('Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key.',
+const PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION = PAID_LOCATION_SCIENCE_DESCRIPTION.replace('Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key.',
   'paperOriginalAssetId is optional: omission means a designed image and the tool supplies null. To reuse an original, provide its exact available asset ID.');
+const SCIENCE_DESCRIPTION = PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION + ' Complete numbered Fig panel references joined by a slash are structural references, never quantities. Source TeX and displayed notation can match only after complete, bounded format normalization; retain every variable, function, factor and denominator. Unknown syntax remains unsupported; source quotes stay exact.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 const CONTEXT_DESCRIPTION = 'Read the exact saved six-dimensional paper understanding, Claims and bound sources, eligible originals and requested scope before art. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs. Faithfully illustrate the author\'s meaning against the source; do not assess the paper\'s original scientific validity or derive new quantities. Full design guidance is returned on every successful paper_illustration_science result; apply it after preserving the source meaning.';
 export const NATIVE_ILLUSTRATION_TOOLS = [
@@ -59,54 +61,137 @@ export const NATIVE_ILLUSTRATION_TOOLS = [
       kind: { type: 'string', enum: ['label_clarification', 'requires_replan'] }, requiredMeaning: str, sourceIds: list }) } }) },
 ] as const;
 
+const VIDEO_SCIENCE_DESCRIPTION = SCIENCE_DESCRIPTION + ' Native narrative video: preserve the complete scientific brief and add videoProduction, durationSeconds and videoDirection. Narration is the complete spoken script, at most 120 characters per scene and 450 total. Use 3–6 scenes of 5/10/15 seconds. Motion, generated elements and continuity cannot add unsupported scientific meaning. Art and final review inspect both exact frame and video prompts.';
+const VIDEO_DIRECTION_SCHEMA = object({
+  shotType: { type: 'string', enum: ['hook', 'mechanism', 'evidence', 'transition', 'takeaway', 'hero'] },
+  purpose: str, subjectLock: str, generatedElements: str, motion: str, camera: str,
+  reference: { type: 'string', enum: ['scene-artwork'] }, frameStrategy: { type: 'string', enum: ['start-reference'] },
+  audioMode: { type: 'string', enum: ['external-narration'] }, subtitleMode: { type: 'string', enum: ['none'] },
+  negativeConstraints: { type: 'array', maxItems: 8, items: str }, modelPolicy: { type: 'string', enum: ['commercial-primary'] },
+});
+const videoScienceScene = scienceSceneSchema({ type: 'string', enum: ['real-space', 'wavevector-space', 'time', 'frequency', 'parameter-space', 'conceptual'] }, false);
+const VIDEO_SCIENCE_SCENE = { ...videoScienceScene,
+  properties: { ...videoScienceScene.properties, durationSeconds: { type: 'integer', enum: [5, 10, 15] }, videoDirection: VIDEO_DIRECTION_SCHEMA },
+  required: [...videoScienceScene.required, 'durationSeconds', 'videoDirection'],
+};
+const VIDEO_SCIENCE_SCHEMA = object({ title: str, narrative: object({ mainMessage: str, audience: str }),
+  videoProduction: object({ schemaVersion: { const: 1 }, narrativeArc: { type: 'string', enum: ['question-mechanism-takeaway', 'question-evidence-limitations', 'observation-mechanism-limitations'] },
+    visualContinuity: str, audioPolicy: { type: 'string', enum: ['external-narration'] }, modelPolicy: { type: 'string', enum: ['commercial-primary'] } }),
+  scenes: { type: 'array', minItems: 3, maxItems: 6, items: VIDEO_SCIENCE_SCENE },
+});
+const ORIGINAL_VIDEO_DIRECTION_SCHEMA = { ...VIDEO_DIRECTION_SCHEMA, properties: { ...VIDEO_DIRECTION_SCHEMA.properties,
+  subtitleMode: { type: 'string', enum: ['none', 'sidecar'] } } };
+const ORIGINAL_VIDEO_SCIENCE_SCENE = { ...VIDEO_SCIENCE_SCENE, properties: { ...VIDEO_SCIENCE_SCENE.properties,
+  videoDirection: ORIGINAL_VIDEO_DIRECTION_SCHEMA } };
+const ORIGINAL_VIDEO_SCIENCE_SCHEMA = { ...VIDEO_SCIENCE_SCHEMA, properties: { ...VIDEO_SCIENCE_SCHEMA.properties,
+  scenes: { type: 'array', minItems: 3, maxItems: 6, items: ORIGINAL_VIDEO_SCIENCE_SCENE } } };
+const VIDEO_CONTEXT_DESCRIPTION = CONTEXT_DESCRIPTION + ' Video context includes the verified base plan, supported execution modes and exact per-frame render resources; local revisions preserve every other scene and its prompts.';
+const NATIVE_VIDEO_TOOLS = NATIVE_ILLUSTRATION_TOOLS.map(tool => tool.name === 'paper_illustration_science'
+  ? { ...tool, description: VIDEO_SCIENCE_DESCRIPTION, parameters: VIDEO_SCIENCE_SCHEMA }
+  : tool.name === 'paper_illustration_science_repair'
+    ? { ...tool, parameters: object({ scienceToolCallId: str, sceneIndex: { type: 'integer', minimum: 0, maximum: 5 }, scene: VIDEO_SCIENCE_SCENE }) }
+    : { ...tool, description: tool.name === 'paper_illustration_context' ? VIDEO_CONTEXT_DESCRIPTION : tool.description + (tool.name === 'paper_illustration_review'
+      ? ' Review the complete video plan, narration, timing, source-bound motion, global continuity and both exact frame/video prompts; accepting only a still image is insufficient.'
+      : tool.name === 'paper_illustration_art' ? ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script.' : '') });
+
+export type VerifiedNativeVideoBase = { view: StoryboardView; settings: StoryboardRequest;
+  prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt: string; renderResources?: DesignSkillUsage[] }>; designSkills: DesignSkillUsage[] };
 type MaterializerInput = { claims: readonly PresentationClaim[]; settings: StoryboardRequest;
-  paperOriginals: Map<string, PaperOriginalRef>; narrativeSource?: VisualNarrativeSource };
+  paperOriginals: Map<string, PaperOriginalRef>; narrativeSource?: VisualNarrativeSource; base?: VerifiedNativeVideoBase };
 function stopped(): never { throw new Error('[blocked] Native illustration selected history changed'); }
 
 /** Deterministic tools only. The installed Agent makes all planning and scientific review decisions. */
-export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean }) {
+export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean; nativeVideo?: boolean; videoContext?: boolean; savedState?: NativeAgentSessionState | null }) {
+  const nativeVideo = input.nativeVideo === true;
+  const videoContext = nativeVideo && input.videoContext === true;
+  if (nativeVideo !== (input.settings.output === 'video' && input.settings.narrative === true)) stopped();
+  if (nativeVideo && Boolean(input.settings.baseAssetId) !== Boolean(input.base)) stopped();
+  if (nativeVideo && !videoContext && input.base) stopped();
+  const revisionSceneIndex = nativeVideo ? input.settings.revisionSceneIndex : undefined;
+  if (revisionSceneIndex !== undefined && (!input.base || input.base.view.output !== 'video' || !input.base.view.narrative
+    || revisionSceneIndex >= input.base.view.document.scenes.length || input.settings.locale !== input.base.settings.locale
+    || input.settings.style !== input.base.settings.style || !isDeepStrictEqual(input.settings.figurePlan, input.base.settings.figurePlan))) stopped();
   const scienceFeedback = input.scienceFeedback === true;
   const deferDesignGuidance = input.deferDesignGuidance === true;
   const sourceQuantityAnnotations = input.sourceQuantityAnnotations === true;
   const sourceQuantityProse = input.sourceQuantityProse === true;
   const sourceQuantityLocations = input.sourceQuantityLocations === true;
   const scienceRepairCallIdFeedback = input.scienceRepairCallIdFeedback === true;
-  const styles = loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan');
-  type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience> };
+  const sourceNotation = input.sourceNotation === true;
+  const styles = loadIllustrationStyleSkills([input.settings.style], revisionSceneIndex !== undefined
+    ? input.base!.settings.instruction : input.settings.instruction, 'plan');
+  let historicalStyles: typeof styles | undefined, contextStyles = styles;
+  const planningStyles = (historical: boolean) => historical
+    ? historicalStyles ??= loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan', '19') : styles;
+  type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience>; designSkills: typeof styles.usage };
   type Art = { id: string; sequence: number; scienceId: string; document: ReturnType<typeof materializeIllustrationArt>;
-    prompts: Array<{ sceneIndex: number; prompt: string }>; designSkills: typeof styles.usage };
+    prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt?: string; renderResources?: DesignSkillUsage[] }>; designSkills: typeof styles.usage };
   type Review = { id: string; sequence: number; artId: string; review: ReturnType<typeof materializeIllustrationReview> };
   type PendingScience = { id: string; sequence: number; args: Record<string, unknown>; rejected: boolean };
   let science: Science | undefined, art: Art | undefined, review: Review | undefined;
   let pendingScience: PendingScience | undefined;
+  // The task store already verified this private checkpoint. Only its latest
+  // complete prefix retains all earlier tool receipts after CP compaction.
+  const savedMessages = input.savedState?.turns.at(-1)?.request.messages ?? [];
+  const savedIllustrationReceipts = new Map<string, { name: string; args: unknown; result: Record<string, unknown> }>();
+  const savedIds = new Set<string>();
+  for (const message of savedMessages) for (const tool of message.role === 'assistant' ? message.toolCalls ?? [] : []) {
+    if (!tool.function.name.startsWith('paper_illustration_')) continue;
+    if (!tool.id || savedIds.has(tool.id)) stopped();
+    savedIds.add(tool.id);
+    const receipts = savedMessages.filter(item => item.role === 'tool' && item.toolCallId === tool.id);
+    if (receipts.length > 1) stopped();
+    if (!receipts.length) continue;
+    const result: unknown = JSON.parse(receipts[0]!.content);
+    if (!record(result)) stopped();
+    savedIllustrationReceipts.set(tool.id, { name: tool.function.name, args: JSON.parse(tool.function.arguments), result });
+  }
   const normalizeScienceArgs = (args: Record<string, unknown>) => input.defaultPaperOriginalRef === true && Array.isArray(args.scenes)
     ? { ...args, scenes: args.scenes.map(scene => record(scene) && !Object.hasOwn(scene, 'paperOriginalAssetId')
       ? { ...scene, paperOriginalAssetId: null } : scene) } : args;
-  const materializeScience = (args: Record<string, unknown>, sequence: number, callId: string) => {
+  const materializeScience = (args: Record<string, unknown>, sequence: number, callId: string, historicalExecution = false) => {
     const normalized = normalizeScienceArgs(args);
     pendingScience = { id: callId, sequence, args: structuredClone(normalized), rejected: true };
-    const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations);
+    const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, sourceNotation);
+    if (revisionSceneIndex !== undefined) {
+      const previous = input.base!.view.document;
+      const meaning = (scene: typeof intent.scenes[number] | typeof previous.scenes[number]) => {
+        const { composition: _composition, treatment: _treatment, ...illustration } = scene.illustration!;
+        void _composition; void _treatment;
+        return { title: scene.title, narration: scene.narration, durationSeconds: scene.durationSeconds,
+          sourceClaimIds: scene.sourceClaimIds, videoDirection: scene.videoDirection, illustration };
+      };
+      if (intent.title !== previous.title || !isDeepStrictEqual(intent.narrative, previous.narrative)
+        || !isDeepStrictEqual(intent.videoProduction, previous.videoProduction) || intent.scenes.length !== previous.scenes.length
+        || intent.scenes.some((scene, index) => index !== revisionSceneIndex && !isDeepStrictEqual(meaning(scene), meaning(previous.scenes[index]!))))
+        throw new Error('local_video_revision_must_preserve_other_scenes_and_global_continuity');
+    }
     pendingScience.rejected = false;
-    science = { id: callId, sequence, intent };
+    const guidance = deferDesignGuidance ? planningStyles(historicalExecution) : contextStyles;
+    science = { id: callId, sequence, intent, designSkills: guidance.usage };
     return { status: 'science_ready', scienceToolCallId: callId, intent,
-      ...(deferDesignGuidance ? { designGuidance: styles.instructions } : {}) };
+      ...(deferDesignGuidance ? { designGuidance: guidance.instructions } : {}) };
   };
-  function call(name: string, args: unknown, sequence: number, callId: string): Record<string, unknown> {
+  function evaluate(name: string, args: unknown, sequence: number, callId: string, historicalExecution = false): Record<string, unknown> {
     try {
       if (!record(args)) throw new Error('object_required');
       if (name === 'paper_illustration_context') {
         if (Object.keys(args).length) throw new Error('context_arguments_empty');
+        contextStyles = planningStyles(historicalExecution);
         let sourceIndex = 0;
         return { status: 'illustration_context', settings: input.settings,
           paper: input.narrativeSource ? projectVisualNarrativeSource(input.narrativeSource) : null,
           claims: input.claims.map(claim => ({ id: claim.id, statement: claim.statement, conditions: claim.conditions, limitations: claim.limitations,
             sources: (claim.sourcePassages ?? []).map(source => ({ sourceId: `s${sourceIndex++}`, text: source.text, relation: source.relation })) })),
           availableOriginals: [...input.paperOriginals.values()].map(item => ({ assetId: item.assetId, sourceClaimId: item.sourceClaimId })),
-          ...(deferDesignGuidance ? {} : { designGuidance: styles.instructions }) };
+          ...(videoContext ? { videoCapabilities: { durationSeconds: [5, 10, 15], frameStrategies: ['start-reference'],
+            references: ['scene-artwork'], audioModes: ['external-narration'], subtitleModes: ['none'] },
+            ...(input.base ? { basePlan: { ...input.base, revisionSceneIndex: revisionSceneIndex ?? null } } : {}) } : {}),
+          ...(deferDesignGuidance ? {} : { designGuidance: contextStyles.instructions }) };
       }
       if (!Number.isSafeInteger(sequence) || sequence < 0 || !callId) stopped();
       if (name === 'paper_illustration_science') {
-        return materializeScience(args, sequence, callId);
+        return materializeScience(args, sequence, callId, historicalExecution);
       }
       if (name === 'paper_illustration_science_repair') {
         const sceneIndex = typeof args.sceneIndex === 'number' ? args.sceneIndex : -1;
@@ -117,17 +202,22 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
         if (!Array.isArray(candidate.scenes) || sceneIndex >= candidate.scenes.length || !record(args.scene))
           throw new Error('science_repair_scene_out_of_range');
         candidate.scenes[sceneIndex] = structuredClone(args.scene);
-        return materializeScience(candidate, sequence, callId);
+        return materializeScience(candidate, sequence, callId, historicalExecution);
       }
       if (name === 'paper_illustration_art') {
         if (Object.keys(args).sort().join(',') !== 'scenes,scienceToolCallId' || !science || args.scienceToolCallId !== science.id || sequence <= science.sequence)
           throw new Error('exact_science_tool_required');
-        const document = materializeIllustrationArt({ scenes: args.scenes }, science.intent, input.claims, input.settings, input.paperOriginals);
-        const resources = document.scenes.map(scene => scene.paperOriginal ? undefined : loadInstalledMediaSkills(input.settings.style, scene.illustration!.treatment, 'render'));
+        const document = materializeIllustrationArt({ scenes: args.scenes }, science.intent, input.claims, input.settings, input.paperOriginals, input.base?.view);
+        const resources = document.scenes.map(scene => scene.paperOriginal ? undefined : loadInstalledMediaSkills(input.settings.style, scene.illustration!.treatment, 'render', undefined, historicalExecution ? '19' : undefined));
         const prompts = document.scenes.flatMap((scene, sceneIndex) => scene.paperOriginal ? []
-          : [{ sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions) }]);
+          : [{ sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions),
+            ...(nativeVideo ? { videoPrompt: compileShotPrompt(document, scene, input.settings.locale) } : {}),
+            ...(videoContext ? { renderResources: resources[sceneIndex]!.usage } : {}) }]);
+        if (revisionSceneIndex !== undefined && prompts.some((prompt, index) => index !== revisionSceneIndex
+          && !isDeepStrictEqual(prompt, input.base!.prompts[index])))
+          throw new Error('local_video_revision_changed_unchanged_rendering_prompt');
         art = { id: callId, sequence, scienceId: science.id, document, prompts,
-          designSkills: mergeDesignSkillUsage(styles.usage, ...resources.map(resource => resource?.usage)) };
+          designSkills: mergeDesignSkillUsage(science.designSkills, ...resources.map(resource => resource?.usage)) };
         return { status: 'art_ready', planToolCallId: callId, document, prompts };
       }
       if (name === 'paper_illustration_review') {
@@ -165,8 +255,36 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
           ? { scienceToolCallId: pendingScience.id } : {}) };
     }
   }
+  function savedResult(name: string, args: unknown, callId: string) {
+    const saved = savedIllustrationReceipts.get(callId);
+    if (saved && (name !== saved.name || !isDeepStrictEqual(args, saved.args))) stopped();
+    return saved?.result;
+  }
+  function reconstruct(name: string, args: unknown, sequence: number, callId: string, recorded?: Record<string, unknown>) {
+    const before = { science, art, review, pendingScience, contextStyles };
+    const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };
+    const rebuilt = evaluate(name, args, sequence, callId);
+    if (!recorded || isDeepStrictEqual(rebuilt, recorded)) return rebuilt;
+    // Known resource compatibility only, never trust or splice a saved prompt.
+    // Science and art are revalidated, then the entire receipt must still match.
+    const hasDesignGuidance = name === 'paper_illustration_context' && recorded.status === 'illustration_context'
+      || (name === 'paper_illustration_science' || name === 'paper_illustration_science_repair') && recorded.status === 'science_ready'
+      || name === 'paper_illustration_art' && recorded.status === 'art_ready';
+    if (hasDesignGuidance && !nativeVideo) {
+      // A successful repair replaces the rejected draft. The historical
+      // recompile needs the same pre-call state, not that first attempt's state.
+      restore();
+      const historical = evaluate(name, args, sequence, callId, true);
+      if (isDeepStrictEqual(historical, recorded)) return historical;
+    }
+    restore();
+    stopped();
+  }
+  function call(name: string, args: unknown, sequence: number, callId: string): Record<string, unknown> {
+    return reconstruct(name, args, sequence, callId, savedResult(name, args, callId));
+  }
   function finish(messages: ChatMessage[], finalResponse: string) {
-    science = undefined; art = undefined; review = undefined; pendingScience = undefined;
+    science = undefined; art = undefined; review = undefined; pendingScience = undefined; contextStyles = styles;
     const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
     for (const [sequence, tool] of calls.entries()) {
       if (!tool.function.name.startsWith('paper_illustration_')) continue;
@@ -175,7 +293,10 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
       if (receipts.length !== 1) stopped();
       const recorded = JSON.parse(receipts[0]!.content) as unknown;
       if (!record(recorded)) stopped();
-      const rebuilt = call(tool.function.name, JSON.parse(tool.function.arguments), sequence, tool.id);
+      const args: unknown = JSON.parse(tool.function.arguments);
+      const saved = savedResult(tool.function.name, args, tool.id);
+      if (saved && !isDeepStrictEqual(saved, recorded)) stopped();
+      const rebuilt = reconstruct(tool.function.name, args, sequence, tool.id, recorded);
       if (!isDeepStrictEqual(rebuilt, recorded)) stopped();
     }
     const selected: unknown = parseStructuredJson(finalResponse);
@@ -191,25 +312,35 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
   return { call, finish };
 }
 
-export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | null) {
+export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | null, output: StoryboardRequest['output'] = 'image') {
   const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
     if (typeof tool.function.description !== 'string') stopped();
     return { ...structuredClone(tool.function), description: tool.function.description };
   });
-  const sourceTools = originalTools ?? [...(saved ? LEGACY_NATIVE_PAPER_TOOLS : NATIVE_PAPER_TOOLS), ...NATIVE_ILLUSTRATION_TOOLS.map(tool =>
+  const definitions = !saved && output === 'video' ? NATIVE_VIDEO_TOOLS : NATIVE_ILLUSTRATION_TOOLS;
+  const sourceTools = originalTools ?? [...(saved ? LEGACY_NATIVE_PAPER_TOOLS : NATIVE_PAPER_TOOLS), ...definitions.map(tool =>
     saved && tool.name === 'paper_illustration_science' ? { ...tool, description: PAID_SCIENCE_DESCRIPTION, parameters: PAID_SCIENCE_SCHEMA }
       : saved && tool.name === 'paper_illustration_context' ? { ...tool, description: PAID_CONTEXT_DESCRIPTION } : tool)];
   const originalScience = originalTools?.find(tool => tool.name === 'paper_illustration_science');
   const originalRepair = originalTools?.find(tool => tool.name === 'paper_illustration_science_repair');
   const scienceDescription = originalScience?.description;
-  const scienceFeedback = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_HZ_SCIENCE_DESCRIPTION;
-  const sourceQuantityAnnotations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION;
-  const sourceQuantityProse = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION;
-  const sourceQuantityLocations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION;
-  const defaultPaperOriginalRef = !saved || scienceDescription === SCIENCE_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, SCIENCE_SCHEMA);
+  const contextDescription = originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description;
+  const videoContext = !saved ? output === 'video' : scienceDescription === VIDEO_SCIENCE_DESCRIPTION
+    && contextDescription === VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, VIDEO_SCIENCE_SCHEMA);
+  const nativeVideo = videoContext || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION
+    && contextDescription === CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, ORIGINAL_VIDEO_SCIENCE_SCHEMA));
+  if (nativeVideo) return { nativeVideo, videoContext, sourceTools, scienceFeedback: true, sourceQuantityAnnotations: true,
+    sourceQuantityProse: true, sourceQuantityLocations: true, defaultPaperOriginalRef: true, deferDesignGuidance: true,
+    scienceRepairCallIdFeedback: true, sourceNotation: true };
+  const scienceFeedback = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_HZ_SCIENCE_DESCRIPTION;
+  const sourceQuantityAnnotations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION;
+  const sourceQuantityProse = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION;
+  const sourceQuantityLocations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION;
+  const defaultPaperOriginalRef = !saved || (scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION) && isDeepStrictEqual(originalScience?.parameters, SCIENCE_SCHEMA);
   const deferDesignGuidance = !saved || originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description === CONTEXT_DESCRIPTION;
   const scienceRepairCallIdFeedback = !saved || originalRepair?.description.includes(SCIENCE_REPAIR_CALL_ID_MARKER) === true;
-  return { sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
+  const sourceNotation = !saved || scienceDescription === SCIENCE_DESCRIPTION;
+  return { nativeVideo, videoContext: false, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
 }
 
 /**
@@ -226,6 +357,34 @@ export function nativeMediaCapabilityGuidance(settings: Pick<StoryboardRequest, 
   ];
 }
 
+/** Reconstruct the completed private tools before reusing their prompts; this reader cannot submit a call. */
+export async function replayNativeVideoPlan(input: MaterializerInput & {
+  deps: Pick<AgentDeps, 'prisma'> & { storage: StorageAdapter };
+  task: { id: string; executionAttempt: number; result: unknown };
+}): Promise<VerifiedNativeVideoBase> {
+  const execution = readNativeAgentExecution(input.task.result);
+  if (execution?.profile !== 'paper-illustration' || input.settings.output !== 'video' || input.settings.narrative !== true
+    || execution.checkpoint?.state !== 'completed') stopped();
+  const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution,
+    authorize: async () => { throw new Error('[blocked] Completed native video replay is read only'); } });
+  const saved = await store.read(), last = saved?.turns.at(-1);
+  if (!saved || !last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length) stopped();
+  const profile = nativeIllustrationToolProfile(saved, 'video');
+  if (!profile.nativeVideo) stopped();
+  const rebuilt = createNativeIllustrationMaterializer({ ...input, ...profile, savedState: saved }).finish(last.request.messages, last.response.text);
+  const stored = record(input.task.result) ? input.task.result : {}, cp = record(stored.storyboardCheckpoint) ? stored.storyboardCheckpoint : {};
+  const planned = record(cp.planned) ? cp.planned : {}, native = record(stored.nativeIllustration) ? stored.nativeIllustration : {};
+  if (!isDeepStrictEqual(rebuilt.document, planned.document) || !isDeepStrictEqual(rebuilt.prompts, stored.illustrationPrompts)
+    || !isDeepStrictEqual(rebuilt.designSkills, planned.designSkills) || rebuilt.planToolCallId !== native.planToolCallId
+    || rebuilt.reviewToolCallId !== native.reviewToolCallId || rebuilt.review.decision !== 'accepted') stopped();
+  return { settings: input.settings, view: { document: rebuilt.document, locale: input.settings.locale,
+    style: input.settings.style, output: 'video', narrative: true, ...(input.settings.baseAssetId ? { baseAssetId: input.settings.baseAssetId } : {}),
+    ...(input.settings.figurePlan ? { figurePlan: input.settings.figurePlan } : {}) },
+    prompts: rebuilt.prompts.map((prompt, index) => ({ ...prompt, videoPrompt: prompt.videoPrompt!,
+      renderResources: prompt.renderResources ?? loadInstalledMediaSkills(input.settings.style,
+        rebuilt.document.scenes[index]!.illustration!.treatment, 'render').usage })), designSkills: rebuilt.designSkills };
+}
+
 export async function runNativeIllustrationTask(input: MaterializerInput & {
   gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter }; task: { id: string; executionAttempt: number; result: unknown };
   sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference; sourceEvidenceIdentity: string;
@@ -235,7 +394,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   if (execution?.profile !== 'paper-illustration') stopped();
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved);
+  const { nativeVideo, videoContext, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved, input.settings.output);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)],
@@ -245,16 +404,19 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
-  const materializer = createNativeIllustrationMaterializer({ ...input, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
+  const materializer = createNativeIllustrationMaterializer({ ...input, savedState: saved, nativeVideo, videoContext, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
   const scienceRepairGuidance = sourceTools.some(tool => tool.name === 'paper_illustration_science_repair')
     ? '如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。'
     : '';
-  const mediaCapabilityGuidance = nativeMediaCapabilityGuidance(input.settings, Boolean(saved));
+  const mediaCapabilityGuidance = [...nativeMediaCapabilityGuidance(input.settings, Boolean(saved)),
+    ...(nativeVideo && input.base ? [input.settings.revisionSceneIndex === undefined
+      ? 'context.basePlan 是已完成并核验的原视频方案。按本次指令创建新的完整私有修订，不覆盖原方案或产物。'
+      : 'context.basePlan 给出已完成原方案和本次唯一 revisionSceneIndex。science 保留全部原幕及次序、全局叙事与连续性，只修改指定幕；art 仅返回指定幕的一个条目。其余幕的科学、旁白、构图、风格、帧及视频提示词必须原样保留。'] : [])];
   const native = await runHostedNativeTask({ inboxRoot: input.inboxRoot, executionAttempt: input.task.executionAttempt,
-    config: { ...binding, goal: deferDesignGuidance
+    config: { ...binding, goal: nativeVideo ? '复用已审论文理解，形成忠实、清晰、美观的私有视频方案：完整科学分镜、参考帧、镜头运动、连续性及完整口语旁白。通过原science/art/review工具终审整份视频计划，不调用生图、视频或配音供应商，不公开结果。' : deferDesignGuidance
       ? '基于论文原文忠实表达作者的主旨、机制、代表结果及成立条件，完成易读、美观且可直接交给生图API的私有图解方案。不评判论文原始科学有效性，不新增推导量，不生成或公开图片。'
       : '依据这篇已理解并核源的论文，自动完成准确、易读、美观且可直接交给生图API的图解方案。终点是私有方案，不生成或公开图片。',
       instructions: (deferDesignGuidance ? [
