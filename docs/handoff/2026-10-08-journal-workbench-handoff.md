@@ -39,14 +39,25 @@
 - The incoming integrated branch also changes Native Skill resources and Synclip video receipt contracts. Pair required Native catalogue resources and inspect video compatibility before enabling affected new tasks.
 - Initial server video adapter is `synclip-video-v1`. Do not silently let it consume v2 receipt requests or enable unconfirmed LTX administrator capabilities.
 - Preserve all existing paid/unknown task receipts and source assets. Deployment does not authorize new model calls, real journal approval or publication.
-- Application deployment and browser usability are separate facts; record actual results here after verification.
+- Application deployment and browser usability are separate facts; both were observed as described below.
+
+## Verified production result
+
+- Deployed successfully on 2026-10-08 from `frontend/nanqing` at `42fe1a974fb62e5a868d3a4f1da812065cb148b1`; exact live/rollback identities remain in Hermes CURRENT. Later documentation-only commits do not require another application deployment.
+- Exact-SHA CI: journal push/PR `37759938589`/`37759945555`, media `37759945507`, video `37759945653` all succeeded. Server preparation converged after initial dependency setup: two full builds matched protected runtime snapshot `entryCount=96850`, `sha256=e4dc74db18d4e51be3d1586685fec829734f4b1f1e817d1ae438ee2e27cef8f6`; post-deployment verification matched the same receipt.
+- The reviewed orchestration reused the existing Native/video installers and canonical production transaction (`skip-migrate=1`, `no-tests=1`, unchanged capability-image reuse). Unrelated Parser/ScanSci/BGE functional canaries were not rerun; their startup health and the existing release guards remained enforced.
+- A temporary Nginx method guard covered the entire pairing window. The first immediate reload probe returned 405 before service shutdown; it recovered automatically with no application switch. A bounded wait then verified 503 and deployment completed with exit 0. Both attempts, the original snapshot, and private logs remain under `/opt/openscience/observations/journal-20261008-42fe1a974fb62e5a868d3a4f1da812065cb148b1/`.
+- Public `/__release` matched the deployed SHA, homepage returned 200, all production services were healthy, Native runtime/catalogue matched API and Worker, and its timer was active. Transaction/failure/pending markers and the temporary maintenance guard were absent.
+- Synclip video now uses v2 receipt verification with `adminModelsEnabled=false` and `accepting=false`; all historical receipts and previous units/config are preserved. This is not video-generation or scientific-quality acceptance. No new model call, paper edit, approval, or publication was submitted for this release.
+- Real signed-in navigation passed: directory → manage my journals → Ultrafast Science workbench → existing paper → sources/rights; directory → public journal homepage also passed. Desktop and 375px viewport were observed, with no horizontal overflow on the workbench/rights page. Source selectors had explicit accessible names and permissions remained unchecked.
+- Browser 418/423 hydration messages appeared only during the initial release transition; later full reloads of the directory and sources page did not reproduce them. Cause is unconfirmed; this observation does not justify a speculative code change.
 
 ## Open product work
 
 - Shared file management and Native Hermes journal-scoped understanding/result binding remain incomplete; labels or links do not prove integration.
 - Preserve figure-card/FAQ editing and journal approval when accepting common results; DOI matches cannot grant access to private research objects.
 - Authoritative OA/citation sources, hierarchical subjects, independent directory inclusion and recommendation/writing tools remain future work.
-- Final CI, server build/start and observed production navigation remain pending at this checkpoint.
+- Journal deployment and the scoped production navigation acceptance are complete. The broader product work above and scientific/video acceptance remain open.
 
 ## Read first
 
