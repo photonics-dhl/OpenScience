@@ -18,14 +18,14 @@ function ResearchIdentityPanel({ description, eyebrow, intent, tagline, title }:
   const openDesk = React.useCallback(() => router.push('/dashboard'), [router]);
   return (
     <section className={styles.welcome} data-research-identity-context={intent}>
-      <div className={styles.companion}><HermesDockAnchor floating={false} onInvoke={openDesk} state="idle"
-        suggestion={{ kind: 'neutral', bodyKey: 'guide.neutral.body', titleKey: 'guide.neutral.title' }} /></div>
       <div data-hermes-protected="true">
       <p className={styles.eyebrow}>{eyebrow}</p>
       <h2>{title}</h2>
       <p className={styles.description}>{description}</p>
-      <p className={styles.tagline}>{tagline}</p>
       </div>
+      <div className={styles.companion}><HermesDockAnchor floating={false} onInvoke={openDesk} state="idle"
+        suggestion={{ kind: 'neutral', bodyKey: 'guide.neutral.body', titleKey: 'guide.neutral.title' }} /></div>
+      <p className={styles.tagline}>{tagline}</p>
     </section>
   );
 }

@@ -175,3 +175,24 @@ body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-paddin
 @media print {
   [data-hermes-global-companion='true'], [data-hermes-action-menu='true'] { display: none !important; }
 }
+
+/* A navigation companion is a character, not a dashboard of runtime labels. */
+[data-hermes-companion-surface='navigation'][data-hermes-placement='anchored'] { margin: 0; }
+[data-hermes-companion-surface='navigation']:not([data-hermes-compact='true']) .hermes-companion-actor { inset: 1rem; }
+[data-hermes-companion-surface='navigation'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
+[data-hermes-companion-surface='navigation'] .hermes-motion-enable {
+  top: auto;
+  right: 4px;
+  bottom: 48px;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+[data-hermes-companion-surface='navigation']:is(:hover, :focus-within) .hermes-motion-enable { opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  [data-hermes-companion-surface='navigation'] .hermes-motion-enable { transition: none; }
+}

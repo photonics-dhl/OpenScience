@@ -10,8 +10,8 @@ import { HermesDockAnchor } from './HermesDockAnchor';
  * The host is collapsed on desktop and only becomes a page-owned compact
  * entry on narrow navigation surfaces.
  */
-export function HermesShellDockAnchor() {
+export function HermesShellDockAnchor({ inline = false }: { inline?: boolean }) {
   const router = useRouter();
-  return <HermesDockAnchor floating onInvoke={() => router.push('/dashboard')} state="idle"
+  return <HermesDockAnchor floating={!inline} onInvoke={() => router.push('/dashboard')} state="idle"
     suggestion={{ kind: 'neutral', bodyKey: 'guide.neutral.body', titleKey: 'guide.neutral.title' }} />;
 }

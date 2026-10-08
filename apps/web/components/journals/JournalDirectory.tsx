@@ -19,14 +19,18 @@ function JournalEntry({ journal }: { journal: JournalSummary }) {
         className={styles.entry}
       >
         <div className={styles.body}>
+          <div className={styles.identity}>
           {journal.subjects.length ? <p className={styles.subjects}>{journal.subjects.join(' · ')}</p> : null}
           <h2 lang={journal.nameEn ? 'en' : 'zh'}>{journal.nameEn || journal.nameZh}</h2>
           {journal.nameZh && journal.nameEn ? <p className={styles.translation} lang="zh">{journal.nameZh}</p> : null}
+          </div>
+          <div className={styles.details}>
           {excerpt ? <p className={styles.description}>{excerpt}</p> : null}
           <div className={styles.metadata}>
             {journal.pIssn ? <span>ISSN {journal.pIssn}</span> : null}
             {journal.eIssn ? <span>eISSN {journal.eIssn}</span> : null}
             <span data-journal-count>{t('articleCount', { count: journal.publicArticleCount })}</span>
+          </div>
           </div>
         </div>
         <ArrowRight className={styles.arrow} size={20} aria-hidden="true" />

@@ -38,6 +38,10 @@ Name the composition in one sentence, such as “a field notebook opening into a
 
 The first viewport must make the title, primary action, visual anchor, and next step legible in that order. Use scale, alignment, crop, whitespace, and contrast before borders or effects. Cards represent meaningful objects or states; avoid identical card grids, equal-weight controls, and repeated pills.
 
+Review an actual before/after pair before retaining a visual treatment. A large dark panel, glass decoration, serif headline or extra shadow is not evidence of better art direction. Ask whether the treatment strengthens the research itself or merely makes its container louder. When two adjacent headings compete, separate their roles through scale, measure and shared baselines. Keep attribution beside the work it describes; captions must remain readable. Preserve the scientific image's complete pixels and labels.
+
+Do not dedicate an empty full-height rail to Hermes. Reserve its shared footprint within the page's meaningful composition. On phones, pair the compact actor with a short supporting passage or action area so that the next real content does not fall behind a separate empty row. Inspect the resulting viewport, not only the actor's bounding box.
+
 ### 5. Implement with the existing system
 
 Reuse OpenScience tokens, shell, type, Hermes, media, and route semantics. Add a token/component when a pattern appears on two or more pages; keep page-specific composition in page overrides. Every changed interaction needs visible focus, hover, active, loading, success, error, empty, and disabled states where relevant. Reserve media space, keep touch targets at least 44px, and honor `prefers-reduced-motion`.

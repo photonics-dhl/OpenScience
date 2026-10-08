@@ -9,7 +9,6 @@ import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
-import { GuideOpticalMargin } from './GuideOpticalMargin';
 import { ScientificText, scientificTextExcerpt } from '@/components/content/ScientificText';
 import { getPublicResearchVersion, type PublicResearchVersion } from '@/lib/api';
 import styles from './research-guide.module.css';
@@ -76,17 +75,19 @@ export function ResearchGuide() {
 
   return <article ref={guideRef} className={styles.guide}>
     <div className={styles.opening}>
-    <GuideOpticalMargin className={styles.opticalMargin} />
     <header className={styles.hero}>
       <div className={styles.intro} data-hermes-protected="true">
+        <p className={styles.eyebrow}>{t('eyebrow')}</p>
         <h1>{t('title').split('\n').map((line, index) => <span key={line} className={index === 1 ? styles.titleAccent : undefined}>{line}</span>)}</h1>
         <p className={styles.lead}>{t('intro')}</p>
         <div className={styles.actions}>
           <Link href="/dashboard" className={styles.primary}>{t('desk')}<ArrowRight size={18} aria-hidden="true" /></Link>
-          <p className={styles.startNote}>{t('startNote')}</p>
+          <a className={styles.chapterLink} href={`#${id}-scenes`}>{t('sceneHeading')}<ArrowRight size={17} aria-hidden="true" /></a>
         </div>
       </div>
-      <a className={styles.chapterLink} href={`#${id}-scenes`}>{t('sceneHeading')}<ArrowRight size={17} aria-hidden="true" /></a>
+      <aside className={styles.companionDock} aria-label="Hermes">
+        <HermesDockAnchor floating={false} onInvoke={openDesk} state="idle" suggestion={guideSuggestion} workspaceId="guide" />
+      </aside>
     </header>
 
     <figure className={styles.proof} data-hermes-protected="true" aria-label={t('exampleLabel')} aria-busy={loadState === 'loading'}>
@@ -95,22 +96,18 @@ export function ResearchGuide() {
           <div className={styles.proofLayout}>
             <div className={styles.proofCopy}>
               {title}
+              {example?.authors.length ? <p className={styles.authors}>{example.authors.map(author => author.displayName).join(' · ')}</p> : null}
               {example?.version.core.insight ? <ScientificText as="p" hideSourceMarkers className={styles.readingHook}>{scientificTextExcerpt(example.version.core.insight, 180)}</ScientificText> : <p className={styles.readingHook}>{t('exampleFallbackBody')}</p>}
             </div>
             {image ? <div className={styles.scienceImage}>{image}</div> : <p className={styles.noImage}>{t(loadState === 'unavailable' ? 'exampleUnavailable' : 'exampleNoImage')}</p>}
           </div>
           <figcaption className={styles.proofFooter}>
             {loadState === 'unavailable' || imageFailed ? <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('retryExample')}</button> : <ScientificText as="p" hideSourceMarkers className={styles.figureCaption}>{illustration?.reader?.narration || illustrationTitle || t('figureLabel')}</ScientificText>}
-            {example?.authors.length ? <p className={styles.authors}>{example.authors.map(author => author.displayName).join(' · ')}</p> : null}
             <Link href={example?.url ?? '/explore'} className={styles.textLink}>{t(example ? 'readExample' : 'explore')}<ArrowRight size={17} aria-hidden="true" /></Link>
           </figcaption>
         </>}
     </figure>
     </div>
-
-    <aside className={styles.companionDock} aria-label="Hermes">
-      <HermesDockAnchor floating={false} onInvoke={openDesk} state="idle" suggestion={guideSuggestion} workspaceId="guide" />
-    </aside>
 
     <section className={styles.scenes} aria-labelledby={`${id}-scenes`}>
       <div className={styles.sectionHeading}><h2 id={`${id}-scenes`}>{t('sceneHeading')}</h2><p>{t('sceneIntro')}</p></div>
