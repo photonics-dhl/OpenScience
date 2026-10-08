@@ -12,6 +12,7 @@ import {
   getCurrentUser,
   getExistingHermesResearchRun,
   getHermesResearchRun,
+  getHermesVideoCapability,
   retryHermesGeneration,
   presentationAssetContentUrl,
   SESSION_CHANGED_EVENT,
@@ -71,6 +72,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [resolving, setResolving] = React.useState(false);
   React.useEffect(() => { if (!pendingRestored && !starting) setGenerationLocale(locale); }, [locale, pendingRestored, starting]);
   const startInFlight = React.useRef(false);
+  const startController = React.useRef<AbortController | null>(null);
   const mounted = React.useRef(false);
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [granting, setGranting] = React.useState(false);
@@ -177,6 +179,16 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     ?? (!guideTaskId ? eligibleTasks.find((task) => task.id === activeTaskId) ?? eligibleTasks[0] : null)
     ?? null;
   const sourceScope = `${owner}:${selectedTask?.id ?? ''}`;
+  const currentStartContext = React.useRef({ sourceScope, guideTaskId });
+  currentStartContext.current = { sourceScope, guideTaskId };
+  React.useEffect(() => {
+    setStarting(false);
+    return () => {
+      startController.current?.abort();
+      startController.current = null;
+      startInFlight.current = false;
+    };
+  }, [sourceScope, guideTaskId, runId]);
   React.useEffect(() => {
     if (runId || !actorId || restoredOwner !== owner || !selectedTask) return;
     const controller = new AbortController();
@@ -265,17 +277,22 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
 
   const start = React.useCallback(async () => {
     if (!selectedTask || !actorId || restoredOwner !== owner || resolvedSource !== sourceScope || startInFlight.current || (guideTaskId && (!guided || guideLoading))) return;
+    const controller = new AbortController();
+    startController.current = controller;
+    const isCurrentStart = () => !controller.signal.aborted && mounted.current && actorRef.current === actorId
+      && visibleContext.current.researchObjectId === researchObjectId && visibleContext.current.runId === runId
+      && currentStartContext.current.sourceScope === sourceScope && currentStartContext.current.guideTaskId === guideTaskId;
     startInFlight.current = true;
     setStarting(true); setError('');
     try {
       const viewer = await getCurrentUser({ fresh: true });
-      if (!mounted.current || actorRef.current !== actorId) return;
+      if (!isCurrentStart()) return;
       if (viewer.userId !== actorId) {
         actorRef.current = viewer.userId; setActorId(viewer.userId); setRestoredOwner(''); setInstruction('');
         setError(t('narrative.identityChanged')); return;
       }
-      const existing = await getExistingHermesResearchRun(researchObjectId, selectedTask.id, undefined, output);
-      if (!mounted.current || actorRef.current !== actorId) return;
+      const existing = await getExistingHermesResearchRun(researchObjectId, selectedTask.id, controller.signal, output);
+      if (!isCurrentStart()) return;
       if (existing.run) {
         if (existing.run.actorId !== actorId || existing.run.researchObjectId !== researchObjectId || !hasHermesRunOutput(existing.run, output)
           || !existing.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === selectedTask.id)) throw new Error(t('narrative.identityChanged'));
@@ -286,18 +303,40 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       const scope = { userId: actorId, researchObjectId, ingestionTaskId: selectedTask.id, output };
       const storage = getHermesDraftStorage();
       const pending = loadPendingHermesRunStart(storage, scope);
+      if (output === 'video' && !pending) {
+        const capability = await getHermesVideoCapability(researchObjectId, controller.signal);
+        if (!isCurrentStart()) return;
+        if (!capability.canGenerateVideo) throw new Error(t('video.unavailable'));
+      }
       const guideKey = guided ? `hermes-guide-run:${actorId}:${guideTaskId}:${selectedTask.id}${output === 'video' ? ':video' : ''}` : null;
       const request: PendingHermesRunStart = pending ?? { key: guideKey ?? crypto.randomUUID(), generation, savedAt: Date.now() };
       // Persist before the paid mutation; all unknown outcomes retain this exact request.
       if (!savePendingHermesRunStart(storage, scope, request)) throw new Error(t('narrative.storageError'));
       setPendingRestored(true);
       const prepared = request.runId ? { scope, pending: request } : await prepareHermesNarrativeSource({
-        scope, pending: request, storage, isCurrent: () => mounted.current && actorRef.current === actorId
-          && selectedTask.id === scope.ingestionTaskId, identityError: t('narrative.identityChanged'), storageError: t('narrative.storageError'),
+        scope, pending: request, storage, isCurrent: isCurrentStart,
+        identityError: t('narrative.identityChanged'), storageError: t('narrative.storageError'),
       });
-      const result = request.runId ? await getHermesResearchRun(researchObjectId, request.runId)
-        : await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
-      if (!mounted.current || actorRef.current !== actorId) return;
+      if (!isCurrentStart()) return;
+      let result: { run: HermesResearchRun };
+      if (prepared.pending.runId) {
+        result = await getHermesResearchRun(prepared.scope.researchObjectId, prepared.pending.runId, controller.signal);
+      } else {
+        const existingPrepared = output === 'video'
+          ? await getExistingHermesResearchRun(prepared.scope.researchObjectId, prepared.scope.ingestionTaskId, controller.signal, output)
+          : { run: null };
+        if (!isCurrentStart()) return;
+        if (existingPrepared.run) result = { run: existingPrepared.run };
+        else {
+          if (output === 'video') {
+            const capability = await getHermesVideoCapability(prepared.scope.researchObjectId, controller.signal);
+            if (!isCurrentStart()) return;
+            if (!capability.canGenerateVideo) throw new Error(t('video.unavailable'));
+          }
+          result = await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
+        }
+      }
+      if (!isCurrentStart()) return;
       if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId || !hasHermesRunOutput(result.run, output)
         || !result.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === prepared.scope.ingestionTaskId)) {
         throw new Error(t('narrative.identityChanged'));
@@ -306,12 +345,16 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       setRun(result.run);
       onRunCreated(result.run);
     } catch (cause) {
-      if (mounted.current && actorRef.current === actorId) setError(cause instanceof Error ? cause.message : t('startError'));
+      if (isCurrentStart()) setError(cause instanceof ApiClientError && cause.code === 'VIDEO_UNAVAILABLE'
+        ? t('video.unavailable') : cause instanceof Error ? cause.message : t('startError'));
     } finally {
-      startInFlight.current = false;
-      if (mounted.current) setStarting(false);
+      if (startController.current === controller) {
+        startController.current = null;
+        startInFlight.current = false;
+        if (mounted.current) setStarting(false);
+      }
     }
-  }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, output, onRunCreated, t]);
+  }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, runId, output, onRunCreated, t]);
 
   async function upgradeGenerationGrant() {
     if (!run || grantInFlight.current || sourceReanalysisInFlight.current || !actorId || run.actorId !== actorId) return;

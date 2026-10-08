@@ -11,7 +11,6 @@ import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisit
 import {
   createWorkspaceGuideSession,
   ApiClientError,
-  getCurrentUser,
   getAgentTask,
   listAgentTasks,
   listVersions,
@@ -20,6 +19,7 @@ import {
   type WorkspaceGuidePayload,
   type WorkspaceGuideResult,
 } from '@/lib/api';
+import { useHermesViewerId } from './useHermesViewerId';
 import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/hermes/literature-intent';
 import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-state';
 
@@ -269,7 +269,7 @@ function HermesAssistantDrawerContent({
     const base = offeredDraft.current; const current = currentDraft.current;
     return !base || Boolean(current && base.researchObjectId === current.researchObjectId && base.scope === current.scope && SDF_FIELDS.every((field) => base.core[field] === current.core[field]));
   };
-  const [viewerId, setViewerId] = useState('');
+  const viewerId = useHermesViewerId();
   const [restoredTask, setRestoredTask] = useState(false);
   const [guideStored, setGuideStored] = useState(false);
   const requestedVersion = useSearchParams()?.get('version') ?? '';
@@ -454,12 +454,6 @@ function HermesAssistantDrawerContent({
       } finally { if (ownerRef.current === owner) setPreparing(false); }
     })();
   }, [task, result, restoredTask, scopedPresentationDraft, requestedVersion, resolvedGuideVersion, route, routeResearchObjectId, currentOwner, onPrepareVersion, tc]);
-
-  useEffect(() => {
-    let active = true;
-    void getCurrentUser().then((user) => { if (active) setViewerId(user.userId); }).catch(() => undefined);
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     if (route !== 'research-object-edit' || !routeResearchObjectId) { setResolvedGuide({ owner: currentOwner, versionId: route }); return; }
