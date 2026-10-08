@@ -96,3 +96,9 @@
 空间只读核查没有可靠的测试来源标记。部分重复 PDF 记录仍关联真实论文，五个研究对象中还有已公开历史，故未按名称删除任何记录。现有可恢复归档入口为 `/api/trash`，`packages/domain/src/trash/trash.ts` 的 `moveToTrash/restoreTrash/taskIsAdopted/taskHasProtectedReference/publicAssetReferences` 已保护采用成果和公开引用。清理已识别测试数据沿用此流程，不新增猜测分类字段。
 
 用户要求将技术检查留在系统内部，只点评最终结果并决定采用。前端这轮已降低过程记录权重；完整自动执行仍须与 Domain/Native 的真实状态衔接。准确协调点为 `packages/domain/src/agent/research-run.ts` 的 `confirmHermesSourceReview` / `authorizeHermesGenerationGrant`、前端 `IngestionClaimReview.tsx` / `HermesMediaReview.tsx` 及 `packages/domain/src/assets/native-image-review.ts`。技术合格、用户采用、付费生成授权和公开发布分别沿用已有合同；本轮不修改其他 owner 的后端状态，不伪造通过或自动发布。
+
+## Native 视频前端合同衔接
+
+已合并总控稳定基线 `c3029264`，保留本线三批 UI 提交。前端沿用服务端 `canGenerateSceneImage`、`canGenerateVideo` 和有序 `videoFrameAssetIds`，不再把 Native 草稿的人工采用状态误当成制作资格。新视频分镜请求保留 `narrative: true`、明确父稿与可选单幕修订范围；图像场景索引与视频修订索引分开。真实对话分支中的折叠制作设置可切换媒介与修改范围，主界面仍围绕结果和对话。未知提交按原 payload/key 恢复；图像与视频的待续请求分别保存，避免覆盖。旧非 Native 手动流程暂保留原有已采用帧排序，资格仍由服务端决定；Native 缺少帧投影时不猜测。
+
+独立 High 审查发现的范围混淆、对话分支漏渲染控件均已修复；4 个定向测试文件共23项通过，Web构建 exit0。测试覆盖实际组件注册的确认动作，但没有冒充浏览器验收。普通用户“由论文开始制作视频”的新入口暂未接入：待后端稳定提交同时提供 `researchRunDraft.output` 与 existing-run 的 `output=video` 精确查询，才能复用既有来源和幂等恢复，避免把旧图像请求升级为视频授权。UI owner 本轮未部署、重启服务器或发起付费制作；新版期刊草稿工作台的并行交付在总控集成，不从本树旧文件回盖。

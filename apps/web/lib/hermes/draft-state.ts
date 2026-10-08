@@ -18,6 +18,7 @@ export interface StoredPresentationDraft {
   selected: string[];
   parentId: string;
   revisionMode?: 'art';
+  revisionSceneIndex?: number;
   scene: number;
   figurePlan?: StoryboardRequest['figurePlan'];
 }
@@ -35,6 +36,7 @@ export interface HermesRunStartScope {
   userId: string;
   researchObjectId: string;
   ingestionTaskId: string;
+  output?: 'video';
 }
 
 export interface PendingHermesRunStart {
@@ -58,7 +60,7 @@ export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult
 }
 
 function runStartKey(scope: HermesRunStartScope): string {
-  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.ingestionTaskId)}:run-start:v1`;
+  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.ingestionTaskId)}:run-start${scope.output === 'video' ? ':video' : ''}:v1`;
 }
 
 export function loadPendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope): PendingHermesRunStart | null {
@@ -73,18 +75,20 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
       || (value.sourceReanalysisKey !== undefined && (typeof value.sourceReanalysisKey !== 'string'
         || !value.sourceReanalysisKey || value.sourceReanalysisKey.length > 64))
       || !generation || generation.profile !== 'visual-narrative-v1' || generation.maxAgentTasks !== 9
+      || generation.output !== scope.output || (generation.output !== undefined && generation.output !== 'video')
       || (generation.locale !== 'zh' && generation.locale !== 'en')
       || typeof generation.style !== 'string' || !generation.style.trim() || generation.style.length > 100
       || typeof generation.instruction !== 'string' || generation.instruction.length > 1_000) return null;
     return { key: value.key, savedAt: value.savedAt, ...(value.runId ? { runId: value.runId } : {}),
       ...(value.sourceReanalysisKey ? { sourceReanalysisKey: value.sourceReanalysisKey } : {}),
-      generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction } };
+      generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction,
+        ...(generation.output ? { output: generation.output } : {}) } };
   } catch { return null; }
 }
 
 export function savePendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope, pending: PendingHermesRunStart): boolean {
   try {
-    if (!storage) return false;
+    if (!storage || pending.generation.output !== scope.output) return false;
     storage.setItem(runStartKey(scope), JSON.stringify({ version: 1, ...pending }));
     return true;
   } catch { return false; }
@@ -145,6 +149,8 @@ export function loadHermesPresentationDraft(storage: Storage | null, scope: Herm
       || !isFigurePlanValid(value.figurePlan)
       || !Array.isArray(value.selected) || value.selected.length > 12 || value.selected.some((id: unknown) => typeof id !== 'string' || (id as string).length > 100)
       || (value.revisionMode !== undefined && (value.revisionMode !== 'art' || value.action !== 'storyboard.revise' || !value.parentId))
+      || (value.revisionSceneIndex !== undefined && (!Number.isInteger(value.revisionSceneIndex) || value.revisionSceneIndex < 0 || value.revisionSceneIndex > 5
+        || !value.parentId || !['storyboard.revise', 'video.create'].includes(String(value.action)) || value.revisionMode !== undefined))
       || typeof value.parentId !== 'string' || value.parentId.length > 100 || typeof value.scene !== 'number' || !Number.isInteger(value.scene) || value.scene < 0) return null;
     return value as StoredPresentationDraft;
   } catch { return null; }

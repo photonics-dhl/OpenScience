@@ -2817,7 +2817,12 @@
     "artRequiresCompatiblePlan": "此方案不支持仅修改艺术风格。请返回并选择同语言的已完成图解方案，或让 Hermes 重新规划。",
     "briefWillUpdate": "你的修改会写入新方案，原图与原方案保留。",
     "updateBrief": "更新制作指令",
-    "needsApprovedScenes": "视频需要已确认的分镜与对应图片。先完成素材后即可制作。",
+    "needsApprovedScenes": "视频画面尚未就绪。回到当前制作任务查看进度或处理失败。",
+    "videoRevision": {
+      "label": "视频调整范围",
+      "all": "调整整个方案",
+      "scene": "仅调整第 {number} 幕"
+    },
     "mediaIntent": "制作什么",
     "preparePlan": "整理制作指令",
     "usingApprovedPlan": "使用当前已确认的制作方案。",
