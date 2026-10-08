@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigation = vi.hoisted(() => ({ pathname: '/guide', push: vi.fn() }));
-const handlers = vi.hoisted(() => ({ items: new Map<string, () => void>() }));
+const handlers = vi.hoisted(() => ({ items: new Map<string, () => void>(), invoke: null as (() => void) | null }));
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 vi.mock('next/navigation', () => ({
   usePathname: () => navigation.pathname,
@@ -13,7 +13,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('../components/ui/context-menu', () => {
   const PassThrough = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
   return {
-    ContextMenu: PassThrough, ContextMenuTrigger: PassThrough, ContextMenuContent: PassThrough,
+    ContextMenu: PassThrough, ContextMenuContent: PassThrough,
+    ContextMenuTrigger: ({ children }: { children: React.ReactElement<{ onClick: () => void }> }) => {
+      handlers.invoke = children.props.onClick;
+      return children;
+    },
     ContextMenuGroup: PassThrough, ContextMenuLabel: PassThrough, ContextMenuSeparator: () => null,
     ContextMenuItem: (props: { children: React.ReactNode; onSelect: () => void; 'data-hermes-navigation'?: string; 'data-hermes-action-key'?: string }) => {
       const key = props['data-hermes-navigation'] ?? props['data-hermes-action-key'];
@@ -32,7 +36,7 @@ import { ResearchGuide } from '../components/guide/ResearchGuide';
 
 const suggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' };
 
-beforeEach(() => { navigation.push.mockClear(); handlers.items.clear(); });
+beforeEach(() => { navigation.push.mockClear(); handlers.items.clear(); handlers.invoke = null; });
 
 describe('global companion SSR ownership', () => {
   it.each(['return', 'create'] as const)('keeps the %s identity invitation with only the floating companion', (intent) => {
@@ -117,6 +121,37 @@ describe('global companion SSR ownership', () => {
 });
 
 describe('public pet navigation', () => {
+  it('removes the redundant conversation invoke from Tab order while keeping the pet menu available', () => {
+    const onInvoke = vi.fn();
+    const onMenuAction = vi.fn();
+    const markup = renderToStaticMarkup(<HermesVisualAdapter
+      inConversation onInvoke={onInvoke} onMenuAction={onMenuAction} state="idle" suggestion={suggestion}
+      protectedGeometryVersion={0} reducedMotion
+    />);
+    const invoke = markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0];
+    const menu = markup.match(/<button\b[^>]*data-hermes-pet-menu-button="true"[^>]*>/)?.[0];
+    expect(invoke).toContain('tabindex="-1"');
+    expect(invoke).not.toContain('disabled');
+    expect(menu).toBeDefined();
+    expect(menu).not.toMatch(/tabindex="-1"|disabled/);
+    expect(handlers.items.has('greet')).toBe(true);
+    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
+    handlers.invoke!();
+    expect(onInvoke).not.toHaveBeenCalled();
+    handlers.items.get('greet')!();
+    expect(onMenuAction).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the page invoke keyboard reachable and actionable outside the conversation', () => {
+    const onInvoke = vi.fn();
+    const markup = renderToStaticMarkup(<HermesVisualAdapter
+      onInvoke={onInvoke} state="idle" suggestion={suggestion} protectedGeometryVersion={0} reducedMotion
+    />);
+    expect(markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0]).not.toContain('tabindex="-1"');
+    handlers.invoke!();
+    expect(onInvoke).toHaveBeenCalledOnce();
+  });
+
   it('offers existing companion gestures and real product navigation without research-specific actions', () => {
     const onMenuAction = vi.fn();
     const markup = renderToStaticMarkup(<HermesVisualAdapter

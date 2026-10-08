@@ -2198,7 +2198,8 @@
       "diff": "内容比较"
     },
     "files": {
-      "savedMaterials": "已有材料与导入记录",
+      "savedMaterials": "已有材料",
+      "importHistory": "导入记录 · {count} 项",
       "snapshotVersion": "公开版本 v{version}",
       "confirmedDraft": "查看已确认草稿",
       "addMore": "可在上方添加更多材料。",

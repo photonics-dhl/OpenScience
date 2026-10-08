@@ -700,10 +700,9 @@ function HermesAssistantDrawerContent({
           <button type="button" className="hermes-conversation-close" onClick={() => onOpenChange(false)} aria-label={t('guide.close')}>×</button>
         </header>
 
-        <div data-hermes-conversation-companion="true" />
-
         <div className="hermes-conversation-transcript" ref={transcript} role="log" aria-label={tc('conversation')} aria-live="polite" aria-relevant="additions text"
           onScroll={(event) => { const pane = event.currentTarget; followTranscript.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 64; }}>
+          <div data-hermes-conversation-companion="true" aria-live="off" />
           <p className="hermes-message hermes-message-assistant">{dashboardContext.editorDraft ? tc('welcomeEditor') : t(suggestion.bodyKey)}</p>
           {sourceReview}
           {turns.map((turn) => <React.Fragment key={turn.id}>

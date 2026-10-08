@@ -28,8 +28,12 @@
   overflow-wrap: anywhere;
 }
 .description { max-width: 65ch; margin: 14px 0 0; color: var(--os-muted-paper); font-size: 16px; line-height: 1.85; overflow-wrap: anywhere; }
-.doiSection { margin-top: 30px; padding: 20px 0 24px; border-top: 1px solid var(--os-rule-paper); border-bottom: 1px solid var(--os-rule-paper); }
-.doiSection h2 { margin: 0; font: 500 21px/1.5 var(--font-reading-serif, Georgia, serif); }
+.doiSection { margin-top: 30px; padding: 8px 0; border-top: 1px solid var(--os-rule-paper); border-bottom: 1px solid var(--os-rule-paper); }
+.doiSection > summary, .importHistory > summary { min-height: 44px; padding-block: 12px; color: var(--os-muted-paper); font: 500 14px/1.5 var(--font-ui); cursor: pointer; }
+.doiSection[open] > summary, .importHistory[open] > summary { color: var(--os-vermilion-ink); }
+.doiSection > summary:focus-visible, .importHistory > summary:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
+.doiSection[open] { padding-bottom: 24px; }
+.importHistory { margin-top: 12px; }
 .doiHelp, .doiPrivacy { max-width: 68ch; color: var(--os-muted-paper); font-size: 14px; line-height: 1.75; }
 .doiPrivacy { margin: 14px 0 0; }
 .doiLabel { display: block; margin: 16px 0 8px; font-size: 14px; font-weight: 600; }

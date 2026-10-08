@@ -16,6 +16,7 @@ import {
 import { useSession } from '@/components/auth/SessionProvider';
 import { AccountLoadState } from '@/components/settings/AccountLoadState';
 import { UsageBalance } from '@/components/settings/UsageBalance';
+import { HermesShellDockAnchor } from '@/components/hermes/HermesShellDockAnchor';
 
 export default function SettingsPage() {
   const t = useTranslations('productSurfaces');
@@ -52,7 +53,10 @@ export default function SettingsPage() {
           </dl>
           <Link href="/me#identity" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('continueIdentity')}</Link>
         </section>
-        <UsageBalance />
+        <aside className="settings-companion-column">
+          <UsageBalance />
+          <HermesShellDockAnchor inline />
+        </aside>
         <section className="surface-folio-sheet px-5 py-6">
           <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
           <div className="account-preference-row mt-5 border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>

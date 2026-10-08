@@ -2198,7 +2198,8 @@
       "diff": "Content comparison"
     },
     "files": {
-      "savedMaterials": "Saved materials and imports",
+      "savedMaterials": "Saved materials",
+      "importHistory": "Import history · {count}",
       "snapshotVersion": "Public version v{version}",
       "confirmedDraft": "View confirmed draft",
       "addMore": "Add more materials above.",

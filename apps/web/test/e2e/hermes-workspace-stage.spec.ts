@@ -79,16 +79,18 @@ test('only the primary left pointer can own Hermes click and drag state', async 
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
 });
 
-test('floating Hermes preserves click intent and settles away from protected work after dragging', async ({ page }) => {
+test('page-owned Hermes preserves click intent and settles away from protected work after dragging', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const anchor = page.locator('[data-hermes-dock-anchor="true"]');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
-  await expect(anchor).toBeHidden();
+  await expect(anchor).toBeVisible();
+  await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+  await stage.scrollIntoViewIfNeeded();
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
   expect({ width: Math.round(stageBox!.width), height: Math.round(stageBox!.height) }).toEqual({ width: 360, height: 360 });
@@ -106,15 +108,19 @@ test('floating Hermes preserves click intent and settles away from protected wor
   await page.mouse.down();
   await page.mouse.move(start.x + 3, start.y + 2);
   await page.mouse.up();
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
   await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
-  await expect(stage).toHaveAttribute('aria-hidden', 'true');
-  await expect(stage).toHaveAttribute('inert', '');
-  await stage.locator('[data-hermes-input-owner]').evaluate((element: HTMLElement) => element.focus());
-  expect(await stage.locator('[data-hermes-input-owner]').evaluate((element) => element === document.activeElement)).toBe(false);
+  await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).not.toHaveAttribute('aria-hidden', 'true');
+  await expect(stage).not.toHaveAttribute('inert', '');
+  await expect(input).toHaveAttribute('tabindex', '-1');
+  await expect(stage).toHaveCSS('opacity', '1');
   await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
+  await expect(input).toBeFocused();
 
   const protectedRegions = page.locator('[data-hermes-protected="true"]');
   const protectedBoxes = await protectedRegions.evaluateAll((elements) => elements.map((element) => {
@@ -137,7 +143,7 @@ test('floating Hermes preserves click intent and settles away from protected wor
   await page.mouse.down();
   await page.mouse.move(120, 140, { steps: 8 });
   await page.mouse.up();
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
   await page.locator('[data-hermes-test-blocker="true"]').evaluate((element) => element.remove());
 
@@ -155,7 +161,7 @@ test('floating Hermes preserves click intent and settles away from protected wor
   await stage.evaluate((element) => element.releasePointerCapture(1));
   await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   await page.mouse.up();
 
   const desired = protectedBoxes[0];
@@ -216,216 +222,115 @@ test('floating Hermes preserves click intent and settles away from protected wor
     });
   });
 
+  const desktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBeNull();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  const mobileBox = await stage.boundingBox();
-  expect(mobileBox).not.toBeNull();
-  expect({ width: Math.round(mobileBox!.width), height: Math.round(mobileBox!.height) }).toEqual({ width: 360, height: 360 });
-  const mobileInput = await input.boundingBox();
-  expect(mobileInput).not.toBeNull();
-  await page.mouse.move(mobileInput!.x + mobileInput!.width / 2, mobileInput!.y + mobileInput!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(90, 120, { steps: 8 });
-  await page.mouse.up();
-  const mobilePreferenceAfterRelease = await page.evaluate((key) => localStorage.getItem(key), mobileKey);
-  expect(mobilePreferenceAfterRelease).not.toBeNull();
-  expect(await page.evaluate(([desktop, mobile]) => localStorage.getItem(desktop) !== localStorage.getItem(mobile), [desktopKey, mobileKey])).toBe(true);
-  const mobileStageAfterRelease = await stage.boundingBox();
-  const mobileHullAfterRelease = await stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox();
-  expect(mobileStageAfterRelease).not.toBeNull();
-  expect(mobileHullAfterRelease).not.toBeNull();
-  expect(mobileHullAfterRelease!.x).toBeGreaterThanOrEqual(0);
-  expect(mobileHullAfterRelease!.y).toBeGreaterThanOrEqual(0);
-  expect(mobileHullAfterRelease!.x + mobileHullAfterRelease!.width).toBeLessThanOrEqual(390);
-  expect(mobileHullAfterRelease!.y + mobileHullAfterRelease!.height).toBeLessThanOrEqual(844);
-
-  const persistedSafeMobilePreference = await page.evaluate(({ key, value }) => {
-    const preference = JSON.parse(value) as Record<string, unknown>;
-    preference.xRatio = .500801;
-    preference.yRatio = .118483;
-    const serialized = JSON.stringify(preference);
-    localStorage.setItem(key, serialized);
-    return serialized;
-  }, { key: mobileKey, value: mobilePreferenceAfterRelease! });
-  await page.evaluate(() => window.history.replaceState(null, '', '/dashboard?hermes-motion=full'));
-  await page.reload({ waitUntil: 'networkidle' });
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  await page.waitForTimeout(1_200);
-  const [mobileStageAfterReload, mobileHullAfterReload] = await Promise.all([
-    stage.boundingBox(),
-    stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
-  ]);
-  expect(mobileStageAfterReload).not.toBeNull();
-  expect(mobileHullAfterReload).not.toBeNull();
-  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBe(persistedSafeMobilePreference);
-  const mobileLayoutViewport = await page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth }));
-  expect(Math.abs(
-    mobileStageAfterReload!.x + mobileStageAfterReload!.width / 2 - .500801 * mobileLayoutViewport.width,
-  )).toBeLessThan(1);
-  expect(Math.abs(
-    mobileStageAfterReload!.y + mobileStageAfterReload!.height / 2 - .118483 * mobileLayoutViewport.height,
-  )).toBeLessThan(1);
-  const protectedAfterMobileReload = await protectedRegions.evaluateAll((elements) => elements.map((element) => {
-    const bounds = element.getBoundingClientRect();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
-  expect(protectedAfterMobileReload.some((region) => overlaps(mobileHullAfterReload!, region))).toBe(false);
-  expect(mobileHullAfterReload!.x).toBeGreaterThanOrEqual(0);
-  expect(mobileHullAfterReload!.y).toBeGreaterThanOrEqual(0);
-  expect(mobileHullAfterReload!.x + mobileHullAfterReload!.width).toBeLessThanOrEqual(390);
-  expect(mobileHullAfterReload!.y + mobileHullAfterReload!.height).toBeLessThanOrEqual(844);
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBe(desktopPreference);
 });
 
-test('Hermes never persists a transitional desktop hull after mobile edge history', async ({ page }) => {
+test('legacy mobile dock history cannot replace the page-owned rail at either breakpoint', async ({ page }) => {
   const desktopKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
   const mobileKey = 'openscience:hermes-dock:v1:workspace-current:mobile';
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
+  const mobilePreference = JSON.stringify({ activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .5, yRatio: .12 });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: mobileKey, value: mobilePreference });
   await mockWorkspace(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
-  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBeNull();
-
-  const dragHull = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
-  const mobileDockSettled = () => stage.evaluate((element, key) => {
-    const preference = JSON.parse(localStorage.getItem(key) ?? 'null') as { xRatio?: number; yRatio?: number } | null;
-    const stageBounds = element.getBoundingClientRect();
-    const hull = element.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
-    if (!preference || preference.xRatio === undefined || preference.yRatio === undefined || !hull) return false;
-    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
-      .map((node) => node.getBoundingClientRect()).filter((bounds) => bounds.width > 0 && bounds.height > 0);
-    return Math.abs(stageBounds.left + stageBounds.width / 2 - preference.xRatio * innerWidth) < .5
-      && Math.abs(stageBounds.top + stageBounds.height / 2 - preference.yRatio * innerHeight) < .5
-      && hull.left >= 0 && hull.top >= 0 && hull.right <= innerWidth && hull.bottom <= innerHeight
-      && protectedRegions.every((region) => !(
-        hull.left < region.right && hull.right > region.left && hull.top < region.bottom && hull.bottom > region.top
-      ));
-  }, mobileKey);
-  const edgeTargets = [
-    { x: 1, y: 422 },
-    { x: 195, y: 1 },
-    { x: 389, y: 422 },
-    { x: 195, y: 843 },
-    { x: 195, y: 1 },
-  ];
-  for (const target of edgeTargets) {
-    const bounds = await dragHull.boundingBox();
-    expect(bounds).not.toBeNull();
-    await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(target.x, target.y, { steps: 12 });
-    await page.mouse.up();
-    await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
-    await expect.poll(mobileDockSettled).toBe(true);
+  const anchor = page.locator('[data-hermes-dock-anchor="true"]');
+  for (const width of [390, 800, 1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', width <= 1100 ? '120' : '360');
+    await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+    await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+    expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
+    expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBe(mobilePreference);
   }
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  const persistedMobilePreference = await page.evaluate((key) => localStorage.getItem(key), mobileKey);
-  expect(persistedMobilePreference).not.toBeNull();
   await page.reload({ waitUntil: 'networkidle' });
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).not.toBeNull();
-  for (let elapsed = 0; elapsed < 180_000 && await stage.getAttribute('data-hermes-action') !== 'return-dock'; elapsed += 250) {
-    await page.clock.runFor(250);
-  }
-  await expect(stage).toHaveAttribute('data-hermes-action', 'return-dock');
-  await page.evaluate((key) => {
-    document.documentElement.dataset.hermesTestDesktopWrites = '[]';
-    const storagePrototype = Object.getPrototypeOf(localStorage) as Storage;
-    const original = storagePrototype.setItem;
-    storagePrototype.setItem = function setItem(nextKey: string, value: string) {
-      if (nextKey === key) {
-        const writes = JSON.parse(document.documentElement.dataset.hermesTestDesktopWrites ?? '[]') as Array<{ hullHeight: number; value: string }>;
-        const hullHeight = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect().height ?? 0;
-        document.documentElement.dataset.hermesTestDesktopWrites = JSON.stringify([...writes, { hullHeight, value }]);
-      }
-      return original.call(this, nextKey, value);
-    };
-  }, desktopKey);
-
-  await page.setViewportSize({ width: 800, height: 900 });
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
-  await page.clock.runFor(2_000);
-  const readSettledSafety = () => stage.evaluate((element) => {
-    const stageBounds = element.getBoundingClientRect();
-    const hull = element.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
-    if (!hull) return { finalHull: false, insideViewport: false, protectedSafe: false, stageSize: 0 };
-    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
-      .map((node) => node.getBoundingClientRect())
-      .filter((bounds) => bounds.width > 0 && bounds.height > 0);
-    return {
-      finalHull: hull.height >= stageBounds.height - 40,
-      insideViewport: hull.left >= 0 && hull.top >= 0 && hull.right <= window.innerWidth && hull.bottom <= window.innerHeight,
-      protectedSafe: protectedRegions.every((region) => !(
-        hull.left < region.right && hull.right > region.left && hull.top < region.bottom && hull.bottom > region.top
-      )),
-      stageSize: Math.round(stageBounds.width),
-    };
-  });
-  await expect.poll(async () => {
-    const safety = await readSettledSafety();
-    return { finalHull: safety.finalHull, insideViewport: safety.insideViewport, stageSize: safety.stageSize };
-  }).toEqual({ finalHull: true, insideViewport: true, stageSize: 200 });
-  let settledDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
-  if (settledDesktopPreference === null) {
-    expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.hermesTestDesktopWrites ?? '[]'))).toEqual([]);
-    await page.setViewportSize({ width: 1200, height: 900 });
-    await page.clock.runFor(2_000);
-    await expect.poll(async () => (await readSettledSafety()).protectedSafe).toBe(true);
-    await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), desktopKey)).not.toBeNull();
-    settledDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
-  } else {
-    expect((await readSettledSafety()).protectedSafe).toBe(true);
-  }
-  const desktopWrites = await stage.evaluate((element) => {
-    const stageBounds = element.getBoundingClientRect();
-    const hull = element.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
-    const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
-    const footprint = {
-      bottom: hull.bottom - center.y, left: center.x - hull.left,
-      right: hull.right - center.x, top: center.y - hull.top,
-    };
-    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
-      .map((node) => node.getBoundingClientRect()).filter((bounds) => bounds.width > 0 && bounds.height > 0);
-    return (JSON.parse(document.documentElement.dataset.hermesTestDesktopWrites ?? '[]') as Array<{ hullHeight: number; value: string }>).map((write) => {
-      const preference = JSON.parse(write.value) as { xRatio: number; yRatio: number };
-      const occupied = {
-        bottom: preference.yRatio * innerHeight + footprint.bottom,
-        left: preference.xRatio * innerWidth - footprint.left,
-        right: preference.xRatio * innerWidth + footprint.right,
-        top: preference.yRatio * innerHeight - footprint.top,
-      };
-      return { hullHeight: write.hullHeight, safe: occupied.left >= 0 && occupied.top >= 0
-        && occupied.right <= innerWidth && occupied.bottom <= innerHeight && protectedRegions.every((region) => !(
-          occupied.left < region.right && occupied.right > region.left
-          && occupied.top < region.bottom && occupied.bottom > region.top
-        )) };
-    });
-  });
-  expect(desktopWrites.length).toBeLessThanOrEqual(1);
-  expect(desktopWrites.every((write) => write.safe), JSON.stringify(desktopWrites)).toBe(true);
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  expect(settledDesktopPreference).not.toBeNull();
-  expect(settledDesktopPreference).not.toBe(persistedMobilePreference);
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBe(settledDesktopPreference);
-  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
-
-  await page.reload({ waitUntil: 'networkidle' });
-  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
-  await expect.poll(async () => {
-    const safety = await readSettledSafety();
-    return { finalHull: safety.finalHull, insideViewport: safety.insideViewport, protectedSafe: safety.protectedSafe, stageSize: safety.stageSize };
-  }).toEqual({ finalHull: true, insideViewport: true, protectedSafe: true, stageSize: 200 });
-  const restoredDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
-  expect(restoredDesktopPreference).not.toBeNull();
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBe(restoredDesktopPreference);
-  expect(await page.evaluate(([desktop, mobile]) => localStorage.getItem(desktop) !== localStorage.getItem(mobile), [desktopKey, mobileKey])).toBe(true);
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
 });
+
+for (const width of [1440, 800, 390]) {
+  test(`one live canvas survives conversation moves and compact changes at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockWorkspace(page);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+    const stage = page.locator('[data-hermes-workspace-stage="true"]');
+    const anchor = page.locator('[data-hermes-dock-anchor="true"]');
+    await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+    await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    const identity = await stage.evaluateHandle((node) => ({
+      stage: node,
+      canvas: node.querySelector('[data-hermes-live2d-canvas="true"]'),
+      rig: node.querySelector('[data-hermes-rig="live2d-wanko"]'),
+      carrier: node.closest('[data-hermes-portal-carrier="true"]'),
+    }));
+    const assertIdentity = async () => {
+      expect(await identity.evaluate((original) => {
+        const current = document.querySelector('[data-hermes-workspace-stage="true"]');
+        return current === original.stage
+          && current?.querySelector('[data-hermes-live2d-canvas="true"]') === original.canvas
+          && current?.querySelector('[data-hermes-rig="live2d-wanko"]') === original.rig
+          && current?.closest('[data-hermes-portal-carrier="true"]') === original.carrier;
+      })).toBe(true);
+      await expect(page.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
+      await expect(page.locator('[data-hermes-portal-carrier="true"]')).toHaveCount(1);
+      await expect(page.locator('[data-hermes-runtime-owner="running"]')).toHaveCount(1);
+    };
+    try {
+      for (let cycle = 0; cycle < 2; cycle += 1) {
+        await (width <= 1100 ? page.locator('.hermes-compact-invoke') : stage.locator('[data-hermes-input-owner="true"]')).click();
+        const conversation = page.locator('.hermes-conversation-transcript > [data-hermes-conversation-companion="true"]');
+        await expect(conversation.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+        await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+        await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
+        await expect(stage).toBeVisible();
+        await expect(stage).toHaveCSS('opacity', '1');
+        await expect(stage).not.toHaveAttribute('inert', '');
+        await expect(stage).not.toHaveAttribute('aria-hidden', 'true');
+        const invoke = stage.locator('[data-hermes-input-owner="true"]');
+        await expect(invoke).toHaveAttribute('tabindex', '-1');
+        const menu = stage.locator('[data-hermes-pet-menu-button="true"]');
+        await page.getByRole('button', { name: 'Close Hermes' }).focus();
+        await page.keyboard.press('Tab');
+        await expect(menu).toBeFocused();
+        await menu.press('Enter');
+        await expect(page.locator('[data-hermes-action-menu="true"]')).toBeVisible();
+        await page.locator('[data-hermes-action-key="greet"]').click();
+        await assertIdentity();
+        await page.setViewportSize({ width: width <= 1100 ? 1440 : 390, height: 844 });
+        await expect.poll(() => conversation.evaluate((node) => {
+          const stage = node.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+          return node.clientWidth > 0 && node.clientHeight > 0
+            && Number(stage?.dataset.hermesStageSize) === Math.min(360, node.clientWidth, node.clientHeight);
+        })).toBe(true);
+        await assertIdentity();
+        await page.getByRole('button', { name: 'Close Hermes' }).click();
+        await expect(anchor.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
+        await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'false');
+        await expect(stage).toHaveAttribute('data-hermes-stage-size', width <= 1100 ? '360' : '120');
+        await assertIdentity();
+        await page.setViewportSize({ width, height: 900 });
+        await expect(stage).toHaveAttribute('data-hermes-stage-size', width <= 1100 ? '120' : '360');
+        await assertIdentity();
+      }
+      expect(errors).toEqual([]);
+    } finally {
+      await identity.dispose();
+    }
+  });
+}
 
 test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage', async ({ page }) => {
   const browserErrors: string[] = [];
@@ -483,6 +388,7 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-dashboard-local]')).toHaveCount(0);
   const originalStage = await stage.elementHandle();
+  const originalCanvas = await stage.locator('[data-hermes-articulated-canvas]').elementHandle();
 
   await page.getByRole('link', { name: 'Continue research', exact: true }).click();
   await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
@@ -491,6 +397,10 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   await expect(stage).toHaveCount(1);
   const routedStage = await stage.elementHandle();
   expect(await originalStage?.evaluate((oldStage, nextStage) => oldStage === nextStage, routedStage)).toBe(true);
+  expect(await originalCanvas?.evaluate((canvas) => canvas === document.querySelector('[data-hermes-articulated-canvas]'))).toBe(true);
+  await originalStage?.dispose();
+  await originalCanvas?.dispose();
+  await routedStage?.dispose();
 
   const input = page.locator('[data-hermes-input-owner]');
   const before = await stage.boundingBox();

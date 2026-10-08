@@ -3,6 +3,15 @@
 import * as React from 'react';
 import { useEffect, useRef, type ReactNode } from 'react';
 
+function tabStops(root: HTMLElement | null): HTMLElement[] {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLElement>(
+    'a[href], button, input, textarea, select, summary, [tabindex]',
+  )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled')
+    && !element.closest('[hidden], [inert]') && element.getClientRects().length > 0
+    && getComputedStyle(element).visibility !== 'hidden');
+}
+
 /** 自写抽屉（§5.4/§18.3）：aria-modal + focus trap + Esc 关闭 + 焦点还原。 */
 export default function Drawer({
   open,
@@ -34,9 +43,7 @@ export default function Drawer({
   useEffect(() => {
     if (open && !inline) {
       triggerRef.current = document.activeElement;
-      const first = ref.current?.querySelector<HTMLElement>(
-        'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
-      );
+      const first = tabStops(ref.current)[0];
       (first ?? ref.current)?.focus();
     } else if (triggerRef.current instanceof HTMLElement) {
       triggerRef.current.focus();
@@ -52,9 +59,7 @@ export default function Drawer({
         return;
       }
       if (e.key === 'Tab' && ref.current) {
-        const focusables = ref.current.querySelectorAll<HTMLElement>(
-          'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
-        );
+        const focusables = tabStops(ref.current);
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];

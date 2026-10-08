@@ -21,6 +21,7 @@ import { AccountLink } from '@/components/navigation/AccountLink';
 import { MyResearchProjects } from '@/components/profile/MyResearchProjects';
 import { useSession } from '@/components/auth/SessionProvider';
 import { AccountLoadState } from '@/components/settings/AccountLoadState';
+import { HermesShellDockAnchor } from '@/components/hermes/HermesShellDockAnchor';
 
 export default function MyProfilePage() {
   const t = useTranslations('productSurfaces');
@@ -144,6 +145,7 @@ export default function MyProfilePage() {
           </dl>
           <div className="account-shortcuts"><Link href="#research-profile">{meT('editProfile')}</Link><Link href="#identity">{meT('verifyIdentity')}</Link></div>
           <Link href="/settings" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('settingsTitle')}</Link>
+          <HermesShellDockAnchor inline />
         </section>
         <MyResearchProjects />
         <div id="identity" className="account-identity">

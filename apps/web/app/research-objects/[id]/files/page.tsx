@@ -71,15 +71,17 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
         <p className={styles.description}>{t('files.body')}</p>
       </header>
       {!restored && !error && <p className={styles.feedback} role="status">{t('state.loadingBody')}</p>}
-      <PaperDoiAssociation object={currentObject} onSaved={(doi, version) => { setCurrentObject((current) => ({ ...current, originalDoi: doi, version })); setRevision((value) => value + 1); }} />
       {restored && (restored.artifacts.length > 0 || restored.ingestion.tasks.length > 0) ? <section className={styles.savedMaterials} aria-labelledby="saved-materials-title">
         <h2 id="saved-materials-title">{t('files.savedMaterials')}</h2>
         {restored.artifacts.map((artifact) => <ArtifactRow action={<ArtifactViewer artifactId={artifact.artifactId} logicalPath={artifact.logicalPath} />} key={artifact.artifactId} name={artifact.logicalPath} />)}
-        {restored.ingestion.tasks.map((task) => <ArtifactRow key={task.id}
+        {restored.ingestion.tasks.length > 0 ? <details className={styles.importHistory}>
+          <summary>{t('files.importHistory', { count: restored.ingestion.tasks.length })}</summary>
+          {restored.ingestion.tasks.map((task) => <ArtifactRow key={task.id}
           name={<Link className={styles.materialLink} href={`/research-objects/${encodeURIComponent(object.id)}/edit?ingestionTask=${encodeURIComponent(task.id)}`}>{task.logicalPath}</Link>}
           status={taskStatus(task.state)}
           action={task.confirmation ? <Link className={styles.textAction} href={`/research-objects/${encodeURIComponent(object.id)}/versions?version=${encodeURIComponent(task.confirmation.versionId)}`}>{t('files.confirmedDraft')}</Link> : undefined}
-        />)}
+          />)}
+        </details> : null}
       </section> : null}
       <fieldset className={styles.uploadArea} disabled={saving} aria-busy={saving}>
         <ArtifactUploader artifacts={artifacts} onArtifactsChange={(next) => { setArtifacts(next); setCommitted(false); }} onIngestionStarted={(task) => {
@@ -95,6 +97,7 @@ export function ResearchObjectFilesContent({ object }: { object: FilesResearchOb
         <p role="alert">{error.message}</p>
         {!restored ? <button className={styles.textAction} type="button" onClick={() => { setError(null); setRevision(value => value + 1); }}>{commonT('retry')}</button> : null}
       </div> : artifacts.length === 0 && restored ? <p className={styles.feedback} role={committed ? 'status' : undefined} data-surface-state={committed ? 'saved' : 'empty'}>{committed ? t('files.committed') : restored.artifacts.length || restored.ingestion.tasks.length ? t('files.addMore') : t('files.empty')}</p> : null}
+      <PaperDoiAssociation object={currentObject} onSaved={(doi, version) => { setCurrentObject((current) => ({ ...current, originalDoi: doi, version })); setRevision((value) => value + 1); }} />
       <div className={styles.acquisition}><ResearchObjectFilesLiteratureEntry researchObjectId={object.id} /></div>
     </div>
   </ResearchSurfaceShell>;

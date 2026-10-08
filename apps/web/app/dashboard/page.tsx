@@ -259,6 +259,7 @@ export default function DashboardPage() {
             <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
           </div>
           <div className={styles.taskRail}>
+            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
             <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
           </div>
           {tasks.length > 0 || taskLoadState !== 'ready' ? (
@@ -282,7 +283,6 @@ export default function DashboardPage() {
           <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} />
         </div>
       </div>
-      <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
       <HermesAssistantDrawer
         dashboardContext={dashboardContext}
         locale={locale}
