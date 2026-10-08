@@ -9,7 +9,7 @@
 
 ## Version and production checkpoint
 
-- branch=`frontend/nanqing`；开发基线 `e43123db6877a1cc1c500ee33608152d2f17f40f`，新实现进行中，候选身份以实际 Git HEAD/diff 为准。
+- branch=`frontend/nanqing`；新实现 `c705c8e6767edb33abb0c36d2a1b333a2cbc0aaf` 已正常推送，追加共享确认的隔离数据库用例；最终候选以实际 Git HEAD 为准，尚未新部署。
 - 2026-10-08 显式回滚完成：active=`45a577a3a8f6bca78a063e7478fba131c5efb375`；rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`。未回退数据库。
 - 原 FD9 生产锁、任务排空、Nginx 写门禁、durable journal、CAS、retention prepare/complete 全部通过，脚本 exit0，所有生产服务 healthy。公网 `/__release` 返回目标完整 SHA。
 - Native 从 42fe 安装时的 `previous/` 恢复 `784c6b25342c29bdc5c2db193258d34dfafd4e64` runtime/catalogue，与旧 API/Worker 匹配；timer 恢复 active。
@@ -26,7 +26,7 @@
 | 发布后重新编辑 | High 审查发现旧 source-upload/授权变更会限制旧公开版本；采用独立私有 working RO 与持久绑定，出版 RO 保持不变。新权限仅约束新稿，显式撤权另走原受控动作。 |
 | 权限与费用 | 上传先保管、显式授权后才进入共享管线；期刊 scoped source/revision/hash/actor/run 绑定及每次外发核权。共用任务使用期刊 grant，不扣个人额度，同锁限制并发；有效结果消费一次、未知 paid 保留、免费恢复不另扣。存储额度及故障恢复待最终 High。 |
 | 编辑及审批 | 五区连续页面、六字段编辑器、图卡/FAQ、私有确认与独立审批发布已接；统一 AI 授权，历史到期时间隐藏且保留。Web build 已过，待精确 CI 和部署后桌面/窄屏真实入口观察。 |
-| 推送与部署 | 尚未完成新候选。完成定向测试、真实隔离浏览器、独立 High 审查、精确 SHA CI 后按原前向发布流程部署。 |
+| 推送与部署 | 实现已推送，精确 CI 运行中（Journal `37807003019`）；已完成独立 High 条件 GO。补齐共享确认数据库用例后复核精确最终 CI，再按原前向流程部署。 |
 
 ## Checks and release constraints
 
@@ -34,6 +34,7 @@
 - 旧 42fe 发布四 CI、构建收敛与站内浏览证据为历史，保存在 Git 前版和 `/opt/openscience/observations/journal-20261008-42fe1a974fb62e5a868d3a4f1da812065cb148b1/`，不能证明本次完整重做完成。
 - 最新协作候选的视频付费前 readiness P1 已修：新收费动作先检查真实 host 新鲜状态；不影响已付结果恢复。定向 Domain 211/211、API 24/24 已过，最终精确 SHA CI 尚待。
 - 本机 Web build exit0（日志 `tmp/check-logs/1791475440758-8ca01aa2-24e2-4363-976f-705ad3087771.log`）；CI 路由前置测试20/20。本机未运行 PostgreSQL 集成（Docker daemon 不可用），须由 GitHub 隔离库验证，不能把跳过记为通过。
+- 旧授权到期兼容 API 8/8 已通过；期刊 Domain 59/59、Worker 6/6（数据库用例未在本机执行）。旧 snapshot 根据保留材料指纹追溯期限；若历史材料已删除无法恢复旧期限，不伪造该事实。未知 paid 预留不盲释放。
 - 新发布编排候选 `tmp/deploy-journal-rebuild.candidate.sh` SHA256 `304074f9ae639ef1a17ce763980ca3f44409b8685d66b0bb7f183e2bdeaa7255` 已独立 High 条件 GO：先完成双库备份、精确 CI、运行快照收敛，再 Native/视频配对和原 canonical 迁移发布。尚未执行新部署。
 - 使用既有 .env/SSH，配置仅机械复用、不打印密钥；必要 additive 迁移按原备份和 migration CLI，不 reset 数据。
 - 精确已推 SHA、干净发布树、线上祖先及 rollback 校验、原 lock/journal/public identity/自动回滚守卫不可绕过；Native/视频资源配对后再开放写入。
