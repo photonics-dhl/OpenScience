@@ -10,6 +10,7 @@
 .workbenchShell :global([data-workspace-mode-tabs='true']) { background: var(--craft-surface, #fff); }
 
 .workbenchShell :global([data-workspace-plane='25']) { background: #f3f7f8; }
+.workbenchShell :global([data-object-header='true'] strong) { font: 400 24px/1.4 var(--font-reading-serif); }
 
 .workbenchNav {
   display: flex;
@@ -87,26 +88,25 @@
   background: var(--craft-surface, #fff);
   color: var(--craft-ink, #182f35);
   border: 1px solid var(--craft-rule, #dce5e5);
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgb(24 47 53 / .025), 0 16px 40px rgb(24 47 53 / .055);
+  border-radius: 3px;
+  box-shadow: 0 8px 24px rgb(24 47 53 / .035);
 }
 
 .leadSection,
 .contentSection,
-.productSection { padding: clamp(28px, 3.6vw, 44px); }
+.productSection { padding: clamp(24px, 3vw, 36px); }
 
 .leadSection {
-  padding-bottom: 36px;
+  padding-bottom: 28px;
 }
 
 .contribution {
   max-width: 65ch;
   margin: 0 auto;
-  padding: 0 0 28px;
-  border-bottom: 1px solid var(--craft-rule, #dce5e5);
+  padding: 0;
   background: transparent;
   color: var(--craft-ink, #182f35);
-  font-size: clamp(21px, 2.2vw, 25px);
+  font-size: 20px;
   font-weight: 400;
   font-family: var(--font-reading-serif, Georgia, serif);
   letter-spacing: -.01em;
@@ -266,13 +266,13 @@
 .productSection > * { width: min(100%, 840px); margin-inline: auto; }
 
 .productSectionHeader {
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .productSectionHeader h2 {
   margin: 0;
   color: var(--craft-ink, #182f35);
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.018em;
   line-height: 1.5;

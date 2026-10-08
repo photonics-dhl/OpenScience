@@ -480,6 +480,7 @@ export interface HermesNarrativeGeneration {
   locale: 'zh' | 'en';
   style: string;
   instruction: string;
+  output?: 'video';
 }
 export interface HermesResearchRun {
   id: string;
@@ -489,7 +490,7 @@ export interface HermesResearchRun {
   version: number;
   versionId: string | null;
   profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | 'visual-narrative-v1' | null;
-  generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction'> | null;
+  generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction' | 'output'> | null;
   generationHold?: 'image-api-pending';
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
@@ -538,8 +539,8 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
-export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun | null }> {
-  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}`, { signal });
+export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}${output ? `&output=${output}` : ''}`, { signal });
 }
 
 export interface HermesArtStyleCapability {
@@ -987,6 +988,7 @@ export interface PresentationAsset {
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
   canGenerateVideo?: boolean;
+  videoFrameAssetIds?: string[];
   canTransition?: boolean;
   canApprove?: boolean;
   canDelete?: boolean;
@@ -1436,6 +1438,7 @@ export interface WorkspaceGuideResult {
     locale: 'zh' | 'en';
     style: string;
     instruction: string;
+    output?: 'video';
   };
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {

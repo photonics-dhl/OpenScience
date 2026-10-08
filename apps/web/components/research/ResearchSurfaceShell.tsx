@@ -59,9 +59,9 @@ export function ResearchSurfaceShell({
       mainClassName="p-0 lg:p-0"
       navigationLabel={t('navigation')}
       objectHeader={<ObjectHeader actions={actions} objectId={object.id} saveState="saved" title={object.title} version={object.version} visibility={object.visibility} />}
-      rightRail={<>
-        {rail ?? <div><p data-reading-role="caption" className="text-os-muted-paper">{t('integrity')}</p><p className="mt-4 text-base leading-[var(--leading-body)] text-os-muted-paper">{t('integrityBody')}</p></div>}
-        <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
+      rightRail={<div className="research-companion-margin">
+        <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
+        <div className="research-companion-copy">{rail ?? <div><p data-reading-role="caption" className="text-os-muted-paper">{t('integrity')}</p><p className="mt-4 text-base leading-[var(--leading-body)] text-os-muted-paper">{t('integrityBody')}</p></div>}</div>
         <HermesAssistantDrawer
           key={object.id}
           dashboardContext={{ tasks: [], researchObjects: [{ id: object.id, status: object.status, title: object.title }],
@@ -74,7 +74,7 @@ export function ResearchSurfaceShell({
           suggestion={suggestion}
           target={assistantTarget}
         />
-      </>}
+      </div>}
       skipLabel={t('skip')}
       workspaceModes={<ResearchWorkspaceNav active={active} objectId={object.id} />}
     >

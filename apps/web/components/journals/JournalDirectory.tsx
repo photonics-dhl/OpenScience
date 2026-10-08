@@ -12,13 +12,30 @@ type Filters = { query: string; subject: string; access: AccessFilter; sort: Dir
 const defaults: Filters = { query: '', subject: '', access: 'all', sort: 'az' };
 function JournalEntry({ journal }: { journal: Item }) {
   const english = useLocale() === 'en';
-  return <li><Link data-journal-entry data-hermes-protected="true" href={`/journals/${journal.slug}`} className={styles.entry}>
-    <div className={styles.body}><h2 lang={journal.nameEn ? 'en' : 'zh'}>{journal.nameEn || journal.nameZh}</h2>
-      {journal.nameZh && journal.nameEn ? <p className={styles.translation} lang="zh">{journal.nameZh}</p> : null}
-      <p className={styles.metadata}>{journal.publisherName || (english ? 'Publisher not provided' : '出版商未提供')}</p>
-      <p className={styles.subjects}>{journal.subjects.join(' · ') || (english ? 'Unclassified' : '未分类')}</p>
-    </div><ArrowRight className={styles.arrow} size={20} aria-hidden="true" />
-  </Link></li>;
+  return (
+    <li>
+      <Link
+        data-journal-entry
+        data-hermes-protected="true"
+        href={`/journals/${journal.slug}`}
+        className={styles.entry}
+      >
+        <div className={styles.body}>
+          <div className={styles.identity}>
+          {journal.subjects.length ? <p className={styles.subjects}>{journal.subjects.join(' · ')}</p> : null}
+          <h2 lang={journal.nameEn ? 'en' : 'zh'}>{journal.nameEn || journal.nameZh}</h2>
+          {journal.nameZh && journal.nameEn ? <p className={styles.translation} lang="zh">{journal.nameZh}</p> : null}
+          </div>
+          <div className={styles.details}>
+          <div className={styles.metadata}>
+            <span>{journal.publisherName || (english ? 'Publisher not provided' : '出版商未提供')}</span>
+          </div>
+          </div>
+        </div>
+        <ArrowRight className={styles.arrow} size={20} aria-hidden="true" />
+      </Link>
+    </li>
+  );
 }
 export function JournalDirectory({ initial = [], initialNextCursor = null }: { initial?: JournalSummary[]; initialNextCursor?: string | null }) {
   const t = useTranslations('journalDirectory'); const english = useLocale() === 'en';

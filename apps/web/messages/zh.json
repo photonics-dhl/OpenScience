@@ -23,7 +23,20 @@
     "openapi": "开放数据 API 规范",
     "sitemap": "公开期刊站点地图",
     "accountTools": "期刊账户工具",
-    "apply": "申请期刊入驻"
+    "apply": "申请期刊入驻",
+    "management": {
+      "title": "我的期刊",
+      "intro": "在这里维护你参与的期刊、目录与论文。",
+      "skip": "跳到内容",
+      "loading": "正在加载我的期刊…",
+      "loadFailed": "无法加载我的期刊。",
+      "retry": "重试加载",
+      "emptyTitle": "让研究汇成一本期刊。",
+      "emptyBody": "加入的期刊会出现在这里。你可以申请期刊入驻，维护目录与论文；也可以先浏览公开期刊。",
+      "apply": "申请期刊入驻",
+      "browse": "浏览期刊",
+      "open": "编辑工作台"
+    }
   },
   "developers": {
     "title": "开发者 API",
@@ -173,6 +186,7 @@
     "prepareVersionFailed": "当前正文尚未整理成可用版本，请查看具体原因后继续。",
     "productionSubmitted": "制作任务已交给服务器，成果会回到左侧。任务完成前仍可编辑正文。",
     "openResearchRun": "打开图文制作",
+    "openResearchVideoRun": "准备这篇论文的视频",
     "published": "已公开发布，可以打开正式研究页面。",
     "undone": "已请求撤销上次修改；正文和保存状态显示在左侧。",
     "cancelled": "已取消这次待确认的安排。",
@@ -1079,7 +1093,9 @@
   "dashboard": {
     "eyebrow": "个人工作区",
     "title": "研究桌面",
-    "welcome": "{name}，继续手头的研究，或和 Hermes 一起梳理下一步。",
+    "welcome": "{name}，继续一项研究，或带来一篇新论文。",
+    "processingHistory": "处理历史",
+    "researchTools": "资料与管理工具",
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
@@ -1361,6 +1377,7 @@
     },
     "research": {
       "title": "你的研究",
+      "actions": "研究工具：{title}",
       "empty": "还没有研究对象。",
       "noResults": "没有匹配的研究对象。",
       "search": "搜索标题或全文",
@@ -1497,6 +1514,17 @@
     "manualEdit": "打开编辑器手动完善"
   },
   "hermesRun": {
+    "video": {
+      "title": "把研究讲成一支视频",
+      "startDescription": "让论文的核心思想成为连贯的画面与旁白。完成后先看整支视频，再告诉 Hermes 你想打磨的地方。",
+      "startFor": "开始制作研究视频：{source}",
+      "composing": "正在把画面与旁白串成故事",
+      "ready": "视频已就绪，来看看吧",
+      "runningDescription": "Hermes 正在梳理故事、制作画面并组织旁白。完成后，回到这里就能观看。",
+      "readyDescription": "看完完整视频，给出你的意见，再决定是否采用。",
+      "preview": "研究讲解视频",
+      "viewResult": "打开视频，给出反馈"
+    },
     "sourceReanalysis": {
       "start": "新建付费分析并继续",
       "continue": "继续分析",
@@ -2203,7 +2231,8 @@
       "diff": "内容比较"
     },
     "files": {
-      "savedMaterials": "已有材料与导入记录",
+      "savedMaterials": "已有材料",
+      "importHistory": "导入记录 · {count} 项",
       "snapshotVersion": "公开版本 v{version}",
       "confirmedDraft": "查看已确认草稿",
       "addMore": "可在上方添加更多材料。",
@@ -2800,7 +2829,12 @@
     "artRequiresCompatiblePlan": "此方案不支持仅修改艺术风格。请返回并选择同语言的已完成图解方案，或让 Hermes 重新规划。",
     "briefWillUpdate": "你的修改会写入新方案，原图与原方案保留。",
     "updateBrief": "更新制作指令",
-    "needsApprovedScenes": "视频需要已确认的分镜与对应图片。先完成素材后即可制作。",
+    "needsApprovedScenes": "视频画面尚未就绪。回到当前制作任务查看进度或处理失败。",
+    "videoRevision": {
+      "label": "视频调整范围",
+      "all": "调整整个方案",
+      "scene": "仅调整第 {number} 幕"
+    },
     "mediaIntent": "制作什么",
     "preparePlan": "整理制作指令",
     "usingApprovedPlan": "使用当前已确认的制作方案。",

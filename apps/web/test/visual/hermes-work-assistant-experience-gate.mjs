@@ -129,12 +129,15 @@ async function assertFootprintsSafe(page, viewport, label) {
 }
 
 async function clickVisibleHermesCta(page, stage, label) {
-  const cta = page.locator('[data-hermes-visible-invoke-cta="true"]');
+  const selector = await stage.getAttribute('data-hermes-compact') === 'true'
+    ? '.hermes-compact-invoke' : '[data-hermes-visible-invoke-cta="true"]';
+  const cta = page.locator(selector);
   await cta.scrollIntoViewIfNeeded();
   const ctaBox = await cta.boundingBox();
   assert.ok(ctaBox, `${label} visible Hermes CTA must have geometry`);
-  const ctaHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)
-    ?.closest('[data-hermes-visible-invoke-cta="true"]') !== null, {
+  const ctaHit = await page.evaluate(({ selector, x, y }) => Boolean(document.elementFromPoint(x, y)
+    ?.closest(selector)), {
+    selector,
     x: ctaBox.x + ctaBox.width / 2,
     y: ctaBox.y + ctaBox.height / 2,
   });
@@ -237,8 +240,12 @@ try {
     await waitForRig(page);
 
     const stage = page.locator('[data-hermes-workspace-stage="true"]');
-    const expectedSize = viewport.width <= 640 ? '168' : '200';
+    const compact = viewport.width <= 1100;
+    const expectedSize = compact ? '120' : '360';
     assert.equal(await stage.getAttribute('data-hermes-stage-size'), expectedSize, label + ' must use the production-derived endpoint');
+    assert.equal(await stage.getAttribute('data-hermes-anchored'), 'true', label + ' must start in its page-owned rail');
+    assert.equal(await page.locator('[data-hermes-dock-anchor="true"] [data-hermes-workspace-stage="true"]').count(), 1,
+      label + ' rail must own the companion');
     assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1, label + ' must have one canvas owner');
     assert.equal(await page.locator('[data-live2d-instance="wanko"]').count(), 1, label + ' must have one model owner');
     assert.equal(await page.locator('[data-hermes-runtime-owner="running"]').count(), 1, label + ' must have one running RAF owner');
@@ -267,20 +274,62 @@ try {
     assert.equal(preClockGuide.action, 'guide-arrive', `${label} guide must settle on the real clock before fake-clock installation`);
     assert.equal(preClockGuide.guideReady, 'true', `${label} guide readiness must not depend on fake time`);
 
+    const originalCanvas = await stage.locator('[data-hermes-live2d-canvas="true"]').elementHandle();
     const dialog = await clickVisibleHermesCta(page, stage, label + ' initial');
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'true', label + ' click must open the assistant');
     await page.waitForFunction(
-      (node) => getComputedStyle(node).opacity === '0.18',
+      (node) => node.getAttribute('data-hermes-in-conversation') === 'true' && getComputedStyle(node).opacity === '1',
       await stage.elementHandle(),
     );
-    assert.equal(await stage.evaluate((node) => getComputedStyle(node).opacity), '0.18', label + ' open drawer must quiet the stage');
-    await dialog.locator('.drawer-close').click();
+    assert.equal(await dialog.locator('.hermes-conversation-transcript > [data-hermes-conversation-companion="true"] [data-hermes-workspace-stage="true"]').count(), 1,
+      label + ' conversation must own the visible companion');
+    assert.equal(await stage.evaluate((node) => !node.inert && node.getAttribute('aria-hidden') !== 'true'), true,
+      label + ' conversation companion must remain interactive');
+    assert.equal(await stage.locator('[data-hermes-input-owner="true"]').getAttribute('tabindex'), '-1', label + ' redundant invoke must leave Tab order');
+    assert.equal(await originalCanvas.evaluate((canvas) => canvas === document.querySelector('[data-hermes-live2d-canvas="true"]')), true,
+      label + ' opening the conversation must retain the canvas');
+    const petMenuButton = stage.locator('[data-hermes-pet-menu-button="true"]');
+    await petMenuButton.focus();
+    await petMenuButton.press('Enter');
+    const conversationMenu = page.locator('[data-hermes-action-menu="true"]');
+    await conversationMenu.waitFor({ state: 'visible' });
+    await conversationMenu.locator('[data-hermes-action-key="greet"]').click();
+    await conversationMenu.waitFor({ state: 'hidden' });
+    await page.screenshot({ animations: 'disabled', path: resolve(output, 'conversation-' + label + '.png') });
+    await dialog.locator('.hermes-conversation-close').click();
     await dialog.waitFor({ state: 'detached' });
     await page.waitForFunction(
       (node) => node.getAttribute('data-hermes-assistant-open') === 'false',
       await stage.elementHandle(),
     );
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'false', label + ' close must restore the work surface');
+    assert.equal(await stage.getAttribute('data-hermes-in-conversation'), 'false', label + ' close must leave the conversation');
+    assert.equal(await stage.getAttribute('data-hermes-stage-size'), expectedSize, label + ' close must restore the page size');
+    assert.equal(await page.locator('[data-hermes-dock-anchor="true"] [data-hermes-workspace-stage="true"]').count(), 1,
+      label + ' close must return to the page-owned rail');
+    assert.equal(await originalCanvas.evaluate((canvas) => canvas === document.querySelector('[data-hermes-live2d-canvas="true"]')), true,
+      label + ' closing the conversation must retain the canvas');
+
+    // The compact rail is an invitation, so its gestures/menu are exercised in
+    // the conversation above. Free dragging and companion speech belong to desktop.
+    if (compact) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === '360');
+      assert.equal(await originalCanvas.evaluate((canvas) => canvas === document.querySelector('[data-hermes-live2d-canvas="true"]')), true,
+        label + ' expanding the compact rail must retain the canvas');
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === '120');
+      assert.equal(await originalCanvas.evaluate((canvas) => canvas === document.querySelector('[data-hermes-live2d-canvas="true"]')), true,
+        label + ' restoring the compact rail must retain the canvas');
+      await originalCanvas.dispose();
+      const final = await assertFootprintsSafe(page, viewport, label + ' compact restored');
+      await page.screenshot({ animations: 'disabled', path: resolve(output, 'dashboard-' + label + '.png') });
+      assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');
+      metrics[label] = { actor: final.actor, initialActor: initial.actor, stageSize: Number(expectedSize), conversationCanvasRetained: true };
+      await context.close();
+      continue;
+    }
+    await originalCanvas.dispose();
 
     const edgeTargets = [
       { name: 'left', x: 1, y: viewport.height / 2 },
@@ -352,7 +401,7 @@ try {
     await waitForRig(page);
 
     await dragStage(page, stage, edgeTargets[1]);
-    const persistedSafety = await assertFootprintsSafe(page, viewport, label + ' persisted detached point');
+    await assertFootprintsSafe(page, viewport, label + ' persisted detached point');
     const persisted = await stage.boundingBox();
     const persistedDock = await page.evaluate(() => Object.fromEntries(
       Object.keys(localStorage)
@@ -368,13 +417,15 @@ try {
         .filter((key) => key.startsWith('openscience:hermes-dock:'))
         .map((key) => [key, localStorage.getItem(key)]),
     ));
-    assert.ok(persisted && restored && Math.abs(restored.x - persisted.x) <= 2 && Math.abs(restored.y - persisted.y) <= 2,
-      label + ' reload must preserve the detached point: ' + JSON.stringify({ persisted, persistedDock, persistedSafety, restored, restoredDock }));
+    assert.ok(persisted && restored, label + ' drag and restored rail must both have geometry');
+    assert.equal(await stage.getAttribute('data-hermes-anchored'), 'true', label + ' reload must restore the page-owned rail');
+    assert.deepEqual(restoredDock, persistedDock, label + ' restoring the rail must preserve saved preferences');
+    await assertFootprintsSafe(page, viewport, label + ' restored page-owned rail');
 
-    const acrossBreakpoint = viewport.width <= 640 ? { height: 900, width: 800 } : { height: 844, width: 639 };
+    const acrossBreakpoint = { height: 844, width: 639 };
     await page.setViewportSize(acrossBreakpoint);
     await page.waitForFunction((size) => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === size,
-      acrossBreakpoint.width <= 640 ? '168' : '200');
+      '120');
     await waitForStableStageGeometry(page);
     await assertFootprintsSafe(page, acrossBreakpoint, label + ' across 640px breakpoint');
     await page.setViewportSize(viewport);
@@ -397,7 +448,8 @@ try {
     await menu.waitFor({ state: 'visible' });
     assert.equal(await menu.locator('[data-hermes-action-key]').count(), 12, label + ' must expose all twelve approved actions');
     let visibleActions = menu.locator('[data-hermes-action-key]:visible');
-    assert.equal(await visibleActions.count(), viewport.width <= 640 ? 8 : 12,
+    const compactMenu = await menu.getAttribute('data-compact') === 'true';
+    assert.equal(await visibleActions.count(), compactMenu ? 8 : 12,
       label + ' must expose the correct compact or desktop action set');
     const menuGeometry = await menu.evaluate((node) => {
       const bounds = node.getBoundingClientRect();
@@ -439,7 +491,7 @@ try {
     }));
     assert.equal(actionTargets.every((target) => target.height >= 44 && target.width >= 44), true,
       label + ' action targets must remain at least 44px: ' + JSON.stringify(actionTargets));
-    if (viewport.width <= 640) {
+    if (compactMenu) {
       await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
       visibleActions = menu.locator('[data-hermes-action-key]:visible');
       assert.equal(await visibleActions.count(), 4, label + ' research-tool group must expose all four work actions');
@@ -540,7 +592,7 @@ try {
       await page.waitForTimeout(4300);
       await bubble.waitFor({ state: 'detached' });
       const restoredDialog = await clickVisibleHermesCta(page, stage, label + ' restored footer');
-      await restoredDialog.locator('.drawer-close').click();
+      await restoredDialog.locator('.hermes-conversation-close').click();
       await restoredDialog.waitFor({ state: 'detached' });
     }
     assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');

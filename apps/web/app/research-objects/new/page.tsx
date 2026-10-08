@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSession } from '@/components/auth/SessionProvider';
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';
@@ -44,6 +45,7 @@ export default function NewResearchObjectPage() {
   const intakeT = useTranslations('ingestion.intake');
   const locale = useLocale() as Locale;
   const router = useRouter();
+  const companion = useOptionalHermesWorkspaceStage();
   const session = useSession();
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
@@ -303,7 +305,7 @@ export default function NewResearchObjectPage() {
           </div> : null}
 
           <section className="mt-6">
-            <HermesDockAnchor floating state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => goalInput.current?.focus()} />
+            <HermesDockAnchor floating state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => { if (companion) companion.openCompanion(); else goalInput.current?.focus(); }} />
             <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
               <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
               <textarea ref={goalInput} rows={2} className="min-h-24 w-full resize-y rounded-control border border-os-rule-paper bg-os-paper px-4 py-3 text-base leading-7 text-os-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-os-muted-paper focus:border-os-vermilion-ink focus:shadow-[0_0_0_3px_rgba(18,93,102,.12)]" maxLength={canIllustrate && autoIllustrate ? 1000 : 2000} value={goal} onChange={(event) => changeGoal(event.target.value)} placeholder={t('hermesPlaceholder')} />

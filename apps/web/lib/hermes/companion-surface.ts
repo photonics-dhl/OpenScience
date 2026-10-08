@@ -1,5 +1,9 @@
 export type HermesCompanionSurface = 'navigation' | 'workspace';
 
+export function hermesStartsCompact(pathname: string): boolean {
+  return pathname.replace(/\/$/, '') !== '/dashboard';
+}
+
 const productRoots = new Set([
   'guide', 'explore', 'research', 'collections', 'auth', 'me', 'settings',
   'developers', 'trash', 'journals', 'admin', 'editorial',
@@ -22,4 +26,12 @@ export function currentHermesPresentation<T extends { pathname: string }>(
 
 export function hermesPresentationCanDock(presentation: { floating?: boolean } | null): boolean {
   return presentation !== null && !presentation.floating;
+}
+
+export function currentHermesAnchorRect<TAnchor, TRect>(
+  measurement: { pathname: string; anchor: TAnchor; rect: TRect } | null,
+  pathname: string,
+  anchor: TAnchor | null | undefined,
+): TRect | null {
+  return measurement?.pathname === pathname && measurement.anchor === anchor ? measurement.rect : null;
 }

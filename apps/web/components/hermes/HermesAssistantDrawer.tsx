@@ -215,15 +215,15 @@ function isWritingInstruction(value: string) {
 
 export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
   const stage = useOptionalHermesWorkspaceStage();
-  const anchorRef = useRef<HTMLSpanElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
   // The editor owns a docked conversation even while it is closed. Register its
-  // existing action without moving the global pet into the conversation panel.
+  // existing action and a real page-owned seat while the conversation is closed.
   useClientLayoutEffect(() => {
     if (!stage || !anchorRef.current || !props.docked || props.route !== 'research-object-edit') return;
     return stage.register({
       anchor: anchorRef.current,
       assistantOpen: props.open,
-      floating: true,
+      floating: false,
       onInvoke: () => props.onOpenChange(true),
       suggestion: props.suggestion,
       workspaceId: props.routeResearchObjectId ?? 'workspace-current',
@@ -233,7 +233,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
   useEffect(() => { if (props.open || props.docked) setOpened(true); }, [props.open, props.docked]);
   if (!opened && !props.open && !props.docked) return null;
   return <>
-    {props.docked && props.route === 'research-object-edit' ? <span data-hermes-floating-owner="editor" hidden ref={anchorRef} /> : null}
+    {props.docked && props.route === 'research-object-edit' ? <div className="hermes-editor-anchor hermes-dock-anchor" data-hermes-dock-anchor="true" data-hermes-floating-owner="editor" hidden={props.open} ref={anchorRef} /> : null}
     <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>
   </>;
 }
@@ -700,10 +700,9 @@ function HermesAssistantDrawerContent({
           <button type="button" className="hermes-conversation-close" onClick={() => onOpenChange(false)} aria-label={t('guide.close')}>×</button>
         </header>
 
-        <div data-hermes-conversation-companion="true" />
-
         <div className="hermes-conversation-transcript" ref={transcript} role="log" aria-label={tc('conversation')} aria-live="polite" aria-relevant="additions text"
           onScroll={(event) => { const pane = event.currentTarget; followTranscript.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 64; }}>
+          <div data-hermes-conversation-companion="true" aria-live="off" />
           <p className="hermes-message hermes-message-assistant">{dashboardContext.editorDraft ? tc('welcomeEditor') : t(suggestion.bodyKey)}</p>
           {sourceReview}
           {turns.map((turn) => <React.Fragment key={turn.id}>
@@ -718,7 +717,7 @@ function HermesAssistantDrawerContent({
           </div>}
           {!submitting && result && <div className="hermes-message hermes-message-assistant">
             <ScientificText as="p">{result.summary}</ScientificText>
-            {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc('openResearchRun')} →</Link> : null}
+            {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc(result?.researchRunDraft?.output === 'video' ? 'openResearchVideoRun' : 'openResearchRun')} →</Link> : null}
             {result.draftEdit && <div className="hermes-conversation-change">
               <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
               {Boolean(editOutcome?.applied) && onUndoDraftEdit && <button type="button" onClick={() => { onUndoDraftEdit(); setEditOutcome(null); }}>{tw('undo')}</button>}

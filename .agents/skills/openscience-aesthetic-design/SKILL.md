@@ -38,11 +38,17 @@ Name the composition in one sentence, such as “a field notebook opening into a
 
 The first viewport must make the title, primary action, visual anchor, and next step legible in that order. Use scale, alignment, crop, whitespace, and contrast before borders or effects. Cards represent meaningful objects or states; avoid identical card grids, equal-weight controls, and repeated pills.
 
+Review an actual before/after pair before retaining a visual treatment. A large dark panel, glass decoration, serif headline or extra shadow is not evidence of better art direction. Ask whether the treatment strengthens the research itself or merely makes its container louder. When two adjacent headings compete, separate their roles through scale, measure and shared baselines. Keep attribution beside the work it describes; captions must remain readable. Preserve the scientific image's complete pixels and labels.
+
+Do not dedicate an empty full-height rail to Hermes. Reserve its shared footprint within the page's meaningful composition. On phones, pair the compact actor with a short supporting passage or action area so that the next real content does not fall behind a separate empty row. Inspect the resulting viewport, not only the actor's bounding box.
+
 ### 5. Implement with the existing system
 
 Reuse OpenScience tokens, shell, type, Hermes, media, and route semantics. Add a token/component when a pattern appears on two or more pages; keep page-specific composition in page overrides. Every changed interaction needs visible focus, hover, active, loading, success, error, empty, and disabled states where relevant. Reserve media space, keep touch targets at least 44px, and honor `prefers-reduced-motion`.
 
-Hermes is 360px on desktop. Narrow screens use a compact expandable entry. Speech must emerge from the hat/face anchor without covering titles or controls. Landing does not receive the floating stage. The shared stage must be clamped to the visible viewport after route changes.
+Hermes follows the user-approved contextual presence policy: the desktop research desk owns a full 360px companion seat; reading, guide, identity, account and other work surfaces start with the same compact 120px Live2D entry. Narrow screens also start compact. Opening the companion moves the same live renderer into the conversation's reserved area, up to 360px within the available space; closing returns it to its page-owned entry. Consistency means the same entry language and expansion behavior, not a large model on every page. No floating banner, static duplicate or translucent actor over the composer. Speech must emerge from the hat/face anchor without covering titles or controls. Landing does not receive the stage.
+
+Keep internal attempts and technical checks in processing history. Lead with the research and final result, then invite feedback or adoption in context. Do not create a second review inbox. Reuse the domain's actual technical qualification and adoption states; hiding controls is not proof of automation, and user adoption does not authorize paid generation or publication. Clean up only identified test records through the existing recoverable archive flow; names, duplicates and missing DOI do not prove that a record is disposable.
 
 ### 6. Real-browser acceptance
 

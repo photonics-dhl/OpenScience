@@ -12,6 +12,30 @@ function fixture() {
 }
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(getCurrentUser).mockResolvedValue({ userId: 'user' } as Awaited<ReturnType<typeof getCurrentUser>>); vi.mocked(getExistingHermesResearchRun).mockResolvedValue({ run: null }); vi.mocked(getIngestionTask).mockResolvedValue({ batchId: 'batch', researchObjectId: 'paper', version: 1, task: { id: 'pdf', artifactId: 'artifact', logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent', result: null } }); vi.mocked(isConfirmedIngestionReanalysisSource).mockReturnValue(false); vi.mocked(createHermesResearchRun).mockResolvedValue({ run }); });
 describe('explicit creation of an illustrated paper', () => {
+  it('creates and recovers a video intent separately, preserving its original payload', async () => {
+    const input=fixture();
+    const videoScope={...scope,output:'video' as const};
+    const generation={...input.generation,output:'video' as const};
+    const video={...run,generationSettings:generation};
+    vi.mocked(createHermesResearchRun).mockRejectedValueOnce(new Error('network')).mockResolvedValue({run:video});
+    await expect(startPaperNarrative({...input,scope:videoScope,generation})).rejects.toThrow('network');
+    const first=vi.mocked(createHermesResearchRun).mock.calls[0];
+    expect(await startPaperNarrative({...input,scope:videoScope,generation:{...generation,style:'ink'}})).toBe(video);
+    expect(getExistingHermesResearchRun).toHaveBeenCalledWith('paper','pdf',undefined,'video');
+    expect(vi.mocked(createHermesResearchRun).mock.calls[1]).toEqual(first);
+    expect(first?.[3]).toEqual(generation);
+  });
+  it('does not reinterpret a returned image run as a video or submit a replacement', async () => {
+    const input=fixture();
+    vi.mocked(getExistingHermesResearchRun).mockResolvedValue({run});
+    await expect(startPaperNarrative({...input,scope:{...scope,output:'video'},generation:{...input.generation,output:'video'}})).rejects.toThrow('identity');
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+  });
+  it('refuses a generation with a different medium from its saved scope', async () => {
+    const input=fixture();
+    await expect(startPaperNarrative({...input,scope:{...scope,output:'video'}})).rejects.toThrow('identity');
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+  });
   it('starts the existing bounded workflow with one exact source', async () => {
     const input = fixture();
     expect(await startPaperNarrative(input)).toBe(run);

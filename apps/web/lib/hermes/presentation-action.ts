@@ -7,7 +7,7 @@ export function presentationSources(action: PresentationAction, selected: string
   if (action !== 'storyboard.create' && parent?.status !== 'draft' && parent?.status !== 'approved') return [];
   const ids = action === 'storyboard.create' ? [...new Set(selected)] : parent?.storyboard ? parent.sourceClaimIds : [];
   if (ids.length < 1 || ids.length > 12) return [];
-  if (action === 'scene.image' && (!parent?.canGenerateSceneImage || parent.status !== 'approved' || !Number.isInteger(sceneIndex) || sceneIndex < 0 || !parent.storyboard?.document.scenes[sceneIndex])) return [];
+  if (action === 'scene.image' && (!parent?.canGenerateSceneImage || !Number.isInteger(sceneIndex) || sceneIndex < 0 || !parent.storyboard?.document.scenes[sceneIndex])) return [];
   return ids;
 }
 export function validPresentationInstruction(value: string): boolean { return value.trim().length > 0 && value.length <= 1000; }
@@ -42,10 +42,37 @@ export function selectEligiblePresentationClaims(claims: PresentationClaim[]): s
 }
 export function newestEligibleStoryboard(assets: PresentationAsset[], action: PresentationAction): PresentationAsset | undefined {
   return assets
-    .filter((asset) => Boolean(asset.storyboard) && (asset.status === 'approved' || (action === 'storyboard.revise' && asset.status === 'draft'))
+    .filter((asset) => Boolean(asset.storyboard) && (asset.status === 'approved' || (action !== 'storyboard.create' && asset.status === 'draft'))
       && (action !== 'scene.image' || asset.canGenerateSceneImage === true)
       && (action !== 'video.create' || asset.canGenerateVideo === true))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+}
+
+export function presentationVideoFrameIds(parent: PresentationAsset | undefined, assets: PresentationAsset[]): string[] {
+  if (!parent?.canGenerateVideo) return [];
+  if (parent.videoFrameAssetIds !== undefined) return [...parent.videoFrameAssetIds];
+  if (parent.storyboard?.narrative === true) return [];
+  // Legacy manual generations predate the ordered projection. Keep their
+  // existing adopted-frame path until the server also projects those parents.
+  return parent.storyboard?.document.scenes.map((_, index) => assets.find(asset => asset.kind === 'image'
+    && asset.status === 'approved' && asset.sceneImage?.storyboardAssetId === parent.id
+    && asset.sceneImage.sceneIndex === index)?.id ?? '') ?? [];
+}
+
+export function presentationStoryboardRequest(input: {
+  action: 'storyboard.create' | 'storyboard.revise'; output: StoryboardRequest['output'];
+  locale: StoryboardRequest['locale']; style: string; instruction: string;
+  parent?: PresentationAsset; figurePlan?: StoryboardRequest['figurePlan'];
+  revisionMode?: StoryboardRequest['revisionMode']; revisionSceneIndex?: number;
+}): StoryboardRequest {
+  const base = input.action === 'storyboard.revise' ? input.parent : undefined;
+  const output = base?.storyboard?.output ?? input.output;
+  return { locale: input.locale, style: input.style, output, instruction: input.instruction,
+    ...(input.figurePlan ? { figurePlan: input.figurePlan } : {}),
+    ...(base ? { baseAssetId: base.id, ...(input.revisionMode ? { revisionMode: input.revisionMode } : {}) } : {}),
+    ...(output === 'video' ? { narrative: true as const,
+      ...(base && input.revisionSceneIndex !== undefined ? { revisionSceneIndex: input.revisionSceneIndex } : {}) } : {}),
+  };
 }
 export function isEligibleArtStoryboard(asset: PresentationAsset | undefined, locale: StoryboardRequest['locale']): boolean {
   return Boolean(asset && (asset.status === 'approved' || asset.status === 'draft') && asset.kind === 'interactive_html'
@@ -55,7 +82,7 @@ export function isEligibleArtStoryboard(asset: PresentationAsset | undefined, lo
 }
 export class SubmissionIntent {
   private signature = ''; private key = ''; private busy = false; private uncertain = false;
-  draft?: { action: PresentationAction; instruction: string; style: string; language?: 'zh' | 'en'; selected: string[]; parentId: string; scene: number; updateBrief?: boolean; revisionMode?: 'art'; figurePlan?: StoryboardRequest['figurePlan'] };
+  draft?: { action: PresentationAction; instruction: string; style: string; language?: 'zh' | 'en'; selected: string[]; parentId: string; scene: number; updateBrief?: boolean; revisionMode?: 'art'; revisionSceneIndex?: number; figurePlan?: StoryboardRequest['figurePlan'] };
   request?: { action: PresentationAction; sourceIds: string[]; payload: StoryboardRequest | { storyboardAssetId: string; sceneIndex: number } | { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] } };
   get isUncertain() { return this.uncertain; }
   get isBusy() { return this.busy; }

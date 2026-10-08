@@ -23,7 +23,20 @@
     "openapi": "Open data API specification",
     "sitemap": "Public journal sitemap",
     "accountTools": "Journal account tools",
-    "apply": "Bring your journal to OpenScience"
+    "apply": "Bring your journal to OpenScience",
+    "management": {
+      "title": "My journals",
+      "intro": "A workspace for the journals, papers and catalogues you help shape.",
+      "skip": "Skip to content",
+      "loading": "Loading your journals…",
+      "loadFailed": "Your journals could not be loaded.",
+      "retry": "Try loading again",
+      "emptyTitle": "Give research a place to gather.",
+      "emptyBody": "Your journals will appear here. Bring a journal to OpenScience to work on its catalogue and papers, or explore the public collection first.",
+      "apply": "Bring your journal",
+      "browse": "Browse journals",
+      "open": "Open editorial workspace"
+    }
   },
   "developers": {
     "title": "Developer API",
@@ -173,6 +186,7 @@
     "prepareVersionFailed": "The current draft could not be prepared as a usable version. See the specific reason before continuing.",
     "productionSubmitted": "The server has received the production task. Results will appear on the left; you can keep editing in the meantime.",
     "openResearchRun": "Open content and illustration creation",
+    "openResearchVideoRun": "Prepare this paper's video",
     "published": "Published successfully. You can open the public research page.",
     "undone": "Requested undo of the last edit. The text and save status are shown on the left.",
     "cancelled": "Cancelled the arrangement awaiting confirmation.",
@@ -1079,7 +1093,9 @@
   "dashboard": {
     "eyebrow": "Personal workspace",
     "title": "Research desk",
-    "welcome": "{name}, continue your current research or work out the next step with Hermes.",
+    "welcome": "{name}, pick up a study or bring a new paper.",
+    "processingHistory": "Processing history",
+    "researchTools": "Materials and management",
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
@@ -1361,6 +1377,7 @@
     },
     "research": {
       "title": "Your research",
+      "actions": "Research tools: {title}",
       "empty": "No research objects yet.",
       "noResults": "No research objects match your search.",
       "search": "Search titles or full text",
@@ -1497,6 +1514,17 @@
     "manualEdit": "Continue manually in the editor"
   },
   "hermesRun": {
+    "video": {
+      "title": "A video for your research",
+      "startDescription": "Turn the paper's central ideas into a visual story with narration. Watch the finished video, then tell Hermes what you would like to refine.",
+      "startFor": "Create a research video: {source}",
+      "composing": "Bringing the scenes and narration together",
+      "ready": "Your video is ready to watch",
+      "runningDescription": "Hermes is shaping the story, preparing the scenes and composing the narration. You can return here when it is ready.",
+      "readyDescription": "Watch the complete video, share your feedback and decide whether to use it.",
+      "preview": "Your research video",
+      "viewResult": "Open the video and give feedback"
+    },
     "sourceReanalysis": {
       "start": "Start new paid analysis",
       "continue": "Continue analysis",
@@ -2203,7 +2231,8 @@
       "diff": "Content comparison"
     },
     "files": {
-      "savedMaterials": "Saved materials and imports",
+      "savedMaterials": "Saved materials",
+      "importHistory": "Import history · {count}",
       "snapshotVersion": "Public version v{version}",
       "confirmedDraft": "View confirmed draft",
       "addMore": "Add more materials above.",
@@ -2800,7 +2829,12 @@
     "artRequiresCompatiblePlan": "This plan does not support a style-only revision. Go back and select a completed illustration plan in the same language, or ask Hermes to create a new plan.",
     "briefWillUpdate": "Your edits will create a revised brief. Existing images and plans are preserved.",
     "updateBrief": "Update production brief",
-    "needsApprovedScenes": "Video needs an approved storyboard and its corresponding images. Prepare those assets first.",
+    "needsApprovedScenes": "The video frames are not ready. Open the current production task to check its progress or resolve a failure.",
+    "videoRevision": {
+      "label": "Video revision scope",
+      "all": "Revise the complete plan",
+      "scene": "Revise scene {number} only"
+    },
     "mediaIntent": "What to create",
     "preparePlan": "Prepare production brief",
     "usingApprovedPlan": "Using the current approved production brief.",

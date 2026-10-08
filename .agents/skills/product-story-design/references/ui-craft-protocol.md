@@ -27,9 +27,11 @@ Use one dominant heading and one dominant surface per viewport. A section may be
 
 ## 3. Keep Hermes one visual object
 
-Every non-Landing surface uses the shared Hermes stage. The desktop stage is a stable 360px square; page code may change its anchor or reserved margin, never the character scale. At narrow widths the bottom dock is a compact 120px entry; activating it opens the same full companion surface in the available conversation area. Do not add page-local portraits, resize controls or alternate static copies.
+Every non-Landing surface uses the shared Hermes stage. The desktop research desk keeps a 360px companion seat. Other contexts and narrow screens start with a consistent compact 120px Live2D entry, as approved by the user on 2026-10-08. Opening the assistant moves the same renderer into its reserved conversation area, up to 360px; closing returns it to its page-owned entry. Do not add page-local portraits, resize controls, static copies or a full-width bottom banner.
 
-The stage must reserve its footprint before the actor or speech appears. The actor, carrier, WebGL fallback, menu and speech contour share that footprint. Speech uses the hat upper-left origin and a short tail; its box may move to avoid content, but its scale and origin rule stay shared. On narrow screens the compact entry is a small lower-corner invitation with transparent surroundings; it never becomes a full-width footer or covers the reading surface. The page may reserve a transparent end-of-content safe area for the fixed companion, without adding a visible strip or changing the reading hierarchy. Idle, loading, reduced-motion and approval states must not change the page's layout geometry.
+The stage must reserve its footprint before the actor or speech appears. The actor, carrier, WebGL fallback, menu and speech contour share that footprint. Speech uses the hat upper-left origin and a short tail; its box may move to avoid content, but its origin rule stays shared. Prefer a meaningful place in the page header, supporting copy or work margin over an empty row. Internal attempts and technical checks recede into history; final results and in-context feedback lead. Idle, loading and reduced-motion states must not change the page's layout geometry. Route-scoped anchor measurements must never position the next page's companion.
+
+Where the generic shell has no contextual seat, use one compact corner launcher with the same Live2D entry and end-of-content safe space; do not create a separate caption, empty heading row or second launcher. Its accessible name describes opening Hermes, while actual navigation stays in navigation links.
 
 ## 4. Author motion with restraint
 

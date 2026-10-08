@@ -4,6 +4,7 @@ import {
   resolveHermesCompanionSurface,
   currentHermesPresentation,
   hermesPresentationCanDock,
+  currentHermesAnchorRect,
 } from '../lib/hermes/companion-surface';
 
 describe('global Hermes product routes', () => {
@@ -56,5 +57,16 @@ describe('Hermes presentation ownership', () => {
     expect(hermesPresentationCanDock({ floating: false })).toBe(true);
     expect(hermesPresentationCanDock({})).toBe(true);
     expect(hermesPresentationCanDock(null)).toBe(false);
+  });
+
+  it('does not place a new route in the outgoing page anchor before its effects run', () => {
+    const anchor = {};
+    const rect = { width: 360, height: 400, left: 900, top: 160 };
+    const measured = { pathname: '/dashboard', anchor, rect };
+    expect(currentHermesAnchorRect(measured, '/dashboard', anchor)).toBe(rect);
+    expect(currentHermesAnchorRect(measured, '/guide', anchor)).toBeNull();
+    expect(currentHermesAnchorRect(measured, '/guide', null)).toBeNull();
+    expect(currentHermesAnchorRect(measured, '/dashboard', {})).toBeNull();
+    expect(currentHermesAnchorRect(null, '/dashboard', anchor)).toBeNull();
   });
 });

@@ -27,8 +27,10 @@ first.
 - Public pages, workbench pages and management pages use distinct composition rules.
 - Motion is purposeful, brief and reduced-motion safe. No persistent decorative
   backdrop animation.
-- Hermes is 360px on desktop and a compact expandable entry on narrow screens; it
-  never becomes a fixed full-width footer or covers reading content.
+- Hermes has a 360px seat on the desktop research desk; other page contexts and
+  narrow screens use a consistent 120px Live2D entry. Opening it shows the same
+  renderer in a dedicated conversation area, up to 360px. It never becomes a
+  fixed full-width footer or covers reading content.
 
 ---
 

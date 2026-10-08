@@ -60,6 +60,7 @@ export interface HermesVisualAdapterProps {
   actionStartedAtMs?: number;
   assistantOpen?: boolean;
   compactPresentation?: boolean;
+  inConversation?: boolean;
   navigationOnly?: boolean;
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
@@ -91,7 +92,7 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, inConversation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const tn = useTranslations('productNavigation');
   const locale = useLocale();
@@ -634,7 +635,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     <ContextMenu open={menuOpen} onOpenChange={updateMenuOpen}>
       <ContextMenuTrigger asChild>
         <button
-          aria-label={navigationOnly ? tn('dashboard') : t('guide.invoke')}
+          aria-label={t('guide.invoke')}
           className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
           onBlur={resetGaze}
           onClick={() => {
@@ -644,7 +645,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               suppressClickTimerRef.current = null;
               return;
             }
-            onInvoke();
+            if (!inConversation) onInvoke();
           }}
           onContextMenuCapture={(event) => {
             if (!event.nativeEvent.isTrusted) return;
@@ -672,6 +673,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
             window.setTimeout(() => target.removeAttribute('data-hermes-long-press-active'), 0);
           }}
           ref={linkRef}
+          tabIndex={inConversation ? -1 : undefined}
           type="button"
           data-hermes-fallback="static"
           data-hermes-renderer="articulated-mesh"
