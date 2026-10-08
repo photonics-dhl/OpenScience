@@ -16,7 +16,7 @@
 }
 .craft-journal-public .journal-directory-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 120px;
   align-items: center;
   gap: 56px;
   padding-bottom: 0;
@@ -29,13 +29,13 @@
   color: #153b40;
 }
 .craft-journal-public .journal-directory-heading p { max-width: 38em; }
-.craft-journal-public .journal-directory-companion { width: 360px; min-height: 360px; }
-.craft-journal-public .journal-directory-companion .hermes-dock-anchor { min-height: 360px; }
+.craft-journal-public .journal-directory-companion { width: 120px; min-height: 140px; }
+.craft-journal-public .journal-directory-companion .hermes-dock-anchor { width: 120px; min-height: 140px; }
 @media (max-width: 1100px) {
   .craft-journal-public > section { padding-inline: 32px; }
-  .craft-journal-public .journal-directory-heading { grid-template-columns: minmax(0, 1fr) 196px; gap: 24px; }
+  .craft-journal-public .journal-directory-heading { grid-template-columns: minmax(0, 1fr) 120px; gap: 24px; }
   .craft-journal-public .journal-directory-companion,
-  .craft-journal-public .journal-directory-companion .hermes-dock-anchor { width: 196px; min-height: 156px; }
+  .craft-journal-public .journal-directory-companion .hermes-dock-anchor { width: 120px; min-height: 140px; }
 }
 @media (max-width: 700px) {
   .craft-journal-public > section { padding-inline: 20px; }

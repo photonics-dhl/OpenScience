@@ -290,7 +290,7 @@ for (const width of [1440, 800, 390]) {
     };
     try {
       for (let cycle = 0; cycle < 2; cycle += 1) {
-        await (width <= 1100 ? page.locator('.hermes-compact-invoke') : stage.locator('[data-hermes-input-owner="true"]')).click();
+        await stage.locator('[data-hermes-input-owner="true"]').click();
         const conversation = page.locator('.hermes-conversation-transcript > [data-hermes-conversation-companion="true"]');
         await expect(conversation.locator('[data-hermes-workspace-stage="true"]')).toHaveCount(1);
         await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
@@ -374,7 +374,7 @@ test('Hermes Live2D visual harness exposes every production action on one real c
   await expect(page.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
 });
 
-test('one Hermes stage persists across workspace routes and keeps direct manipulation', async ({ page }) => {
+test('one Hermes stage persists across workspace routes and expands from the editor context', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const browserErrors: string[] = [];
   page.on('pageerror', (error) => browserErrors.push(error.message));
@@ -390,7 +390,7 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   const originalStage = await stage.elementHandle();
   const originalCanvas = await stage.locator('[data-hermes-articulated-canvas]').elementHandle();
 
-  await page.getByRole('link', { name: 'Continue research', exact: true }).click();
+  await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: /Coherent transport at the attosecond frontier/ }).click();
   await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
   await page.waitForTimeout(500);
   if (browserErrors.length > 0) throw new Error(browserErrors.join('\n'));
@@ -402,29 +402,37 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   await originalCanvas?.dispose();
   await routedStage?.dispose();
 
-  const input = page.locator('[data-hermes-input-owner]');
-  const before = await stage.boundingBox();
-  expect(before).not.toBeNull();
-  await input.hover();
-  await page.mouse.down();
-  await page.mouse.move(before!.x - 180, before!.y + 100, { steps: 8 });
-  await page.mouse.up();
-  const moved = await stage.boundingBox();
-  expect(moved).not.toBeNull();
-  expect(Math.abs(moved!.x - before!.x)).toBeGreaterThan(80);
+  const input = stage.locator('[data-hermes-input-owner]');
+  await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(page.locator('.hermes-editor-anchor').locator('[data-hermes-workspace-stage]')).toHaveCount(1);
+  await input.click();
+  await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
+  await expect(stage).toHaveCSS('opacity', '1');
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(input).toBeFocused();
+  await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+});
 
-  await page.reload({ waitUntil: 'networkidle' });
-  await expect.poll(async () => {
-    const restored = await stage.boundingBox();
-    return restored ? Math.max(Math.abs(restored.x - moved!.x), Math.abs(restored.y - moved!.y)) : Number.POSITIVE_INFINITY;
-  }).toBeLessThan(8);
-
-  const interactionBox = await stage.locator('[data-hermes-carrier-interaction-hull="true"]').boundingBox();
-  expect(interactionBox).not.toBeNull();
-  await page.mouse.move(interactionBox!.x + interactionBox!.width * .2, interactionBox!.y + interactionBox!.height / 2);
-  await page.mouse.move(interactionBox!.x + interactionBox!.width * .8, interactionBox!.y + interactionBox!.height / 2);
-  await page.mouse.move(interactionBox!.x + interactionBox!.width + 140, interactionBox!.y + interactionBox!.height / 2);
-  await expect(stage).toHaveAttribute('data-hermes-action', 'pointer-avoid');
+test('creation opens the complete companion from its compact entry without starting work', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.route('**/api/workspaces', (route) => json(route, { workspaces: [{ id: 'workspace-hermes', name: 'Personal', type: 'personal', role: 'owner' }] }));
+  await page.route('**/api/agent/tasks?**', (route) => json(route, { tasks: [] }));
+  const posts: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') posts.push(new URL(request.url()).pathname); });
+  await page.goto(`${baseUrl}/research-objects/new?mode=import`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
+  await stage.locator('[data-hermes-input-owner="true"]').click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+  await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+  expect(posts).toEqual([]);
 });
 
 test('Hermes respects system motion and persists explicit user preferences', async ({ page }) => {
@@ -465,7 +473,7 @@ test('Hermes respects system motion and persists explicit user preferences', asy
     new MutationObserver(sample).observe(document, { attributes: true, childList: true, subtree: true });
   });
 
-  await page.getByRole('link', { name: 'Continue research', exact: true }).click();
+  await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: /Coherent transport at the attosecond frontier/ }).click();
   await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
   await page.reload({ waitUntil: 'networkidle' });
   await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'reduced');

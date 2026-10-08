@@ -104,11 +104,11 @@
 .craft-account .account-heading h1 { margin: 0 0 12px; font: 400 clamp(2rem, 2.8vw, 2.5rem)/1.25 var(--font-reading-serif); }
 .craft-account .account-heading p { max-width: 65ch; font-size: .9375rem; line-height: 1.75; }
 .craft-account .account-heading [data-reading-role='caption'] { margin-bottom: 14px; font-size: .75rem; }
-.craft-account .account-grid { grid-template-columns: 360px minmax(0, 1fr); gap: 40px 48px; }
+.craft-account .account-grid { grid-template-columns: 240px minmax(0, 1fr); gap: 40px 48px; }
 .craft-account .surface-folio-sheet { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .craft-account .account-summary { padding: 0 0 24px; border: 0; }
 .craft-account .account-summary .account-monogram { width: 64px; height: 64px; margin-bottom: 24px; border-radius: 50%; border: 1px solid #c9dcd5; background: #f1f5f1; font: 400 30px/1 var(--font-reading-serif); }
-.craft-account .account-summary .hermes-dock-anchor { width: 360px; min-height: 360px; margin-top: 24px; }
+.craft-account .account-summary .hermes-dock-anchor { width: 120px; min-height: 140px; margin-top: 24px; }
 .craft-account .account-summary dl { margin-block: 20px 24px; }
 .craft-account .account-summary dd { font-size: 1rem; line-height: 1.6; }
 .craft-account .account-shortcuts { gap: 6px; }
@@ -128,7 +128,7 @@
 .craft-account .settings-grid > section { padding: 28px; border: 1px solid var(--craft-rule, #dce5e5); border-radius: 3px; background: #fff; }
 .craft-account .settings-grid > section:first-child { grid-column: 1; grid-row: 1; }
 .craft-account .settings-companion-column { grid-column: 2; grid-row: 1 / span 2; }
-.craft-account .settings-companion-column .hermes-dock-anchor { min-height: 360px; width: 360px; margin-top: 12px; }
+.craft-account .settings-companion-column .hermes-dock-anchor { min-height: 140px; width: 120px; margin: 12px 0 0 auto; }
 .craft-account .settings-grid [data-usage-balance] { padding: 28px 0; background: transparent; border-top: 2px solid #173f43; border-radius: 0; }
 .craft-account .settings-grid [data-usage-balance] dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-block: 28px; }
 .craft-account .settings-grid [data-usage-balance] dd { font: 400 40px/1.25 var(--font-reading-serif); }
@@ -248,6 +248,13 @@
 .craft-journal-manage .journal-managed-list h2 { margin: 0; font: 400 1.5rem/1.4 var(--font-reading-serif); }
 .craft-journal-manage .journal-managed-list p { margin: 8px 0 0; font-size: 0.875rem; }
 .craft-journal-manage .journal-list-action { font-size: 0.875rem; color: var(--craft-accent, #125d66); }
+.craft-journal-manage .journal-managed-empty { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: center; gap: 64px; padding: 48px 40px; margin-top: 40px; background: var(--craft-surface, #fff); border-radius: 8px; }
+.craft-journal-manage .journal-managed-empty h2 { max-width: 20ch; margin: 0; font: 400 clamp(28px, 3vw, 36px)/1.4 var(--font-reading-serif); text-wrap: balance; }
+.craft-journal-manage .journal-managed-empty p { max-width: 42ch; margin: 20px 0 0; color: var(--craft-muted, #51666c); font-size: 15px; line-height: 1.9; }
+.journal-empty-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 28px; }
+.journal-empty-art { width: 100%; max-width: 280px; color: #7daca9; }
+.craft-journal-manage .journal-empty-actions .journal-primary-link { display: inline-flex; min-height: 48px; align-items: center; padding: 12px 22px; border-radius: 6px; background: var(--craft-accent, #125d66); color: #fff; text-decoration: none; }
+.journal-empty-actions .journal-back-link { display: inline-flex; min-height: 44px; align-items: center; font-size: 14px; }
 .craft-journal-manage > article > section { padding-top: 24px; border-top: 1px solid var(--craft-rule, #dce5e5); }
 .craft-journal-manage > article > section article { border: 0; border-top: 1px solid var(--craft-rule, #dce5e5); padding: 20px 0; }
 .craft-journal-manage > section { margin-top: 40px; }
@@ -359,8 +366,8 @@
 }
 
 @media (max-width: 1100px) {
-  .craft-account .account-summary .hermes-dock-anchor { width: 196px; min-height: 156px; margin-left: auto; }
-  .craft-account .settings-companion-column .hermes-dock-anchor { width: 196px; min-height: 156px; margin-left: auto; }
+  .craft-account .account-summary .hermes-dock-anchor { width: 120px; min-height: 140px; margin-left: auto; }
+  .craft-account .settings-companion-column .hermes-dock-anchor { width: 120px; min-height: 140px; margin-left: auto; }
   .craft-editorial .editorial-layout { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .craft-editorial .editorial-fields { max-width: 720px; }
 }
@@ -383,6 +390,8 @@
 }
 
 @media (max-width: 600px) {
+  .craft-journal-manage .journal-managed-empty { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 28px 24px; }
+  .journal-empty-art { width: 160px; justify-self: end; }
   .craft-account .account-heading { margin-bottom: 28px; padding-bottom: 24px; }
   .craft-account .account-research, .craft-account .settings-grid > section { padding: 20px; }
   .craft-account .account-projects { padding: 20px; }

@@ -37,7 +37,7 @@ export function ImportStage({ compact = false }: ImportStageProps) {
           {t('import.upload')}
           <ArrowRight size={16} aria-hidden="true" />
         </Link>
-        <Link className={styles.createAction} data-reading-role="control" href="/research-objects/new?mode=blank" data-action-priority="primary">
+        <Link className={styles.createAction} data-reading-role="control" href="/research-objects/new?mode=blank" data-action-priority="secondary">
           {t('import.blank')}
           <ArrowRight size={16} aria-hidden="true" />
         </Link>

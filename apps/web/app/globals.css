@@ -2457,7 +2457,7 @@ body {
 }
 
 .hermes-workspace-stage[data-hermes-assistant-open='true'] {
-  opacity: .18;
+  opacity: 1;
   pointer-events: none;
 }
 

@@ -824,58 +824,77 @@
   .desk :is(.primaryAction, .continueAction):not(:disabled):active { transform: none; }
   .literature :is(a, button):is(:hover, :active) { translate: none; transform: none; }
 }
-/* Authenticated research desk: the current study leads; task history recedes. */
-.desk .heading::before, .desk .continueResearch::before, .desk .researchLibrary::before { display: none; }
-.desk .heading { padding-bottom: 24px; margin-bottom: 32px; align-items: center; }
-.desk :is(.heading, .stateSurface) h1.title { font-size: clamp(30px, 2.8vw, 40px); font-weight: 400; line-height: 1.2; margin-top: 10px; }
-.desk .eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .08em; color: #57736c; }
-.desk .heading .welcome { font-size: 14px; margin-top: 14px; }
-.desk .continueResearch { border: 1px solid #cddbd6; border-top: 2px solid #173f43; border-radius: 3px; }
-.desk .continuation .researchTitle { max-width: 32ch; font-size: clamp(28px, 2.7vw, 38px); font-weight: 400; line-height: 1.23; margin-block: 20px 24px; }
-.desk .sectionLabel { font-size: 11px; font-weight: 500; letter-spacing: .04em; }
-.desk .researchMeta { font-size: 12px; }
-.desk .continuationNext { background: #edf3ef; padding-block: 20px; border-radius: 0 0 2px 2px; }
-.desk .continuationActions .continueAction { background: #173f43; border-color: #173f43; border-radius: 3px; box-shadow: none; font-size: 13px; }
-.desk .hermesConversation { padding-block: 4px; gap: 20px; }
-.desk .hermesMessage { font-size: 14px; max-width: 28em; }
-.desk .hermesConversation .primaryAction { color: #173f43; background: #fff; border: 1px solid #bbcfc6; box-shadow: none; border-radius: 3px; font-size: 13px; }
-.desk .activityRail { padding-top: 24px; }
-.desk .activityRail ol { gap: 16px; margin-top: 16px; }
-.desk .activityRail li > a { height: 100%; padding: 16px; border: 1px solid #dce5df; border-radius: 3px; background: #fff; text-decoration: none; gap: 12px; }
-.desk .activityRail li > a > span:first-child > span:first-child { font-size: 14px; line-height: 1.6; font-weight: 500; }
-.desk .activityRail li > a > span:first-child > span:last-child { font-size: 11px; line-height: 1.7; color: #62766d; }
-.desk .activityRail li > a > span:last-child { padding-top: 12px; border-top: 1px solid #e1e8e3; font-size: 12px; color: #21665f; }
-.desk .activityRail > aside > button { font-size: 12px; margin-top: 16px; }
-.desk .importStage { padding-top: 36px; }
-.desk .workSurface { grid-template-columns: minmax(0, 1fr) 360px; gap: 32px 48px; }
-.desk .taskRail { padding: 0; border-left: 0; gap: 8px; }
-.desk .taskRail :global(.hermes-dock-anchor) { width: 360px; min-height: 360px; margin: 0 auto; }
-.desk .taskRail :global([data-hermes-placement='anchored']) { margin: 0; }
+/* The desk is a research collection with one companion seat. */
+.desk .heading::before, .desk .researchLibrary::before { display: none; }
+.desk .heading { margin-bottom: 32px; padding-bottom: 28px; align-items: center; }
+.headingCopy { width: calc(100% - 408px); }
+.headingTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.desk :is(.heading, .stateSurface) h1.title { margin: 0; font-size: 36px; font-weight: 400; line-height: 1.25; }
+.desk .heading .welcome { margin-top: 14px; font-size: 14px; }
+.createResearch { display: inline-flex; flex: none; align-items: center; justify-content: center; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: var(--os-vermilion-ink); color: #fff; font: 500 14px/1.5 var(--font-ui); text-decoration: none; transition: background-color 140ms ease-out; }
+.desk .workSurface { grid-template-columns: minmax(0, 1fr) 360px; gap: 48px; }
+.researchStack { min-width: 0; }
+.desk .researchLibrary { padding: 0; }
+.desk .libraryHeading { align-items: center; gap: 16px; }
+.desk .researchLibrary h2.libraryTitle { font: 500 16px/1.5 var(--font-ui); }
+.desk .searchControls { width: min(100%, 17rem); }
+.desk input.searchInput { border-color: #d4e0db; background: transparent; border-radius: 6px; font-size: 13px; }
+.desk .researchEntries { margin-top: 24px; border: 0; background: transparent; }
+.desk .researchEntry { gap: 8px; padding: 0; position: relative; }
+.desk .researchLink { grid-template-columns: minmax(0, 1fr) 76px 16px; gap: 20px; padding: 24px 8px 24px 0; }
+.desk .researchEntryTitle { font: 400 23px/1.45 var(--font-reading-serif); color: #173f43; }
+.desk .entryMeta { display: grid; justify-items: end; margin: 0; font: 400 13px/1.6 var(--font-ui); color: var(--os-muted-paper); gap: 4px; }
+.desk .entryMeta > span:last-child { color: var(--os-ink); font-variant-numeric: tabular-nums; }
+.desk .entryArrow { grid-column: 3; grid-row: auto; color: #7c9188; width: 16px; }
+.desk .researchEntryAction { position: relative; flex: none; }
+.researchEntryAction > summary { display: grid; place-items: center; width: 44px; min-height: 44px; list-style: none; border-radius: 6px; cursor: pointer; color: #62776f; }
+.researchEntryAction > summary::-webkit-details-marker { display: none; }
+.researchEntryAction > div { position: absolute; z-index: 15; top: 44px; right: 0; min-width: 132px; padding: 8px; border: 1px solid #d6e1dc; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px rgb(24 47 53 / .08); }
+.researchEntryAction > div > button { width: 100%; min-height: 44px; border: 0; background: transparent; text-align: left; padding: 8px 12px; }
+.processHistory, .researchTools { border-top: 1px solid #dce5df; }
+.processHistory { margin-top: 24px; }
+.processHistory > summary, .researchTools > summary { min-height: 44px; padding: 14px 0; cursor: pointer; color: #62776f; font-size: 13px; }
+.processHistory > aside { border-top: 0; padding-top: 0; }
+.processHistory ol { margin-top: 0; }
+.processHistory li > a { text-decoration: none; }
+.processHistory > aside > button { margin-bottom: 20px; }
+.managementActions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 20px 0; }
+.managementActions > a { font-size: 13px; color: #21665f; }
+.desk .taskRail { padding: 0 0 24px; border: 0; border-radius: 0; background: transparent; gap: 0; }
+.desk .taskRail :global(.hermes-dock-anchor) { width: 360px; max-width: 100%; min-height: 360px; margin: 0 auto; }
+.desk .taskRail :global([data-hermes-placement='anchored']) { margin: 0; opacity: 1; }
 .desk .taskRail :global([data-hermes-compact='false'] .hermes-companion-actor) { inset: 16px; }
-.desk .taskRail :global(.hermes-visual-state-label),
-.desk .taskRail :global(.hermes-visual-invoke-label) { display: none; }
-.desk .hermesConversation { padding: 0 24px 16px; gap: 12px; }
-.desk .hermesConversation .primaryAction:active { color: #fff; }
-@media (hover:hover) and (pointer:fine) {
- .desk .activityRail li > a:hover { border-color: #91afa1; }
- .desk .activityRail li > a:hover > span:first-child > span:first-child { color: #21665f; text-decoration: underline; text-underline-offset: 3px; }
- .desk .hermesConversation .primaryAction:hover { background: #edf3ef; }
-}
-@media (max-width:760px) {
- .desk .activityRail ol { grid-template-columns: minmax(0,1fr); gap: 10px; }
- .desk .continuation .researchTitle { font-size: 28px; }
- .desk .continuationNext { gap: 16px; }
+.desk .taskRail :global(.hermes-pet-menu-button) { top: 0; right: 12px; bottom: auto; border-color: transparent; background: transparent; }
+.desk .taskRail :global(.hermes-visual-state-label), .desk .taskRail :global(.hermes-visual-invoke-label) { display: none; }
+.desk .hermesConversation { margin-top: -32px; padding: 0 24px; gap: 16px; }
+.desk h2.hermesTitle { font: 600 20px/1.4 var(--font-ui); }
+.desk .hermesMessage { max-width: 26em; font-size: 14px; line-height: 1.8; color: #62776f; }
+.desk .hermesConversation .primaryAction { border: 1px solid #c7d8ce; border-radius: 6px; background: #f4f7f3; color: #173f43; box-shadow: none; font-size: 13px; }
+@media (hover: hover) and (pointer: fine) {
+ .createResearch:hover { background: #24565a; }
+ .researchEntryAction > summary:hover, .researchEntryAction > div > button:hover { background: #eaf1ec; }
+ .desk .hermesConversation .primaryAction:hover { background: #e4eee5; }
 }
 @media (max-width: 1100px) {
- .desk .workSurface { grid-template-columns: minmax(0, 1fr); gap: 24px; }
- .desk .taskRail { display: grid; grid-template-columns: minmax(0, 1fr) 196px; align-items: center; gap: 16px; }
- .desk .taskRail :global(.hermes-dock-anchor) { grid-column: 2; grid-row: 1; width: 196px; height: 156px; min-height: 156px; margin: 0; }
- .desk .hermesConversation { grid-column: 1; grid-row: 1; padding: 0; flex-direction: column; align-items: stretch; }
+ .desk .workSurface { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+ .headingCopy { width: 100%; }
+ .desk .taskRail { grid-row: 1; display: grid; grid-template-columns: minmax(0, 1fr) 120px; align-items: center; gap: 16px; padding: 20px; }
+ .desk .taskRail :global(.hermes-dock-anchor) { grid-column: 2; grid-row: 1; width: 120px; min-height: 140px; margin: 0; }
+ .desk .hermesConversation { grid-column: 1; grid-row: 1; margin-top: 0; padding: 0; flex-direction: column; align-items: stretch; }
  .desk .hermesIdentity { flex: none; }
  .desk .hermesConversation .primaryAction { width: 100%; }
 }
-@media (max-width: 760px) {
- .desk .taskRail { grid-template-columns: minmax(0, 1fr) 120px; }
- .desk .taskRail :global(.hermes-dock-anchor) { width: 120px; }
- .desk .taskRail :global(.hermes-compact-invoke) { display: none; }
+@media (max-width: 600px) {
+ .desk .heading { align-items: flex-start; gap: 20px; }
+ .desk :is(.heading, .stateSurface) h1.title { font-size: 30px; }
+ .createResearch { min-height: 44px; padding-inline: 14px; font-size: 13px; }
+ .desk .libraryHeading { align-items: stretch; }
+ .desk .searchControls { width: 100%; }
+ .desk .researchEntryTitle { font-size: 21px; }
+ .desk .researchLink { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; padding-block: 22px; }
+ .desk .entryMeta { grid-column: 1; grid-row: 2; display: flex; justify-content: flex-start; gap: 12px; }
+ .desk .entryArrow { grid-column: 2; grid-row: 1 / 3; }
+ .desk .taskRail { padding: 16px; }
+ .desk h2.hermesTitle { font-size: 20px; }
 }
+@media (prefers-reduced-motion: reduce) { .createResearch { transition: none; } }

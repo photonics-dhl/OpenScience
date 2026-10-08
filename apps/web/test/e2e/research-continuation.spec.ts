@@ -27,10 +27,12 @@ async function fixtures(page: Page, tasks = [task]) {
   });
 }
 
-test('dashboard primary continuation opens the actual pending review', async ({ page }) => {
+test('dashboard keeps process records behind history and opens the actual review from there', async ({ page }) => {
   await fixtures(page);
   await page.goto('/dashboard');
-  const continuation = page.locator('[data-continuation-priority="primary"]');
+  const continuation = page.locator('aside[aria-labelledby="hermes-task-title"]');
+  await expect(continuation).not.toBeVisible();
+  await page.getByText('Processing history', { exact: true }).first().click();
   await expect(continuation.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/hermes?task=journey-task');
   await continuation.getByRole('link').click();
   await expect(page).toHaveURL(/hermes\?task=journey-task$/);

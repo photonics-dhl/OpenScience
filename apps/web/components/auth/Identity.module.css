@@ -34,8 +34,8 @@
 .main { grid-column: 2; grid-row: 1; min-width: 0; }
 .context { grid-column: 1; grid-row: 1; min-width: 0; align-self: center; }
 .welcome { max-width: 400px; margin: 0 auto; }
-.companion { width: 360px; max-width: 100%; min-height: 360px; margin: 24px 0 0; }
-.companion :global(.hermes-dock-anchor) { min-height: 360px; }
+.companion { width: 120px; max-width: 100%; min-height: 140px; margin: 24px 0 0; }
+.companion :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
 .companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .eyebrow { color: #125d66; font: 600 14px/1.6 var(--font-ui); margin: 0 0 16px; }
 .shell .welcome h2 { max-width: 16ch; font: 400 clamp(36px, 3.8vw, 50px)/1.28 var(--font-reading-serif); margin: 0; letter-spacing: -.025em; text-wrap: balance; overflow-wrap: anywhere; }
@@ -103,8 +103,8 @@
 
 @media (max-width: 1100px) {
   /* Keep the compact companion owned by the auth surface on narrow screens. */
-  .companion { width: 196px; min-height: 156px; margin: 24px 0 0 auto; }
-  .companion :global(.hermes-dock-anchor) { min-height: 156px; }
+  .companion { width: 120px; min-height: 140px; margin: 24px 0 0 auto; }
+  .companion :global(.hermes-dock-anchor) { min-height: 140px; }
 }
 
 .shell [data-signup-profile] { border-block: 1px solid #e0e6e8; }

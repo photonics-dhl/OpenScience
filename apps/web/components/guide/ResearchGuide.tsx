@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
 import { ScientificText, scientificTextExcerpt } from '@/components/content/ScientificText';
 import { getPublicResearchVersion, type PublicResearchVersion } from '@/lib/api';
@@ -22,7 +23,8 @@ export function ResearchGuide() {
   const t = useTranslations('productGuide');
   const router = useRouter();
   const guideRef = React.useRef<HTMLElement>(null);
-  const openDesk = React.useCallback(() => router.push('/dashboard'), [router]);
+  const stage = useOptionalHermesWorkspaceStage();
+  const openDesk = React.useCallback(() => { if (stage) stage.openCompanion(); else router.push('/dashboard'); }, [router, stage]);
   const [selected, setSelected] = React.useState(0);
   const [sceneMotion, setSceneMotion] = React.useState<'pointer' | 'keyboard'>('keyboard');
   const [example, setExample] = React.useState<PublicResearchVersion | null>(null);

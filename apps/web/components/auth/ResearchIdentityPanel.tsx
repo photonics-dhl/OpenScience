@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import styles from './Identity.module.css';
 
 interface ResearchIdentityPanelProps {
@@ -15,7 +16,8 @@ interface ResearchIdentityPanelProps {
 
 function ResearchIdentityPanel({ description, eyebrow, intent, tagline, title }: ResearchIdentityPanelProps) {
   const router = useRouter();
-  const openDesk = React.useCallback(() => router.push('/dashboard'), [router]);
+  const stage = useOptionalHermesWorkspaceStage();
+  const openDesk = React.useCallback(() => { if (stage) stage.openCompanion(); else router.push('/dashboard'); }, [router, stage]);
   return (
     <section className={styles.welcome} data-research-identity-context={intent}>
       <div data-hermes-protected="true">

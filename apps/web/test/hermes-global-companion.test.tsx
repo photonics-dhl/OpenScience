@@ -81,7 +81,7 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('Current research object');
     expect(markup).not.toContain('data-hermes-presence-control');
     expect(markup).toContain('data-hermes-size-mode="automatic"');
-    expect(markup).toContain('data-hermes-stage-size="360"');
+    expect(markup).toContain(`data-hermes-stage-size="${pathname === '/dashboard' ? 360 : 120}"`);
   });
 
   it.each(['/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {
@@ -116,6 +116,7 @@ describe('global companion SSR ownership', () => {
       dashboardContext={{ tasks: [], researchObjects: [] }}
     />);
     expect(markup).toContain('data-hermes-floating-owner="editor"');
+    expect(markup).toContain('data-hermes-dock-anchor="true"');
     expect(markup).not.toContain('data-live2d-instance');
   });
 });
@@ -162,7 +163,7 @@ describe('public pet navigation', () => {
       expect(handlers.items.has(key)).toBe(true);
     }
     for (const key of ['continue', 'evidence', 'sources', 'compare']) expect(handlers.items.has(key)).toBe(false);
-    expect(markup).toContain('aria-label="dashboard"');
+    expect(markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0]).toContain('aria-label="guide.invoke"');
     expect(markup).toContain('data-hermes-pet-menu-button="true"');
     expect(markup).toContain('aria-haspopup="menu"');
     handlers.items.get('dashboard')!();

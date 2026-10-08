@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Search } from 'lucide-react';
+import { ArrowRight, MoreHorizontal, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -74,6 +74,7 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
     <section
       className={styles.researchLibrary}
       aria-labelledby="research-list-title"
+      data-hermes-protected="true"
       data-surface-state={searchFailed ? 'error' : searching ? 'loading' : visible.length === 0 ? 'empty' : 'ready'}
     >
       <div className={styles.libraryHeading}>
@@ -130,20 +131,22 @@ export function ResearchList({ researchObjects, onChanged }: ResearchListProps) 
                   <span className={styles.researchEntryTitle}>
                     {research.title}
                   </span>
-                  <span data-reading-role="caption" className={styles.entryMeta}>
-                    <span>{t('research.draftRevision')}</span>
-                    <span>{t('research.version', { version: research.versionNo })}</span>
-                  </span>
                 </span>
-                <span data-reading-role="caption" className={styles.entryStatus}>{t(`research.status.${research.status}`)}</span>
+                <span data-reading-role="caption" className={styles.entryMeta}>
+                  <span>{research.status === 'draft' ? t('research.draftRevision') : t(`research.status.${research.status}`)}</span>
+                  <span>{t('research.version', { version: research.versionNo })}</span>
+                </span>
                 <ArrowRight className={styles.entryArrow} size={18} aria-hidden="true" />
               </Link>
-              <div className={styles.researchEntryAction} role="group" aria-label={research.title}>
-                <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
-                  setRetry(value => value + 1);
-                  onChanged?.();
-                }} />
-              </div>
+              <details className={styles.researchEntryAction}>
+                <summary aria-label={t('research.actions', { title: research.title })}><MoreHorizontal size={18} aria-hidden="true" /></summary>
+                <div>
+                  <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
+                    setRetry(value => value + 1);
+                    onChanged?.();
+                  }} />
+                </div>
+              </details>
             </li>
           ))}
         </ul>

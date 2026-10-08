@@ -23,7 +23,20 @@
     "openapi": "Open data API specification",
     "sitemap": "Public journal sitemap",
     "accountTools": "Journal account tools",
-    "apply": "Bring your journal to OpenScience"
+    "apply": "Bring your journal to OpenScience",
+    "management": {
+      "title": "My journals",
+      "intro": "A workspace for the journals, papers and catalogues you help shape.",
+      "skip": "Skip to content",
+      "loading": "Loading your journals…",
+      "loadFailed": "Your journals could not be loaded.",
+      "retry": "Try loading again",
+      "emptyTitle": "Give research a place to gather.",
+      "emptyBody": "Your journals will appear here. Bring a journal to OpenScience to work on its catalogue and papers, or explore the public collection first.",
+      "apply": "Bring your journal",
+      "browse": "Browse journals",
+      "open": "Open editorial workspace"
+    }
   },
   "developers": {
     "title": "Developer API",
@@ -1079,7 +1092,9 @@
   "dashboard": {
     "eyebrow": "Personal workspace",
     "title": "Research desk",
-    "welcome": "{name}, continue your current research or work out the next step with Hermes.",
+    "welcome": "{name}, pick up a study or bring a new paper.",
+    "processingHistory": "Processing history",
+    "researchTools": "Materials and management",
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
@@ -1361,6 +1376,7 @@
     },
     "research": {
       "title": "Your research",
+      "actions": "Research tools: {title}",
       "empty": "No research objects yet.",
       "noResults": "No research objects match your search.",
       "search": "Search titles or full text",

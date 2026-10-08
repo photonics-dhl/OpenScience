@@ -46,7 +46,9 @@ Do not dedicate an empty full-height rail to Hermes. Reserve its shared footprin
 
 Reuse OpenScience tokens, shell, type, Hermes, media, and route semantics. Add a token/component when a pattern appears on two or more pages; keep page-specific composition in page overrides. Every changed interaction needs visible focus, hover, active, loading, success, error, empty, and disabled states where relevant. Reserve media space, keep touch targets at least 44px, and honor `prefers-reduced-motion`.
 
-Hermes is 360px on desktop. Narrow screens use a compact expandable entry. Speech must emerge from the hat/face anchor without covering titles or controls. Landing does not receive the floating stage. The shared stage must be clamped to the visible viewport after route changes.
+Hermes follows the user-approved contextual presence policy: the desktop research desk owns a full 360px companion seat; reading, guide, identity, account and other work surfaces start with the same compact 120px Live2D entry. Narrow screens also start compact. Opening the companion moves the same live renderer into the conversation's reserved area, up to 360px within the available space; closing returns it to its page-owned entry. Consistency means the same entry language and expansion behavior, not a large model on every page. No floating banner, static duplicate or translucent actor over the composer. Speech must emerge from the hat/face anchor without covering titles or controls. Landing does not receive the stage.
+
+Keep internal attempts and technical checks in processing history. Lead with the research and final result, then invite feedback or adoption in context. Do not create a second review inbox. Reuse the domain's actual technical qualification and adoption states; hiding controls is not proof of automation, and user adoption does not authorize paid generation or publication. Clean up only identified test records through the existing recoverable archive flow; names, duplicates and missing DOI do not prove that a record is disposable.
 
 ### 6. Real-browser acceptance
 

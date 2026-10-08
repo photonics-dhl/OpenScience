@@ -133,12 +133,12 @@ async function mockDashboard(page: Page, taskState?: string) {
   });
 }
 
-async function expectDashboardProtectedRegions(page: Page) {
+async function expectDashboardProtectedRegions(page: Page, empty = false) {
   const regions = [
     page.locator('header nav[data-hermes-primary-navigation="true"]'),
-    page.locator('section[aria-labelledby="continue-title"]'),
-    page.locator('section[aria-labelledby="import-stage-title"]'),
-    page.locator('aside[aria-labelledby="hermes-task-title"]'),
+    empty ? page.locator('section[aria-labelledby="import-stage-title"]')
+      : page.locator('section[aria-labelledby="research-list-title"]'),
+    page.locator('main header[data-hermes-protected="true"]'),
   ];
   for (const region of regions) {
     await expect(region).toHaveCount(1);
@@ -154,7 +154,7 @@ test('Dashboard protects semantic navigation, continuation, import and Hermes ta
 
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.reload({ waitUntil: 'networkidle' });
-  await expectDashboardProtectedRegions(page);
+  await expectDashboardProtectedRegions(page, true);
 });
 
 test('a patrol cycle stays inside its shared motion envelope and clears adjacent protected work', async ({ page }) => {

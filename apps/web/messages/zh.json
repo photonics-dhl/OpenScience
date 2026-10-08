@@ -23,7 +23,20 @@
     "openapi": "开放数据 API 规范",
     "sitemap": "公开期刊站点地图",
     "accountTools": "期刊账户工具",
-    "apply": "申请期刊入驻"
+    "apply": "申请期刊入驻",
+    "management": {
+      "title": "我的期刊",
+      "intro": "在这里维护你参与的期刊、目录与论文。",
+      "skip": "跳到内容",
+      "loading": "正在加载我的期刊…",
+      "loadFailed": "无法加载我的期刊。",
+      "retry": "重试加载",
+      "emptyTitle": "让研究汇成一本期刊。",
+      "emptyBody": "加入的期刊会出现在这里。你可以申请期刊入驻，维护目录与论文；也可以先浏览公开期刊。",
+      "apply": "申请期刊入驻",
+      "browse": "浏览期刊",
+      "open": "编辑工作台"
+    }
   },
   "developers": {
     "title": "开发者 API",
@@ -1079,7 +1092,9 @@
   "dashboard": {
     "eyebrow": "个人工作区",
     "title": "研究桌面",
-    "welcome": "{name}，继续手头的研究，或和 Hermes 一起梳理下一步。",
+    "welcome": "{name}，继续一项研究，或带来一篇新论文。",
+    "processingHistory": "处理历史",
+    "researchTools": "资料与管理工具",
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
@@ -1361,6 +1376,7 @@
     },
     "research": {
       "title": "你的研究",
+      "actions": "研究工具：{title}",
       "empty": "还没有研究对象。",
       "noResults": "没有匹配的研究对象。",
       "search": "搜索标题或全文",

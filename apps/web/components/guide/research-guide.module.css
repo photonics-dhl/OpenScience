@@ -25,8 +25,8 @@
 .primary svg, .textLink svg, .chapterLink svg { flex: none; transition: transform 160ms ease-out; }
 .primary:active { transform: translateY(1px); }
 .chapterLink { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; color: var(--guide-muted); text-decoration: none; }
-.companionDock { width: 360px; max-width: 100%; min-height: 360px; margin: 18px 0 0; }
-.companionDock :global(.hermes-dock-anchor) { width: 100%; min-height: 360px; }
+.companionDock { width: 120px; max-width: 100%; min-height: 140px; margin: 24px 0 0; }
+.companionDock :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
 .companionDock :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 
 /* The research folio has its own hierarchy inside the invitation. */
@@ -108,7 +108,7 @@
   .intro h1 { font-size: 48px; }
   .intro { gap: 22px; }
   .proof { padding: 24px; }
-  .companionDock, .companionDock :global(.hermes-dock-anchor) { width: 196px; min-height: 156px; }
+  .companionDock, .companionDock :global(.hermes-dock-anchor) { width: 120px; min-height: 140px; }
   .scenes { grid-template-columns: 180px minmax(0, 1fr); gap: 0 32px; }
   .sceneContent { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }

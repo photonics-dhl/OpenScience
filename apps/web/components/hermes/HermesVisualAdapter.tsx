@@ -635,7 +635,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     <ContextMenu open={menuOpen} onOpenChange={updateMenuOpen}>
       <ContextMenuTrigger asChild>
         <button
-          aria-label={navigationOnly ? tn('dashboard') : t('guide.invoke')}
+          aria-label={t('guide.invoke')}
           className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
           onBlur={resetGaze}
           onClick={() => {

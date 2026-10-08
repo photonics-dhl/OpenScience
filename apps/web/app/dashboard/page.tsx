@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
-import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
@@ -236,51 +235,41 @@ export default function DashboardPage() {
       skipLabel={t('context.skip')}
     >
       <div className={styles.layout}>
-        <header className={styles.heading}>
-          <div>
-            <p data-reading-role="caption" className={styles.eyebrow}>
-              {t('eyebrow')}
-            </p>
-            <h1 className={styles.title}>
-              {t('title')}
-            </h1>
+        <header className={styles.heading} data-hermes-protected="true">
+          <div className={styles.headingCopy}>
+            <div className={styles.headingTitleRow}>
+              <h1 className={styles.title}>{t('title')}</h1>
+              {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="primary" href="/research-objects/new?mode=import">{t('import.title')}</Link> : null}
+            </div>
             <p data-reading-role="body" className={styles.welcome}>
               {t('welcome', { name: user?.displayName ?? '' })}
             </p>
           </div>
-          <details className={styles.deskTools}>
-            <summary>{t('deskTools')}</summary>
-            <div><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
-          </details>
         </header>
 
         <div className={styles.workSurface}>
-          <div className={styles.continueResearch}>
-            <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+          <div className={styles.researchStack}>
+            {researchObjects.length > 0 ? <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} /> : <ImportStage />}
+            {tasks.length > 0 || taskLoadState !== 'ready' ? (
+              <details className={styles.processHistory}>
+                <summary>{t('processingHistory')}</summary>
+                <HermesRail tasks={tasks} loadState={taskLoadState} headingLabel={t('processingHistory')} />
+              </details>
+            ) : null}
+            <details className={styles.researchTools}>
+              <summary>{t('researchTools')}</summary>
+              <div className={styles.literature}>
+                <LiteratureAcquisitionDisclosure initialTask={literatureTask}
+                  onAuthenticationRequired={handleLiteratureAuthenticationRequired}
+                  recoveryComplete={literatureRecovered} userId={user!.userId} />
+              </div>
+              <div className={styles.managementActions}><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
+            </details>
           </div>
           <div className={styles.taskRail}>
             <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
             <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
           </div>
-          {tasks.length > 0 || taskLoadState !== 'ready' ? (
-            <div className={styles.activityRail}>
-              <HermesRail tasks={tasks} loadState={taskLoadState} />
-            </div>
-          ) : null}
-        </div>
-        {researchObjects.length > 0 ? <div className={styles.startResearch}>
-          <ImportStage />
-        </div> : null}
-        <div className={styles.literature}>
-          <LiteratureAcquisitionDisclosure
-            initialTask={literatureTask}
-            onAuthenticationRequired={handleLiteratureAuthenticationRequired}
-            recoveryComplete={literatureRecovered}
-            userId={user!.userId}
-          />
-        </div>
-        <div className={styles.library}>
-          <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} />
         </div>
       </div>
       <HermesAssistantDrawer
