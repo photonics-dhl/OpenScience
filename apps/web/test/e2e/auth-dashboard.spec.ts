@@ -253,7 +253,7 @@ test('dashboard keeps the real task reachable in history without duplicating the
   });
 
   await page.goto(`${baseUrl}/dashboard`);
-  const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
+  const href = `/research-objects/${task.researchObjectId}/edit?ingestionTask=${task.id}`;
   await expect(page.locator(`[href="${href}"]`)).toHaveCount(1);
   await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
