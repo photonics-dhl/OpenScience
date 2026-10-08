@@ -8,7 +8,7 @@ import { compileIllustrationImagePrompt } from './scene-image';
 import type { IllustrationReviewIssue } from './illustration-review';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
-import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
+import { scientificComparisonBinding, scientificExpressionReferences, scientificEqualityRelations, normalizeScientificSourceNotation, type ScientificBinding, type ScientificRepresentation } from './scientific-comparison';
 
 type ScientificScene = { title: string; narration: string; illustration: Extract<IllustrationBrief, { schemaVersion: 2 }>; visualAction?: string; sourceClaimIds: string[]; paperOriginal?: { assetId: string; objectKey: string; contentHash: string } };
 // New candidates only: stored historical briefs stay readable, but a freshly
@@ -47,8 +47,10 @@ const SOURCE_UNIT = '(?:da|[qryzafpnμumcdhkMGTPEZYRQ])?(?:Hz|eV|mol|rad|sr|Pa|s
 const SOURCE_HYPHENATED_UNIT = new RegExp(`^[-–]${SOURCE_UNIT}(?![\\p{L}\\p{N}_/%^+-])`, 'u');
 const NEXT_SOURCE_QUANTITY = new RegExp(`^[ \\t]+[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[-–]|[ \\t]+)${SOURCE_UNIT}(?![\\p{L}\\p{N}_/%^+-])`, 'u');
 const STRUCTURAL_REFERENCE_PATTERN = /\b(?:label|subject|scene|figure|fig\.?|step|stage|panel|node|arrow|element)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*\b|(?:图号|图|标签|场景|对象|主体|步骤|阶段|节点|箭头|序号)\s*#?\d+[a-z]?(?:[/,-][a-z0-9]+)*|第?\d+幕|\d+号/giu;
-function stripStructuralReferences(value: string, nativeQuantitySyntax = false): string {
-  if (nativeQuantitySyntax) value = value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_])/giu, ';');
+function stripStructuralReferences(value: string, nativeQuantitySyntax = false, sourceNotation = false): string {
+  if (nativeQuantitySyntax) value = sourceNotation
+    ? value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_]|\.\d)(?:\/[ \t]*S?\d+[a-z](?![\p{L}\p{N}_]|\.\d))*/giu, ';')
+    : value.replace(/\b(?:table|fig(?:ure)?\.?)\s*S?\d+[a-z]?(?![\p{L}\p{N}_])/giu, ';');
   return value.replace(/\b(?:fig\.?|figure)\s*S\d+[a-z]?\s*\|/giu, ';')
     .replace(/\([^()]*\)|\[[^\[\]]*\]/gu, group => {
     const inner = group.slice(1, -1), remaining = inner.replace(STRUCTURAL_REFERENCE_PATTERN, '');
@@ -57,8 +59,8 @@ function stripStructuralReferences(value: string, nativeQuantitySyntax = false):
 }
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
-function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): ScientificQuantity[] {
-  const value = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
+function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): ScientificQuantity[] {
+  const formatted = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
     .replace(/(?<![\\*])(\*{1,2})([A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*)\1(?!\*)/gu,
@@ -68,7 +70,20 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     .replaceAll('阿秒', 'as').replaceAll('飞秒', 'fs').replaceAll('纳米', 'nm')
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
-    .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax);
+    .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax, sourceNotation);
+  const normalized = sourceNotation ? normalizeScientificSourceNotation(formatted) : { text: formatted, unsupported: [] };
+  // Unsupported TeX is opaque to the existing AST: no interior/prefix may
+  // supply evidence for a different expression. Keep the failed range as a
+  // rejected expression and preserve all positions in the comparison copy.
+  // Keep non-prose math barriers at both ends: spaces alone could splice the
+  // operands around a failed factor into a different, shorter expression.
+  const characters = normalized.text.split('');
+  for (const range of normalized.unsupported) {
+    characters.fill(' ', range.start, range.end);
+    characters[range.start] = '$';
+    characters[range.end - 1] = '$';
+  }
+  const value = characters.join('');
   const ratioPattern = /(?<![\d.])\d+(?:\.\d+)?(?:[ \t]*:[ \t]*\d+(?:\.\d+)?){1,3}(?![\d.])/gu;
   const ratios = [...value.matchAll(ratioPattern)].map(match => ({
     value: match[0].replace(/[ \t]*:[ \t]*/gu, ':'), unit: 'ratio', binding: null,
@@ -88,7 +103,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     const unit = sourceQuantityAnnotations ? SOURCE_HYPHENATED_UNIT.exec(after) : legacyHz;
     return unit ? [{ start: match.index!, end: match.index! + match[0].length + unit[0].length, legacyHz: !!legacyHz }] : [];
   }) : [];
-  const originalReferences = scientificExpressionReferences(scalarValue);
+  const originalReferences = scientificExpressionReferences(scalarValue, sourceNotation);
   // A hyphenated unit followed by a parenthetical variable assignment is source
   // prose, not subtraction followed by a function. Recognize only the complete
   // standalone prefix; enclosing arithmetic and operator continuations stay math.
@@ -147,20 +162,27 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
       ?? /\b(FWHM[_\s]*[ST])\s*\(\s*$/iu.exec(before)?.[1];
     const distantPhotonCount = !unit && /N[_\s]*SP[^。.;\n]{0,70}$/iu.test(before) ? 'nsp' : null;
     const variable = (directVariable ?? distantPhotonCount)?.toLowerCase().replaceAll('_', '') ?? null;
+    // A scalar next to opaque math is not an independent reported result.
+    // This is local adjacency only: a semicolon/punctuation boundary still
+    // allows complete quantities elsewhere in the same supporting quote.
+    const remaining = scalarValue.slice(match.index! + raw.length);
+    const afterUnit = remaining.slice(unitPattern.exec(remaining)?.[0].length ?? 0);
+    const opaqueFactor = sourceNotation && (/^[ \t]*(?:[-+*×·/^][ \t]*)?\$/u.test(afterUnit)
+      || /\$[ \t]*(?:[-+*×·/^][ \t]*)?$/u.test(scalarValue.slice(0, match.index!)));
     if (comparison) expressionRanges.push(comparison);
     results.push({ quantity: { value: normalizedNumber, unit,
-      binding: comparison?.prose ? null : comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null),
+      binding: opaqueFactor ? { kind: 'unsupported-expression' } : comparison?.prose ? null : comparison?.binding ?? (variable ? { kind: 'symbol', key: variable } : null),
       ...(comparison?.prose && comparison.binding.kind !== 'unsupported-expression' ? { representations: [comparison.binding] } : {}) }, index: match.index! });
   }
   // Denominators and coefficients inside a parsed LHS are structure, not
   // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
-  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue) : originalReferences)
+  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue, sourceNotation) : originalReferences)
     .filter(reference => !hyphenatedUnits.some(range => range.legacyHz && reference.start === range.start && reference.end === range.end))
     .filter(reference => !expressionRanges.some(range => reference.start >= range.start
       && (reference.end <= range.end || reference.unsupported && reference.start < range.end)));
   const structuralRanges = [...expressionRanges, ...references];
   const equalities = scientificEqualityRelations(comparisonValue).map(([left, right]) => [representationKey(left), representationKey(right)] as [string, string]);
-  return [...ratios, ...references.map(reference => ({ value: reference.key, unit: '__expression__',
+  return [...ratios, ...[...references, ...normalized.unsupported].map(reference => ({ value: reference.key, unit: '__expression__',
     binding: reference.unsupported ? { kind: 'unsupported-expression' as const } : null })),
     ...results.filter(item => !structuralRanges.some(range => item.index >= range.start && item.index < range.end))
     .map(item => ({ ...item.quantity, equalities }))];
@@ -190,12 +212,12 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   }
   return true;
 }
-function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false): void {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): void {
   const cache = new Map<string, ScientificQuantity[]>();
   const quantities = (text: string) => {
     const existing = cache.get(text);
     if (existing) return existing;
-    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
+    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
     cache.set(text, parsed);
     return parsed;
   };
@@ -474,7 +496,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[] } {
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
   const { sourceLookup } = illustrationSources(claims);
@@ -541,7 +563,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
       ...illustration.labels.map((label, index): readonly [string, string] => [`labels[${index}]`, label]),
       ...illustration.constraints.map((constraint, index): readonly [string, string] => [`constraints[${index}]`, constraint])];
     requireBoundNumericalResults(sourceQuantityLocations ? quantityFields.map(([field, value]) => [`scenes[${sceneIndex}].${field}`, value] as const) : quantityFields,
-    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse);
+    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
     return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, settings.narrative ? 600 : 120, 'narration'), illustration,
@@ -550,7 +572,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
   });
   requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [[sourceQuantityLocations ? 'narrative.mainMessage' : 'mainMessage', narrative.mainMessage] as const] : [])],
     [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
-    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse);
+    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };
 }

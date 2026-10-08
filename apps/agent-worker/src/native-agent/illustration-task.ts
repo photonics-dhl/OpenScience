@@ -45,8 +45,9 @@ const PAID_HZ_SCIENCE_DESCRIPTION = PAID_SCIENCE_DESCRIPTION + ' Each scene must
 const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Recognized hyphenated scientific units in source prose or consecutive typed quantities are quantities, not subtraction; a complete parenthetical named-variable assignment remains distinct from arithmetic. Explicit local source symbols may have spaced subscripts and an is/of approximation statement; preserve their exact symbol identity, not aliases or arithmetic factors.';
 const PAID_PROSE_SCIENCE_DESCRIPTION = PAID_ANNOTATION_SCIENCE_DESCRIPTION + ' A bare expression reference can match only that exact whole expression explicitly reported in the same supporting quote. Ordinary complete predicates after a comparison are prose, not units; unknown units remain binding. Use exact case-sensitive source IDs, supports relations and complete supporting text of 12..12000 characters; page markers or qualifiers cannot serve as subject bases. If an independent comparison is written after prose, separate it with a semicolon instead of an ambiguous mathematical wrapper; never remove functions, factors, terms or units.';
 const PAID_LOCATION_SCIENCE_DESCRIPTION = PAID_PROSE_SCIENCE_DESCRIPTION + ' Tell the smallest coherent visual story: do not make a scene for every summary field or auxiliary example. Each displayed quantity or complete expression must be explicitly described by a subject and supported by that subject\'s own quote; quoting it alone does not describe its object or meaning. Separate a standalone comparison from explanatory prose with a semicolon, retaining its operator, value and units. Quantity feedback names scenes[index] or narrative.mainMessage so repair that exact field and its subject basis. Only availableOriginals supplies original asset IDs; if empty, design a scene with paperOriginalAssetId null. sN is for subject bases; original paper_read uses P IDs. Keep the source case and its necessary conditions together.';
-const SCIENCE_DESCRIPTION = PAID_LOCATION_SCIENCE_DESCRIPTION.replace('Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key.',
+const PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION = PAID_LOCATION_SCIENCE_DESCRIPTION.replace('Each scene must include paperOriginalAssetId; for a designed image emit "paperOriginalAssetId": null, not an omitted key.',
   'paperOriginalAssetId is optional: omission means a designed image and the tool supplies null. To reuse an original, provide its exact available asset ID.');
+const SCIENCE_DESCRIPTION = PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION + ' Complete numbered Fig panel references joined by a slash are structural references, never quantities. Source TeX and displayed notation can match only after complete, bounded format normalization; retain every variable, function, factor and denominator. Unknown syntax remains unsupported; source quotes stay exact.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 const CONTEXT_DESCRIPTION = 'Read the exact saved six-dimensional paper understanding, Claims and bound sources, eligible originals and requested scope before art. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs. Faithfully illustrate the author\'s meaning against the source; do not assess the paper\'s original scientific validity or derive new quantities. Full design guidance is returned on every successful paper_illustration_science result; apply it after preserving the source meaning.';
 export const NATIVE_ILLUSTRATION_TOOLS = [
@@ -64,13 +65,14 @@ type MaterializerInput = { claims: readonly PresentationClaim[]; settings: Story
 function stopped(): never { throw new Error('[blocked] Native illustration selected history changed'); }
 
 /** Deterministic tools only. The installed Agent makes all planning and scientific review decisions. */
-export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean }) {
+export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean }) {
   const scienceFeedback = input.scienceFeedback === true;
   const deferDesignGuidance = input.deferDesignGuidance === true;
   const sourceQuantityAnnotations = input.sourceQuantityAnnotations === true;
   const sourceQuantityProse = input.sourceQuantityProse === true;
   const sourceQuantityLocations = input.sourceQuantityLocations === true;
   const scienceRepairCallIdFeedback = input.scienceRepairCallIdFeedback === true;
+  const sourceNotation = input.sourceNotation === true;
   const styles = loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan');
   type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience> };
   type Art = { id: string; sequence: number; scienceId: string; document: ReturnType<typeof materializeIllustrationArt>;
@@ -85,7 +87,7 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
   const materializeScience = (args: Record<string, unknown>, sequence: number, callId: string) => {
     const normalized = normalizeScienceArgs(args);
     pendingScience = { id: callId, sequence, args: structuredClone(normalized), rejected: true };
-    const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations);
+    const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, sourceNotation);
     pendingScience.rejected = false;
     science = { id: callId, sequence, intent };
     return { status: 'science_ready', scienceToolCallId: callId, intent,
@@ -202,14 +204,15 @@ export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | n
   const originalScience = originalTools?.find(tool => tool.name === 'paper_illustration_science');
   const originalRepair = originalTools?.find(tool => tool.name === 'paper_illustration_science_repair');
   const scienceDescription = originalScience?.description;
-  const scienceFeedback = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_HZ_SCIENCE_DESCRIPTION;
-  const sourceQuantityAnnotations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION;
-  const sourceQuantityProse = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION;
-  const sourceQuantityLocations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION;
-  const defaultPaperOriginalRef = !saved || scienceDescription === SCIENCE_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, SCIENCE_SCHEMA);
+  const scienceFeedback = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_HZ_SCIENCE_DESCRIPTION;
+  const sourceQuantityAnnotations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION;
+  const sourceQuantityProse = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION;
+  const sourceQuantityLocations = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION;
+  const defaultPaperOriginalRef = !saved || (scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION) && isDeepStrictEqual(originalScience?.parameters, SCIENCE_SCHEMA);
   const deferDesignGuidance = !saved || originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description === CONTEXT_DESCRIPTION;
   const scienceRepairCallIdFeedback = !saved || originalRepair?.description.includes(SCIENCE_REPAIR_CALL_ID_MARKER) === true;
-  return { sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
+  const sourceNotation = !saved || scienceDescription === SCIENCE_DESCRIPTION;
+  return { sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
 }
 
 /**
@@ -235,7 +238,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   if (execution?.profile !== 'paper-illustration') stopped();
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved);
+  const { sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)],
@@ -245,7 +248,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
-  const materializer = createNativeIllustrationMaterializer({ ...input, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
+  const materializer = createNativeIllustrationMaterializer({ ...input, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
