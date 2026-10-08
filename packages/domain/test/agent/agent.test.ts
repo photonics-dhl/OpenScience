@@ -182,6 +182,26 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
   });
 
+  it('allows one recovery retry for a late paid scene-image result without broadening blocked retries', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
+    const taskId = 'paid-scene-image-recovery';
+    db.agentTasks.push({
+      id: taskId, sessionId: session.id, kind: 'presentation.generate', status: 'failed', progress: 10,
+      retryCount: 0, executionAttempt: 2, dispatchedAt: new Date(),
+      payload: { kind: 'image', researchObjectId: ro.id, versionId: 'version-1', sourceClaimIds: ['claim-1'],
+        sceneImage: { storyboardAssetId: 'storyboard-1', sceneIndex: 0 } },
+      interestContext: null, idempotencyKey: null, result: null,
+      error: '[blocked] Previous paid image attempt has no saved result; explicit new generation is required',
+      createdAt: new Date(), updatedAt: new Date(), deletedAt: null,
+    });
+
+    await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ canRetry: true });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, status: 'pending', retryCount: 1 });
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === taskId)).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
   it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
     const { deps, user, ro, db, redis } = await makeDeps(2);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });

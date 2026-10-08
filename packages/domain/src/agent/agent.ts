@@ -187,15 +187,22 @@ function evaluateAgentTaskRetryEligibility(
   if (task.retryCount < 2 && isRetryableSourceSearchIndex(task)) {
     return { authorityValid: true, canRetry: Boolean(researchObject) };
   }
-  const manualReviewPreflight = task.kind === 'presentation.generate'
-    && task.error === '[blocked] Saved PNG review replacement has no current receipt'
-    && isJsonRecord(task.payload) && !('hermesRunAuthority' in task.payload);
-  if (task.status !== 'failed' || task.retryCount !== 0 || (task.error?.startsWith('[blocked]') && !manualReviewPreflight)) {
-    return { authorityValid: true, canRetry: false };
-  }
   const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
     ? task.payload as Record<string, unknown>
     : {};
+  const manualReviewPreflight = task.kind === 'presentation.generate'
+    && task.error === '[blocked] Saved PNG review replacement has no current receipt'
+    && !('hermesRunAuthority' in payload);
+  // A slow commercial image response can arrive just after the worker lease
+  // advances to the next execution attempt. Retrying this exact state reuses
+  // the original provider receipt and never creates a second paid request.
+  const latePaidImageRecovery = task.kind === 'presentation.generate'
+    && task.error === '[blocked] Previous paid image attempt has no saved result; explicit new generation is required'
+    && isJsonRecord(payload.sceneImage) && !('hermesRunAuthority' in payload);
+  if (task.status !== 'failed' || task.retryCount !== 0
+    || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)) {
+    return { authorityValid: true, canRetry: false };
+  }
   if (task.kind === 'sdf.extract') {
     return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && Boolean(payload.manuscriptText.trim()) && !('artifactId' in payload) };
   }
