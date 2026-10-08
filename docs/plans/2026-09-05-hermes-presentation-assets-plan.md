@@ -1,4 +1,4 @@
-> HISTORICAL — 本文保留当时的实施目标、版本、待办及结果，不是当前工作指令；不得据此重跑测试、迁移、生成或发布。续作只读 [当前交接](../handoff/2026-09-10-hermes-web-image-handoff.md)；未完成需求仍须按当前基线逐项判断。
+> Task 1–4 是已完成的历史实施记录，不据此重跑测试、迁移、生成或发布。末节「2026-10-08 原生论文视频接线」已获独立 High 有界设计 GO，仍待写权协调、尚未实施；运行状态、发布和实际质量仍以 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md) 为准。
 
 # Hermes Presentation Assets Implementation Plan
 
@@ -91,3 +91,93 @@
 - [x] Keep MiniMax image/video disabled unless exact provider/model/price/secret and one administrator approval journey are available; record this as an optional blocked capability, not a Task 12 blocker.
 - [x] Set Taskmaster Task 11 to `done` only after deterministic production acceptance. Production RO `OSR-2026-000019` replayed SVG/HTML hashes exactly (`8d5f8f23…c640` / `b20f83cc…1198`), served the safe HTML publicly, and enforced `presentation_not_evidence`.
 - [x] Sync CURRENT docs and run docs gates.
+
+## 2026-10-08 原生论文视频接线（设计候选，源码仍只读）
+
+### 目标、基线与复用边界
+
+- 用户目标：正确理解论文后生成精美、自然配音的商业模型视频。Hermes 自动完成中间处理与技术审阅，用户决定最终效果和采用；不增加逐幕、逐图、逐阶段的强制人工确认。保留来源、权限、额度、未知付费终态和最终公开边界。
+- 代码定位基于 canonical `7755a5ef7ab0a6bfa5184b54dd93c4054f883be4`，包含刚集成的旧 paid ART 重放兼容；该身份只标设计审查来源，不是线上版本。开始写代码前由总控确认最终生图提交及符号归属。
+- 复用唯一 Nous Hermes Agent、`paper-illustration` profile、`presentation.generate`、既有队列/SourceMap/六维/Claims/Evidence/科学与艺术工具。视频模型只消费已审表达，不重新理解论文；不新增 planner、Agent、任务库、队列、数据库迁移或科研内容样本答案。
+- Synclip Gateway/spool/broker、paid 恢复及 Linux 路径/权限验证已由总控集成验收；本设计不重跑未变检查。账户权限、无水印且科学正确的帧、自然旁白和真实成片仍未验收。
+
+### 最小请求与工具字段
+
+使用既有 `storyboard.output='video'` 和 `narrative=true` 表示原生全文叙事；仅扩展 narrative 对 video 的合法组合，不新增 nativeVideo 标志。未携带原生执行标记的旧任务、旧请求键和保存会话继续原路径。新 UI/Hermes 视频意图传入该组合，不让用户选择内部执行引擎。
+
+| 既有工具 | 新视频分支的最小差额 | 固定不变的约束 |
+|---|---|---|
+| `paper_illustration_context` | 返回原设置、已理解全文、Claims/sN、可用参考与实际已实现的 frame/audio 策略 | 重用已审理解；paper_read/paper_view 核对原文，不做第二次全文分析 |
+| `paper_illustration_science` / `_science_repair` | 根增加现有 `videoProduction`；scene 增加 `durationSeconds`、现有 `videoDirection` | 仍保留原 title/narration/message/domain/encoding/labels/subjects/basis/constraints；运动、生成对象、条件与旁白均须由同 scene 的已有来源支持。局部修复保留精确 scienceToolCallId |
+| `paper_illustration_art` | 输入沿用 scienceToolCallId 和逐幕 layout/treatment/style；输出完整 video document 及逐幕帧、视频提示词 | art 只表达已保存含义，不添加运动事实或改旁白；新科学含义返回 science 修订 |
+| `paper_illustration_review` | 核对 exact planToolCallId 的完整 document、帧提示词、视频提示词和旁白 | accepted/blocked 绑定完整候选；不能拿静态图片审阅代替动作、时序、镜头、旁白、条件和限制的审阅 |
+
+`videoProduction` 和 `videoDirection` 直接复用 `packages/domain/src/assets/storyboard.ts` 的已有字段/枚举。新 LTX 计划按已实现的 5/10/15 秒、3–6 幕和原总时长/旁白边界规划，执行时不再默默把原生计划时长取整。艺术侧继续生成 `IllustrationBrief`；新视频 document 保留逐幕 illustration 和原 narrative，避免只剩 visualAction 文本而丢掉参考帧的已审科学设计。
+
+`parseStoryboardDocument` 增一个内部解析选项，由已验证的 settings.narrative 与 output 共同选择新视频形状；默认旧调用的键集合和校验语义不变。`presentationStoryboardView` 从原 provenance.storyboardSettings 传该选项；`handler.readStoryboardCheckpoint` 必须去掉新分支固定按 image 解析的假设，并从已验证的 expected.payload.storyboard 取得同一模式。science/ART 物化、保存视图、checkpoint 恢复、终态采用及帧/视频父项消费均传同一模式；checkpoint 内保存的 payload、父计划模式或调用者模式不一致即拒绝，不能丢掉视频字段再当图片读取。新分支同时执行既有插图来源校验及视频方向校验，不放宽 sourceNotation/数值/空间关系规则。
+
+不新增一个视频规划工具或最终提交接口。现有 `illustrationPrompts` 每项保持 `{sceneIndex,prompt}`，新视频项仅扩展 `videoPrompt`；旧图片消费者继续用 prompt。`compileShotPrompt` 从现有 spool 私有函数变为同文件导出的确定性函数，供原生 ART/REVIEW 和 spool 共用；不能在审阅之后另写一套镜头提示词。
+
+### 原调用链与完整消费绑定
+
+1. 原 generations API → `persistAgentTaskCoreInTransaction` → `supportsNativeIllustration`，仅在创建合法新视频任务时附原 `initialNativeAgentExecution(...,'paper-illustration')`。请求重放先复用旧任务；不将旧 fixed-Worker/paid 任务升级为原生，也不再次扣费。
+2. `createPresentationGenerationHandler` → 既有全文/Claims/Evidence 权威读取 → `prepareNativeIllustration` → `runNativeIllustrationTask`。继续每轮检查任务、权限、来源、父计划及 CAS；视频进入同一 science→art→review 循环，终点仍是私有计划。
+   原 `research-run.ts` 承担自动推进：新建 run 的既有设置绑定 video 意图，原生计划和帧的技术审阅合格后直接创建下一阶段，最终停在已有 awaiting_video_review；不在原生 Agent 内发起生图/视频收费。不得把旧只授权图片的 grant 升为视频，新增 video step 要占原 validGrant 的已授权槽位，sceneLimit 从剩余预算预留该 step 后计算；不足时缩小合法计划或明确预算不足，不扩大 maxAgentTasks。
+3. `finish/reconstruct` → 原 `storyboardCheckpoint/storyboardReview/illustrationPrompts` → 原资产落库。`review.candidateHash` 与真实终态 checkpoint 同时绑定完整视频 document 和工具回执；沿现有调用记录证明被审的 prompt 等于实际 prompt，不增加新 hash、账本或门禁。
+4. 原 scene.image 分支共用现有原生父计划核验，允许合法的 native video 父计划。图像只消费已保存的该 scene.prompt；图像完成后的科学/像素检查仍自动执行，合格私有帧可被后续视频技术步骤采用，不新增人工按钮。
+5. 原 `video.create` → `requireVideoGenerationParents` → 原 handler → `SynclipVideoSpool.generate`。保持同 RO/版本/来源、当前父计划和有序图片任务 ID；补传已核验的逐幕 videoPrompt。spool 重新用同一编译函数对照后才消费，缺失/不一致在外部提交前失败；旧任务保持原编译与恢复路径。
+6. broker 继续核对图片回执、已审 PNG、保存原图及刷新后的原图字节，使用短 HTTPS 首帧链接。现有 `inputHash` 已覆盖完整 storyboard 与每帧文件；旁白、镜头和帧都绑定该输入，不另建媒体清单库。
+7. 配音是同一 video.create 的执行步骤：仅使用 scene.narration 的完整顺序文本，不另手写脚本。复用 Synclip 既有异步合同及 Gateway 边界补音频适配，TTS receipt/终态按原任务与 sceneIndex 保存；字节实测时长后完成镜头对齐、音量与 mux，再写原 video 资产。未知 TTS 提交也不得重发。失败保留片段/音频/回执，不能宣称完整成片。
+
+当前 broker 只实现 start-reference + Synclip 图片回执，且 external-narration 尚未完成音轨消费；不能因为枚举包含其他选项就宣称 start/end、paper-original、native/hybrid 或 burn-in 可执行。规划可记录未完成的 intended 策略，但执行预检须明确拒绝不支持的策略，不能静默丢掉或回退。带配音的最终交付不得把 audio-pending/静音标为成功。
+
+TTS 先于首次视频 POST 做实际时长检查；过长不能重新打开已 accepted 的 science，也不能在旧 video.create 下换父计划。确定性执行流程为：
+
+- Worker 核对实际音频长度与原计划后，保留音频与其绑定，返回明确的音频时长诊断；只有原 spool 中所有视频 attempt/receipt 均不存在，才能记录“尚无视频外部提交”。旧 video task 及 spool 保持终态不可支付，原任务/父项不改。
+- 原 research-run owner 在 Serializable/CAS 下重验 actor/run/来源/原父项、上述零视频提交证明及剩余授权槽位，沿既有替代/修订谱系只创建一次 base-bound storyboard 修订任务，给出原声轨时长和 source-faithful 口语目标。新任务走正常幂等/收费，不调用仅用于 rejected science 的 repair 工具来重开旧终审。若现有替代路径不能保留旧任务或预算不足，私有停止并说明原因，不开新 run 或扩大 grant。
+- 新计划完成真实终审后，重新判定所有帧的消费资格/复用范围，再创建一个绑定新父项和输入的 video task；迟到的旧 Worker 回调、旧 receipt 或旧 step 不得使旧任务再可提交。视频提交前始终检查新计划的音轨长度。
+- 音频恢复绑定 provider + 原远端 task ID + sceneIndex + **确切 narration 文本和 TTS 参数**（已选 voice、speed 及任何实际支持并发送的字段），不能只比较文本；完全相同才能 GET/复用已成功音频。文字或参数变化是原授权/预算内的新生成，旧 receipt 保留。未知 TTS/视频提交不触发自动新付费修订；预算耗尽或未知结果保持明确私有失败/阻断，不变速强塞、静音降级或新增人工阶段审批。
+
+### 父分镜修订与现有资产复用
+
+新建原生视频与旧第三幕返工是两个接入验收点。当前 `supportsNativeIllustration` 排除 baseAssetId，`requireNativeIllustrationTerminalSource` 要求 context.baseIdentity=null；仅开放新建无法修复第三幕。
+
+- 新修订仍创建原 `presentation.generate` 私有任务，保留 baseAssetId 与源身份；每轮和终态用原 `readStoryboardPlanningContext` 重验该父项，不覆盖旧任务、图片、审阅或公开版本。
+- 单幕修订需要在既有 StoryboardRequest/API 增加可选 `revisionSceneIndex`，仅 video + baseAssetId 时合法。它防止“只修第三幕”的指令意外重写其他幕；自然语言要求和全量父 ID 本身不足以强制该范围。最终固定 scene 数量/顺序、root narrative/videoProduction（包括全局 visualContinuity）、全局 style/locale/figurePlan 与影响其他幕的资源选择；除目标 scene 外，科学、旁白、艺术、方向字段及已保存帧/视频提示词均须与父项原样。新 instruction 只作用于目标幕，不得借它改变其他幕的渲染结果。没有该字段的合法修订保留全量修订语义。
+- `requireVideoGenerationParents` 当前要求每帧直接属于当前 storyboard，不能直接把旧帧重新登记到新父项。跨父复用只允许明确 base 链、同 sceneIndex、相同 scene 全内容/来源/原审核/帧身份，且**该帧的确切已验证 prompt 与实际渲染设置/资源版本均一致**；全局风格或资源变化不能仅靠 scene 相等复用。新计划若明确沿用父项资源，须先由原 native 完整回放证明该父 prompt/资源，而不是复制一个未经核验的 saved prompt。保留真实原任务 ID/审批/来源，不制造别名或伪造新回执；变化的 scene 必须重新制作/审阅，不能借此接受水印或错误几何。
+- 自动执行保持资产 draft，不伪造 `status=approved`。新原生视频父计划以真实完成 checkpoint + accepted storyboardReview 证明技术合格；帧复用 `sceneImageReviewTaskResult` 和 `requireAcceptedSceneImageReview` 校验保存像素/来源/真实拥有任务，draft 或原 approved 都必须满足该技术条件。现有导入/历史副本的跳过分支不能给新视频自动消费背书；blocked/rejected/deleted、旧无回执或来源已变始终拒绝。用户最终采用/公开仍执行原授权与状态变更。
+- 将上述判定共用在 `requireVideoGenerationParents`、资产列表的既有 canGenerateSceneImage/canGenerateVideo 投影及 research-run 自动推进。客户端可获得服务端派生的有序 videoFrameAssetIds，替代当前仅查 status=approved 的选择逻辑；这只是同一资格判定的读投影，不增加持久状态或人工审批。服务端写入前仍重新加载验证，不信任客户端布尔值/ID。
+
+### paid / sourceNotation / Skill 兼容
+
+- 新视频工具定义只加入新建会话；保存会话从首轮真实 request.options.tools/allowedTools 恢复原定义。`nativeIllustrationToolProfile` 必须从已保存且已识别的工具 schema/description 恢复**整个能力元组**：media 形状、scienceFeedback、sourceQuantityAnnotations/Prose/Locations、defaultPaperOriginalRef、deferDesignGuidance、scienceRepairCallIdFeedback、sourceNotation；新建与恢复视频须得出同一个元组，不能仅修 sourceNotation。新视频定义的显式匹配增加到既有 profile 判定中，不另存一份可漂移标志；未知定义不得猜测升级。历史 image 定义仍走原来的各项精确判定。
+- 原 `savedResult/reconstruct/finish` 保留 `7755a5ef` 的 **current-first → verified saved 完整 prefix/exact call → 唯一 v19 Execution fallback → 整 receipt deepEqual** 边界。fallback 只处理已识别资源差异并恢复调用前状态；science profile 不回退，不信任/拼接 saved prompt，不把历史 tool output 当成新模型结果。视频新分支不得扩大 fallback 的资源版本或适用工具；新增状态也必须在重建失败时一并恢复。
+- sourceNotation 只复用已收敛的通用表达式识别；不修改 stripStructuralReferences/scientific-comparison 或放宽科学关系。新视频参数沿现有 science/art 物化边界传递，旧模式接受/拒绝集合及原结果字节保持。
+- 不扩大 maxTurns、重试、原费用或未知终态恢复授权。供应商/API/音色选择留在 Gateway/执行器，Hermes 文本不得携带 key/URL 或调用外部 API。
+
+### 准备申请的文件与精确符号
+
+| 分组 | 文件 / 符号 | 写入界限 |
+|---|---|---|
+| 入口与终态 | `packages/domain/src/agent/native-agent-execution.ts`：supportsNativeIllustration、requireNativeAgentExecutionAuthority、requireNativeIllustrationTerminalSource、nativeAgentTerminalResult；`agent.ts`：persistAgentTaskCoreInTransaction 的既有路由调用 | 保留 profile/队列/收费/CAS；新请求与修订明确分支，不改变旧 marker |
+| 自动推进与资格 | `packages/domain/src/agent/research-run.ts`：既有新 run/故事板设置构造、任务预算、storyboard/scene_image 完成后的 advance 与 authority；`assets/presentation-asset.ts`：既有资产资格投影；`assets/scene-image.ts`：现有只读 review 校验调用 | 只对新绑定 video 意图和授权的 run 自动推进；草稿技术可消费不等于用户采用/公开 |
+| 数据形状 | `packages/domain/src/assets/storyboard.ts`：StoryboardRequest、parseStoryboardRequest、parseStoryboardDocument、presentationStoryboardView；`video.ts`：requireVideoGenerationParents | 复用现有类型/来源/父项校验；仅增加视频叙事字段与明确的局部修订范围 |
+| 原生工具 | `apps/agent-worker/src/native-agent/illustration-task.ts`：工具 schema/description、nativeIllustrationToolProfile、createNativeIllustrationMaterializer.call/reconstruct/finish、runNativeIllustrationTask | 同一个 Agent 和 science/art/review；在生图 owner 最终提交之后才获写权 |
+| 确定性物化 | `presentation/illustration-planner.ts`：materializeIllustrationScience、materializeIllustrationArt；`illustration-review.ts`：materializeIllustrationReview/parseIllustrationReview；`storyboard.ts`：现有 sourceBoundAnimation/materialize 的兼容投影 | 只补视频字段，复用既有科学绑定；不改来源/表达式识别函数。兼容动画元数据不能当商业运动已验证 |
+| 消费 | `presentation/handler.ts`：readStoryboardCheckpoint、prepareNativeIllustration、原生父计划/scene.image、video.create；`host-video-spool.ts`：输入类型；`synclip-video-spool.ts`：compileShotPrompt/generate；`infra/synclip-video/broker.mjs`：已有逐镜执行/音轨组装 | checkpoint 模式全链一致；共用原生父计划核验，提示词/帧/旁白同源，保持 paid 恢复及资源边界 |
+| API/意图 | `apps/api/src/routes/presentation-assets.ts`：storyboard 请求 schema；`apps/web/components/hermes/HermesPresentationAction.tsx`：既有新建/修订视频请求；对应 API 客户端类型 | 新视频默认原生全文叙事；仅局部修订增加 revisionSceneIndex；UI 文件须由总控与生图 owner 定序 |
+| 音频真缺口 | `packages/ai-gateway` 的 Synclip 音频适配与对应 broker 消费 | 单独安排后续写权；仅补 GET voices / POST audio / 同任务轮询与有界音频读取，不建立第二套 TTS 服务或队列 |
+
+### 必要验收与发布边界
+
+1. 无外呼定向回归：旧 paid science/art/review 逐项重放相同；v19/v20、sourceNotation 及整个能力元组不漂移；新视频首次/恢复/checkpoint/父项消费识别相同合同和解析模式；拒绝伪造 review ID、改旁白/运动/帧提示词、父项或来源变化。
+2. 原 handler 合同：新 narrative video 真进入原生 Agent，终审完整计划；scene.image 和 video.create 消费同一计划、同一顺序；跨父复用同时比较源/帧/prompt/渲染资源；单幕修订拒绝改变 scene 数量/顺序、全局连续性/风格和其他幕 prompt；中间技术审阅不新增人工确认。
+3. 执行合同：音频时长/策略先检；长音频只能由原 run owner 创建一次有预算的新父项修订，旧 video task 始终不可支付，资格重验后新任务绑定新父项；文本相同但 voice/speed 改变不能复用旧音频；成功/失败/未知 TTS 与视频都保留 receipt，恢复不重复 POST；最终 result 不再为 audio-pending。
+4. 按改动范围运行 Native/Domain/API/Worker 的既有定向测试、类型检查及对应 Linux CI。复用未变视频接口/路径/权限证据；不为了本设计重跑旧验证或模型任务。
+5. 独立 High 先审本设计与新增差额，协调写权后才实施；发版复用原发布/回退流程。真实论文的科学与艺术、连续运动、语音自然度和最终用户采用仍须以实际产物验收，计划/CI 不能代替。
+
+### 设计审查记录与写权请求
+
+2026-10-08 独立 High（Avicenna，`01a11988-3321-7e33-b76b-e771098c92a7`）对照上述固定源码身份审查并复核增量，结论为 **Bounded design GO**。四项 P2 已闭合：完整能力元组恢复、长音频后的权威修订/旧任务不可支付、局部修订与跨父复用的全局 prompt/资源约束、checkpoint 到消费的解析模式传递；未发现新增 P1/P2 设计阻断。该结论只批准进入协调后的实现，不证明代码、原子防陈旧提交、回放相等或真实音画已完成。
+
+申请总控按上表分配 Native/Domain/Worker/自动推进及 API 意图的精确符号写权，并确定音频适配后续 owner；实施前独立树须从最终已集成生图基线续接。当前只改本文，未触碰共享源码、CI、全局状态文档或生产；没有模型/视频/TTS请求，也未重跑已通过检查。
