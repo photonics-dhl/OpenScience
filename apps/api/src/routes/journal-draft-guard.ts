@@ -12,6 +12,9 @@ export function registerJournalDraftGuard(app: FastifyInstance, deps: Parameters
   app.addHook('preHandler', async (req, reply) => {
     // Fastify also runs hooks for requests without a matched route.
     const route = req.routeOptions.url ?? '';
+    // Public readers submit corrections, not editorial draft changes. That exact
+    // endpoint retains its own session, public-version and idempotency checks.
+    if (req.method === 'POST' && route === '/journals/:id/articles/:articleId/feedback') return;
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ||
         !route.startsWith('/journals/:id/articles/:articleId') || route.endsWith('/draft/restore')) return;
     reply.header('Cache-Control', 'no-store');
