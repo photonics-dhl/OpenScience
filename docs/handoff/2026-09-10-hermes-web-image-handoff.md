@@ -21,11 +21,12 @@
 - 2026-10-08 总控只读实核：`/opt/openscience/.release-id` 与公网 `/__release` 均为 `45a577a3a8f6bca78a063e7478fba131c5efb375`；`.rollback-id` 为 `3d6f24a5161665fded3af87111a73f6c69eca736`。两 SHA 均可在本仓解析，Worker 镜像标签匹配；Web/API/Worker 等容器 healthy。
 - 接管时 canonical HEAD 为 `748e33a42fe9619365ee8ad5f9e28ead2c1e3594`，其中指南 Hermes 专属栏调整尚未上线；本轮文档提交身份以 Git HEAD 为准。旧 e4ed2457、52f6c1a3、4ed53b71 等是历史发布，不是当前线上锚点。
 - 2026-10-08 总控已修复模型配置漂移：API/Worker 的全局 Gateway 原为 MiniMax-M3.1-Flash-Preview，而 Native 绑定 M3，session.ts 在外呼前确定性拒绝。独立 High GO 后仅恢复服务器实际存在的 .env.prod 中 MINIMAX_MODEL=M3，按原 FD9/私有备份/空闲复核流程同版本重建 Worker、API、Web；Native 绑定/目录、镜像/挂载及上述 release/rollback/公网身份不变。apply exit0、status=applied/stage=verified，操作前/关入口后/完成后 AgentTask、ResearchRun、JournalJob 均0；零模型请求、无迁移。私有备份/receipt：`/opt/openscience/observations/model-m3-restore-20261008T034213Z`；本机证据 `tmp/session-coordination-20261008/`，首次预备失败也保留。不存在的服务器 .env 未创建，Docker mounts 顺序变化按内容排序比较，未放宽身份检查。
-- 生图已获通知继续其既有授权、已准备且查重的唯一原生私有计划；配置修复不重放旧失败，也不证明真实模型效果。M3.1 像素审阅如需启用须独立选型验证，不能再通过改变全局主模型破坏 Native M3 绑定。
+- 生图在独立确认 Worker 两个模型均为 M3 后，已沿既存固定 key 提交唯一私有计划 `cb063919-3cf7-40ad-aeab-7d802410975f`（ROc896/version2047/同6Claims，hermes-agent/paper-illustration/M3）；owner 最近回报 running、CP started/5 turns，无生图/公开。请求/提交/状态在其独立树 `tmp/first-scene-native-{request,submission,status}.json`，只读原task，不建新key。M3.1 像素审阅如需启用须独立选型验证，不能再通过改变全局主模型破坏 Native M3 绑定。
 
 ## 未完成与下一动作
 - 生图：新 editorial 草稿同时要求 S(z) 曲线与旧 y–z 椭圆包络，session 正核对坐标、FWHM 与来源；保留已有全文提取。科学编码有冲突时须由原生 Hermes 同源核对，不能把仅改艺术风格当作科学修订已完成。session 已定位修订草稿藏于折叠区、多个旧方案同时带生图按钮，正改为默认最新待审方案、显式选择旧方案、按钮绑定当前选择；候选及真实入口验收未完成，“缓存导致”仍未证实。
-- 视频候选 `828f82ce110d8b169a02cc049221637925c1a077` 修正官方接口/首帧来源/任务恢复，`ec305b8510d33e4ef4cbcf34448ea98505af87db` 修检查点容错与恢复保留诊断，专属树干净、尚未集成或部署。owner 报告 LTX 须管理员端点/权限、duration_seconds 与 HTTP(S) 首帧，拟复用受控原图回执；10接口/13执行器/72来源测试及类型检查通过，14个旧展示fixture失败同基线，最终High证据和Linux验证待总控收取。已实看首帧水印与 z/k⊥ 科学表达问题，不能沿旧“已审批”直接出视频；第三幕、剩余镜头/成片/音轨继续验收，77音色目录成功不等于自然度认可。
+- 视频候选 `828f82ce` 与恢复候选 `ec305b85` 已分别集成为 `9b2e08d0`、`a74b34a0`；High/定向证据已核对其专属树 `tmp/synclip-video-contract/integration-evidence.md`，既有14项展示fixture及1项Domain空稿fixture失败保留为基线，不能报全套通过。CI `52594e2d` 补现有video Linux隔离/回执/handler测试与media恢复测试，并接入指定frontend/nanqing；精确集成CI尚待运行，未部署。参考帧 `1074f761` 水印和 z/k⊥ 表达需返工，第三幕 `2ef0b5f2` 仍科学阻断；管理员端点权限、音轨自然度和成片未验收，77音色目录不等于可用成片。当前视频规划仍为固定Worker，原生Hermes端到端规划未完成，已交视频owner先只读梳理可复用入口与最小差额。
+- 生图 UI 8文件候选新增原分镜选择组件/文案与既有media-retention harness/E2E；owner 已用5项浏览器用例复现并修复刷新父稿/场景、移走或拒绝新方案后的旧选择复活、视频父方案幕数变化问题，19单测与5 browser绿；最终High/精确SHA待收。总控已核对Playwright配置：此spec的beforeAll自启3037 Vite，单步WEB_BASE_URL只免重复启动注册页fixture，不跳过用例；待同候选一起接入两组paths、vitest与既有E2E workflow。
 - UI：用户要求提升整站审美，不能收缩成 Hermes 位置修补。依 [产品 UI 计划](../plans/2026-10-07-product-ui-quality-plan.md) 与现有审美 Skill 逐页改进；代码检查、截图与用户审美认可分别记录。
 - 生图 session 本轮报告浏览器工具因无法可靠识别 URL 停止，未继续点击；这不妨碍代码/来源核对，但真实视觉与站内入口仍未验收。不得绕过浏览器策略，也不按此错误推断产品故障。
 - RO9067 第四幕 `28ab61b0-7931-41d3-8200-2d63c1f986ad` 的供应商 POST 终态未知且无 receipt；需可核实的关联/幂等查询合同才能恢复，不为补齐 4/4 重发。分镜后是否强制用户审核再生图仍待产品策略确认；公开确认边界不变。
@@ -51,6 +52,7 @@
 - 旧 ChatGPT 浏览器链路、timer 与登录 profile 已按用户授权停用/清理；历史 spool/媒体/备份/回执保留，ScanSci Xvfb 保留。独立债务包括第14页 BGE dense 超限、旧 v11 的58 chunks、科学返工/经验/几何与三篇整体验收，局部修复不取消目标。
 - 运维目标保持现 ECS 先做功能/展示，集群和异机存储后续；对象定时、完整隔离恢复、独立告警及测试站未完成。恢复候选仍 NO-GO，crypto 保持用户暂停，不新 run/重试/合成 key/读旧私钥或 DPAPI。证据 `tmp/ops-readiness-20261003/crypto-phase-checkpoint.json` 与既有 observations 保留；只清理已确认归属且不再使用的生成物。
 - 公司正式上线与年度运维交接、期刊真实试用等既有目标保留，期刊任务见 [期刊 CURRENT](2026-09-15-journal-onboarding-handoff.md)；本次协调未扩大权限、版权或额度范围。
+- 已合入远端独有的10-06期刊交接 `6d1e8bd6`：共享理解代码da3045当时已部署，精确期刊/Hermes CI、16例Parser及ScanSci/BGE探针通过；真实期刊PDF→Hermes与人工科学质量仍未验收。历史部署证据保存在期刊CURRENT，不能覆盖本页当前生产锚点。生图unused离线安装目录的删除被自动审批policy拒绝，未执行且不绕过；仍在ignored tmp隔离，既有依赖与产品路径保留。
 
 ## Read first / 历史
 - 启动定向读本页、`node scripts/read-current-management-context.mjs`、Git 与必要只读运行事实，再查能力台账对应入口；progress/index 只定位/摘要，不维护第二份动态任务表。

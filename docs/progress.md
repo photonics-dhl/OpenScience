@@ -3,6 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-08：视频适配与审阅恢复两提交已集入canonical，补现有Linux CI并接入frontend/nanqing；远端唯一期刊交接提交合入且保留10-06发布证据，未强推或改main。生图唯一原生计划已提交、UI生命周期用例已RED→GREEN，精确task/候选/待验收状态统一见CURRENT。
 - 2026-10-08：总控按独立 High 审查恢复主 Gateway 与 Native Hermes 的 M3 一致性；只改服务器模型配置并同版本重建 Worker/API/Web，实际身份/健康与三类零在途任务验证通过，未触发模型或迁移。生图已获通知继续已有单次验证；视频两组已提交候选及其 Linux/首帧/成片差额见 CURRENT，UI 继续独立制作。
 - 2026-10-08：用户指定本 session 总控「生图系统开发」「视频系统开发」「UI优化」。已下发职责与共享文件顺序，三者均进入各自任务工作树；总控汇总 CURRENT/progress/index、协调集成和发布，专属设计/实现计划由各 owner 维护。
 - 初始接管已只读核对服务器、公网 release、Worker 镜像与 Git 可解析性，归一 CURRENT 中多个互相冲突的旧线上锚点。随后同版本配置恢复见本页最新检查点；候选、实际部署、真实产品观察和用户认可分别记录。
