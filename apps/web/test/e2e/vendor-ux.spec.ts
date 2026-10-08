@@ -1,10 +1,69 @@
 import { expect, test, type Page } from 'playwright/test';
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
+import type { PublicResearchVersion } from '../../lib/api';
+
+const guidePublicPath = '/api/research/OSR-2026-000022/v/4';
+const guideFigurePath = `${guidePublicPath}/presentation-assets/00000000-0000-4000-8000-000000000004`;
+// Synthetic, local layout media. It supplies no scientific-content evidence.
+const guideFigureSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#f3efe4"/><text x="60" y="84" fill="#153b40" font-size="26">Research figure — layout fixture</text><rect x="60" y="130" width="390" height="300" fill="#dce6e1"/><rect x="480" y="130" width="420" height="140" fill="#d8e2dd"/><rect x="480" y="300" width="420" height="130" fill="#e4dace"/><text x="60" y="492" fill="#54686b" font-size="20">Complete 16:9 image · cited version 4</text></svg>';
+const guidePublicResearch = {
+  publicId: 'OSR-2026-000022', title: 'A fixed research version · 研究的图文表达',
+  url: '/research/OSR-2026-000022/v/4', visibility: 'public',
+  version: { versionNo: 4, publicVersionId: 'OSR-2026-000022-v4', status: 'published',
+    publishedAt: '2026-10-08T00:00:00.000Z', contentSha256: null, legalDisclaimer: null,
+    core: { problem: '科研内容如何形成清晰的阅读路径？', insight: '通过题目、研究图与正文组织表达；此处仅为浏览器排版示例。', method: '', results: '', limitations: '', reproducibility: '' } },
+  authors: [{ displayName: 'Layout Researcher', identityStatus: 'registered', isCorresponding: true, affiliation: null, sortOrder: 0 }],
+  contributions: [], licenses: { content: 'CC0-1.0' }, aiReview: null, citation: 'Local browser layout fixture, version 4.',
+  artifactPaths: [], claims: [], evidence: [], history: [],
+  presentationAssets: [{ id: '00000000-0000-4000-8000-000000000004', kind: 'svg', label: 'Research figure layout',
+    contentHash: '0'.repeat(64), generator: { name: 'browser-layout-fixture', version: '1' }, sourceClaimIds: [],
+    reader: { order: 1, title: 'Research figure layout', narration: 'A local layout fixture for the cited public version.' }, url: guideFigurePath }],
+} satisfies PublicResearchVersion;
+
+async function expectGuideFigure(page: Page) {
+  await expect(page.locator('article').getByRole('heading', { name: guidePublicResearch.title, exact: true })).toBeVisible();
+  const figure = page.locator(`article a[href="${guideFigurePath}"] img`);
+  await expect(figure).toBeVisible();
+  await expect(figure).toHaveJSProperty('complete', true);
+  expect(await figure.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator(`article a[href="${guidePublicResearch.url}"]`).first()).toHaveAttribute('href', guidePublicResearch.url);
+}
+
+async function exerciseCaptionEntry(page: Page, openLabel: string, closeLabel: string, openScreenshot?: string) {
+  const caption = page.locator('.hermes-anchored-entry-copy').getByRole('button', { name: openLabel, exact: true });
+  const stage = page.locator('[data-hermes-instance="single"]');
+  await expect(caption).toBeVisible();
+  await expect(stage).toHaveCount(1);
+  const original = await stage.elementHandle();
+  try {
+    await caption.focus();
+    await expect(caption).toBeFocused();
+    await caption.click();
+    const dialog = page.getByRole('dialog', { name: 'Hermes', exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(stage).toHaveCount(1);
+    expect(await stage.evaluate((element, previous) => element === previous, original)).toBe(true);
+    if (openScreenshot) await page.screenshot({ path: openScreenshot, fullPage: true, animations: 'disabled' });
+    await dialog.getByRole('button', { name: closeLabel, exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(caption).toBeFocused();
+    await expect(stage).toHaveCount(1);
+    expect(await stage.evaluate((element, previous) => element === previous, original)).toBe(true);
+  } finally { await original?.dispose(); }
+}
 
 async function prepare(page: Page, profileFails = false) {
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === guideFigurePath) {
+      if (route.request().method() !== 'GET') return route.fulfill({ status: 405 });
+      return route.fulfill({ contentType: 'image/svg+xml', body: guideFigureSvg });
+    }
+    if (path === guidePublicPath) {
+      if (route.request().method() !== 'GET') return route.fulfill({ status: 405 });
+      return route.fulfill({ json: { research: guidePublicResearch } });
+    }
     if (path === '/api/research-identity' && profileFails) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'fixture profile unavailable' } } });
     const bodies: Record<string, unknown> = {
       '/api/auth/me': { userId: 'vendor-user', email: 'user@example.invalid', displayName: '研究者甲', status: 'email_verified', level: 'free' },
@@ -47,9 +106,17 @@ test('public guide sends an anonymous researcher to login with the desk destinat
 test('guide scenes support keyboard and small screens without business writes', async ({ page }) => {
   await prepare(page);
   const writes: string[] = [];
-  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  const publicVersions: string[] = [];
+  page.on('request', request => {
+    if (request.method() === 'POST') writes.push(request.url());
+    const path = new URL(request.url()).pathname;
+    if (/^\/api\/research\/[^/]+\/v\/[^/]+$/.test(path)) publicVersions.push(path);
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/guide');
+  await expectGuideFigure(page);
+  await exerciseCaptionEntry(page, '打开对话', '收起 Hermes', 'test/visual/out/product-craft/guide-hermes-dialog-desktop.png');
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-desktop.png', fullPage: true, animations: 'disabled' });
   await expect(page.getByRole('tab')).toHaveCount(3);
   const first = page.getByRole('tab', { name: '从论文开始', exact: true });
   const second = page.getByRole('tab', { name: '读懂研究', exact: true });
@@ -62,36 +129,52 @@ test('guide scenes support keyboard and small screens without business writes', 
   await expect(page.getByRole('tab', { name: '继续完善', exact: true })).toBeFocused();
   await page.setViewportSize({ width: 375, height: 812 });
   await first.click();
-  await expect(page.getByRole('tabpanel').getByRole('link', { name: '在桌面找到入口' })).toBeVisible();
+  await expect(page.getByRole('tabpanel').getByRole('link', { name: '进入桌面，上传材料' })).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.getByRole('tabpanel').locator('div').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await exerciseCaptionEntry(page, '打开对话', '收起 Hermes');
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-mobile-zh.png', fullPage: true, animations: 'disabled' });
+  expect(publicVersions.length).toBeGreaterThan(0);
+  expect([...new Set(publicVersions)]).toEqual([guidePublicPath]);
   expect(writes).toEqual([]);
 });
 
 test('English guide keeps task tabs and the desk entry readable on phones', async ({ page }) => {
   await prepare(page);
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/guide');
+  await expectGuideFigure(page);
   await page.getByRole('tab', { name: 'Keep developing', exact: true }).click();
   await expect(page.getByRole('tabpanel').getByRole('heading', { name: 'Pick up where you want to work' })).toBeVisible();
   await expect(page.locator('article').getByRole('link', { name: 'Enter research desk', exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await exerciseCaptionEntry(page, 'Open conversation', 'Close Hermes');
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-mobile-en.png', fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 320, height: 812 });
+  await expect(page.locator('article').getByRole('link', { name: 'Enter research desk', exact: true }).first()).toBeVisible();
+  await exerciseCaptionEntry(page, 'Open conversation', 'Close Hermes');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-mobile-en-320.png', fullPage: true, animations: 'disabled' });
+  expect(writes).toEqual([]);
 });
 
 test('guide remains usable when the public preview fails and can reload it', async ({ page }) => {
   await prepare(page);
   let reads = 0;
-  await page.route('**/api/explore?*', route => {
+  await page.route(`**${guidePublicPath}`, route => {
     reads++;
-    return reads === 1 ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } }) : route.fulfill({ json: { items: [], nextCursor: null } });
+    return reads === 1 ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } }) : route.fulfill({ json: { research: guidePublicResearch } });
   });
   await page.goto('/guide');
   await expect(page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: '重新加载画面', exact: true }).click();
   await expect(page.getByRole('button', { name: '重新加载画面', exact: true })).toHaveCount(0);
-  await expect(page.locator('article').getByRole('link', { name: '探索公开研究', exact: true })).toBeVisible();
+  await expectGuideFigure(page);
+  await expect(page.locator('article').getByRole('link', { name: '阅读这项研究', exact: true })).toHaveAttribute('href', guidePublicResearch.url);
   expect(reads).toBe(2);
 });
 
