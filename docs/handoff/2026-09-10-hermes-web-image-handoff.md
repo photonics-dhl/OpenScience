@@ -11,8 +11,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责三线写权/依赖/集成/发布与CURRENT/progress/index，各owner保留原任务和专属计划。线程心跳`openscience`已ACTIVE，每10分钟检查三线；完成、idle或受阻时及时补派有用且已授权的独立下一步，状态不变不通知，不用无关检查充数。
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 冻结原文reader与两尺寸回归已收；缓存退役受审批阻断；五项0写 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/version-evidence-reader` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | Worker事务授权fixture修复cb092已收；原31项通过，待CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/video-admission-journal-ci`（8ea基线） |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | Native/Skill发布差额已核；须新不可变目录，SDK不升级；五项0写 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/version-evidence-reader` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | Worker31修复已收；仅提示/收费前检查可保留关闭host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/video-admission-journal-ci` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | phase与真实helper回归已收；继续已授权Figma/站内视觉工作 | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
 - 写权按当前三线文件归属互斥；root统一共享CI、CURRENT/progress/index与合并。未知付费保护不取消独立实现任务；不并行发布/资产写。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
@@ -20,12 +20,12 @@
 ## 当前版本与观察边界
 - 2026-10-09 00:42:03 CST总控只读实核：release=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`；Web/API/Worker healthy、restart0，global/Native M3，runtime/catalogue784。期刊按用户要求回滚已生效，先前42fe及Fig2 fresh为历史时点；证据`tmp/session-coordination-20261008/live-release-20261009.json`，本批未部署。
 - 期刊独立线新增六提交到远端d9eba2c6，包含共享Native管线、私有working RO、赞助额度及迁移51；与本地有重叠，已按真实语义合并，保留唯一Gateway资格权威。原期刊运行/重做边界查远端[期刊交接](2026-10-08-journal-workbench-handoff.md)；实际Git和运行事实优先，不沿旧42fe快照发版。
-- 本地代码候选`838a9bbcfa4fca9b7390c9baf54c4cbfc318eb06`已收后台b705、CLI/ACK、UI540/165、reader5d/1256、CSS515、helper5c5/b82与组件a326。已正常推至frontend/nanqing，完整保留远端至500的期刊修正、未强推；[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)精确8ea的4项CI已终态：视频PR与期刊PR/push成功；媒体PR37813910062在Worker可信分类用例失败（29中1），后续浏览器未执行。根因旧fixture缺事务/ingestion查询，cb092→a12b仅测试且全等、31/31通过；准备同批CI。e431原27例通过但新导航缺mock取消，fixture已补；0b绿属历史。workflow追加对应组/trace/真实session测试，无新安装授权。
-- M3恢复历史High GO/applied证据仍在`/opt/openscience/observations/model-m3-restore-20261008T034213Z`；当前45/784配对以上述fresh为准，不重做恢复。
+- 本地代码候选`a7617791`保留全部已审集成与远端至500期刊代码，协作分支frontend/nanqing，无强推。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)精确4c的5项CI：视频及期刊PR/push通过，media双失败于旧第三参数guard测试。1ff6693e改用真实readiness合同，152/152、lint0、High GO，产品0改动；2db→a761仅删两语重复且错误承诺未收费的文案。待同批新CI，旧媒体浏览器仍未执行。
+- 01:26–01:29只读确认45/784仍在用；实际Native illustration目录v17，缺style-taxonomy/legacy-v19，科学资源缺新定义轴规则。SDK/adapter/unit与候选相同，可复用SDK但须原installer生成新的不可变runtime/catalogue配对，不混配或改写784；旧paid/CP保留。生图tmp/native-deploy-delta-20261009-{installed,receipt}.json；视频tmp/synclip-host-readonly/release-4c1d83e0-compatibility.json确认仅上线提示可保留关闭host，真正启用配音前才升级。最小顺序见deployment.md，未执行生产写。
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于2026-10-08T04:02:45.662Z failed/transport stopped；CP仍started/turn6，11对象保留。Gateway M3/provider_timeout/600365ms、token usage=null，上游终态/计费未知，无新计划/图片。证据在生图`tmp/first-scene-native-{request,submission,status,latency}.json`；不重发/新key/扩预算/改模型。ROc896/version2047/同6Claims/原PDF、父36727536和第二幕保留，旧3e607af0矛盾稿不采用；科学错误不因配置恢复而完成。
 
 ## 未完成与下一动作
-- 格式db5884b5、Skill20/d82e79c2、paid兼容0d7d493d已在42fe上线。fresh采用sourceNotation，旧paid/未知仍旧语法；真实错误引用仍拒。回放沿已核prefix/exact call、current-first和唯一历史Execution19，完整deepEqual不删。原验证/RED见生图tmp/source-notation-*、native-skill-replay-final-*；上线不解除cb未知终态。
+- 格式db5884b5、Skill20/d82e79c2、paid兼容0d7d493d是42fe历史上线记录；当前回滚45/784，目录恢复依上项。候选保留fresh sourceNotation与旧paid完整prefix/exact call/current-first/唯一历史19及deepEqual；原验证留生图tmp，不解除cb未知终态。
 - PNG隔离ea135→9ab与校准54c77→c302均全等/High GO；Gateway23/Worker29、回放52+2及0b CI证据保留。MINIMAX_IMAGE_REVIEW_MODEL仅PNG、未配仍primary；主/Native M3不变，生产未配。root21的science/plan/render沿20、review21、历史19优先，不降未来版本。仍是Worker→Gateway单次vision，非Nous SDK审图循环；科学改善未实测，详见生图tmp/pixel-review-calibration-*。
 - 离线wire只证明已有PNG/prompt传递，不能证明科学正确；有效accepted曾漏矛盾，cb第6轮超时未定因。Gaussian/tau/时空/virtual-real仍须修订；原证据保留生图tmp/pixel-review-wire-receipt.json、first-scene-native-diagnostics.json，0新外呼。
 - 视频主候选及host3603→92bf已集入/High闭合，原验证保留、Linux host32/32；renderer已有codec，未切生产。[视频合同](../plans/2026-09-05-hermes-presentation-assets-plan.md)14fd→c07c：LTX有原生声/多镜头，分段不强制外置TTS，当前换轨会替代原声/音乐/环境声。无合格原生实片，暂不改模式；账户权限/音色、坏镜头与实际音画待验。

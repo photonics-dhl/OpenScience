@@ -6,6 +6,8 @@
 
 并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。
 
+Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`规定原写门禁、排空、timer原状态和配对失败恢复；关闭video host可复用，真实启用另验，状态见CURRENT。
+
 冻结版本原文：`VersionRecord.tsx`复用`WorkbenchClaimReader`及已有冻结source API；`research-continuation.spec.ts`覆盖换版本/迟到请求与双语窄屏，`globals.css`仅重置原文sheet局部translate。`useHermesViewerId.ts`复用SessionProvider使制作入口随真实跨标签身份变化；验收及上线状态见CURRENT。
 
 视频执行资格：Gateway `synclip-video-readiness.ts`读取已有host heartbeat；Domain `agent/video-readiness.ts`识别受授权视频意图并在新收费前检查；Worker `video-task-admission.ts`复用任务与outbox暂停/恢复。API `research-runs.ts`的`hermes-video-capability`供Web在来源准备前消费，原重分析的`output`只限制、不扩权；相关同名单测及原media CI覆盖边界，实际交付状态只见CURRENT。

@@ -169,6 +169,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+Native资源同步：应用loader与Native skill_view的不可变目录分别核对；SDK相同、资源版本号相同均不证明科学正文/引用已同步。原installer从确切Worker dist重建新配对，保留旧paid目录和完整回放；当前实物缺口及证据见CURRENT，执行顺序见deployment.md。源码新规则不等于模型已消费。
+
 Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed history，`publicationIncluded=false`也受`trash.ts`的`publicAssetReferences`保护，旧私有归属结论不能沿用。已审soft-trash方案保留对象/封存，成员直链恢复前404，初始30天恢复有权限/状态条件；禁止purge/补造源/改封存。实际操作另遇`ResearchContentManager`管理行缺资源身份，重复标题无法对应exact UUID；由UI复用原DTO补行标识，不改权限/回收语义，最新授权/写权/证据只见CURRENT。
 
 视频收费前检查：Gateway读取现有host heartbeat，API/Worker同源注入；Web普通及Native入口在新来源/分镜/帧/视频费用前消费可用性，并保持已知run读取与原key/body恢复。供应商网页free/isAdmin不能证明服务器Key无LTX权限；实际Key的模型访问尚未核实，现有host关闭/audio缺项与此分开记录。新期刊共享管线的合并、Panel phase消费差额与最终验证见CURRENT，不以单测成功宣称视频可交付。
