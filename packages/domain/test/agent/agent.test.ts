@@ -59,11 +59,13 @@ function makeSnapshotDispatch() {
         where.id === task.id ? structuredClone(task) : null,
       updateMany: async ({ where, data }: {
         where: { id: string; dispatchedAt: null; updatedAt?: Date };
-        data: { dispatchedAt: Date };
+        data: { dispatchedAt: Date; updatedAt?: Date };
       }) => {
         if (where.id !== task.id || task.dispatchedAt !== where.dispatchedAt
           || (where.updatedAt && where.updatedAt.getTime() !== task.updatedAt.getTime())) return { count: 0 };
         task.dispatchedAt = data.dispatchedAt;
+        // Model Prisma @updatedAt: omitting an explicit value writes the wall clock.
+        task.updatedAt = data.updatedAt ?? new Date();
         return { count: 1 };
       },
     } },
@@ -177,6 +179,36 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(true);
     await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(false);
     expect(normal.pushes).toEqual([{ queue: 'agent:queue', id: normal.task.id }]);
+    expect(normal.task.updatedAt.getTime()).toBeGreaterThanOrEqual(normal.task.dispatchedAt!.getTime());
+  });
+
+  it('snapshot dispatch keeps acknowledgement versions monotonic ahead of the ORM clock', async () => {
+    vi.useFakeTimers();
+    try {
+      const clock = Date.parse('2026-10-08T00:00:00.100Z');
+      vi.setSystemTime(clock);
+      const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
+      task.updatedAt = new Date(clock + 2);
+      const oldVersion = task.updatedAt.getTime();
+      const oldDispatch = dispatchAgentTask(deps, task.id);
+      await pushed;
+      // A competing ack must not move102 back to the wall clock100.
+      await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+      const parkedAt = new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
+      task.dispatchedAt ??= parkedAt;
+      task.updatedAt = parkedAt;
+      task.dispatchedAt = null;
+      task.updatedAt = new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
+      unblock();
+      await expect(oldDispatch).resolves.toBe(true);
+      expect(task.dispatchedAt).toBeNull();
+      expect(task.updatedAt.getTime()).toBeGreaterThan(oldVersion);
+      await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+      expect(task.dispatchedAt).toBeInstanceOf(Date);
+      expect(pushes).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('explicit source-index token-limit recovery reuses the original owner and remaining budget', async () => {

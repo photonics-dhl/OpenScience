@@ -790,10 +790,12 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task || task.deletedAt || task.dispatchedAt != null) return false;
   await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
+  const acknowledgedAt = new Date();
   await deps.prisma.agentTask.updateMany({
     // Park/release advances updatedAt; an old acknowledgement cannot close its new outbox.
     where: { id: task.id, dispatchedAt: null, updatedAt: task.updatedAt },
-    data: { dispatchedAt: new Date() },
+    data: { dispatchedAt: acknowledgedAt,
+      updatedAt: new Date(Math.max(acknowledgedAt.getTime(), task.updatedAt.getTime() + 1)) },
   });
   return true;
 }
