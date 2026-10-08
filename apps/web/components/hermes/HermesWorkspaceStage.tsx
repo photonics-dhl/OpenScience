@@ -1574,7 +1574,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
           visible={Boolean(bubblePlacement)}
         />
       ) : null}
-      {reducedMotion !== null && motionControl.action !== 'retry' ? <button
+      {reducedMotion !== null ? <button
         className="hermes-motion-enable"
         data-hermes-motion-toggle
         data-motion-active={reducedMotion ? 'false' : 'true'}
@@ -1582,6 +1582,11 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         disabled={motionControl.action === 'none'}
         onClick={(event) => {
           event.stopPropagation();
+          if (motionControl.action === 'retry') {
+            setRuntimeStatus((current) => current.phase === 'fallback'
+              ? reduceHermesRuntimeStatus(current, { type: 'retry' }) : current);
+            return;
+          }
           const preference = reducedMotion ? 'full' : 'reduced';
           saveHermesMotionPreference(window.localStorage, preference);
           setReducedMotion(preference === 'reduced');
@@ -1589,7 +1594,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         onPointerDown={(event) => event.stopPropagation()}
         type="button"
       >{t(motionControl.label === 'enable' ? 'enableMotion'
-        : motionControl.label === 'disable' ? 'disableMotion' : 'startingMotion')}</button> : null}
+        : motionControl.label === 'disable' ? 'disableMotion'
+          : motionControl.label === 'retry' ? 'retryMotion' : 'startingMotion')}</button> : null}
       {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}
