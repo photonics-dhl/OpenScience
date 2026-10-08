@@ -60,6 +60,14 @@ on:
       - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
       - 'apps/agent-worker/test/presentation/scientific-comparison.test.ts'
       - 'apps/agent-worker/src/index.ts'
+      - 'apps/agent-worker/src/video-task-admission.ts'
+      - 'apps/agent-worker/test/video-task-admission.test.ts'
+      - 'apps/agent-worker/test/native-video-readiness.test.ts'
+      - 'packages/ai-gateway/src/synclip-video-readiness.ts'
+      - 'packages/ai-gateway/test/synclip-video-readiness.test.ts'
+      - 'packages/domain/src/agent/video-readiness.ts'
+      - 'packages/domain/test/agent/video-readiness.test.ts'
+      - 'infra/compose/docker-compose.prod.test.mjs'
       - 'apps/agent-worker/src/parsers/cascade-orchestrator.ts'
       - 'apps/agent-worker/src/parsers/recovery-checkpoint.ts'
       - 'apps/agent-worker/test/parser-recovery-*.test.ts'
@@ -285,6 +293,14 @@ on:
       - 'apps/agent-worker/test/presentation/automatic-style.test.ts'
       - 'apps/agent-worker/test/presentation/scientific-comparison.test.ts'
       - 'apps/agent-worker/src/index.ts'
+      - 'apps/agent-worker/src/video-task-admission.ts'
+      - 'apps/agent-worker/test/video-task-admission.test.ts'
+      - 'apps/agent-worker/test/native-video-readiness.test.ts'
+      - 'packages/ai-gateway/src/synclip-video-readiness.ts'
+      - 'packages/ai-gateway/test/synclip-video-readiness.test.ts'
+      - 'packages/domain/src/agent/video-readiness.ts'
+      - 'packages/domain/test/agent/video-readiness.test.ts'
+      - 'infra/compose/docker-compose.prod.test.mjs'
       - 'apps/agent-worker/src/parsers/cascade-orchestrator.ts'
       - 'apps/agent-worker/src/parsers/recovery-checkpoint.ts'
       - 'apps/agent-worker/test/parser-recovery-*.test.ts'
@@ -487,6 +503,13 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
+      - name: Video readiness before paid source and media work
+        run: |
+          npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-video-readiness.test.ts
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/video-readiness.test.ts
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t 'while closed'
+          npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/video-task-admission.test.ts test/native-video-readiness.test.ts
+          node --test infra/compose/docker-compose.prod.test.mjs
       - name: Source-preserving long table indexing
         run: |
           npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/chunker.test.ts test/embedder.test.ts
