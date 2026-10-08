@@ -645,6 +645,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hermes-page-screenshots
-          path: apps/web/test/visual/out/**/*.png
+          path: |
+            apps/web/test/visual/out/**/*.png
+            apps/web/test/visual/out/**/*.json
           if-no-files-found: ignore
           retention-days: 7

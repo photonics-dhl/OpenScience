@@ -1,4 +1,5 @@
 import { expect, test, type Page } from 'playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
 import type { PublicResearchVersion } from '../../lib/api';
 
@@ -29,6 +30,68 @@ async function expectGuideFigure(page: Page) {
   await expect(page.locator(`article a[href="${guidePublicResearch.url}"]`).first()).toHaveAttribute('href', guidePublicResearch.url);
 }
 
+async function waitForCompanionCapture(page: Page, label: string) {
+  const readFrame = () => page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    const rig = stage?.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]');
+    const canvas = rig?.querySelector<HTMLCanvasElement>('[data-hermes-live2d-canvas="true"]');
+    const fallback = rig?.querySelector<HTMLElement>('.hermes-rig-vector-fallback');
+    const rect = (element: Element | null | undefined) => {
+      const box = element?.getBoundingClientRect();
+      return { x: box?.x ?? 0, y: box?.y ?? 0, width: box?.width ?? 0, height: box?.height ?? 0 };
+    };
+    const fallbackStyle = fallback ? getComputedStyle(fallback) : null;
+    return {
+      motionPreference: stage?.dataset.hermesMotionPreference,
+      stageSize: Number(stage?.dataset.hermesStageSize ?? 0),
+      status: rig?.dataset.hermesRigStatus,
+      staticFrame: rig?.dataset.hermesStaticFrame,
+      lastDrawAt: Number(rig?.dataset.hermesLastDrawAt ?? 0),
+      rigRect: rect(rig), canvasRect: rect(canvas), fallbackRect: rect(fallback),
+      backingWidth: canvas?.width ?? 0, backingHeight: canvas?.height ?? 0,
+      devicePixelRatio, scrollY, activeTag: document.activeElement?.tagName,
+      fallbackVisible: Boolean(fallbackStyle && fallbackStyle.display !== 'none'
+        && fallbackStyle.visibility === 'visible' && Number(fallbackStyle.opacity) > 0),
+    };
+  });
+  type Frame = Awaited<ReturnType<typeof readFrame>>;
+  const sizeReady = (frame: Frame) => {
+    // Match the current browser backing store to the renderer's existing logical-pixel/DPR bounds.
+    const resolution = Math.min(frame.devicePixelRatio || 1, 1.5);
+    return frame.stageSize === 120 && frame.rigRect.width > 0 && frame.rigRect.height > 0
+      && frame.canvasRect.width > 0 && frame.canvasRect.height > 0
+      && frame.backingWidth === Math.round(Math.max(1, Math.round(frame.rigRect.width)) * resolution)
+      && frame.backingHeight === Math.round(Math.max(1, Math.round(frame.rigRect.height)) * resolution);
+  };
+  const staticReady = (frame: Frame) => frame.motionPreference === 'reduced' && frame.staticFrame === 'true'
+    && frame.fallbackVisible && frame.fallbackRect.width > 0 && frame.fallbackRect.height > 0;
+  const before = await readFrame();
+  let notBefore: number | null = null;
+  try {
+    await page.evaluate(async () => { await document.fonts.ready; });
+    await page.locator('[data-hermes-workspace-stage="true"]').scrollIntoViewIfNeeded();
+    await expect.poll(async () => {
+      const frame = await readFrame();
+      return staticReady(frame) || (frame.motionPreference === 'full' && sizeReady(frame));
+    }, { timeout: 20_000 }).toBe(true);
+    if ((await readFrame()).motionPreference === 'full') {
+      notBefore = await page.evaluate(() => performance.now());
+      // Old ready survives resize; require a successful draw after the current size settled.
+      await expect.poll(async () => {
+        const frame = await readFrame();
+        return sizeReady(frame) && frame.status === 'ready' && frame.lastDrawAt > notBefore!;
+      }, { timeout: 20_000 }).toBe(true);
+    }
+  } finally {
+    const after = await readFrame();
+    const evidence = JSON.stringify({ before, notBefore, after }, null, 2);
+    const name = `guide-${label === 'Open conversation' ? 'en' : 'zh'}-${page.viewportSize()?.width}-companion`;
+    await mkdir('test/visual/out/product-craft', { recursive: true });
+    await writeFile(`test/visual/out/product-craft/${name}.json`, evidence);
+    await test.info().attach(name, { body: evidence, contentType: 'application/json' });
+  }
+}
+
 async function exerciseCaptionEntry(page: Page, openLabel: string, closeLabel: string, openScreenshot?: string) {
   const caption = page.locator('.hermes-anchored-entry-copy').getByRole('button', { name: openLabel, exact: true });
   const stage = page.locator('[data-hermes-instance="single"]');
@@ -49,6 +112,7 @@ async function exerciseCaptionEntry(page: Page, openLabel: string, closeLabel: s
     await expect(caption).toBeFocused();
     await expect(stage).toHaveCount(1);
     expect(await stage.evaluate((element, previous) => element === previous, original)).toBe(true);
+    await waitForCompanionCapture(page, openLabel);
   } finally { await original?.dispose(); }
 }
 
