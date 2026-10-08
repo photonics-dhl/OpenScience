@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getHermesResearchRun, getHermesVideoCapability,
+import { ApiClientError, createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getHermesResearchRun, getHermesVideoCapability,
   getIngestionTask, isConfirmedIngestionReanalysisSource, reanalyzeConfirmedIngestion, type HermesResearchRun } from '@/lib/api';
 import { prepareHermesNarrativeSource, startPaperNarrative } from '@/lib/hermes/start-paper-narrative';
 import { loadPendingHermesRunStart, savePendingHermesRunStart } from '@/lib/hermes/draft-state';
@@ -33,6 +33,52 @@ function historicalSource() {
 }
 
 describe('fresh video readiness and exact saved requests', () => {
+  it.each(['unavailable', 'network'] as const)('recovers the same prepared B body after %s without another paid preparation', async failure => {
+    const f = videoFixture(); historicalSource(); const nextScope = { ...f.scope, ingestionTaskId: 'new-pdf' };
+    vi.mocked(createHermesResearchRun).mockRejectedValueOnce(failure === 'unavailable'
+      ? new ApiClientError('VIDEO_UNAVAILABLE', 'closed', 503) : new Error('network'));
+    await expect(startPaperNarrative(f)).rejects.toBeDefined();
+    const first = vi.mocked(createHermesResearchRun).mock.calls[0];
+    const saved = loadPendingHermesRunStart(f.storage, nextScope);
+    const original = loadPendingHermesRunStart(f.storage, f.scope);
+    vi.mocked(getHermesVideoCapability).mockClear().mockResolvedValue({ canGenerateVideo: false });
+    await expect(startPaperNarrative({ ...f, scope: nextScope })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(getHermesVideoCapability).toHaveBeenCalledWith('paper'); expect(createHermesResearchRun).toHaveBeenCalledTimes(1);
+    expect(reanalyzeConfirmedIngestion).toHaveBeenCalledTimes(1);
+    expect(loadPendingHermesRunStart(f.storage, nextScope)).toEqual(saved);
+    expect(loadPendingHermesRunStart(f.storage, f.scope)).toEqual(original);
+    vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: true });
+    vi.mocked(createHermesResearchRun).mockResolvedValue({ run: { ...run, generationSettings: f.generation,
+      steps: [{ stage: 'source_ingestion', ingestionTaskId: 'new-pdf' }] } as HermesResearchRun });
+    await startPaperNarrative({ ...f, scope: nextScope, generation: { ...f.generation, style: 'changed' } });
+    expect(vi.mocked(createHermesResearchRun).mock.calls[1]).toEqual(first);
+    expect(reanalyzeConfirmedIngestion).toHaveBeenCalledTimes(1);
+  });
+  it('reads an existing run in the actual prepared B scope before admission or another run POST', async () => {
+    const f = videoFixture(); historicalSource();
+    const video = { ...run, generationSettings: f.generation, steps: [{ stage: 'source_ingestion', ingestionTaskId: 'new-pdf' }] } as HermesResearchRun;
+    vi.mocked(getExistingHermesResearchRun).mockImplementation(async (_ro, source) => ({ run: source === 'new-pdf' ? video : null }));
+    vi.mocked(reanalyzeConfirmedIngestion).mockImplementation(async () => {
+      vi.mocked(getHermesVideoCapability).mockClear().mockResolvedValue({ canGenerateVideo: false });
+      return { id: 'new-pdf', artifactId: 'artifact', logicalPath: 'paper.pdf', state: 'queued', retryCount: 0, error: null, agentTaskId: 'new-agent' };
+    });
+    expect(await startPaperNarrative(f)).toBe(video);
+    expect(getExistingHermesResearchRun).toHaveBeenCalledWith('paper', 'new-pdf', undefined, 'video');
+    expect(getHermesVideoCapability).not.toHaveBeenCalled(); expect(createHermesResearchRun).not.toHaveBeenCalled();
+  });
+  it.each(['read', 'capability'] as const)('stops before run POST if context changes during prepared B %s', async stage => {
+    const f = videoFixture(); historicalSource(); let current = true; let preparedRead = false;
+    vi.mocked(getExistingHermesResearchRun).mockImplementation(async (_ro, source) => {
+      if (source === 'new-pdf') { preparedRead = true; if (stage === 'read') current = false; }
+      return { run: null };
+    });
+    vi.mocked(getHermesVideoCapability).mockImplementation(async () => {
+      if (stage === 'capability' && preparedRead) current = false;
+      return { canGenerateVideo: true };
+    });
+    await expect(startPaperNarrative({ ...f, isCurrent: () => current })).rejects.toThrow('identity');
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+  });
   it('keeps the original source receipt only in its original scope and resumes the prepared run body', async () => {
     const f = videoFixture(); const detail = historicalSource();
     vi.mocked(createHermesResearchRun).mockRejectedValueOnce(new Error('response lost'));
@@ -47,20 +93,25 @@ describe('fresh video readiness and exact saved requests', () => {
     vi.mocked(getHermesVideoCapability).mockClear().mockResolvedValue({ canGenerateVideo: false });
     vi.mocked(createHermesResearchRun).mockResolvedValue({ run: { ...run, generationSettings: f.generation,
       steps: [{ stage: 'source_ingestion', ingestionTaskId: 'new-pdf' }] } as HermesResearchRun });
+    await expect(startPaperNarrative({ ...f, scope: nextScope })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: true });
     await startPaperNarrative({ ...f, scope: nextScope, generation: { ...f.generation, style: 'changed' } });
     expect(vi.mocked(createHermesResearchRun).mock.calls[1]).toEqual(first);
     expect(reanalyzeConfirmedIngestion).toHaveBeenCalledTimes(1); expect(getIngestionTask).not.toHaveBeenCalled();
-    expect(getHermesVideoCapability).not.toHaveBeenCalled();
+    expect(getHermesVideoCapability).toHaveBeenCalledWith('paper');
   });
   it('replays a legacy unknown run body without newly preparing a now-confirmed source', async () => {
     const f = videoFixture(); historicalSource();
     savePendingHermesRunStart(f.storage, f.scope, { key: 'unknown-run', generation: f.generation, savedAt: 1 });
     vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: false });
     vi.mocked(createHermesResearchRun).mockResolvedValue({ run: { ...run, generationSettings: f.generation } });
+    await expect(startPaperNarrative(f)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+    vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: true });
     await startPaperNarrative(f);
     expect(createHermesResearchRun).toHaveBeenCalledWith('paper', ['pdf'], 'unknown-run', f.generation);
     expect(getIngestionTask).not.toHaveBeenCalled(); expect(reanalyzeConfirmedIngestion).not.toHaveBeenCalled();
-    expect(getHermesVideoCapability).not.toHaveBeenCalled();
+    expect(getHermesVideoCapability).toHaveBeenCalledWith('paper');
   });
   it('fixes the run stage before its first POST even when no reanalysis is needed', async () => {
     const f = videoFixture();
@@ -104,7 +155,9 @@ describe('fresh video readiness and exact saved requests', () => {
   });
   it.each(['start', 'prepare'] as const)('reuses a concurrently saved %s key after its readiness await', async entry => {
     const f = videoFixture(); const releases: Array<() => void> = [];
-    vi.mocked(getHermesVideoCapability).mockImplementation(() => new Promise(resolve => releases.push(() => resolve({ canGenerateVideo: true }))));
+    vi.mocked(getHermesVideoCapability).mockImplementation(() => releases.length < 2
+      ? new Promise(resolve => releases.push(() => resolve({ canGenerateVideo: true })))
+      : Promise.resolve({ canGenerateVideo: true }));
     vi.mocked(createHermesResearchRun).mockRejectedValue(new Error('response lost'));
     const pending = { key: 'ui-run', generation: f.generation, savedAt: 1, phase: 'source' as const };
     if (entry === 'prepare') {
@@ -195,9 +248,12 @@ describe('fresh video readiness and exact saved requests', () => {
     await expect(startPaperNarrative(f)).rejects.toThrow('response lost');
     const first = vi.mocked(reanalyzeConfirmedIngestion).mock.calls[0];
     vi.mocked(getHermesVideoCapability).mockClear().mockResolvedValue({ canGenerateVideo: false });
-    expect(await startPaperNarrative(f)).toBe(video);
+    await expect(startPaperNarrative(f)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
     expect(vi.mocked(reanalyzeConfirmedIngestion).mock.calls[1]).toEqual(first);
-    expect(getHermesVideoCapability).not.toHaveBeenCalled();
+    expect(createHermesResearchRun).not.toHaveBeenCalled();
+    vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: true });
+    expect(await startPaperNarrative(f)).toBe(video);
+    expect(vi.mocked(reanalyzeConfirmedIngestion).mock.calls[2]).toEqual(first);
   });
   it.each(['start', 'prepare'] as const)('stops %s when scope changes during the capability read', async entry => {
     const f = videoFixture(); historicalSource(); let current = true; const mint = vi.spyOn(crypto, 'randomUUID');
@@ -244,8 +300,11 @@ describe('explicit creation of an illustrated paper', () => {
     await expect(startPaperNarrative({...input,scope:videoScope,generation})).rejects.toThrow('network');
     const first=vi.mocked(createHermesResearchRun).mock.calls[0];
     vi.mocked(getHermesVideoCapability).mockClear().mockResolvedValue({ canGenerateVideo: false });
+    await expect(startPaperNarrative({...input,scope:videoScope,generation:{...generation,style:'ink'}})).rejects.toMatchObject({code:'VIDEO_UNAVAILABLE'});
+    expect(createHermesResearchRun).toHaveBeenCalledTimes(1);
+    vi.mocked(getHermesVideoCapability).mockResolvedValue({ canGenerateVideo: true });
     expect(await startPaperNarrative({...input,scope:videoScope,generation:{...generation,style:'ink'}})).toBe(video);
-    expect(getHermesVideoCapability).not.toHaveBeenCalled();
+    expect(getHermesVideoCapability).toHaveBeenCalledWith('paper');
     expect(getExistingHermesResearchRun).toHaveBeenCalledWith('paper','pdf',undefined,'video');
     expect(vi.mocked(createHermesResearchRun).mock.calls[1]).toEqual(first);
     expect(first?.[3]).toEqual(generation);

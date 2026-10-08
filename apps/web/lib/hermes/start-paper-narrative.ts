@@ -106,9 +106,9 @@ export async function startPaperNarrative(input: {
   check();
   if (viewer.userId !== scope.userId) throw new Error(input.identityError);
   const saved = loadPendingHermesRunStart(storage, scope);
-  const verify = (run: HermesResearchRun) => {
-    if (run.actorId !== scope.userId || run.researchObjectId !== scope.researchObjectId || !hasHermesRunOutput(run, scope.output)
-      || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === scope.ingestionTaskId))
+  const verify = (run: HermesResearchRun, runScope = scope) => {
+    if (run.actorId !== runScope.userId || run.researchObjectId !== runScope.researchObjectId || !hasHermesRunOutput(run, runScope.output)
+      || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === runScope.ingestionTaskId))
       throw new Error(input.identityError);
     return run;
   };
@@ -139,17 +139,16 @@ export async function startPaperNarrative(input: {
   if (prepared.pending.runId) {
     const result = await getHermesResearchRun(prepared.scope.researchObjectId, prepared.pending.runId);
     check();
-    if (result.run.id !== prepared.pending.runId || result.run.actorId !== prepared.scope.userId
-      || result.run.researchObjectId !== prepared.scope.researchObjectId || !hasHermesRunOutput(result.run, prepared.scope.output)
-      || !result.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === prepared.scope.ingestionTaskId))
-      throw new Error(input.identityError);
-    return result.run;
+    if (result.run.id !== prepared.pending.runId) throw new Error(input.identityError);
+    return verify(result.run, prepared.scope);
   }
+  const preparedExisting = await getExistingHermesResearchRun(prepared.scope.researchObjectId, prepared.scope.ingestionTaskId, undefined, prepared.scope.output);
+  check();
+  if (preparedExisting.run) return verify(preparedExisting.run, prepared.scope);
+  if (prepared.scope.output === 'video') await requireVideoReady(prepared.scope.researchObjectId, check);
   const { run } = await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
   check();
-  if (run.actorId !== prepared.scope.userId || run.researchObjectId !== prepared.scope.researchObjectId || !hasHermesRunOutput(run, prepared.scope.output)
-    || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === prepared.scope.ingestionTaskId))
-    throw new Error(input.identityError);
+  verify(run, prepared.scope);
   savePendingHermesRunStart(storage, prepared.scope, { ...prepared.pending, runId: run.id });
   return run;
 }
