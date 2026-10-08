@@ -539,6 +539,10 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
+export function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<{ canGenerateVideo: boolean }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+}
+
 export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}${output ? `&output=${output}` : ''}`, { signal });
 }
@@ -1924,11 +1928,11 @@ export async function refreshIngestionAnalysis(
 }
 
 export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string,
-  sourceReanalysis?: import('@openscience/domain').NativeSourceCorrectionInput): Promise<IngestionTaskSummary> {
+  sourceReanalysis?: import('@openscience/domain').NativeSourceCorrectionInput, output?: 'video'): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, ...(sourceReanalysis ? { sourceReanalysis } : {}) }),
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, ...(sourceReanalysis ? { sourceReanalysis } : {}), ...(output ? { output } : {}) }),
   });
   return result.task;
 }

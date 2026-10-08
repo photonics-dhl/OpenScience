@@ -45,6 +45,10 @@ export interface PendingHermesRunStart {
   savedAt: number;
   runId?: string;
   sourceReanalysisKey?: string;
+  /** First source POST body only; missing on a legacy key means output was omitted. */
+  sourceReanalysisOutput?: 'video';
+  /** New intents prepare their source; run-phase/legacy unknown run bodies never prepare again. */
+  phase?: 'source' | 'run';
 }
 
 export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult['researchRunDraft'] | null {
@@ -74,6 +78,10 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
       || (value.runId !== undefined && (typeof value.runId !== 'string' || !value.runId || value.runId.length > 100))
       || (value.sourceReanalysisKey !== undefined && (typeof value.sourceReanalysisKey !== 'string'
         || !value.sourceReanalysisKey || value.sourceReanalysisKey.length > 64))
+      || (value.sourceReanalysisOutput !== undefined && (value.sourceReanalysisOutput !== 'video'
+        || !value.sourceReanalysisKey || scope.output !== 'video'))
+      || (value.phase !== undefined && value.phase !== 'source' && value.phase !== 'run')
+      || (value.phase === 'run' && (value.sourceReanalysisKey !== undefined || value.sourceReanalysisOutput !== undefined))
       || !generation || generation.profile !== 'visual-narrative-v1' || generation.maxAgentTasks !== 9
       || generation.output !== scope.output || (generation.output !== undefined && generation.output !== 'video')
       || (generation.locale !== 'zh' && generation.locale !== 'en')
@@ -81,6 +89,8 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
       || typeof generation.instruction !== 'string' || generation.instruction.length > 1_000) return null;
     return { key: value.key, savedAt: value.savedAt, ...(value.runId ? { runId: value.runId } : {}),
       ...(value.sourceReanalysisKey ? { sourceReanalysisKey: value.sourceReanalysisKey } : {}),
+      ...(value.sourceReanalysisOutput ? { sourceReanalysisOutput: value.sourceReanalysisOutput } : {}),
+      ...(value.phase ? { phase: value.phase } : {}),
       generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction,
         ...(generation.output ? { output: generation.output } : {}) } };
   } catch { return null; }
@@ -89,6 +99,10 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
 export function savePendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope, pending: PendingHermesRunStart): boolean {
   try {
     if (!storage || pending.generation.output !== scope.output) return false;
+    if (pending.sourceReanalysisOutput !== undefined && (pending.sourceReanalysisOutput !== 'video'
+      || !pending.sourceReanalysisKey || scope.output !== 'video')) return false;
+    if (pending.phase !== undefined && pending.phase !== 'source' && pending.phase !== 'run') return false;
+    if (pending.phase === 'run' && (pending.sourceReanalysisKey !== undefined || pending.sourceReanalysisOutput !== undefined)) return false;
     storage.setItem(runStartKey(scope), JSON.stringify({ version: 1, ...pending }));
     return true;
   } catch { return false; }
