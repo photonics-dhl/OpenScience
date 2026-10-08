@@ -3,6 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
+- 2026-10-08：核实旧049c已非current；21:29只读证据指向v27当前96b owner、69 active/0 vector。精确显式owner CLI03b3全等集入3a3faa，High GO/31例通过，未生产apply。e431视频CI成功、期刊双语fixture失败、media导航缺mock耗时取消；323修正/失败trace本地已集，UI补mock。生图另修ACK ORM时钟回退P2，视频补收费前readiness；发布仍NO-GO，详见CURRENT。
 - 2026-10-08：浏览器可见入口修正及OA无元数据反馈已全等集入，保留真实目录点击/创建/幂等/多PDF检查，等待CI；BGE恢复f427全等集入79050，High关闭CLI参数P2、73相关本地验证通过，追加原CI。生图续只读核真实049c owner/双预算/来源，视频/UI继续P1收费前检查；发布仍NO-GO，未生产apply。
 - 2026-10-08：c3已推但发布NO-GO：集成High发现video不可执行时仍可能先花Native/图片额度，视频/UI优先补付费前资格。期刊旧Browse all journals与media四例旧上传链接定位失败已交UI；Search29/Worker25、新Web单测和构建已过，后续导航未跑。BGE原终态无合法现成恢复，High B方案后授生图原retry/CLI内部精确任务恢复；生产、旧paid和69段lexical未动。
 - 2026-10-08：UI已提交fe12全等合入2265（含普通视频入口及期刊语义合并），长表格57c751全等集入aa0；各自High/定向证据保留。原媒体CI补新Web恢复/导航及Search29/Worker25，最终构建与Linux行为待本批执行。生图已转既有lexical来源合法消费路径只读分析；未收UI在途页面，未生产索引/部署/付费。
