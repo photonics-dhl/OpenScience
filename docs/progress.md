@@ -3,7 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-08：ACK CAS与单调更新时间f1de/cc1e全等集入a5d792/89d6ba；3个实际dispatcher回归Green，原High P2关闭，原CI追加对应组，视频整体P1仍待业务集成。生图随即接Fig.2重复plan/d508悬空copy现态与可恢复方案，不按旧快照清理。导航已知mock/入口差额由UI同批修完再跑CI，未部署或新增付费。
+- 2026-10-08：ACK CAS与单调更新时间f1de/cc1e全等集入a5d792/89d6ba；3例Green/原High P2关闭，22:18视频同源真实派发交错另2/2通过，整体收费边界/TC/集成High仍待，原CI追加对应组。生图接Fig.2重复plan/d508悬空copy现态与可恢复方案，不按旧快照清理。导航已知mock/入口差额由UI同批修完再跑CI，未部署或新增付费。
 - 2026-10-08：核实旧049c已非current；21:29只读证据指向v27当前96b owner、69 active/0 vector。精确显式owner CLI03b3全等集入3a3faa，High GO/31例通过，未生产apply。e431视频CI成功、期刊双语fixture失败、media导航缺mock耗时取消；323修正/失败trace本地已集，UI补mock。生图另修ACK ORM时钟回退P2，视频补收费前readiness；发布仍NO-GO，详见CURRENT。
 - 2026-10-08：浏览器可见入口修正及OA无元数据反馈已全等集入，保留真实目录点击/创建/幂等/多PDF检查，等待CI；BGE恢复f427全等集入79050，High关闭CLI参数P2、73相关本地验证通过，追加原CI。生图续只读核真实049c owner/双预算/来源，视频/UI继续P1收费前检查；发布仍NO-GO，未生产apply。
 - 2026-10-08：c3已推但发布NO-GO：集成High发现video不可执行时仍可能先花Native/图片额度，视频/UI优先补付费前资格。期刊旧Browse all journals与media四例旧上传链接定位失败已交UI；Search29/Worker25、新Web单测和构建已过，后续导航未跑。BGE原终态无合法现成恢复，High B方案后授生图原retry/CLI内部精确任务恢复；生产、旧paid和69段lexical未动。
