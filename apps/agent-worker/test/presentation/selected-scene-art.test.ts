@@ -52,6 +52,22 @@ it('requests one art scene, preserves whole original science and every unselecte
   expect(selected.illustration?.composition).not.toBe(previous.illustration?.composition);
 });
 
+it('allows automatic catalogue selection for a bounded art scene', async () => {
+  const original = base();
+  const request = { ...settings, style: 'auto' as const };
+  const completeStructured = vi.fn(async (guard: (value: unknown) => boolean) => {
+    const value = { scenes: [{ layout: 'Place subject 0 on the shared reading path.', treatment: 'Editorial linework with restrained cyan emphasis.', styleId: 'article:editorial',
+      styleRecommendations: { selectedStyleId: 'article:editorial', choices: [
+        { styleId: 'article:editorial', name: 'Editorial', reason: 'Clear publication hierarchy' },
+        { styleId: 'infographic:technical-schematic', name: 'Blueprint', reason: 'Technical fallback' },
+      ] } }] };
+    expect(guard(value)).toBe(true); return value;
+  });
+  const result = await generateIllustrationStoryboard({ completeStructured } as never, claims, request, original, undefined, {} as never);
+  expect(result.document.scenes[0]).toEqual(original.document.scenes[0]);
+  expect(result.document.scenes[1]!.illustration?.treatment).toContain('BAOYU_STYLE=article:editorial');
+});
+
 it.each(['current', 'unrecommended', 'out-of-range', 'missing-catalogue'])('rejects %s before provider', async kind => {
   const original = base(), request = { ...settings };
   if (kind === 'current') request.style = recommendations.selectedStyleId;

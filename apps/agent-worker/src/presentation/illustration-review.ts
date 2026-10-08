@@ -124,12 +124,17 @@ export async function reviewIllustrationStoryboard(
   }
   // Imported evidence is field-scoped and often all marked supports. Keep the
   // selected Claims' whole source context: unused passages can carry qualifiers.
-  const selectedClaimIds = new Set(candidate.scenes.flatMap(scene => scene.sourceClaimIds));
-  const selectedClaims = candidate.narrative ? claims : claims.filter(claim => selectedClaimIds.has(claim.id));
+  const boundedSceneIndex = settings.revisionMode === 'art' && settings.artSceneIndex !== undefined ? settings.artSceneIndex : undefined;
+  const reviewSceneIndices = boundedSceneIndex === undefined ? candidate.scenes.map((_, index) => index) : [boundedSceneIndex];
+  const reviewScenes = reviewSceneIndices.map(index => candidate.scenes[index]).filter((scene): scene is StoryboardDocument['scenes'][number] => Boolean(scene));
+  if (!reviewScenes.length) throw new Error('[blocked] Illustration review scene selection is invalid');
+  const selectedClaimIds = new Set(reviewScenes.flatMap(scene => scene.sourceClaimIds));
+  const selectedClaims = candidate.narrative && boundedSceneIndex === undefined ? claims : claims.filter(claim => selectedClaimIds.has(claim.id));
   const sources = selectedClaims.flatMap(claim => (claim.sourcePassages ?? [])
     .map(passage => ({ ...passage, claimId: claim.id })));
   const sourceIds = new Map(sources.map((source, index) => [`${source.claimId}:${source.evidenceId}`, `s${index}`]));
-  const candidateView = { title: candidate.title, ...(candidate.narrative ? { narrative: candidate.narrative } : {}), scenes: candidate.scenes.map(scene => {
+  const candidateView = { title: candidate.title, ...(candidate.narrative ? { narrative: candidate.narrative } : {}), scenes: reviewScenes.map((scene, reviewIndex) => {
+    const originalSceneIndex = reviewSceneIndices[reviewIndex]!;
     if (scene.illustration?.schemaVersion !== 2) throw new Error('[blocked] Illustration review requires separate science and layout');
     // Legacy mechanical reuse has no authored scientific explanation. New narrative
     // captions always require real passages; an uploaded image is not proof of its meaning.
@@ -141,7 +146,7 @@ export async function reviewIllustrationStoryboard(
       }
     }
     const { schemaVersion: _schemaVersion, ...brief } = scene.illustration;
-    return { title: scene.title, narration: scene.narration, ...brief,
+    return { sceneIndex: originalSceneIndex, title: scene.title, narration: scene.narration, ...brief,
       ...(scene.paperOriginal ? { mediaSource: { kind: 'unchanged_paper_original', assetId: scene.paperOriginal.assetId } } : {}),
       // For paper-original scenes, basis.evidenceId is the registered asset id
       // (not a source passage), so sourceId is undefined — that's fine: the
@@ -157,10 +162,11 @@ export async function reviewIllustrationStoryboard(
   }) };
   const candidateHash = createHash('sha256').update(JSON.stringify(candidate)).digest('hex');
   const perSceneStyle = storyboardSceneStyles(settings, candidate.scenes);
-  const generatedStyles = perSceneStyle.filter((_, index) => !candidate.scenes[index]!.paperOriginal);
+  const reviewPerSceneStyle = reviewSceneIndices.map(index => perSceneStyle[index]!);
+  const generatedStyles = reviewPerSceneStyle.filter((_, index) => !reviewScenes[index]!.paperOriginal);
   const reviewSkills = loadIllustrationStyleSkills(generatedStyles.length ? generatedStyles : [settings.style], settings.instruction, 'review');
-  const autoScenes = candidate.scenes.flatMap((scene, index) => perSceneStyle[index] === 'auto' && !scene.paperOriginal
-    ? [{ index, treatment: scene.illustration!.treatment }] : []);
+  const autoScenes = reviewScenes.flatMap((scene, reviewIndex) => reviewPerSceneStyle[reviewIndex] === 'auto' && !scene.paperOriginal
+    ? [{ index: reviewSceneIndices[reviewIndex]!, treatment: scene.illustration!.treatment }] : []);
   const autoStyleSkills = autoScenes.map(({ index, treatment }) => ({ index, skills: loadInstalledMediaSkills('auto', treatment, 'render') }));
   const autoStyleGuidance = autoStyleSkills.map(({ index, skills }) => `Scene ${index}: ${skills.instructions}`).join('\n');
   const verdictOnly = Boolean(settings.narrative || candidate.narrative || context.acceptanceOnly);

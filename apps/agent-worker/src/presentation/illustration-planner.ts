@@ -673,9 +673,10 @@ export async function generateIllustrationStoryboard(gateway: Pick<AiGateway, 'c
     if (settings.artSceneIndex !== undefined) {
       const scene = base.document.scenes[settings.artSceneIndex];
       const saved = parseIllustrationStyleRecommendations(scene?.styleRecommendations);
+      const automaticStyle = settings.style === 'auto';
       if (!Number.isInteger(settings.artSceneIndex) || !settings.narrative || !settings.baseAssetId || !scene || scene.paperOriginal
-        || !saved || saved.selectedStyleId === settings.style || !saved.choices.some(choice => choice.styleId === settings.style)
-        || !installedIllustrationStyle(settings.style))
+        || (!automaticStyle && (!saved || saved.selectedStyleId === settings.style || !saved.choices.some(choice => choice.styleId === settings.style)
+          || !installedIllustrationStyle(settings.style))))
         throw new Error('[blocked] Select an installed saved alternative for the exact generated scene');
     }
   }

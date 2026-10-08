@@ -1247,6 +1247,31 @@ describe('automatic art direction after sourced science', () => {
     expect(reviewed.designSkills).toContainEqual(expect.objectContaining({ id: 'openscience-handdraw-style', resources: expect.arrayContaining(['references/style-catalogue.json#002']) }));
   });
 
+  it('bounds formal illustration review input to the selected art scene', async () => {
+    const source = await generateIllustrationStoryboard(mockGateway('BAOYU_STYLE=article:editorial; Quiet ink.').gateway, claims, {
+      locale: 'en', style: 'watercolor', instruction: 'Explain the relation.', output: 'image',
+    });
+    const document = structuredClone(source.document);
+    document.scenes = [
+      { ...structuredClone(document.scenes[0]!), title: 'First scene' },
+      { ...structuredClone(document.scenes[0]!), title: 'Chosen scene' },
+      { ...structuredClone(document.scenes[0]!), title: 'Third scene' },
+    ];
+    const settings = { locale: 'en' as const, style: 'auto', instruction: 'Restyle the selected scene with article:editorial.', output: 'image' as const,
+      narrative: undefined, revisionMode: 'art' as const, baseAssetId: '30000000-0000-4000-8000-000000000001', artSceneIndex: 1 };
+    const reviewScientific = vi.fn(async (input: { prompt: string }) => {
+      expect(input.prompt).toContain('Chosen scene');
+      expect(input.prompt).not.toContain('Third scene');
+      expect(input.prompt).toContain('"sceneIndex":1');
+      return { text: JSON.stringify({ decision: 'accepted', summary: 'Bounded scene is consistent.', corrections: [] }), promptHash: 'p', responseHash: 'r' };
+    });
+    await reviewIllustrationStoryboard({ reviewScientific } as never, claims, settings, document, {
+      researchObjectId: 'ro', versionId: 'version', sourceEvidenceIdentity: 'source',
+      authorizationContext: { taskId: 'review' }, illustrationContext: {},
+    } as never);
+    expect(reviewScientific).toHaveBeenCalledOnce();
+  });
+
   it('gives pixel review the same selected appearance guidance as rendering', async () => {
     const settings = { locale: 'en' as const, style: 'auto', instruction: 'Explain the relation.', output: 'image' as const };
     const candidate = await generateIllustrationStoryboard(mockGateway('Calm lines.', 'infographic:subway-map').gateway, claims, settings);
