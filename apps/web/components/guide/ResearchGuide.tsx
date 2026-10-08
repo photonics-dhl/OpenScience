@@ -86,9 +86,6 @@ export function ResearchGuide() {
           <p className={styles.startNote}>{t('startNote')}</p>
         </div>
       </div>
-      <div className={styles.companion}>
-        <HermesDockAnchor floating={false} onInvoke={openDesk} state="idle" suggestion={guideSuggestion} workspaceId="guide" />
-      </div>
       <a className={styles.chapterLink} href={`#${id}-scenes`}>{t('sceneHeading')}<ArrowRight size={17} aria-hidden="true" /></a>
     </header>
 
@@ -110,6 +107,10 @@ export function ResearchGuide() {
         </>}
     </figure>
     </div>
+
+    <aside className={styles.companionDock} aria-label="Hermes">
+      <HermesDockAnchor floating={false} onInvoke={openDesk} state="idle" suggestion={guideSuggestion} workspaceId="guide" />
+    </aside>
 
     <section className={styles.scenes} aria-labelledby={`${id}-scenes`}>
       <div className={styles.sectionHeading}><h2 id={`${id}-scenes`}>{t('sceneHeading')}</h2><p>{t('sceneIntro')}</p></div>

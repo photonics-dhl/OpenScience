@@ -21,9 +21,9 @@
 .primary { display: inline-flex; align-items: center; justify-content: space-between; gap: 36px; min-height: 56px; padding: 14px 24px; border: 1px solid rgb(255 255 255 / .1); border-radius: 10px; background: var(--os-vermilion-ink); color: #fff; box-shadow: 0 2px 3px rgb(12 51 57 / .1), inset 0 1px 0 rgb(255 255 255 / .14); text-decoration: none; font-size: 16px; font-weight: 600; transition: background-color 160ms ease, transform 100ms ease-out, box-shadow 160ms ease; }
 .primary svg, .textLink svg { flex: none; transition: transform 160ms ease-out; }
 .primary:active { transform: scale(.98); }
-.companion { width: min(360px, 100%); min-height: 360px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--os-rule-paper); }
-.companion :global(.hermes-dock-anchor) { min-height: 360px; }
-.companion :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
+.companionDock { display: grid; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; min-height: 360px; margin: -24px 0 80px; padding-top: 12px; border-top: 1px solid var(--os-rule-paper); }
+.companionDock :global(.hermes-dock-anchor) { grid-column: 2; min-height: 360px; }
+.companionDock :global(.hermes-workspace-stage[data-hermes-placement='anchored']) { margin-top: 0; }
 .chapterLink { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 14px; color: var(--os-ink); text-decoration: none; }
 .chapterLink svg { color: var(--os-vermilion-ink); }
 .proof { position: relative; isolation: isolate; min-width: 0; margin: 0; padding: 20px 0 0; border: 0; border-top: 1px solid var(--os-rule-paper); border-radius: 0; background: transparent; color: var(--os-ink); }
@@ -112,7 +112,8 @@
   .opening { grid-template-columns: minmax(0, 1fr); gap: 32px; margin-bottom: 56px; }
   .hero { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; padding-block: 0; }
   .intro h1 { font-size: 48px; }
-  .companion { min-height: 320px; margin-top: 0; }
+  .companionDock { grid-template-columns: minmax(0, 1fr) 320px; min-height: 320px; }
+  .companionDock :global(.hermes-dock-anchor) { min-height: 320px; }
   .chapterLink { grid-column: 1 / -1; }
   .opticalMargin { top: 240px; bottom: 0; width: 300px; }
   .proof { padding-top: 16px; }
@@ -125,13 +126,14 @@
   .hero { grid-template-columns: minmax(0, 1fr); }
   /* Keep the compact companion owned by the guide surface. The shell fallback
      is reserved for public surfaces that have no page-owned anchor. */
-  .companion { width: 196px; min-height: 156px; margin-top: 8px; margin-left: auto; padding-top: 8px; }
-  .companion :global(.hermes-dock-anchor) { min-height: 156px; }
+  .companionDock { grid-template-columns: minmax(0, 1fr) 196px; min-height: 156px; margin: -8px 0 48px; padding-top: 8px; }
+  .companionDock :global(.hermes-dock-anchor) { min-height: 156px; }
 }
 @media (max-width: 800px) {
   .hero { grid-template-columns: minmax(0, 1fr); }
   .intro { gap: 24px; }
-  .companion { justify-self: center; }
+  .companionDock { grid-template-columns: minmax(0, 1fr) 148px; min-height: 148px; margin: 0 0 40px; }
+  .companionDock :global(.hermes-dock-anchor) { min-height: 148px; }
   .proofLayout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .proofCopy { gap: 14px; }
   .proof .researchTitle { max-width: 26ch; }
@@ -147,9 +149,8 @@
   .opening { gap: 24px; margin-bottom: 40px; }
   .opticalMargin { top: 18%; right: -20px; bottom: auto; width: 180px; height: 240px; opacity: .36; }
   .proof { padding-top: 14px; }
-  .companion { grid-column: 2; grid-row: 2; justify-self: end; width: 148px; min-height: 148px; margin: 0; padding-top: 6px; }
-  .companion :global(.hermes-dock-anchor) { min-height: 148px; }
-  .chapterLink { grid-column: 1; grid-row: 2; align-self: end; }
+  .companionDock { grid-template-columns: minmax(0, 1fr) 148px; min-height: 148px; margin-bottom: 32px; }
+  .companionDock :global(.hermes-dock-anchor) { min-height: 148px; }
   .proofLoading { min-height: 320px; }
   .skeleton { margin-top: 48px; }
   .startNote { font-size: 14px; }
