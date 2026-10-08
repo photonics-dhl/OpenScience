@@ -191,7 +191,7 @@ it('shows account journal loading without claiming the account has no journals',
   expect(markup).not.toContain('尚未加入期刊');
 });
 
-it('recovers the account journal list from a failed load using the local retry action', async () => {
+it('recovers the account journal list from a failed load and opens its sole workbench', async () => {
   let load: (() => void) | undefined;
   vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
   api.listMyJournals.mockRejectedValueOnce(new Error('Journal list unavailable'))
@@ -204,7 +204,20 @@ it('recovers the account journal list from a failed load using the local retry a
   expect(renderToStaticMarkup(render())).toContain('正在加载我的期刊');
   await settle();
   const markup = renderToStaticMarkup(render());
-  expect(markup).toContain('Optics Journal');
-  expect(markup).toContain('href="/journals/manage/optics"');
+  expect(router.replace).toHaveBeenCalledWith('/journals/manage/optics');
+  expect(markup).toContain('正在加载我的期刊');
+  expect(markup).not.toContain('href="/journals/manage/optics"');
   expect(markup).not.toContain('role="alert"');
+});
+
+it('shows a journal selector when an account manages multiple journals', async () => {
+  let load: (() => void) | undefined;
+  vi.mocked(React.useEffect).mockImplementationOnce(effect => { load = effect as () => void; });
+  api.listMyJournals.mockResolvedValueOnce({ items: [journal('optics', 'Optics Journal'), journal('photonics', 'Photonics Journal')] });
+  const render = mountDirectory([], null, MyJournalsPage);
+  render(); load!(); await settle();
+  const markup = renderToStaticMarkup(render());
+  expect(markup).toContain('href="/journals/manage/optics"');
+  expect(markup).toContain('href="/journals/manage/photonics"');
+  expect(router.replace).not.toHaveBeenCalled();
 });

@@ -50,7 +50,8 @@ suite('journal shared Native confirmation against isolated PostgreSQL', () => {
         passwordHash: 'unusable', platformRole: 'platform_admin', status: 'email_verified' } });
       const owner = await prisma.user.create({ data: { email: `${randomUUID()}@example.invalid`, displayName: 'Journal DB fixture editor',
         passwordHash: 'unusable', status: 'email_verified' } });
-      const application = await saveJournalApplication(deps, owner.id, { nameEn: 'Synthetic Validation Journal', pIssn: validIssn(),
+      const issn = validIssn();
+      const application = await saveJournalApplication(deps, owner.id, { nameEn: 'Synthetic Validation Journal', pIssn: issn,
         websiteUrl: 'https://journals.example.test', publisherName: 'Isolated test publisher', subjects: ['Validation'],
         description: 'Test fixture', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email,
         representationEvidence: 'Synthetic test fixture', rightsDeclaration: 'I have authorization for this synthetic test.',
@@ -62,7 +63,8 @@ suite('journal shared Native confirmation against isolated PostgreSQL', () => {
       const journalId = verified.journal!.id;
       await activateJournalHomepage(deps, owner.id, journalId);
       const imported = await importJournalArticle(deps, owner.id, journalId, { title: 'Synthetic confirmation paper',
-        authors: ['Synthetic author'], originalUrl: 'https://journals.example.test/paper' });
+        authors: ['Synthetic author'], journalTitle: 'Synthetic Validation Journal', issns: [issn],
+        originalUrl: 'https://journals.example.test/paper' });
       const oldSource = { kind: 'fulltext' as const, text: oldText, url: 'https://journals.example.test/paper', label: 'Old public source' };
       const rights = { internalProcessing: true, derivativeGeneration: true, publicSource: false, publicDerivative: true,
         externalProcessing: true, license: 'Synthetic test licence', evidence: 'Editor-owned synthetic text' };

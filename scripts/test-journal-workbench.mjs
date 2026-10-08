@@ -19,6 +19,14 @@ function load(file, dependencies = {}) {
 const policy = load('apps/api/src/routes/journal-draft-policy.ts');
 const model = load('apps/web/lib/journal-workbench-model.ts');
 const rights = load('apps/web/lib/journal-rights-form.ts');
+test('a new private revision may be archived while its fixed public revision stays protected', () => {
+  const paper = { id: 'article', revision: 4, contentState: 'active', reviewState: 'draft', jobs: [],
+    releases: [{ versionNo: 1, publishedAt: '2026-10-01', revision: 3 }] };
+  assert.equal(model.canDeleteDraft(paper, 'editor'), true);
+  assert.equal(model.canDeleteDraft({ ...paper, revision: 3 }, 'editor'), false);
+  assert.equal(model.canDeleteDraft({ ...paper, jobs: [{ state: 'running' }] }, 'editor'), false);
+  assert.equal(model.canDeleteDraft({ ...paper, releases: [{ versionNo: 1, publishedAt: '2026-10-01' }] }, 'editor'), false);
+});
 const article = { id: 'a', revision: 1, contentState: 'active', reviewState: 'draft', jobs: [], releases: [] };
 test('draft deletion permits only editable unsubmitted work', () => { assert.equal(policy.draftDeletionBlock({ ...article, releaseCount: 0, activeJobCount: 0 }), null); for (const change of [{ releaseCount: 1 }, { activeJobCount: 1 }, { reviewState: 'submitted' }, { reviewState: 'approved' }, { contentState: 'restricted' }, { contentState: 'withdrawn' }]) assert.equal(typeof policy.draftDeletionBlock({ ...article, releaseCount: 0, activeJobCount: 0, ...change }), 'string'); });
 test('archive marker is revision-bound and rejects malformed values', () => { assert.equal(policy.archivedAtRevision({ revision: 2 }, 2), true); for (const item of [null, [], {}, { revision: '2' }, { revision: 1 }]) assert.equal(policy.archivedAtRevision(item, 2), false); });

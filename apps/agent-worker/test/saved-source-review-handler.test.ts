@@ -179,11 +179,19 @@ function fixture(executionAttempt = 1, native = false) {
     putObject: vi.fn(async (key: string, body: Buffer) => { stored.set(key, body); return { key, size: body.length, etag: 'test' }; }),
   };
   const tx = {
+    journalArticle: { findUnique: vi.fn().mockResolvedValue(null) },
+    agentSession: { findUnique: vi.fn().mockResolvedValue({ ...session, researchObject: session.researchObject }) },
+    membership: { findUnique: vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' }) },
+    ingestionTask: { findUnique: vi.fn().mockImplementation(async () => ({ id: ids.ingestion, agentTaskId: owner.id,
+      artifactId: 'artifact', artifact: { id: 'artifact', workspaceId: 'workspace', blobSha256: contentHash },
+      agentTask: owner, batch: { userId: 'actor', researchObjectId: 'ro',
+        researchObject: { id: 'ro', workspaceId: 'workspace', workspace: { status: 'active' } } } })) },
     artifact: { findFirst: vi.fn().mockResolvedValue({ id: 'artifact' }) },
     agentTask: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     $executeRaw: vi.fn(),
   };
   const prisma = {
+    journalArticle: { findUnique: vi.fn().mockResolvedValue(null) },
     agentTask: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => structuredClone(tasks.get(where.id) ?? null)) },
     artifact: { findUnique: vi.fn().mockResolvedValue({ id: 'artifact', workspaceId: 'workspace', size: bytes.length,
       blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf', deletedAt: null, bytesPurgedAt: null }) },

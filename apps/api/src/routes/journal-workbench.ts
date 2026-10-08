@@ -72,7 +72,7 @@ export function registerJournalWorkbenchRoutes(app: FastifyInstance, deps: Deps)
       const article = await journalArticleInScope(tx, p.id, p.articleId);
       assertArticleRevision(article, input.revision);
       const [releaseCount, activeJobCount] = await Promise.all([
-        tx.journalRelease.count({ where: { articleId: p.articleId } }),
+        tx.journalRelease.count({ where: { articleId: p.articleId, revision: article.revision } }),
         tx.journalJob.count({ where: { journalId: p.id, articleId: p.articleId, state: { in: activeStates } } }),
       ]);
       const block = draftDeletionBlock({ ...article, releaseCount, activeJobCount });
