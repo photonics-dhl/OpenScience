@@ -165,6 +165,7 @@ on:
       - 'apps/web/test/e2e/hermes-dashboard.spec.ts'
       - 'apps/web/test/e2e/auth-dashboard.spec.ts'
       - 'apps/web/test/e2e/research-continuation.spec.ts'
+      - 'apps/web/test/e2e/vendor-ux.spec.ts'
       - 'packages/search/src/chunker.ts'
       - 'packages/search/test/chunker.test.ts'
       - 'packages/search/test/fixtures/long-docling-table.json'
@@ -413,6 +414,7 @@ on:
       - 'apps/web/test/e2e/hermes-dashboard.spec.ts'
       - 'apps/web/test/e2e/auth-dashboard.spec.ts'
       - 'apps/web/test/e2e/research-continuation.spec.ts'
+      - 'apps/web/test/e2e/vendor-ux.spec.ts'
       - 'packages/search/src/chunker.ts'
       - 'packages/search/test/chunker.test.ts'
       - 'packages/search/test/fixtures/long-docling-table.json'
@@ -601,6 +603,10 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
+      - name: Guide layout and contextual companion focus
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test vendor-ux.spec.ts --grep "guide scenes support keyboard|English guide keeps task tabs|guide remains usable when the public preview fails" --config playwright.config.ts --workers 1 --max-failures=1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-guide-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
       - name: Hermes navigation and existing research entry
         run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-workspace-stage.spec.ts hermes-dashboard.spec.ts auth-dashboard.spec.ts research-continuation.spec.ts --config playwright.config.ts --workers 1 --max-failures=1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-entry-browser
         env:
@@ -625,6 +631,7 @@ jobs:
           path: |
             tmp/illustrated-creation-browser/
             tmp/hermes-entry-browser/
+            tmp/hermes-guide-browser/
             tmp/storyboard-lifecycle-browser/
             tmp/presentation-retry-browser/
           if-no-files-found: ignore

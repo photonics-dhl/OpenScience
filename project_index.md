@@ -8,6 +8,8 @@
 
 Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`规定原写门禁、排空、timer原状态和配对失败恢复；关闭video host可复用，真实启用另验，状态见CURRENT。
 
+紧凑研究入口与版式：`HermesDockAnchor.tsx`共用原120px锚点和对话按钮，`HermesWorkspaceStage.tsx`复用原Drawer关闭回焦；`ResearchGuide.tsx`保留固定公开版本并提供原科研图大图入口。`vendor-ux.spec.ts`与`research-continuation.spec.ts`承接指南/阅读截图，原media CI保存正常PNG及失败trace；实际验收见CURRENT。
+
 冻结版本原文：`VersionRecord.tsx`复用`WorkbenchClaimReader`及已有冻结source API；`research-continuation.spec.ts`覆盖换版本/迟到请求与双语窄屏，`globals.css`仅重置原文sheet局部translate。`useHermesViewerId.ts`复用SessionProvider使制作入口随真实跨标签身份变化；验收及上线状态见CURRENT。
 
 视频执行资格：Gateway `synclip-video-readiness.ts`读取已有host heartbeat；Domain `agent/video-readiness.ts`识别受授权视频意图并在新收费前检查；Worker `video-task-admission.ts`复用任务与outbox暂停/恢复。API `research-runs.ts`的`hermes-video-capability`供Web在来源准备前消费，原重分析的`output`只限制、不扩权；相关同名单测及原media CI覆盖边界，实际交付状态只见CURRENT。
