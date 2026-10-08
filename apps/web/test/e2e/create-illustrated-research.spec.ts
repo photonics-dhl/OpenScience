@@ -16,7 +16,7 @@ async function setup(page: Page, loseResponse = false) {
     if (path === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal research', role: 'owner' }] } });
     if (path === '/api/research-objects') return route.fulfill({ json: request.method() === 'POST' ? { researchObject: ro } : { researchObjects: [ro] } });
     if (path.endsWith('/ingest')) return route.fulfill({ json: { batchId: 'batch', tasks: [source] } });
-    if (path === `/api/ingestion/tasks/${source.id}`) return route.fulfill({ json: { task: { ...source, result: null } } });
+    if (path === `/api/ingestion/tasks/${source.id}`) return route.fulfill({ json: { task: { ...source, result: null }, batchId: 'batch', researchObjectId: ro.id, version: ro.version } });
     if (path.endsWith('/hermes-runs')) {
       if (request.method() === 'POST') {
         runCreated = true;
