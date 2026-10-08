@@ -14,7 +14,7 @@
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 真实PNG审图模型/载荷/paid核查与最小修复；7755应用/Skill配对发布前置，无新付费 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/image-review-routing` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | Native/Domain/Worker接线、草稿技术资格与自动推进、Gateway音频/broker；依已审计划实施 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/synclip-video-delivery`；从7755a5ef续作 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 指南、探索、期刊、研究桌面等全站构图、字体和视觉节奏；真实桌面/窄屏入口验收 | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
-- 生图独占Gateway的`native-image-review.ts`与对应独立测试，共用provider/gateway/Worker index须报符号定序；视频独占已授Native/Domain/Worker/音频范围，Web归UI。未知付费保护约束具体任务，不得扩成整条线长期待命；不得覆盖、还原或混入他人改动。
+- 视频确认无共用文件在途写入后，生图另获GatewayOptions/constructor/native PNG分支/completeWithControls局部provider选择与Worker `buildGateway`可选审图模型构造、对应测试；不改provider.ts、Native/Text或全局M3。视频保留其余已授Native/Domain/Worker/音频，Web归UI；未知付费保护只约束具体任务，不扩成整线待命。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
 
 ## 当前版本与观察边界
