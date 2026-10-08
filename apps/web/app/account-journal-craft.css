@@ -177,6 +177,20 @@
 .craft-journal-public [data-journal-paper] > div { gap: 4px 24px; }
 .craft-journal-public [data-journal-papers] > nav a { min-height: 44px; display: inline-flex; align-items: center; }
 
+/* A journal is a reading folio; the companion shares its opening, never its text. */
+.craft-journal-home > .journal-reading-folio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: 'back back' 'masthead companion' 'papers papers' 'details details'; gap: 32px 48px; }
+.craft-journal-home .journal-back-link { grid-area: back; width: fit-content; }
+.craft-journal-home > .journal-reading-folio > [data-journal-masthead] { grid-area: masthead; display: block; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.craft-journal-home [data-journal-masthead] h1 { font-size: clamp(2.5rem, 4.4vw, 3.75rem); line-height: 1.12; }
+.craft-journal-home [data-journal-papers] { grid-area: papers; margin: 0; padding-top: 28px; border-top: 1px solid var(--craft-rule, #dce5e5); }
+.craft-journal-home [data-journal-paper] h3 { max-width: 46ch; font-size: clamp(1.625rem, 2.7vw, 2.25rem); line-height: 1.3; }
+.craft-journal-home > .journal-reading-folio > [data-journal-details] { grid-area: details; padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--craft-rule, #dce5e5); }
+.craft-journal-home .journal-reading-companion { grid-area: companion; align-self: start; width: 100%; max-width: 320px; min-width: 0; }
+[data-journal-derivative='true'] > .journal-reading-companion { width: 100%; max-width: 360px; min-width: 0; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--craft-rule, #dce5e5); }
+@media (max-width: 700px) {
+  .craft-journal-home > .journal-reading-folio { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'back' 'masthead' 'papers' 'companion' 'details'; gap: 28px; }
+}
+
 .craft-journal-public [data-journal-directory] form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding-bottom: 20px; }
 .craft-journal-public [data-journal-directory] form input { width: 100%; }
 .craft-journal-public [data-journal-directory] form button { border: 0; border-radius: 8px; background: var(--craft-accent, #125d66); color: #fff; padding: 10px 24px; font-weight: 600; box-shadow: var(--craft-shadow-control, 0 2px 4px rgb(24 47 53 / .1)); }
