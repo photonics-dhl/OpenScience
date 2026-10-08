@@ -4,7 +4,8 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider,
+  createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -105,8 +106,10 @@ async function main(): Promise<void> {
           return inspect(payerImageProvider);
         }
       : undefined;
+    const nativeAgentRuntime = nativeAgentRuntimeFromEnv(process.env);
+    const nativeSceneImageEnabled = env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip';
     const app = ownedApp = await buildApp({
-      nativeAgentRuntime: nativeAgentRuntimeFromEnv(process.env),
+      nativeAgentRuntime,
       prisma,
       redis,
       mailer,
@@ -116,8 +119,11 @@ async function main(): Promise<void> {
       ...(searchPrisma ? { deleteSearchContent: (scope: Parameters<typeof deleteSearchContent>[1]) => deleteSearchContent(searchPrisma, scope) } : {}),
       ...(searchPrisma ? { setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(searchPrisma, tx, scope) } : {}),
       sceneImageEnabled: env.ai.sceneImageEnabled,
-      nativeSceneImageEnabled: env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip',
+      nativeSceneImageEnabled,
       videoEnabled: env.ai.videoEnabled,
+      readVideoReadiness: createNativeVideoReadinessReader(process.env, {
+        nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled,
+      }),
       ...(inspectPooledImageRecoveryState && payerImageProvider ? {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
           ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,

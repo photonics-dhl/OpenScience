@@ -91,6 +91,37 @@ async function waitingAuthorFixture() {
 }
 
 describe('new automatic runs use the existing independent Native reviewer', () => {
+  it('does not pay for a reviewer when video readiness closes after the author starts', async () => {
+    const f = await newRunAuthorFixture(); let ready = true;
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
+    const completedAuthor = structuredClone(f.author.result);
+    f.author.status = 'running'; f.author.result = initialNativeAgentExecution(runtime, 'paper-author');
+    f.db.ingestionTasks[0]!.state = 'parsing';
+    const request = { ...f.request, generation: { ...f.request.generation, output: 'video' as const } };
+    const run = await createHermesResearchRun(f.deps, request); f.ids.run = run.id;
+    const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length };
+    ready = false;
+    f.author.status = 'succeeded'; f.author.result = completedAuthor; f.db.ingestionTasks[0]!.state = 'needs_review';
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(await getHermesResearchRun(f.deps, { actorId: f.input.actorId, researchObjectId: f.ids.ro, runId: run.id }))
+      .toMatchObject({ id: run.id, generationHold: 'video-api-pending' });
+    const paused = structuredClone(f.db);
+    await expect(ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, runId: run.id, taskId: f.ids.source }))
+      .rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db).toEqual(paused);
+    ready = true;
+    f.db.hermesResearchRuns.find(row => row.id === run.id)!.lastReconciledAt = new Date(0);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.db.agentTasks).toHaveLength(before.tasks + 1);
+    expect(f.db.usageLedger).toHaveLength(before.ledger + 1);
+    expect(readNativeAgentExecution(f.db.agentTasks.at(-1)!.result)?.profile).toBe('paper-source-review');
+    await ensureHermesIngestionReview(f.deps, { actorId: f.input.actorId, runId: run.id, taskId: f.ids.source });
+    expect(f.db.agentTasks).toHaveLength(before.tasks + 1);
+    expect(f.db.usageLedger).toHaveLength(before.ledger + 1);
+  });
+
   it('atomically creates a real reviewer and canonical steps while preserving the paid author self-check', async () => {
     const f = await newRunAuthorFixture(); const author = structuredClone(f.author);
     const tx = vi.spyOn(f.prisma, '$transaction');
@@ -353,6 +384,24 @@ async function initializationFailureFixture() {
 }
 
 describe('native reviewer initialization failure recovery', () => {
+  it('projects a readiness hold for failed video source initialization recovery without changing its paid history', async () => {
+    const f = await initializationFailureFixture();
+    f.db.hermesResearchRuns[0]!.generationSettings = { locale: 'en', style: 'auto', instruction: 'Explain the paper', output: 'video' };
+    const readVideoReadiness = vi.fn(async () => false);
+    const deps = { ...f.deps, videoEnabled: true, readVideoReadiness };
+    const before = structuredClone(f.db);
+    const closed = await getHermesResearchRun(deps, f.input);
+    expect(closed).toMatchObject({ id: f.ids.run, status: 'failed', version: f.input.expectedVersion,
+      canRetryGeneration: false, chargeableAttempts: 1, generationRecovery: 'source-review-fresh', generationHold: 'video-api-pending' });
+    expect(f.db).toEqual(before);
+    readVideoReadiness.mockResolvedValue(true);
+    const reopened = await getHermesResearchRun(deps, f.input);
+    expect(reopened).toMatchObject({ id: f.ids.run, status: 'failed', version: f.input.expectedVersion,
+      canRetryGeneration: true, chargeableAttempts: 1, generationRecovery: 'source-review-fresh' });
+    expect(reopened.generationHold).toBeUndefined();
+    expect(f.db).toEqual(before);
+  });
+
   it.each(['older-source', 'current-source', 'current-run'] as const)(
     'scopes existing versions to the current ingestion/run, allowing reuse of the same PDF (%s)', async origin => {
       const f = await initializationFailureFixture();

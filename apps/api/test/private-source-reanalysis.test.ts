@@ -9,12 +9,13 @@ import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 
-async function apiFixture(recoveredComposition = false, native = false) {
+async function apiFixture(recoveredComposition = false, native = false,
+  video: { videoEnabled?: boolean; readVideoReadiness?: () => Promise<boolean> } = {}) {
   const f = recoveredComposition ? await exhaustedRecoveredCompositionFixture() : await privateSourceReanalysisFixture(); const redis = createFakeRedis();
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
-    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
+    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, ...video,
     ...(native ? { nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' } } : {}) });
   apps.push(app);
   return { ...f, app, cookies: { openscience_session: token }, url: `/ingestion/${f.input.taskId}/reanalyze`,
@@ -22,6 +23,46 @@ async function apiFixture(recoveredComposition = false, native = false) {
 }
 
 describe('POST existing ingestion reanalyze paid private source HTTP contract', () => {
+  it('keeps unsupported video source-run reanalysis non-chargeable when output is omitted', async () => {
+    const f = await apiFixture(false, false, { videoEnabled: true, readVideoReadiness: async () => false });
+    f.db.hermesResearchRuns[0].generationSettings = { locale: 'zh', style: 'scientific', instruction: 'Explain the paper.', output: 'video' };
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length };
+    const response = await f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
+      headers: { 'idempotency-key': 'video-source-closed' }, payload: f.body });
+    expect(response.statusCode, response.body).toBe(409);
+    expect(response.json().error.code).toBe('INGESTION_NOT_RETRYABLE');
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+  });
+
+  it('checks readiness for a valid private analysis request targeting video', async () => {
+    const f = await apiFixture(false, false, { videoEnabled: true, readVideoReadiness: async () => false });
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length };
+    const response = await f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
+      headers: { 'idempotency-key': 'private-video-destination-closed' }, payload: { ...f.body, output: 'video' } });
+    expect(response.statusCode, response.body).toBe(503);
+    expect(response.json().error.code).toBe('VIDEO_UNAVAILABLE');
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+  });
+
+  it('honors explicit video admission before ordinary confirmed-source reanalysis', async () => {
+    const f = await apiFixture(false, false, { videoEnabled: true, readVideoReadiness: async () => false });
+    f.db.ingestionTasks[0].state = 'confirmed'; f.current.result = structuredClone(f.anchorResult);
+    const commitId = 'video-confirm'; const versionId = 'video-version';
+    f.db.commits.push({ id: commitId, idempotencyKey: `ingestion-confirm:${f.ids.source}`, researchObjectId: f.ids.ro });
+    f.db.versions.push({ id: versionId, commitId, researchObjectId: f.ids.ro, versionNo: 1 });
+    f.db.versionManifests.push({ id: 'video-manifest', versionId });
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length };
+    const response = await f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,
+      headers: { 'idempotency-key': 'video-confirmed-source-closed' },
+      payload: { processingConsent: true, sourceAgentTaskId: f.current.id, output: 'video' } });
+    expect(response.statusCode, response.body).toBe(503);
+    expect(response.json().error.code).toBe('VIDEO_UNAVAILABLE');
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+  });
+
   it('uses server-native configuration for a fresh private paper task through actual HTTP and replays without a second debit', async () => {
     const f = await apiFixture(false, true); const before = f.db.usageLedger.length;
     const post = (key: string) => f.app.inject({ method: 'POST', url: f.url, cookies: f.cookies,

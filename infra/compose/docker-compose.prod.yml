@@ -94,6 +94,8 @@ services:
       - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:ro
       - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
+      # Observe atomically replaced video heartbeats without provider credentials or input access.
+      - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
       - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:ro
       - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
     command: ["node", "dist/index.js"]
@@ -111,6 +113,10 @@ services:
       HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: ${HERMES_SCENE_IMAGE_FALLBACK_PROVIDER:-}
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       HERMES_VIDEO_PROVIDER: ${HERMES_VIDEO_PROVIDER:-disabled}
+      SYNCLIP_VIDEO_ENABLED: ${SYNCLIP_VIDEO_ENABLED:-false}
+      # The inbox path participates in configuration checks only; it is not mounted into API.
+      SYNCLIP_VIDEO_INBOX_DIR: /synclip-video-jobs/inbox
+      SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox

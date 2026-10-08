@@ -23,13 +23,15 @@ function fixture(platformRole = 'user') {
   db.workspaces.push({ id: WORKSPACE, status: 'active' });
   db.memberships.push({ id: 'membership', workspaceId: WORKSPACE, userId: USER, role: 'author' });
   db.researchObjects.push({ id: RO, workspaceId: WORKSPACE, createdBy: USER, status: 'draft', visibility: 'private' });
-  db.versions.push({ id: VERSION, researchObjectId: RO, status: 'draft', versionNo: 1 });
+  db.commits.push({ id: 'presentation-commit', branchId: 'presentation-branch' });
+  db.versions.push({ id: VERSION, researchObjectId: RO, status: 'draft', versionNo: 1, commitId: 'presentation-commit',
+    publicVersionId: null, researchRecord: null, createdAt: new Date('2026-09-05T00:00:00.000Z') });
   db.claimNodes.push({
     id: CLAIM, researchObjectId: RO, versionId: VERSION, kind: 'core', statement: 'Transfer completes in 43 fs.',
     assessment: 'supported', conditions: ['room temperature'], limitations: [], extractionStatus: 'succeeded',
   });
   db.usageLedger.push({ id: 'credit', userId: USER, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: new Date() });
-  return { prisma, db, redis: { lpush: async () => 1 } };
+  return { prisma, db, redis: { lpush: async () => 1 }, videoEnabled: true, readVideoReadiness: vi.fn(async () => true) };
 }
 
 describe('Presentation asset domain contract', () => {
@@ -66,7 +68,7 @@ describe('Presentation asset domain contract', () => {
     ctx.db.workspaces[0].status = 'archived';
     const response = await getPresentationTask(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION, taskId: task.id });
     expect(response).toMatchObject({ id: task.id, kind: 'presentation.generate', status });
-    expect(response).not.toHaveProperty('researchObjectId');
+    expect(response).toHaveProperty('researchObjectId', RO);
     expect(response).not.toHaveProperty('payload');
   });
 
@@ -223,6 +225,20 @@ describe('Presentation asset domain contract', () => {
 
   it('lets only the owning run actor review its exactly bound media asset', async () => {
     const ctx = fixture();
+    // The shared fake predates the profile alternatives in this scoped relation query.
+    vi.spyOn(ctx.prisma.hermesResearchStep, 'findFirst').mockImplementation(async (args) => {
+      const scope = args?.where?.run as { actorId: string; researchObjectId: string; versionId: string;
+        status: { in: string[] }; OR: Array<{ profile: string; maxAgentTasks: number | { gte: number } }> };
+      const step = ctx.db.hermesResearchSteps.find(candidate => {
+        const run = ctx.db.hermesResearchRuns.find(row => row.id === candidate.runId);
+        return candidate.presentationAssetId === args?.where?.presentationAssetId && candidate.status === args.where.status
+          && run && run.actorId === scope.actorId && run.researchObjectId === scope.researchObjectId
+          && run.versionId === scope.versionId && scope.status.in.includes(run.status)
+          && scope.OR.some(option => option.profile === run.profile && (typeof option.maxAgentTasks === 'number'
+            ? option.maxAgentTasks === run.maxAgentTasks : run.maxAgentTasks >= option.maxAgentTasks.gte));
+      });
+      return step ? { ...step, run: ctx.db.hermesResearchRuns.find(run => run.id === step.runId) } : null;
+    });
     const updatedAt = new Date('2026-09-08T00:00:00.000Z');
     ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'image',
       status: 'draft', label: 'presentation_not_evidence', provenance: {}, updatedAt });
@@ -232,6 +248,11 @@ describe('Presentation asset domain contract', () => {
       sourceClaimIds: [CLAIM], status: 'awaiting_scene_images_review' });
     ctx.db.hermesResearchSteps.push({ id: 'step', runId: ctx.db.hermesResearchRuns[0].id, stage: 'scene_image',
       ordinal: 0, status: 'awaiting_approval', presentationAssetId: ASSET });
+    ctx.db.hermesResearchRuns[0].actorId = ASSET;
+    await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+      assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
+    expect(ctx.db.presentationAssets[0].status).toBe('draft');
+    ctx.db.hermesResearchRuns[0].actorId = USER;
     await expect(transitionPresentationAsset(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
       assetId: ASSET, status: 'approved', expectedUpdatedAt: updatedAt })).resolves.toMatchObject({ status: 'approved' });
 
@@ -281,6 +302,41 @@ it('charges storyboard submissions once and blocks the free path', async () => {
     const { submitDeterministicPresentationTask } = await import('../../src/agent/agent');
     await expect(submitDeterministicPresentationTask(ctx as never, { sessionId: ctx.db.agentSessions[0].id, userId: USER, kind: 'presentation.generate', payload: ctx.db.agentTasks[0].payload, idempotencyKey: 'bypass' })).rejects.toThrow();
 });
+it('does not charge or create a session for a new direct video storyboard while closed', async () => {
+  const ctx = fixture();
+  ctx.readVideoReadiness.mockResolvedValue(false);
+  await expect(submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+    kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: { locale: 'en', style: 'technical', instruction: 'Explain', output: 'video' },
+    idempotencyKey: 'closed-direct-storyboard' })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+  expect(ctx.db.agentTasks).toHaveLength(0);
+  expect(ctx.db.agentSessions).toHaveLength(0);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+});
+
+it('keeps exact direct task replay and rejects a conflicting payload while closed', async () => {
+  const ctx = fixture();
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html' as const, sourceClaimIds: [CLAIM],
+    storyboard: { locale: 'en' as const, style: 'technical', instruction: 'Explain', output: 'video' as const }, idempotencyKey: 'direct-replay' };
+  const first = await submitPresentationGeneration(ctx as never, input);
+  ctx.readVideoReadiness.mockClear().mockResolvedValue(false);
+  expect((await submitPresentationGeneration(ctx as never, input)).id).toBe(first.id);
+  await expect(submitPresentationGeneration(ctx as never, { ...input, storyboard: { ...input.storyboard, instruction: 'Another goal' } }))
+    .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  expect(ctx.readVideoReadiness).not.toHaveBeenCalled();
+  expect(ctx.db.agentTasks).toHaveLength(1);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+});
+
+it('leaves a new explicit image storyboard available while video is closed', async () => {
+  const ctx = fixture();
+  ctx.readVideoReadiness.mockResolvedValue(false);
+  await submitPresentationGeneration(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+    kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: { locale: 'en', style: 'technical', instruction: 'Explain', output: 'image' },
+    idempotencyKey: 'image-compatible' });
+  expect(ctx.db.agentTasks).toHaveLength(1);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  expect(ctx.readVideoReadiness).not.toHaveBeenCalled();
+});
 it.each(['foreign', 'version', 'rejected', 'legacy', 'malformed', 'claim-set'])('rejects an invalid %s revision base without charge', async (reason) => {
     const ctx = fixture();
     const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', durationSeconds: 8, sourceClaimIds: [CLAIM] })) };
@@ -314,16 +370,26 @@ it.each([undefined, 'legacy'])('blocks planner-owned assets with invalid subtype
   expect(ctx.db.presentationAssets[0].status).toBe('draft');
 });
 
-function sceneFixture() {
+function sceneFixture(output: 'image' | 'video' = 'video') {
   const ctx = fixture('platform_admin');
-  const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', durationSeconds: 8, sourceClaimIds: [CLAIM] })) };
-  ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', label: 'presentation_not_evidence', updatedAt: new Date(), contentHash: 'parent', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain' } } });
+  const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', ...(output === 'video' ? { durationSeconds: 8 } : {}), sourceClaimIds: [CLAIM] })) };
+  ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', label: 'presentation_not_evidence', updatedAt: new Date(), contentHash: 'parent', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain', ...(output === 'image' ? { output } : {}) } } });
   ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
   return { ...ctx, input };
 }
-async function savedManualSceneFixture() {
+it('does not charge a new direct frame of an approved video storyboard while closed', async () => {
   const ctx = sceneFixture();
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  ctx.readVideoReadiness.mockResolvedValue(false);
+  await expect(submitPresentationGeneration(ctx as never, ctx.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+  expect(ctx.db.agentTasks).toHaveLength(0);
+  expect(ctx.db.agentSessions).toHaveLength(0);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+});
+
+async function savedManualSceneFixture(output: 'image' | 'video' = 'video') {
+  const ctx = sceneFixture(output);
   (ctx as any).audit = { record: async (event: any, tx: any) => tx.auditLog.create({ data: event }) };
   const branchId = '80000000-0000-4000-8000-000000000001';
   const commitId = '90000000-0000-4000-8000-000000000001';
@@ -362,6 +428,36 @@ async function savedManualSceneFixture() {
   ctx.prisma.artifact.findMany = async () => [];
   return { ctx, source, parent };
 }
+
+it('does not charge a new direct video frame review while closed', async () => {
+  const { ctx, source } = await savedManualSceneFixture();
+  ctx.readVideoReadiness.mockResolvedValue(false);
+  const before = structuredClone(ctx.db);
+  await expect(submitExistingSceneImageReview(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+    assetId: source.id, idempotencyKey: 'closed-video-frame-review' })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+  expect(ctx.db).toEqual(before);
+});
+
+it('preserves an old direct video frame review replay while closed', async () => {
+  const { ctx, source } = await savedManualSceneFixture();
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id, idempotencyKey: 'video-frame-review-replay' };
+  const first = await submitExistingSceneImageReview(ctx as never, input);
+  ctx.readVideoReadiness.mockClear().mockResolvedValue(false);
+  expect((await submitExistingSceneImageReview(ctx as never, input)).id).toBe(first.id);
+  expect(ctx.db.agentTasks).toHaveLength(2);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  expect(ctx.readVideoReadiness).not.toHaveBeenCalled();
+});
+
+it('allows a new direct image frame review while video is closed', async () => {
+  const { ctx, source } = await savedManualSceneFixture('image');
+  ctx.readVideoReadiness.mockClear().mockResolvedValue(false);
+  await submitExistingSceneImageReview(ctx as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+    assetId: source.id, idempotencyKey: 'image-frame-review-compatible' });
+  expect(ctx.db.agentTasks).toHaveLength(2);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
+  expect(ctx.readVideoReadiness).not.toHaveBeenCalled();
+});
 
 it('starts one charged review-only task from an existing manual PNG without another render', async () => {
   const { ctx, source } = await savedManualSceneFixture();
@@ -593,6 +689,7 @@ it('replaces one failed review-only request with a new identity only after exact
 });
 it('submits one charged scene image with exact replay and narrow capability', async () => {
   const ctx = sceneFixture();
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
   const first = await submitPresentationGeneration(ctx as never, ctx.input);
   expect((await submitPresentationGeneration(ctx as never, ctx.input)).id).toBe(first.id);
   expect(ctx.db.agentTasks[0].payload.sceneImage).toEqual(ctx.input.sceneImage);

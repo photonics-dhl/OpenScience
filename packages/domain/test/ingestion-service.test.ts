@@ -191,6 +191,10 @@ describe('ingestion confirmation research record', () => {
 
 function makeDeps() {
   const { prisma, db } = createFakePrisma();
+  Object.assign(prisma.auditLog, { findMany: async ({ where }: { where: Record<string, unknown> }) =>
+    db.auditLogs.filter(row => Object.entries(where).every(([key, value]) => value === undefined
+      || (value && typeof value === 'object' && 'in' in value
+        ? (value.in as unknown[]).includes(row[key]) : row[key] === value))) });
   const user = seedUser(db);
   db.workspaces.push({ id: 'ws-1', type: 'personal', name: 'Personal', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
   db.memberships.push({ id: 'm-1', workspaceId: 'ws-1', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });

@@ -2,15 +2,16 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import {
-  createHermesResearchRun, reconcileHermesResearchRuns, requireHermesPresentationTaskAuthority,
+  createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, requireHermesPresentationTaskAuthority,
   authorizeHermesGenerationGrant, type HermesNarrativeGrant, type HermesResearchRunDeps,
 } from '../../src/agent/research-run';
 import { CONTENT_DRIVEN_PROFILE, VISUAL_NARRATIVE_PROFILE, requireVideoGenerationParents } from '../../src/assets/video';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
-import { parsePresentationGenerationPayload, requireStoryboardBase } from '../../src/assets/presentation-asset';
+import { parsePresentationGenerationPayload, requireStoryboardBase, submitPresentationGeneration } from '../../src/assets/presentation-asset';
 import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
+import { isHermesVideoTask } from '../../src/agent/video-readiness';
 import type { Prisma } from '@prisma/client';
 
 const uuid = (n: number) => `${n.toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`;
@@ -81,6 +82,7 @@ function fixture(output: 'video' | null = 'video') {
     try { return await transaction(callback); } catch (error) { errors.push(error); throw error; }
   } });
   const deps: HermesResearchRunDeps = { prisma, nativeSceneImageEnabled: true,
+    videoEnabled: true, readVideoReadiness: vi.fn(async () => true),
     nativeAgentRuntime: { runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' },
     redis: { lpush: vi.fn(async () => 1) } as unknown as HermesResearchRunDeps['redis'], now: () => time };
   return { prisma, db, deps, sourceMapRef, step, errors,
@@ -197,6 +199,160 @@ async function timingReady(sourceCosts = 2) {
 }
 
 describe('explicit native video research run', () => {
+  it('rejects a new explicit video intent while closed without writing a run or debit', async () => {
+    const f = fixture();
+    f.db.hermesResearchRuns.length = 0;
+    f.db.hermesResearchSteps.length = 0;
+    f.deps.readVideoReadiness = async () => false;
+    await expect(createHermesResearchRun(f.deps, { actorId: ids.actor, researchObjectId: ids.ro,
+      ingestionTaskIds: [ids.ingestion], idempotencyKey: 'closed-new-video', generation: { ...grant, output: 'video' } }))
+      .rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db.hermesResearchRuns).toHaveLength(0);
+    expect(f.db.hermesResearchSteps).toHaveLength(0);
+    expect(f.generated()).toHaveLength(0);
+    expect(f.debits()).toHaveLength(0);
+  });
+
+  it('returns the same video intent under its old key while closed and still rejects digest changes', async () => {
+    const f = fixture();
+    f.db.hermesResearchRuns.length = 0;
+    f.db.hermesResearchSteps.length = 0;
+    const input = { actorId: ids.actor, researchObjectId: ids.ro, ingestionTaskIds: [ids.ingestion],
+      idempotencyKey: 'paid-replay', generation: { ...grant, output: 'video' as const } };
+    const first = await createHermesResearchRun(f.deps, input);
+    f.deps.readVideoReadiness = vi.fn(async () => false);
+    expect(await createHermesResearchRun(f.deps, input)).toEqual(first);
+    await expect(createHermesResearchRun(f.deps, { ...input, generation: { ...input.generation, instruction: 'Different goal' } }))
+      .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    expect(f.db.hermesResearchRuns).toHaveLength(1);
+    expect(f.debits()).toHaveLength(0);
+  });
+
+  it.each(['storyboard', 'frames', 'video', 'timing-revision'] as const)(
+    'does not create another paid %s task after video readiness closes', async stage => {
+    const f = stage === 'frames' ? (await storyboardReady()).f
+      : stage === 'video' ? (await framesReady()).f
+        : stage === 'timing-revision' ? (await timingReady(1)).f : fixture();
+    const before = { tasks: f.generated().length, debits: f.debits().length, status: f.run().status,
+      assets: structuredClone(f.db.presentationAssets), steps: structuredClone(f.db.hermesResearchSteps) };
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: vi.fn(async () => false) });
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.debits()).toHaveLength(before.debits);
+    expect(f.generated()).toHaveLength(before.tasks);
+    expect(f.run().status).toBe(before.status);
+    expect(f.db.presentationAssets).toEqual(before.assets);
+    expect(f.db.hermesResearchSteps).toEqual(before.steps);
+    expect(f.run().error).toBe('Video generation is temporarily unavailable.');
+    expect(f.run().lastReconciledAt).toEqual(new Date(time.getTime() + 55_000));
+  });
+
+  it('backs off the closed run for a minute, then resumes the same run once without duplicate tasks', async () => {
+    const f = fixture();
+    let elapsed = 0;
+    f.deps.now = () => new Date(time.getTime() + elapsed);
+    const reader = vi.fn(async () => false);
+    f.deps.readVideoReadiness = reader;
+    const findMany = f.prisma.hermesResearchRun.findMany.bind(f.prisma.hermesResearchRun);
+    vi.spyOn(f.prisma.hermesResearchRun, 'findMany').mockImplementation(async args => {
+      const rows = await findMany(args);
+      const cutoff = new Date(f.deps.now!().getTime() - 5_000);
+      return rows.filter(row => !row.lastReconciledAt || row.lastReconciledAt <= cutoff);
+    });
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.run()).toMatchObject({ id: ids.run, status: 'awaiting_claim_review', version: 1 });
+    reader.mockResolvedValue(true);
+    elapsed = 59_999;
+    expect(await reconcileHermesResearchRuns(f.deps)).toMatchObject({ inspected: 0 });
+    expect(reader).toHaveBeenCalledTimes(1);
+    expect(f.debits()).toHaveLength(0);
+    elapsed = 60_000;
+    await reconcileHermesResearchRuns(f.deps);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.run()).toMatchObject({ id: ids.run, status: 'generating_storyboard', maxAgentTasks: 9, error: null });
+    expect(f.generated()).toHaveLength(1);
+    expect(f.debits()).toHaveLength(1);
+  });
+
+  it('rolls back a frame batch when readiness closes between two new charges', async () => {
+    const { f } = await storyboardReady();
+    f.deps.readVideoReadiness = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.run().status).toBe('awaiting_storyboard_review');
+    expect(f.generated()).toHaveLength(1);
+    expect(f.debits()).toHaveLength(1);
+    expect(f.db.hermesResearchSteps.filter(step => step.stage === 'scene_image')).toHaveLength(0);
+  });
+
+  it('allows a completed storyboard result to settle while closed and projects a read-only hold', async () => {
+    const f = fixture();
+    await reconcileHermesResearchRuns(f.deps);
+    const parent = await finishStoryboard(f);
+    f.deps.readVideoReadiness = async () => false;
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.run().status).toBe('awaiting_storyboard_review');
+    expect(f.debits()).toHaveLength(1);
+    const before = structuredClone(f.db);
+    const view = await getHermesResearchRun(f.deps, { actorId: ids.actor, researchObjectId: ids.ro, runId: ids.run });
+    expect(view.generationHold).toBe('video-api-pending');
+    expect(view.steps.find(step => step.stage === 'storyboard')?.presentationAssetId).toBe(parent.asset.id);
+    expect(f.db).toEqual(before);
+  });
+
+  it('classifies the actual owned storyboard, frames and final video with their persisted native parents', async () => {
+    const { f, parent, frames } = await framesReady();
+    expect(await isHermesVideoTask(f.prisma, parent.task.id)).toBe(true);
+    for (const frame of frames) expect(await isHermesVideoTask(f.prisma, frame.task.id)).toBe(true);
+    expect(await isHermesVideoTask(f.prisma, ids.sourceTask)).toBe(false);
+    await reconcileHermesResearchRuns(f.deps);
+    const video = f.generated().find(task => task.payload.kind === 'video')!;
+    expect(await isHermesVideoTask(f.prisma, video.id)).toBe(true);
+    video.payload.hermesRunAuthority.ordinal += 1;
+    expect(await isHermesVideoTask(f.prisma, video.id)).toBe(false);
+  });
+
+  it('keeps a bound video run frame classified when its child parent has become invalid', async () => {
+    const { f, frames } = await framesReady();
+    frames[0]!.task.payload.sceneImage.storyboardAssetId = uuid(99);
+    expect(await isHermesVideoTask(f.prisma, frames[0]!.task.id)).toBe(true);
+  });
+
+  it('gates a new direct final video with real qualified native parents before any debit', async () => {
+    const { f, parent, frames } = await framesReady();
+    f.db.users[0].platformRole = 'platform_admin';
+    f.db.commits.push({ id: 'direct-native-commit', branchId: 'direct-native-branch' });
+    f.db.versions[0].commitId = 'direct-native-commit';
+    f.deps.readVideoReadiness = async () => false;
+    await expect(submitPresentationGeneration(f.deps, { userId: ids.actor, researchObjectId: ids.ro, versionId: ids.version,
+      kind: 'video', sourceClaimIds: [ids.claim], video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parent.asset.id,
+        sceneImageAssetIds: frames.map(frame => frame.asset.id) as [string, string, string] }, idempotencyKey: 'closed-direct-video' }))
+      .rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.generated()).toHaveLength(4);
+    expect(f.debits()).toHaveLength(4);
+  });
+
+  it('preserves a paid direct final video replay while closed and classifies direct frame parents', async () => {
+    const { f, parent, frames } = await framesReady();
+    f.db.users[0].platformRole = 'platform_admin';
+    f.db.commits.push({ id: 'direct-replay-commit', branchId: 'direct-replay-branch' });
+    f.db.versions[0].commitId = 'direct-replay-commit';
+    const input = { userId: ids.actor, researchObjectId: ids.ro, versionId: ids.version, kind: 'video' as const,
+      sourceClaimIds: [ids.claim], video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parent.asset.id,
+        sceneImageAssetIds: frames.map(frame => frame.asset.id) as [string, string, string] }, idempotencyKey: 'direct-final-replay' };
+    const task = await submitPresentationGeneration(f.deps, input);
+    const directFrame = await submitPresentationGeneration(f.deps, { userId: ids.actor, researchObjectId: ids.ro, versionId: ids.version,
+      kind: 'image', sourceClaimIds: [ids.claim], sceneImage: { storyboardAssetId: parent.asset.id, sceneIndex: 0 }, idempotencyKey: 'direct-frame' });
+    expect(await isHermesVideoTask(f.prisma, task.id)).toBe(true);
+    expect(await isHermesVideoTask(f.prisma, directFrame.id)).toBe(true);
+    const before = { tasks: f.generated().length, debits: f.debits().length };
+    f.deps.readVideoReadiness = vi.fn(async () => false);
+    expect((await submitPresentationGeneration(f.deps, input)).id).toBe(task.id);
+    expect(f.generated()).toHaveLength(before.tasks);
+    expect(f.debits()).toHaveLength(before.debits);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    parent.asset.versionId = uuid(99);
+    expect(await isHermesVideoTask(f.prisma, directFrame.id)).toBe(false);
+  });
   it('persists the explicit video intent without creating another source analysis', async () => {
     const f = fixture(); f.db.hermesResearchRuns.length = 0; f.db.hermesResearchSteps.length = 0;
     const run = await createHermesResearchRun(f.deps, { actorId: ids.actor, researchObjectId: ids.ro,
@@ -227,9 +383,11 @@ describe('explicit native video research run', () => {
   });
   it('keeps absent output on the image default path without reserving a video', async () => {
     const f = fixture(null);
+    f.deps.readVideoReadiness = vi.fn(async () => false);
     await reconcileHermesResearchRuns(f.deps);
     expect(f.generated()[0]!.payload.storyboard).toEqual({ ...settings, output: 'image', narrative: true, narrativeSceneLimit: 5 });
     expect(f.generated().some(task => task.payload.kind === 'video')).toBe(false);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it.each([null, ['video'], 'image', 'audio', 1])('rejects malformed explicit output %j without new tasks or charges', async output => {
     const f = fixture(); f.db.hermesResearchRuns.length = 0; f.db.hermesResearchSteps.length = 0;
@@ -362,6 +520,7 @@ describe('explicit native video research run', () => {
     expect(f.debits()).toHaveLength(5);
     await requireHermesPresentationTaskAuthority(f.prisma as never, { actorId: ids.actor, taskId: video.id,
       payload: parsePresentationGenerationPayload(video.payload), authority: video.payload.hermesRunAuthority });
+    f.deps.readVideoReadiness = vi.fn(async () => false);
     video.status = 'succeeded';
     f.db.presentationAssets.push({ id: video.id, researchObjectId: ids.ro, versionId: ids.version, kind: 'video', status: 'draft',
       deletedAt: null, contentHash: '9'.repeat(64), provenance: {}, createdAt: time, updatedAt: time });
@@ -372,6 +531,8 @@ describe('explicit native video research run', () => {
     expect(f.debits()).toHaveLength(5);
     expect(f.db.presentationAssets.every(asset => asset.status === 'draft')).toBe(true);
     expect(f.db.agentTasks.filter(task => task.kind === 'sdf.extract').map(task => task.id)).toEqual([ids.sourceTask]);
+    expect((await getHermesResearchRun(f.deps, { actorId: ids.actor, researchObjectId: ids.ro, runId: ids.run })).generationHold).toBeUndefined();
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it('does not create or debit a duplicate video when reconcilers overlap', async () => {
     const { f } = await framesReady();

@@ -15,6 +15,8 @@ import {
   CodexSpoolImageProvider,
   ChatGptWebSpoolImageProvider,
   SynclipSpoolImageProvider,
+  createNativeVideoReadinessReader,
+  type NativeVideoReadinessReader,
   ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
   MutableProviderKillSwitch,
@@ -86,6 +88,7 @@ import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector'
 import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
+import { admitPendingVideoTask, createVideoReadinessResumeScheduler, VIDEO_READINESS_HOLD } from './video-task-admission';
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
   sourceReview?: {
@@ -191,7 +194,12 @@ export type ParserCascadeRunner = ((
   renderPages(input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult>;
 };
 
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
+/** Video-only admission dependencies; generic AgentDeps remain unchanged. */
+export interface WorkerVideoReadinessDeps {
+  videoEnabled?: boolean;
+  readVideoReadiness?: NativeVideoReadinessReader;
+}
+export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -847,13 +855,27 @@ export function createResearchRunReconcileScheduler(options: {
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => boolean = () => false): Promise<number> {
   let recovered = 0;
-  while (!stopping()) {
-    const taskId = await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1);
-    if (!taskId) return recovered;
+  const snapshot = await deps.redis.lrange(AGENT_TASK_PROCESSING_QUEUE, 0, -1);
+  for (const taskId of snapshot.reverse()) {
+    if (stopping()) break;
+    const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+    if (task?.status === 'pending' && task.error === VIDEO_READINESS_HOLD) {
+      const admission = await admitPendingVideoTask(deps, task);
+      if (admission !== null) {
+        if (admission) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        continue;
+      }
+    }
     const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
     if (retryable) {
-      const moved = await deps.redis.rpoplpush(AGENT_TASK_PROCESSING_QUEUE, AGENT_TASK_QUEUE);
-      if (moved) recovered += 1;
+      if (await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1) === taskId) {
+        if (await deps.redis.rpoplpush(AGENT_TASK_PROCESSING_QUEUE, AGENT_TASK_QUEUE)) recovered += 1;
+      } else {
+        // A held tail may remain after a losing CAS. Publish this ordinary ID
+        // before removing its old entry, so a crash/error cannot lose the task.
+        await deps.redis.lpush(AGENT_TASK_QUEUE, taskId);
+        if (await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId)) recovered += 1;
+      }
     } else {
       await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
     }
@@ -872,10 +894,13 @@ export async function createPollOnce(
   const runMaintenance = options.runMaintenance ?? true;
   const stopping = options.stopping ?? (() => false);
   const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
+  const resumeVideoTasks = runMaintenance ? createVideoReadinessResumeScheduler() : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     if (stopping()) return false;
     if (reconcileRuns) {
       await reconcileRuns(deps);
+      if (stopping()) return false;
+      await resumeVideoTasks!(deps);
       if (stopping()) return false;
       await recoverUndispatchedAgentTasks(deps);
     }
@@ -896,6 +921,17 @@ export async function createPollOnce(
         include: { session: { select: { userId: true } } },
       });
       if (!task) return true;
+      if (stopping()) { processingEntryDeferred = true; return false; }
+      if (task.status === 'pending') {
+        // Keep the entry while intent/readiness and the pending CAS are unresolved.
+        processingEntryDeferred = true;
+        const admission = await admitPendingVideoTask(deps, task);
+        if (admission !== null) {
+          processingEntryDeferred = !admission;
+          return true;
+        }
+        processingEntryDeferred = false;
+      }
       if (stopping()) { processingEntryDeferred = true; return false; }
       // Once claim starts, drain this attempt even if a signal arrives while its
       // transaction awaits: deferring after claim would consume an unused attempt.
@@ -922,6 +958,7 @@ export async function createPollOnce(
       });
       return true;
     } catch (e) {
+      if (!claimed && processingEntryDeferred) throw e;
       if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
         const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
         if (!retryable) throw e;
@@ -978,9 +1015,12 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
 
 /** Shared dependency assembly used by the real Worker entry and automatic run scheduler. */
 export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 'storage' | 'audit'>, env: NodeJS.ProcessEnv = process.env): WorkerDeps {
+  const nativeAgentRuntime = nativeAgentRuntimeFromEnv(env);
+  const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env);
   return { ...input,
-    nativeAgentRuntime: nativeAgentRuntimeFromEnv(env),
-    nativeSceneImageEnabled: env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env),
+    nativeAgentRuntime, nativeSceneImageEnabled,
+    videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
+    readVideoReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }),
     malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
@@ -1109,9 +1149,11 @@ async function main(): Promise<void> {
     console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
     const maintenance = (async () => {
       const reconcileRuns = createResearchRunReconcileScheduler();
+      const resumeVideoTasks = createVideoReadinessResumeScheduler();
       while (!stopping) {
         try {
           await reconcileRuns(deps);
+          if (!stopping) await resumeVideoTasks(deps);
           if (!stopping) await recoverUndispatchedAgentTasks(deps);
         } catch (error) {
           console.error('agent-worker maintenance error', error);

@@ -47,7 +47,7 @@ function initial(web = true) {
 }
 
 describe('server-owned independent source review role', () => {
-  it.each([false, true])('records initial Hermes model intent atomically with task, debit and run CAS (lose=%s)', async lose => {
+  it.each(['success', 'cas-conflict', 'video-closed', 'video-ready'] as const)('records initial Hermes model intent atomically with task, debit and run CAS (%s)', async mode => {
     const f = fixture(); const objects = new Map<string, Buffer>();
     const storage = { headObject: async () => null,
       putObject: async (key: string, body: Buffer) => { objects.set(key, body); return { key, size: body.length, etag: 'test' }; },
@@ -64,11 +64,18 @@ describe('server-owned independent source review role', () => {
     f.db.agentTasks[0].result.scientificReview.semanticStage.source.sourceMapHash = reference.serializedSha256;
     f.db.hermesResearchSteps.splice(1); f.db.hermesResearchSteps[0].agentTaskId = f.ids.anchor;
     f.db.ingestionTasks[0].agentTaskId = f.ids.anchor; f.db.hermesResearchRuns[0].status = 'awaiting_source_review';
+    if (mode.startsWith('video-')) {
+      Object.assign(f.db.hermesResearchRuns[0].generationSettings, { output: 'video' });
+      Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => mode === 'video-ready' });
+    }
     const before = structuredClone(f.db);
-    if (lose) vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    if (mode === 'cas-conflict') vi.spyOn(f.prisma.hermesResearchRun, 'updateMany').mockResolvedValueOnce({ count: 0 });
     const request = refreshIngestionAnalysis({ ...f.deps, storage }, { userId: f.input.actorId, taskId: f.ids.source,
       sourceAgentTaskId: f.ids.anchor, compositionSourceAgentTaskId: f.ids.anchor, reviewOnly: true, processingConsent: true }, {}, f.ids.run);
-    if (lose) {
+    if (mode === 'video-closed') {
+      await expect(request).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+      expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    } else if (mode === 'cas-conflict') {
       await expect(request).rejects.toBeDefined(); expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
     } else {
       await request;

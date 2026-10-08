@@ -36,6 +36,27 @@ async function failedPacketIndependent() {
 }
 
 describe('same-run final source composition recovery', () => {
+  it.each([
+    ['composition', async () => { const f = await sourceCompositionRecoveryFixture(); return { f, request: f.recoveryInput }; }],
+    ['saved composition review', async () => { const f = await savedCompositionFixture(); return { f, request: f.resumeInput }; }],
+    ['source review', async () => { const f = await sourceReviewPacketFailureFixture(); return { f, request: f.packetInput }; }],
+  ] as const)('holds new paid video %s recovery, then preserves its same-key receipt', async (_phase, make) => {
+    const { f, request } = await make(); let ready = false;
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
+    const run = f.db.hermesResearchRuns.find(row => row.id === f.run.id)!;
+    run.generationSettings = { ...run.generationSettings, output: 'video' };
+    const before = structuredClone(f.db); const dispatches = f.redis.lpush.mock.calls.length;
+    await expect(retryHermesGeneration(f.deps, request)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    ready = true;
+    await retryHermesGeneration(f.deps, request);
+    expect(f.db.agentTasks).toHaveLength(before.agentTasks.length + 1);
+    expect(f.db.usageLedger).toHaveLength(before.usageLedger.length + 1);
+    const recovered = structuredClone(f.db); ready = false;
+    await retryHermesGeneration(f.deps, request);
+    expect(f.db).toEqual(recovered); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches + 1);
+  });
+
   it('reviews a proven paid composition once without rerunning composition or rewriting failed science', async () => {
     const f = await savedCompositionFixture(); const before = structuredClone(f.owner);
     const compositions = structuredClone(f.db.hermesResearchSteps.filter(step => step.runId === f.run.id && step.stage === 'source_composition'));
