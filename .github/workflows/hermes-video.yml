@@ -72,6 +72,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prepare codecs for narrated-video acceptance
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter '@openscience/ai-gateway...' build
