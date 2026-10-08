@@ -147,12 +147,14 @@ class InstallLifecycleTests(unittest.TestCase):
         source_method=scope.resolve('openscience-source-review').read_text()
         self.assertIn('without peer-reviewing the paper', source_method)
         self.assertIn('separately requested critical assessment', source_method)
-        synclip = scope.resolve('openscience-synclip-capabilities')
-        self.assertIn('gpt-image-2', synclip.read_text())
-        self.assertIn('does **not** have a Synclip video adapter', synclip.read_text())
-        video = scope.resolve('openscience-research-video')
-        self.assertIn('smallest provider-supported duration', video.read_text())
-        self.assertIn('must not claim that Synclip video generation is connected', video.read_text())
+        # Verify installation fidelity through the restricted reader, not a
+        # historical capability statement that changes as adapters are added.
+        for name in ('openscience-synclip-capabilities', 'openscience-research-video'):
+            with self.subTest(skill=name):
+                source = self.source/'.agents/skills'/name/'SKILL.md'
+                installed = scope.resolve(name)
+                self.assertEqual(installed.read_bytes(), source.read_bytes())
+                self.assertEqual(installed.stat().st_mode & 0o222, 0)
         self.assertEqual(reference.stat().st_mode & 0o222, 0)
         self.assertFalse(self.active)
 
