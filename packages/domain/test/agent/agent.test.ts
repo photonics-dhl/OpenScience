@@ -202,7 +202,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
-  it('allows one explicit review-only retry after a malformed native review response', async () => {
+  it('allows bounded explicit review-only retries after a malformed native review response', async () => {
     const { deps, user, ro, db, redis } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
     const taskId = 'native-review-schema-recovery';

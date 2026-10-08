@@ -201,17 +201,19 @@ function evaluateAgentTaskRetryEligibility(
     && isJsonRecord(payload.sceneImage) && !('hermesRunAuthority' in payload);
   // MiniMax native pixel review can return a completed HTTP response whose
   // JSON is malformed. The image draft and the paid review reservation are
-  // already durable; one explicit retry may reset only the review checkpoint.
+  // already durable; at most two explicit retries may reset only the review
+  // checkpoint, allowing one provider-model change without reopening image
+  // generation.
   // Keep this manual-task-only and exact so transport uncertainty remains
   // permanently non-retryable.
   const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
-    && task.retryCount === 0
+    && task.retryCount < 2
     && !('hermesRunAuthority' in payload)
     && (task.error === 'Native image review response invalid JSON; explicit review retry required'
       || task.error === 'Native image review response failed schema validation; explicit review retry required'
       || task.error === 'structured output is not JSON'
       || /^Expected ',' or '\}' after property value in JSON at position [0-9]+(?: \(line [0-9]+ column [0-9]+\))?$/u.test(task.error ?? ''));
-  if (task.status !== 'failed' || task.retryCount !== 0
+  if (task.status !== 'failed' || (task.retryCount !== 0 && !nativeImageReviewSchemaRecovery)
     || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
     || (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
     return { authorityValid: true, canRetry: false };
@@ -983,7 +985,7 @@ export async function retryAgentTask(
         const sourceSearch = isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
         const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
-          && task.retryCount === 0
+          && task.retryCount < 2
           && !('hermesRunAuthority' in (task.payload as Record<string, unknown>))
           && (task.error === 'Native image review response invalid JSON; explicit review retry required'
             || task.error === 'Native image review response failed schema validation; explicit review retry required'
