@@ -65,7 +65,7 @@ type MaterializerInput = { claims: readonly PresentationClaim[]; settings: Story
 function stopped(): never { throw new Error('[blocked] Native illustration selected history changed'); }
 
 /** Deterministic tools only. The installed Agent makes all planning and scientific review decisions. */
-export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean }) {
+export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean; savedState?: NativeAgentSessionState | null }) {
   const scienceFeedback = input.scienceFeedback === true;
   const deferDesignGuidance = input.deferDesignGuidance === true;
   const sourceQuantityAnnotations = input.sourceQuantityAnnotations === true;
@@ -74,41 +74,62 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
   const scienceRepairCallIdFeedback = input.scienceRepairCallIdFeedback === true;
   const sourceNotation = input.sourceNotation === true;
   const styles = loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan');
-  type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience> };
+  let historicalStyles: typeof styles | undefined, contextStyles = styles;
+  const planningStyles = (historical: boolean) => historical
+    ? historicalStyles ??= loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan', '19') : styles;
+  type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience>; designSkills: typeof styles.usage };
   type Art = { id: string; sequence: number; scienceId: string; document: ReturnType<typeof materializeIllustrationArt>;
     prompts: Array<{ sceneIndex: number; prompt: string }>; designSkills: typeof styles.usage };
   type Review = { id: string; sequence: number; artId: string; review: ReturnType<typeof materializeIllustrationReview> };
   type PendingScience = { id: string; sequence: number; args: Record<string, unknown>; rejected: boolean };
   let science: Science | undefined, art: Art | undefined, review: Review | undefined;
   let pendingScience: PendingScience | undefined;
+  // The task store already verified this private checkpoint. Only its latest
+  // complete prefix retains all earlier tool receipts after CP compaction.
+  const savedMessages = input.savedState?.turns.at(-1)?.request.messages ?? [];
+  const savedIllustrationReceipts = new Map<string, { name: string; args: unknown; result: Record<string, unknown> }>();
+  const savedIds = new Set<string>();
+  for (const message of savedMessages) for (const tool of message.role === 'assistant' ? message.toolCalls ?? [] : []) {
+    if (!tool.function.name.startsWith('paper_illustration_')) continue;
+    if (!tool.id || savedIds.has(tool.id)) stopped();
+    savedIds.add(tool.id);
+    const receipts = savedMessages.filter(item => item.role === 'tool' && item.toolCallId === tool.id);
+    if (receipts.length > 1) stopped();
+    if (!receipts.length) continue;
+    const result: unknown = JSON.parse(receipts[0]!.content);
+    if (!record(result)) stopped();
+    savedIllustrationReceipts.set(tool.id, { name: tool.function.name, args: JSON.parse(tool.function.arguments), result });
+  }
   const normalizeScienceArgs = (args: Record<string, unknown>) => input.defaultPaperOriginalRef === true && Array.isArray(args.scenes)
     ? { ...args, scenes: args.scenes.map(scene => record(scene) && !Object.hasOwn(scene, 'paperOriginalAssetId')
       ? { ...scene, paperOriginalAssetId: null } : scene) } : args;
-  const materializeScience = (args: Record<string, unknown>, sequence: number, callId: string) => {
+  const materializeScience = (args: Record<string, unknown>, sequence: number, callId: string, historicalExecution = false) => {
     const normalized = normalizeScienceArgs(args);
     pendingScience = { id: callId, sequence, args: structuredClone(normalized), rejected: true };
     const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, sourceNotation);
     pendingScience.rejected = false;
-    science = { id: callId, sequence, intent };
+    const guidance = deferDesignGuidance ? planningStyles(historicalExecution) : contextStyles;
+    science = { id: callId, sequence, intent, designSkills: guidance.usage };
     return { status: 'science_ready', scienceToolCallId: callId, intent,
-      ...(deferDesignGuidance ? { designGuidance: styles.instructions } : {}) };
+      ...(deferDesignGuidance ? { designGuidance: guidance.instructions } : {}) };
   };
-  function call(name: string, args: unknown, sequence: number, callId: string): Record<string, unknown> {
+  function evaluate(name: string, args: unknown, sequence: number, callId: string, historicalExecution = false): Record<string, unknown> {
     try {
       if (!record(args)) throw new Error('object_required');
       if (name === 'paper_illustration_context') {
         if (Object.keys(args).length) throw new Error('context_arguments_empty');
+        contextStyles = planningStyles(historicalExecution);
         let sourceIndex = 0;
         return { status: 'illustration_context', settings: input.settings,
           paper: input.narrativeSource ? projectVisualNarrativeSource(input.narrativeSource) : null,
           claims: input.claims.map(claim => ({ id: claim.id, statement: claim.statement, conditions: claim.conditions, limitations: claim.limitations,
             sources: (claim.sourcePassages ?? []).map(source => ({ sourceId: `s${sourceIndex++}`, text: source.text, relation: source.relation })) })),
           availableOriginals: [...input.paperOriginals.values()].map(item => ({ assetId: item.assetId, sourceClaimId: item.sourceClaimId })),
-          ...(deferDesignGuidance ? {} : { designGuidance: styles.instructions }) };
+          ...(deferDesignGuidance ? {} : { designGuidance: contextStyles.instructions }) };
       }
       if (!Number.isSafeInteger(sequence) || sequence < 0 || !callId) stopped();
       if (name === 'paper_illustration_science') {
-        return materializeScience(args, sequence, callId);
+        return materializeScience(args, sequence, callId, historicalExecution);
       }
       if (name === 'paper_illustration_science_repair') {
         const sceneIndex = typeof args.sceneIndex === 'number' ? args.sceneIndex : -1;
@@ -119,17 +140,17 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
         if (!Array.isArray(candidate.scenes) || sceneIndex >= candidate.scenes.length || !record(args.scene))
           throw new Error('science_repair_scene_out_of_range');
         candidate.scenes[sceneIndex] = structuredClone(args.scene);
-        return materializeScience(candidate, sequence, callId);
+        return materializeScience(candidate, sequence, callId, historicalExecution);
       }
       if (name === 'paper_illustration_art') {
         if (Object.keys(args).sort().join(',') !== 'scenes,scienceToolCallId' || !science || args.scienceToolCallId !== science.id || sequence <= science.sequence)
           throw new Error('exact_science_tool_required');
         const document = materializeIllustrationArt({ scenes: args.scenes }, science.intent, input.claims, input.settings, input.paperOriginals);
-        const resources = document.scenes.map(scene => scene.paperOriginal ? undefined : loadInstalledMediaSkills(input.settings.style, scene.illustration!.treatment, 'render'));
+        const resources = document.scenes.map(scene => scene.paperOriginal ? undefined : loadInstalledMediaSkills(input.settings.style, scene.illustration!.treatment, 'render', undefined, historicalExecution ? '19' : undefined));
         const prompts = document.scenes.flatMap((scene, sceneIndex) => scene.paperOriginal ? []
           : [{ sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions) }]);
         art = { id: callId, sequence, scienceId: science.id, document, prompts,
-          designSkills: mergeDesignSkillUsage(styles.usage, ...resources.map(resource => resource?.usage)) };
+          designSkills: mergeDesignSkillUsage(science.designSkills, ...resources.map(resource => resource?.usage)) };
         return { status: 'art_ready', planToolCallId: callId, document, prompts };
       }
       if (name === 'paper_illustration_review') {
@@ -167,8 +188,36 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
           ? { scienceToolCallId: pendingScience.id } : {}) };
     }
   }
+  function savedResult(name: string, args: unknown, callId: string) {
+    const saved = savedIllustrationReceipts.get(callId);
+    if (saved && (name !== saved.name || !isDeepStrictEqual(args, saved.args))) stopped();
+    return saved?.result;
+  }
+  function reconstruct(name: string, args: unknown, sequence: number, callId: string, recorded?: Record<string, unknown>) {
+    const before = { science, art, review, pendingScience, contextStyles };
+    const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };
+    const rebuilt = evaluate(name, args, sequence, callId);
+    if (!recorded || isDeepStrictEqual(rebuilt, recorded)) return rebuilt;
+    // Known resource compatibility only, never trust or splice a saved prompt.
+    // Science and art are revalidated, then the entire receipt must still match.
+    const hasDesignGuidance = name === 'paper_illustration_context' && recorded.status === 'illustration_context'
+      || (name === 'paper_illustration_science' || name === 'paper_illustration_science_repair') && recorded.status === 'science_ready'
+      || name === 'paper_illustration_art' && recorded.status === 'art_ready';
+    if (hasDesignGuidance) {
+      // A successful repair replaces the rejected draft. The historical
+      // recompile needs the same pre-call state, not that first attempt's state.
+      restore();
+      const historical = evaluate(name, args, sequence, callId, true);
+      if (isDeepStrictEqual(historical, recorded)) return historical;
+    }
+    restore();
+    stopped();
+  }
+  function call(name: string, args: unknown, sequence: number, callId: string): Record<string, unknown> {
+    return reconstruct(name, args, sequence, callId, savedResult(name, args, callId));
+  }
   function finish(messages: ChatMessage[], finalResponse: string) {
-    science = undefined; art = undefined; review = undefined; pendingScience = undefined;
+    science = undefined; art = undefined; review = undefined; pendingScience = undefined; contextStyles = styles;
     const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
     for (const [sequence, tool] of calls.entries()) {
       if (!tool.function.name.startsWith('paper_illustration_')) continue;
@@ -177,7 +226,10 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
       if (receipts.length !== 1) stopped();
       const recorded = JSON.parse(receipts[0]!.content) as unknown;
       if (!record(recorded)) stopped();
-      const rebuilt = call(tool.function.name, JSON.parse(tool.function.arguments), sequence, tool.id);
+      const args: unknown = JSON.parse(tool.function.arguments);
+      const saved = savedResult(tool.function.name, args, tool.id);
+      if (saved && !isDeepStrictEqual(saved, recorded)) stopped();
+      const rebuilt = reconstruct(tool.function.name, args, sequence, tool.id, recorded);
       if (!isDeepStrictEqual(rebuilt, recorded)) stopped();
     }
     const selected: unknown = parseStructuredJson(finalResponse);
@@ -248,7 +300,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
-  const materializer = createNativeIllustrationMaterializer({ ...input, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
+  const materializer = createNativeIllustrationMaterializer({ ...input, savedState: saved, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
