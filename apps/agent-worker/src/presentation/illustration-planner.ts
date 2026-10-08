@@ -601,8 +601,11 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
   });
   const perSceneStyle = settings.revisionMode === 'art' ? storyboardSceneStyles(settings, intent.scenes)
     : intent.scenes.map((_, index) => eligibleFigures?.[index]?.styleId ?? settings.style);
+  const localSceneIndex = settings.output === 'video' && settings.narrative === true ? settings.revisionSceneIndex : settings.artSceneIndex;
+  if (localSceneIndex !== undefined && (!base || localSceneIndex >= base.document.scenes.length))
+    throw new Error('local_art_revision_requires_exact_base_scene');
   const generatedScenes = intent.scenes.flatMap((scene, index) => scene.paperOriginal
-    || (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) ? [] : [{ scene, index }]);
+    || (localSceneIndex !== undefined && index !== localSceneIndex) ? [] : [{ scene, index }]);
   const layoutLimit = ILLUSTRATION_BRIEF_MAX_CHARACTERS;
   const root = object(value); keys(root, ['scenes'], 'art_root');
   if (!Array.isArray(root.scenes) || root.scenes.length !== generatedScenes.length)
@@ -618,7 +621,7 @@ export function materializeIllustrationArt(value: unknown, intent: ReturnType<ty
   let artIndex = 0;
   for (let index = 0; index < intent.scenes.length; index += 1) {
     const scene = intent.scenes[index]!;
-    if (settings.artSceneIndex !== undefined && index !== settings.artSceneIndex) {
+    if (localSceneIndex !== undefined && index !== localSceneIndex) {
       scenes.push(structuredClone(base!.document.scenes[index]!) as typeof intent.scenes[number]);
       continue;
     }

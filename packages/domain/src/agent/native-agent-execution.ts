@@ -4,7 +4,7 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { AgentError } from './errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { lockTrashReferences } from '../trash/trash';
-import { parsePresentationGenerationPayload, requirePresentationWriteScope } from '../assets/presentation-asset';
+import { parsePresentationGenerationPayload, requirePresentationWriteScope, requireStoryboardBase } from '../assets/presentation-asset';
 import { requireHermesPresentationTaskAuthority } from './research-run';
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
 import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
@@ -179,7 +179,10 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
   const payload = parsePresentationGenerationPayload(task.payload);
   const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
   const ro = await tx.researchObject.findUnique({ where: { id: payload.researchObjectId } });
-  if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload) || context.baseIdentity !== null) blocked();
+  if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload)) blocked();
+  const base = payload.storyboard?.output === 'video' && payload.storyboard.narrative === true
+    ? await requireStoryboardBase(tx, payload) : undefined;
+  if (context.baseIdentity !== (base?.identity ?? null)) blocked();
   const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
     researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
   const lineage = payload.hermesRunAuthority ? new Map(claims.map(claim => {
@@ -237,10 +240,11 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
     ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
 }
 
-/** Only fresh single-paper narrative planning is supported; existing revisions retain their original engine. */
+/** New native video revisions retain their explicit base; historical image revisions keep their engine. */
 export function supportsNativeIllustration(payload: unknown): boolean {
   if (!record(payload) || payload.kind !== 'interactive_html' || !record(payload.storyboard)) return false;
   const settings = payload.storyboard;
   return (settings.output === 'image' || settings.output === 'video') && settings.narrative === true
-    && !['baseAssetId', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined);
+    && !['revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined)
+    && (settings.output === 'video' || (settings.baseAssetId === undefined && settings.revisionSceneIndex === undefined));
 }

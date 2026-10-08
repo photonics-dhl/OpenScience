@@ -24,11 +24,13 @@ function fixture() {
   return { task, tx: tx as never };
 }
 describe('native Agent server-owned execution receipts', () => {
-  it('routes fresh narrative video to the same native profile and leaves unmarked legacy/revision work unchanged', () => {
+  it('routes native narrative video and explicit video bases to the same profile without upgrading legacy image revisions', () => {
     const payload = { kind: 'interactive_html', storyboard: { output: 'video', narrative: true } };
     expect(supportsNativeIllustration(payload)).toBe(true);
     expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'video' } })).toBe(false);
-    expect(supportsNativeIllustration({ ...payload, storyboard: { ...payload.storyboard, baseAssetId: 'old-plan' } })).toBe(false);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { ...payload.storyboard, baseAssetId: 'old-plan', revisionSceneIndex: 2 } })).toBe(true);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'image', narrative: true, baseAssetId: 'old-plan' } })).toBe(false);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { ...payload.storyboard, revisionTaskId: 'old-task' } })).toBe(false);
     expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'image', narrative: true } })).toBe(true);
   });
   it.each(['nativeIllustrationContext', 'storyboardCheckpoint', 'storyboardReview', 'nativeIllustration', 'illustrationPrompts'])('retains server-owned %s on failure and rejects a substituted incoming value', key => {

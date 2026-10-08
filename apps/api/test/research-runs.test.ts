@@ -22,12 +22,55 @@ async function fixture(role = 'author') {
   db.artifacts.push({ id: 'artifact', workspaceId: 'workspace', logicalPath: 'paper.pdf' });
   db.agentTasks.push({ id: 'agent-task', status: 'running' });
   db.ingestionTasks.push({ id: INGESTION_ID, batchId: 'batch', artifactId: 'artifact', agentTaskId: 'agent-task', state: 'parsing', error: null });
+  // The shared fake lacks this existing Prisma reader; keep its transaction rollback and real run writer.
+  prisma.hermesResearchRun.findFirst = async args => {
+    const where = args.where as { actorId?: string; researchObjectId?: string; profile?: string;
+      generationSettings?: { equals: unknown }; steps?: { some: { stage: string; ingestionTaskId: string } } };
+    const row = db.hermesResearchRuns.find(candidate => (!where.actorId || candidate.actorId === where.actorId)
+      && (!where.researchObjectId || candidate.researchObjectId === where.researchObjectId) && (!where.profile || candidate.profile === where.profile)
+      && (!where.generationSettings || candidate.generationSettings?.output === where.generationSettings.equals)
+      && (!where.steps || db.hermesResearchSteps.some(step => step.runId === candidate.id
+        && step.stage === where.steps!.some.stage && step.ingestionTaskId === where.steps!.some.ingestionTaskId)));
+    return row ? prisma.hermesResearchRun.findUnique({ where: { id: row.id }, include: args.include }) : null;
+  };
+  prisma.hermesResearchRun.findUniqueOrThrow = async args => {
+    const row = await prisma.hermesResearchRun.findUnique(args); if (!row) throw new Error('Missing API run fixture'); return row;
+  };
   const app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, storage: {} as StorageAdapter });
+  const errors: Error[] = []; app.addHook('onError', async (_request, _reply, error) => { errors.push(error); });
   apps.push(app);
-  return { app, db, cookies: { openscience_session: token } };
+  return { app, db, errors, cookies: { openscience_session: token } };
 }
 
 describe('Hermes research run API contract', () => {
+  it('binds an explicit video intent to the original nine-task grant and replays the same run', async () => {
+    const { app, db, errors, cookies } = await fixture();
+    Object.assign(db.artifacts[0], { mimeType: 'application/pdf' }); Object.assign(db.agentTasks[0], { kind: 'sdf.extract' });
+    const generation = { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'aged-academia',
+      instruction: 'Explain this paper in a source-bound narrated video.', output: 'video' };
+    const request = { method: 'POST' as const, url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+      headers: { 'idempotency-key': 'explicit-native-video' }, payload: { ingestionTaskIds: [INGESTION_ID], generation } };
+    const first = await app.inject(request), replay = await app.inject(request);
+    expect(first.statusCode, errors[0]?.stack ?? first.body).toBe(202); expect(replay.statusCode, replay.body).toBe(202);
+    expect(replay.json().run.id).toBe(first.json().run.id);
+    expect(db.hermesResearchRuns[0]).toMatchObject({ profile: 'visual-narrative-v1', maxAgentTasks: 9,
+      generationSettings: { output: 'video', locale: 'en' } });
+    const changed = await app.inject({ ...request, payload: { ingestionTaskIds: [INGESTION_ID], generation: {
+      profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'aged-academia', instruction: generation.instruction } } });
+    expect(changed.statusCode).toBe(409); expect(db.hermesResearchRuns).toHaveLength(1);
+  });
+
+  it('rejects expanded video grants and internal execution selectors at the API boundary', async () => {
+    const { app, db, cookies } = await fixture();
+    const generation = { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'aged-academia', instruction: 'Explain the paper.', output: 'video' };
+    for (const altered of [{ ...generation, maxAgentTasks: 11 }, { ...generation, nativeVideo: true }, { ...generation, output: 'image' }]) {
+      const response = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+        headers: { 'idempotency-key': 'invalid-video-intent' }, payload: { ingestionTaskIds: [INGESTION_ID], generation: altered } });
+      expect(response.statusCode, response.body).toBe(400);
+    }
+    expect(db.hermesResearchRuns).toHaveLength(0);
+  });
+
   it('projects the pending image-service handoff from the server-owned Native plan without exposing its private context', async () => {
     const { app, db, cookies } = await fixture();
     const response = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,

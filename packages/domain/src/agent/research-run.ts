@@ -13,9 +13,10 @@ import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, in
   NATIVE_REVIEW_INITIALIZATION_ERROR, NATIVE_REVIEW_INITIALIZATION_RECOVERY, inspectNativeSourceReviewPreflightRecovery,
   NATIVE_REVIEW_PREFLIGHT_ERROR, NATIVE_REVIEW_PREFLIGHT_RECOVERY, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../assets/video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents } from '../assets/video';
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustrationSourceSupport } from '../assets/illustration-brief';
+import { readVisualNarrativeSource } from '../assets/illustration-source';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview, requireAcceptedSceneImageReview } from '../assets/scene-image';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
@@ -23,7 +24,7 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
 import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
-import { readNativeAgentExecution, requireNativeIllustrationTerminalSource } from './native-agent-execution';
+import { nativeAgentTerminalResult, readNativeAgentExecution, requireNativeIllustrationTerminalSource } from './native-agent-execution';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
 const WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -35,20 +36,40 @@ type GenerationGrant = { profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE; maxAgent
   | { profile: typeof CONTENT_DRIVEN_PROFILE; maxAgentTasks: 8 }
   | { profile: typeof CONTENT_DRIVEN_IMAGE_PROFILE; maxAgentTasks: 7 }
   | { profile: typeof VISUAL_NARRATIVE_PROFILE; maxAgentTasks: 9 };
-export interface HermesNarrativeSettings { locale: 'zh' | 'en'; style: string; instruction: string }
+export interface HermesNarrativeSettings { locale: 'zh' | 'en'; style: string; instruction: string; output?: 'video' }
 export type HermesNarrativeGrant = HermesNarrativeSettings & { profile: typeof VISUAL_NARRATIVE_PROFILE; maxAgentTasks: 9 };
 function narrativeSettings(value: unknown): HermesNarrativeSettings {
   const settings = jsonRecord(value);
-  if (Object.keys(settings).sort().join(',') !== 'instruction,locale,style'
+  if (!['instruction,locale,style', 'instruction,locale,output,style'].includes(Object.keys(settings).sort().join(','))
+    || (Object.hasOwn(settings, 'output') && settings.output !== 'video')
     || !['zh', 'en'].includes(String(settings.locale))
     || typeof settings.style !== 'string' || !settings.style.trim() || settings.style.length > 100
     || typeof settings.instruction !== 'string' || !settings.instruction.trim() || settings.instruction.length > 1000) {
     throw new HermesResearchRunError('VALIDATION_ERROR', 'A bounded narrative goal, language and style are required');
   }
-  return { locale: settings.locale as 'zh' | 'en', style: settings.style, instruction: settings.instruction };
+  return { locale: settings.locale as 'zh' | 'en', style: settings.style, instruction: settings.instruction,
+    ...(settings.output === undefined ? {} : { output: 'video' as const }) };
 }
 const imageRun = (profile: string | null) => profile === CONTENT_DRIVEN_IMAGE_PROFILE || profile === VISUAL_NARRATIVE_PROFILE;
-function validGrant(value: { profile: string | null; maxAgentTasks: number | null }): boolean {
+const narrativeVideoRun = (run: { profile: string | null; generationSettings?: unknown }) =>
+  run.profile === VISUAL_NARRATIVE_PROFILE && jsonRecord(run.generationSettings).output === 'video';
+function currentVideoStoryboard(run: RunRow) {
+  return run.steps.filter(step => step.stage === 'storyboard').sort((a, b) => b.ordinal - a.ordinal)[0];
+}
+function currentVideoSteps<T extends { stage: string; ordinal: number; agentTask?: { payload: unknown } | null; presentationAsset?: { provenance: unknown } | null }>(steps: T[], stage: string): T[] {
+  const candidates = steps.filter(step => step.stage === stage).sort((a, b) => a.ordinal - b.ordinal);
+  if (stage !== 'scene_image') return candidates.slice(-1);
+  const scenes = new Map<number, T>();
+  for (const step of candidates) {
+    const settings = jsonRecord(jsonRecord(step.agentTask?.payload).sceneImage);
+    const stored = jsonRecord(jsonRecord(step.presentationAsset?.provenance).sceneImage);
+    const index = settings.sceneIndex ?? stored.sceneIndex;
+    if (Number.isInteger(index) && Number(index) >= 0 && Number(index) < 6) scenes.set(Number(index), step);
+  }
+  return [...scenes.entries()].sort(([a], [b]) => a - b).map(([, step]) => step);
+}
+function validGrant(value: { profile: string | null; maxAgentTasks: number | null; generationSettings?: unknown }): boolean {
+  if (narrativeVideoRun(value)) return value.maxAgentTasks === 9;
   return (value.profile === ONCHIP_FIELD_SAMPLING_PROFILE && value.maxAgentTasks === 7)
     || (value.profile === CONTENT_DRIVEN_PROFILE && value.maxAgentTasks === 8)
     || (value.profile === CONTENT_DRIVEN_IMAGE_PROFILE && value.maxAgentTasks === 7)
@@ -201,15 +222,49 @@ function requestDigest(input: { actorId: string; researchObjectId: string; inges
   })).digest('hex');
 }
 
+async function requireReusableNarrativeUnderstanding(tx: Prisma.TransactionClient, run: RunRow, taskId: string, workspaceId: string) {
+  const reject = () => new HermesResearchRunError('SOURCE_NOT_READY', 'The existing paper understanding or source review is incomplete, held or changed');
+  const phases = run.steps.filter(step => ['source_ingestion', 'source_composition', 'source_review'].includes(step.stage));
+  const source = phases.filter(step => step.stage === 'source_ingestion');
+  if (narrativeVideoRun(run) || !run.versionId || !run.sourceClaimIds.length || !run.sourceReviewDigest || run.error
+    || !['awaiting_claim_review', 'awaiting_storyboard_review', 'awaiting_scene_images_review', 'succeeded'].includes(run.status)
+    || source.length !== 1 || source[0]!.ingestionTaskId !== taskId || !phases.some(step => step.stage === 'source_review')
+    || phases.some(step => step.status !== 'succeeded' || step.error || !step.agentTaskId || step.presentationAssetId)
+    || await validateReviewedSources(tx, run) !== 'ready') throw reject();
+  try {
+    const proof = await readVisualNarrativeSource(tx, { userId: run.actorId, workspaceId, researchObjectId: run.researchObjectId,
+      versionId: run.versionId, sourceClaimIds: run.sourceClaimIds });
+    const canonical = await tx.agentTask.findUnique({ where: { id: source[0]!.agentTaskId! }, include: { session: true } });
+    if (!canonical || canonical.deletedAt || canonical.status !== 'succeeded' || canonical.kind !== 'sdf.extract'
+      || canonical.session.userId !== run.actorId || canonical.session.researchObjectId !== run.researchObjectId
+      || !phases.some(step => step.stage === 'source_review' && step.agentTaskId === canonical.id)) throw reject();
+    const execution = readNativeAgentExecution(canonical.result);
+    if (execution) {
+      if (execution.profile !== 'paper-source-review') throw reject();
+      nativeAgentTerminalResult(canonical, 'succeeded', canonical.result);
+      const review = jsonRecord(proof.result.scientificReview);
+      if (typeof review.sourceAgentTaskId !== 'string') throw reject();
+      const author = await tx.agentTask.findUnique({ where: { id: review.sourceAgentTaskId }, include: { session: true } });
+      if (!author || author.deletedAt || author.status !== 'succeeded' || author.kind !== 'sdf.extract'
+        || author.session.deletedAt || author.session.userId !== run.actorId || author.session.researchObjectId !== run.researchObjectId
+        || readNativeAgentExecution(author.result)?.profile !== 'paper-author'
+        || !isDeepStrictEqual(parseDocumentSourceMapReference(jsonRecord(author.result).sourceMapRef), proof.reference)) throw reject();
+      nativeAgentTerminalResult(author, 'succeeded', author.result);
+    }
+    return phases;
+  } catch { throw reject(); }
+}
+
 export async function createHermesResearchRun(
   deps: HermesResearchRunDeps,
   input: { actorId: string; researchObjectId: string; ingestionTaskIds: string[]; idempotencyKey: string; generation?: HermesNarrativeGrant },
   ctx: AuditContext = {},
 ): Promise<HermesResearchRunView> {
   const taskIds = [...new Set(input.ingestionTaskIds)].sort();
-  const settings = input.generation ? narrativeSettings({ locale: input.generation.locale, style: input.generation.style, instruction: input.generation.instruction }) : undefined;
+  const settings = input.generation ? narrativeSettings({ locale: input.generation.locale, style: input.generation.style, instruction: input.generation.instruction,
+    ...(input.generation.output === undefined ? {} : { output: input.generation.output }) }) : undefined;
   if (input.generation && (input.generation.profile !== VISUAL_NARRATIVE_PROFILE || input.generation.maxAgentTasks !== 9 || taskIds.length !== 1)) {
-    throw new HermesResearchRunError('VALIDATION_ERROR', 'Automatic paper narratives require one paper and the bounded image grant');
+    throw new HermesResearchRunError('VALIDATION_ERROR', 'Automatic paper narratives require one paper and the bounded narrative grant');
   }
   if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200 || taskIds.length === 0 || taskIds.length !== input.ingestionTaskIds.length) {
     throw new HermesResearchRunError('VALIDATION_ERROR', 'A non-empty unique ingestion task list and idempotency key are required');
@@ -230,13 +285,25 @@ export async function createHermesResearchRun(
       return { run: replay, reviewerTaskId: null };
     }
 
+    let reused: RunRow | undefined;
+    let reusedPhases: RunRow['steps'] | undefined;
     if (settings) {
-      const existing = await tx.hermesResearchRun.findFirst({ where: {
+      const where = {
         actorId: input.actorId, researchObjectId: input.researchObjectId, profile: VISUAL_NARRATIVE_PROFILE,
         steps: { some: { stage: 'source_ingestion', ingestionTaskId: taskIds[0]! } },
-      }, select: { id: true } });
-      if (existing) throw new HermesResearchRunError('SOURCE_NOT_READY',
+      };
+      const duplicate = settings.output === 'video' ? await tx.hermesResearchRun.findFirst({ where: {
+        ...where, generationSettings: { path: ['output'], equals: 'video' },
+      }, select: { id: true } }) : await tx.hermesResearchRun.findFirst({ where, select: { id: true } });
+      if (duplicate) throw new HermesResearchRunError('SOURCE_NOT_READY',
         'This paper already has a Hermes narrative run. Open the existing run to view its progress or failure; starting again cannot replace it.');
+      if (settings.output === 'video') {
+        const existing = await tx.hermesResearchRun.findFirst({ where, include: RUN_INCLUDE });
+        if (existing) {
+          reusedPhases = await requireReusableNarrativeUnderstanding(tx, existing, taskIds[0]!, workspace.id);
+          reused = existing;
+        }
+      }
     }
 
     const tasks = await tx.ingestionTask.findMany({
@@ -265,8 +332,14 @@ export async function createHermesResearchRun(
         idempotencyKey: input.idempotencyKey,
         requestDigest: digest,
         ...(settings ? { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9, generationSettings: { ...settings } } : {}),
+        ...(reused ? { status: 'awaiting_claim_review', versionId: reused.versionId, sourceClaimIds: reused.sourceClaimIds, sourceReviewDigest: reused.sourceReviewDigest } : {}),
         steps: {
-          create: ordered.map((task, ordinal) => ({
+          create: reusedPhases ? reusedPhases.map(step => ({ stage: step.stage, ordinal: step.ordinal, status: 'succeeded',
+            // Keep the review task's unique owning run. The canonical ingestion step and
+            // reusedSourceRunId audit retain the actual completed review; these are cost slots.
+            ingestionTaskId: step.ingestionTaskId, artifactId: step.artifactId,
+            agentTaskId: step.stage === 'source_ingestion' ? step.agentTaskId : null, presentationAssetId: null, error: null,
+          })) : ordered.map((task, ordinal) => ({
             stage: 'source_ingestion', ordinal,
             ingestionTaskId: task.id, artifactId: task.artifactId, agentTaskId: task.agentTaskId,
             status: READY_INGESTION_STATES.has(task.state) ? 'succeeded' : 'waiting',
@@ -282,9 +355,10 @@ export async function createHermesResearchRun(
       targetType: 'hermes_research_run',
       targetId: run.id,
       metadata: { researchObjectId: researchObject.id, ingestionTaskCount: ordered.length,
+        ...(reused ? { reusedSourceRunId: reused.id, noNewSourceTask: true } : {}),
         ...(settings ? { profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9, intermediateReview: 'hermes', publicationAuthorized: false } : {}) },
     }, ctx);
-    const reviewerTaskId = settings && readNativeAgentExecution(ordered[0]!.agentTask!.result)?.profile === 'paper-author'
+    const reviewerTaskId = settings && !reused && readNativeAgentExecution(ordered[0]!.agentTask!.result)?.profile === 'paper-author'
       ? await initializeHermesNativeSourceReviewInTransaction(deps, tx,
       { actorId: input.actorId, taskId: taskIds[0]!, runId: run.id }, ctx) : null;
     const current = settings ? await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }) : run;
@@ -2279,6 +2353,9 @@ async function advanceAutomaticSources(deps: HermesResearchRunDeps, run: RunRow)
 }
 
 async function advanceAutomaticAssetReviews(deps: HermesResearchRunDeps, run: RunRow): Promise<void> {
+  // Native video consumes technically qualified private parents in the reconciliation transaction.
+  // It must not turn intermediate technical review into user adoption/approval.
+  if (narrativeVideoRun(run)) return;
   const stage = run.status === 'awaiting_storyboard_review' ? 'storyboard' : 'scene_image';
   for (const step of run.steps.filter(item => item.stage === stage && item.status === 'awaiting_approval')) {
     const task = stage === 'storyboard' && step.agentTaskId
@@ -2310,6 +2387,7 @@ export async function authorizeHermesGenerationGrant(deps: HermesResearchRunDeps
       throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
     }
     if (run.maxAgentTasks === 2) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Art style continuation cannot renew a scientific correction grant');
+    if (narrativeVideoRun(run)) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video must remain within its original nine-task grant');
     const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
     const version = run.versionId ? await tx.version.findUnique({ where: { id: run.versionId } }) : null;
@@ -3150,6 +3228,10 @@ export async function requireHermesPresentationTaskAuthority(
   if (!run || !step || run.steps.length !== 1 || run.actorId !== input.actorId
     || run.researchObjectId !== input.payload.researchObjectId || run.versionId !== input.payload.versionId
     || (!validGrant(run) && !renderAuthority && !pixelAuthority) || run.profile !== input.authority.profile || run.status !== expectedStatus
+    || (run.profile === VISUAL_NARRATIVE_PROFILE && input.authority.stage === 'video'
+      && (!narrativeVideoRun(run) || input.payload.video?.profile !== CONTENT_DRIVEN_PROFILE))
+    || (run.profile === VISUAL_NARRATIVE_PROFILE && input.authority.stage === 'storyboard'
+      && input.payload.storyboard?.output !== (narrativeVideoRun(run) ? 'video' : 'image'))
     || step.agentTaskId !== input.taskId || step.status !== 'running'
     || (renderAuthority && !isDeepStrictEqual(renderAuthority.payload, input.payload))
     || !isDeepStrictEqual([...run.sourceClaimIds].sort(), input.payload.sourceClaimIds)
@@ -3229,13 +3311,14 @@ async function createPresentationSteps(
   });
   const sourceTaskCount = run.profile === VISUAL_NARRATIVE_PROFILE
     ? run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length : 0;
-  if (existingCount + sourceTaskCount + inputs.length > run.maxAgentTasks!) throw new Error('Hermes generation grant exhausted');
+  const reservedVideo = narrativeVideoRun(run) && stage !== 'video' ? 1 : 0;
+  if (existingCount + sourceTaskCount + inputs.length + reservedVideo > run.maxAgentTasks!) throw new Error('Hermes generation grant exhausted');
   if (pixelAuthority && existingCount + sourceTaskCount + inputs.length
     > Number(pixelAuthority.metadata.existingTaskCount) + pixelAuthority.depth + 1 + pixelAuthority.sceneLimit)
     throw new Error('Narrative scientific revision image allowance exhausted');
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
     userId: run.actorId, researchObjectId: run.researchObjectId, kind: 'visualization',
-    title: imageRun(run.profile) ? 'Hermes research illustration' : 'Hermes research video', idempotencyKey: `hermes-run-session:${run.id}`,
+    title: imageRun(run.profile) && !narrativeVideoRun(run) ? 'Hermes research illustration' : 'Hermes research video', idempotencyKey: `hermes-run-session:${run.id}`,
   });
   for (const item of inputs) {
     const payload = {
@@ -3311,13 +3394,16 @@ async function narrativeSceneLimit(tx: Prisma.TransactionClient, run: RunRow, re
   const presentations = await tx.agentTask.count({ where: { kind: 'presentation.generate',
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
   const sources = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
-  const limit = Math.min(6, run.maxAgentTasks! - sources - presentations - 1 - (reserveCorrection ? 1 : 0));
-  if (limit < 1) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Hermes generation grant cannot cover a narrative scene and its reserved correction');
+  const video = narrativeVideoRun(run);
+  const limit = Math.min(6, run.maxAgentTasks! - sources - presentations - 1 - (reserveCorrection ? 1 : 0) - (video ? 1 : 0));
+  if (limit < (video ? 3 : 1)) throw new HermesResearchRunError('SOURCE_NOT_READY', video
+    ? 'Hermes generation grant cannot cover three video scenes, the video task and its reserved correction'
+    : 'Hermes generation grant cannot cover a narrative scene and its reserved correction');
   return limit;
 }
 
 async function repairBlockedNarrative(deps: HermesResearchRunDeps, tx: Prisma.TransactionClient, run: RunRow, taskId: string): Promise<boolean> {
-  if (run.profile !== VISUAL_NARRATIVE_PROFILE) return false;
+  if (run.profile !== VISUAL_NARRATIVE_PROFILE || narrativeVideoRun(run)) return false;
   const task = await tx.agentTask.findUnique({ where: { id: taskId } });
   if (!task || task.status !== 'failed' || task.deletedAt) return false;
   const result = jsonRecord(task.result);
@@ -3358,7 +3444,7 @@ async function repairRejectedNarrativeImages(deps: HermesResearchRunDeps, tx: Pr
   const presentations = await tx.agentTask.count({ where: { kind: 'presentation.generate',
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
   const sources = run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
-  if (sources + presentations + replacements.length > run.maxAgentTasks!) return false;
+  if (sources + presentations + replacements.length + (narrativeVideoRun(run) ? 1 : 0) > run.maxAgentTasks!) return false;
   await createPresentationSteps(deps, tx, run, 'scene_image', replacements);
   return true;
 }
@@ -3416,6 +3502,94 @@ async function findApprovedStoryboardRevision(
   return revision;
 }
 
+/** Validate the immutable producer receipt against actual saved native parents; never resubmit its video task. */
+async function readNativeVideoAudioTiming(tx: Prisma.TransactionClient, run: RunRow, step: RunRow['steps'][number]) {
+  if (!narrativeVideoRun(run) || run.maxAgentTasks !== 9 || !step.agentTaskId) return undefined;
+  const task = await tx.agentTask.findUnique({ where: { id: step.agentTaskId }, include: { session: true } });
+  const result = jsonRecord(task?.result);
+  if (!Object.hasOwn(result, 'videoAudioTiming') || !task?.error?.includes('AUDIO_TIMING_REVISION_REQUIRED')) return undefined;
+  const reject = () => new HermesResearchRunError('SOURCE_NOT_READY', 'Audio timing revision bindings changed; original task and audio retained');
+  const timing = jsonRecord(result.videoAudioTiming);
+  const keys = ['schemaVersion', 'taskId', 'executionAttempt', 'storyboardAssetId', 'parentIdentity', 'sourceEvidenceIdentity', 'inputHash', 'voice', 'speed', 'noVideoSubmissions', 'scenes'];
+  const hex = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
+  const token = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(value);
+  if (task.status !== 'failed' || task.deletedAt || task.kind !== 'presentation.generate' || step.presentationAssetId
+    || task.session.deletedAt || task.session.status !== 'active' || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId
+    || Object.keys(timing).length !== keys.length || !keys.every(key => Object.hasOwn(timing, key))
+    || timing.schemaVersion !== 1 || timing.taskId !== task.id || timing.executionAttempt !== task.executionAttempt
+    || !Number.isSafeInteger(timing.executionAttempt) || Number(timing.executionAttempt) < 1 || timing.noVideoSubmissions !== true
+    || !hex(timing.inputHash) || !token(timing.voice) || typeof timing.speed !== 'number' || !Number.isFinite(timing.speed) || timing.speed <= 0
+    || !Array.isArray(timing.scenes) || timing.scenes.length < 3 || timing.scenes.length > 6
+    || await tx.presentationAsset.findUnique({ where: { id: task.id } })) throw reject();
+  const payload = parsePresentationGenerationPayload(task.payload);
+  if (payload.researchObjectId !== run.researchObjectId || payload.versionId !== run.versionId || payload.kind !== 'video'
+    || payload.video?.profile !== CONTENT_DRIVEN_PROFILE || !isDeepStrictEqual(payload.sourceClaimIds, [...run.sourceClaimIds].sort())
+    || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'video', ordinal: step.ordinal, profile: VISUAL_NARRATIVE_PROFILE })
+    || !run.steps.some(item => item.stage === 'storyboard' && item.presentationAssetId === payload.video!.storyboardAssetId && item.status === 'succeeded')) throw reject();
+  const parents = await requireVideoGenerationParents(tx, payload);
+  if (!parents || timing.storyboardAssetId !== parents.storyboard.id || timing.parentIdentity !== parents.identity
+    || typeof parents.parentSourceEvidenceIdentity !== 'string' || timing.sourceEvidenceIdentity !== parents.parentSourceEvidenceIdentity
+    || timing.scenes.length !== parents.storyboardView.document.scenes.length) throw reject();
+  const changedScenes: number[] = [];
+  const durations: Array<{ sceneIndex: number; planned: number; actual: number }> = [];
+  for (const [sceneIndex, raw] of timing.scenes.entries()) {
+    const audio = jsonRecord(raw), scene = parents.storyboardView.document.scenes[sceneIndex]!;
+    const sceneKeys = ['sceneIndex', 'narration', 'plannedDurationSeconds', 'durationSeconds', 'taskId', 'contentHash', 'size'];
+    if (Object.keys(audio).length !== sceneKeys.length || !sceneKeys.every(key => Object.hasOwn(audio, key))
+      || audio.sceneIndex !== sceneIndex || audio.narration !== scene.narration || typeof scene.durationSeconds !== 'number'
+      || audio.plannedDurationSeconds !== scene.durationSeconds
+      || typeof audio.durationSeconds !== 'number' || !Number.isFinite(audio.durationSeconds) || audio.durationSeconds <= 0
+      || !token(audio.taskId) || !hex(audio.contentHash) || !Number.isSafeInteger(audio.size) || Number(audio.size) < 1) throw reject();
+    durations.push({ sceneIndex, planned: scene.durationSeconds, actual: audio.durationSeconds });
+    if (audio.durationSeconds > scene.durationSeconds) changedScenes.push(sceneIndex);
+  }
+  if (!changedScenes.length) throw reject();
+  return { task, payload, parents, changedScenes, durations };
+}
+
+function nativeVideoTimingRevision(run: RunRow, timing: NonNullable<Awaited<ReturnType<typeof readNativeVideoAudioTiming>>>) {
+  const settings = narrativeSettings(run.generationSettings);
+  const single = timing.changedScenes.length === 1 ? timing.changedScenes[0] : undefined;
+  const instruction = `Revise ${single === undefined ? 'the base storyboard' : `only scene ${single + 1} of the base storyboard`} for saved narration timing. `
+    + `Timing in seconds (scene, planned, actual): ${timing.durations.map(item => `${item.sceneIndex + 1}/${item.planned}/${item.actual}`).join('; ')}. `
+    + 'Use concise, source-faithful narration or a longer allowed 5/10/15-second shot. Preserve all supported meaning, conditions, limitations and the base continuity. '
+    + 'Do not force a speed change, invent scientific content, reopen accepted science, or change other scenes in a single-scene revision.';
+  return { schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId!, kind: 'interactive_html', sourceClaimIds: run.sourceClaimIds,
+    storyboard: { ...settings, instruction, output: 'video' as const, narrative: true, narrativeSceneLimit: timing.parents.storyboardView.document.scenes.length,
+      baseAssetId: timing.parents.storyboard.id, ...(single === undefined ? {} : { revisionSceneIndex: single }) } };
+}
+
+async function handleNativeVideoAudioTiming(
+  deps: HermesResearchRunDeps, tx: Prisma.TransactionClient, run: RunRow,
+  step: RunRow['steps'][number], workspaceId: string,
+): Promise<HermesResearchRunStatus | null | undefined> {
+  if (run.status !== 'generating_video') return undefined;
+  const timing = await readNativeVideoAudioTiming(tx, run, step);
+  if (!timing) return undefined;
+  if (currentVideoStoryboard(run)?.presentationAssetId !== timing.parents.storyboard.id)
+    throw new HermesResearchRunError('SOURCE_NOT_READY', 'Audio timing parent is no longer current');
+  const presentations = await tx.agentTask.count({ where: { kind: 'presentation.generate',
+    payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } });
+  const sources = run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
+  // A single-scene base revision can preserve other frames once shared verified replay is available.
+  // A full revision must reserve every frame; no new scene-selection contract is invented here.
+  const changedFrames = timing.changedScenes.length === 1 ? 1 : timing.parents.storyboardView.document.scenes.length;
+  const budgetAvailable = presentations + sources + 1 + changedFrames + 1 <= run.maxAgentTasks!;
+  const alreadyRevised = run.steps.some(item => item.stage === 'storyboard' && item.ordinal > 0);
+  const marked = await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id, agentTaskId: timing.task.id,
+    status: step.status, presentationAssetId: step.presentationAssetId }, data: { status: 'failed', error: timing.task.error } });
+  if (marked.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Audio timing video step changed');
+  const preserved = { ...run, steps: run.steps.map(item => item.id === step.id ? { ...item, status: 'failed' } : item) };
+  if (!budgetAvailable || alreadyRevised) return moveRun(deps, tx, preserved, 'stopped', workspaceId, alreadyRevised
+    ? 'Audio timing revision has already used its one replacement; original video and audio retained'
+    : 'Audio timing revision budget cannot cover a new plan, changed frames and video within nine tasks; original video and audio retained');
+  const ordinal = (currentVideoStoryboard(run)?.ordinal ?? -1) + 1;
+  await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal, replacesTaskId: timing.task.id, payload: nativeVideoTimingRevision(run, timing) }]);
+  const moved = await moveRun(deps, tx, preserved, 'generating_storyboard', workspaceId);
+  if (!moved) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Audio timing run changed before replacement');
+  return moved;
+}
+
 async function moveRun(
   deps: HermesResearchRunDeps, tx: Prisma.TransactionClient, run: RunRow,
   to: HermesResearchRunStatus, workspaceId: string | undefined, error: string | null = null,
@@ -3426,6 +3600,7 @@ async function moveRun(
   if (to === 'failed' || to === 'stopped') {
     for (const step of run.steps) {
       if (step.status === 'succeeded' || (['source_composition', 'source_review'].includes(step.stage) && step.status === 'failed')) continue;
+      if (narrativeVideoRun(run) && step.stage === 'video' && step.status === 'failed') continue;
       await tx.hermesResearchStep.updateMany({ where: {
         id: step.id, runId: run.id, ...(to === 'failed' ? { presentationAssetId: null } : {}),
       }, data: { status: to, error } });
@@ -3527,6 +3702,8 @@ export async function reconcileHermesResearchRuns(
             return null;
           }
           const pixelAuthority = await readNarrativePixelReplanAuthority(tx, { runId: run.id, actorId: run.actorId });
+          if (narrativeVideoRun(run) && run.maxAgentTasks !== 9)
+            return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Native video requires its original nine-task grant');
           if (run.maxAgentTasks === 2) {
             const next = await advanceArtStyleContinuation(deps, tx, run);
             if (next) return moveRun(deps, tx, run, next as HermesResearchRunStatus, ro.workspaceId,
@@ -3552,12 +3729,12 @@ export async function reconcileHermesResearchRuns(
             await createPresentationSteps(deps, tx, run, 'storyboard', [{ ordinal: 0, payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'interactive_html', sourceClaimIds: run.sourceClaimIds,
-              storyboard: settings ? { ...settings, output: 'image', narrative: true, narrativeSceneLimit: sceneLimit } : { locale: 'zh', style: 'technical', output: imageRun(run.profile) ? 'image' : 'video', instruction: imageRun(run.profile) ? '根据当前已审核Claims规划1至6幅相互补充的科研图解。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑画面补写结果。' : '根据当前已审核Claims自主选择讲解重点、场景数量、时长和动态表现。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑场景补写结果。' },
+              storyboard: settings ? { ...settings, output: settings.output ?? 'image', narrative: true, narrativeSceneLimit: sceneLimit } : { locale: 'zh', style: 'technical', output: imageRun(run.profile) ? 'image' : 'video', instruction: imageRun(run.profile) ? '根据当前已审核Claims规划1至6幅相互补充的科研图解。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑画面补写结果。' : '根据当前已审核Claims自主选择讲解重点、场景数量、时长和动态表现。只讲来源支持的内容；若只提取到方法，就仅讲方法。不套用任何特定论文或固定科学机制，不为凑场景补写结果。' },
             } }]);
             return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
           }
           const stage = run.status.includes('storyboard') ? 'storyboard' : run.status.includes('scene_images') ? 'scene_image' : 'video';
-          const steps = run.steps.filter((step) => step.stage === stage);
+          const steps = narrativeVideoRun(run) ? currentVideoSteps(run.steps, stage) : run.steps.filter((step) => step.stage === stage);
           if (run.status.startsWith('generating_')) {
             const failed = steps.find((step) => step.agentTask?.status === 'failed');
             const inFlight = steps.some((step) => step.agentTask?.status === 'pending' || step.agentTask?.status === 'running');
@@ -3571,6 +3748,10 @@ export async function reconcileHermesResearchRuns(
                 data: { status: 'awaiting_approval', presentationAssetId: asset.id } });
             }
             if (failed && !inFlight) {
+              if (stage === 'video') {
+                const timing = await handleNativeVideoAudioTiming(deps, tx, run, failed, ro.workspaceId);
+                if (timing !== undefined) return timing;
+              }
               if (!pixelAuthority && stage === 'storyboard' && failed.agentTaskId && await repairBlockedNarrative(deps, tx, run, failed.agentTaskId)) {
                 return moveRun(deps, tx, run, 'generating_storyboard', ro.workspaceId);
               }
@@ -3603,7 +3784,7 @@ export async function reconcileHermesResearchRuns(
               data: { lastReconciledAt: now(deps) } });
             return null;
           }
-          if (run.status === 'awaiting_storyboard_review' && run.versionId && steps.length === 1) {
+          if (run.status === 'awaiting_storyboard_review' && !narrativeVideoRun(run) && run.versionId && steps.length === 1) {
             const step = steps[0]!;
             const baseAsset = step.presentationAsset;
             if (step.status === 'awaiting_approval' && baseAsset && baseAsset.status !== 'approved') {
@@ -3656,7 +3837,72 @@ export async function reconcileHermesResearchRuns(
             }
             return moveRun(deps, tx, run, 'stopped', ro.workspaceId, NARRATIVE_CORRECTION_STOP);
           }
-          if (assets.some((asset) => asset!.status !== 'approved')) {
+          const nativeVideo = narrativeVideoRun(run);
+          const technicalAdvance = nativeVideo && ['awaiting_storyboard_review', 'awaiting_scene_images_review'].includes(run.status);
+          let nativeVideoPayload: Record<string, unknown> | undefined;
+          let nativeFrameInputs: Array<{ ordinal: number; payload: Record<string, unknown>; replacesTaskId?: string }> | undefined;
+          if (technicalAdvance && run.status === 'awaiting_storyboard_review') {
+            const asset = assets[0]!;
+            if (steps.length !== 1 || steps[0]!.agentTaskId !== asset.id || steps[0]!.agentTask?.status !== 'succeeded')
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video storyboard must belong to this completed run step');
+            const proof = await requireNativeVideoStoryboard(tx, asset, { researchObjectId: run.researchObjectId,
+              versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds });
+            const owner = await tx.agentSession.findUnique({ where: { id: proof.task.sessionId } });
+            const payload = parsePresentationGenerationPayload(proof.task.payload);
+            const settings = narrativeSettings(run.generationSettings);
+            let timing: Awaited<ReturnType<typeof readNativeVideoAudioTiming>>;
+            let expectedStoryboard: unknown = { ...settings, output: 'video', narrative: true, narrativeSceneLimit: proof.settings.narrativeSceneLimit };
+            if (steps[0]!.ordinal > 0) {
+              const oldVideo = run.steps.find(step => step.stage === 'video' && step.ordinal === steps[0]!.ordinal - 1);
+              timing = oldVideo ? await readNativeVideoAudioTiming(tx, run, oldVideo) : undefined;
+              if (!timing || steps[0]!.ordinal !== 1) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video timing revision lost its failed predecessor');
+              expectedStoryboard = nativeVideoTimingRevision(run, timing).storyboard;
+            }
+            if (owner?.userId !== run.actorId || !isDeepStrictEqual(payload.hermesRunAuthority,
+              { runId: run.id, stage: 'storyboard', ordinal: steps[0]!.ordinal, profile: VISUAL_NARRATIVE_PROFILE })
+              || !isDeepStrictEqual(proof.settings, expectedStoryboard))
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video storyboard run authority changed');
+            const view = presentationStoryboardView(asset, run.sourceClaimIds)!;
+            if (proof.settings.narrativeSceneLimit === undefined || view.document.scenes.length > proof.settings.narrativeSceneLimit)
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video storyboard exceeds its authorized scene limit');
+            if (timing) {
+              for (const index of timing.changedScenes) {
+                const before = timing.parents.storyboardView.document.scenes[index]!, after = view.document.scenes[index];
+                if (!after || (after.narration === before.narration && (after.durationSeconds ?? 0) <= timing.durations[index]!.actual))
+                  throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video timing revision did not resolve the overlong scene');
+              }
+            }
+            nativeFrameInputs = [];
+            let ordinal = Math.max(-1, ...run.steps.filter(step => step.stage === 'scene_image').map(step => step.ordinal)) + 1;
+            for (let sceneIndex = 0; sceneIndex < view.document.scenes.length; sceneIndex++) {
+              const oldId = timing?.payload.video?.sceneImageAssetIds[sceneIndex];
+              const old = oldId ? await tx.presentationAsset.findUnique({ where: { id: oldId }, include: { sourceClaims: { select: { claimId: true } } } }) : null;
+              if (old) {
+                try {
+                  await requireNativeVideoSceneImage(tx, old, asset, proof, { researchObjectId: run.researchObjectId,
+                    versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds }, sceneIndex);
+                  continue;
+                } catch (error) {
+                  if (proof.settings.revisionSceneIndex !== undefined && proof.settings.revisionSceneIndex !== sceneIndex) throw error;
+                }
+              } else if (timing) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video timing revision lost its original frame');
+              nativeFrameInputs.push({ ordinal: ordinal++, ...(oldId ? { replacesTaskId: oldId } : {}), payload: {
+                schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId, kind: 'image', sourceClaimIds: run.sourceClaimIds,
+                sceneImage: { storyboardAssetId: asset.id, sceneIndex },
+              } });
+            }
+          } else if (technicalAdvance) {
+            if (steps.some((step, index) => jsonRecord(jsonRecord(step.agentTask?.payload).sceneImage).sceneIndex !== index
+              || step.agentTaskId !== assets[index]!.id || step.agentTask?.status !== 'succeeded'))
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video frames must belong to the completed ordered run steps');
+            const storyboard = currentVideoStoryboard(run)?.presentationAssetId;
+            if (!storyboard) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Native video storyboard binding is missing');
+            const video = { storyboardAssetId: storyboard, sceneImageAssetIds: assets.map(asset => asset!.id), profile: CONTENT_DRIVEN_PROFILE };
+            await requireVideoGenerationParents(tx, { researchObjectId: run.researchObjectId, versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds, video });
+            nativeVideoPayload = { schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
+              kind: 'video', sourceClaimIds: run.sourceClaimIds, video };
+          }
+          if (!technicalAdvance && assets.some((asset) => asset!.status !== 'approved')) {
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
             return null;
           }
@@ -3664,7 +3910,8 @@ export async function reconcileHermesResearchRuns(
           if (run.status === 'awaiting_storyboard_review') {
             const storyboardAssetId = assets[0]!.id;
             const approved = presentationStoryboardView(assets[0]!, run.sourceClaimIds);
-            if (!approved || (run.profile === CONTENT_DRIVEN_PROFILE && (approved.output !== 'video' || approved.document.scenes.some(scene => !scene.animation))) || (imageRun(run.profile) && approved.output !== 'image')
+            if (!approved || (run.profile === CONTENT_DRIVEN_PROFILE && (approved.output !== 'video' || approved.document.scenes.some(scene => !scene.animation))) || (imageRun(run.profile) && !nativeVideo && approved.output !== 'image')
+              || (nativeVideo && approved.output !== 'video')
               || (run.profile === VISUAL_NARRATIVE_PROFILE && !approved.document.narrative)) {
               return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Approved storyboard requires a content-driven animation plan');
             }
@@ -3674,14 +3921,18 @@ export async function reconcileHermesResearchRuns(
             }
             const sourceTaskCount = run.profile === VISUAL_NARRATIVE_PROFILE
               ? run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length : 0;
-            if (sourceTaskCount + sceneCount + (imageRun(run.profile) ? 1 : 2) > run.maxAgentTasks!) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
+            const presentations = nativeVideo ? await tx.agentTask.count({ where: { kind: 'presentation.generate',
+              payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } }) : 0;
+            if (nativeVideo ? sourceTaskCount + presentations + nativeFrameInputs!.length + 1 > run.maxAgentTasks!
+              : sourceTaskCount + sceneCount + (imageRun(run.profile) ? 1 : 2) > run.maxAgentTasks!)
+              return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Hermes generation grant cannot cover this storyboard');
             if (pixelAuthority && (storyboardAssetId !== pixelAuthority.task.id || sceneCount < 1 || sceneCount > pixelAuthority.sceneLimit))
               return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Narrative replacement exceeds its reviewed scene allowance');
             if (!pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && sceneCount !== 1) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction requires exactly one scene');
             const replacedImageTaskId = !pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13)
               ? run.steps.find(step => step.stage === 'scene_image' && step.ordinal === 0)?.agentTaskId : undefined;
             if (!pixelAuthority && (run.maxAgentTasks === 11 || run.maxAgentTasks === 13) && !replacedImageTaskId) return moveRun(deps, tx, run, 'stopped', ro.workspaceId, 'Scientific correction image task binding is missing');
-            await createPresentationSteps(deps, tx, run, 'scene_image', Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal,
+            await createPresentationSteps(deps, tx, run, 'scene_image', nativeFrameInputs ?? Array.from({ length: sceneCount }, (_, ordinal) => ({ ordinal,
               ...(pixelAuthority ? { replacesTaskId: String(pixelAuthority.sceneReviews[ordinal]!.taskId) }
                 : replacedImageTaskId ? { replacesTaskId: replacedImageTaskId } : {}), payload: {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
@@ -3691,10 +3942,11 @@ export async function reconcileHermesResearchRuns(
             return moveRun(deps, tx, run, 'generating_scene_images', ro.workspaceId);
           }
           if (run.status === 'awaiting_scene_images_review') {
-            if (imageRun(run.profile)) return moveRun(deps, tx, run, 'succeeded', ro.workspaceId);
-            const storyboard = run.steps.find((step) => step.stage === 'storyboard')?.presentationAssetId;
+            if (imageRun(run.profile) && !nativeVideo) return moveRun(deps, tx, run, 'succeeded', ro.workspaceId);
+            const storyboard = (nativeVideo ? currentVideoStoryboard(run) : run.steps.find((step) => step.stage === 'storyboard'))?.presentationAssetId;
             if (!storyboard) return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Storyboard binding is missing');
-            await createPresentationSteps(deps, tx, run, 'video', [{ ordinal: 0, payload: {
+            const ordinal = nativeVideo ? Math.max(-1, ...run.steps.filter(step => step.stage === 'video').map(step => step.ordinal)) + 1 : 0;
+            await createPresentationSteps(deps, tx, run, 'video', [{ ordinal, payload: nativeVideoPayload ?? {
               schemaVersion: 1, researchObjectId: run.researchObjectId, versionId: run.versionId,
               kind: 'video', sourceClaimIds: run.sourceClaimIds, video: { storyboardAssetId: storyboard,
                 sceneImageAssetIds: assets.map((asset) => asset!.id), profile: run.profile,

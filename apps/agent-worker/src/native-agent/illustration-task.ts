@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { parseStructuredJson, NATIVE_IMAGE_REQUEST_MAX_BYTES, type AiGateway, type ChatMessage } from '@openscience/ai-gateway';
 import { nativeAgentMaxTurns, readNativeAgentExecution, type AgentDeps, type DocumentSourceMap, type DocumentSourceMapReference,
-  type PaperOriginalRef, type StoryboardRequest } from '@openscience/domain';
+  type PaperOriginalRef, type StoryboardRequest, type StoryboardView } from '@openscience/domain';
 import type { Prisma } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import { materializeIllustrationScience, materializeIllustrationArt, UnboundNumericSourceError } from '../presentation/illustration-planner';
@@ -10,7 +10,7 @@ import { materializeIllustrationReview } from '../presentation/illustration-revi
 import { compileIllustrationImagePrompt } from '../presentation/scene-image';
 import { compileShotPrompt } from '../presentation/synclip-video-spool';
 import { loadIllustrationStyleSkills } from '../presentation/illustration-styles';
-import { loadInstalledMediaSkills, mergeDesignSkillUsage } from '../skills/installed-media-skills';
+import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import type { PresentationClaim } from '../presentation/chart-generator';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 import { createNativeTaskStore } from './task-store';
@@ -66,7 +66,7 @@ const VIDEO_DIRECTION_SCHEMA = object({
   shotType: { type: 'string', enum: ['hook', 'mechanism', 'evidence', 'transition', 'takeaway', 'hero'] },
   purpose: str, subjectLock: str, generatedElements: str, motion: str, camera: str,
   reference: { type: 'string', enum: ['scene-artwork'] }, frameStrategy: { type: 'string', enum: ['start-reference'] },
-  audioMode: { type: 'string', enum: ['external-narration'] }, subtitleMode: { type: 'string', enum: ['none', 'sidecar'] },
+  audioMode: { type: 'string', enum: ['external-narration'] }, subtitleMode: { type: 'string', enum: ['none'] },
   negativeConstraints: { type: 'array', maxItems: 8, items: str }, modelPolicy: { type: 'string', enum: ['commercial-primary'] },
 });
 const videoScienceScene = scienceSceneSchema({ type: 'string', enum: ['real-space', 'wavevector-space', 'time', 'frequency', 'parameter-space', 'conceptual'] }, false);
@@ -79,22 +79,38 @@ const VIDEO_SCIENCE_SCHEMA = object({ title: str, narrative: object({ mainMessag
     visualContinuity: str, audioPolicy: { type: 'string', enum: ['external-narration'] }, modelPolicy: { type: 'string', enum: ['commercial-primary'] } }),
   scenes: { type: 'array', minItems: 3, maxItems: 6, items: VIDEO_SCIENCE_SCENE },
 });
+const ORIGINAL_VIDEO_DIRECTION_SCHEMA = { ...VIDEO_DIRECTION_SCHEMA, properties: { ...VIDEO_DIRECTION_SCHEMA.properties,
+  subtitleMode: { type: 'string', enum: ['none', 'sidecar'] } } };
+const ORIGINAL_VIDEO_SCIENCE_SCENE = { ...VIDEO_SCIENCE_SCENE, properties: { ...VIDEO_SCIENCE_SCENE.properties,
+  videoDirection: ORIGINAL_VIDEO_DIRECTION_SCHEMA } };
+const ORIGINAL_VIDEO_SCIENCE_SCHEMA = { ...VIDEO_SCIENCE_SCHEMA, properties: { ...VIDEO_SCIENCE_SCHEMA.properties,
+  scenes: { type: 'array', minItems: 3, maxItems: 6, items: ORIGINAL_VIDEO_SCIENCE_SCENE } } };
+const VIDEO_CONTEXT_DESCRIPTION = CONTEXT_DESCRIPTION + ' Video context includes the verified base plan, supported execution modes and exact per-frame render resources; local revisions preserve every other scene and its prompts.';
 const NATIVE_VIDEO_TOOLS = NATIVE_ILLUSTRATION_TOOLS.map(tool => tool.name === 'paper_illustration_science'
   ? { ...tool, description: VIDEO_SCIENCE_DESCRIPTION, parameters: VIDEO_SCIENCE_SCHEMA }
   : tool.name === 'paper_illustration_science_repair'
     ? { ...tool, parameters: object({ scienceToolCallId: str, sceneIndex: { type: 'integer', minimum: 0, maximum: 5 }, scene: VIDEO_SCIENCE_SCENE }) }
-    : { ...tool, description: tool.description + (tool.name === 'paper_illustration_review'
+    : { ...tool, description: tool.name === 'paper_illustration_context' ? VIDEO_CONTEXT_DESCRIPTION : tool.description + (tool.name === 'paper_illustration_review'
       ? ' Review the complete video plan, narration, timing, source-bound motion, global continuity and both exact frame/video prompts; accepting only a still image is insufficient.'
       : tool.name === 'paper_illustration_art' ? ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script.' : '') });
 
+export type VerifiedNativeVideoBase = { view: StoryboardView; settings: StoryboardRequest;
+  prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt: string; renderResources?: DesignSkillUsage[] }>; designSkills: DesignSkillUsage[] };
 type MaterializerInput = { claims: readonly PresentationClaim[]; settings: StoryboardRequest;
-  paperOriginals: Map<string, PaperOriginalRef>; narrativeSource?: VisualNarrativeSource };
+  paperOriginals: Map<string, PaperOriginalRef>; narrativeSource?: VisualNarrativeSource; base?: VerifiedNativeVideoBase };
 function stopped(): never { throw new Error('[blocked] Native illustration selected history changed'); }
 
 /** Deterministic tools only. The installed Agent makes all planning and scientific review decisions. */
-export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean; nativeVideo?: boolean; savedState?: NativeAgentSessionState | null }) {
+export function createNativeIllustrationMaterializer(input: MaterializerInput & { scienceFeedback?: boolean; deferDesignGuidance?: boolean; sourceQuantityAnnotations?: boolean; sourceQuantityProse?: boolean; sourceQuantityLocations?: boolean; defaultPaperOriginalRef?: boolean; scienceRepairCallIdFeedback?: boolean; sourceNotation?: boolean; nativeVideo?: boolean; videoContext?: boolean; savedState?: NativeAgentSessionState | null }) {
   const nativeVideo = input.nativeVideo === true;
+  const videoContext = nativeVideo && input.videoContext === true;
   if (nativeVideo !== (input.settings.output === 'video' && input.settings.narrative === true)) stopped();
+  if (nativeVideo && Boolean(input.settings.baseAssetId) !== Boolean(input.base)) stopped();
+  if (nativeVideo && !videoContext && input.base) stopped();
+  const revisionSceneIndex = nativeVideo ? input.settings.revisionSceneIndex : undefined;
+  if (revisionSceneIndex !== undefined && (!input.base || input.base.view.output !== 'video' || !input.base.view.narrative
+    || revisionSceneIndex >= input.base.view.document.scenes.length || input.settings.locale !== input.base.settings.locale
+    || input.settings.style !== input.base.settings.style || !isDeepStrictEqual(input.settings.figurePlan, input.base.settings.figurePlan))) stopped();
   const scienceFeedback = input.scienceFeedback === true;
   const deferDesignGuidance = input.deferDesignGuidance === true;
   const sourceQuantityAnnotations = input.sourceQuantityAnnotations === true;
@@ -102,13 +118,14 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
   const sourceQuantityLocations = input.sourceQuantityLocations === true;
   const scienceRepairCallIdFeedback = input.scienceRepairCallIdFeedback === true;
   const sourceNotation = input.sourceNotation === true;
-  const styles = loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan');
+  const styles = loadIllustrationStyleSkills([input.settings.style], revisionSceneIndex !== undefined
+    ? input.base!.settings.instruction : input.settings.instruction, 'plan');
   let historicalStyles: typeof styles | undefined, contextStyles = styles;
   const planningStyles = (historical: boolean) => historical
     ? historicalStyles ??= loadIllustrationStyleSkills([input.settings.style], input.settings.instruction, 'plan', '19') : styles;
   type Science = { id: string; sequence: number; intent: ReturnType<typeof materializeIllustrationScience>; designSkills: typeof styles.usage };
   type Art = { id: string; sequence: number; scienceId: string; document: ReturnType<typeof materializeIllustrationArt>;
-    prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt?: string }>; designSkills: typeof styles.usage };
+    prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt?: string; renderResources?: DesignSkillUsage[] }>; designSkills: typeof styles.usage };
   type Review = { id: string; sequence: number; artId: string; review: ReturnType<typeof materializeIllustrationReview> };
   type PendingScience = { id: string; sequence: number; args: Record<string, unknown>; rejected: boolean };
   let science: Science | undefined, art: Art | undefined, review: Review | undefined;
@@ -136,6 +153,19 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
     const normalized = normalizeScienceArgs(args);
     pendingScience = { id: callId, sequence, args: structuredClone(normalized), rejected: true };
     const intent = materializeIllustrationScience(normalized, input.claims, input.settings, input.paperOriginals, scienceFeedback, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, sourceNotation);
+    if (revisionSceneIndex !== undefined) {
+      const previous = input.base!.view.document;
+      const meaning = (scene: typeof intent.scenes[number] | typeof previous.scenes[number]) => {
+        const { composition: _composition, treatment: _treatment, ...illustration } = scene.illustration!;
+        void _composition; void _treatment;
+        return { title: scene.title, narration: scene.narration, durationSeconds: scene.durationSeconds,
+          sourceClaimIds: scene.sourceClaimIds, videoDirection: scene.videoDirection, illustration };
+      };
+      if (intent.title !== previous.title || !isDeepStrictEqual(intent.narrative, previous.narrative)
+        || !isDeepStrictEqual(intent.videoProduction, previous.videoProduction) || intent.scenes.length !== previous.scenes.length
+        || intent.scenes.some((scene, index) => index !== revisionSceneIndex && !isDeepStrictEqual(meaning(scene), meaning(previous.scenes[index]!))))
+        throw new Error('local_video_revision_must_preserve_other_scenes_and_global_continuity');
+    }
     pendingScience.rejected = false;
     const guidance = deferDesignGuidance ? planningStyles(historicalExecution) : contextStyles;
     science = { id: callId, sequence, intent, designSkills: guidance.usage };
@@ -154,6 +184,9 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
           claims: input.claims.map(claim => ({ id: claim.id, statement: claim.statement, conditions: claim.conditions, limitations: claim.limitations,
             sources: (claim.sourcePassages ?? []).map(source => ({ sourceId: `s${sourceIndex++}`, text: source.text, relation: source.relation })) })),
           availableOriginals: [...input.paperOriginals.values()].map(item => ({ assetId: item.assetId, sourceClaimId: item.sourceClaimId })),
+          ...(videoContext ? { videoCapabilities: { durationSeconds: [5, 10, 15], frameStrategies: ['start-reference'],
+            references: ['scene-artwork'], audioModes: ['external-narration'], subtitleModes: ['none'] },
+            ...(input.base ? { basePlan: { ...input.base, revisionSceneIndex: revisionSceneIndex ?? null } } : {}) } : {}),
           ...(deferDesignGuidance ? {} : { designGuidance: contextStyles.instructions }) };
       }
       if (!Number.isSafeInteger(sequence) || sequence < 0 || !callId) stopped();
@@ -174,11 +207,15 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
       if (name === 'paper_illustration_art') {
         if (Object.keys(args).sort().join(',') !== 'scenes,scienceToolCallId' || !science || args.scienceToolCallId !== science.id || sequence <= science.sequence)
           throw new Error('exact_science_tool_required');
-        const document = materializeIllustrationArt({ scenes: args.scenes }, science.intent, input.claims, input.settings, input.paperOriginals);
+        const document = materializeIllustrationArt({ scenes: args.scenes }, science.intent, input.claims, input.settings, input.paperOriginals, input.base?.view);
         const resources = document.scenes.map(scene => scene.paperOriginal ? undefined : loadInstalledMediaSkills(input.settings.style, scene.illustration!.treatment, 'render', undefined, historicalExecution ? '19' : undefined));
         const prompts = document.scenes.flatMap((scene, sceneIndex) => scene.paperOriginal ? []
           : [{ sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions),
-            ...(nativeVideo ? { videoPrompt: compileShotPrompt(document, scene, input.settings.locale) } : {}) }]);
+            ...(nativeVideo ? { videoPrompt: compileShotPrompt(document, scene, input.settings.locale) } : {}),
+            ...(videoContext ? { renderResources: resources[sceneIndex]!.usage } : {}) }]);
+        if (revisionSceneIndex !== undefined && prompts.some((prompt, index) => index !== revisionSceneIndex
+          && !isDeepStrictEqual(prompt, input.base!.prompts[index])))
+          throw new Error('local_video_revision_changed_unchanged_rendering_prompt');
         art = { id: callId, sequence, scienceId: science.id, document, prompts,
           designSkills: mergeDesignSkillUsage(science.designSkills, ...resources.map(resource => resource?.usage)) };
         return { status: 'art_ready', planToolCallId: callId, document, prompts };
@@ -287,9 +324,12 @@ export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | n
   const originalScience = originalTools?.find(tool => tool.name === 'paper_illustration_science');
   const originalRepair = originalTools?.find(tool => tool.name === 'paper_illustration_science_repair');
   const scienceDescription = originalScience?.description;
-  const nativeVideo = !saved ? output === 'video' : scienceDescription === VIDEO_SCIENCE_DESCRIPTION
-    && isDeepStrictEqual(originalScience?.parameters, VIDEO_SCIENCE_SCHEMA);
-  if (nativeVideo) return { nativeVideo, sourceTools, scienceFeedback: true, sourceQuantityAnnotations: true,
+  const contextDescription = originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description;
+  const videoContext = !saved ? output === 'video' : scienceDescription === VIDEO_SCIENCE_DESCRIPTION
+    && contextDescription === VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, VIDEO_SCIENCE_SCHEMA);
+  const nativeVideo = videoContext || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION
+    && contextDescription === CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, ORIGINAL_VIDEO_SCIENCE_SCHEMA));
+  if (nativeVideo) return { nativeVideo, videoContext, sourceTools, scienceFeedback: true, sourceQuantityAnnotations: true,
     sourceQuantityProse: true, sourceQuantityLocations: true, defaultPaperOriginalRef: true, deferDesignGuidance: true,
     scienceRepairCallIdFeedback: true, sourceNotation: true };
   const scienceFeedback = !saved || scienceDescription === SCIENCE_DESCRIPTION || scienceDescription === PAID_OPTIONAL_REFERENCE_SCIENCE_DESCRIPTION || scienceDescription === PAID_LOCATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_PROSE_SCIENCE_DESCRIPTION || scienceDescription === PAID_ANNOTATION_SCIENCE_DESCRIPTION || scienceDescription === PAID_HZ_SCIENCE_DESCRIPTION;
@@ -300,7 +340,7 @@ export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | n
   const deferDesignGuidance = !saved || originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description === CONTEXT_DESCRIPTION;
   const scienceRepairCallIdFeedback = !saved || originalRepair?.description.includes(SCIENCE_REPAIR_CALL_ID_MARKER) === true;
   const sourceNotation = !saved || scienceDescription === SCIENCE_DESCRIPTION;
-  return { nativeVideo, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
+  return { nativeVideo, videoContext: false, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
 }
 
 /**
@@ -317,6 +357,34 @@ export function nativeMediaCapabilityGuidance(settings: Pick<StoryboardRequest, 
   ];
 }
 
+/** Reconstruct the completed private tools before reusing their prompts; this reader cannot submit a call. */
+export async function replayNativeVideoPlan(input: MaterializerInput & {
+  deps: Pick<AgentDeps, 'prisma'> & { storage: StorageAdapter };
+  task: { id: string; executionAttempt: number; result: unknown };
+}): Promise<VerifiedNativeVideoBase> {
+  const execution = readNativeAgentExecution(input.task.result);
+  if (execution?.profile !== 'paper-illustration' || input.settings.output !== 'video' || input.settings.narrative !== true
+    || execution.checkpoint?.state !== 'completed') stopped();
+  const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution,
+    authorize: async () => { throw new Error('[blocked] Completed native video replay is read only'); } });
+  const saved = await store.read(), last = saved?.turns.at(-1);
+  if (!saved || !last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length) stopped();
+  const profile = nativeIllustrationToolProfile(saved, 'video');
+  if (!profile.nativeVideo) stopped();
+  const rebuilt = createNativeIllustrationMaterializer({ ...input, ...profile, savedState: saved }).finish(last.request.messages, last.response.text);
+  const stored = record(input.task.result) ? input.task.result : {}, cp = record(stored.storyboardCheckpoint) ? stored.storyboardCheckpoint : {};
+  const planned = record(cp.planned) ? cp.planned : {}, native = record(stored.nativeIllustration) ? stored.nativeIllustration : {};
+  if (!isDeepStrictEqual(rebuilt.document, planned.document) || !isDeepStrictEqual(rebuilt.prompts, stored.illustrationPrompts)
+    || !isDeepStrictEqual(rebuilt.designSkills, planned.designSkills) || rebuilt.planToolCallId !== native.planToolCallId
+    || rebuilt.reviewToolCallId !== native.reviewToolCallId || rebuilt.review.decision !== 'accepted') stopped();
+  return { settings: input.settings, view: { document: rebuilt.document, locale: input.settings.locale,
+    style: input.settings.style, output: 'video', narrative: true, ...(input.settings.baseAssetId ? { baseAssetId: input.settings.baseAssetId } : {}),
+    ...(input.settings.figurePlan ? { figurePlan: input.settings.figurePlan } : {}) },
+    prompts: rebuilt.prompts.map((prompt, index) => ({ ...prompt, videoPrompt: prompt.videoPrompt!,
+      renderResources: prompt.renderResources ?? loadInstalledMediaSkills(input.settings.style,
+        rebuilt.document.scenes[index]!.illustration!.treatment, 'render').usage })), designSkills: rebuilt.designSkills };
+}
+
 export async function runNativeIllustrationTask(input: MaterializerInput & {
   gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter }; task: { id: string; executionAttempt: number; result: unknown };
   sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference; sourceEvidenceIdentity: string;
@@ -326,7 +394,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   if (execution?.profile !== 'paper-illustration') stopped();
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
   const saved = await store.read();
-  const { nativeVideo, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved, input.settings.output);
+  const { nativeVideo, videoContext, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback } = nativeIllustrationToolProfile(saved, input.settings.output);
   const binding = { taskId: input.task.id, artifactId: input.sourceMapRef.artifactId, documentSha256: input.sourceMapRef.contentHash,
     sourceMapHash: input.sourceMapRef.serializedSha256, runtimeId: execution.runtimeId, skillCatalogueId: execution.skillCatalogueId,
     model: execution.model, allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)],
@@ -336,14 +404,17 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
   const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
-  const materializer = createNativeIllustrationMaterializer({ ...input, savedState: saved, nativeVideo, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
+  const materializer = createNativeIllustrationMaterializer({ ...input, savedState: saved, nativeVideo, videoContext, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
   const scienceRepairGuidance = sourceTools.some(tool => tool.name === 'paper_illustration_science_repair')
     ? '如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。'
     : '';
-  const mediaCapabilityGuidance = nativeMediaCapabilityGuidance(input.settings, Boolean(saved));
+  const mediaCapabilityGuidance = [...nativeMediaCapabilityGuidance(input.settings, Boolean(saved)),
+    ...(nativeVideo && input.base ? [input.settings.revisionSceneIndex === undefined
+      ? 'context.basePlan 是已完成并核验的原视频方案。按本次指令创建新的完整私有修订，不覆盖原方案或产物。'
+      : 'context.basePlan 给出已完成原方案和本次唯一 revisionSceneIndex。science 保留全部原幕及次序、全局叙事与连续性，只修改指定幕；art 仅返回指定幕的一个条目。其余幕的科学、旁白、构图、风格、帧及视频提示词必须原样保留。'] : [])];
   const native = await runHostedNativeTask({ inboxRoot: input.inboxRoot, executionAttempt: input.task.executionAttempt,
     config: { ...binding, goal: nativeVideo ? '复用已审论文理解，形成忠实、清晰、美观的私有视频方案：完整科学分镜、参考帧、镜头运动、连续性及完整口语旁白。通过原science/art/review工具终审整份视频计划，不调用生图、视频或配音供应商，不公开结果。' : deferDesignGuidance
       ? '基于论文原文忠实表达作者的主旨、机制、代表结果及成立条件，完成易读、美观且可直接交给生图API的私有图解方案。不评判论文原始科学有效性，不新增推导量，不生成或公开图片。'

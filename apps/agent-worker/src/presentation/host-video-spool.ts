@@ -33,6 +33,8 @@ export interface HostVideoInput {
   sceneImages: Buffer[];
   /** Existing provider image tasks, ordered exactly like the approved scene images. */
   sceneImageTaskIds?: string[];
+  /** Complete reviewed native prompts; commercial consumers must compare them with the shared compiler. */
+  videoPrompts?: string[];
 }
 
 export interface HostVideoResult {
@@ -49,6 +51,7 @@ export interface HostVideoResult {
 }
 
 export interface PresentationVideoSpool {
+  readonly provider?: 'synclip';
   generate(input: HostVideoInput): Promise<{ filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: string; generatorVersion: string; inputHash: string; narration: unknown; metrics: Record<string, unknown>; runtime: unknown }>;
 }
 function fail(message = 'INVALID_VIDEO_SPOOL_OUTPUT'): never { throw new Error(message); }
