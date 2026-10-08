@@ -203,3 +203,57 @@ TTS 先于首次视频 POST 做实际时长检查；过长不能重新打开已 
 音轨 broker 当前离线 39/41 通过，另两项因本机无可用 ffmpeg/ffprobe 和非 POSIX 环境跳过；完整 PCM 解码按 stdout 全部排空及 child close 后的样本数计时，不另落 PCM 文件；最终分别核对真实帧时间线上的视频/AAC 起点、跨度与缺口。实际 codec/mux 及 Linux 权限仍须由总控在既有 CI 补验，不冒称音画合格。执行仅 start-reference + scene-artwork + external-narration + 无字幕；sidecar/burn-in/native audio/start-end 在付费前拒绝，音色来自当前目录且须支持旁白语言。未知收费与旧任务/回执继续保留。
 
 共享 Skill 依赖：`createNativeIllustrationMaterializer.reconstruct/finish`、`replayNativeVideoPlan`、handler `readVerifiedVideoPlan`、Domain `requireNativeVideoSceneImage` 校验真实完整回执/逐帧版本资源；当前候选按 Skill20，视频不开放 v19 fallback，原 Stage A 三字段回执按原 context 恢复。20→21 必须先保留 v20/v19 paid 的 science/plan/review/render 消费语义；不能只检查 pixel checkpoint。详细证据在忽略目录 `tmp/synclip-video-contract/`；Web、CI、CURRENT/progress/index 和生产由总控定序，本会话不改共享 Skill、`gateway.ts`、`provider.ts` 或 Worker `index.ts`。
+
+### 2026-10-08 Synclip host 更新差额（只读实核／候选设计）
+
+历史只读观察（17:48）：视频服务当时指向独立 bundle `ca9405869cc85583b242f4e066d90a2f56c168e2`，配置为 v1／inline，无 audio；Worker 已有 inbox rw／results ro 挂载，共享 Key 只核元数据。证据 `tmp/synclip-host-readonly/server.json` 不再代表当前 host，更不是发布时的空闲证明。
+
+18:42 并行期刊发布后的定向只读确认：host source-id 与应用同为 `42fe1a974fb62e5a868d3a4f1da812065cb148b1`，配置已 v2／synclip-receipt，adminModelsEnabled=false、无 audio；timer enabled/active、oneshot 当时 inactive，renderer digest 与早先完全相同且仍存在。当前 bundle 无音频 JS、无 previous；其 source installer 仍只支持初装并拒绝已有安装。证据 `tmp/synclip-host-readonly/after-journal.json`、`current-paths.json`。后续只补当前 v2 的可恢复更新与音频闭包，不重做初装或切回 v1；旧 v1 仅保留兼容保护。应用/Native 最新基线与并行发布排程统一查 CURRENT，不根据本节历史快照操作。
+
+现有 renderer `sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f` 已含 FFmpeg／ffprobe 5.1.9；MP3/H.264/AAC/PNG decoder、PCM s16le/AAC/libx264 encoder、MP3/s16le/MP4/concat 格式及当前 mux 所需全部滤镜均只读列举成功。合成 CI 所需 libmp3lame 也存在。不需下载安装二进制；尚未在生产执行实际编码、TTS 或视频请求。
+
+当前可恢复更新缺口在 `infra/synclip-video/install.sh`：已上线 42 的该脚本仍只允许初装，已有 config/service/timer 即 exit69；当前 bundle／provider 根未发现可复用的更新入口或 previous 快照。复用 `infra/synclip-image/install.sh` 已有 provider flock、不可变 bundle、previous 备份、原子 config 与失败回退方式，不另建发布服务。精确候选范围为视频 `install.sh`、对应 `install.test.mjs` 和本计划；不改模型 adapter、Web、CI 或共享 Skill。
+
+拟议增量：保留原初装参数，已有安装要求 `--defer-timer`；升级在 provider FD8 下操作，不覆盖总控继承的生产 FD9。已有 v1 的固定 spool/key 路径和 renderer 迁移到 v2/synclip-receipt，默认 adminModelsEnabled=false 且无旁白；已有 v2 则保留已配置的 audio/admin。允许显式 `--config` 选用该 provider private 目录下 root 0600 的完整非秘密配置，严格验证固定挂载/Key 路径，不推断音色或管理员权限。只导入运行闭包、验证配置，绝不运行 broker 或读取 Key。
+
+切换前保存原 service/timer/config/.ready 及启用状态；移除旧 ready、原子换 config、安装匹配 unit 并 daemon-reload，defer 期间 timer 停止且 disabled，待总控完成配对应用发布后显式激活。ERR/INT/TERM 仅恢复原组件配置/状态，不杀运行任务；FD8 忙则原样退出。显式 `--confirm --rollback <candidateSHA> --defer-timer` 沿同一锁恢复 previous 配置/units，但 timer 始终 disabled、live ready 缺席；配对应用和确认 spool 兼容后才恢复原 timer 状态。previous 不覆盖、不消费，半恢复后可重试同一 rollback。所有 inbox/private/结果/付费回执保留。发布前总控须阻止新视频准入并等待执行器自然空闲；单机安装锁不能阻止 Worker 写 inbox，不能把观察时空目录或 timer inactive 当作排空证明。
+
+原 High 增量指出 v1 回退兼容 P2：v1 不能安全消费新格式或留存终态目录，任何重新激活前 inbox/private 必须无 UUID 目录，包含过期/已终态作业；非空时只恢复文件，保持 timer disabled、无 ready，绝不清理回执以满足条件。自动失败恢复仅在完整恢复成功、旧应用仍配对且满足此兼容条件时恢复原 timer；显式 rollback 始终延迟激活。上述语义已纳入最小设计，最终实现仍须复审。
+
+原 High 已对这一设计差额最终 GO，无新增设计 P1/P2；此结论不替代脚本实现、fixture 或实际发布验收。脚本与测试分别由原音频 worker／Domain worker 在两文件范围实施，主线程只维护操作说明与整合，不重复修改两个实现文件。
+
+本地实现检查点：升级／显式回退脚本候选已通过原 High 最终有界 GO，无新增 P1/P2。原初装脚本对既有安装 exit69 的 RED、转义 v1 兼容 RED 和九边界重复恢复 RED 均已保留；语义判定与不重入修复已完成。最终受影响范围 13/13（4组＋9边界）GREEN，复用 19 个未变组覆盖全部23个根组；不是一次最终全套重跑。日志与源快照比对在 `tmp/synclip-host-readonly/install-green.log`，source delta 仅 recover，当前源码与实测 snapshot 相同。禁止据本地候选直接激活生产；17:48/17:53/18:42 仅只读服务器元数据及固定镜像能力，无 Worker exec／服务写操作／模型请求。
+
+这轮仅授权只读服务器和本地候选，禁止安装/重启/新模型 POST。现有 image installer 隔离 shell fixture 复用于验证：已有 v1 升级、配置/旁白保留与显式配置、忙锁/坏闭包/不安全路径拒绝、延迟激活、失败原子恢复和可执行的 previous 回退；新增断点覆盖 config/service/daemon-reload 阶段失败及 INT/TERM、半恢复重试、FD9 保留，不重跑未变模型或 broker 套件。
+
+#### 前置检查（供总控未来发布，不在本轮执行）
+
+1. 按 [部署手册](../runbooks/deployment.md) 使用干净、已推送、精确 CI 通过的完整 SHA；同源 Gateway dist 已构建，生产 FD9 事务仍由总控持有。`HERMES_VIDEO_ENABLED` 控制 API/Worker 视频能力；受控维护窗口中停止新视频准入，等待旧 Worker 与 broker 自然排空，不能用杀进程或仅停 timer 代替。
+2. 复用已实核 renderer digest。若变更镜像，先补相应 FFmpeg 实编码证据；本次不新下载、不换镜像。CI 的真实 mux 与 Linux 权限两项仍须实际运行。
+3. 完整旁白配置只在 provider 的 `private/host-config.json` 准备，root 0600、无 symlink、无 Key 内容；包含固定 spool/Key 路径、v2/synclip-receipt、显式 audio provider/voice/speed。音色必须来自当前 Synclip 目录且支持所用语言；LTX 管理权限须另有账户证据，不能由生图成功推定或让 installer 默认开启。配置默认安全迁移并不代表旁白已启用。
+
+#### 执行步骤
+
+1. 总控在既有生产锁与维护窗口内，从 `/opt/openscience-releases/<candidateSHA>/infra/synclip-video/install.sh` 执行 `--confirm --source /opt/openscience-releases/<candidateSHA> --renderer-image sha256:4a30b091d4bdeb7dd7670a01521d30d7b32694e1f3b34977a2aa26e91669559f --config /opt/openscience-synclip-video/private/host-config.json --defer-timer`。只迁移 runtime 时可不传 `--config`，此时不会自动启用音频或 admin。不要从 `/opt/openscience/infra/` 猜源路径：实核该处无 installer。
+2. 确认 host 切换成功、timer disabled、无 live ready；保留该 bundle 的 `previous`。沿原正常应用发布流程切换匹配 Worker/Native Skill，应用失败先保持视频 timer disabled。
+3. 只有账户权限、voice、应用/host 合同与旧 spool 恢复条件均确认后，由总控显式 `systemctl enable --now openscience-synclip-video.timer`。安装器本身不调用 broker、不生成媒体。
+
+#### 回滚步骤
+
+1. 再次停止视频准入并等待 FD8 空闲；使用本次候选脚本执行 `--confirm --rollback <candidateSHA> --defer-timer`。它恢复该候选的 previous 配置/units，不消费 previous，不触碰 Key/输入/结果/回执；重复运行允许完成半恢复。
+2. 显式 rollback 后 timer 始终停止且 disabled、无 live ready。恢复匹配的旧应用；如果 previous 是 v1，inbox/private 中任何 UUID 目录都会阻止再激活，包括已终态目录。保留这些作业，由总控判断兼容恢复，不删除或重发以跨过阻断。
+3. 如果 config/service/daemon-reload 或信号中断造成部分恢复，保留现场与 previous，排除具体文件/服务错误后重试同一 rollback；恢复失败不得重新启用 timer。
+
+#### 验证命令与观察边界
+
+- 复用 `systemctl show openscience-synclip-video.service openscience-synclip-video.timer` 的指定状态/path 属性、`stat` 的 owner/mode、Worker 指定 Mounts 与 bundle source-id，核对同源完整 SHA、inbox rw/results ro 和受保护文件；不要打印 Environment、config 全文或 Key。
+- 激活后仅检查既有 `.ready` 的 provider/revision/accepting/narration 元数据及新 Worker 的对应配置。installer/心跳可用、codec 列举和合成 CI 均不证明自然人声或论文视频质量，真实成片仍沿原任务与私有审核路径单独验收。
+- 总控在现有视频 CI 的 Gateway build 之后增加 `node --test infra/synclip-video/install.test.mjs`；该 fixture 不使用真实 Docker、systemd、Key 或供应商，无需 sudo／新依赖。本地 shell 行为覆盖不能替代现有真实 codec/mux 与 POSIX 权限验收；本轮总控报告 Linux 真实 codec 用例因 FFmpeg／ffprobe 不可用失败，CI 修复由总控负责，和已实核的生产媒体镜像能力分开判断。
+
+### 2026-10-08 UI 接线新增差额（总控优先指派）
+
+UI High 发现既有 workspace.guide 未接受／保存 `researchRunDraft.output`，现有 run 查询又会把同一论文的图片与视频意图串线。沿原入口补接：明确整篇论文视频请求的 draft 仅新增可选 `output:"video"`，图片与旧草稿省略；它不是 grant 或任务启动。既有 `GET /research-objects/:id/hermes-runs?ingestionTaskId=<uuid>` 新增可选 `output=image|video`，省略按图片；视频只找显式 video，旧无 output／null settings 仍作图片。响应 `{run|null}`、actor/RO/原 source/版本/权限与 unknown/幂等保护保持，不新增端点、队列或模型链；Web 类型与消费由 UI owner 更新。
+
+主线程负责 `workspace-guide.ts` 和其既有测试，原音频 worker 负责 Domain `getExistingHermesResearchRun`／API query schema 与直接测试，Carson 仅审此增量；不碰期刊文件、共享模型或生图 Skill。Guide 已实际 RED→GREEN 21/21，Domain 意图查询 26/26，真实 API handler 23/23；包括同源双意图、actor/RO/source/profile 隔离、原版本/grant/key 不变、legacy null／无 output／显式 image、跨两页与短页、failed/unknown 不跳过、非法值及无权限拒绝。只读 `narrativeSettingsView` 补齐返回兼容，不改变保存记录或严格执行校验。Carson 对 guide 与 Domain/API 差额分别最终有界 GO，无新增 P1/P2。Domain build、Worker 源码与 API 现有类型检查、guide scoped lint 均0；Domain原20项未改行 lint 未扩修。完整日志 `tmp/video-intent-boundaries/`；当前新 UI／真实模型效果未验收，host 候选和上述验证独立保留。
+
+上述六文件后端差额独立提交 `16003486f455198518784e2034af4fde402add57`，可先由总控／UI接入；不是生产发布身份。本计划与 host 两文件另交付，既有四个视频实现提交和9914文档已由总控逐项全等集入，不再重复取回旧分支。
