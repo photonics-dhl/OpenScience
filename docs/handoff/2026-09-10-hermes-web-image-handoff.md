@@ -20,11 +20,12 @@
 ## 当前版本与观察边界
 - 2026-10-08 总控只读实核：`/opt/openscience/.release-id` 与公网 `/__release` 均为 `45a577a3a8f6bca78a063e7478fba131c5efb375`；`.rollback-id` 为 `3d6f24a5161665fded3af87111a73f6c69eca736`。两 SHA 均可在本仓解析，Worker 镜像标签匹配；Web/API/Worker 等容器 healthy。
 - 接管时 canonical HEAD 为 `748e33a42fe9619365ee8ad5f9e28ead2c1e3594`，其中指南 Hermes 专属栏调整尚未上线；本轮文档提交身份以 Git HEAD 为准。旧 e4ed2457、52f6c1a3、4ed53b71 等是历史发布，不是当前线上锚点。
-- 本轮没有部署、迁移、模型请求、真实业务写入或新增功能验收；容器健康与版本一致仅证明运行身份。三个开发 session 的既有操作与付费任务继续按各自授权和证据单独记录。
+- 2026-10-08 总控已修复模型配置漂移：API/Worker 的全局 Gateway 原为 MiniMax-M3.1-Flash-Preview，而 Native 绑定 M3，session.ts 在外呼前确定性拒绝。独立 High GO 后仅恢复服务器实际存在的 .env.prod 中 MINIMAX_MODEL=M3，按原 FD9/私有备份/空闲复核流程同版本重建 Worker、API、Web；Native 绑定/目录、镜像/挂载及上述 release/rollback/公网身份不变。apply exit0、status=applied/stage=verified，操作前/关入口后/完成后 AgentTask、ResearchRun、JournalJob 均0；零模型请求、无迁移。私有备份/receipt：`/opt/openscience/observations/model-m3-restore-20261008T034213Z`；本机证据 `tmp/session-coordination-20261008/`，首次预备失败也保留。不存在的服务器 .env 未创建，Docker mounts 顺序变化按内容排序比较，未放宽身份检查。
+- 生图已获通知继续其既有授权、已准备且查重的唯一原生私有计划；配置修复不重放旧失败，也不证明真实模型效果。M3.1 像素审阅如需启用须独立选型验证，不能再通过改变全局主模型破坏 Native M3 绑定。
 
 ## 未完成与下一动作
 - 生图：新 editorial 草稿同时要求 S(z) 曲线与旧 y–z 椭圆包络，session 正核对坐标、FWHM 与来源；保留已有全文提取。科学编码有冲突时须由原生 Hermes 同源核对，不能把仅改艺术风格当作科学修订已完成。session 已定位修订草稿藏于折叠区、多个旧方案同时带生图按钮，正改为默认最新待审方案、显式选择旧方案、按钮绑定当前选择；候选及真实入口验收未完成，“缓存导致”仍未证实。
-- 视频：session 已发现整份请求 256KB 上限与约 500KB 首帧 PNG 不匹配，正修传输边界并复核审阅恢复；报告 broker 旧任务过期、未知付费结果与长任务存活修复已首轮验证，改动限 adapter/spool/broker 及测试，新部署和付费调用未开始。第三幕须纠正二维横向角谱被画成含实数 kz 轴截面，再推进镜头/成片/音轨；候选仍待集成审查，单次正常 JSON 不证明长期稳定。
+- 视频候选 `828f82ce110d8b169a02cc049221637925c1a077` 修正官方接口/首帧来源/任务恢复，`ec305b8510d33e4ef4cbcf34448ea98505af87db` 修检查点容错与恢复保留诊断，专属树干净、尚未集成或部署。owner 报告 LTX 须管理员端点/权限、duration_seconds 与 HTTP(S) 首帧，拟复用受控原图回执；10接口/13执行器/72来源测试及类型检查通过，14个旧展示fixture失败同基线，最终High证据和Linux验证待总控收取。已实看首帧水印与 z/k⊥ 科学表达问题，不能沿旧“已审批”直接出视频；第三幕、剩余镜头/成片/音轨继续验收，77音色目录成功不等于自然度认可。
 - UI：用户要求提升整站审美，不能收缩成 Hermes 位置修补。依 [产品 UI 计划](../plans/2026-10-07-product-ui-quality-plan.md) 与现有审美 Skill 逐页改进；代码检查、截图与用户审美认可分别记录。
 - 生图 session 本轮报告浏览器工具因无法可靠识别 URL 停止，未继续点击；这不妨碍代码/来源核对，但真实视觉与站内入口仍未验收。不得绕过浏览器策略，也不按此错误推断产品故障。
 - RO9067 第四幕 `28ab61b0-7931-41d3-8200-2d63c1f986ad` 的供应商 POST 终态未知且无 receipt；需可核实的关联/幂等查询合同才能恢复，不为补齐 4/4 重发。分镜后是否强制用户审核再生图仍待产品策略确认；公开确认边界不变。
