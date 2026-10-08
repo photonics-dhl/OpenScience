@@ -44,11 +44,13 @@ const interestContext = buildInterestContext({
 
 const CORE_FIELDS = ['problem', 'insight', 'method', 'evidence', 'results', 'limitations', 'reproducibility'] as const;
 
-function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: string[]; ingestionTaskIds?: string[] } = {}) {
+function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: string[]; ingestionTaskIds?: string[]; sessionResearchObjectId?: string } = {}) {
   const userId = overrides.taskUserId ?? 'user-1';
   return {
     prisma: {
-      agentTask: { findUnique: vi.fn().mockResolvedValue({ id: 'guide-1', kind: 'workspace.guide', session: { userId } }),
+      agentTask: { findUnique: vi.fn().mockResolvedValue({ id: 'guide-1', kind: 'workspace.guide', session: {
+        userId, ...(overrides.sessionResearchObjectId ? { researchObjectId: overrides.sessionResearchObjectId } : {}),
+      } }),
         findMany: vi.fn().mockResolvedValue([]) },
       ingestionTask: { findMany: vi.fn().mockResolvedValue((overrides.ingestionTaskIds ?? ['task-1']).map((id) => ({ id, state: 'needs_review', batch: { userId, researchObjectId: 'ro-1' } }))) },
       researchObject: { findMany: vi.fn().mockResolvedValue((overrides.researchObjectIds ?? ['ro-1']).map((id) => ({
@@ -62,6 +64,70 @@ function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: strin
 }
 
 describe('workspace.guide handler', () => {
+  const runSource = '30000000-0000-4000-8000-000000000001';
+  const runGoal = '请理解整篇论文，制作有自然旁白的讲解视频。';
+  const runPayload = { ...payload, goal: runGoal, route: 'research-object-edit', context: {
+    ...payload.context, tasks: [{ id: runSource, researchObjectId: 'ro-1', state: 'needs_review' }],
+    researchRunSource: { ingestionTaskId: runSource },
+  } };
+  const runDraft = { researchObjectId: 'ro-1', ingestionTaskId: runSource, locale: 'zh', style: 'auto', instruction: runGoal };
+  const runResult = { summary: '已准备制作参数。', nextSteps: [], needsMoreInformation: false, researchRunDraft: runDraft };
+  function runGateway(answer: unknown) {
+    return { completeStructured: vi.fn().mockImplementation((guard: (value: unknown) => boolean) => {
+      if (!guard(answer)) throw new Error('test guide response rejected by actual boundary');
+      return answer;
+    }) } as unknown as AiGateway;
+  }
+
+  it.each(['zh', 'en'] as const)('preserves the explicit video production intent through the %s guide boundary and normalization', async locale => {
+    const goal = locale === 'zh' ? runGoal : 'Understand this paper and make a narrated explanatory video.';
+    const answer = { ...runResult, researchRunDraft: { ...runDraft, locale, instruction: goal, output: 'video' } };
+    const gateway = runGateway(answer);
+    const deps = trustedDeps({ sessionResearchObjectId: 'ro-1', ingestionTaskIds: [runSource] });
+    const actual = await workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload: { ...runPayload, locale, goal } });
+    expect(actual).toEqual(answer);
+    expect(gateway.completeStructured).toHaveBeenCalledOnce();
+    const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Array<{ role: string; content: string }>;
+    expect(JSON.parse(messages.find(message => message.role === 'user')!.content).context.researchRunContext).toMatchObject({
+      researchObjectId: 'ro-1', ingestionTaskId: runSource, profile: 'visual-narrative-v1', maxAgentTasks: 9,
+    });
+  });
+
+  it('keeps the legacy illustration draft without adding an output or changing the initial grant', async () => {
+    const goal = '请理解整篇论文，制作六维内容和完整图解。';
+    const answer = { ...runResult, researchRunDraft: { ...runDraft, instruction: goal } };
+    const gateway = runGateway(answer);
+    const deps = trustedDeps({ sessionResearchObjectId: 'ro-1', ingestionTaskIds: [runSource] });
+    const actual = await workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload: { ...runPayload, goal } });
+    expect(actual).toEqual(answer);
+    expect(Object.hasOwn(actual.researchRunDraft!, 'output')).toBe(false);
+  });
+
+  it('does not guess the video source when the existing source selector must choose between PDFs', async () => {
+    const secondSource = '30000000-0000-4000-8000-000000000002';
+    const { ingestionTaskId: _selected, ...withoutSource } = runDraft; void _selected;
+    const answer = { ...runResult, researchRunDraft: { ...withoutSource, output: 'video' } };
+    const deps = trustedDeps({ sessionResearchObjectId: 'ro-1', ingestionTaskIds: [runSource, secondSource] });
+    const actual = await workspaceGuideHandler(runGateway(answer), deps as never, { id: 'guide-1', payload: {
+      ...runPayload, context: { researchObjects: payload.context.researchObjects,
+        tasks: [runSource, secondSource].map(id => ({ id, researchObjectId: 'ro-1', state: 'needs_review' })) },
+    } });
+    expect(actual).toEqual(answer);
+    expect(Object.hasOwn(actual.researchRunDraft!, 'ingestionTaskId')).toBe(false);
+  });
+
+  it.each(['image', 'audio', null, 1])('rejects unsupported explicit research output %s without changing the documented draft shape', output => {
+    expect(workspaceGuideResultGuard({ ...runResult, researchRunDraft: { ...runDraft, output } })).toBe(false);
+  });
+
+  it('rejects a video draft that changes the authorized paper or original instruction', async () => {
+    for (const altered of [{ researchObjectId: 'other-ro' }, { ingestionTaskId: 'other-source' }, { instruction: 'A different paid task' }]) {
+      const deps = trustedDeps({ sessionResearchObjectId: 'ro-1', ingestionTaskIds: [runSource] });
+      await expect(workspaceGuideHandler(runGateway({ ...runResult, researchRunDraft: { ...runDraft, output: 'video', ...altered } }),
+        deps as never, { id: 'guide-1', payload: runPayload })).rejects.toThrow('actual boundary');
+    }
+  });
+
   it.each(['sdf-method', 'sdf-evidence'])('passes selected passage %s through to the model', async target => {
     const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
     await workspaceGuideHandler(gateway, trustedDeps() as never, { id: 'guide-1', payload: { ...payload, route: 'research-object-edit', target, goal: 'Explain this passage' } });

@@ -183,6 +183,15 @@ export async function createHermesArtStyleContinuation(...args: Parameters<typeo
   return { run: toView(result.run), taskIds: result.taskIds };
 }
 
+function narrativeSettingsView(value: unknown): HermesNarrativeSettings | null {
+  if (value === null) return null;
+  const settings = jsonRecord(value);
+  if (settings.output !== 'image') return narrativeSettings(value);
+  const legacy = { ...settings };
+  delete legacy.output;
+  return narrativeSettings(legacy);
+}
+
 function toView(run: RunRow, recovery?: { chargeableAttempts: number }): HermesResearchRunView {
   return {
     id: run.id,
@@ -191,7 +200,7 @@ function toView(run: RunRow, recovery?: { chargeableAttempts: number }): HermesR
     versionId: run.versionId,
     profile: run.profile as GenerationProfile | null,
     maxAgentTasks: run.maxAgentTasks,
-    generationSettings: run.profile === VISUAL_NARRATIVE_PROFILE ? narrativeSettings(run.generationSettings) : null,
+    generationSettings: run.profile === VISUAL_NARRATIVE_PROFILE ? narrativeSettingsView(run.generationSettings) : null,
     sourceClaimIds: run.sourceClaimIds,
     status: run.status as HermesResearchRunStatus,
     version: run.version,
@@ -391,17 +400,36 @@ export async function createHermesResearchRun(
 
 export async function getExistingHermesResearchRun(
   deps: HermesResearchRunDeps,
-  input: { actorId: string; researchObjectId: string; ingestionTaskId: string },
+  input: { actorId: string; researchObjectId: string; ingestionTaskId: string; output?: 'image' | 'video' },
 ): Promise<HermesResearchRunView | null> {
+  if (input.output !== undefined && input.output !== 'image' && input.output !== 'video')
+    throw new HermesResearchRunError('VALIDATION_ERROR', 'Output must be image or video');
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
   if (!ro) throw new HermesResearchRunError('NOT_FOUND', 'Research object not found');
   await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Research object not found', { cause }); });
-  const run = await deps.prisma.hermesResearchRun.findFirst({ where: {
-    actorId: input.actorId, researchObjectId: input.researchObjectId, profile: VISUAL_NARRATIVE_PROFILE,
-    steps: { some: { stage: 'source_ingestion', ingestionTaskId: input.ingestionTaskId } },
-  }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
-  return run ? getHermesResearchRun(deps, { ...input, runId: run.id }) : null;
+  const output = input.output ?? 'image';
+  let cursor: { id: string } | undefined;
+  // Match actual JSON values so missing paths and legacy null settings do not
+  // depend on database JSON NULL predicate semantics. The page size is not a cap.
+  for (;;) {
+    const candidates = await deps.prisma.hermesResearchRun.findMany({ where: {
+      actorId: input.actorId, researchObjectId: input.researchObjectId, profile: VISUAL_NARRATIVE_PROFILE,
+      steps: { some: { stage: 'source_ingestion', ingestionTaskId: input.ingestionTaskId } },
+    }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, generationSettings: true },
+    take: 25, ...(cursor ? { cursor, skip: 1 } : {}) });
+    if (!candidates.length) return null;
+    const run = candidates.find(candidate => {
+      const settings = candidate.generationSettings;
+      if (settings === null) return output === 'image';
+      if (typeof settings !== 'object' || Array.isArray(settings)) return false;
+      const savedOutput = jsonRecord(settings).output;
+      return output === 'video' ? savedOutput === 'video' : savedOutput === undefined || savedOutput === 'image';
+    });
+    if (run) return getHermesResearchRun(deps, { ...input, runId: run.id });
+    if (candidates.length < 25) return null;
+    cursor = { id: candidates[candidates.length - 1]!.id };
+  }
 }
 
 export async function getHermesResearchRun(

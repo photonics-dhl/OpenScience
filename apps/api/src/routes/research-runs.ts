@@ -10,7 +10,7 @@ import { requireCurrentUser } from './session-guard';
 
 const paramsSchema = z.object({ id: z.string().uuid() }).strict();
 const readParamsSchema = z.object({ id: z.string().uuid(), runId: z.string().uuid() }).strict();
-const existingRunQuerySchema = z.object({ ingestionTaskId: z.string().uuid() }).strict();
+const existingRunQuerySchema = z.object({ ingestionTaskId: z.string().uuid(), output: z.enum(['image', 'video']).optional() }).strict();
 const createSchema = z.object({ ingestionTaskIds: z.array(z.string().uuid()).min(1).max(20),
   generation: z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(9),
     locale: z.enum(['zh', 'en']), style: z.string().trim().min(1).max(100), instruction: z.string().trim().min(1).max(1000),
@@ -75,8 +75,8 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<Herme
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = paramsSchema.parse(req.params);
-    const { ingestionTaskId } = existingRunQuerySchema.parse(req.query);
-    return reply.send({ run: await getExistingHermesResearchRun(deps, { actorId: user.userId, researchObjectId: id, ingestionTaskId }) });
+    const { ingestionTaskId, output } = existingRunQuerySchema.parse(req.query);
+    return reply.send({ run: await getExistingHermesResearchRun(deps, { actorId: user.userId, researchObjectId: id, ingestionTaskId, output }) });
   });
 
   app.post('/research-objects/:id/hermes-runs', async (req, reply) => {
