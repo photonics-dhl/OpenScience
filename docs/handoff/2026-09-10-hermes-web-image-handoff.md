@@ -11,9 +11,9 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责三线写权/依赖/集成/发布与CURRENT/progress/index，各owner保留原任务和专属计划。线程心跳`openscience`已ACTIVE，每10分钟检查三线；完成、idle或受阻时及时补派有用且已授权的独立下一步，状态不变不通知，不用无关检查充数。
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 独占hermes-dashboard.spec.ts；消费dad并验生命周期，已过业务证据复用 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/hermes-dashboard-ci` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | spec55eb待限定审查；7完整代表过，5失败case保留，待精确CSS/生命周期差额 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原trace取证完成，缺脚本正文；无可安全修复差额，f90待CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/journal-refinement-option-ci` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | Stage冻结；32删除有效enum候选未收，限恢复原断言/可追加fresh draw，不扩fixture整理 | `.worktrees/research-product-craft`；原分支保留，新基线按canonical |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 6ab→0baf已收；仅globals reduced规则删opacity一行，4新行为交原High，其他源暂冻结 | `.worktrees/research-product-craft`，`codex/ui-wanko-capture-20261009` |
 - 写权按当前三线文件归属互斥；root统一共享CI、CURRENT/progress/index与合并。未知付费保护不取消独立实现任务；不并行发布/资产写。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
 
@@ -31,7 +31,7 @@
 - 视频主候选及host3603→92bf已集入/High闭合，原验证保留、Linux host32/32；renderer已有codec，未切生产。[视频合同](../plans/2026-09-05-hermes-presentation-assets-plan.md)14fd→c07c：LTX有原生声/多镜头，分段不强制外置TTS，当前换轨会替代原声/音乐/环境声。无合格原生实片，暂不改模式；账户权限/音色、坏镜头与实际音画待验。
 - 视频收费守卫b705→b328、Web helper/组件及phase af4已收且High闭合；legacy无output原key closed hold，已知run先读，prepared B按读run→fresh capability→原key/body POST，保留paid A/B。期刊语义合并与后端CI已通过，完整测试证据保留原tmp/PR。API账户层级不能证明服务端Key的LTX访问能力，不开付费探测。
 - 已收reader/CSS/版式126757/c962；原High、两尺寸Edge2PASS及24单测/TC/build复用，未带bc996。586指南组通过；artifact11579945240七PNG/四JSON已由UI全看：full角色/中文可见，en320按钮两行；zh375 reduced为可见静态回退（starting/lastDraw0），不称WebGL画帧。对话迁移单角色、桌面/手机审批页无遮挡；旧空槽描述过时。403捕获High GO不代替生命周期审查；版本阅读PNG仍缺。
-- be426期刊artifact11574126501闭合摘要遮挡/六首帧；目录15单测/TC0，新图待。retry892→dad已收/High/TC/lint过，生图4ac全等消费后真loss/model失败恢复2/2过14.8s，保留自动一次/手动新canvas/单实例/偏好。其它代表同task/同key2过；reload与旧approval身份2败，后者应同canvas。case307按真实anchor抑自动speech，须先证runtime正常，保留几何保障。root外推dialog名称已撤回；UI32因误删有效enum未收，真实producer在lib/hermes/wanko-live2d-renderer.ts:244，不以组件grep代全链。reload缺script正文，原case待补证。证据root tmp/session-coordination-20261008、生图tmp/hermes-dashboard-ci/retry-tests.log、视频tmp/hermes-reload-trace-review/receipt.json。
+- retry892→dad已收/High/TC/lint过，真loss/model恢复2/2过14.8s。55eb测试候选完整PASS仅7个：business2/retry2/approval同canvas/anchored不自动speech/真SPA卸载；9PASS与a591已撤回，Talk关闭原opener断言保留。当前5失败case涉及Enable同lost canvas、offscreen零首帧、reduced nudge漏出、Talk回焦两例，交UI原High裁定；nudge原trace末帧已实看黑泡，已授单行CSS纠正。root旧dialog外推/32删enum均撤回，6ab→0baf只追加fresh draw且保留lib:244有效enum。reload原case缺script字节待补证；证据在生图tmp/hermes-dashboard-ci、视频tmp/hermes-reload-trace-review/receipt.json及root原tmp。55eb另由总控原High只审新增测试守卫/诊断，不重审4行为。
 - Task4长表格57c→aa0已收/High GO，Search29/Worker25已CI通过；行窗口失败保lexical。恢复f427→79050保留原retry/双预算/CAS/fence，CLI03b3→3a3faa显式UUID、scope current take2、唯一后严格owner。10-08 21:29只读：当前96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27有69 active/0 vector，6368来源/确认/manifest/模型/owner/budgets当时满足；旧049c/be071已非current、不得apply。真实BGE未跑，许可与freshread仍需分别核；原回执在生图tmp/source-index-token-limit-recovery/。
 - Fig.2五项属e77已发布v8/OSR-2026-000023-v2的excluded sealed history；d508为68B、929缺行、77b对象缺失，后两项不扩scope。方案High GO，用户已允许exact5软回收并接受成员直链404/初始30天条件，授权持续有效，禁purge/补源/改封存。10-08 23:03:59 fresh五项live/42fe稳定；生图缺认证、UI正常管理入口缺精确ID，双方0写释放，无writer。行标识165已集入ab3但未发布，正常发布后fresh核对再按原授权操作。截图UI tmp/ui-art-20261008/37-fig2-content-manager-identity-gap.png，原方案/zero-write在生图tmp/fig2-cleanup/；实际回收/GET/HEAD/entry.lastError均待。
 - 生图浏览器getState及唯一reset后的getState均为request-header policy错误，已停循环；不绕过、不据此判产品故障或宣称实点。UI先前预览启动也曾被自动审批拒绝；按各自真实观察范围记录。
@@ -58,7 +58,7 @@
 - 旧 ChatGPT 浏览器链路、timer 与登录 profile 已按用户授权停用/清理；历史 spool/媒体/备份/回执保留，ScanSci Xvfb 保留。独立债务包括第14页 BGE dense 超限、旧 v11 的58 chunks、科学返工/经验/几何与三篇整体验收，局部修复不取消目标。
 - 运维目标保持现 ECS 先做功能/展示，集群和异机存储后续；对象定时、完整隔离恢复、独立告警及测试站未完成。恢复候选仍 NO-GO，crypto 保持用户暂停，不新 run/重试/合成 key/读旧私钥或 DPAPI。证据 `tmp/ops-readiness-20261003/crypto-phase-checkpoint.json` 与既有 observations 保留；只清理已确认归属且不再使用的生成物。
 - 公司正式上线/年度运维交接、期刊真实试用继续；[原期刊任务](2026-09-15-journal-onboarding-handoff.md)与[10-08交付](2026-10-08-journal-workbench-handoff.md)分工保留。期刊页面/权限验收不等于真实PDF→Hermes科学质量通过；10-06证据只作历史，不扩大权限/版权/额度。
-- 自有生成物清理审批阻断仍保留：旧离线目录/Junction清理未执行；新Next测试cache已核无进程/3018监听，删除也在启动前被自动审批以blocked by policy拒绝，0删除、未绕过。生图`tmp/version-evidence-reader/next-cache-cleanup-{receipt,blocked}.json`留证，原依赖/截图/日志均保留。
+- 清理阻断保留：旧离线目录/Junction未删；Next cache当时无进程/3018监听，删除仍在启动前被自动审批以blocked by policy拒绝，0删除/未绕过。该cache现被既有3018验证路径复用，不能按旧无进程快照清理；生图tmp/version-evidence-reader/next-cache-cleanup-{receipt,blocked}.json及原依赖/日志/图保留。
 
 ## Read first / 历史
 - 启动定向读本页、`node scripts/read-current-management-context.mjs`、Git 与必要只读运行事实，再查能力台账对应入口；progress/index 只定位/摘要，不维护第二份动态任务表。
