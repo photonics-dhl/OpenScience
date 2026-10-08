@@ -1391,8 +1391,24 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   // Compact mode still belongs to a page-owned anchor when one is usable.
   // Only a compact surface without an anchor should fall back to the viewport corner.
   const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock));
-  const stageCenterX = anchored && anchorRect ? anchorRect.left + anchorRect.width / 2 : position.x;
-  const stageCenterY = anchored && anchorRect ? anchorRect.top + anchorRect.height / 2 : position.y;
+  const detachedPosition = (() => {
+    if (anchored || compact || viewportSize.width <= 0 || viewportSize.height <= 0) return position;
+    const half = stageSize / 2;
+    const minX = viewportSize.left + half + 24;
+    const maxX = viewportSize.right - half - 24;
+    const minY = viewportSize.top + half + 64;
+    const maxY = viewportSize.bottom - half - 16;
+    const safeMinX = Math.min(minX, maxX);
+    const safeMaxX = Math.max(minX, maxX);
+    const safeMinY = Math.min(minY, maxY);
+    const safeMaxY = Math.max(minY, maxY);
+    return {
+      x: Math.min(safeMaxX, Math.max(safeMinX, position.x)),
+      y: Math.min(safeMaxY, Math.max(safeMinY, position.y)),
+    };
+  })();
+  const stageCenterX = anchored && anchorRect ? anchorRect.left + anchorRect.width / 2 : detachedPosition.x;
+  const stageCenterY = anchored && anchorRect ? anchorRect.top + anchorRect.height / 2 : detachedPosition.y;
   const fallbackBubbleHorizontal = viewportSize.width > 0 && stageCenterX < (viewportSize.left + viewportSize.right) / 2 ? 'right' : 'left';
   const fallbackBubbleVertical = viewportSize.height > 0 && stageCenterY < (viewportSize.top + viewportSize.bottom) / 2 ? 'below' : 'above';
   const bubbleHorizontal = guideTarget

@@ -16,6 +16,7 @@ import "./globals.css";
 import "./product-polish.css";
 import "./account-journal-craft.css";
 import "./hermes-companion.css";
+import "./product-art-direction.css";
 import "katex/dist/katex.min.css";
 
 // next/font downloads at image-build time and serves the files from our own origin.

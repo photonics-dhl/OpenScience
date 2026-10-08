@@ -1,0 +1,8 @@
+{
+  "skill_name": "openscience-aesthetic-design",
+  "evals": [
+    {"id":1,"prompt":"OpenScience 指南页像文字堆砌，要求艺术感、清晰叙事和不掠夺阅读焦点的动效。先研究成熟产品官方页面，再实现可在真实浏览器验收的方向。","expected_output":"页面 brief、参考原则转译、视觉锚点、桌面/窄屏验收与 Hermes/reduced-motion 说明。","files":[]},
+    {"id":2,"prompt":"OpenScience 全站入口和 Hermes 尺寸不一致。请审查公开页、研究桌面、工作区和账户页，提出统一但不模板化的页面系统。","expected_output":"页面家族构图规则、Hermes 一致性、真实导航路径和视口验收，不把页面改成同一张卡片网格。","files":[]},
+    {"id":3,"prompt":"用户说当前 UI 是 toy，要求用 Figma、已有 skills 和成熟网页研究打磨所有页面。工具受限时要如实标记并给出质量台账。","expected_output":"工具证据、Figma 状态、成熟产品研究、能力台账，以及候选/部署/浏览器观察/用户接受的区别。","files":[]}
+  ]
+}
