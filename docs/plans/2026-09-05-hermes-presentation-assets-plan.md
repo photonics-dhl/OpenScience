@@ -200,7 +200,7 @@ TTS 先于首次视频 POST 做实际时长检查；过长不能重新打开已 
 
 最终增量 High：Carson 闭合完整父身份 P1、逐帧资源及原 Stage A 回放 P2；Avicenna 闭合完整 PCM 解码、实际音视频时间线与 stdout 尾部样本 P2。Worker 定向 67/67、Domain 父项/投影 175/175、run-owner 57/57、API 7/7；Domain/Worker/API TC、定向 lint、docs:lint/audit:docs-sync、脚本语法与 diff 检查通过。扩大到既有大型文件的 lint 仍有 43 项未改行历史错误，未扩入本次修复，不能称全仓 lint 通过。
 
-音轨 broker 当前离线 39/41 通过，另两项因本机无可用 ffmpeg/ffprobe 和非 POSIX 环境跳过；完整 PCM 解码按 stdout 全部排空及 child close 后的样本数计时，不另落 PCM 文件；最终分别核对真实帧时间线上的视频/AAC 起点、跨度与缺口。实际 codec/mux 及 Linux 权限仍须由总控在既有 CI 补验，不冒称音画合格。执行仅 start-reference + scene-artwork + external-narration + 无字幕；sidecar/burn-in/native audio/start-end 在付费前拒绝，音色来自当前目录且须支持旁白语言。未知收费与旧任务/回执继续保留。
+上一候选的本机音轨 broker 观察为39通过、2项因无可用 ffmpeg/ffprobe 和非 POSIX 环境跳过；完整 PCM 解码按 stdout 全部排空及 child close 后的样本数计时，不另落 PCM 文件；最终分别核对真实帧时间线上的视频/AAC 起点、跨度与缺口。2026-10-08 总控随后确认 d3fa 视频 push CI 全success，broker/reference 114/114、0skip，真实 codec/mux 与 worker-readable 两项实际执行；本轮复用，不重跑，也不冒称真实生成音画已合格。执行仍仅 start-reference + scene-artwork + external-narration + 无字幕；sidecar/burn-in/native audio/start-end 在付费前拒绝，音色来自当前目录且须支持旁白语言。未知收费与旧任务/回执继续保留。
 
 共享 Skill 依赖：`createNativeIllustrationMaterializer.reconstruct/finish`、`replayNativeVideoPlan`、handler `readVerifiedVideoPlan`、Domain `requireNativeVideoSceneImage` 校验真实完整回执/逐帧版本资源；当前候选按 Skill20，视频不开放 v19 fallback，原 Stage A 三字段回执按原 context 恢复。20→21 必须先保留 v20/v19 paid 的 science/plan/review/render 消费语义；不能只检查 pixel checkpoint。详细证据在忽略目录 `tmp/synclip-video-contract/`；Web、CI、CURRENT/progress/index 和生产由总控定序，本会话不改共享 Skill、`gateway.ts`、`provider.ts` 或 Worker `index.ts`。
 
@@ -248,7 +248,7 @@ TTS 先于首次视频 POST 做实际时长检查；过长不能重新打开已 
 
 - 复用 `systemctl show openscience-synclip-video.service openscience-synclip-video.timer` 的指定状态/path 属性、`stat` 的 owner/mode、Worker 指定 Mounts 与 bundle source-id，核对同源完整 SHA、inbox rw/results ro 和受保护文件；不要打印 Environment、config 全文或 Key。
 - 激活后仅检查既有 `.ready` 的 provider/revision/accepting/narration 元数据及新 Worker 的对应配置。installer/心跳可用、codec 列举和合成 CI 均不证明自然人声或论文视频质量，真实成片仍沿原任务与私有审核路径单独验收。
-- 总控在现有视频 CI 的 Gateway build 之后增加 `node --test infra/synclip-video/install.test.mjs`；该 fixture 不使用真实 Docker、systemd、Key 或供应商，无需 sudo／新依赖。本地 shell 行为覆盖不能替代现有真实 codec/mux 与 POSIX 权限验收；本轮总控报告 Linux 真实 codec 用例因 FFmpeg／ffprobe 不可用失败，CI 修复由总控负责，和已实核的生产媒体镜像能力分开判断。
+- 总控在现有视频 CI 的 Gateway build 之后增加 `node --test infra/synclip-video/install.test.mjs`；该 fixture 不使用真实 Docker、systemd、Key 或供应商，无需 sudo／新依赖。本地 shell 行为覆盖和真实 codec/mux／POSIX 权限验收分别判断；先前 Linux 缺 FFmpeg／ffprobe 的失败已由总控修复，d3fa CI 为114pass/0fail/0skip，无须重跑本机套件。
 
 ### 2026-10-08 UI 接线新增差额（总控优先指派）
 
@@ -257,3 +257,29 @@ UI High 发现既有 workspace.guide 未接受／保存 `researchRunDraft.output
 主线程负责 `workspace-guide.ts` 和其既有测试，原音频 worker 负责 Domain `getExistingHermesResearchRun`／API query schema 与直接测试，Carson 仅审此增量；不碰期刊文件、共享模型或生图 Skill。Guide 已实际 RED→GREEN 21/21，Domain 意图查询 26/26，真实 API handler 23/23；包括同源双意图、actor/RO/source/profile 隔离、原版本/grant/key 不变、legacy null／无 output／显式 image、跨两页与短页、failed/unknown 不跳过、非法值及无权限拒绝。只读 `narrativeSettingsView` 补齐返回兼容，不改变保存记录或严格执行校验。Carson 对 guide 与 Domain/API 差额分别最终有界 GO，无新增 P1/P2。Domain build、Worker 源码与 API 现有类型检查、guide scoped lint 均0；Domain原20项未改行 lint 未扩修。完整日志 `tmp/video-intent-boundaries/`；当前新 UI／真实模型效果未验收，host 候选和上述验证独立保留。
 
 上述六文件后端差额独立提交 `16003486f455198518784e2034af4fde402add57`，可先由总控／UI接入；不是生产发布身份。本计划与 host 两文件另交付，既有四个视频实现提交和9914文档已由总控逐项全等集入，不再重复取回旧分支。
+
+2026-10-08 总控后续确认：后端差额与 host `3603a426` 分别全等集入 `68edf1cf`／`92bfaf0c`，已推送代码 `0b71ef9f09e64747e6cb66a4ca34381d4c331d2c` 的 push／PR 六项媒体、视频和期刊 CI 全成功。Linux 实际执行 guide21、intent-query26、API23、host fixture32（23个顶层组含子项）及 broker/reference114，均0skip，真实 codec 与权限用例已运行。本轮复用总控证据，不重新验 CI；尚未部署该候选或调用供应商，不能据此验收真实音画质量。
+
+### 2026-10-08 LTX 原生声音／完整成片合同核实
+
+本轮只读官方公开文档与既有源码／回执，不发付费 POST、不读取 Key、不安装或重启。匿名 GET 已取得 Synclip 当前 Admin／Audio 文档 HTML及其公开文档组件、i18n；静态解析不执行下载的脚本。原始来源和字段摘录在 `tmp/synclip-contract-audit/{docs-fetch,api-contract-extract,api-cards}.json`。网页工具无法读 dev 页面时的错误不解释为供应商 API 故障；猜测的 `/dev/docs/tasks` 页面404也不是 `/v1/tasks/:id` 调用结果。
+
+- **原生能力确实存在。** [Synclip LTX 2.5介绍](https://synclip.ai/blog/ltx-2-5-ai-video-generator-synclip)宣称联合音视频与原生多镜头，且明确模式／套餐影响可用控制。[LTX 官方提示指南](https://docs.ltx.io/open-source-model/usage-guides/prompting-guide)支持用引号给出台词，并指定语言、口音、切镜和声音连续性。不能把现有 external-only 实现说成 LTX 只会生成无声单镜头，也不能仅因没有独立台词字段就断言 prompt 不能产生旁白。
+- **Synclip 已公开的可调用合同有边界。** [当前 Admin API](https://synclip.ai/dev/docs/video-admin)把 `ltx23/ltx23fast` 标为 LTX 2.5；LTX 时长仅5/10/15秒，`audio_urls/video_urls` 是 Seedance 多模态输入。轮询示例只给 `output.type=video`、视频URL和缩略图，没有音轨存在、逐字转录或词级时间戳保证；有声与编码格式仍须看实际返回文件。[上游 LTX API](https://docs.ltx.io/models/ltx-2-5)另有 audio-to-video／自动时长等能力，不能直接套进 Synclip 包装接口。其 native multi-shot 是一次短片内多次切镜，不等于当前 API 一次返回我们的24–90秒论文成片。
+- **external-narration 的依据是可控性，不是原生音频不存在。** 分段／总时长和旁白来源是两个独立选择：15秒上限解释为什么长片要拼接，不能证明旁白必须外置。当前方案可把同一份已审 `scene.narration`、目录中的 voice 和 speed 单独绑定回执，先测实际声音时长，再付费生成对应镜头，便于跨片段保持同一声音和独立修订。它没有证明实际音频逐字正确，也没有证明声线更自然；仍须听验专名、数字／单位、漏读与表达。现有对齐是按幕和实际流时间线，不是逐词与动作的语义同步。
+- **明确哪些步骤可以省。** 若每段原生结果已满足该段已审台词、声音偏好与科学内容，则 `prepareAudio`／单独 TTS 时长解码和 `muxSynclipNarration` 的替换音轨可省；多段原生音视频仍能保留声音后拼成24–90秒片，只有单请求已覆盖整片时才可再省 concat。符合交付编码／尺寸／帧率的片段可评估视频流直接复制，避免每幕都缩放重编码。当前没有这种合格 LTX 实片回执，暂不删除已审处理或增加模式；下载完整性、真实音画审阅与来源绑定仍需保留。本地 FFmpeg 是媒体检查与编辑，不是再次运行 LTX 扩散模型；媒体解码、视频重编码与云模型生成也不是同一步。
+- **已知实现取舍。** `compileShotPrompt` 明确要求旁白外置；`requireSupportedPlan`拒绝native模式，这是项目实现限制。`muxSynclipNarration` 使用 `-map 0:v:0 -map 1:a:0`，原生人声、氛围声和音乐均被独立TTS取代；当前不能宣称保留了供应商的完整音效设计。将来若保留或混合原生轨道，须先确认不会引入重复人声或错误叙述，本轮不改该已审实现。
+
+| 字段／证明 | 最近已有证据 | 具体未决项 |
+|---|---|---|
+| `adminModelsEnabled`／账户 Admin 能力 | 18:42 host 元数据为false；Key只核存在与0600。成功图片不证明视频Admin权限 | 分别核实账户实际 entitlement 和有权限的显式启用；不把false改true当验证 |
+| `audio.provider` | 最近实核audio整个字段缺失；已审架构固定Synclip | 后续保护配置中显式填写，不新增供应商／TTS服务 |
+| `audio.voice`／语种／试听 | [Audio API](https://synclip.ai/dev/docs/audio)要求有效 voices ID，提供 languages／preview_url；文档样例不是本账户目录 | 获取当前账户有效ID与所需zh/en支持并实际试听；本轮未选择声线偏好 |
+| `audio.speed` | 最近配置缺失；文档描述正倍率，样例用数值 | 明确实际采用值并听验；参数表把type写string、各语言示例用number，现adapter沿数值示例，尚非真实接受证据 |
+| 原生 LTX 声轨／旁白成片 | 已知321b任务阻断于分镜、无Synclip POST；H3 hook原片属于另一供应商 | 没有可证明本账户LTX音轨、准确旁白或整篇成片的真实回执，不以模型宣传或codec CI替代 |
+
+此表为当前 external 实现的未决配置；若后续批准原生旁白路线，独立 TTS 的 voice/speed 并非所有视频都必须配置的字段。
+
+本轮保持已审 external 路线，不启用新模式；权限待真实核实，音色／语速偏好未代选，保留旧 paid／unknown。仅此合同与取舍说明更新，不改 Web、共享 CI/CURRENT、Gateway／Worker 工厂或检索能力。
+
+Avicenna 对上述合同差额独立 High 复核为 GO、无 P1/P2；复核只读，未重新执行模型、codec 或 CI。
