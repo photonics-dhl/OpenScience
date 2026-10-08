@@ -8,13 +8,13 @@
 - 保留原 PDF/SourceMap、认可图片、公开标识、旧版本和失败/费用/回执；日常结果为私有草稿，公开沿现有确认流程。未知外部提交、旧 oncekey、paid/started checkpoint 不得因接管或旧文档提示而重放。
 
 ## 总控与并行分工
-- 用户于 2026-10-08 指定总控「协调三个并行开发会话」：`01a1197c-7a1e-7631-b1c1-2d09b587be9a`。总控负责范围/依赖协调、集成审查、发布排程和 CURRENT/progress/index 汇总；其他 session 保留其既有用户任务，专属计划仍由对应 owner 维护。
+- 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责三线写权/依赖/集成/发布与CURRENT/progress/index，各owner保留原任务和专属计划。线程心跳`openscience`已ACTIVE，每10分钟检查三线；完成、idle或受阻时及时补派有用且已授权的独立下一步，状态不变不通知，不用无关检查充数。
 | Session / ID | 主责与本轮焦点 | 活动工作树 |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | paid兼容已集入/CI通过；科学草稿与图片质量待真实Native纠正，无新付费 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/illustration-chain-repair` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 真实PNG审图模型/载荷/paid核查与最小修复；7755应用/Skill配对发布前置，无新付费 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS`，`codex/image-review-routing` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | Native/Domain/Worker接线、草稿技术资格与自动推进、Gateway音频/broker；依已审计划实施 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，`codex/synclip-video-delivery`；从7755a5ef续作 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 指南、探索、期刊、研究桌面等全站构图、字体和视觉节奏；真实桌面/窄屏入口验收 | `.worktrees/research-product-craft`，`codex/ui-art-direction-20261008` |
-- 生图主责 PresentationWorkbench/ResearchPresentation 的分镜选择与修订行为，UI 主责全站外观；共用 handler、image-review、Gateway provider、api.ts 等须先报具体符号范围，由总控协调顺序。不得覆盖、还原或混入他人改动。
+- 生图独占Gateway的`native-image-review.ts`与对应独立测试，共用provider/gateway/Worker index须报符号定序；视频独占已授Native/Domain/Worker/音频范围，Web归UI。未知付费保护约束具体任务，不得扩成整条线长期待命；不得覆盖、还原或混入他人改动。
 - 使用任务独立工作树，canonical 只集成已明确归属的提交；生产发布按已有锁和干净、已推送精确 SHA 规则串行排程。在途部署/付费任务自然完成后交接，不因协调重启、扩预算或重发。进度写在各自 session，总控只读收取，不另建任务库。
 
 ## 当前版本与观察边界
