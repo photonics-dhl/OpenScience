@@ -444,6 +444,28 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(input).toBeFocused();
   await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+
+  const externalOpener = page.getByRole('button', { name: 'Hermes · Chat', exact: true });
+  await expect(externalOpener).toBeVisible();
+  const originalExternalOpener = await externalOpener.elementHandle();
+  expect(originalExternalOpener).not.toBeNull();
+  try {
+    await externalOpener.click();
+    await expect(externalOpener).toHaveCount(0);
+    expect(await originalExternalOpener!.evaluate((button) => button.isConnected)).toBe(false);
+    await expect(page.getByRole('complementary', { name: 'Hermes research guide' })).toBeVisible();
+    await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
+    await expect(stage).toHaveCount(1);
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+    await expect(input).toBeFocused();
+    await expect(externalOpener).toBeVisible();
+    expect(await originalExternalOpener!.evaluate((button) => button.isConnected)).toBe(false);
+    await expect(stage).toHaveCount(1);
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+  } finally { await originalExternalOpener?.dispose(); }
 });
 
 test('creation opens the complete companion from its compact entry without starting work', async ({ page }) => {
