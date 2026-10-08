@@ -169,6 +169,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed history，`publicationIncluded=false`也受`trash.ts`的`publicAssetReferences`保护；09-18/09-20的私有归属结论不能沿用。缺失源行不能补造，封存记录不能为清理而重写。当前只核既有soft-trash/restore对列表、媒体历史读取和恢复期限的语义，禁止purge；最新引用图、范围及执行状态统一见CURRENT。
+
 视频配音与复用：新候选沿原Native science/art/review形成完整视频计划、逐帧prompt/renderResources和原旁白；`research-run.ts`在既有授权内自动推进，Domain同一技术资格派生videoFrameAssetIds并约束局部返工。Gateway `synclip-audio-api.ts`及既有broker保存每幕TTS/视频回执，完整解码测时、核最终视频/AAC时间线再合成；未知提交不重发，长旁白走有预算的新父修订。仅实现start-reference/scene-artwork/external-narration/无字幕，其余策略付费前拒绝；Linux codec/权限及真实自然度仍需对应证据。旧Qwen/Serena和H3试镜是历史/回退材料，不代表新RO链路通过，也不在听验前删除。
 
 2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。已部署实现复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。

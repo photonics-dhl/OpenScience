@@ -27,12 +27,12 @@
 ## 未完成与下一动作
 - 格式db5884b5、Skill20/d82e79c2、paid兼容0d7d493d已在42fe上线。fresh采用sourceNotation，旧paid/未知仍旧语法；真实错误引用仍拒。回放沿已核prefix/exact call、current-first和唯一历史Execution19，完整deepEqual不删。原验证/RED见生图tmp/source-notation-*、native-skill-replay-final-*；上线不解除cb未知终态。
 - PNG隔离ea135→9ab与校准54c77→c302均全等/High GO；Gateway23/Worker29、回放52+2及0b CI证据保留。MINIMAX_IMAGE_REVIEW_MODEL仅PNG、未配仍primary；主/Native M3不变，生产未配。root21的science/plan/render沿20、review21、历史19优先，不降未来版本。仍是Worker→Gateway单次vision，非Nous SDK审图循环；科学改善未实测，详见生图tmp/pixel-review-calibration-*。
-- wire离线证据：生图tmp/pixel-review-wire-receipt.json的2ef原/重建promptHash5d424、PNG6ebb一致；fc仅PNGf0e/sourceIdentity一致，promptHash21eca→7ed745，不能认作原packet。0模型外呼，不是历史外网抓包。fc有效accepted承认轴冲突却列非阻塞；普通audit succeeded不等于accepted，传输/结构合格不证明科学正确。
-- cb科学诊断见生图tmp/first-scene-native-diagnostics.json：第6轮1,721,322bytes/20消息低于本机上限，仅排除本地oversize，超时未定因；完成turn的压缩空messages不是原请求尺寸。20/500/77nm、1MeV/0.94c错来源及Gaussian1.8、tau/时空/virtual-real问题仍须Native修订，不由代码补论文答案。
-- 视频主候选及9914已集入、High闭合，原Worker67/Domain175/run57/API7/音频179证据保留；新CI见上。host3603→92bf全等集入、High GO，Linux含子项32/32；原renderer已有codec，未生产切换。[视频计划](../plans/2026-09-05-hermes-presentation-assets-plan.md)的合同14fd→c07c已集入：LTX原生声/多镜头存在，15秒分段不推出必须外置TTS，当前换轨会替代原生人声/音乐/环境声；这是实现取舍。原生合格实片尚缺，暂不改模式，现只读核账户权限/音色；坏镜头及真实音画待验。
+- 离线wire回执：2ef原/重建prompt与PNG一致，fc仅PNG/来源一致，不能称原packet；0外呼。fc有效accepted仍漏科学矛盾，audit succeeded不等于accepted。cb第6轮1,721,322bytes/20消息只排除本地oversize，超时未定因；数值错源、Gaussian/tau/时空/virtual-real仍须Native修订。原证据在生图tmp/pixel-review-wire-receipt.json、first-scene-native-diagnostics.json，不以传输成功代替科学质量。
+- 视频主候选及host3603→92bf已集入/High闭合，原验证保留、Linux host32/32；renderer已有codec，未切生产。[视频合同](../plans/2026-09-05-hermes-presentation-assets-plan.md)14fd→c07c：LTX有原生声/多镜头，分段不强制外置TTS，当前换轨会替代原声/音乐/环境声。无合格原生实片，暂不改模式；账户权限/音色、坏镜头与实际音画待验。
 - 普通video沿原hermes-runs/9任务授权，旧image不升级；guide/query160→68及21/26/23保留。集成High P1：UI重分析、Domain来源reviewer/分镜/成图可早于不可用host检查收费。视频补fresh readiness/收费前检查，UI在source准备前消费。ACK f1de/cc1e→a5d792/89d6ba全等收取：snapshot CAS+显式max(now,snapshot+1ms)，ORM回退RED→Green3/3、原High P2关闭，84未跑；原CI增对应组。22:18视频同源c513的真实dispatcher交错2/2通过（其tmp/video-paid-readiness/dispatch-ack-green.log），整体收费边界/TC/集成High仍待，组件通过不放行。原run/key/paid保留，admin=true不是权限证据。原审查在总控integration-high-c3ebf728.md。
 - UI fe12→2265含构图/普通视频/期刊，原High/定向与c3 build证据保留；c7ed/2123/3decb/323全等收取，保留实际点击/幂等/多PDF/窄屏/权限。OA11与期刊20本地通过；e431缺323双语fixture修正，待下一CI。导航68例缺mock、来源ID和两个已移除保存入口断言，由UI同批按真实确认→版本页修复，保留各业务目的，不故意跑已知失败。bc996视觉未收；P1 Web待backend DTO，新UI未部署或验收。
 - Task4长表格57c→aa0全等，High闭3P2，Search29/Worker25已CI实跑；同源行窗口失败保lexical。内部恢复f427→79050保留原retry/canRetry/双预算/CAS/fence，Domain34/CLI23/Storage16本地通过。21:17实核旧049c/be071已非current、active0；当前96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为active69/vector0。21:29核6368来源/确认/v27 manifest/模型/owner/budgets全部满足；只是只读时点，不是执行许可。CLI03b3→3a3faa两文件High GO/31通过：显式UUID、scope current take2、唯一后严格owner，不自动换owner；旧049c拒绝。真实BGE恢复未跑，发布后操作前须freshread；回执在生图tmp/source-index-token-limit-recovery/，原表3051/607仅离线。
+- Fig.2于22:44–22:47只读纠正：5项live但e77/v8已published（OSR-2026-000023-v2），sealed history均publicationIncluded=false；旧私有draft/0公开refs失效。d508为68B PNG、929源行缺失，77b live但对象缺失，不扩scope。soft-trash会使5条成员直链404，匿名冻结列表原本不含它们；保留5对象/sealedJSON、初始30天恢复条件，禁止purge/补源。生图tmp/fig2-cleanup/disposition-proposal.md已root High技术GO，用户404影响授权待答；实际GET及逐项entry/lastError检查待执行，无生产写。原证据同目录，42fe稳定。
 - 生图浏览器getState及唯一reset后的getState均为request-header policy错误，已停循环；不绕过、不据此判产品故障或宣称实点。UI先前预览启动也曾被自动审批拒绝；按各自真实观察范围记录。
 - RO9067 第四幕 `28ab61b0-7931-41d3-8200-2d63c1f986ad` 的供应商 POST 终态未知且无receipt；需可核实的关联/幂等查询合同恢复，不为补齐4/4重发。用户已要求减少中间人工审核；按此接产品流程，公开确认边界不变。
 
@@ -40,8 +40,7 @@
 - ROc896802c：旧首幕 `27b2381a`、`fc1c5474`、`73746a85`、`b3c023bf` 已通过产品回收站移除并保留30天恢复期。矛盾艺术稿 `3e607af0` 经fresh身份/0子任务/expectedUpdatedAt核对后用普通Domain CAS拒绝，2026-10-08T04:38:17.618Z已rejected，providerCalls0；before/after回执在生图ignored tmp。父 `36727536` 仍approved、第二幕 `e8b6cb5d` 仍private draft，不级联或据旧“成功”重新采用坏稿。
 - RO9067 的 run `7a959a7f` 已观察到 SourceMap、paper-author、独立来源审阅与四幕分镜成功；三张图有供应商成功回执，其中第三幕审阅阻断，第四幕外部终态未知。后续第二幕 `ead639dc-e480-4520-8f0c-691402c8b739` 单次成功、两路审阅 accepted、私有 PNG 已实看；不代表全文链路或其余镜头已验收。
 - 正例7eb1/d64经historyCopy追到原e550/scene0/c54，原Web5.6-sol accepted、sourceIdentity/5Claims/30Evidence及PDF/Map/PNG字节均核对，PNG实际1280×720。生图tmp/accepted-image-*保存审计，image-reference-case-input.json去掉历史判定/认可标签；不是Native身份或新授权。现存仅published，旧approved带prior review不能直接重开，未造alias/改旧记录；站内实点与合法新任务验收仍缺。
-- Synclip video bundle 曾安装并接线，旧任务 `321b013e-9606-4858-82a7-f767105d0069` 在科学分镜结构化阶段阻断，无 Synclip POST/视频费用；现存失败、bundle 收据和后续修复均保留，当前进展由视频 owner 提供。
-- H3 独立 pilot 的 hook 任务 `447219218062265` 已取回 5,654,125 bytes、2560×1440、15.084 秒 H.264/AAC 原片；画面已看，音轨自然度未获人工认可。mechanism 的 402 拒绝不重发，mapping/result 当时未提交；该产物不证明 Synclip 适配或四幕成片完成。
+- 历史Synclip `321b013e-9606-4858-82a7-f767105d0069` 阻于科学分镜、无POST/视频费，原失败/bundle回执保留。独立H3 hook `447219218062265` 已回收2560×1440/15.084秒H.264/AAC，画面已看、音轨未获认可；mechanism402不重发，mapping/result未提交，不证明Synclip或四幕完成。
 
 ## Illustration delivery
 | 论文 / Taskmaster | 已见产品与用户反馈 | 剩余交付 |
