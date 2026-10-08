@@ -105,7 +105,7 @@ export function SourceRightsFields({ value, onChange, disabled = false, idPrefix
       </div>
     </fieldset>
     <label className="grid gap-1 text-sm sm:col-span-2" htmlFor={`${idPrefix}-evidence`}>
-      {t.evidence}{evidenceRequired ? t.required : t.optional}<textarea id={`${idPrefix}-evidence`} aria-describedby={`${idPrefix}-evidence-help`} aria-required={evidenceRequired} disabled={disabled} rows={3} className="border border-os-rule-paper bg-transparent p-3" value={value.evidence} onChange={(event) => update({ evidence: event.target.value })} />
+      {t.evidence}{evidenceRequired ? t.required : t.optional}<textarea id={`${idPrefix}-evidence`} aria-describedby={`${idPrefix}-evidence-help`} aria-required={evidenceRequired} disabled={disabled} rows={3} className="border border-os-rule-paper bg-transparent p-3 placeholder:text-os-muted-paper" placeholder={t.evidenceExample} value={value.evidence} onChange={(event) => update({ evidence: event.target.value })} />
       <span id={`${idPrefix}-evidence-help`} className="text-sm leading-relaxed text-os-muted-paper">{t.evidenceHelp}</span>
     </label>
     <div className="sm:col-span-2 text-sm" aria-live="polite">
