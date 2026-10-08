@@ -791,7 +791,8 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
   if (!task || task.deletedAt || task.dispatchedAt != null) return false;
   await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
   await deps.prisma.agentTask.updateMany({
-    where: { id: task.id, dispatchedAt: null },
+    // Park/release advances updatedAt; an old acknowledgement cannot close its new outbox.
+    where: { id: task.id, dispatchedAt: null, updatedAt: task.updatedAt },
     data: { dispatchedAt: new Date() },
   });
   return true;

@@ -3,7 +3,7 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
-  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
 } from '../../src/agent/agent';
 import { buildInterestContext } from '../../src/research-intelligence/interest-context';
 
@@ -41,6 +41,40 @@ const DURABLE_SOURCE_RETRIEVE_PAYLOAD = {
   query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
   identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
 } as const;
+
+function makeSnapshotDispatch() {
+  const task = { id: 'snapshot-dispatch-task', status: 'pending', executionAttempt: 1,
+    deletedAt: null, dispatchedAt: null as Date | null, updatedAt: new Date('2026-10-08T00:00:00Z'),
+    result: { paidReceipt: 'unchanged' } };
+  const pushes: Array<{ queue: string; id: string }> = [];
+  let notifyPushed!: () => void;
+  let unblock!: () => void;
+  let first = true;
+  const pushed = new Promise<void>(resolve => { notifyPushed = resolve; });
+  const barrier = new Promise<void>(resolve => { unblock = resolve; });
+  const deps = {
+    prisma: { agentTask: {
+      // Prisma returns a snapshot, never the mutable backing row.
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        where.id === task.id ? structuredClone(task) : null,
+      updateMany: async ({ where, data }: {
+        where: { id: string; dispatchedAt: null; updatedAt?: Date };
+        data: { dispatchedAt: Date };
+      }) => {
+        if (where.id !== task.id || task.dispatchedAt !== where.dispatchedAt
+          || (where.updatedAt && where.updatedAt.getTime() !== task.updatedAt.getTime())) return { count: 0 };
+        task.dispatchedAt = data.dispatchedAt;
+        return { count: 1 };
+      },
+    } },
+    redis: { lpush: async (queue: string, id: string) => {
+      pushes.push({ queue, id });
+      if (first) { first = false; notifyPushed(); await barrier; }
+      return 1;
+    } },
+  };
+  return { deps: deps as never, task, pushes, pushed, unblock };
+}
 
 function seedSourceRetrieveTask(
   db: { agentTasks: Array<Record<string, unknown>> },
@@ -107,6 +141,44 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('snapshot dispatch cannot acknowledge an outbox reopened while its LPUSH was pending', async () => {
+    const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
+    const oldDispatch = dispatchAgentTask(deps, task.id);
+    await pushed;
+    const originalResult = structuredClone(task.result);
+    // The admission owner atomically parks, then releases with increasing timestamps.
+    task.dispatchedAt = new Date(task.updatedAt.getTime() + 1);
+    task.updatedAt = new Date(task.updatedAt.getTime() + 1);
+    task.dispatchedAt = null;
+    task.updatedAt = new Date(task.updatedAt.getTime() + 1);
+    unblock();
+    await expect(oldDispatch).resolves.toBe(true);
+    expect(task.dispatchedAt).toBeNull();
+    await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+    expect(task.dispatchedAt).toBeInstanceOf(Date);
+    expect(pushes).toEqual([{ queue: 'agent:queue', id: task.id }, { queue: 'agent:queue', id: task.id }]);
+    expect(task).toMatchObject({ status: 'pending', executionAttempt: 1, result: originalResult });
+  });
+
+  it('snapshot dispatch preserves a parked row and acknowledges an unchanged outbox only once', async () => {
+    const held = makeSnapshotDispatch();
+    const oldDispatch = dispatchAgentTask(held.deps, held.task.id);
+    await held.pushed;
+    const heldAt = new Date(held.task.updatedAt.getTime() + 1);
+    held.task.dispatchedAt = heldAt;
+    held.task.updatedAt = heldAt;
+    held.unblock();
+    await expect(oldDispatch).resolves.toBe(true);
+    expect(held.task.dispatchedAt).toEqual(heldAt);
+    await expect(dispatchAgentTask(held.deps, held.task.id)).resolves.toBe(false);
+    expect(held.pushes).toHaveLength(1);
+    const normal = makeSnapshotDispatch();
+    normal.unblock();
+    await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(true);
+    await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(false);
+    expect(normal.pushes).toEqual([{ queue: 'agent:queue', id: normal.task.id }]);
+  });
+
   it('explicit source-index token-limit recovery reuses the original owner and remaining budget', async () => {
     const { deps, user, task, source, db, redis } = await makeSourceIndexRecovery();
     Object.assign(task, { status: 'succeeded', error: null, progress: 100, retryCount: 1, executionAttempt: 2,
