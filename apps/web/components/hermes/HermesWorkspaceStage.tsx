@@ -317,7 +317,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
-  const assistantWasOpenRef = useRef(false);
+  const assistantFocusContextRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
+  const visualInvocationPathRef = useRef<string | null>(null);
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -889,13 +890,20 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [assistantOpen, conversationAnchor]);
 
   useClientLayoutEffect(() => {
-    if (assistantWasOpenRef.current && !assistantOpen) {
+    const previousContext = assistantFocusContextRef.current;
+    assistantFocusContextRef.current = assistantOpen
+      ? { pathname, editorOwned: presentation?.anchor.dataset.hermesFloatingOwner === 'editor' } : null;
+    if (visualInvocationPathRef.current !== pathname) visualInvocationPathRef.current = null;
+    if (previousContext && !assistantOpen) {
+      const restoreVisualFocus = previousContext.pathname === pathname
+        && (visualInvocationPathRef.current === pathname || previousContext.editorOwned);
+      visualInvocationPathRef.current = null;
+      if (!restoreVisualFocus) return;
       const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
       if (!trigger?.isConnected) return;
       trigger.focus();
     }
-    assistantWasOpenRef.current = assistantOpen;
-  }, [assistantOpen, conversationAnchor]);
+  }, [assistantOpen, conversationAnchor, pathname, presentation?.anchor]);
 
   useEffect(() => {
     setGuideReady(false);
@@ -1197,6 +1205,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [guideTarget, onDismissGuide]);
 
   const invokeHermes = () => {
+    // Both callers activate the visual; external conversation buttons open their drawer directly.
+    if (!assistantOpen) visualInvocationPathRef.current = pathname;
     setInvokeCount((count) => count + 1);
     (compact && navigationOnly ? fallbackOnInvoke : presentation?.onInvoke ?? fallbackOnInvoke)();
   };
