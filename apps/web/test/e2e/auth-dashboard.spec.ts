@@ -2,6 +2,20 @@ import { expect, test, type Page } from 'playwright/test';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    const anonymousRead = url.pathname === '/api/auth/me'
+      || (url.pathname === '/api/research-objects' && url.search === '?limit=20')
+      || (url.pathname === '/api/agent/tasks' && url.search === '?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal');
+    if (route.request().method() === 'GET' && anonymousRead) {
+      return route.fulfill({ status: 401, json: { error: { code: 'SESSION_INVALID', message: 'Not signed in' } } });
+    }
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
+
 async function mockAuthenticatedUser(page: Page, options: {
   researchObjects?: unknown[];
   tasks?: unknown[];
@@ -10,6 +24,11 @@ async function mockAuthenticatedUser(page: Page, options: {
   // Dashboard literature recovery is part of the current read contract.
   // Individual retrieval tests override these defaults with more specific fixtures.
   await page.route('**/api/agent/tasks?**', async (route) => {
+    const { searchParams } = new URL(route.request().url());
+    const guide = searchParams.get('kind') === 'workspace.guide' && searchParams.size === 2;
+    const literature = searchParams.get('kind') === 'source.retrieve' && searchParams.get('recovery') === 'true'
+      && searchParams.get('targetKind') === 'personal' && searchParams.size === 4;
+    if (route.request().method() !== 'GET' || searchParams.get('actionable') !== 'false' || (!guide && !literature)) return route.fallback();
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
   });
   await page.route('**/api/auth/me', async (route) => {
@@ -31,7 +50,7 @@ async function mockAuthenticatedUser(page: Page, options: {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: options.tasks ?? [] }) });
   });
   await page.route('**/api/workspaces', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner' }] }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner', status: 'active' }] }) });
   });
 }
 

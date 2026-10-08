@@ -1,30 +1,81 @@
-import { expect, test, type Page } from 'playwright/test';
+import { expect, test, type Page, type Route } from 'playwright/test';
+import type { WorkspaceGuidePayload } from '../../lib/api';
 
 const ro = { id: 'journey-ro', workspaceId: 'workspace-journey', publicId: 'OSR-JOURNEY', title: 'Research continuation', version: 1, status: 'draft', visibility: 'private' };
 const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', method: 'Measurement', results: 'Result', limitations: 'Limits', reproducibility: 'Data' };
 const confirmation = { commitId: 'confirmed-commit', versionId: 'confirmed-version', versionNo: 2, version: 7, evidenceStatus: 'needs_review', missingFields: ['results'] };
-const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.title, logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, artifactId: 'artifact-journey', agentTaskId: null };
+const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.title, logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, artifactId: 'artifact-journey', agentTaskId: 'agent-journey' };
+
+test.beforeEach(async ({ page }) => {
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
+
+function readJson(route: Route, json: unknown) {
+  return route.request().method() === 'GET' ? route.fulfill({ json }) : route.fallback();
+}
 
 async function fixtures(page: Page, tasks = [task]) {
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async route => {
-    const path = new URL(route.request().url()).pathname;
-    let body: unknown = {};
+    if (route.request().method() !== 'GET') return route.fallback();
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    let body: unknown;
     if (path === '/api/auth/me') body = { userId: 'user-journey', email: 'test@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' };
     else if (path === '/api/research-objects') body = { researchObjects: [ro] };
     else if (path === '/api/ingestion') body = { tasks };
     else if (path === `/api/research-objects/${ro.id}/ingestion`) body = { researchObjectId: ro.id, version: 1, tasks: tasks.map(item => ({ ...item, confirmation: null })), latestConfirmation: null };
+    else if (path === `/api/research-objects/${ro.id}/hermes-runs` && url.searchParams.get('ingestionTaskId') === task.id && url.searchParams.size === 1) body = { run: null };
+    else if (path === `/api/research-objects/${ro.id}/authors`) body = { authors: [] };
     else if (path === '/api/versions/confirmed-version') body = { version: { versionId: 'confirmed-version', snapshot: { core, artifacts: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }] } } };
-    else if (path.endsWith('/record')) body = { record: { objectId: ro.id, versionId: path.split('/').at(-2), recordState: 'recorded', sdf: core, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [], evidence: [] } };
-    else if (path.endsWith('/claims')) body = { claims: [] };
-    else if (path.endsWith('/evidence')) body = { evidence: [] };
+    else if (path.startsWith(`/api/research-objects/${ro.id}/versions/`) && path.endsWith('/record')) body = { record: { objectId: ro.id, versionId: path.split('/').at(-2), recordState: 'recorded', sdf: core, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [], evidence: [] } };
+    else if (path.startsWith(`/api/research-objects/${ro.id}/versions/`) && path.endsWith('/claims')) body = { claims: [] };
+    else if (path.startsWith(`/api/research-objects/${ro.id}/versions/`) && path.endsWith('/evidence')) body = { evidence: [] };
+    else if (path.startsWith(`/api/research-objects/${ro.id}/versions/`) && path.endsWith('/presentation-assets')) body = { assets: [] };
     else if (path === '/api/ingestion/tasks/journey-task') body = { researchObjectId: ro.id, batchId: 'batch', version: 1, task: { ...task, result: { core } } };
     else if (path === `/api/research-objects/${ro.id}`) body = { researchObject: { ...ro, sdf: { core, nodes: [] } } };
-    else if (path.endsWith('/versions')) body = { versions: [] };
-    else if (path.includes('tasks')) body = { tasks: [] };
-    else if (path === '/api/workspaces') body = { workspaces: [] };
+    else if (path === `/api/research-objects/${ro.id}/versions`) body = { versions: [] };
+    else if (path === '/api/agent/tasks' && url.searchParams.get('actionable') === 'false') {
+      const routeRo = new URL(page.url()).pathname.match(/^\/research-objects\/([^/]+)\//u)?.[1];
+      const guide = url.searchParams.get('kind') === 'workspace.guide' && url.searchParams.size === 2;
+      const literature = url.searchParams.get('kind') === 'source.retrieve' && url.searchParams.get('recovery') === 'true'
+        && url.searchParams.get('targetKind') === (routeRo ? 'research_object' : 'personal')
+        && url.searchParams.get('researchObjectId') === (routeRo ?? null) && url.searchParams.size === (routeRo ? 5 : 4);
+      if (!guide && !literature) return route.fallback();
+      body = { tasks: [] };
+    }
+    else if (path === '/api/workspaces') body = { workspaces: [{ id: ro.workspaceId, name: 'Research workspace', type: 'personal', role: 'owner', status: 'active' }] };
+    else return route.fallback();
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   });
+}
+
+async function mockVersionGuide(page: Page) {
+  const submissions: Array<{ key: string; payload: WorkspaceGuidePayload }> = [];
+  await page.route('**/api/csrf-token', route => route.request().method() === 'GET' ? route.fulfill({ json: { csrfToken: 'test-csrf' } }) : route.fallback());
+  await page.route('**/api/agent/sessions', route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    expect(route.request().postDataJSON()).toMatchObject({ kind: 'workspace.guide', researchObjectId: ro.id });
+    return route.fulfill({ status: 201, json: { session: { id: 'version-guide-session' } } });
+  });
+  await page.route('**/api/agent/tasks', route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const input = route.request().postDataJSON();
+    const key = route.request().headers()['idempotency-key'];
+    expect(key).toBeTruthy();
+    expect(input).toMatchObject({ sessionId: 'version-guide-session', kind: 'workspace.guide', payload: { route: 'research-object-edit', context: { editorDraft: { researchObjectId: ro.id, scope: 'sdf' } } } });
+    submissions.push({ key, payload: input.payload });
+    return route.fulfill({ status: 201, json: { task: {
+      id: 'version-guide-task', sessionId: input.sessionId, researchObjectId: ro.id, kind: 'workspace.guide', status: 'succeeded', progress: 100,
+      result: { summary: 'Review media in the saved private version.', nextSteps: [{ label: 'Review media', intent: 'review-media', targetId: ro.id }], needsMoreInformation: false },
+      error: null, createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z',
+    } } });
+  });
+  return submissions;
 }
 
 test('dashboard keeps process records behind history and opens the actual review from there', async ({ page }) => {
@@ -89,11 +140,15 @@ test('empty Hermes entry keeps editing and source material reachable on mobile',
 
 test('confirmation writes only on request and keeps a route back into the research', async ({ page }) => {
   await fixtures(page);
+  const revisedCore = { ...core, problem: 'Revised question' };
   let writes = 0;
+  await page.route('**/api/research-objects/journey-ro/versions', route => readJson(route, { versions: writes ? [{ ...confirmation, status: 'draft' }] : [] }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => readJson(route, { record: { objectId: ro.id, versionId: confirmation.versionId, recordState: 'recorded', sdf: revisedCore, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [], evidence: [] } }));
   await page.route('**/api/csrf-token', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) }));
   await page.route('**/api/ingestion/journey-task/confirm', async route => {
     writes += 1;
-    expect(route.request().postDataJSON()).toEqual({ version: 1, core: { ...core, problem: 'Revised question' } });
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postDataJSON()).toEqual({ version: 1, core: revisedCore, sourceAgentTaskId: task.agentTaskId });
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { ...task, state: 'confirmed' }, sdf: { core: { ...core, problem: 'Revised question' } }, confirmation }) });
   });
   await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
@@ -101,34 +156,94 @@ test('confirmation writes only on request and keeps a route back into the resear
   expect(writes).toBe(0);
   await page.getByRole('button', { name: 'Confirm and create version', exact: true }).click();
   await expect(page).toHaveURL(/versions\?version=confirmed-version$/);
+  await expect(page.locator('[data-selected-version="confirmed-version"]')).toContainText(revisedCore.problem);
+  await expect(page.getByRole('link', { name: 'paper.pdf', exact: true })).toHaveAttribute('href', '/api/artifacts/artifact-journey/download');
+  await page.reload();
+  await expect(page.locator('[data-selected-version="confirmed-version"]')).toContainText(revisedCore.problem);
   expect(writes).toBe(1);
 });
 
 test('the confirmed paper is included in the next commit through the editor', async ({ page }) => {
   await fixtures(page);
-  await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ versions: [{ versionId: 'previous-version', versionNo: 1, status: 'draft' }] }) }));
-  await page.route('**/api/versions/previous-version', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: { versionId: 'previous-version', snapshot: { artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf', blobSha256: 'a'.repeat(64) }, { artifactId: task.artifactId, logicalPath: task.logicalPath }] } } }) }));
+  const artifacts = [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf' }, { artifactId: task.artifactId, logicalPath: task.logicalPath }];
+  const editedCore = { ...core, problem: 'Reviewed question' };
+  let committed = false;
+  let saves = 0;
+  let commits = 0;
+  await page.route('**/api/research-objects/journey-ro/versions', route => readJson(route, { versions: [{ versionId: committed ? 'committed-version' : 'previous-version', versionNo: committed ? 2 : 1, commitMessage: committed ? 'Draft saved' : 'Source import confirmed', status: 'draft', createdAt: '2026-10-08T00:00:00.000Z' }] }));
+  await page.route('**/api/versions/previous-version', route => readJson(route, { version: { versionId: 'previous-version', snapshot: { core, artifacts } } }));
+  await page.route('**/api/research-objects/journey-ro/versions/committed-version/record', route => readJson(route, { record: { objectId: ro.id, versionId: 'committed-version', recordState: 'recorded', sdf: editedCore, manifest: artifacts, claims: [], evidence: [] } }));
+  await page.route('**/api/research-objects/journey-ro/ingestion', route => readJson(route, { researchObjectId: ro.id, version: 1, tasks: [{ ...task, state: 'confirmed', confirmation: { ...confirmation, versionId: 'previous-version' } }], latestConfirmation: null }));
   await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: ro.id, version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
-  await page.route('**/api/csrf-token', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) }));
+  await page.route('**/api/sdf/journey-ro', route => {
+    expect(route.request().method()).toBe('PUT');
+    expect(route.request().postDataJSON()).toEqual({ version: 1, core: editedCore });
+    saves += 1;
+    return route.fulfill({ json: { sdf: { core: editedCore } } });
+  });
+  const guideSubmissions = await mockVersionGuide(page);
   let submitted: unknown;
   await page.route('**/api/research-objects/journey-ro/commits', async route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    commits += 1;
     submitted = route.request().postDataJSON();
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ commit: { versionId: 'committed-version' } }) });
+    committed = true;
+    await route.fulfill({ json: { commit: { versionId: 'committed-version', versionNo: 2, commitId: 'new-commit' } } });
   });
-  await page.goto('/research-objects/journey-ro/edit');
-  await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Commit message', exact: true }).fill('Reviewed paper');
-  await page.getByRole('button', { name: 'Create commit', exact: true }).click();
-  await expect.poll(() => submitted).toMatchObject({ artifacts: [{ artifactId: 'prior-artifact', logicalPath: 'previous-paper.pdf' }, { artifactId: 'artifact-journey', logicalPath: 'paper.pdf' }], sdfCore: core });
+  await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
+  await page.locator('#sdf-field-problem').fill(editedCore.problem);
+  await expect.poll(() => saves).toBe(1);
+  expect(commits).toBe(0);
+  const assistant = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(assistant).toBeVisible();
+  await assistant.getByLabel('What would you like to advance today?').fill('Review media for this saved research');
+  await assistant.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+  await expect.poll(() => submitted).toEqual({ version: 2, message: 'Draft saved', artifacts, sdfCore: editedCore });
+  expect(guideSubmissions).toHaveLength(1);
+  expect(guideSubmissions[0].payload.context.editorDraft).toMatchObject({ researchObjectId: ro.id, version: 2, scope: 'sdf', core: {
+    problem: editedCore.problem, insight: core.insight, method: core.method,
+    results: core.results, limitations: core.limitations, reproducibility: core.reproducibility,
+  } });
+  await expect(assistant.locator('[data-hermes-media-review="true"]')).toBeVisible();
+  await expect(assistant.getByText('This version has no media awaiting review.', { exact: true })).toBeVisible();
+  expect(commits).toBe(1);
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await page.locator('summary').filter({ hasText: /^More$/ }).click();
+  await page.getByRole('button', { name: 'Edit history', exact: true }).click();
+  const history = page.getByRole('dialog');
+  await history.getByRole('button', { name: /Draft saved/ }).click();
+  await expect(history.locator('[data-selected-version="committed-version"]')).toContainText(editedCore.problem);
+  for (const artifact of artifacts) await expect(history.getByRole('link', { name: artifact.logicalPath, exact: true })).toHaveAttribute('href', `/api/artifacts/${artifact.artifactId}/download`);
+  expect(commits).toBe(1);
 });
 
 test('a foreign imported paper cannot be silently attached or committed', async ({ page }) => {
   await fixtures(page);
-  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: 'foreign-ro', version: 1, task: { ...task, state: 'confirmed', result: { core } } }) }));
+  const foreignCore = { ...core, problem: 'Foreign proposal must stay hidden' };
+  await page.route('**/api/ingestion/tasks/journey-task', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjectId: 'foreign-ro', version: 1, task: { ...task, state: 'confirmed', result: { core: foreignCore } } }) }));
+  let writes = 0;
+  for (const path of ['/api/sdf/journey-ro', '/api/research-objects/journey-ro/commits', '/api/ingestion/journey-task/confirm']) {
+    await page.route(`**${path}`, route => { writes += 1; return route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'Foreign source cannot be written' } } }); });
+  }
+  const guideSubmissions = await mockVersionGuide(page);
   await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  await expect(page.locator('main').getByRole('alert')).toContainText('This material has no confirmed version');
-  await expect(page.getByRole('button', { name: 'Create commit', exact: true })).toBeDisabled();
-  await expect(page.getByText('paper.pdf', { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-sdf-node] textarea')).toHaveCount(0);
+  await expect(page.getByText(foreignCore.problem, { exact: true })).toHaveCount(0);
+  await expect(page.locator('a[href="/api/artifacts/artifact-journey/download"]')).toHaveCount(0);
+  const assistant = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(assistant).toBeVisible();
+  await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText(core.problem);
+  await expect(assistant.getByText('This analysis does not belong to the current Research Object or material, so its content was not loaded.', { exact: true })).toBeVisible();
+  await assistant.getByLabel('What would you like to advance today?').fill('Review media for this saved research');
+  await assistant.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+  await expect(assistant.getByRole('alert')).toContainText('Ordinary save and commit are paused until it is resolved');
+  expect(guideSubmissions).toHaveLength(1);
+  expect(writes).toBe(0);
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await expect(page.locator('[data-sdf-node] textarea')).toHaveCount(0);
+  await expect(page.getByText(foreignCore.problem, { exact: true })).toHaveCount(0);
+  expect(writes).toBe(0);
 });
 
 test('the task hub opens the existing assistant in the same research context', async ({ page }) => {
@@ -145,10 +260,12 @@ test('partial extraction can be confirmed with empty fields and navigates to the
   await fixtures(page);
   await page.route('**/api/csrf-token', route => route.fulfill({ json: { csrfToken: 'test-csrf' } }));
   await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ ...confirmation, status: 'draft' }] } }));
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => readJson(route, { record: { objectId: ro.id, versionId: confirmation.versionId, recordState: 'recorded', sdf: { ...core, results: '' }, manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath }], claims: [], evidence: [] } }));
   let writes = 0;
   await page.route('**/api/ingestion/journey-task/confirm', async route => {
     writes++;
     expect(route.request().postDataJSON().core.results).toBe('');
+    expect(route.request().postDataJSON().sourceAgentTaskId).toBe(task.agentTaskId);
     await route.fulfill({ json: { task: { ...task, state: 'confirmed' }, sdf: { core: { ...core, results: '' } }, confirmation } });
   });
   await page.goto('/research-objects/journey-ro/hermes?task=journey-task');
@@ -157,6 +274,7 @@ test('partial extraction can be confirmed with empty fields and navigates to the
   expect(writes).toBe(0);
   await page.getByRole('button', { name: 'Confirm and create version', exact: true }).click();
   await expect(page.locator('[data-selected-version="confirmed-version"]')).toBeVisible();
+  await expect(page.locator('[data-selected-version="confirmed-version"]').getByText(core.results, { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(/versions\?version=confirmed-version$/);
   expect(writes).toBe(1);
 });
