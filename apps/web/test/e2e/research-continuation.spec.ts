@@ -310,7 +310,7 @@ async function versionEvidenceFixtures(page: Page) {
   await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => route.fulfill({ json: { record } }));
 }
 
-async function openVersionEvidence(page: Page) {
+async function openVersionEvidence(page: Page, locale: 'en' | 'zh' = 'en') {
   const reader = page.locator('[data-version-claim-reader="confirmed-version"]');
   await expect(reader).toBeVisible();
   const narrative = reader.locator('[data-claim-narrative]');
@@ -318,9 +318,9 @@ async function openVersionEvidence(page: Page) {
   await narrative.locator(':scope > summary').click();
   const claim = reader.locator('[data-claim-id="claim"]');
   await claim.locator(':scope > summary').click();
-  await claim.locator('details > summary').filter({ hasText: /^Evidence \(1\)$/ }).click();
+  await claim.locator('details > summary').filter({ hasText: locale === 'zh' ? /^证据（1）$/ : /^Evidence \(1\)$/ }).click();
   await claim.locator('[data-evidence-id="evidence"] > summary').click();
-  await claim.getByRole('button', { name: 'View original source', exact: true }).click();
+  await claim.getByRole('button', { name: locale === 'zh' ? '查看来源原文' : 'View original source', exact: true }).click();
 }
 
 test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
@@ -344,6 +344,25 @@ test('selected snapshot and original evidence remain scoped across version switc
   await expect(page.locator('[data-evidence-sheet]')).toHaveCount(0);
   await page.locator('[data-version-claim-reader="newer"] [data-claim-narrative] > summary').click();
   await expect(page.getByText('This version has no published structured claims yet.', { exact: true })).toBeVisible();
+});
+
+test('original evidence is completely visible on a narrow Chinese surface', async ({ page }) => {
+  await versionEvidenceFixtures(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const quotation = '选定版本的论文原文。';
+  await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record/evidence/evidence/source', route => route.fulfill({ json: { source: { text: quotation, page: 3, region: null } } }));
+  await page.goto('/research-objects/journey-ro/versions?version=confirmed-version');
+  await openVersionEvidence(page, 'zh');
+  const sheet = page.locator('[data-evidence-sheet]');
+  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(sheet.getByText(quotation, { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(sheet.getByText(task.logicalPath, { exact: true })).toBeVisible();
+  await expect(sheet.locator('dd').filter({ hasText: /^3$/ })).toBeVisible();
+  await expect(sheet.locator('[data-source-region]')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: '关闭', exact: true })).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/research-continuation/version-source-mobile-zh.png' });
 });
 
 test('late original evidence response cannot reopen the previous version after browser Back', async ({ page }) => {
