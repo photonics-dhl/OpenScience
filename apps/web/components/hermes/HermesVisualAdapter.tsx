@@ -545,7 +545,14 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   useEffect(() => {
     if (assistantOpen) engageArticulation({ x: .42, y: -.12 });
-  }, [assistantOpen, interactiveReady, still, state]);
+    else if (!inConversation) {
+      const visual = linkRef.current;
+      if (!visual?.matches(':hover') && !visual?.contains(document.activeElement)) {
+        updateEngaged(false);
+        resetArticulation();
+      }
+    }
+  }, [assistantOpen, inConversation, interactiveReady, still, state]);
 
   useEffect(() => {
     let cancelled = false;
