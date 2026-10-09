@@ -279,7 +279,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           target={guideTarget}
         />
       ) : null}
-      {surface === 'navigation' && routeAssistantOpen ? <Drawer open label="Hermes" closeLabel={companionCopy('close')}
+      {surface === 'navigation' ? <Drawer open={routeAssistantOpen} label="Hermes" closeLabel={companionCopy('close')}
         onClose={() => setRouteAssistantOpen(false)} className="hermes-companion-invitation research-product" side="right">
         <div data-hermes-conversation-companion="true" />
         <div className="hermes-companion-invitation-copy"><h2>Hermes</h2><p>{companionCopy('invitation')}</p>

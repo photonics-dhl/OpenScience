@@ -36,7 +36,7 @@ export function ResearchContentManager({ researchObjectId, onChanged }: { resear
       {loading ? <p role="status">{t('loading')}</p> : error ? <p role="alert">{error} <button className={styles.action} type="button" onClick={() => void load()}>{t('retry')}</button></p> : items.length === 0 ? <p>{t('contentEmpty')}</p> : <ul className={styles.list}>
         {items.map((item) => {
           const title = labels.title(item);
-          return <li className={styles.row} key={`${item.kind}:${item.resourceId}`}>
+          return <li className={styles.row} data-resource-id={item.resourceId} data-resource-kind={item.kind} key={`${item.kind}:${item.resourceId}`}>
             <div><strong className={styles.itemTitle} title={title}>{title}</strong><small>{t(`kind.${item.kind}`)} · {new Date(item.createdAt).toLocaleString(locale)}</small>{item.adopted && <small>{t('adopted')}</small>}</div>
             {item.canDelete ? <TrashActionButton kind={item.kind} resourceId={item.resourceId} title={title} onDone={() => { onChanged?.(item); void load(); }} /> : <small>{t('retained')}</small>}
           </li>;

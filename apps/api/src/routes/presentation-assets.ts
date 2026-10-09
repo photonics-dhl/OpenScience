@@ -5,6 +5,7 @@ import {
   getPresentationAssetForRead,
   getPresentationTask,
   listPresentationAssets,
+  isHermesVideoReady,
   PublicEvidenceSourceError,
   PresentationAssetError,
   submitPresentationGeneration,
@@ -53,6 +54,7 @@ const transitionBody = z.object({
 }).strict();
 
 export function registerPresentationAssetRoutes(app: FastifyInstance, deps: AgentRouteDeps & { storage?: StorageAdapter; sceneImageEnabled?: boolean; videoEnabled?: boolean;
+  readVideoReadiness?: import('@openscience/domain').HermesVideoReadinessDeps['readVideoReadiness'];
   canRetryImageReviewBeforeSubmission?: import('@openscience/domain').HermesResearchRunDeps['canRetryImageReviewBeforeSubmission'] }): void {
   app.get('/research-objects/:researchObjectId/versions/:versionId/presentation-tasks/:taskId', async (req, reply) => {
     reply.header('Cache-Control', 'private, no-store');
@@ -78,7 +80,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     if (!user) return;
     const params = scopeParams.parse(req.params);
     const body = generationBody.parse(req.body);
-    if ((body.kind === 'video' && !deps.videoEnabled) || (body.kind === 'image' && !body.sceneImage)) throw new PresentationAssetError('VALIDATION_ERROR', 'This media generation capability is currently unavailable');
+    if (body.kind === 'image' && !body.sceneImage) throw new PresentationAssetError('VALIDATION_ERROR', 'This media generation capability is currently unavailable');
     if (body.sceneImage && !deps.sceneImageEnabled) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image generation is currently unavailable');
     const idempotencyKey = z.string().trim().min(1).max(200).parse(req.headers['idempotency-key']);
     const task = await submitPresentationGeneration(deps, {
@@ -94,7 +96,9 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const params = scopeParams.parse(req.params);
-    return reply.send({ assets: (await listPresentationAssets(deps, { userId: user.userId, ...params })).map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage, canGenerateVideo: !!deps.videoEnabled && asset.canGenerateVideo })) });
+    const assets = await listPresentationAssets(deps, { userId: user.userId, ...params });
+    const videoReady = await isHermesVideoReady(deps);
+    return reply.send({ assets: assets.map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage, canGenerateVideo: videoReady && asset.canGenerateVideo })) });
   });
 
   app.post('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/:assetId/review', async (req, reply) => {
@@ -114,6 +118,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const asset = await transitionPresentationAsset(deps, { userId: user.userId, ...params, ...body }, auditCtx(req));
     const assets = await listPresentationAssets(deps, { userId: user.userId, researchObjectId: params.researchObjectId, versionId: params.versionId });
     const view = assets.find(item => item.id === asset.id);
-    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage, canGenerateVideo: !!deps.videoEnabled && view.canGenerateVideo } });
+    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage,
+      canGenerateVideo: await isHermesVideoReady(deps) && view.canGenerateVideo } });
   });
 }

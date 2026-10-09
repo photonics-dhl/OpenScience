@@ -111,8 +111,42 @@
 
 视频进度只突出整体状态；终态私有视频直接预览，反馈与采用指向既有精确版本的 presentation 页面。中间技术步骤仍折叠，未新增分镜人工审核、采用接口或公开操作。旧 source-reanalysis intent 不含 output，故视频流程不暴露该图像专用重分析入口；服务端可重试能力继续按原 run 使用，不转为新图片请求。
 
-新批次5个定向测试文件25项通过，涵盖实际 Panel effects/点击、严格 guide 字段、API query、跨媒介拒绝、未知参数恢复与准确 pending 清理。新增测试最初把 profile/maxAgentTasks 误放入严格 guide 夹具，已修正；该失败没有放宽产品校验。High 审查产品代码无剩余 P1/P2；最终构建与稳定上游合并证据待本批收口补录。Figma 最新一次仍要求重新认证，未新建画布；本地预览启动的自动审批拒绝不作等价重试，官方浏览器只证明现网行为。
+新批次5个定向测试文件25项通过，涵盖实际 Panel effects/点击、严格 guide 字段、API query、跨媒介拒绝、未知参数恢复与准确 pending 清理。新增测试最初把 profile/maxAgentTasks 误放入严格 guide 夹具，已修正；该失败没有放宽产品校验。High 审查产品代码无剩余 P1/P2。`90977eef` 依赖 `c2aa0b55` 与稳定上游16003486；合入 canonical0194690e 后的提交 `fe12ea28` 中，相关 producer 源与16003486全等，7个定向文件37项通过、Web生产构建exit0，证据 `tmp/ui-art-20261008/integrated-web-{tests,build}.log`。该已提交批次可独立集入；当时尚无新的候选浏览器验收。Figma 最新一次仍要求重新认证，未新建画布；本地预览启动的自动审批拒绝不作等价重试，官方浏览器只证明现网行为。
+
+## 2026-10-08 集成阻断与精确修正记录
+
+总控集成审查发现 P1：Synclip 视频 host 未就绪时，视频流程可能先消耗来源重分析、Native 分镜与场景图额度，再在 spool 拒绝。此前 Web 有界审查 GO 不覆盖这条端到端条件。视频 owner 已交付受保护且no-store的服务端资格DTO与付费前守卫；Web消费进展见下节，组合验收前发布仍为NO-GO。既有run、原请求/键和已收费来源保持，本线没有真实付费调用。版本页等新的视觉扩展暂缓，现有候选保留。
+
+期刊真实浏览器 CI 的旧 `Browse all journals` 定位与本线已本地化标题不符。`c7ed7d9d` 改为 main/h1 与命名目录可见、真实搜索结果与精确链接；`3decb525` 补上实际点击进入期刊、核URL/h1、返回目录后截图，并修正四个创建用例为桌面唯一主要入口的可见性、可访问名称、精确href与真实点击，手机先切375再进入桌面。`323e2038` 修复审查发现的 fixture 名称 P1：中文名称作唯一搜索词，英文显示名由同一常量供创建与 heading 断言使用。这三提交须整体收取，不能只取早期定位。单PDF、丢响应幂等、多PDF不静默选源、其他桌面/375、权限、正文/发布、overflow/console检查保留。两文件TypeScript语法0错误；本地 ESLint 在 AJV 初始化报 `defaultMeta` TypeError，未声称lint通过，未安装依赖或修改配置。真实 Linux 回归由总控续跑；失败发生在目录截图前，不能把旧截图冒充该候选证据。
+
+随后 run37782272375 在 `e43123db` 的中文 heading 匹配处失败。逐行对比确认该提交及当时 canonical `3a731dc0` 均尚未合入 `323e2038`；其差异恰好是已修正的 fixture 显示名与搜索名分离。目录真实 h2 与主页 h1 仍优先 `nameEn || nameZh`，中文译名是段落；没有新证据说 API 搜索丢失结果。本线没有重复修改产品或猜定位，已给总控现成修正的精确提交与既有验证，待补入后再跑浏览器。该 run artifact11553190226 的存在已核对，未把前一 run 的截图冒充本次目录证据。
+
+语义合并的另一个独立 P2 是目录 API 缺 `openAccess` 字段而筛选选项可用。独立 `2123e01f` 在无权威元数据时禁用 open/closed；旧链接保留筛选语义并提供只清获取方式、保留查询/学科/排序的恢复动作。两项真实 API shape/旧 URL 回归加入既有目录测试，最终4个文件20项通过，`journal-integration-final-tests.log`；High 增量审查GO，`work-page-oa-web-build.log`构建进程exit0。没有补造OA分类或改后端权限。
+
+GitHub connector 核到 c3ebf728 的 `journal-browser-evidence` artifact11550760655，已下载检查其中两张真实375px图片（services-request、sources-supplementary）；目录首个失败前未生成目录截图。媒体失败run37776286111没有上传artifact，日志虽给出4份 error-context.md 路径，本机不能访问 runner 文件，未声称看到了它们。现有截图能说明对应期刊工作页已运行，却不足以认可整站审美；紧凑角色在这些管理页的载体/正文占位仍待候选实看调校。图片均在 ignored tmp，不上传Figma或当作正式资产。
 
 ## 其余工作页继续项
 
 源码审查已指出版本、发布、协作、沙箱的共同层级问题：对象上下文与大页头重复；版本正文被长历史列表推后；发布动作位于长预览之后；协作的六个同权标签与常驻创建表单竞争。下一批沿现有工作区收紧章节页头，版本内容先于比较工具，发布保留真实成果预览并把主动作与设置归组，协作列表先于可展开的新建表单。只读源码判断不能替代美感与真实浏览器验收，整站艺术质量仍未确认。
+
+UI owner另有独立页面视觉候选`bc996cfe`，未包含在本次测试/资源身份修复集成中；相关审美与部署仍待验收。
+
+## 浏览器测试与当前合同修正
+
+媒体 CI 的68例导航组因旧夹具遗漏工作区、账号、RO导入与已有run请求而外逃到未启动的3101，最终job取消；不能记为通过。四个原spec保留全部68例，补齐只读合同和当前来源Agent任务ID。未知API在context层立即报错，page级失败/恢复fixture仍优先，`page.unrouteAll`不会移除隔离边界；不延长超时或启动真实API。来源确认保留精确POST/次数与版本记录；原编辑器提交用例改走当前自动保存、Hermes对话和编辑历史入口，外来来源仍单独验证只读及零写入。审查纠正了自动打开助手时的失效按钮定位、六字段payload不含schemaVersion、媒体review可见态和GET-only分流。
+
+本批离线实际执行夹具函数52项通过、四spec共68例注册；定向四spec的TypeScript检查exit0。实际依赖`createResearchObject`幂等键默认值被推为UUID模板，已按现有HTTP任意非system字符串合同显式注为string，传入值、默认UUID及请求不变。证据在ignored `tmp/ui-art-20261008/e2e-fixture-{execution,types}.log`；真实Linux浏览器由总控串行运行，尚未宣称68例通过、部署成功或审美合格。
+
+Fig.2五项软回收已由用户在总控明确授权，但本次正常产品入口只能看到同名内容，无法精确绑定UUID：研究桌面→RO9067编辑→更多→管理内容共有448行、119项仅名“图片”，行内无资源链接或ID。已核DHL/12430020的官网会话及邮箱验证；没有点击删除/提交，业务POST与资产写均为0，写窗口已释放。截图37留在原tmp，不能按标题猜删。素材整理及整站美感、Word与脱敏包交付继续保留；服务端视频capability合同已交付，前端付费前消费仍待本线接入。
+
+据此授权的最小入口补差：内容行、原删除按钮及其确认框以既有DTO/props直接输出`data-resource-kind`、`data-resource-id`，不改文案、排序、权限、API或回收语义。候选尚未发布，不能向现网注入属性代替修复；五项仍是零写，待正常发布与fresh身份/引用核对后由总控重新交唯一writer。
+
+## 2026-10-09 视频入口的付费前可用性
+
+普通Panel与Hermes制作动作消费同一`getHermesVideoCapability`。新意图在新key、来源准备或制作POST前fresh检查，false/读取失败留在现有入口反馈。普通Panel在来源准备后按实际B scope先读runId/已有video run，已有结果直接恢复；仍无run才再次判断能否用原B key/body提交。明确VIDEO_UNAVAILABLE与网络未知都保留A来源回执、B待续参数；不清可能已收费的来源，不新增拒绝marker。源、guide、run或actor切换会取消资格读取并释放旧锁，旧finally不能清掉新操作。
+
+Native制作记录按真实actor分区；可写上下文与来源加载也绑定actor。提交前fresh身份核对，账号切换不能拾取他人的unknown；同actor旧unknown保留原action/sourceIds/payload/key，GET未完成的取消与POST已发出的unknown分别处理。Drawer通过`useHermesViewerId`直接消费已有SessionProvider，真实跨标签changed/invalidated会先清旧actor，再接新身份，不再用mount-only缓存或增加另一套广播。50个实际hook/handler测试通过（Native34、普通13、真实Provider事件链3），证据`video-capability-components-final.log`与`hermes-viewer-session-tests.log`，独立High关闭本组件范围P1/P2；这不是浏览器或审美验收。共享getter/来源helper由视频owner交付；legacy source key缺原output时的closed hold及组合Web检查尚待整合，整体P1仍未宣布关闭。
+
+一次额外路径核查纠正：`ResearchPresentation.generate`保留视频参数分支，但现有`onGenerate`只传ids用于图表，不能当作当前站内视频入口。为该假设写的候选测试没有触达视频分支，已移入ignored tmp并保留原失败；未修改生产文件，也不计作产品RED或测试通过。冻结版本的原文reader/测试修复由生图owner承担，本线保持其文件只读；来源弹层若有真实几何缺陷，按实际截图与计算样式另作局部修正。
+
+原文底部弹层P2已有真实1280×720截图、quote viewport ratio0和独立RED：Tailwind individual translate叠加局部translateX令内容移出屏幕。独立`515cea73`仅在`.pub-evidence-sheet`重置translate，保留bottom/宽度/transform，不改全局Dialog；已交总控和生图消费，desktop/narrow的真实可见性复验由该reader用例完成，尚不把源码修正当作浏览器通过。

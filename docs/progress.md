@@ -3,7 +3,19 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-09 期刊全量重做实现已推送；共用文件/Hermes、独立私有工作稿及真实PostgreSQL确认边界通过，五区浏览器验收仍在修复。显式回滚与双库备份已完成，尚未新部署；精确运行身份、CI缺口及完整剩余范围见[期刊 CURRENT](handoff/2026-10-08-journal-workbench-handoff.md)。
+- 2026-10-09：ee2批次收齐目录高级筛选及原浏览器验收（15单测/TC0；真实交互/375坐标待CI），历史href修复全等集入但本机auth全文件13过/1启动异常未全绿。root截图等待当前尺寸后新draw并保存正常JSON，独立High GO；导航原70组下一轮收齐失败。be426指南中文字形已修、320英文与角色像素/版本阅读仍待新图；无生产/付费/资产操作。
+- 2026-10-09：be426视频及期刊三路CI通过，真实期刊图与六组锚点/首帧记录闭合原Hermes遮摘要；全页图黑skip-link先按滚动捕获差异处理，不误改键盘控件。媒体导航5过/1历史href旧断言失败/64未跑，生图接同文件完整验证；root让下一轮跑完整既定组收齐失败，UI接有实际375像素依据的目录控制栈优化。无生产、五项资产或付费动作。
+- 2026-10-09：9fb视频/期刊三路CI通过，media图文27与指南3通过后在导航旧标题断言失败，66项未执行；同一导航/blocked合同修复f865已全等集入，受影响3/3通过。真实期刊图发现窄屏浮卡挡摘要，UI页内入口修复68e已收/High GO；根补首帧/锚点/无遮挡捕获，并用现有字体补中文缺字后备。新组合WebTC/静态检查通过，实际图与下一批CI仍待；无生产或付费操作。
+- 2026-10-09：4ba后端CI已走通，媒体浏览器首组25过/2败已由真实DTO夹具差额闭合，Edge受影响2/2通过；无产品修补或付费。首轮UI14d最小集入c962，canonical24/24、TC/build0；阅读栏补截图点，指南补真实fixture/回焦用例后同批Linux CI。实际PNG、导航后续组与生产验收仍待，版本/保护边界见CURRENT。
+- 2026-10-09 01:33：4c视频/期刊CI三绿，媒体两路暴露旧第三参数guard测试；1ff改为真实readiness合同，152/152/lint0/High GO。另收两语准确不可用文案2db。只读证实Native784目录仍v17且缺新版科学资源：复用SDK、需原installer新目录配对；关闭的视频host可暂复用。最小发布边界已写原runbook，未安装/重启/付费/资产写。
+- 2026-10-09 01:10：精确8ea的4项CI中视频及期刊PR/push通过；媒体在Worker video admission的普通sdf.extract用例失败（trusted classifier期望handler1次实际0），Gateway46/Domain96通过，后续媒体浏览器未执行。原日志保留；cb092测试修复全等集入a12b，31/31，真实产品逻辑未改；原CI补足七个直接入口（本地7/7）。待新批CI，未重发模型或发布。
+- 2026-10-09：合并期刊共享管线与视频新收费守卫，保留期刊私有working RO/赞助额度及原ACK/未知任务；新phase消费P1已由af4和真实helper回归闭合，Web增量High GO，canonical相关3文件61/61、完整WebTC0。后续500期刊修正也已保留，完整Webbuild0、授权字段5/5；代码语义合并High GO，已正常推送协作分支并触发精确CI，现网/五项回收均未动。
+- 2026-10-09 00:42：只读确认期刊显式回滚已生效，服务healthy、M3保持，当前运行身份见CURRENT。已收reader/CSS两尺寸2PASS、helper58及组件50；真实消费新增phase P1由UI闭合。远端新增六期刊提交与本批重叠，先合并/High再精确CI；未发布/未操作Fig2。自有Next缓存清理被自动审批阻断、0删除，证据保留。
+- 2026-10-09：UI540/165已全等集入79ca/ab3，68例保留、52个fixture函数/TC已过，资源ID补差未发布。剩余版本原文缺口授生图两文件；视频转Web请求/存储helper，UI专注组件，写权互斥。root High明确legacy本地key闭合时不可盲POST，采用prepared scope只读恢复→资格→mutation、保留paid source/key，不加拒绝marker；整体P1/CI未GO，五项仍0写。
+- 2026-10-08：视频b705后端P1全等集入b328（33代码/测试/infra文件，保留账户与P1文档）；组件High/29业务/API74证据复用，原CI补readiness，待Web/CI/整体High。Fig.2用户已批准exact5，但生图缺认证通道、UI真实管理列表缺精确行身份，双方0写释放；UI修原DTO资源标识，正常发布后沿原授权继续，当前未回收。
+- 2026-10-08 22:45–22:47：Fig.2五项已被公开v8的sealed history引用，即使publicationIncluded=false仍受保护；旧私有/0公开refs已降历史。soft-trash会使五项成员直链404，匿名冻结列表原本不含它们；软回收方案仍需明确保留对象/封存、30天恢复条件及真实GET验证。另77b源对象缺失但不扩scope；无生产写，证据见CURRENT。
+- 2026-10-08：ACK CAS与单调更新时间f1de/cc1e全等集入a5d792/89d6ba；3例Green/原High P2关闭，22:18视频同源真实派发交错另2/2通过，整体收费边界/TC/集成High仍待，原CI追加对应组。生图接Fig.2重复plan/d508悬空copy现态与可恢复方案，不按旧快照清理。导航已知mock/入口差额由UI同批修完再跑CI，未部署或新增付费。
+- 2026-10-08：核实旧049c已非current；21:29只读证据指向v27当前96b owner、69 active/0 vector。精确显式owner CLI03b3全等集入3a3faa，High GO/31例通过，未生产apply。e431视频CI成功、期刊双语fixture失败、media导航缺mock耗时取消；323修正/失败trace本地已集，UI补mock。生图另修ACK ORM时钟回退P2，视频补收费前readiness；发布仍NO-GO，详见CURRENT。
 - 2026-10-08：浏览器可见入口修正及OA无元数据反馈已全等集入，保留真实目录点击/创建/幂等/多PDF检查，等待CI；BGE恢复f427全等集入79050，High关闭CLI参数P2、73相关本地验证通过，追加原CI。生图续只读核真实049c owner/双预算/来源，视频/UI继续P1收费前检查；发布仍NO-GO，未生产apply。
 - 2026-10-08：c3已推但发布NO-GO：集成High发现video不可执行时仍可能先花Native/图片额度，视频/UI优先补付费前资格。期刊旧Browse all journals与media四例旧上传链接定位失败已交UI；Search29/Worker25、新Web单测和构建已过，后续导航未跑。BGE原终态无合法现成恢复，High B方案后授生图原retry/CLI内部精确任务恢复；生产、旧paid和69段lexical未动。
 - 2026-10-08：UI已提交fe12全等合入2265（含普通视频入口及期刊语义合并），长表格57c751全等集入aa0；各自High/定向证据保留。原媒体CI补新Web恢复/导航及Search29/Worker25，最终构建与Linux行为待本批执行。生图已转既有lexical来源合法消费路径只读分析；未收UI在途页面，未生产索引/部署/付费。

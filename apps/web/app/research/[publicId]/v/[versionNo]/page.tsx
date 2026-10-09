@@ -44,8 +44,9 @@ export default async function Page({ params }: { params: { publicId: string; ver
   const versionNo = Number(params.versionNo);
   const t = await getTranslations('public');
   const shell = await getTranslations('shell');
-  const publicShell = (children: React.ReactNode, mainClassName?: string) => (
+  const publicShell = (children: React.ReactNode, mainClassName?: string, includeHermesDock = true) => (
     <PublicShell
+      includeHermesDock={includeHermesDock}
       headerActions={<SiteHeader context="public-product" tone="paper" />}
       headerUtilities={<PublicProductAccess />}
       mainClassName={mainClassName}
@@ -71,5 +72,5 @@ export default async function Page({ params }: { params: { publicId: string; ver
   // Keep corrected legacy URLs temporary: a later real v10 must remain usable.
   if (result.research.version.versionNo !== versionNo) redirect(result.research.url);
   const journalPackage = (result.research as typeof result.research & { journalPackage?: PublicJournalPackageData }).journalPackage;
-  return publicShell(<div className="pub-page-tabbed min-w-0 max-w-full">{journalPackage ? <PublicJournalRelease value={journalPackage} /> : <PublicReadingSurface research={result.research} />}</div>, 'min-w-0 max-w-full');
+  return publicShell(<div className="pub-page-tabbed min-w-0 max-w-full">{journalPackage ? <PublicJournalRelease value={journalPackage} /> : <PublicReadingSurface research={result.research} />}</div>, 'min-w-0 max-w-full', !journalPackage);
 }

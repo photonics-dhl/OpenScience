@@ -32,8 +32,9 @@ function fixture() {
   Object.assign(prisma.hermesResearchRun, { findUniqueOrThrow: async (args: Parameters<typeof prisma.hermesResearchRun.findUnique>[0]) =>
     prisma.hermesResearchRun.findUnique(args) });
   Object.assign(prisma.auditLog, { findMany: vi.fn(async ({ where }: { where: { action: string; actorId: string;
-    AND: Array<{ metadata: { path: string[]; equals: string } }> } }) => db.auditLogs.filter(row => row.action === where.action
-      && row.actorId === where.actorId && where.AND.every(clause => row.metadata[clause.metadata.path[0]!] === clause.metadata.equals))),
+    AND?: Array<{ metadata: { path: string[]; equals: string } }>; metadata?: { path: string[]; equals: string } } }) => db.auditLogs.filter(row => row.action === where.action
+      && row.actorId === where.actorId && (!where.AND || where.AND.every(clause => row.metadata[clause.metadata.path[0]!] === clause.metadata.equals))
+      && (!where.metadata || row.metadata[where.metadata.path[0]!] === where.metadata.equals))),
     findFirst: vi.fn(async ({ where }: { where: { action: string; actorId: string;
     metadata: { path: string[]; equals: string } } }) => db.auditLogs.find(row => row.action === where.action
       && row.actorId === where.actorId && row.metadata[where.metadata.path[0]!] === where.metadata.equals) ?? null) });
@@ -98,6 +99,21 @@ describe('explicit source parser recovery', () => {
     await retryIngestionTask(f.deps as Parameters<typeof retryIngestionTask>[0], { userId: f.read.actorId, taskId: 'ingestion' });
     expect(f.db.agentTasks[0].result).toEqual({ sourceMapRef: f.sourceMapRef });
     expect(f.db.auditLogs[0].metadata).not.toHaveProperty('runId');
+  });
+
+  it('holds a new video parser retry but keeps its committed same-key recovery readable', async () => {
+    const f = fixture(); let ready = false;
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
+    Object.assign(f.db.hermesResearchRuns[0].generationSettings, { output: 'video' });
+    const before = structuredClone(f.db);
+    await expect(retryHermesGeneration(f.deps, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    ready = true;
+    await retryHermesGeneration(f.deps, f.input);
+    expect(f.db.agentTasks).toHaveLength(1); expect(f.db.usageLedger).toHaveLength(0);
+    const recovered = structuredClone(f.db); ready = false;
+    await retryHermesGeneration(f.deps, f.input);
+    expect(f.db).toEqual(recovered); expect(f.redis.lpush).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a generic ingestion retry bound to a failed Hermes run', async () => {

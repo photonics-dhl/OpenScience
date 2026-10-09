@@ -5,6 +5,26 @@ import { HERMES_PATROL_MOTION_ENVELOPE, HERMES_PATROL_TRANSLATION_ENVELOPE } fro
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
 
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  // Page-specific failure fixtures take priority; clearing them keeps this isolation boundary.
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'GET') {
+      if (url.pathname === '/api/workspaces') return json(route, { workspaces: [{ id: 'workspace-hermes', name: 'Personal', type: 'personal', role: 'owner', status: 'active' }] });
+      if (url.pathname === '/api/agent/tasks' && url.searchParams.get('actionable') === 'false') {
+        if (url.searchParams.get('kind') === 'workspace.guide' && url.searchParams.size === 2) return json(route, { tasks: [] });
+        const routeRo = new URL(page.url()).pathname.match(/^\/research-objects\/([^/]+)\//u)?.[1];
+        if (url.searchParams.get('kind') === 'source.retrieve' && url.searchParams.get('recovery') === 'true'
+          && url.searchParams.get('targetKind') === (routeRo ? 'research_object' : 'personal')
+          && url.searchParams.get('researchObjectId') === (routeRo ?? null)
+          && url.searchParams.size === (routeRo ? 5 : 4)) return json(route, { tasks: [] });
+      }
+    }
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
+
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 );
@@ -112,6 +132,7 @@ async function json(route: Route, body: unknown, status = 200) {
 
 async function mockDashboard(page: Page, taskState?: string) {
   await page.route('**/api/**', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
     const url = new URL(route.request().url());
     if (url.pathname === '/api/auth/me') return json(route, {
       userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
@@ -123,12 +144,6 @@ async function mockDashboard(page: Page, taskState?: string) {
       id: 'task-hermes', researchObjectId: 'ro-hermes', researchTitle: 'Coherent transport at the attosecond frontier',
       logicalPath: 'manuscript.pdf', state: taskState, retryCount: 0, error: taskState.startsWith('failed_') ? 'Parser interrupted' : null,
     }] : [] });
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'workspace.guide') {
-      return json(route, { tasks: [] });
-    }
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
-      return json(route, { tasks: [] });
-    }
     return route.fallback();
   });
 }
@@ -630,7 +645,7 @@ test('Hermes releases a fallback WebGL context when WebGL2 initialization fails'
     testWindow.__hermesContexts = { acquired: 0, lost: 0 };
     const acquired = new WeakSet<object>();
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (kind: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
       if (kind === 'webgl2') return null;
       const context = original.call(this, kind as '2d', ...args as []) as WebGLRenderingContext | null;
       if (!context || (kind !== 'webgl' && kind !== 'experimental-webgl')) return context;
@@ -689,7 +704,7 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
   await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
 
-  await offscreenStyle.evaluate((style) => style.remove());
+  await offscreenStyle.evaluate((style) => (style as HTMLStyleElement).remove());
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 });
 
@@ -702,7 +717,7 @@ test('Hermes aborts and releases a pending initialization on SPA unmount', async
     testWindow.__hermesPendingContexts = { acquired: 0, lost: 0 };
     const originalContext = HTMLCanvasElement.prototype.getContext;
     const tracked = new WeakSet<object>();
-    HTMLCanvasElement.prototype.getContext = function (kind: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
       const context = originalContext.call(this, kind as '2d', ...args as []) as WebGL2RenderingContext | null;
       if (kind !== 'webgl2' || !context || !this.matches('[data-hermes-articulated-canvas]')) return context;
       if (!tracked.has(context)) {
@@ -805,6 +820,8 @@ test('Hermes retries with a fresh runtime after the required Cubism model fails'
 });
 
 test('Hermes keeps the real six-field approval surface still until confirmation succeeds', async ({ page }) => {
+  await mockDashboard(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: baseUrl }]);
   const detail = {
     batchId: 'batch-review',
     researchObjectId: 'ro-hermes',
@@ -818,11 +835,36 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
       } },
     },
   };
+  const confirmation = { commitId: 'commit-review', versionId: 'version-review', versionNo: 3, version: 3, evidenceStatus: 'needs_review', missingFields: [] };
+  let confirmations = 0;
+  await page.route('**/api/research-objects/ro-hermes/ingestion', (route) => route.request().method() === 'GET' ? json(route, {
+    researchObjectId: 'ro-hermes', version: detail.version,
+    tasks: [{ ...detail.task, confirmation: detail.task.state === 'confirmed' ? confirmation : null }],
+    latestConfirmation: detail.task.state === 'confirmed' ? confirmation : null,
+  }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/hermes-runs?ingestionTaskId=task-review', (route) => route.request().method() === 'GET' ? json(route, { run: null }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes', (route) => route.request().method() === 'GET' ? json(route, { researchObject: {
+    id: 'ro-hermes', workspaceId: 'workspace-hermes', title: 'Reviewed research', version: detail.version,
+    status: 'draft', visibility: 'private', sdf: { core: detail.task.result.core },
+  } }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/versions', (route) => route.request().method() === 'GET' ? json(route, {
+    versions: detail.task.state === 'confirmed' ? [{ ...confirmation, status: 'draft', createdAt: '2026-10-08T00:00:00.000Z' }] : [],
+  }) : route.fallback());
+  await page.route('**/api/versions/version-review', (route) => route.request().method() === 'GET' ? json(route, {
+    version: { versionId: confirmation.versionId, snapshot: { core: detail.task.result.core, artifacts: [] } },
+  }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/versions/version-review/record', (route) => route.request().method() === 'GET' ? json(route, {
+    record: { objectId: 'ro-hermes', versionId: confirmation.versionId, recordState: 'recorded', sdf: detail.task.result.core, manifest: [], claims: [], evidence: [] },
+  }) : route.fallback());
   await page.route('**/api/ingestion/tasks/task-review', (route) => json(route, detail));
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'review-csrf' }));
   await page.route('**/api/ingestion/task-review/confirm', (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postDataJSON()).toEqual({ version: 2, core: detail.task.result.core, sourceAgentTaskId: 'agent-review' });
+    confirmations += 1;
     detail.task.state = 'confirmed';
-    return json(route, { sdf: { core: detail.task.result.core }, task: detail.task });
+    detail.version = confirmation.version;
+    return json(route, { sdf: { core: detail.task.result.core }, task: detail.task, confirmation });
   });
   await page.goto(`${baseUrl}/research-objects/ro-hermes/hermes?task=task-review&hermes-motion=full`, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { name: '确认你的研究结构' })).toBeVisible();
@@ -830,7 +872,13 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
   await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
+  expect(confirmations).toBe(0);
   await page.getByRole('button', { name: '确认并创建版本' }).click();
+  await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-hermes/versions?version=version-review`);
+  await expect(page.locator('[data-selected-version="version-review"]')).toContainText('Results');
+  expect(confirmations).toBe(1);
+  await page.goBack({ waitUntil: 'networkidle' });
+  await expect(page).toHaveURL(/hermes\?task=task-review&hermes-motion=full$/);
   await expect(page.getByText('已确认并写入新版本。')).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -838,6 +886,7 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await expect(page.getByRole('button', { name: '已确认' })).toBeDisabled();
+  expect(confirmations).toBe(1);
 });
 
 test('Hermes keeps visible renderer-owned draw heartbeat gaps within 750ms', async ({ page }) => {
@@ -1069,6 +1118,10 @@ for (const recoveryCase of [
 test('RO Hermes literature target comes from the route rather than a cross-RO task suggestion', async ({ page }) => {
   const routeRo = '00000000-0000-4000-8000-000000000701';
   const taskRo = '00000000-0000-4000-8000-000000000702';
+  await page.route(`**/api/research-objects/${routeRo}/ingestion`, (route) => route.request().method() === 'GET' ? json(route, {
+    researchObjectId: routeRo, version: 1, tasks: [], latestConfirmation: null,
+  }) : route.fallback());
+  await page.route(`**/api/research-objects/${routeRo}/hermes-runs?ingestionTaskId=task-cross-ro`, (route) => route.request().method() === 'GET' ? json(route, { run: null }) : route.fallback());
   await page.route('**/api/auth/me', (route) => json(route, { userId: 'cross-ro-user', email: 'cross@example.invalid', displayName: 'Cross RO', status: 'email_verified', level: 'free' }));
   await page.route('**/api/ingestion/tasks/task-cross-ro', (route) => json(route, {
     batchId: 'batch-cross', researchObjectId: taskRo, version: 1,

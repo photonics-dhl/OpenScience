@@ -2,6 +2,25 @@ import { expect, test, type Page } from 'playwright/test';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 
+async function fillNewResearchTitle(page: Page, title: string) {
+  await page.locator('summary').filter({ hasText: /^Workspace and title$/ }).click();
+  await page.getByLabel('Title (optional)', { exact: true }).fill(title);
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    const anonymousRead = url.pathname === '/api/auth/me'
+      || (url.pathname === '/api/research-objects' && url.search === '?limit=20')
+      || (url.pathname === '/api/agent/tasks' && url.search === '?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal');
+    if (route.request().method() === 'GET' && anonymousRead) {
+      return route.fulfill({ status: 401, json: { error: { code: 'SESSION_INVALID', message: 'Not signed in' } } });
+    }
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
+
 async function mockAuthenticatedUser(page: Page, options: {
   researchObjects?: unknown[];
   tasks?: unknown[];
@@ -10,6 +29,11 @@ async function mockAuthenticatedUser(page: Page, options: {
   // Dashboard literature recovery is part of the current read contract.
   // Individual retrieval tests override these defaults with more specific fixtures.
   await page.route('**/api/agent/tasks?**', async (route) => {
+    const { searchParams } = new URL(route.request().url());
+    const guide = searchParams.get('kind') === 'workspace.guide' && searchParams.size === 2;
+    const literature = searchParams.get('kind') === 'source.retrieve' && searchParams.get('recovery') === 'true'
+      && searchParams.get('targetKind') === 'personal' && searchParams.size === 4;
+    if (route.request().method() !== 'GET' || searchParams.get('actionable') !== 'false' || (!guide && !literature)) return route.fallback();
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
   });
   await page.route('**/api/auth/me', async (route) => {
@@ -31,7 +55,7 @@ async function mockAuthenticatedUser(page: Page, options: {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: options.tasks ?? [] }) });
   });
   await page.route('**/api/workspaces', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner' }] }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner', status: 'active' }] }) });
   });
 }
 
@@ -120,6 +144,14 @@ for (const viewport of [
 ]) {
   test(`dashboard navigation remains complete at ${viewport.name} width`, async ({ page }) => {
     let uploadedBody = '';
+    const writes: string[] = [];
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method()))
+        writes.push(`${request.method()} ${path}`);
+    });
+    const core = { schemaVersion: 1, problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const researchObject = { id: 'ro-created', workspaceId: 'workspace-1', title: 'Imported study', status: 'draft', visibility: 'private', version: 1, sdf: { core, nodes: [] } };
     await page.setViewportSize(viewport);
     await mockAuthenticatedUser(page);
     await page.route('**/api/csrf-token', async (route) => {
@@ -130,7 +162,7 @@ for (const viewport of [
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
-        body: JSON.stringify({ researchObject: { id: 'ro-created', workspaceId: 'workspace-1', version: 1 } }),
+        body: JSON.stringify({ researchObject }),
       });
     });
     const tasks = [
@@ -150,13 +182,22 @@ for (const viewport of [
     await page.route('**/api/ingestion/batch-1', async (route) => {
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-created', tasks }) });
     });
-    await page.route('**/api/research-objects/ro-created', route => route.fulfill({ json: { researchObject: {
-      id: 'ro-created', workspaceId: 'workspace-1', title: 'Imported study', visibility: 'private', version: 1,
-      sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
-    } } }));
-    await page.route('**/api/research-objects/ro-created/versions', route => route.fulfill({ json: { versions: [] } }));
-    await page.route('**/api/research-objects/ro-created/ingestion', route => route.fulfill({ json: { researchObjectId: 'ro-created', version: 1, tasks: tasks.map(task => ({ ...task, confirmation: null })), latestConfirmation: null } }));
-    await page.route('**/api/research-objects/ro-created/authors', route => route.fulfill({ json: { authors: [] } }));
+    await page.route('**/api/**', route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() !== 'GET') return route.fallback();
+      if (url.pathname === '/api/research-objects/ro-created') return route.fulfill({ json: { researchObject } });
+      if (url.pathname === '/api/research-objects/ro-created/authors') return route.fulfill({ json: { authors: [] } });
+      if (url.pathname === '/api/research-objects/ro-created/versions') return route.fulfill({ json: { versions: [] } });
+      if (url.pathname === '/api/research-objects/ro-created/ingestion') return route.fulfill({ json: { researchObjectId: researchObject.id, version: 1, tasks: tasks.map(task => ({ ...task, confirmation: null })), latestConfirmation: null } });
+      if (url.pathname === '/api/ingestion/tasks/task-paper') return route.fulfill({ json: { researchObjectId: researchObject.id, batchId: 'batch-1', version: 1, task: { ...tasks[0], result: { core: { ...core, problem: 'Imported evidence' } } } } });
+      if (url.pathname === '/api/research-objects/ro-created/hermes-runs' && url.searchParams.get('ingestionTaskId') === tasks[0].id) return route.fulfill({ json: { run: null } });
+      const literature = url.pathname === '/api/agent/tasks' && url.searchParams.get('actionable') === 'false'
+        && url.searchParams.get('kind') === 'source.retrieve' && url.searchParams.get('recovery') === 'true'
+        && url.searchParams.get('targetKind') === 'research_object' && url.searchParams.get('researchObjectId') === researchObject.id && url.searchParams.size === 5;
+      if (literature) return route.fulfill({ json: { tasks: [] } });
+      return route.fallback();
+    });
     await page.goto(`${baseUrl}/dashboard`);
 
     await expect(page.getByRole('heading', { name: /research desk/i })).toBeVisible();
@@ -172,19 +213,24 @@ for (const viewport of [
     expect(overflow).toBe(false);
     await page.locator('[data-action-priority="primary"]').click();
     await expect(page).toHaveURL(`${baseUrl}/research-objects/new?mode=import`);
-    await expect(page.getByRole('heading', { name: /^new research$/i })).toBeVisible();
-    await page.getByText('Workspace and title', { exact: true }).click();
-    await page.getByLabel(/title \(optional\)/i).fill('Imported study');
+    await expect(page.getByRole('heading', { name: 'New research', level: 1, exact: true })).toBeVisible();
+    await fillNewResearchTitle(page, 'Imported study');
     await page.getByLabel(/choose files/i).setInputFiles([
       { name: 'paper.md', mimeType: 'text/markdown', buffer: Buffer.from('# evidence') },
       { name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('png') },
       { name: 'measurements.csv', mimeType: 'text/csv', buffer: Buffer.from('x,y\n1,2') },
       { name: 'analysis.py', mimeType: 'text/x-python', buffer: Buffer.from('print(1)') },
     ]);
-    await page.getByRole('button', { name: /^start research$/i }).click();
+    await page.getByRole('button', { name: 'Start research', exact: true }).click();
     await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-created/edit?ingestionTask=task-paper`);
-    await expect(page.getByText('paper.md', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Imported study', { exact: true })).toBeVisible();
+    const source = page.getByRole('combobox', { name: 'Current material', exact: true });
+    await expect(source).toHaveValue('task-paper');
+    await expect(source.locator('option:not([value=""])')).toHaveCount(4);
+    await expect(page.getByRole('link', { name: 'View task details and recovery', exact: true })).toHaveAttribute('href', '/research-objects/ro-created/hermes?task=task-paper');
     for (const filename of ['paper.md', 'figure.png', 'measurements.csv', 'analysis.py']) expect(uploadedBody).toContain(filename);
+    expect(uploadedBody.match(/name="file"; filename="/g)).toHaveLength(4);
+    expect(writes).toEqual(['POST /api/research-objects', 'POST /api/research-objects/ro-created/ingest']);
     const finalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(finalOverflow).toBe(false);
   });
@@ -207,7 +253,7 @@ test('dashboard keeps the real task reachable in history without duplicating the
   });
 
   await page.goto(`${baseUrl}/dashboard`);
-  const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
+  const href = `/research-objects/${task.researchObjectId}/edit?ingestionTask=${task.id}`;
   await expect(page.locator(`[href="${href}"]`)).toHaveCount(1);
   await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
@@ -229,6 +275,10 @@ test('dashboard keeps the real task reachable in history without duplicating the
 
 test('a server-blocked material remains visible without a retry action', async ({ page }) => {
   await mockAuthenticatedUser(page);
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=ro-blocked', route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { tasks: [] } });
+  });
   await page.route('**/api/csrf-token', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) });
   });
@@ -240,10 +290,9 @@ test('a server-blocked material remains visible without a retry action', async (
   });
 
   await page.goto(`${baseUrl}/research-objects/new?mode=import`);
-  await page.getByText('Workspace and title', { exact: true }).click();
-  await page.getByLabel(/title \(optional\)/i).fill('Blocked evidence study');
+  await fillNewResearchTitle(page, 'Blocked evidence study');
   await page.getByLabel(/choose files/i).setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg><script /></svg>') });
-  await page.getByRole('button', { name: /^start research$/i }).click();
+  await page.getByRole('button', { name: 'Start research', exact: true }).click();
   await expect(page.getByText('Security scan blocked this file').first()).toBeVisible();
   await expect(page.getByText(/KB · Blocked/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);

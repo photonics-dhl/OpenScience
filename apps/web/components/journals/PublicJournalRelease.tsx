@@ -3,6 +3,7 @@ import * as React from 'react';
 import type { JournalDraft } from '@/lib/journal-api';
 import { JournalFeedback } from './JournalFeedback';
 import { paperDoiPath } from '@/lib/paper-identity';
+import { HermesShellDockAnchor } from '@/components/hermes/HermesShellDockAnchor';
 
 export interface PublicJournalPackageData {
   articleId?: string;
@@ -56,6 +57,7 @@ export function PublicJournalRelease({ value }: { value: PublicJournalPackageDat
     </> : null}
     {value.source?.url ? <a className="mt-5 inline-block max-w-full break-words text-sm text-os-ink [overflow-wrap:anywhere]" href={value.source.url}>查看原始来源：{value.source.label}</a> : null}
     {value.license ? <p className="mt-2 text-sm text-os-muted-paper">衍生解读许可：{value.license}</p> : null}
+    <aside className="journal-reading-companion" aria-label="Hermes" data-journal-reading-companion="release"><HermesShellDockAnchor inline /></aside>
     {value.articleId ? <JournalFeedback journalId={value.journal.id} articleId={value.articleId} versionNo={value.versionNo} returnTo={value.url} /> : null}
   </section>;
 }

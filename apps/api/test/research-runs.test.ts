@@ -14,7 +14,7 @@ type RunQuery = { where?: { actorId?: string; researchObjectId?: string; profile
   orderBy?: Array<{ createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' }>;
   cursor?: { id: string }; skip?: number; take?: number };
 
-async function fixture(role = 'author', canStartNewVideo: () => Promise<boolean> = async () => true) {
+async function fixture(role = 'author', video: { videoEnabled?: boolean; readVideoReadiness?: () => Promise<boolean> } = {}) {
   const { prisma, db } = createFakePrisma();
   const redis = createFakeRedis();
   const user = seedUser(db, { email: 'run@example.com', displayName: 'Run User' });
@@ -57,7 +57,7 @@ async function fixture(role = 'author', canStartNewVideo: () => Promise<boolean>
     const row = await prisma.hermesResearchRun.findUnique(args); if (!row) throw new Error('Missing API run fixture'); return row;
   };
   const app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
-    storage: {} as StorageAdapter, canStartNewVideo });
+    storage: {} as StorageAdapter, ...video });
   const errors: Error[] = []; app.addHook('onError', async (_request, _reply, error) => { errors.push(error); });
   apps.push(app);
   return { app, db, errors, actorId: user.id, cookies: { openscience_session: token } };
@@ -79,22 +79,8 @@ function storedRun(f: Awaited<ReturnType<typeof fixture>>, generationSettings: u
 }
 
 describe('Hermes research run API contract', () => {
-  it('reports scoped fresh video readiness without starting a run', async () => {
-    let available = true;
-    const { app, db, cookies } = await fixture('author', async () => available);
-    const url = `/research-objects/${RO_ID}/hermes-video-readiness`;
-    const ready = await app.inject({ method: 'GET', url, cookies });
-    expect(ready.statusCode, ready.body).toBe(200);
-    expect(ready.headers['cache-control']).toBe('private, no-store');
-    expect(ready.json()).toEqual({ available: true });
-    available = false;
-    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ available: false });
-    db.memberships.length = 0;
-    expect((await app.inject({ method: 'GET', url, cookies })).statusCode).toBe(404);
-  });
-
   it('binds an explicit video intent to the original nine-task grant and replays the same run', async () => {
-    const { app, db, errors, cookies } = await fixture();
+    const { app, db, errors, cookies } = await fixture('author', { videoEnabled: true, readVideoReadiness: async () => true });
     Object.assign(db.artifacts[0], { mimeType: 'application/pdf' }); Object.assign(db.agentTasks[0], { kind: 'sdf.extract' });
     const generation = { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'aged-academia',
       instruction: 'Explain this paper in a source-bound narrated video.', output: 'video' };
@@ -108,6 +94,61 @@ describe('Hermes research run API contract', () => {
     const changed = await app.inject({ ...request, payload: { ingestionTaskIds: [INGESTION_ID], generation: {
       profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'aged-academia', instruction: generation.instruction } } });
     expect(changed.statusCode).toBe(409); expect(db.hermesResearchRuns).toHaveLength(1);
+  });
+
+  for (const [name, video] of [
+    ['disabled', { videoEnabled: false, readVideoReadiness: async () => true }],
+    ['closed', { videoEnabled: true, readVideoReadiness: async () => false }],
+    ['missing', { videoEnabled: true }],
+    ['unreadable', { videoEnabled: true, readVideoReadiness: async () => { throw new Error('local readiness read failed'); } }],
+  ] as const) {
+    it(`rejects a new video run before any task or debit when service is ${name}`, async () => {
+      const { app, db, cookies } = await fixture('author', video);
+      Object.assign(db.artifacts[0], { mimeType: 'application/pdf' }); Object.assign(db.agentTasks[0], { kind: 'sdf.extract' });
+      const response = await app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+        headers: { 'idempotency-key': 'closed-native-video' }, payload: { ingestionTaskIds: [INGESTION_ID],
+          generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'scientific', instruction: 'Explain the paper.', output: 'video' } } });
+      expect(response.statusCode, response.body).toBe(503);
+      expect(response.json().error.code).toBe('VIDEO_UNAVAILABLE');
+      expect(db.hermesResearchRuns).toHaveLength(0);
+      expect(db.agentTasks).toHaveLength(1);
+      expect(db.usageLedger).toHaveLength(0);
+    });
+  }
+
+  it('reads dynamic video capability without creating a run or exposing executor configuration', async () => {
+    let ready = true;
+    const { app, db, cookies } = await fixture('author', { videoEnabled: true, readVideoReadiness: async () => ready });
+    const url = `/research-objects/${RO_ID}/hermes-video-capability`;
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    const available = await app.inject({ method: 'GET', url, cookies });
+    expect(available.statusCode, available.body).toBe(200);
+    expect(available.json()).toEqual({ canGenerateVideo: true });
+    expect(available.headers['cache-control']).toContain('no-store');
+    ready = false;
+    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ canGenerateVideo: false });
+    expect(db.hermesResearchRuns).toHaveLength(0);
+    expect(db.usageLedger).toHaveLength(0);
+  });
+
+  it('preserves same-key run creation replay and read-only restore after video service closes', async () => {
+    let ready = true;
+    const { app, db, cookies } = await fixture('author', { videoEnabled: true, readVideoReadiness: async () => ready });
+    Object.assign(db.artifacts[0], { mimeType: 'application/pdf' }); Object.assign(db.agentTasks[0], { kind: 'sdf.extract' });
+    const request = { method: 'POST' as const, url: `/research-objects/${RO_ID}/hermes-runs`, cookies,
+      headers: { 'idempotency-key': 'restorable-video-run' }, payload: { ingestionTaskIds: [INGESTION_ID], generation: {
+        profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: 'en', style: 'scientific', instruction: 'Explain the paper.', output: 'video' } } };
+    const first = await app.inject(request);
+    expect(first.statusCode, first.body).toBe(202);
+    ready = false;
+    const replay = await app.inject(request);
+    expect(replay.statusCode, replay.body).toBe(202);
+    expect(replay.json().run.id).toBe(first.json().run.id);
+    const restored = await app.inject({ method: 'GET', url: `${request.url}/${first.json().run.id}`, cookies });
+    expect(restored.statusCode, restored.body).toBe(200);
+    expect(restored.json().run.id).toBe(first.json().run.id);
+    expect(db.hermesResearchRuns).toHaveLength(1);
+    expect(db.usageLedger).toHaveLength(0);
   });
 
   it('rejects expanded video grants and internal execution selectors at the API boundary', async () => {

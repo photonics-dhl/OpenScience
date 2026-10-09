@@ -13,6 +13,7 @@ import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
+import { requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
@@ -349,11 +350,13 @@ async function hasHermesAssetReviewAuthority(
   return true;
 }
 
-export async function submitPresentationGeneration(deps: AgentDeps, input: {
+export async function submitPresentationGeneration(deps: AgentDeps & HermesVideoReadinessDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
   await requirePresentationWriteScope(deps.prisma, input);
   const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}), ...(input.video !== undefined ? { video: input.video } : {}) });
+  const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } });
+  let videoIntent = payload.kind === 'video' || payload.storyboard?.output === 'video';
   await requireStoryboardRevisionTask(deps.prisma, payload, input.userId);
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
@@ -365,12 +368,14 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    videoIntent ||= sceneParent?.view.output === 'video';
     if (generatedSceneImageRequiresPixelReview(payload) && !/^[a-f0-9]{64}$/u.test(sceneParent?.sourceEvidenceIdentity ?? ''))
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Reviewed scene image requires a source-bound storyboard; revise the plan before generating');
-    if (sceneParent) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
+    if (sceneParent && !replay) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
+  if (videoIntent && !replay) await requireHermesVideoReady(deps);
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
@@ -1637,7 +1642,7 @@ export async function requireManualSceneImageReviewReceipt(
 }
 
 /** Review existing private PNG pixels through the normal worker without paying for another render. */
-export async function submitExistingSceneImageReview(deps: AgentDeps & {
+export async function submitExistingSceneImageReview(deps: AgentDeps & HermesVideoReadinessDeps & {
   canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
 }, input: PresentationScope & {
   assetId: string; idempotencyKey: string;
@@ -1761,6 +1766,8 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
       if (!proved) throw new PresentationAssetError('VALIDATION_ERROR', 'Existing review submission is not proven absent');
       failedCopyRecovery = { taskId: firstTask.id, promptHash };
     }
+    if (parent.view.output === 'video'
+      && !await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } })) await requireHermesVideoReady(deps);
     const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
       sessionId: previous.sessionId, userId: input.userId, kind: 'presentation.generate',
       payload: previous.payload as Record<string, unknown>, idempotencyKey: input.idempotencyKey,

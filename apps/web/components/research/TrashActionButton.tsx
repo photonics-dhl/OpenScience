@@ -28,8 +28,8 @@ export function TrashActionButton({ kind, resourceId, title, published = false, 
     finally { writing.current = false; setBusy(false); }
   }
   return <>
-    <button className={styles.action} disabled={disabled || busy} type="button" onClick={() => { setError(''); setDeleteUnadopted(false); dialog.current?.showModal(); }}>{t(published ? 'archive' : 'delete')}</button>
-    <dialog className={styles.dialog} ref={dialog} aria-label={t(published ? 'archive' : 'delete')} onCancel={(event) => { if (busy) event.preventDefault(); }}>
+    <button className={styles.action} data-resource-id={resourceId} data-resource-kind={kind} disabled={disabled || busy} type="button" onClick={() => { setError(''); setDeleteUnadopted(false); dialog.current?.showModal(); }}>{t(published ? 'archive' : 'delete')}</button>
+    <dialog className={styles.dialog} data-resource-id={resourceId} data-resource-kind={kind} ref={dialog} aria-label={t(published ? 'archive' : 'delete')} onCancel={(event) => { if (busy) event.preventDefault(); }}>
       <h2>{t(published ? 'archive' : 'delete')}</h2>
       <p className={styles.itemTitle}>{title}</p>
       <p>{t(published ? 'archiveBody' : kind === 'session' ? 'sessionBody' : 'deleteBody')}</p>

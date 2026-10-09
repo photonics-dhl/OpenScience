@@ -54,6 +54,21 @@
 
 .directory[data-journal-directory] .search button { border-radius: 3px; }
 
+.refinement { margin-block: 12px 20px; border-bottom: 1px solid var(--craft-rule, #dce5e5); }
+.refinementSummary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; min-height: 56px; padding-block: 12px; list-style: none; cursor: pointer; }
+.refinementSummary::-webkit-details-marker { display: none; }
+.refinementTitle { color: var(--craft-accent, #125d66); font-size: 14px; font-weight: 500; line-height: 1.5; }
+.refinementValue { min-width: 0; color: var(--craft-muted, #51666c); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.refinementChevron { grid-column: 2; grid-row: 1 / span 2; color: var(--craft-muted, #51666c); transition: transform 160ms ease; }
+.refinement[open] .refinementChevron { transform: rotate(180deg); }
+.refinementSummary:focus-visible { outline: 2px solid var(--craft-accent, #125d66); outline-offset: 4px; }
+.directory[data-journal-directory] .refinementFields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; margin: 12px 0; padding: 0; border: 0; }
+.refinementFields > label { display: grid; min-width: 0; gap: 8px; font-size: 14px; line-height: 1.5; }
+.refinementFields select { box-sizing: border-box; width: 100%; min-width: 0; }
+.directory[data-journal-directory] .refinementHint { margin: 12px 0 20px; color: var(--craft-muted, #51666c); font-size: 13px; line-height: 1.8; }
+@media (max-width: 600px) { .directory[data-journal-directory] .refinementFields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .refinementFields > label:last-child { grid-column: 1 / -1; } }
+@media (prefers-reduced-motion: reduce) { .refinementChevron { transition: none; } }
+
 .directory[data-journal-directory] [data-journal-resources].resources {
   display: flex;
   flex-wrap: wrap;

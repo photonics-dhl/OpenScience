@@ -1,10 +1,11 @@
 import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { createPersonalWorkspace, nativeAgentRuntimeFromEnv, synclipVideoAccepting } from '@openscience/domain';
+import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider,
+  createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -105,8 +106,10 @@ async function main(): Promise<void> {
           return inspect(payerImageProvider);
         }
       : undefined;
+    const nativeAgentRuntime = nativeAgentRuntimeFromEnv(process.env);
+    const nativeSceneImageEnabled = env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip';
     const app = ownedApp = await buildApp({
-      nativeAgentRuntime: nativeAgentRuntimeFromEnv(process.env),
+      nativeAgentRuntime,
       prisma,
       redis,
       mailer,
@@ -116,13 +119,11 @@ async function main(): Promise<void> {
       ...(searchPrisma ? { deleteSearchContent: (scope: Parameters<typeof deleteSearchContent>[1]) => deleteSearchContent(searchPrisma, scope) } : {}),
       ...(searchPrisma ? { setSearchContentVisibility: (scope, _visible, tx) => setSearchContentVisibility(searchPrisma, tx, scope) } : {}),
       sceneImageEnabled: env.ai.sceneImageEnabled,
-      nativeSceneImageEnabled: env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip',
+      nativeSceneImageEnabled,
       videoEnabled: env.ai.videoEnabled,
-      canStartNewVideo: () => process.env.HERMES_VIDEO_ENABLED === 'true'
-        && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
-        && process.env.SYNCLIP_VIDEO_ENABLED === 'true'
-        && Boolean(process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim())
-        ? synclipVideoAccepting(process.env.SYNCLIP_VIDEO_RESULTS_DIR!.trim()) : Promise.resolve(false),
+      readVideoReadiness: createNativeVideoReadinessReader(process.env, {
+        nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled,
+      }),
       ...(inspectPooledImageRecoveryState && payerImageProvider ? {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
           ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,

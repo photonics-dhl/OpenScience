@@ -8,6 +8,22 @@
     "searchLabel": "搜索期刊",
     "searchPlaceholder": "搜索期刊名称、ISSN 或学科",
     "search": "搜索",
+    "filters": {
+      "label": "筛选与排序",
+      "defaults": "全部学科 · 全部获取方式 · A–Z",
+      "subjectLabel": "学科",
+      "allSubjects": "全部学科",
+      "accessLabel": "开放获取",
+      "accessAll": "全部获取方式",
+      "accessOpen": "仅开放获取",
+      "accessClosed": "非开放获取",
+      "accessUnknown": "状态未知",
+      "sortLabel": "排序",
+      "sortPaperCount": "平台收录篇数",
+      "sortCitationCount": "被引次数",
+      "availability": "开放获取状态未知不等于非开放获取；引用量排序在接入可靠数据后启用。",
+      "citationFallback": "引用量暂不可用，当前按 A–Z 排序"
+    },
     "loading": "正在加载期刊目录…",
     "loadFailed": "暂时无法加载期刊目录。",
     "retry": "重试",
@@ -1520,13 +1536,13 @@
       "title": "把研究讲成一支视频",
       "startDescription": "让论文的核心思想成为连贯的画面与旁白。完成后先看整支视频，再告诉 Hermes 你想打磨的地方。",
       "startFor": "开始制作研究视频：{source}",
+      "unavailable": "视频制作暂不可用。你可以继续编辑，或查看已有成果。",
       "composing": "正在把画面与旁白串成故事",
       "ready": "视频已就绪，来看看吧",
       "runningDescription": "Hermes 正在梳理故事、制作画面并组织旁白。完成后，回到这里就能观看。",
       "readyDescription": "看完完整视频，给出你的意见，再决定是否采用。",
       "preview": "研究讲解视频",
-      "viewResult": "打开视频，给出反馈",
-      "unavailable": "视频生成当前不可用，未启动新的付费分析。"
+      "viewResult": "打开视频，给出反馈"
     },
     "sourceReanalysis": {
       "start": "新建付费分析并继续",
@@ -2489,7 +2505,9 @@
       "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
       "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
       "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
-    }
+    },
+    "entryHint": "一起梳理下一步",
+    "openConversation": "打开对话"
   },
   "researchWorkbenchReview": {
     "backHome": "返回 OpenScience",
@@ -2885,6 +2903,9 @@
     "charge": "每次提交使用 1 AI credit。生成独立草稿，保留原稿，不会自动批准或发布。",
     "loadError": "无法加载研究上下文，请刷新重试。",
     "submitError": "提交失败，请检查来源分镜与权限后重试。",
+    "videoUnavailable": "视频制作暂不可用，已有成果仍可查看。",
+    "videoAvailabilityError": "暂时无法确认视频是否可制作，请稍后重试。",
+    "identityChanged": "账号已切换，请刷新后再继续制作。",
     "uncertain": "提交结果尚不明确。已锁定编辑，请重试同一请求以找回任务，避免重复提交。",
     "loading": "正在加载研究…",
     "refresh": "刷新",
@@ -3103,7 +3124,8 @@
         "title": "在哪里找到论文原文？",
         "body": "在研究阅读页的资料区域打开原文与来源；查看图文时可以随时回到正文。"
       }
-    }
+    },
+    "viewFigure": "查看完整研究图"
   },
   "journalServiceLabels": {
     "basic": "基础服务"

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -73,6 +73,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
   let articleId: string;
   let slug: string;
   let journalName: string;
+  const journalNameEn = 'Synthetic Open Science Journal';
   let releaseUrl: string;
 
   beforeAll(async () => {
@@ -93,7 +94,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
     adminToken = await createSession(redis, { userId: admin.id, status: admin.status });
     app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'isolated-journal-browser-test', secureCookies: false, journalsEnabled: true, publicIdPrefix: 'BRW', nativeAgentRuntime });
 
-    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: 'Synthetic Open Science Journal', pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
+    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: journalNameEn, pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
     expect(applicationResponse.statusCode, applicationResponse.body).toBe(200);
     const application = applicationResponse.json().application as { id: string; revision: number };
     const submitted = await app.inject({ method: 'POST', url: `/journals/applications/${application.id}/submit`, cookies: { openscience_session: ownerToken }, payload: { revision: application.revision, submissionKey: randomUUID() } });
@@ -186,6 +187,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
           expect(response?.status(), `${surface.name} ${viewport.name}`).toBe(200);
           // The responsive navigation keeps a hidden desktop link in the DOM on mobile.
           for (const text of surface.expected) await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible' });
+          let directoryRefinement: Record<string, unknown> | undefined;
           if (surface.name === 'directory') {
             // The directory's primary browse heading is intentional in both locales.
             const main = page.getByRole('main');
@@ -193,20 +195,105 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             const directory = main.locator('[data-journal-directory]');
             await directory.waitFor({ state: 'visible' });
             expect(await directory.getAttribute('aria-label')).toBeTruthy();
+            await expect.poll(() => directory.locator('form').getAttribute('aria-busy')).toBe('false');
+            const refinement = directory.locator('details[data-journal-refinement]');
+            const refinementSummary = refinement.locator('summary');
+            // Hidden controls remain addressable for closed-state/popstate assertions.
+            const subject = refinement.getByRole('combobox', { name: /^学科/, includeHidden: true });
+            const access = refinement.getByRole('combobox', { name: /^开放获取/, includeHidden: true });
+            const sort = refinement.getByRole('combobox', { name: /^排序/, includeHidden: true });
+            const readRefinement = async () => ({
+              url: page.url(), open: await refinement.evaluate(element => (element as HTMLDetailsElement).open),
+              summary: await refinementSummary.innerText(),
+              values: { subject: await subject.inputValue(), access: await access.inputValue(), sort: await sort.inputValue() },
+            });
+            const initial = await readRefinement();
+            expect(initial.open).toBe(false);
+            expect(initial.values).toEqual({ subject: '', access: 'all', sort: 'az' });
+            expect(initial.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            const firstHeading = directory.locator('[data-journal-entry]').first().getByRole('heading', { level: 2 });
+            await firstHeading.waitFor({ state: 'visible' });
+            // Measure the initial viewport before focus/keyboard actions can scroll it.
+            const firstResult = await firstHeading.evaluate(element => ({ text: element.textContent?.trim(),
+              bounds: element.getBoundingClientRect().toJSON(), scrollY,
+              viewport: { width: innerWidth, height: innerHeight } }));
+            directoryRefinement = { initial, firstResult };
+            if (viewport.width === 375) {
+              expect(firstResult.scrollY).toBe(0);
+              expect(firstResult.bounds.height).toBeGreaterThan(0);
+              expect(firstResult.bounds.top, JSON.stringify(firstResult)).toBeGreaterThanOrEqual(0);
+              expect(firstResult.bounds.bottom, JSON.stringify(firstResult)).toBeLessThanOrEqual(firstResult.viewport.height);
+            }
+            await refinementSummary.focus();
+            expect(await refinementSummary.evaluate(element => element === document.activeElement)).toBe(true);
+            await refinementSummary.press('Enter');
+            await expect.poll(() => refinement.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+            const availability = {
+              subjectEnabled: await subject.isEnabled(), accessEnabled: await access.isEnabled(), sortEnabled: await sort.isEnabled(),
+              fixtureSubjectEnabled: await subject.locator('option[value="Open Science"]').isEnabled(),
+              openDisabled: await access.locator('option[value="open"]').isDisabled(),
+              closedDisabled: await access.locator('option[value="closed"]').isDisabled(),
+              unknownEnabled: await access.locator('option[value="unknown"]').isEnabled(),
+              paperCountEnabled: await sort.locator('option[value="paper_count"]').isEnabled(),
+              citationDisabled: await sort.locator('option[value="citation_count"]').isDisabled(),
+            };
+            directoryRefinement.availability = availability;
+            expect(availability).toEqual({ subjectEnabled: true, accessEnabled: true, sortEnabled: true,
+              fixtureSubjectEnabled: true, openDisabled: true, closedDisabled: true, unknownEnabled: true,
+              paperCountEnabled: true, citationDisabled: true });
+            await subject.selectOption('Open Science');
+            expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
+            await refinementSummary.press('Enter');
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: 'Open Science' } });
+            const active = await readRefinement();
+            expect(active.summary).toContain('Open Science');
+            directoryRefinement.active = active;
+            await page.goBack({ waitUntil: 'networkidle' });
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            expect(new URL(page.url()).searchParams.get('subject')).toBeNull();
+            const back = await readRefinement();
+            expect(back.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            directoryRefinement.back = back;
+            await page.goForward({ waitUntil: 'networkidle' });
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: 'Open Science', access: 'all', sort: 'az' } });
+            expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
+            const forward = await readRefinement();
+            expect(forward.summary).toContain('Open Science');
+            directoryRefinement.forward = forward;
+            await refinementSummary.press('Enter');
+            await expect.poll(() => refinement.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+            await access.selectOption('unknown');
+            await sort.selectOption('paper_count');
+            await expect.poll(readRefinement).toMatchObject({ values: { subject: 'Open Science', access: 'unknown', sort: 'paper_count' } });
+            const selected = await readRefinement();
+            expect(new URL(selected.url).searchParams.get('access')).toBe('unknown');
+            expect(new URL(selected.url).searchParams.get('sort')).toBe('paper_count');
+            expect(selected.summary).toContain('状态未知'); expect(selected.summary).toContain('平台收录篇数');
+            directoryRefinement.selected = selected;
+            await subject.selectOption(''); await access.selectOption('all'); await sort.selectOption('az');
+            await refinementSummary.press('Enter');
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            const reset = await readRefinement();
+            for (const key of ['subject', 'access', 'sort']) expect(new URL(reset.url).searchParams.get(key)).toBeNull();
+            expect(reset.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            directoryRefinement.reset = reset;
             await directory.getByRole('searchbox').fill(journalName);
             await directory.getByRole('button', { name: '搜索', exact: true }).click();
-            const directoryTitle = 'Synthetic Open Science Journal';
-            await directory.getByRole('heading', { name: directoryTitle, exact: true }).waitFor({ state: 'visible' });
-            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: directoryTitle, exact: true }) });
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalNameEn, exact: true }) });
             await result.waitFor({ state: 'visible' });
             await result.getByText(journalName, { exact: true }).waitFor({ state: 'visible' });
             expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
             await result.click();
             await page.waitForURL(`${baseUrl}/journals/${slug}`, { waitUntil: 'networkidle' });
-            await page.getByRole('heading', { level: 1, name: directoryTitle, exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('heading', { level: 1, name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
             await page.goBack({ waitUntil: 'networkidle' });
             await directory.waitFor({ state: 'visible' });
-            await directory.getByRole('heading', { name: directoryTitle, exact: true }).waitFor({ state: 'visible' });
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            await expect.poll(() => directory.getByRole('searchbox').inputValue()).toBe(journalName);
+            expect(new URL(page.url()).searchParams.get('q')).toBe(journalName);
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            directoryRefinement.searchReturn = await readRefinement();
           }
           if (surface.name === 'release') {
             const sourceLink = page.getByRole('link', { name: /查看原始来源/ });
@@ -221,6 +308,55 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '草稿箱' }).click();
           }
           if (surface.name === 'processing-redirect') expect(new URL(page.url()).searchParams.get('view')).toBe('drafts');
+          if (['directory', 'homepage', 'release'].includes(surface.name)) {
+            // Back navigation can restore scroll/focus before the deferred Live2D first frame.
+            // A loaded heading and the overflow check below do not establish actor visibility.
+            const before = await page.evaluate(() => ({ scrollY, activeTag: document.activeElement?.tagName, activeText: document.activeElement?.textContent?.trim().slice(0, 100) }));
+            const readingScope = surface.name === 'homepage' ? '[data-journal-reading-companion="home"] '
+              : surface.name === 'release' ? '[data-journal-reading-companion="release"] ' : '';
+            const anchorSelector = `${readingScope}[data-hermes-dock-anchor="true"][data-hermes-companion-margin="true"]`;
+            const anchor = page.locator(anchorSelector);
+            await anchor.scrollIntoViewIfNeeded();
+            const readCompanion = () => page.evaluate((selector) => {
+              const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+              const inlineAnchor = document.querySelector<HTMLElement>(selector);
+              const carrier = stage?.closest('[data-hermes-portal-carrier="true"]');
+              const bounds = (element: Element | null | undefined) => element?.getBoundingClientRect().toJSON() ?? null;
+              return {
+                stageCount: document.querySelectorAll('[data-hermes-workspace-stage="true"]').length,
+                anchorCount: document.querySelectorAll('[data-hermes-dock-anchor="true"]').length,
+                anchored: stage?.dataset.hermesAnchored,
+                dockReady: stage?.dataset.hermesDockReady,
+                rigStatus: stage?.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]')?.dataset.hermesRigStatus,
+                carrierAtAnchor: Boolean(inlineAnchor && carrier?.parentElement === inlineAnchor),
+                scrollY, activeTag: document.activeElement?.tagName,
+                activeText: document.activeElement?.textContent?.trim().slice(0, 100),
+                stageBounds: bounds(stage), anchorBounds: bounds(inlineAnchor),
+              };
+            }, anchorSelector);
+            let warmed: Awaited<ReturnType<typeof readCompanion>> | null = null;
+            try {
+              await expect.poll(readCompanion, { timeout: 20_000 }).toMatchObject({
+                stageCount: 1, anchorCount: 1, anchored: 'true', dockReady: 'true', rigStatus: 'ready', carrierAtAnchor: true,
+              });
+              warmed = await readCompanion();
+              // Full-page capture at a restored scroll offset can paint an offscreen fixed skip link over page content.
+              // Keep the real focus state while using a declared top-of-page capture viewport.
+              await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+            } finally {
+              await writeFile(resolve(outputDir, `${surface.name}-${viewport.name}-companion.json`), JSON.stringify({ before, warmed, after: await readCompanion(), ...(directoryRefinement ? { directoryRefinement } : {}) }, null, 2));
+            }
+            if (surface.name === 'release') {
+              const stageBox = await page.locator('[data-hermes-workspace-stage="true"]').boundingBox();
+              const summaryBox = await page.getByText(draft.summary, { exact: true }).boundingBox();
+              expect(stageBox).not.toBeNull(); expect(summaryBox).not.toBeNull();
+              // A floating actor can cover text while every element remains within scrollWidth.
+              const overlap = stageBox && summaryBox && stageBox.x < summaryBox.x + summaryBox.width
+                && stageBox.x + stageBox.width > summaryBox.x && stageBox.y < summaryBox.y + summaryBox.height
+                && stageBox.y + stageBox.height > summaryBox.y;
+              expect(overlap, `journal summary is obscured at ${viewport.width}px`).toBe(false);
+            }
+          }
           await page.screenshot({ path: resolve(outputDir, `${surface.name}-${viewport.name}.png`), fullPage: true });
           const layout = await page.evaluate(() => ({
             width: window.innerWidth,

@@ -169,11 +169,17 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+Native资源同步：应用loader与Native skill_view的不可变目录分别核对；SDK相同、资源版本号相同均不证明科学正文/引用已同步。原installer从确切Worker dist重建新配对，保留旧paid目录和完整回放；当前实物缺口及证据见CURRENT，执行顺序见deployment.md。源码新规则不等于模型已消费。
+
+Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed history，`publicationIncluded=false`也受`trash.ts`的`publicAssetReferences`保护，旧私有归属结论不能沿用。已审soft-trash方案保留对象/封存，成员直链恢复前404，初始30天恢复有权限/状态条件；禁止purge/补造源/改封存。实际操作另遇`ResearchContentManager`管理行缺资源身份，重复标题无法对应exact UUID；由UI复用原DTO补行标识，不改权限/回收语义，最新授权/写权/证据只见CURRENT。
+
+视频收费前检查：Gateway读取现有host heartbeat，API/Worker同源注入；Web普通及Native入口在新来源/分镜/帧/视频费用前消费可用性，并保持已知run读取与原key/body恢复。供应商网页free/isAdmin不能证明服务器Key无LTX权限；实际Key的模型访问尚未核实，现有host关闭/audio缺项与此分开记录。新期刊共享管线的合并、Panel phase消费差额与最终验证见CURRENT，不以单测成功宣称视频可交付。
+
 视频配音与复用：新候选沿原Native science/art/review形成完整视频计划、逐帧prompt/renderResources和原旁白；`research-run.ts`在既有授权内自动推进，Domain同一技术资格派生videoFrameAssetIds并约束局部返工。Gateway `synclip-audio-api.ts`及既有broker保存每幕TTS/视频回执，完整解码测时、核最终视频/AAC时间线再合成；未知提交不重发，长旁白走有预算的新父修订。仅实现start-reference/scene-artwork/external-narration/无字幕，其余策略付费前拒绝；Linux codec/权限及真实自然度仍需对应证据。旧Qwen/Serena和H3试镜是历史/回退材料，不代表新RO链路通过，也不在听验前删除。
 
 2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。已部署实现复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。
 
-2026-09-28新来源先以lexical恢复：第14页表格3051字/607词法token，旧049c8b89终态token_limit_exceeded；原HTTP/精确BGE计数未保留，不把旧摘要当原始回执。v14的69 chunks active、查询曾召回10段，旧v11仍58；core needs_review/canRetry=false，storage沿embedding_unavailable激活lexical。10-08候选沿chunker/search-indexer补明确超限表格的完整行窗口、逐向量校验与mean-normalize；先完成原分区再分配临时窗口预算，失败保留原lexical，源文本/定位/权限/fence不变。High三个P2闭合，原表离线Client+fakeHTTP与29/25定向通过；尚未生产BGE或重索引，真实dense召回待验，既有终态如何合法消费仍须核原producer/恢复入口。执行证据见CURRENT。
+长表dense恢复：09-28第14页表格3051字/607词法token、v14的69 active及查询10段均为历史；原HTTP/精确BGE计数未保留。10-08只读已证旧049c/be071非current、active0，当前v27的96b/d357为69 active/0 vector，来源/确认/manifest/模型/双预算条件另已核实，时点及原回执只见CURRENT。候选chunker/search-indexer对明确token超限表格划同源完整行窗口，先原分区后临时预算，校验逐向量后mean-normalize；失败保lexical、源/定位/权限/fence不变，29/25已CI通过。Domain内部恢复沿原retry与producer，CLI显式UUID后查询scope current take2、唯一后严格owner，不采用不同owner，默认只列计划；旧049c不可恢复，参数/源/模型/双预算回归与High已过。候选尚未生产BGE或重索引，部署后操作前须freshread，不以只读快照保证恢复或宣称dense召回通过。
 
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
 

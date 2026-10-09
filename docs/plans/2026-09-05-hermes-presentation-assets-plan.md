@@ -304,3 +304,21 @@ Avicenna 对上述合同差额独立 High 复核为 GO、无 P1/P2；复核只�
 上述前置不新增模式、供应商或收费重试。旧paid／unknown未触碰，媒体／CI测试继续复用既有通过证据；真实声音与论文成片尚未验收。
 
 Avicenna独立High仅复核本节及两份短证据，GO、无P1/P2；未运行模型、SSH或测试。
+
+### 2026-10-08 P1：视频 readiness 必须先于新增收费（候选完成，待统一集入发布）
+
+总控High发现：普通视频路径先重分析论文，再建run、收费规划分镜与配图，直到最终视频render才读`.ready`；最终POST被closed阻断仍会浪费上游额度。修复复用既有ready、任务和DB outbox，不新建服务、迁移、队列或收费探针。此处记录本地候选与证据，生产身份以CURRENT为准。
+
+已稳定API合同：受保护、no-store的`GET /research-objects/:id/hermes-video-capability`仅返回`{canGenerateVideo:boolean}`；通用重分析增加顶层`output?:'video'`限制性提示，不授予权限、不改变任务payload及旧同键digest。新开始不可用返回503／`VIDEO_UNAVAILABLE`；既有run用`generationHold: video-api-pending`投影，不改真实状态、key和回执。Web由原owner接线，不能仅依赖静态flag；本owner未改Web或共享CI/CURRENT。
+
+Gateway同源动态读取现有`.ready`，校验fresh、provider/model/adapter、accepting及合法Synclip旁白配置；API与Worker均注入专用依赖，Domain不读Key或调用Provider。API只增整个既有results目录RO挂载，以观察原子rename，未挂单文件旧inode、Key、private或inbox。
+
+新run、source reviewer／composition／saved composition／refresh／parser重试及直接分镜／视频帧／视频入口，在原重放与资格核验之后、新收费之前检查。无run的video重分析也沿原审计传播requestedOutput，refresh新session不误按原batch session核验；事务内读回分类防缺sink／no-op丢失意图。共有source_ingestion引用本身不属于视频；只有可信owned phase、审计或合法父资产派生限制。正常parser retry领取前保留原attempt，claim后running／succeeded／failed允许恰好+1，拒绝未授权更后attempt。私有重分析原三字段image proof及不支持video source-run的409保持不变；技术恢复复用原reservation时不新增扣费。
+
+Worker在claim前CAS暂停pending任务，dispatchedAt保持非空、更新时间严格递增；约60s maintenance仅在fresh ready和可信绑定通过后CAS清hold／置dispatchedAt=null，由原outbox恢复同ID。首次park若被ACK抢先，仅在完整业务快照未变时回读重试一次，避免遗留processing只能重启恢复；running／failed／unknown及已变内容不重置。生图owner独立提交f427恢复前置、f1de快照ACK CAS及cc1e单调ACK data已原差额集入，复用其direct3项及High证据，未重写其agent.ts或底层测试。
+
+必要验证分批通过：Domain八个相关文件710项（回归中parser fake补完整审计查询，媒体7个旧fixture按既有合同校正，未改产品权限），readiness helper96项；API含启动74项；Worker业务29项、queue6项、配置8项；Gateway真实文件reader46项；compose3项。准确RED保留在`tmp/video-paid-readiness/`：新source收费、direct reviewer、无run refresh、真实ACK交错及真实retry→claim。最初一次reconcile通过只证明进入等待态，已补真正收费入口；中间fixture错误及误放变量均已修复，不作为产品根因。
+
+最新匹配Domain/Gateway build、Domain source/integration及API source/integration类型检查通过；Search源码与旧dist不一致导致的7项Worker错误，重建既有Search依赖后完整Worker typecheck通过，未改检索逻辑。定向lint无新增问题；research-run与presentation旧文件原unused/any lint债务仍保留，仅改动行无错误。docs-sync8项和docs lint通过。Domain/API与Gateway/Worker/infra独立High均已关闭本次P1/P2，组件GO只覆盖此候选修复。
+
+本次未改生产、未调用供应商或新生成媒体，未重跑旧codec/媒体CI。旧paid／unknown及原始证据保留；账户权限、旁白音色与高质量真实视频仍按前节未决项推进，不能以本地测试替代成片验收。下一步由总控集入独立提交、完成触发的正常CI与部署；随后验证站内入口和真实Synclip成片。

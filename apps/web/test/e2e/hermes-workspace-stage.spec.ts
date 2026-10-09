@@ -2,6 +2,27 @@ import { expect, test, type Page, type Route } from 'playwright/test';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  // Context routes survive page.unrouteAll; an undeclared API must never reach a real server.
+  await page.context().route('**/api/**', (route) => {
+    const { pathname, searchParams } = new URL(route.request().url());
+    if (route.request().method() === 'GET') {
+      if (pathname === '/api/auth/me') return json(route, { error: { code: 'SESSION_INVALID', message: 'Not signed in' } }, 401);
+      if (pathname === '/api/workspaces') return json(route, { workspaces: [{ id: 'workspace-hermes', name: 'Personal', type: 'personal', role: 'owner', status: 'active' }] });
+      if (pathname === '/api/agent/tasks' && searchParams.get('actionable') === 'false') {
+        if (searchParams.get('kind') === 'workspace.guide' && searchParams.size === 2) return json(route, { tasks: [] });
+        const routeRo = new URL(page.url()).pathname.match(/^\/research-objects\/([^/]+)\//u)?.[1];
+        if (searchParams.get('kind') === 'source.retrieve' && searchParams.get('recovery') === 'true'
+          && searchParams.get('targetKind') === (routeRo ? 'research_object' : 'personal')
+          && searchParams.get('researchObjectId') === (routeRo ?? null)
+          && searchParams.size === (routeRo ? 5 : 4)) return json(route, { tasks: [] });
+      }
+    }
+    throw new Error(`Unmocked API request: ${route.request().method()} ${pathname}${new URL(route.request().url()).search}`);
+  });
+});
+
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
@@ -16,6 +37,10 @@ async function mockWorkspace(page: Page) {
     id: 'ro-hermes', publicId: 'OSR-2026-000042', title: 'Coherent transport at the attosecond frontier', version: 2, status: 'draft',
   }] }));
   await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/research-objects/ro-hermes/ingestion', (route) => route.request().method() === 'GET' ? json(route, {
+    researchObjectId: 'ro-hermes', version: 2, tasks: [], latestConfirmation: null,
+  }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/authors', (route) => route.request().method() === 'GET' ? json(route, { authors: [] }) : route.fallback());
   await page.route('**/api/research-objects/ro-hermes/versions', (route) => json(route, { versions: [] }));
   await page.route('**/api/research-objects/ro-hermes', (route) => json(route, { researchObject: {
     id: 'ro-hermes', workspaceId: 'workspace-hermes', title: 'Coherent transport at the attosecond frontier',

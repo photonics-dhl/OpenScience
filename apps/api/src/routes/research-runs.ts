@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ingestionClaimSelectionSchema } from './ingestion-claim-selection-schema';
 import { MAX_INGESTION_CLAIMS } from '@openscience/domain';
-import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getExistingHermesResearchRun, getHermesResearchRun, getHermesVideoReadiness, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
+import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
@@ -49,12 +49,12 @@ function auditCtx(req: FastifyRequest): AuditContext {
 }
 
 export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<HermesSourceReviewDeps, 'storage'> & AuthDeps & { storage?: StorageAdapter }): void {
-  app.get('/research-objects/:id/hermes-video-readiness', async (req, reply) => {
+  app.get('/research-objects/:id/hermes-video-capability', async (req, reply) => {
     void reply.header('Cache-Control', 'private, no-store');
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = paramsSchema.parse(req.params);
-    return reply.send(await getHermesVideoReadiness(deps, { actorId: user.userId, researchObjectId: id }));
+    return reply.send(await getHermesVideoCapability(deps, { actorId: user.userId, researchObjectId: id }));
   });
 
   app.get('/research-objects/:id/hermes-art-style-capability', async (req, reply) => {

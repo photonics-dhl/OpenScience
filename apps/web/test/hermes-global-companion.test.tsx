@@ -106,7 +106,9 @@ describe('global companion SSR ownership', () => {
     const docked = renderToStaticMarkup(<HermesDockAnchor {...props} floating={false} />);
     expect(floating).toContain('data-hermes-floating-owner="true"');
     expect(docked).toContain('class="hermes-dock-anchor"');
-    expect(docked).not.toContain('hidden');
+    expect(docked).not.toMatch(/\shidden(?:=|>)/);
+    expect(docked).not.toMatch(/class="[^"]*\bhidden\b/);
+    expect(docked).not.toMatch(/<div\b[^>]*aria-hidden="true"/);
   });
 
   it('retains the editor conversation as the owner while it is closed', () => {

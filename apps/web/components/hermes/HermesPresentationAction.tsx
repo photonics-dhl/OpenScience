@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
+import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getCurrentUser, getHermesVideoCapability, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
 import { hasCurrentPresentationSources, isEligibleArtStoryboard, newestEligibleStoryboard, presentationSources, presentationVideoFrameIds, presentationStoryboardRequest, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
@@ -15,7 +15,8 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const t = useTranslations('hermesPresentation'); const locale = useLocale();
   const tc = useTranslations('hermesConversation');
   const versionLabels = useVersionLabels();
-  const [data, setData] = useState<{ title: string; versions: VersionSummary[]; workspace?: WorkspaceApi }>();
+  const bootstrapScope = `${userId ?? ''}:${ro}:${requestedVersionId ?? ''}`;
+  const [data, setData] = useState<{ scope: string; title: string; versions: VersionSummary[]; workspace?: WorkspaceApi }>();
   const [versionId, setVersionId] = useState(''); const [action, setAction] = useState<PresentationAction>(intent.action);
   const [instruction, setInstruction] = useState(intent.instruction); const [style, setStyle] = useState<StoryboardRequest['style']>(intent.style ?? 'auto');
   const [claims, setClaims] = useState<PresentationClaim[]>([]); const [assets, setAssets] = useState<PresentationAsset[]>([]);
@@ -25,30 +26,35 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const [revisionSceneIndex, setRevisionSceneIndex] = useState<number | undefined>(intent.revisionSceneIndex);
   const [figurePlan, setFigurePlan] = useState(intent.figurePlan);
   const intentFigurePlanJson = JSON.stringify(intent.figurePlan);
-  const [ready, setReady] = useState(false); const [busy, setBusy] = useState(false); const [uncertain, setUncertain] = useState(false); const [error, setError] = useState('');
+  const [readyScope, setReadyScope] = useState(''); const [busy, setBusy] = useState(false); const [uncertain, setUncertain] = useState(false); const [error, setError] = useState('');
   const localRecords = useRef(new Map<string, SubmissionIntent>()); const records = submissionRecords ?? localRecords.current;
   const submissionController = useRef<AbortController | null>(null);
-  const draftScope: HermesDraftScope | null = userId && versionId ? { userId, researchObjectId: ro, versionId, purpose: 'presentation' } : null;
+  const bootstrapReady = Boolean(userId && data?.scope === bootstrapScope);
+  const sourceScope = userId && versionId ? `${userId}:${ro}:${versionId}` : '';
+  const ready = bootstrapReady && Boolean(sourceScope) && readyScope === sourceScope;
+  const draftScope: HermesDraftScope | null = userId && versionId && bootstrapReady ? { userId, researchObjectId: ro, versionId, purpose: 'presentation' } : null;
 
   useEffect(() => {
-    let active = true; setReady(false); setError('');
+    let active = true; setData(undefined); setVersionId(''); setReadyScope(''); setError('');
+    if (!userId) return;
     void Promise.all([getResearchObject(ro), listVersions(ro), listMyWorkspaces()]).then(([research, versions, workspaces]) => {
       if (!active) return;
-      setData({ title: research.researchObject.title, versions: versions.versions, workspace: workspaces.find((workspace) => workspace.id === research.researchObject.workspaceId) });
+      setData({ scope: bootstrapScope, title: research.researchObject.title, versions: versions.versions, workspace: workspaces.find((workspace) => workspace.id === research.researchObject.workspaceId) });
       setVersionId(selectPresentationVersion(versions.versions, requestedVersionId)?.versionId ?? '');
     }).catch(() => active && setError('loadError'));
     return () => { active = false; };
-  }, [ro, requestedVersionId]);
+  }, [ro, requestedVersionId, userId, bootstrapScope]);
   useEffect(() => {
-    if (!versionId) return;
-    const abort = new AbortController(); setReady(false); setError('');
+    setReadyScope('');
+    if (!sourceScope || !bootstrapReady) return;
+    const abort = new AbortController(); setError('');
     void Promise.all([listVersionClaims(ro, versionId, abort.signal), listPresentationAssets(ro, versionId, abort.signal)]).then(([claimResult, assetResult]) => {
       if (abort.signal.aborted) return;
       setClaims(claimResult.claims.filter((claim) => claim.researchObjectId === ro && claim.versionId === versionId));
-      setAssets(assetResult.assets.filter((asset) => asset.researchObjectId === ro && asset.versionId === versionId)); setReady(true);
+      setAssets(assetResult.assets.filter((asset) => asset.researchObjectId === ro && asset.versionId === versionId)); setReadyScope(sourceScope);
     }).catch(() => !abort.signal.aborted && setError('loadError'));
     return () => abort.abort();
-  }, [ro, versionId]);
+  }, [ro, versionId, sourceScope, bootstrapReady]);
   useEffect(() => {
     const stored = draftScope ? loadHermesPresentationDraft(getHermesDraftStorage(), draftScope) : null;
     if (stored && !intent.instruction.trim() && !onConfirmationChange) { setAction(stored.action); setInstruction(stored.instruction); setStyle(stored.style); setParentId(stored.parentId); setScene(stored.scene); setUpdateBrief(stored.action === 'storyboard.revise'); setRevisionMode(stored.revisionMode); setRevisionSceneIndex(stored.revisionSceneIndex); setFigurePlan(stored.figurePlan); return; }
@@ -56,9 +62,9 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [draftScope?.researchObjectId, draftScope?.userId, draftScope?.versionId, intent.action, intent.instruction, intent.sceneIndex, intent.revisionSceneIndex, intent.style, intent.revisionMode, intent.baseAssetId, intentFigurePlanJson, onConfirmationChange]);
 
   const version = data?.versions.find((candidate) => candidate.versionId === versionId);
-  const canWrite = version?.status === 'draft' && data?.workspace?.status === 'active' && ['owner', 'maintainer', 'author', 'contributor'].includes(data.workspace.role ?? '');
+  const canWrite = bootstrapReady && version?.status === 'draft' && data?.workspace?.status === 'active' && ['owner', 'maintainer', 'author', 'contributor'].includes(data.workspace.role ?? '');
   const eligibleClaimIds = selectEligiblePresentationClaims(claims);
-  const uncertainEntry = [...records.entries()].find(([key, record]) => key.startsWith(`${ro}:${versionId}:`) && record.isUncertain);
+  const uncertainEntry = sourceScope ? [...records.entries()].find(([key, record]) => key.startsWith(`${sourceScope}:`) && record.isUncertain) : undefined;
   const uncertainRecord = uncertainEntry?.[1];
   const replayRequest = uncertainRecord?.request;
   const uncertainDraft = uncertainRecord?.draft;
@@ -84,48 +90,78 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const videoImageIds = presentationVideoFrameIds(parent, assets);
   const videoReady = Boolean(replayRequest) || effectiveAction !== 'video.create' || Boolean(parent?.canGenerateVideo && videoImageIds.length >= 3 && videoImageIds.every(Boolean));
   const needsInstruction = effectiveAction === 'storyboard.create' || effectiveAction === 'storyboard.revise'; const locked = busy || uncertain || Boolean(uncertainRecord);
-  const requestScope = uncertainEntry?.[0] ?? `${ro}:${versionId}:${effectiveAction}`; const scopeRef = useRef(requestScope); scopeRef.current = requestScope;
+  const requestScope = uncertainEntry?.[0] ?? `${sourceScope}:${effectiveAction}`; const scopeRef = useRef(requestScope); scopeRef.current = requestScope;
   const canReplay = Boolean(uncertainDraft && replayRequest && sourcesValid);
   useEffect(() => { if (!uncertainDraft && !parentId && !intent.baseAssetId && newestParent) setParentId(newestParent.id); }, [newestParent, parentId, intent.baseAssetId, uncertainDraft]);
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   useEffect(() => {
     const record = records.get(requestScope);
+    setBusy(false); setUncertain(Boolean(record?.isUncertain));
     if (!record?.isUncertain || !record.draft) return;
     setAction(record.draft.action); setInstruction(record.draft.instruction); setStyle(record.draft.style); setParentId(record.draft.parentId); setScene(record.draft.scene); setUpdateBrief(record.draft.updateBrief ?? record.draft.action === 'storyboard.revise'); setRevisionMode(record.draft.revisionMode); setRevisionSceneIndex(record.draft.revisionSceneIndex); setFigurePlan(record.draft.figurePlan); setUncertain(true);
   }, [records, requestScope]);
   useEffect(() => () => {
-    const record = records.get(requestScope);
-    if (!record?.isBusy) return;
     submissionController.current?.abort();
-    record.fail(true);
+    submissionController.current = null;
+    const record = records.get(requestScope);
+    if (record?.isBusy) record.fail(true);
   }, [records, requestScope]);
   useEffect(() => { if (!uncertainDraft && draftScope) saveHermesPresentationDraft(getHermesDraftStorage(), draftScope, { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: eligibleClaimIds, parentId, scene, ...(revisionMode ? { revisionMode } : {}), ...(effectiveAction === 'storyboard.revise' && parent?.storyboard?.output === 'video' && revisionSceneIndex !== undefined ? { revisionSceneIndex } : {}), ...(figurePlan ? { figurePlan } : {}) }); }, [action, effectiveAction, draftScope, eligibleClaimIds, instruction, locale, parentId, scene, style, revisionMode, revisionSceneIndex, parent?.storyboard?.output, figurePlan, uncertainDraft]);
 
   async function submit(event?: React.FormEvent) {
     event?.preventDefault();
-    if (busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
+    if (busy || submissionController.current || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
     const request = replayRequest?.payload ?? (effectiveAction === 'scene.image' ? { storyboardAssetId: parent!.id, sceneIndex: scene }
       : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
       : presentationStoryboardRequest({ action: effectiveAction, locale: locale === 'zh' ? 'zh' : 'en', style,
         output: action === 'video.create' ? 'video' : 'image', instruction: instruction.trim(), parent,
         figurePlan, revisionMode: effectiveRevisionMode, revisionSceneIndex }));
-    const record = records.get(requestScope) ?? new SubmissionIntent(); records.set(requestScope, record); const key = record.begin(JSON.stringify([ro, versionId, effectiveAction, sourceIds, request])); if (!key) return;
-    if (!record.isUncertain) {
-      record.draft = { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: [...sourceIds], parentId: parent?.id ?? '', scene, updateBrief, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}), ...(parent?.storyboard?.output === 'video' && revisionSceneIndex !== undefined ? { revisionSceneIndex } : {}), ...(figurePlan ? { figurePlan } : {}) };
-      record.request = { action: effectiveAction, sourceIds: [...sourceIds], payload: request };
-    }
     const activeController = new AbortController(); submissionController.current = activeController;
     setBusy(true); setError('');
+    let record: SubmissionIntent | undefined;
     try {
+      // An existing uncertain intent must replay its saved request and key,
+      // even when new video work is no longer available.
+      if (!replayRequest && (effectiveAction === 'video.create' || ('output' in request && request.output === 'video'))) {
+        try {
+          const capability = await getHermesVideoCapability(ro, activeController.signal);
+          if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
+          if (!capability.canGenerateVideo) { setError('videoUnavailable'); return; }
+        } catch {
+          if (!activeController.signal.aborted && scopeRef.current === requestScope) setError('videoAvailabilityError');
+          return;
+        }
+      }
+      if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
+      // Replays keep their paid request, but still belong to the current actor.
+      try {
+        const viewer = await getCurrentUser({ fresh: true });
+        if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
+        if (viewer.userId !== userId) { setReadyScope(''); setError('identityChanged'); return; }
+      } catch {
+        if (!activeController.signal.aborted && scopeRef.current === requestScope) { setReadyScope(''); setError('identityChanged'); }
+        return;
+      }
+      record = records.get(requestScope) ?? new SubmissionIntent(); records.set(requestScope, record);
+      const key = record.begin(JSON.stringify([ro, versionId, effectiveAction, sourceIds, request])); if (!key) return;
+      if (!record.isUncertain) {
+        record.draft = { action, instruction, style, language: locale === 'zh' ? 'zh' : 'en', selected: [...sourceIds], parentId: parent?.id ?? '', scene, updateBrief, ...(effectiveRevisionMode ? { revisionMode: effectiveRevisionMode } : {}), ...(parent?.storyboard?.output === 'video' && revisionSceneIndex !== undefined ? { revisionSceneIndex } : {}), ...(figurePlan ? { figurePlan } : {}) };
+        record.request = { action: effectiveAction, sourceIds: [...sourceIds], payload: request };
+      }
       const result = effectiveAction === 'scene.image' ? await generatePresentationSceneImage(ro, versionId, sourceIds, request as { storyboardAssetId: string; sceneIndex: number }, key, activeController?.signal)
         : effectiveAction === 'video.create' ? await generatePresentationVideo(ro, versionId, sourceIds, request as { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] }, key, activeController?.signal)
           : await generatePresentationStoryboard(ro, versionId, sourceIds, request as StoryboardRequest, key, activeController?.signal);
       if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
-      record.complete(); records.delete(requestScope); setBusy(false); onSubmitted(`/research-objects/${encodeURIComponent(ro)}/edit?${new URLSearchParams({ stage: 'media', version: versionId, task: result.task.id })}`);
+      record.complete(); records.delete(requestScope); setUncertain(false); onSubmitted(`/research-objects/${encodeURIComponent(ro)}/edit?${new URLSearchParams({ stage: 'media', version: versionId, task: result.task.id })}`);
     } catch (cause) {
       if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
-      const ambiguous = !(cause instanceof ApiClientError) || cause.status === 0 || cause.status === 408 || cause.status === 429 || cause.status >= 500;
-      record.fail(ambiguous); setBusy(false); setUncertain(ambiguous); setError(ambiguous ? 'uncertain' : 'submitError');
+      const videoUnavailable = cause instanceof ApiClientError && cause.code === 'VIDEO_UNAVAILABLE';
+      const ambiguous = videoUnavailable ? Boolean(replayRequest)
+        : !(cause instanceof ApiClientError) || cause.status === 0 || cause.status === 408 || cause.status === 429 || cause.status >= 500;
+      record?.fail(ambiguous); setUncertain(ambiguous); setError(ambiguous ? 'uncertain' : videoUnavailable ? 'videoUnavailable' : 'submitError');
+    } finally {
+      if (submissionController.current === activeController) submissionController.current = null;
+      if (!activeController.signal.aborted && scopeRef.current === requestScope) setBusy(false);
     }
   }
   const confirmationReady = !busy && Boolean(canWrite) && ready && sourcesValid && videoReady && (!needsInstruction || Boolean(instruction.trim())) && (!uncertain || canReplay);

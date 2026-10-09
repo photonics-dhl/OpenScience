@@ -33,9 +33,10 @@ import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesSourceReviewRecovery, in
   validNativeSourceCorrectionInput, resolveNativeSourceCorrectionExecution,
   type NativeSourceCorrectionInput, type HermesPrivateSourceReanalysisInput, type SourceReviewNotSubmittedVerifier } from './source-review-recovery';
 import { persistHermesSourceReviewTechnicalTaskInTransaction } from '../agent/agent';
+import { HermesVideoUnavailableError, isHermesVideoRun, isHermesVideoTask, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from './source-composition-recovery';
 
-export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
+export type IngestionDeps = AgentDeps & HermesVideoReadinessDeps & { storage: StorageAdapter };
 
 const INGESTION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const LEGACY_FULL_DOCUMENT_LIMIT_ERROR = '[blocked] Paper exceeds the full-document understanding limit; split the document into research sections before analysis';
@@ -490,7 +491,7 @@ export async function retryIngestionTask(
 
 /** Shared retry mutation; callers own the transaction and dispatch only after commit. */
 export async function retryIngestionTaskInTransaction(
-  deps: AgentDeps, tx: Prisma.TransactionClient, input: { userId: string; taskId: string },
+  deps: AgentDeps & HermesVideoReadinessDeps, tx: Prisma.TransactionClient, input: { userId: string; taskId: string },
   ctx: AuditContext = {},
   runRequest?: { runId: string; sourceStepId: string; clientIdempotencyKey: string; requestDigest: string; previousVersion: number },
 ) {
@@ -611,6 +612,9 @@ export async function retryIngestionTaskInTransaction(
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable extraction failures can be retried');
   }
   if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Extraction retry audit is unavailable');
+  const videoRun = runRequest ? await tx.hermesResearchRun.findUnique({ where: { id: runRequest.runId } }) : null;
+  if (videoRun && isHermesVideoRun(videoRun) || agentTask && await isHermesVideoTask(tx, agentTask.id))
+    await requireHermesVideoReady(deps);
   const recovery = reviewCandidateSourceId ? 'review_candidate_preflight' : legacyFullDocumentLimitRecovery ? 'legacy_full_document_limit'
     : passageBudgetRecovery ? 'canonical_passage_budget' : parserRecovery ? 'unresolved_parser_pages'
     : canonicalAllMissingRecovery ? 'canonical_all_fields_missing'
@@ -860,6 +864,11 @@ async function persistIngestionCompositionInTransaction(deps: IngestionDeps, tx:
     throw new IngestionError('VALIDATION_ERROR', 'Native independent reviewer runtime or grant is unavailable');
   if (hermesRun && (!deps.audit?.record || hermesRun.maxAgentTasks !== 9 || hermesRun.steps.length + 1 + 3 > hermesRun.maxAgentTasks))
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Independent source review receipt or remaining grant is unavailable');
+  const videoOutput = Boolean(hermesRun && isHermesVideoRun(hermesRun)) || await isHermesVideoTask(tx, input.sourceAgentTaskId);
+  if (videoOutput && !await tx.agentTask.findUnique({ where: { idempotencyKey: stableKey }, select: { id: true } })) {
+    await requireHermesVideoReady(deps);
+    if (!deps.audit?.record) throw new HermesVideoUnavailableError();
+  }
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
     userId: input.userId,
     researchObjectId: source.batch.researchObjectId,
@@ -905,16 +914,18 @@ async function persistIngestionCompositionInTransaction(deps: IngestionDeps, tx:
       artifactId: source.artifactId,
       sourceMapSha256: sourceMapProof.serializedSha256,
       creditPolicy: 'charged_ingestion_analysis_refresh',
+      ...(videoOutput ? { requestedOutput: 'video' } : {}),
       ...(nativeAuthor ? { reviewMode: 'agent', reviewProfile: 'paper-source-review',
         authorCheckpointSha256: nativeAuthor.checkpoint.serializedSha256 } : {}),
       ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, stage: 'source_review' } : {}),
     },
   }, ctx);
+  if (videoOutput && !await isHermesVideoTask(tx, replacement.id)) throw new HermesVideoUnavailableError();
   return replacement.id;
 }
 
 /** New automatic run only: keep the paid author intact and initialize the existing reviewer atomically. */
-export async function initializeHermesNativeSourceReviewInTransaction(deps: AgentDeps & { storage?: StorageAdapter }, tx: Prisma.TransactionClient,
+export async function initializeHermesNativeSourceReviewInTransaction(deps: AgentDeps & HermesVideoReadinessDeps & { storage?: StorageAdapter }, tx: Prisma.TransactionClient,
   input: { actorId: string; taskId: string; runId: string }, ctx: AuditContext = {}): Promise<string | null> {
   const source = await tx.ingestionTask.findUnique({ where: { id: input.taskId },
     include: { artifact: true, agentTask: true, batch: { include: { researchObject: true } } } });
@@ -970,7 +981,7 @@ export async function initializeHermesNativeSourceReviewInTransaction(deps: Agen
 }
 
 /** One paid final composition, preserving the original failed phase and normal run budget. */
-export async function recoverHermesSourceCompositionInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
+export async function recoverHermesSourceCompositionInTransaction(deps: AgentDeps & HermesVideoReadinessDeps, tx: Prisma.TransactionClient, input: {
   actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<string> {
   const proof = await inspectHermesSourceCompositionRecovery(tx, input.runId);
@@ -978,6 +989,7 @@ export async function recoverHermesSourceCompositionInTransaction(deps: AgentDep
     || proof.run.version !== input.expectedVersion || !deps.audit?.record)
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'This source composition has no safe final-draft recovery');
   const { run, source, failed, sourceStep, failedStep, reference, recoveryKey } = proof;
+  if (isHermesVideoRun(run)) await requireHermesVideoReady(deps);
   const moved = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
     status: 'failed', version: input.expectedVersion, versionId: null, maxAgentTasks: 9 },
     data: { status: 'running', version: { increment: 1 }, error: null, lastReconciledAt: null } });
@@ -1012,7 +1024,7 @@ export async function recoverHermesSourceCompositionInTransaction(deps: AgentDep
 }
 
 /** Called only inside the existing run recovery transaction, under its version fence. */
-export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & { canRetrySourceReviewBeforeSubmission?: SourceReviewNotSubmittedVerifier }, tx: Prisma.TransactionClient, input: {
+export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & HermesVideoReadinessDeps & { canRetrySourceReviewBeforeSubmission?: SourceReviewNotSubmittedVerifier }, tx: Prisma.TransactionClient, input: {
   actorId: string; researchObjectId: string; runId: string; expectedVersion: number; requestDigest: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<string> {
   const proof = await inspectHermesSourceReviewRecovery(tx, input.runId, undefined, deps.canRetrySourceReviewBeforeSubmission);
@@ -1023,6 +1035,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Source review recovery audit is unavailable');
   const { membership } = await requireActiveMembership(tx, run.researchObject.workspaceId, input.actorId);
   if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  if (!proof.technicalRecovery && isHermesVideoRun(run)) await requireHermesVideoReady(deps);
   // The phase row and the new paid task are committed together. Never reset the
   // original reservation or overwrite the task that contains the failure evidence.
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
@@ -1090,7 +1103,7 @@ export async function recoverHermesSourceReviewInTransaction(deps: AgentDeps & {
 }
 
 /** Review a previously paid, newly validated private composition without rerunning its failed producer. */
-export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient, input: {
+export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps & HermesVideoReadinessDeps, tx: Prisma.TransactionClient, input: {
   actorId: string; researchObjectId: string; runId: string; expectedVersion: number;
 }, ctx: AuditContext = {}): Promise<string> {
   if (!deps.audit?.record) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Saved composition review audit is unavailable');
@@ -1111,6 +1124,7 @@ export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps,
     payload: { path: ['hermesRunAuthority', 'runId'], equals: proof.run.id } } }))
     throw new IngestionError('INGESTION_NOT_RETRYABLE', 'A presentation task already writes this run');
   const { run, source, replacement: composition } = proof;
+  if (isHermesVideoRun(run)) await requireHermesVideoReady(deps);
   const changedRun = await tx.hermesResearchRun.updateMany({ where: { id: run.id, actorId: input.actorId,
     researchObjectId: input.researchObjectId, status: 'failed', version: input.expectedVersion, versionId: null, maxAgentTasks: 9 },
     data: { status: 'awaiting_source_review', version: { increment: 1 }, error: null, lastReconciledAt: null } });
@@ -1148,7 +1162,7 @@ export async function reviewHermesSavedCompositionInTransaction(deps: AgentDeps,
 /** Upgrade to the existing v5 reviewed output under the run's durable grant. */
 export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
   actorId: string; runId: string; taskId: string;
-}, guardNewPaidWork?: () => Promise<void>): Promise<'ready' | 'queued'> {
+}): Promise<'ready' | 'queued'> {
   let selected: { stage: 'ready' | 'queued' | HermesIngestionReviewStage; sourceAgentTaskId: string; reviewerTaskId?: string } | undefined;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -1161,7 +1175,6 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
         const run = await readHermesRefreshRun(tx, source, input.actorId, input.runId);
         if (!source.agentTaskId || !source.agentTask) throw new IngestionError('VALIDATION_ERROR', 'Hermes source analysis is unavailable');
         if (run.steps.some(step => step.stage === 'source_review' && step.agentTaskId === null)) {
-          await guardNewPaidWork?.();
           const reviewerTaskId = await initializeHermesNativeSourceReviewInTransaction(deps, tx, input);
           return { stage: 'queued' as const, sourceAgentTaskId: reviewerTaskId ?? source.agentTaskId,
             ...(reviewerTaskId ? { reviewerTaskId } : {}) };
@@ -1200,7 +1213,6 @@ export async function ensureHermesIngestionReview(deps: IngestionDeps, input: {
           data: { status: 'succeeded', error: null } });
           if (completed.count !== completedPhases.length) throw new IngestionError('VALIDATION_ERROR', 'A Hermes source review phase failed or disappeared');
         } else {
-          await guardNewPaidWork?.();
           await prepareHermesRefresh(tx, source, { userId: input.actorId, sourceAgentTaskId: source.agentTaskId,
             ...(stage === 'source_review' ? { reviewOnly: true } : {}) }, input.runId);
         }
@@ -1534,6 +1546,11 @@ export async function refreshIngestionAnalysis(
           throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Confirmed ingestion cannot be refreshed');
         }
         const hermesRun = internalRunId ? await prepareHermesRefresh(tx, source, input, internalRunId) : undefined;
+        const videoOutput = Boolean(hermesRun && isHermesVideoRun(hermesRun)) || await isHermesVideoTask(tx, input.sourceAgentTaskId);
+        if (videoOutput) {
+          await requireHermesVideoReady(deps);
+          if (!deps.audit?.record) throw new HermesVideoUnavailableError();
+        }
         const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
           userId: input.userId,
           researchObjectId: source.batch.researchObjectId,
@@ -1562,9 +1579,11 @@ export async function refreshIngestionAnalysis(
           targetType: 'ingestion_task',
           targetId: source.id,
           metadata: { policy, oldAgentTaskId: input.sourceAgentTaskId, newAgentTaskId: replacement.id, artifactId: source.artifactId,
+            ...(videoOutput ? { requestedOutput: 'video' } : {}),
             ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, stage: 'source_composition' } : {}),
             sourceMapSha256: sourceMapProof?.serializedSha256 ?? null, creditPolicy: 'charged_ingestion_analysis_refresh' },
         }, ctx);
+        if (videoOutput && !await isHermesVideoTask(tx, replacement.id)) throw new HermesVideoUnavailableError();
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: source.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });
       break;
@@ -1582,11 +1601,12 @@ export async function refreshIngestionAnalysis(
 export async function reanalyzeConfirmedIngestion(
   deps: IngestionDeps,
   input: { userId: string; taskId: string; sourceAgentTaskId: string; processingConsent: boolean; idempotencyKey: string;
-    sourceReanalysis?: HermesPrivateSourceReanalysisInput | NativeSourceCorrectionInput },
+    output?: 'video'; sourceReanalysis?: HermesPrivateSourceReanalysisInput | NativeSourceCorrectionInput },
   ctx: AuditContext = {},
 ): Promise<IngestionTaskView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (!input.idempotencyKey || input.idempotencyKey.length > 64) throw new IngestionError('VALIDATION_ERROR', 'A bounded idempotency key is required');
+  if (input.output !== undefined && input.output !== 'video') throw new IngestionError('VALIDATION_ERROR', 'Unsupported narrative output');
   const sourceCorrection = validNativeSourceCorrectionInput(input.sourceReanalysis);
   const privateInput = validPrivateSourceReanalysisInput(input.sourceReanalysis) ? input.sourceReanalysis : undefined;
   if (input.sourceReanalysis !== undefined && !sourceCorrection && !privateInput)
@@ -1686,6 +1706,13 @@ export async function reanalyzeConfirmedIngestion(
           });
           return tx.ingestionTask.findUniqueOrThrow({ where: { id: candidate.id }, include: { artifact: true } });
         }
+        const sourceRunSettings = transactionProof?.run.generationSettings;
+        const videoOutput = input.output === 'video' || (sourceRunSettings !== null && typeof sourceRunSettings === 'object'
+          && !Array.isArray(sourceRunSettings) && (sourceRunSettings as Record<string, unknown>).output === 'video');
+        if (videoOutput) {
+          await requireHermesVideoReady(deps);
+          if (!deps.audit?.record) throw new HermesVideoUnavailableError();
+        }
         const transactionReference = parseDocumentSourceMapReference((source.agentTask.result as Record<string, unknown>).sourceMapRef);
         if (transactionReference.objectKey !== sourceMapProof.objectKey
           || transactionReference.serializedSha256 !== sourceMapProof.serializedSha256
@@ -1733,10 +1760,12 @@ export async function reanalyzeConfirmedIngestion(
           targetType: 'ingestion_task', targetId: newIngestion.id,
           metadata: { sourceIngestionTaskId: source.id, sourceAgentTaskId: sourceAgent.id, newAgentTaskId: analysis.id,
             artifactId: source.artifactId, sourceMapSha256: sourceMapProof.serializedSha256, confirmationPolicy: 'new_draft',
+            ...(videoOutput ? { requestedOutput: 'video' } : {}),
             ...(transactionProof ? { ...transactionProof.input, creditPolicy: 'fresh_task_charge' } : {}),
             ...(correctionAuthor ? { intent: 'revise_saved_source', authorCheckpointSha256: correctionAuthor.checkpoint.serializedSha256,
               creditPolicy: 'fresh_task_charge' } : {}) },
         }, ctx);
+        if (videoOutput && !await isHermesVideoTask(tx, analysis.id)) throw new HermesVideoUnavailableError();
         return tx.ingestionTask.findUniqueOrThrow({ where: { id: newIngestion.id }, include: { artifact: true } });
       }, { isolationLevel: 'Serializable' });
       break;

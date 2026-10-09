@@ -645,6 +645,8 @@
 }
 
 .researchEntry + .researchEntry { border-top: 1px solid var(--os-rule-paper); }
+.researchEntries > .researchEntry:first-child .researchLink { padding-block: 1.75rem; }
+.researchEntries > .researchEntry:first-child .researchEntryTitle { font-size: clamp(1.5rem, 2.2vw, 1.875rem); line-height: 1.4; }
 .researchEntry:focus-within { background: var(--craft-tint, #edf4f3); }
 
 .researchLink {

@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { ApiClientError, createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun, getHermesVideoReadiness,
+import { ApiClientError, createHermesResearchRun, getCurrentUser, getExistingHermesResearchRun,
   reanalyzeHermesRunSource, type HermesResearchRun } from '@/lib/api';
 
 const generationSchema = z.object({ profile: z.literal('visual-narrative-v1'), maxAgentTasks: z.literal(9),
-  locale: z.enum(['zh', 'en']), style: z.string().min(1).max(100), instruction: z.string().min(1).max(1000), output: z.literal('video').optional() }).strict();
+  locale: z.enum(['zh', 'en']), style: z.string().min(1).max(100), instruction: z.string().min(1).max(1000) }).strict();
 const intentSchema = z.object({
   actorId: z.string().uuid(), researchObjectId: z.string().uuid(), sourceRunId: z.string().uuid(),
   expectedRunVersion: z.number().int().positive(), ingestionTaskId: z.string().uuid(), sourceAgentTaskId: z.string().uuid(),
@@ -14,7 +14,7 @@ const intentSchema = z.object({
 export type SourceReanalysisIntent = z.infer<typeof intentSchema>;
 export type SourceReanalysisScope = Pick<SourceReanalysisIntent, 'actorId' | 'researchObjectId' | 'sourceRunId'>;
 export class SourceReanalysisIntentError extends Error {
-  constructor(readonly reason: 'storage' | 'context' | 'response' | 'video') {
+  constructor(readonly reason: 'storage' | 'context' | 'response') {
     super(reason); this.name = 'SourceReanalysisIntentError';
   }
 }
@@ -41,7 +41,6 @@ export function isSourceReanalysisCurrent(intent: SourceReanalysisIntent, run: H
     && run.researchObjectId === intent.researchObjectId && run.version === intent.expectedRunVersion
     && run.status === 'failed' && run.profile === 'visual-narrative-v1' && run.maxAgentTasks === 9 && !run.versionId
     && settings?.locale === intent.generation.locale && settings.style === intent.generation.style && settings.instruction === intent.generation.instruction
-    && (settings.output ?? 'image') === (intent.generation.output ?? 'image')
     && run.steps.filter(step => step.stage === 'source_ingestion').length === 1
     && run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === intent.ingestionTaskId)
     && (!handle || (handle.ingestionTaskId === intent.ingestionTaskId && handle.sourceAgentTaskId === intent.sourceAgentTaskId
@@ -94,11 +93,6 @@ export async function continueSourceReanalysis(input: {
   save(current);
   if (!current.newIngestionTaskId) {
     check();
-    if (input.run.generationSettings?.output === 'video') {
-      const readiness = await getHermesVideoReadiness(current.researchObjectId);
-      check();
-      if (!readiness.available) throw new SourceReanalysisIntentError('video');
-    }
     const task = await reanalyzeHermesRunSource(current.ingestionTaskId, current.sourceAgentTaskId, {
       intent: 'new_paid_private_analysis', sourceRunId: current.sourceRunId, expectedRunVersion: current.expectedRunVersion,
     }, current.reanalysisKey);
@@ -119,7 +113,6 @@ export async function continueSourceReanalysis(input: {
       || run.actorId !== current.actorId || run.researchObjectId !== current.researchObjectId
       || run.profile !== 'visual-narrative-v1' || run.maxAgentTasks !== 9
       || run.generationSettings?.locale !== current.generation.locale || run.generationSettings.style !== current.generation.style
-      || (run.generationSettings.output ?? 'image') !== (current.generation.output ?? 'image')
       || run.generationSettings.instruction !== current.generation.instruction
       || run.steps.filter(step => step.stage === 'source_ingestion').length !== 1
       || !run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === newIngestionTaskId))
@@ -133,11 +126,6 @@ export async function continueSourceReanalysis(input: {
   check();
   if (existing.run) return finish(existing.run);
   if (current.newRunId) throw new SourceReanalysisIntentError('response');
-  if (input.run.generationSettings?.output === 'video') {
-    const readiness = await getHermesVideoReadiness(current.researchObjectId);
-    check();
-    if (!readiness.available) throw new SourceReanalysisIntentError('video');
-  }
   await checkAccount();
   save(current);
   check();

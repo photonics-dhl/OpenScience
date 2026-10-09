@@ -35,13 +35,15 @@
 - 最新协作候选的视频付费前 readiness P1 已修：新收费动作先检查真实 host 新鲜状态；不影响已付结果恢复。定向 Domain 211/211、API 24/24 已过，最终精确 SHA CI 尚待。
 - 本机 Web build exit0（日志 `tmp/check-logs/1791475440758-8ca01aa2-24e2-4363-976f-705ad3087771.log`）；Web期刊37/37、路由21/21。GitHub隔离PostgreSQL中迁移51及期刊Domain72例、API边界均通过；本机Docker不可用，没有借用生产DB测试。
 - 旧授权到期兼容 API 8/8 已通过；期刊 Domain 59/59、Worker 6/6（数据库用例未在本机执行）。旧 snapshot 根据保留材料指纹追溯期限；若历史材料已删除无法恢复旧期限，不伪造该事实。未知 paid 预留不盲释放。
-- 新发布编排候选 `tmp/deploy-journal-rebuild.candidate.sh` SHA256 `304074f9ae639ef1a17ce763980ca3f44409b8685d66b0bb7f183e2bdeaa7255` 已独立 High 条件 GO：先完成双库备份、精确 CI、运行快照收敛，再 Native/视频配对和原 canonical 迁移发布。尚未执行新部署。
+- 新发布编排候选 `tmp/deploy-journal-rebuild.candidate.sh` SHA256 `a2ed3061a1b3df57f36979d3a1f518ed0d5fd472d5024485a83ad6a3ed6dcfca` 已独立 High 条件 GO：先完成双库备份、精确 CI、运行快照收敛，再 Native配对和原 canonical 迁移发布；保留当前关闭的视频host，Native安装后临时disabled，成功配对后恢复原enabled/active，候选失败保持disabled。尚未执行新部署。
 - 2026-10-09 原双库备份 exit0，core157M/search14M、sets7/7，绑定线上45；私有证据在 observations/journal-20261008-d9eba2c6bfbd6e9c79b7acb92ee5781ebec32ec4/backup.{log,exit}。最终部署只能使用最终精确SHA自身的收敛快照。
 - 5008136c服务器三轮构建exit0、first/second运行快照一致；发布脚本已上传其私有观察目录但未执行。后续修复提交须重新物化并取得自己SHA的运行快照，不能部署已被替代候选。
 - 使用既有 .env/SSH，配置仅机械复用、不打印密钥；必要 additive 迁移按原备份和 migration CLI，不 reset 数据。
 - 精确已推 SHA、干净发布树、线上祖先及 rollback 校验、原 lock/journal/public identity/自动回滚守卫不可绕过；Native/视频资源配对后再开放写入。
 - 测试与部署不授权审批真实期刊、重发未知付费任务或公开新科研结果。验收用隔离数据和最小已授权真实站内路径；科研质量仍需实际产物及用户确认。
 
+- 2026-10-09 08:44 CST重新fetch发现远端已到58695a25；保留全部协作生产代码，auth-dashboard采用远端完整fixture，4个导航spec移到独立CI矩阵并保留所有截图/trace，research-continuation仅补新版空表单断言。本机该单条运行无终态已停止，交精确CI验证。生产仍45/rollback42，无事务标记。
+
 ## Next action
 
-修复新五区浏览器交互用例，完成精确最终 CI、服务器构建收敛、前向发布和桌面/窄屏真实入口观察；最后同步精确线上版本。回滚及重做实现已完成，整项仍待新部署交付。
+合并远端最新协作代码并完成导航CI修复，再完成精确最终 CI、服务器构建收敛、前向发布和桌面/窄屏真实入口观察；最后同步精确线上版本。回滚及重做实现已完成，整项仍待新部署交付。

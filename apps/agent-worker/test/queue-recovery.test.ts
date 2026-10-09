@@ -57,6 +57,10 @@ describe('agent-worker durable queue recovery', () => {
       ['agent:queue:processing', ['pending-task', 'running-task', 'succeeded-task']],
     ]);
     const redis = {
+      lrange: async (key: string) => [...(lists.get(key) ?? [])],
+      lpush: async (key: string, value: string) => {
+        lists.set(key, [value, ...(lists.get(key) ?? [])]); return lists.get(key)!.length;
+      },
       lindex: async (key: string, index: number) => {
         const rows = lists.get(key) ?? [];
         return rows[index < 0 ? rows.length + index : index] ?? null;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
-import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
+import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion, refreshIngestionAnalysis } from '../../src/ingestion/ingestion-service';
+import { isHermesVideoTask } from '../../src/agent/video-readiness';
 import { getHermesResearchRun, reconcileHermesResearchRuns } from '../../src/agent/research-run';
 import { resolveHermesPrivateSourceReanalysisExecution, requireHermesSourceReviewExecution } from '../../src/ingestion/source-review-recovery';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
@@ -69,6 +70,52 @@ describe('new private analysis after the real recovered-composition and packet h
     const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length };
     await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).rejects.toThrow();
     expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+  });
+});
+
+describe('unbound source refresh preserves its paid video intent', () => {
+  it.each([
+    ['composition', 'video', 'normal'], ['legacy refresh', 'video', 'normal'],
+    ['composition', 'image', 'normal'], ['legacy refresh', 'image', 'normal'],
+    ['composition', 'video', 'missing'], ['legacy refresh', 'video', 'no-op'],
+  ] as const)('checks %s before new fees for %s (%s)', async (phase, output, auditMode) => {
+    const f = await privateSourceReanalysisFixture(); let ready = true;
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
+    const findFirst = f.prisma.agentTask.findFirst.bind(f.prisma.agentTask);
+    Object.assign(f.prisma.agentTask, { findFirst: async (args: Prisma.AgentTaskFindFirstArgs) => {
+      const keys = typeof args.where?.idempotencyKey === 'object' ? args.where.idempotencyKey?.in : undefined;
+      if (!keys) return findFirst(args);
+      const row = f.db.agentTasks.find(task => keys.includes(task.idempotencyKey ?? ''));
+      return row ? f.prisma.agentTask.findUnique({ where: { id: row.id }, include: args.include }) : null;
+    } });
+    const created = await reanalyzeConfirmedIngestion(f.deps, { ...f.input, ...(output === 'video' ? { output } : {}) });
+    const source = f.db.ingestionTasks.find(row => row.id === created.id)!;
+    const producer = f.db.agentTasks.find(row => row.id === source.agentTaskId)!;
+    Object.assign(producer, { status: 'succeeded', executionAttempt: 1,
+      result: structuredClone(f.db.agentTasks.find(row => row.id === f.ids.anchor)!.result) });
+    source.state = 'needs_review';
+    expect(f.db.hermesResearchSteps.some(step => step.ingestionTaskId === source.id)).toBe(false);
+    const input = { userId: f.input.userId, taskId: source.id, sourceAgentTaskId: producer.id, processingConsent: true,
+      ...(phase === 'composition' ? { compositionSourceAgentTaskId: producer.id, reviewOnly: true } : {}) };
+    const before = structuredClone(f.db); const dispatches = f.redis.lpush.mock.calls.length; ready = false;
+    if (output === 'video') {
+      await expect(refreshIngestionAnalysis(f.deps, input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+      expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches); ready = true;
+    }
+    if (auditMode !== 'normal') {
+      Object.assign(f.deps, { audit: auditMode === 'missing' ? undefined : { record: async () => {} } });
+      await expect(refreshIngestionAnalysis(f.deps, input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+      expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+      return;
+    }
+    await refreshIngestionAnalysis(f.deps, input);
+    expect(f.db.agentTasks).toHaveLength(before.agentTasks.length + 1);
+    expect(f.db.usageLedger).toHaveLength(before.usageLedger.length + 1);
+    expect(await isHermesVideoTask(f.prisma as unknown as Prisma.TransactionClient,
+      f.db.ingestionTasks.find(row => row.id === source.id)!.agentTaskId!)).toBe(output === 'video');
+    const refreshed = structuredClone(f.db); ready = false;
+    await refreshIngestionAnalysis(f.deps, input);
+    expect(f.db).toEqual(refreshed); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches + 1);
   });
 });
 
@@ -492,4 +539,85 @@ describe('new paid private source analysis', () => {
       ingestionTaskId: first.id, sourceAgentTaskId: f.current.id, executionAttempt: 1 })).toBeNull();
     expect(f.db.auditLogs.filter(row => row.action === 'ingestion.task.reanalyze').every(row => row.metadata.intent === undefined)).toBe(true);
   });
+});
+
+describe('video admission before source reanalysis', () => {
+  async function confirmedVideoSource() {
+    const f = await privateSourceReanalysisFixture();
+    f.db.ingestionTasks[0].state = 'confirmed'; f.current.result = structuredClone(f.anchorResult);
+    const commitId = 'manual-video-save'; const versionId = 'manual-video-version';
+    f.db.commits.push({ id: commitId, idempotencyKey: `ingestion-confirm:${f.ids.source}`, researchObjectId: f.ids.ro });
+    f.db.versions.push({ id: versionId, commitId, researchObjectId: f.ids.ro, versionNo: 1 });
+    f.db.versionManifests.push({ id: 'video-manifest', versionId });
+    const input = { userId: f.input.userId, taskId: f.input.taskId, sourceAgentTaskId: f.input.sourceAgentTaskId,
+      processingConsent: true, idempotencyKey: 'video-preanalysis', output: 'video' as const };
+    return { ...f, input };
+  }
+
+  for (const mode of ['disabled', 'closed', 'missing', 'unreadable'] as const) {
+    it(`does not debit or enqueue new video source analysis when readiness is ${mode}`, async () => {
+      const f = await confirmedVideoSource();
+      Object.assign(f.deps, { videoEnabled: mode !== 'disabled', readVideoReadiness: mode === 'missing' ? undefined
+        : async () => { if (mode === 'unreadable') throw new Error('local readiness unavailable'); return mode === 'disabled'; } });
+      const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length, batches: f.db.ingestionBatches.length };
+      await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+      expect(f.db.usageLedger).toHaveLength(before.ledger);
+      expect(f.db.agentTasks).toHaveLength(before.tasks);
+      expect(f.db.ingestionBatches).toHaveLength(before.batches);
+    });
+  }
+
+  it('replays an already charged identical source request after video readiness closes', async () => {
+    const f = await confirmedVideoSource();
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => true });
+    const first = await reanalyzeConfirmedIngestion(f.deps, f.input);
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length, batches: f.db.ingestionBatches.length };
+    Object.assign(f.deps, { videoEnabled: false, readVideoReadiness: async () => false });
+    await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).resolves.toEqual(first);
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+    expect(f.db.ingestionBatches).toHaveLength(before.batches);
+  });
+
+  it('keeps unsupported video source-run reanalysis non-chargeable when the caller omits output', async () => {
+    const f = await privateSourceReanalysisFixture();
+    f.db.hermesResearchRuns[0].generationSettings = { locale: 'zh', style: 'scientific', instruction: 'Explain the paper.', output: 'video' };
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => false });
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length };
+    await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+  });
+
+  it('checks video readiness for a valid private source proof with an explicit video destination', async () => {
+    const f = await privateSourceReanalysisFixture();
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => false });
+    const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length };
+    await expect(reanalyzeConfirmedIngestion(f.deps, { ...f.input, output: 'video' })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.agentTasks).toHaveLength(before.tasks);
+  });
+
+  it('persists the restrictive video binding in the existing analysis receipt', async () => {
+    const f = await confirmedVideoSource();
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => true });
+    const first = await reanalyzeConfirmedIngestion(f.deps, f.input);
+    const receipt = f.db.auditLogs.find(row => row.action === 'ingestion.task.reanalyze' && row.targetId === first.id);
+    expect(receipt).toMatchObject({ actorId: f.input.userId, targetType: 'ingestion_task',
+      metadata: { requestedOutput: 'video', newAgentTaskId: first.agentTaskId, sourceIngestionTaskId: f.input.taskId,
+        sourceAgentTaskId: f.input.sourceAgentTaskId } });
+  });
+
+  for (const sink of ['missing', 'no-op'] as const) {
+    it(`does not leave a charged video source task without a durable intent when audit is ${sink}`, async () => {
+      const f = await confirmedVideoSource();
+      Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => true,
+        audit: sink === 'missing' ? undefined : { record: async () => undefined } });
+      const before = { ledger: f.db.usageLedger.length, tasks: f.db.agentTasks.length, batches: f.db.ingestionBatches.length };
+      await expect(reanalyzeConfirmedIngestion(f.deps, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+      expect(f.db.usageLedger).toHaveLength(before.ledger);
+      expect(f.db.agentTasks).toHaveLength(before.tasks);
+      expect(f.db.ingestionBatches).toHaveLength(before.batches);
+    });
+  }
 });
