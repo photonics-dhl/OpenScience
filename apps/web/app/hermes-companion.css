@@ -29,7 +29,7 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
   place-items: center;
   width: calc(100% + 40px);
   height: 360px;
-  margin: -24px -20px 20px;
+  margin: calc(3.25rem - 24px) -20px 20px;
 }
 @media (max-width: 1100px) {
   .hermes-conversation-transcript > [data-hermes-conversation-companion='true'] { height: min(360px, 42dvh); }
