@@ -433,6 +433,13 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await routedStage?.dispose();
 
   const input = stage.locator('[data-hermes-input-owner]');
+  const initialInlineAssistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
+  await expect(initialInlineAssistant).toBeVisible();
+  await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(initialInlineAssistant).toHaveCount(0);
+  await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'false');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(page.locator('.hermes-editor-anchor').locator('[data-hermes-workspace-stage]')).toHaveCount(1);
