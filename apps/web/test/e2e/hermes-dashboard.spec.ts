@@ -88,6 +88,23 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
   const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
   await expect(travelHull).toBeVisible();
   await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  const patrolControl = await stage.evaluateHandle((element) => {
+    const stageNode = element as HTMLElement;
+    let action = 'doze';
+    const forceAction = () => {
+      if (stageNode.dataset.hermesAction !== action) stageNode.dataset.hermesAction = action;
+    };
+    const observer = new MutationObserver(forceAction);
+    observer.observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
+    forceAction();
+    return { begin: () => { action = 'patrol'; forceAction(); }, dispose: () => observer.disconnect() };
+  });
+  await expect.poll(() => stage.evaluate((element) => {
+    const actor = element.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
+    return (element as HTMLElement).dataset.hermesAction === 'doze'
+      && new DOMMatrixReadOnly(getComputedStyle(actor).transform).isIdentity
+      && actor.getAnimations().every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
+  })).toBe(true);
   const geometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
   await page.evaluate((motionEnvelope) => {
     const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
@@ -150,31 +167,23 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
   });
   await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
 
-  await page.evaluate(() => {
-    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
-    const forcePatrol = () => {
-      if (stageNode.dataset.hermesAction !== 'patrol') stageNode.dataset.hermesAction = 'patrol';
-    };
-    forcePatrol();
-    new MutationObserver(forcePatrol).observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
-  });
-  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
-  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+  // Predict the cycle from the hull before the patrol transform starts.
   const settledEnvelope = await page.evaluate((motionEnvelope) => {
     const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
     const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!.getBoundingClientRect();
+    const restHullRect = { bottom: hull.bottom, left: hull.left, right: hull.right, top: hull.top };
     const envelope = {
       bottom: hull.bottom + motionEnvelope.bottom, left: hull.left - motionEnvelope.left,
       right: hull.right + motionEnvelope.right, top: hull.top - motionEnvelope.top,
     };
     const overlapsEnvelope = envelope.left < blocker.right && envelope.right > blocker.left
       && envelope.top < blocker.bottom && envelope.bottom > blocker.top;
-    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope };
+    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope, restHullRect };
   }, HERMES_PATROL_MOTION_ENVELOPE);
   expect(settledEnvelope.overlapsEnvelope, `settled patrol envelope: ${JSON.stringify(settledEnvelope)}`).toBe(false);
   const patrolOrigin = await travelHull.boundingBox();
   expect(patrolOrigin).not.toBeNull();
-  const evidence = await page.evaluate(() => new Promise<{
+  const evidence = await patrolControl.evaluate((control, origin) => new Promise<{
     collisions: number; frames: number; maxBottomDelta: number; maxRightDelta: number; maxX: number; maxY: number;
     minLeftDelta: number; minTopDelta: number; minX: number; minY: number; viewportViolations: number;
   }>((resolveEvidence) => {
@@ -182,13 +191,17 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
     const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
     const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
     const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!;
-    const origin = hull.getBoundingClientRect();
     const result = {
       collisions: 0, frames: 0, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY,
       maxBottomDelta: Number.NEGATIVE_INFINITY, maxRightDelta: Number.NEGATIVE_INFINITY,
       minLeftDelta: Number.POSITIVE_INFINITY, minTopDelta: Number.POSITIVE_INFINITY,
       minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, viewportViolations: 0,
     };
+    // Start a fresh cycle in the same browser task that starts its sampler.
+    control.begin();
+    if (!actor.getAnimations().some((animation) => (animation as CSSAnimation).animationName === 'hermes-companion-patrol')) {
+      throw new Error('The real patrol animation did not start from the held rest pose');
+    }
     const started = performance.now();
     const overlapsRect = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     const sample = () => {
@@ -210,7 +223,11 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
       else requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
-  }));
+  }), settledEnvelope.restHullRect);
+  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
+  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+  await patrolControl.evaluate((control) => control.dispose());
+  await patrolControl.dispose();
   expect(evidence.frames).toBeGreaterThan(120);
   expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
   expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
