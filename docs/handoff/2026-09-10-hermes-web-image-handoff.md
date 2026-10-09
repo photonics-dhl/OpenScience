@@ -14,10 +14,10 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 3a2九文件High Scoped GO，4项闭合；等待canonical CI/LinuxHost6/installedSDK及真实图片质量，未集入 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 6f35 CI过；正定位Native安装前首失败与二次pause回滚断点，补真实顺序回归；声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（0f/d754/4cf保留） |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 已重启6f35安装前work query/runtime-snapshot只读诊断；3a2源码High GO仍待集成/LinuxHost6/SDK/真实PNG | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原High设计GO；正实现可信quiesce后重复pause/prepare-rollback续作及连续调用回归，声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（0f/d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，本次恢复收尾后关闭生产窗口；video本地诊断原lock/test及transaction顺序，新增源码差额须原High。image/UI待消费者；无生产/资产writer。
+- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，生产窗口关闭。image仅专属tmp/原checkpoint准备安全诊断，必要服务器读交root；video原lock/test连续调用修复，新增差额须原High。UI待集成消费者，无生产/资产writer。
 
 ## Git / CI / 运行事实
 - 交付branch仍`release/onchip-production-line`，已推候选`6f35e5680220b352c6702b042a860e76caffdf6d`；后续本地文档HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2及UI header独立未混入。
