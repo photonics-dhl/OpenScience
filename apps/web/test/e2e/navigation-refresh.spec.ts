@@ -13,6 +13,11 @@ async function setup(page: Page, authenticated = false, locale = 'zh') {
 
 test('public header orders navigation and About supports keyboard navigation to contextual contact', async ({ page }) => {
   await setup(page);
+  const requests: unknown[] = [];
+  await page.route('**/contact/email', route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { error: 'unavailable' } });
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/who-we-serve/researchers');
   const navigation = page.locator('header [data-hermes-primary-navigation]');
@@ -32,14 +37,19 @@ test('public header orders navigation and About supports keyboard navigation to 
   await page.getByRole('link', { name: '申请情报分析演示', exact: true }).click();
   await expect(page).toHaveURL(/\/contact\?topic=demo$/);
   await expect(page.getByRole('heading', { name: '申请情报分析演示', exact: true })).toBeVisible();
-  const mail = new URL((await page.getByRole('link', { name: '撰写演示申请', exact: true }).getAttribute('href'))!);
-  expect(mail.pathname).toBe('chunanqing@opt.ac.cn');
-  expect(mail.searchParams.get('subject')).toContain('情报分析演示申请');
-  expect(mail.searchParams.get('body')).toContain('希望回答的问题');
-  // Inspect the draft link without opening a mail client or sending a message.
+  expect(await page.content()).not.toContain('chunanqing@opt.ac.cn');
+  await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+  expect(requests).toHaveLength(0);
+  // Fail retrieval deliberately so QA cannot launch a mail client or send mail.
+  await page.getByRole('button', { name: '撰写演示申请', exact: true }).click();
+  await expect(page.locator('main [role="alert"]')).toBeVisible();
+  expect(requests).toEqual([{ intent: 'compose' }]);
+  await page.locator('main button').filter({ hasText: '重试' }).click();
+  await expect.poll(() => requests.length).toBe(2);
   await page.getByRole('navigation', { name: '联系主题' }).getByRole('link', { name: '反馈问题', exact: true }).click();
   await expect(page.getByRole('heading', { name: '反馈问题', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: '撰写问题反馈' })).toHaveAttribute('href', /subject=/);
+  await expect(page.getByRole('button', { name: '撰写问题反馈' })).toBeVisible();
+  await expect(page.locator('main [role="alert"]')).toHaveCount(0);
 });
 
 test('mobile Features preserves creation mode and upload entry opens the complete guide', async ({ page }) => {

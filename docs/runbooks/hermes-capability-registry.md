@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-公共导航的 About 联系、问题反馈、情报分析演示申请由 `apps/web/app/contact/` 提供主题说明和用户自发邮件草稿，复用 `chunanqing@opt.ac.cn` 集中配置；API 接入链接既有开发者文档。上传／创建研究入口复用原 `ResearchGuide`，本轮没有新增 Hermes 模型能力或邮件发送服务，验证及候选见 [导航与服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)。
+公共导航的 About 联系、问题反馈、情报分析演示申请由 `apps/web/app/contact/` 提供主题说明；共用 `components/contact/EmailDraftButton.tsx`，点击才由 `POST /contact/email` 返回服务端配置的收件地址，正文仅在浏览器组装，不提供发信服务，也不保证阻止主动抓取。API 链接既有开发者文档，上传／创建研究复用原 `ResearchGuide`，没有新增 Hermes 模型能力。验证及候选见 [导航与服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)。
 
 Industry / Investors 技术发现入口复用已有 `/literature/acquisitions` 与精确 `source.retrieve` 任务：`apps/web/lib/technology-discovery/` 负责元数据适配、幂等恢复、账号/受众草稿及咨询资料，`components/technology-discovery/` 消费。新增能力为前端检索、来源比较/导出与用户自发邮件草稿；自然语言需求拆解、全文技术分析、技术成熟度判断和自动跟踪尚未接入，不将固定状态文案称作 Hermes 模型回答。实际验证/部署边界见 [服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)，架构见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。
 

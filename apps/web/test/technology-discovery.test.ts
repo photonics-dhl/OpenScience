@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTaskView } from '../lib/api';
-import { contactEmail, consultationMailto, consultationText } from '../lib/technology-discovery/contact';
+import { consultationText } from '../lib/technology-discovery/contact';
 import { anonymousDraftKey, loadDiscoveryDraft, saveDiscoveryDraft, transferAnonymousQuery, userDraftKey } from '../lib/technology-discovery/storage';
 import { selectedSources, sourcesFromTask, type DiscoveryDraft } from '../lib/technology-discovery/types';
 
@@ -54,7 +54,5 @@ describe('technology discovery state', () => {
     expect(body).toContain('Market question');
     expect(body).toContain('Earlier research query');
     expect(body).not.toContain('Second title');
-    expect(consultationMailto(contactEmail('bad address'), body)).toContain('mailto:chunanqing@opt.ac.cn?');
-    expect(consultationMailto(contactEmail(undefined), body)).toContain(encodeURIComponent('Real metadata title'));
   });
 });

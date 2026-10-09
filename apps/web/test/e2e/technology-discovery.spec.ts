@@ -91,6 +91,11 @@ test('audience navigation and login preserve a query without submitting automati
 
 test('real producer-shaped records support comparison, export and a contextual email draft', async ({ page }) => {
   const { writes } = await setup(page);
+  const recipientRequests: unknown[] = [];
+  await page.route('**/contact/email', route => {
+    recipientRequests.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { error: 'unavailable' } });
+  });
   await page.goto('/who-we-serve/investors');
   await page.locator('#technology-query').fill('10.1234/optical');
   await page.locator('#discovery-brief').fill('Evaluate low-temperature integration and pilot evidence.');
@@ -110,14 +115,18 @@ test('real producer-shaped records support comparison, export and a contextual e
   await page.getByRole('textbox', { name: 'Organization', exact: true }).fill('Fixture Lab');
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill('fixture@example.invalid');
   await page.getByRole('textbox', { name: 'What do you need to discuss?', exact: true }).fill('Please discuss A&B, not a new recipient.');
-  const href = await page.getByRole('link', { name: 'Open email draft', exact: true }).getAttribute('href');
-  const mail = new URL(href!);
-  expect(mail.pathname).toBe('chunanqing@opt.ac.cn');
-  expect(mail.searchParams.get('body')).toContain('Evaluate low-temperature integration');
-  expect(mail.searchParams.get('body')).toContain('https://example.org/paper-one');
-  expect(mail.searchParams.get('body')).toContain('A&B');
-  expect([...mail.searchParams.keys()]).toEqual(['subject', 'body']);
-  // Do not click the mailto link: no mail client or external message in QA.
+  const draft = await page.locator('main pre').textContent();
+  expect(draft).toContain('Evaluate low-temperature integration');
+  expect(draft).toContain('https://example.org/paper-one');
+  expect(draft).toContain('A&B');
+  expect(await page.content()).not.toContain('chunanqing@opt.ac.cn');
+  await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+  expect(recipientRequests).toHaveLength(0);
+  await page.getByRole('button', { name: 'Open email draft', exact: true }).click();
+  await expect(page.locator('main [role="alert"]')).toContainText('could not be opened');
+  expect(recipientRequests).toEqual([{ intent: 'compose' }]);
+  await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Fixture Researcher');
+  await expect(page.getByRole('textbox', { name: 'What do you need to discuss?', exact: true })).toHaveValue('Please discuss A&B, not a new recipient.');
   await page.reload();
   await expect(page.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(2);
 });

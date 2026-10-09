@@ -5,7 +5,8 @@ import { ArrowRight, ExternalLink, Search, Sparkles } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSession } from '@/components/auth/SessionProvider';
 import { ApiClientError } from '@/lib/api';
-import { contactEmail, consultationMailto, consultationText } from '@/lib/technology-discovery/contact';
+import { EmailDraftButton } from '@/components/contact/EmailDraftButton';
+import { consultationText } from '@/lib/technology-discovery/contact';
 import { readDiscoveryTask, retryDiscoveryTask, startLiteratureTaskPolling, submitDiscoveryQuery } from '@/lib/technology-discovery/service';
 import { anonymousDraftKey, loadDiscoveryDraft, saveDiscoveryDraft, transferAnonymousQuery, userDraftKey } from '@/lib/technology-discovery/storage';
 import { selectedSources, sourcesFromTask, type DiscoveryAudience, type DiscoveryDraft } from '@/lib/technology-discovery/types';
@@ -190,7 +191,6 @@ export function TechnologyDiscovery({ audience }: { audience: DiscoveryAudience 
     ...shortlist.map((source, index) => `${index + 1}. ${source.title}\n${source.identifier || t('identifierUnknown')}\n${source.url || t('sourceUnknown')}\n${t('validationUnknown')}`),
   ].join('\n'));
   const contactBody = consultationText({ audience, locale: locale === 'zh' ? 'zh' : 'en', ...contact, need: contact.need || visibleDraft.brief || visibleDraft.query || turns.at(-1)?.query || '', brief: visibleDraft.brief, query: turns.at(-1)?.query || visibleDraft.query, sources: shortlist });
-  const recipient = contactEmail(process.env.NEXT_PUBLIC_OPENSCIENCE_CONTACT_EMAIL);
   function validateContact() {
     if (!contact.name.trim() || !contact.organization.trim() || !contact.need.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) {
       setContactError(t('contactValidation'));
@@ -260,7 +260,7 @@ export function TechnologyDiscovery({ audience }: { audience: DiscoveryAudience 
           <label>{t('need')}<textarea rows={4} value={contact.need} onChange={event => setContact(current => ({ ...current, need: event.target.value }))} /></label>
           <details><summary>{t('previewDraft')}</summary><pre>{contactBody}</pre></details>
           {contactError && <p role="alert" className={styles.error}>{contactError}</p>}
-          <div className={styles.contactActions}><button type="button" onClick={() => { if (validateContact()) downloadText('openscience-consultation-request.txt', contactBody); }}>{t('exportRequest')}</button><a href={consultationMailto(recipient, contactBody)} onClick={event => { if (!validateContact()) event.preventDefault(); }}>{t('openEmailDraft')}</a></div>
+          <div className={styles.contactActions}><button type="button" onClick={() => { if (validateContact()) downloadText('openscience-consultation-request.txt', contactBody); }}>{t('exportRequest')}</button><EmailDraftButton label={t('openEmailDraft')} subject="OpenScience technology consultation" body={contactBody} requestKey={`${scope}:${status}:${userId ?? ''}`} validate={validateContact} /></div>
           <p className={styles.hint}>{t('mailNotice')}</p>
         </section>}
       </aside>

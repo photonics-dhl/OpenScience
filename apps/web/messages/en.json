@@ -514,11 +514,15 @@
     "myJournals": "My journals",
     "developers": "Developer API"
   },
+  "emailDraft": {
+    "opening": "Opening email draft…",
+    "retry": "Retry opening email draft",
+    "failed": "The email draft could not be opened. Please retry."
+  },
   "aboutContact": {
     "topicsLabel": "Contact topic",
     "detailsTitle": "Tell us what you need",
-    "emailLabel": "Contact email",
-    "mailNote": "This opens your email app. Review the draft before sending. You can also copy the address and write from your preferred email service.",
+    "mailNote": "This opens your email app. Review the draft before deciding whether to send it.",
     "contact": {
       "title": "Contact us",
       "intro": "Get in touch about using OpenScience, research collaborations or an idea you would like to discuss.",

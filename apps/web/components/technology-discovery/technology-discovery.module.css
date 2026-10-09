@@ -470,10 +470,10 @@
   flex-wrap:wrap;
   gap:9px;
 }
-.contactActions button,.contactActions a {
+.contactActions button {
   display:inline-flex;
   align-items:center;
-  min-height:40px;
+  min-height:44px;
   padding:8px 12px;
   border:1px solid #a8c9c7;
   border-radius:7px;
@@ -485,6 +485,8 @@
   text-decoration:none;
   cursor:pointer;
 }
+.contactActions button:disabled { opacity:.7; cursor:wait; }
+.contactActions p[role='alert'] { margin:8px 0 0; color:#9b302c; font-size:12px; }
 .srOnly {
   position:absolute;
   width:1px;
