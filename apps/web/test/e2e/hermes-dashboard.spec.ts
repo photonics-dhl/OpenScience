@@ -537,6 +537,8 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
+  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const retry = page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i });
   await expect(retry).toBeVisible();
   const generation = Number(await rig.getAttribute('data-hermes-runtime-generation'));
@@ -544,7 +546,6 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   await expect(rig).toHaveAttribute('data-hermes-runtime-generation', String(generation + 1));
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('opacity', '0');
-  await visual.click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
@@ -1112,6 +1113,7 @@ for (const recoveryCase of [
     await page.route(`**/api/agent/tasks/${task.id}`, (route) => json(route, { task }));
 
     await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+    await expect(page.locator('main [data-literature-state]')).toHaveAttribute('data-literature-state', 'running');
     const recoveryBaseline = recoveryGets;
     const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
     await visual.click();
@@ -1152,6 +1154,7 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
     researchObjectId: routeRo, version: 1, tasks: [], latestConfirmation: null,
   }) : route.fallback());
   await page.route(`**/api/research-objects/${routeRo}/hermes-runs?ingestionTaskId=task-cross-ro`, (route) => route.request().method() === 'GET' ? json(route, { run: null }) : route.fallback());
+  await page.route(`**/api/research-objects/${routeRo}/versions`, (route) => route.request().method() === 'GET' ? json(route, { versions: [] }) : route.fallback());
   await page.route('**/api/auth/me', (route) => json(route, { userId: 'cross-ro-user', email: 'cross@example.invalid', displayName: 'Cross RO', status: 'email_verified', level: 'free' }));
   await page.route('**/api/ingestion/tasks/task-cross-ro', (route) => json(route, {
     batchId: 'batch-cross', researchObjectId: taskRo, version: 1,
@@ -1177,6 +1180,7 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
   });
 
   await page.goto(`${baseUrl}/research-objects/${routeRo}/hermes?task=task-cross-ro`, { waitUntil: 'networkidle' });
+  await expect(page.locator('main [data-literature-state]')).toHaveAttribute('data-literature-state', 'running');
   const recoveryBaseline = recoveryGets;
   await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
   await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('download paper 10.1038/nature12373');

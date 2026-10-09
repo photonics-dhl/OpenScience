@@ -511,6 +511,9 @@ jobs:
   skill-path:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PLAYWRIGHT_WEB_MODE: production
+      API_ORIGIN: http://127.0.0.1:3101
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -651,6 +654,9 @@ jobs:
   browser-entry:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PLAYWRIGHT_WEB_MODE: production
+      API_ORIGIN: http://127.0.0.1:3101
     strategy:
       fail-fast: false
       matrix:
@@ -666,7 +672,7 @@ jobs:
           cache: pnpm
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
-      - run: npx pnpm@9.15.0 --filter '@openscience/web^...' build
+      - run: npx pnpm@9.15.0 --filter '@openscience/web...' build
       - name: Hermes navigation and existing research entry
         run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test '${{ matrix.suite }}.spec.ts' --config playwright.config.ts --workers 1 --reporter=line --trace retain-on-failure --output ../../tmp/hermes-entry-browser
         env:
