@@ -6,7 +6,9 @@
 
 ### Native目录与关闭中的视频执行器
 
-- 前置：先完成原精确CI/High、备份及发布锁流程，记录实际应用/Native配对和timer的原enable/active状态。沿原持久写门禁阻止API提交新任务，Worker与Native在途任务自然完成后停止生产者接单，再核DB活动任务、Native instances和inbox均空；不能只靠发布锁或一次inbox快照。未排空即退出，不强杀任务。SDK代码相同不等于目录内容相同；Skill引用或Worker科学正文变更，即使版本号没变，也按资源变更处理。
+> 当前执行缺口（2026-10-09，7f源码核对）：`production-deploy-transaction.sh`只在迁移分支停旧API/Web/Worker，没有Native安装与回滚入口；尚未核到下文所称现成的持久写门禁。以下是必须实现的目标顺序，不能当作已可直接运行的发布脚本。先在原transaction/installer中补接正常停接单、同FD9配对及恢复先后顺序；进展与写权以CURRENT为准，不为符合文字新增另一套门禁或锁。
+
+- 目标前置：先完成原精确CI/High、备份及发布锁流程，记录实际应用/Native配对和timer原状态。在原transaction接入已有API正常停接单与Worker排空机制；在途任务自然完成后停生产者，再核DB活动任务、Native instances和inbox均空，不能只靠发布锁或一次inbox快照。未排空即退出，不强杀任务。SDK代码相同不等于目录内容相同；Skill引用或Worker科学正文变更，即使版本号没变，也按资源变更处理。
 - 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。安装器无catalogue-only模式；复用已装SDK，不改写旧目录、不手拼旧runtime与新catalogue。成功返回后立即确认timer inactive，并在配对期临时保持disabled，保留原始enable状态；`--defer-timer`不是跨重启的持久停用。保持写门禁和生产者停接单，禁止提前启动/重启；API/Worker身份、挂载和目录匹配后才恢复原timer与入口。
 - 视频：仅上线不可用提示和新收费前检查时，可保留现有关闭的host；新reader对缺旁白声明/关闭/过期返回不可用，无需为此升级host。实际启用新配音请求前才另做完整bundle升级与配置验收；配置开关不证明Key权限，不自动选音色或调用供应商。模型接单关闭与systemd timer关闭是不同事实。
 - 回滚：安装器内部失败沿其原恢复流程；若安装成功后任何配对/应用发布步骤失败，在同一锁和写门禁内，使用原事务及新release的`previous/`中原unit文件、`runtime.env`与`state.json`恢复旧文件并daemon-reload，按保存的原状态精确恢复enabled/disabled/enabled-runtime，不一律enable。仅在旧应用/Native匹配且原timerWasActive为真时start；恢复失败保持门禁、生产者停接单和timer stopped。不重装/删除旧不可变目录，不把新paid请求盲交旧Worker，保留全部paid/unknown和回执。

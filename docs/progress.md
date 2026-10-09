@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-09：7f视频、期刊、media主job（含Linux TERM/FD9）、reading20/20、workspace11/11及auth通过；Dashboard24/25，loading已过。巡游253帧0碰撞/越界，但top28.767超共享28；29建议已撤回。8a临时校准原DOM的101×101动画相位，拿到证据后再修共享范围，原强断言保持。
+- 2026-10-09：7f各CI仅Dashboard24/25剩包络。fd真实10201相位校准已收，cc432仅扩大共享L/R/T52/35/30、B保27；18项unit/lint与High GO，移除临时诊断，原强断言待最终CI。发布另缺同锁Native安装/回滚接缝，生图与视频分别设计原installer/transaction的最小复用，未生产写。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
 - 2026-10-09：生图9行fresh括号修复经独立High/目标回归，canonical依赖配套后完整WorkerTC0；真source错绑/时空矛盾仍须Native纠正，不重放cb未知任务。视频只读声音目录已收、实际Key目录/声音/成片仍待。
 - 2026-10-09：按用户认可的收敛主线，将生图owner调回已有论文理解→分镜/提示词→实际图核对；root接手UI/CI，不新增流水线/门禁/付费步骤。UI Figma14frame为候选，普通用户旅程、三篇科学质量和整站审美未验收。
