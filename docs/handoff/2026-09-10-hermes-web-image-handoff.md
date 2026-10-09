@@ -13,9 +13,9 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | stage1两bug a64已交待联合源码审/集成；install.py+lifecycle继续restore-previous，设计High已返回，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原transaction/state、deploy.sh、lock.mjs、deploy.test五文件实施联合High三项P1；原journal/FD9复用 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两CSS3989→root221b已收；56px预览保留，实施64px/框内互动；scope含原surface/unit及WorkspaceShell局部host，补RO概览fallback对话，运行未验 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | a64＋0df已交；源码High发现原Native缺失恢复P1及umask权限P2，已重新派修原两文件；Linux待验 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 632五文件已交61pass/6 skip；High三P1为旧容器绑定、旧Native-bound pending、迁移前新Prisma查询，已派修 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 64px头像12488已交，16文件High GO/定向TS-CSS/50policy，运行未验。复用ResearchSurfaceShell原anchor/Drawer，未改WorkspaceShell；root接集成验收 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
 - 各owner仅写已授范围，不回退他人修改；root持有共享CI/docs及dashboard/workspace集成spec，UI持研究Hermes产品入口写权。单renderer/跨路由/焦点/运行任务/权限与零POST边界保留，测试随新真实路径同步。三线无生产写窗口，不并行发布/资产写；在途自然收尾，不派重复检查。
 
 ## Git / CI / 运行事实
@@ -26,7 +26,7 @@
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 10-09 14:04 CST只读：app=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，Native/runtime/catalogue=`784c6b25342c29bdc5c2db193258d34dfafd4e64`；Web/API/Worker healthy、restart0、M3，无部署journal。原`live-release-prepublish-7f5945d6.json`保留额外容器inspect失败（exit1/109bytes）；不泛称全机验证。02:49:50Z video host42fe/admin关/audio缺为另一次旧读。
-- Native仍v17/784，paid/CP保留。联合设计High已返回并派发：旧app只读回滚preflight先于Native降级；自然stop禁超时KILL；API/Web→原timer→Worker。合法pending原样保留，活动/未知processing/inbox阻替换；原journal保存attempting无receipt持有及candidate启动前DB时点，之后新未完成工作阻旧app恢复。完整结论在root `tmp/session-coordination-20261008/native-pairing-design-high-20261009.md`，原两方案路径未改。a64仅Windows AST/diff0，Linux行为未跑，待完整源码联合增量High/既有CI；旧video host关闭，生产0写。
+- Native仍v17/784，paid/CP保留。a64/0df＋632联合源码审为NO-GO（4P1/1P2见owner分工），已派原owner修；其余FD9、preflight、无KILL、API/Web→timer→Worker、receipt gap及checkpoint保持已审，不重开全审。image 24为方法数非PASS；video61pass/6 skip，Linux未验。原设计结论在root `tmp/session-coordination-20261008/native-pairing-design-high-20261009.md`，待修正SHA增量复核/原CI，无生产writer。
 
 ## 当前交付与明确下一步
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
