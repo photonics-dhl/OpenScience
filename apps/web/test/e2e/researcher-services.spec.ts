@@ -12,7 +12,7 @@ async function setup(page: Page, authenticated = false) {
     if (path === '/api/auth/me') return route.fulfill({ status: authenticated ? 200 : 401, json: authenticated
       ? { userId: 'owner', email: 'author@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' }
       : { error: { code: 'UNAUTHORIZED', message: 'Login required' } } });
-    if (path === '/api/auth/csrf') return route.fulfill({ json: { csrfToken: 'csrf-fixture' } });
+    if (path === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'csrf-fixture' } });
     if (path === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal', role: 'owner' }] } });
     if (path === '/api/research-objects') return route.fulfill({ json: request.method() === 'POST' ? { researchObject: ro } : { researchObjects: [] } });
     if (path === '/api/research-objects/researcher-draft') return route.fulfill({ json: { researchObject: ro } });
@@ -107,19 +107,31 @@ test('PDF validation explains the error and mode changes stay locked during a wr
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
   let submissions = 0;
+  let submittedCsrfToken: string | undefined;
   await page.route('**/api/research-objects', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
     submissions += 1;
+    submittedCsrfToken = route.request().headers()['x-csrf-token'];
     await pending;
     await route.fulfill({ json: { researchObject: { id: 'researcher-draft', workspaceId: 'workspace', version: 1 } } });
   });
-  await page.getByRole('button', { name: '建立私有草稿', exact: true }).click();
-  const switchMode = page.getByRole('link', { name: /上传 PDF 从论文原文开始/ });
-  await expect(switchMode).toHaveAttribute('aria-disabled', 'true');
-  // Keyboard activation must also remain inert while the create request is pending.
-  await switchMode.focus();
-  await page.keyboard.press('Enter');
-  expect(new URL(page.url()).searchParams.get('mode')).toBe('blank');
-  expect(submissions).toBe(1);
-  release();
-  await expect(page).toHaveURL(/researcher-draft\/edit/, { timeout: 20_000 });
+  try {
+    await page.getByRole('button', { name: '建立私有草稿', exact: true }).click();
+    const switchMode = page.getByRole('link', { name: /上传 PDF 从论文原文开始/ });
+    await expect(switchMode).toHaveAttribute('aria-disabled', 'true');
+    // The form locks before CSRF preparation completes; witness the actual POST handler.
+    await expect.poll(() => submissions, { timeout: 10_000 }).toBe(1);
+    expect(submittedCsrfToken).toBe('csrf-fixture');
+    // Keyboard activation must also remain inert while the create request is pending.
+    await switchMode.focus();
+    await expect(switchMode).toBeFocused();
+    await page.keyboard.press('Enter');
+    expect(new URL(page.url()).searchParams.get('mode')).toBe('blank');
+    expect(submissions).toBe(1);
+    release();
+    await expect(page).toHaveURL(/\/research-objects\/researcher-draft\/edit$/, { timeout: 20_000 });
+    expect(submissions).toBe(1);
+  } finally {
+    release();
+  }
 });
