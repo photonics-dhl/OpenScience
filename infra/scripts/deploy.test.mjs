@@ -362,31 +362,49 @@ test('SSH runner does not misclassify a remote permission error as key authentic
   assert.doesNotMatch(sshRun, /permission denied\|host key verification/iu);
 });
 
-function waitForStreamMatch(stream, pattern, label, timeoutMs = 5000) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    let output = '';
-    const finish = (error) => {
+function observeSignalFixture(child) {
+  const state = { output: '', closed: false, error: null, exit: { code: null, signal: null } };
+  const checks = new Set();
+  const notify = () => { for (const check of checks) check(); };
+  const onError = (error) => { state.error = error.message; notify(); };
+  child.stderr.on('data', (chunk) => { state.output += chunk.toString(); notify(); });
+  child.stderr.on('error', onError);
+  child.stdin?.on('error', onError);
+  child.on('error', onError);
+  child.once('close', (code, signal) => { state.closed = true; state.exit = { code, signal }; notify(); });
+  const wait = (ready, label, failEarly = true) => new Promise((resolvePromise, rejectPromise) => {
+    let timeout;
+    const finish = (reason) => {
       clearTimeout(timeout);
-      stream.off('data', onData);
-      stream.off('end', onEnd);
-      stream.off('error', onError);
-      if (error) rejectPromise(error);
-      else resolvePromise(output);
+      checks.delete(check);
+      if (reason) rejectPromise(new Error(`${label} ${reason}; output=${JSON.stringify(state.output)}; exit=${JSON.stringify(state.exit)}; spawnError=${JSON.stringify(state.error)}`));
+      else resolvePromise(state.output);
     };
-    const onData = (chunk) => {
-      output += chunk.toString();
-      if (pattern.test(output)) finish();
+    const check = () => {
+      if (ready()) finish();
+      else if (failEarly && (state.closed || state.error)) finish('closed or failed before readiness');
     };
-    const onEnd = () => finish(new Error(`${label} stream ended before ${pattern}; output=${JSON.stringify(output)}`));
-    const onError = (error) => finish(error);
-    const timeout = setTimeout(
-      () => finish(new Error(`${label} timed out before ${pattern}; output=${JSON.stringify(output)}`)),
-      timeoutMs,
-    );
-    stream.on('data', onData);
-    stream.once('end', onEnd);
-    stream.once('error', onError);
+    timeout = setTimeout(() => finish('timed out'), 5000);
+    checks.add(check);
+    check();
   });
+  const waitForExit = async (label = 'fixture exit') => {
+    await wait(() => state.closed, label, false);
+    return state.exit;
+  };
+  return {
+    child,
+    waitFor: (pattern, label) => wait(() => pattern.test(state.output), label),
+    waitForExit,
+    stop: async () => {
+      if (!state.closed && child.pid) {
+        try { process.kill(-child.pid, 'SIGKILL'); }
+        catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
+      child.stdin?.destroy();
+      await waitForExit('fixture cleanup');
+    },
+  };
 }
 
 test('Tesseract is packaged only in the isolated document parser image', () => {
@@ -981,6 +999,15 @@ try {
   const invoke = (operation, candidate = newSha, rollback = oldSha) => (
     `node '${helperPath}' '${operation}' '${lockDirectory}' '${journalPath}' '${markerPath}' '${requiredUid}' '${candidate}' '${rollback}'`
   );
+  const children = [];
+  const startFixture = (body) => {
+    const fixture = observeSignalFixture(spawn(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, body,
+    )], { stdio: ['pipe', 'pipe', 'pipe'], detached: true }));
+    children.push(fixture);
+    return fixture;
+  };
+  let primaryError;
   try {
     await writeFile(helperPath, helper);
     await writeFile(markerPath, `${oldSha}\n`);
@@ -1005,16 +1032,10 @@ try {
     assert.notEqual(result.status, 0, 'CAS without inherited FD9 must fail closed');
     assert.equal((await readFile(markerPath, 'utf8')).trim(), newSha);
 
-    const crash = spawn(bash, ['-c', transactionLockHarness(
-      lockDirectory,
-      requiredUid,
-      `${invoke('start')}; printf 'JOURNAL_DURABLE\\n' >&2; sleep 30`,
-    )], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-    let [chunk] = await once(crash.stderr, 'data');
-    assert.match(chunk.toString(), /JOURNAL_DURABLE/);
-    const crashExit = once(crash, 'exit');
-    process.kill(-crash.pid, 'SIGKILL');
-    await crashExit;
+    const crash = startFixture(`${invoke('start')}; printf 'JOURNAL_DURABLE\\n' >&2; IFS= read -r crashRelease`);
+    assert.match(await crash.waitFor(/JOURNAL_DURABLE/, 'crash readiness'), /JOURNAL_DURABLE/);
+    process.kill(-crash.child.pid, 'SIGKILL');
+    assert.deepEqual(await crash.waitForExit(), { code: null, signal: 'SIGKILL' });
     assert.equal(existsSync(journalPath), true);
     result = spawnSync(bash, ['-c', transactionLockHarness(
       lockDirectory, requiredUid, `[ ! -e '${journalPath}' ] || exit 75`,
@@ -1024,30 +1045,40 @@ try {
 
     await writeFile(markerPath, `${oldSha}\n`);
     const rollbackTrap = [
-      `rollback_handler() { ${invoke('cas', oldSha, newSha)}; printf "ROLLBACK_IN_LOCK\\n" >&2; sleep 1; ${invoke('clear')}; exit 143; }`,
+      `rollback_handler() { printf "TRAP_ENTERED\\n" >&2; ${invoke('cas', oldSha, newSha)}; printf "ROLLBACK_IN_LOCK\\n" >&2; local rollbackRelease; IFS= read -r rollbackRelease; [ "$rollbackRelease" = release-rollback ]; ${invoke('clear')}; exit 143; }`,
       'trap rollback_handler TERM',
       invoke('start'),
       invoke('cas'),
       'printf "SWITCHED\\n" >&2',
-      'sleep 30',
+      // A builtin pause has no foreground-child fork window after the readiness marker.
+      'IFS= read -r interruptedRelease',
     ].join('; ');
-    const interrupted = spawn(bash, ['-c', transactionLockHarness(
-      lockDirectory, requiredUid, rollbackTrap,
-    )], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-    [chunk] = await once(interrupted.stderr, 'data');
-    assert.match(chunk.toString(), /SWITCHED/);
-    const interruptedExit = once(interrupted, 'exit');
-    const rollbackOutput = waitForStreamMatch(interrupted.stderr, /ROLLBACK_IN_LOCK/, 'TERM rollback');
-    process.kill(-interrupted.pid, 'SIGTERM');
-    assert.match(await rollbackOutput, /ROLLBACK_IN_LOCK/);
+    const interrupted = startFixture(rollbackTrap);
+    assert.match(await interrupted.waitFor(/SWITCHED/, 'TERM readiness'), /SWITCHED/);
+    const rollbackOutput = interrupted.waitFor(/ROLLBACK_IN_LOCK/, 'TERM rollback');
+    process.kill(-interrupted.child.pid, 'SIGTERM');
+    assert.match(await rollbackOutput, /TRAP_ENTERED[\s\S]*ROLLBACK_IN_LOCK/);
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
+    assert.equal(existsSync(journalPath), true);
     const competitor = spawnSync(bash, ['-c', transactionLockHarness(
       lockDirectory, requiredUid, ':',
     )], { encoding: 'utf8' });
     assert.equal(competitor.status, 73, competitor.stderr);
-    await interruptedExit;
+    interrupted.child.stdin.end('release-rollback\n');
+    assert.deepEqual(await interrupted.waitForExit(), { code: 143, signal: null });
     assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
     assert.equal(existsSync(journalPath), false);
+    const replacement = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, ':',
+    )], { encoding: 'utf8' });
+    assert.equal(replacement.status, 0, replacement.stderr);
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
+    const cleanup = await Promise.allSettled(children.map((fixture) => fixture.stop()));
+    const errors = cleanup.filter((result) => result.status === 'rejected').map((result) => result.reason);
+    if (errors.length) throw new AggregateError(primaryError ? [primaryError, ...errors] : errors, 'signal fixture cleanup failed; sandbox retained');
     await rm(sandbox, { recursive: true, force: true });
   }
 });
