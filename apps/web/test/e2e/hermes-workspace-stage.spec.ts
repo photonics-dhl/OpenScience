@@ -167,10 +167,19 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   const composition = input.locator('[data-hermes-companion-actor="true"]');
   const bounds = await composition.boundingBox();
   expect(bounds && { width: bounds.width, height: bounds.height }).toEqual({ width: 160, height: 160 });
-  const visible = (await input.boundingBox())!;
-  const frame = (await host.boundingBox())!;
+  // Read related boxes in one browser task while their shared page-entry animation runs.
+  const { visible, frame, stageBounds } = await host.evaluate((anchor) => {
+    const currentStage = anchor.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    const currentInput = currentStage?.querySelector<HTMLElement>('[data-hermes-input-owner="true"]');
+    if (!currentStage || !currentInput) throw new Error('Avatar renderer is not inside its page-owned frame');
+    const bounds = (node: Element) => {
+      const { x, y, width, height } = node.getBoundingClientRect();
+      return { x, y, width, height };
+    };
+    return { visible: bounds(currentInput), frame: bounds(anchor), stageBounds: bounds(currentStage) };
+  });
   expect(visible).toEqual(frame);
-  expect(await stage.boundingBox()).toEqual(frame);
+  expect(stageBounds).toEqual(frame);
   const viewport = page.viewportSize()!;
   expect(visible.x).toBeGreaterThanOrEqual(0);
   expect(visible.x + visible.width).toBeLessThanOrEqual(viewport.width);
@@ -327,6 +336,8 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
     await page.mouse.move(box.x + 96, box.y + 48, { steps: 4 });
     await expect(page.locator(stageSelector)).toHaveAttribute('data-hermes-dragging', 'false');
     await page.mouse.up();
+    await page.mouse.move(8, 8);
+    await expect.poll(() => input.evaluate((button) => button.matches(':active'))).toBe(false);
     expect(await host.boundingBox()).toEqual(before);
     await expect(guide(page)).toHaveCount(0);
     // A short viewport and positive scroll expose the legacy menu pre-scroll;
@@ -721,8 +732,7 @@ test('existing RO overview and files consume their real entries and keep the sam
   try {
     await enterEditor(page);
     await assertAvatar(page);
-    const nav = page.locator('[data-research-workspace-nav="true"]');
-    await nav.locator('a[href="' + roPath + '/overview"]').click();
+    await page.getByRole('link', { name: 'Research details', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(roPath + '/overview$'));
     await expect(page.getByRole('heading', { name: researchTitle, exact: true })).toBeVisible();
     await assertAvatar(page);
@@ -730,6 +740,7 @@ test('existing RO overview and files consume their real entries and keep the sam
     await assertConversation(page);
     await identity.assert();
     await closeTo(page, label(page));
+    const nav = page.locator('[data-research-workspace-nav="true"]');
     await nav.locator('a[href="' + roPath + '/files"]').click();
     await expect(page).toHaveURL(new RegExp(roPath + '/files$'));
     await expect(page.getByRole('heading', { name: 'Files', exact: true })).toBeVisible();
