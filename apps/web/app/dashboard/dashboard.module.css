@@ -829,12 +829,13 @@
 /* The desk is a research collection with one companion seat. */
 .desk .heading::before, .desk .researchLibrary::before { display: none; }
 .desk .heading { margin-bottom: 32px; padding-bottom: 28px; align-items: center; }
-.headingCopy { width: calc(100% - 408px); }
-.headingTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.headingCopy { width: 100%; }
+.headingTitleRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; }
+.headingActions { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
 .desk :is(.heading, .stateSurface) h1.title { margin: 0; font-size: 36px; font-weight: 400; line-height: 1.25; }
 .desk .heading .welcome { margin-top: 14px; font-size: 14px; }
 .createResearch { display: inline-flex; flex: none; align-items: center; justify-content: center; min-height: 48px; padding: 12px 22px; border-radius: 6px; background: var(--os-vermilion-ink); color: #fff; font: 500 14px/1.5 var(--font-ui); text-decoration: none; transition: background-color 140ms ease-out; }
-.desk .workSurface { grid-template-columns: minmax(0, 1fr) 360px; gap: 48px; }
+.desk .workSurface { grid-template-columns: minmax(0, 1fr); }
 .researchStack { min-width: 0; }
 .desk .researchLibrary { padding: 0; }
 .desk .libraryHeading { align-items: center; gap: 16px; }

@@ -60,6 +60,7 @@ export interface HermesVisualAdapterProps {
   actionStartedAtMs?: number;
   assistantOpen?: boolean;
   compactPresentation?: boolean;
+  avatarPresentation?: boolean;
   inConversation?: boolean;
   navigationOnly?: boolean;
   state: HermesVisualState;
@@ -92,8 +93,9 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, inConversation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, avatarPresentation = false, inConversation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
+  const tc = useTranslations('hermesCompanion');
   const tn = useTranslations('productNavigation');
   const locale = useLocale();
   const router = useRouter();
@@ -122,7 +124,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     stageTranslate: string;
   } | null>(null);
   const promptPlayedRef = useRef(false);
-  const still = state === 'awaiting_approval';
+  const still = state === 'awaiting_approval' && !avatarPresentation;
   const presence = still ? 'still' : state === 'scanning' ? 'working' : assistantOpen ? 'open' : engaged ? 'attentive' : 'idle';
   meshInputRef.current.action = action;
   meshInputRef.current.actionStartedAtMs = actionStartedAtMs;
@@ -155,6 +157,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   const getActorBounds = () => {
     const trigger = linkRef.current;
+    if (avatarPresentation) return trigger?.getBoundingClientRect() ?? null;
     return trigger?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
       ?? trigger?.getBoundingClientRect()
       ?? null;
@@ -187,6 +190,11 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       else stage.style.removeProperty('translate');
       stage.removeAttribute('data-hermes-menu-layout-shift');
     };
+    if (avatarPresentation) {
+      restoreStageTranslate();
+      if (!menuOpen) menuLayoutRef.current = null;
+      return;
+    }
     if (!menuOpen) {
       restoreStageTranslate();
       window.scrollTo({ behavior: 'auto', top: layout.scrollY });
@@ -436,7 +444,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       window.cancelAnimationFrame(menuFrame);
       window.cancelAnimationFrame(settleFrame);
     };
-  }, [compactGroup, compactMenu, menuOpen, protectedGeometryVersion]);
+  }, [avatarPresentation, compactGroup, compactMenu, menuOpen, protectedGeometryVersion]);
 
   useEffect(() => () => {
     const layout = menuLayoutRef.current;
@@ -451,6 +459,12 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   const dispatchContextMenu = () => {
     const trigger = linkRef.current;
     if (!trigger) return;
+    if (avatarPresentation) {
+      const bounds = trigger.getBoundingClientRect();
+      trigger.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2, clientX: bounds.left + bounds.width / 2, clientY: bounds.bottom }));
+      updateMenuOpen(true);
+      return;
+    }
     const estimatedMenuHeight = compactMenu ? 366 : 380;
     const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
     if (!menuLayoutRef.current) menuLayoutRef.current = {
@@ -642,7 +656,9 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     <ContextMenu open={menuOpen} onOpenChange={updateMenuOpen}>
       <ContextMenuTrigger asChild>
         <button
-          aria-label={t('guide.invoke')}
+          aria-label={avatarPresentation ? tc('openConversation') : t('guide.invoke')}
+          aria-haspopup={avatarPresentation ? 'dialog' : undefined}
+          aria-expanded={avatarPresentation ? assistantOpen : undefined}
           className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
           onBlur={resetGaze}
           onClick={() => {
@@ -702,6 +718,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
             data-hermes-instance="single"
           >
             <HermesRiggedPortrait
+              avatarPresentation={avatarPresentation}
               fallback={<HermesStaticPortrait />}
               inputRef={meshInputRef}
               onRuntimeStatus={onRuntimeStatus}

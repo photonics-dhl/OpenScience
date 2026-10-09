@@ -19,19 +19,20 @@ export interface HermesRiggedPortraitProps {
   fallback: ReactNode;
   inputRef: MutableRefObject<HermesPetMeshInput>;
   reducedMotion: boolean;
+  avatarPresentation?: boolean;
   rendererGeneration?: number;
   state: HermesVisualState;
   onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
 }
 
-export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, reducedMotion, rendererGeneration = 0, state }: HermesRiggedPortraitProps) {
+export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, reducedMotion, avatarPresentation = false, rendererGeneration = 0, state }: HermesRiggedPortraitProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<HermesPetMeshRenderer | null>(null);
   const stageRef = useRef<HTMLSpanElement | null>(null);
   const stateRef = useRef(state);
   const staticPresentationRef = useRef(false);
   const [runtimeStatus, setRuntimeStatus] = useState<HermesRuntimeStatus>(() => createHermesRuntimeStatus(rendererGeneration));
-  const staticPresentation = reducedMotion || state === 'awaiting_approval';
+  const staticPresentation = reducedMotion || (!avatarPresentation && state === 'awaiting_approval');
   stateRef.current = state;
   staticPresentationRef.current = staticPresentation;
   inputRef.current.state = state;

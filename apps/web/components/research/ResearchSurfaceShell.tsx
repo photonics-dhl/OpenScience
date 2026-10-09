@@ -58,9 +58,8 @@ export function ResearchSurfaceShell({
       }
       mainClassName="p-0 lg:p-0"
       navigationLabel={t('navigation')}
-      objectHeader={<ObjectHeader actions={actions} objectId={object.id} saveState="saved" title={object.title} version={object.version} visibility={object.visibility} />}
+      objectHeader={<ObjectHeader actions={<>{actions}<HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} suggestion={suggestion} workspaceId={object.id} /></>} objectId={object.id} saveState="saved" title={object.title} version={object.version} visibility={object.visibility} />}
       rightRail={<div className="research-companion-margin">
-        <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => openAssistant(null)} state="idle" suggestion={suggestion} workspaceId={object.id} />
         <div className="research-companion-copy">{rail ?? <div><p data-reading-role="caption" className="text-os-muted-paper">{t('integrity')}</p><p className="mt-4 text-base leading-[var(--leading-body)] text-os-muted-paper">{t('integrityBody')}</p></div>}</div>
         <HermesAssistantDrawer
           key={object.id}

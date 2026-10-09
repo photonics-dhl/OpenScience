@@ -14,6 +14,6 @@ import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
 export function HermesShellDockAnchor({ inline = false }: { inline?: boolean }) {
   const router = useRouter();
   const stage = useOptionalHermesWorkspaceStage();
-  return <HermesDockAnchor floating={!inline} onInvoke={() => { if (stage) stage.openCompanion(); else router.push('/dashboard'); }} state="idle"
+  return <HermesDockAnchor floating={!inline} usesFallbackAssistant assistantOpen={stage?.companionOpen ?? false} onInvoke={() => { if (stage) stage.openCompanion(); else router.push('/dashboard'); }} state="idle"
     suggestion={{ kind: 'neutral', bodyKey: 'guide.neutral.body', titleKey: 'guide.neutral.title' }} />;
 }

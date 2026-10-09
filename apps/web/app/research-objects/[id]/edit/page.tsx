@@ -19,6 +19,7 @@ import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
 import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import { HermesExtractionEvidence } from '../../../../components/hermes/HermesExtractionEvidence';
 import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes-guide';
@@ -263,7 +264,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [serverSaveState, setServerSaveState] = useState<'dirty' | 'saving' | 'saved' | 'error'>('saved');
   const [hermesOpen, setHermesOpen] = useState(false);
-  useEffect(() => { if (hermesTaskId || ingestionTaskId || window.matchMedia('(min-width: 1024px)').matches) setHermesOpen(true); }, [hermesTaskId, ingestionTaskId]);
+  useEffect(() => { if (hermesTaskId || ingestionTaskId) setHermesOpen(true); }, [hermesTaskId, ingestionTaskId]);
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
@@ -1206,10 +1207,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   return (
     <EditorLayout
         objectId={roId}
-        workspaceClassName={`editor-workspace research-product ${styles.workbenchShell}`}
+        workspaceClassName={`editor-workspace research-product ${styles.workbenchShell} ${hermesOpen ? styles.assistantOpen : ''}`}
         workflow={<div className={styles.workbenchNav}>
           <span className={styles.navContext}>{tw('navigation')}</span>
-          <span className={styles.navSpacer} />
+            <span className={styles.navSpacer} />
+            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={extracting ? 'scanning' : undefined} suggestion={editorSuggestion} workspaceId={roId} />
           <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
           <details className={styles.moreMenu}><summary>{th('more')}</summary><div><button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setHistoryOpen(true); }}>{th('title')}</button><ResearchContentManager researchObjectId={params.id} onChanged={(removed) => void refreshManagedContent(removed)} /></div></details>
         </div>}
@@ -1319,9 +1321,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         aside={
           <>
             <EditHistory researchObjectId={roId} versions={versions} open={historyOpen} loading={historyLoading} loadError={historyError} onOpenChange={setHistoryOpen} dirty={state.dirty || JSON.stringify(artifacts) !== JSON.stringify(committedArtifacts)} draftToken={JSON.stringify([state.core, artifacts, state.version])} restoreBlocked={confirmingIngestion || Boolean(confirmationIntent) || reanalyzingConfirmedIngestion || refreshingLegacyIngestion || extracting || serverSaveState === 'saving'} onRestore={restoreHistory} />
-            {!hermesOpen && <button type="button" className={styles.hermesButton} onClick={() => setHermesOpen(true)}>Hermes · {tw('talkToHermes')}</button>}
             <HermesAssistantDrawer
               docked
+              pageOwnedAnchor
               sourceReview={sourceReviewPanel}
               initialGoal={hermesInitialGoal}
               onSourceCommand={async (command) => {

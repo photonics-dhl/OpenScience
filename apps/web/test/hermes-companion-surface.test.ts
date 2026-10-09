@@ -5,9 +5,24 @@ import {
   currentHermesPresentation,
   hermesPresentationCanDock,
   currentHermesAnchorRect,
+  hermesStartsCompact,
+  hermesUsesAvatarEntry,
 } from '../lib/hermes/companion-surface';
 
 describe('global Hermes product routes', () => {
+  it('starts private research in an avatar entry at every viewport', () => {
+    for (const pathname of ['/dashboard', '/dashboard/', '/research-objects/new', '/research-objects/object/edit', '/research-objects/object/overview']) {
+      expect(hermesStartsCompact(pathname)).toBe(true);
+      expect(hermesUsesAvatarEntry(pathname)).toBe(true);
+    }
+  });
+
+  it('keeps the research avatar out of public reading and landing', () => {
+    for (const pathname of ['/', '/guide', '/research/OSR-2026-000023', '/research-objects-old/object/edit']) {
+      expect(hermesUsesAvatarEntry(pathname)).toBe(false);
+    }
+  });
+
   it.each([
     '/guide', '/guide/', '/explore', '/research/OSR-2026-000023',
     '/research/OSR-2026-000023/v/1', '/collections/optics',

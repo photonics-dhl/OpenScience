@@ -1,7 +1,11 @@
 export type HermesCompanionSurface = 'navigation' | 'workspace';
 
 export function hermesStartsCompact(pathname: string): boolean {
-  return pathname.replace(/\/$/, '') !== '/dashboard';
+  return resolveHermesCompanionSurface(pathname) !== null;
+}
+
+export function hermesUsesAvatarEntry(pathname: string): boolean {
+  return resolveHermesCompanionSurface(pathname) === 'workspace';
 }
 
 const productRoots = new Set([

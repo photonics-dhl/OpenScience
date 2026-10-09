@@ -4,6 +4,88 @@
 body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-padding-bottom: 176px; }
 .hermes-dock-anchor--floating { position: absolute; width: 1px; height: 1px; min-height: 0; pointer-events: none; }
 .hermes-dock-anchor[data-hermes-compact-context='true'] { width: 120px; min-height: 140px; }
+.hermes-avatar-entry {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true'] {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  margin: 0;
+}
+.hermes-avatar-entry-label {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--os-ink);
+  text-align: left;
+  font: 600 16px/1.4 var(--font-ui);
+  cursor: pointer;
+}
+.hermes-avatar-entry-label small { color: var(--os-muted-paper); font: 400 12px/1.6 var(--font-ui); }
+.hermes-avatar-entry-label:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 4px; }
+.hermes-avatar-entry[data-hermes-entry-open='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true'] {
+  width: 0;
+  min-width: 0;
+  visibility: hidden;
+}
+.hermes-compact-dock[data-hermes-avatar='true'][data-hermes-compact-placement] { width: 64px; height: 64px; background: transparent; border-radius: 50%; box-shadow: none; }
+.hermes-compact-dock[data-hermes-avatar='true'][data-hermes-compact-placement='fallback'] { visibility: hidden; }
+.hermes-compact-dock .hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-compact='true'] {
+  top: 0;
+  right: 0;
+  min-width: 64px;
+  min-height: 64px;
+  margin: 0;
+  opacity: 1;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual {
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 50%;
+  background: var(--os-paper-strong);
+  pointer-events: auto;
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true']:has([data-hermes-menu-open='true']) { min-height: 64px; }
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true']:has([data-hermes-menu-open='true']) .hermes-workspace-stage[data-hermes-avatar='true'] { margin: 0; }
+.hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-compact='true'] .hermes-companion-actor {
+  inset: auto;
+  left: -48px;
+  top: -8px;
+  width: 160px;
+  height: 160px;
+  opacity: 1;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] :is(.hermes-motion-enable, .hermes-pet-menu-button, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
+.hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-motion-preference='full'][data-hermes-presentation-state='awaiting_approval'] .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-wanko-carrier { animation: hermes-carrier-hover 6.2s ease-in-out infinite !important; }
+@media (hover: hover) and (pointer: fine) {
+  .hermes-avatar-entry-label:hover { color: var(--os-vermilion-ink); }
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:hover { background: var(--os-paper); }
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual { transition: none; }
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:active { transform: none; }
+}
 body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { display: none; }
 .hermes-editor-anchor:not([hidden]) { width: 120px; min-height: 140px; margin: 16px auto; }
 .hermes-editor-anchor[hidden] { display: none; }

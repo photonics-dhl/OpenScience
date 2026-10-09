@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
-import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
@@ -240,7 +239,10 @@ export default function DashboardPage() {
           <div className={styles.headingCopy}>
             <div className={styles.headingTitleRow}>
               <h1 className={styles.title}>{t('title')}</h1>
-              {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="primary" href="/research-objects/new?mode=import">{t('import.title')}</Link> : null}
+              <div className={styles.headingActions}>
+                {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="primary" href="/research-objects/new?mode=import">{t('import.title')}</Link> : null}
+                <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={deriveHermesCompositeVisualState(tasks, guideWorking)} suggestion={suggestion} />
+              </div>
             </div>
             <p data-reading-role="body" className={styles.welcome}>
               {t('welcome', { name: user?.displayName ?? '' })}
@@ -266,10 +268,6 @@ export default function DashboardPage() {
               </div>
               <div className={styles.managementActions}><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
             </details>
-          </div>
-          <div className={styles.taskRail}>
-            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={deriveHermesCompositeVisualState(tasks, guideWorking)} suggestion={suggestion} />
-            <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
           </div>
         </div>
       </div>

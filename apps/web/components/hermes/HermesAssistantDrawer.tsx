@@ -102,6 +102,8 @@ export interface HermesAssistantDrawerProps {
   /** Wait until the editor has loaded the draft base before applying a restored result. */
   taskRestoreReady?: boolean;
   docked?: boolean;
+  /** The page toolbar owns the companion entry instead of an extra editor seat. */
+  pageOwnedAnchor?: boolean;
   /** Source choice, recoverable analysis and explicit adoption stay in this conversation. */
   sourceReview?: React.ReactNode;
   onSourceCommand?(command: string): Promise<boolean>;
@@ -219,7 +221,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
   // The editor owns a docked conversation even while it is closed. Register its
   // existing action and a real page-owned seat while the conversation is closed.
   useClientLayoutEffect(() => {
-    if (!stage || !anchorRef.current || !props.docked || props.route !== 'research-object-edit') return;
+    if (!stage || !anchorRef.current || props.pageOwnedAnchor || !props.docked || props.route !== 'research-object-edit') return;
     return stage.register({
       anchor: anchorRef.current,
       assistantOpen: props.open,
@@ -228,12 +230,12 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
       suggestion: props.suggestion,
       workspaceId: props.routeResearchObjectId ?? 'workspace-current',
     });
-  }, [stage, props.docked, props.route, props.routeResearchObjectId, props.open, props.onOpenChange, props.suggestion]);
+  }, [stage, props.docked, props.pageOwnedAnchor, props.route, props.routeResearchObjectId, props.open, props.onOpenChange, props.suggestion]);
   const [opened, setOpened] = useState(props.open || Boolean(props.docked));
   useEffect(() => { if (props.open || props.docked) setOpened(true); }, [props.open, props.docked]);
   if (!opened && !props.open && !props.docked) return null;
   return <>
-    {props.docked && props.route === 'research-object-edit' ? <div className="hermes-editor-anchor hermes-dock-anchor" data-hermes-dock-anchor="true" data-hermes-floating-owner="editor" hidden={props.open} ref={anchorRef} /> : null}
+    {!props.pageOwnedAnchor && props.docked && props.route === 'research-object-edit' ? <div className="hermes-editor-anchor hermes-dock-anchor" data-hermes-dock-anchor="true" data-hermes-floating-owner="editor" hidden={props.open} ref={anchorRef} /> : null}
     <React.Suspense fallback={null}><HermesAssistantDrawerContent {...props} /></React.Suspense>
   </>;
 }

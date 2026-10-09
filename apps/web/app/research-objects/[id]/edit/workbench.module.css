@@ -11,6 +11,11 @@
 
 .workbenchShell[data-os-surface='workspace'] :global([data-object-context-bar='true']) { padding-block: 20px; }
 .workbenchShell :global([data-workspace-plane='25']) { background: #f3f7f8; }
+.workbenchShell :global([data-workspace-planes='true']) { grid-template-columns: minmax(0, 1fr); }
+.workbenchShell:not(.assistantOpen) :global([data-workspace-plane='25']) { display: contents; }
+@media (min-width: 1024px) {
+  .workbenchShell.assistantOpen :global([data-workspace-planes='true']) { grid-template-columns: minmax(0, 1fr) 20rem; }
+}
 .workbenchShell[data-os-surface='workspace'] :global([data-object-header='true'] strong) {
   font: 600 clamp(24px, 2.25vw, 32px)/1.35 var(--font-ui, sans-serif);
   letter-spacing: -.02em;

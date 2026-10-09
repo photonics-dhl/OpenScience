@@ -51,7 +51,7 @@ import {
 } from '@/lib/hermes/companion-placement';
 
 import { researchObjectFromHermesPath } from '@/lib/hermes/presentation-intent';
-import { currentHermesAnchorRect, currentHermesPresentation, hermesPresentationCanDock, hermesStartsCompact, resolveHermesCompanionSurface } from '@/lib/hermes/companion-surface';
+import { currentHermesAnchorRect, currentHermesPresentation, hermesPresentationCanDock, hermesStartsCompact, hermesUsesAvatarEntry, resolveHermesCompanionSurface } from '@/lib/hermes/companion-surface';
 import { HermesAssistantDrawer } from './HermesAssistantDrawer';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
@@ -63,6 +63,8 @@ interface HermesStagePresentation {
   anchor: HTMLElement;
   assistantOpen: boolean;
   floating?: boolean;
+  usesFallbackAssistant?: boolean;
+  invocationRef?: React.MutableRefObject<HTMLElement | null>;
   onInvoke: () => void;
   state?: HermesVisualState;
   suggestion: HermesGuideSuggestion;
@@ -76,6 +78,7 @@ interface HermesWorkspaceStageContextValue {
   requestGuide(target: HermesAnchorId | null): void;
   setRouteState(state: HermesVisualState): void;
   setWriting(writing: boolean): void;
+  companionOpen: boolean;
 }
 
 const HermesWorkspaceStageContext = React.createContext<HermesWorkspaceStageContextValue | null>(null);
@@ -87,6 +90,7 @@ const SETTLED_MOTION_CLEARANCE_PX = 2;
 const GUIDE_PRECLAMP_MOTION_CLEARANCE_PX = 6;
 const PAGE_OWNED_OBSTACLE_SELECTOR = '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]';
 type MeasuredBubblePlacement = HermesBubblePlacement & { stageLeft: number; stageTop: number };
+type AssistantFocusContext = { pathname: string; editorOwned: boolean; inlineOwned: boolean; avatarOwned: boolean; invokedEntry: boolean; opener: HTMLElement | null };
 type GuidePlanState = {
   mode: 'travel' | 'edge-stop' | 'static' | null;
   placement: HermesTravelPlacement | null;
@@ -234,7 +238,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     return () => { release(); setRegistryVersion((version) => version + 1); };
   }, []);
   const openCompanion = useCallback(() => setRouteAssistantOpen(true), []);
-  const context = useMemo(() => ({ openCompanion, register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting }), [openCompanion, register, registerAnchor, setGuideTarget, setRouteState, setWriting]);
+  const context = useMemo(() => ({ openCompanion, register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting, companionOpen: routeAssistantOpen }), [openCompanion, register, registerAnchor, setGuideTarget, setRouteState, setWriting, routeAssistantOpen]);
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
   const surface = resolveHermesCompanionSurface(pathname);
   const researchObjectId = researchObjectFromHermesPath(pathname);
@@ -248,12 +252,12 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   // Dashboard and editor already own their assistant. Their floating registration
   // supplies that existing action instead of opening another drawer.
   const routeOwnsAssistant = pathname === '/dashboard' || /^\/research-objects\/[^/]+\/edit\/?$/.test(pathname);
-  const hasFallbackDrawer = surface === 'workspace' && !routeOwnsAssistant && (!presentation || pathname === '/research-objects/new');
+  const hasFallbackDrawer = surface === 'workspace' && !routeOwnsAssistant && (!presentation || presentation.usesFallbackAssistant || pathname === '/research-objects/new');
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}
       {surface ? (
-        <React.Suspense fallback={<HermesWorkspaceStageFallback compact={hermesStartsCompact(pathname)} />}><HermesWorkspaceStage
+        <React.Suspense fallback={hermesUsesAvatarEntry(pathname) ? null : <HermesWorkspaceStageFallback compact={hermesStartsCompact(pathname)} />}><HermesWorkspaceStage
           guideTarget={guideTarget}
           fallbackWorkspaceId={researchObjectId ?? 'workspace-current'}
           fallbackAssistantOpen={routeAssistantOpen}
@@ -294,7 +298,7 @@ export function useOptionalHermesWorkspaceStage() {
   return React.useContext(HermesWorkspaceStageContext);
 }
 
-function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fallbackOnInvoke, guideTarget, navigationOnly, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
+function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fallbackOnInvoke, guideTarget: requestedGuideTarget, navigationOnly, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
   fallbackWorkspaceId: string;
   fallbackAssistantOpen: boolean;
   fallbackOnInvoke: () => void;
@@ -308,6 +312,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   writing: boolean;
 }) {
   const pathname = usePathname();
+  const avatarSurface = hermesUsesAvatarEntry(pathname);
+  const guideTarget = avatarSurface ? null : requestedGuideTarget;
   const searchParams = useSearchParams();
   const motionSearch = searchParams.toString();
   const state = presentation?.state ?? routeState;
@@ -317,8 +323,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
-  const assistantFocusContextRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
-  const pendingVisualFocusRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
+  const assistantFocusContextRef = useRef<AssistantFocusContext | null>(null);
+  const pendingVisualFocusRef = useRef<AssistantFocusContext | null>(null);
   const visualInvocationPathRef = useRef<string | null>(null);
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
@@ -386,9 +392,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const hasUsableAnchor = anchorRect !== null && (hermesPresentationCanDock(presentation) || compactPresence);
   // Route and viewport select the initial presence; scrolling never changes it.
   const compact = !guideTarget && !conversationAnchor && compactPresence;
+  const avatar = avatarSurface && !conversationAnchor;
   const stageSize = conversationAnchor ? conversationPlacement!.size
-    : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
-  const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock));
+    : avatar ? 64 : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
+  const anchored = Boolean(conversationAnchor || (hasUsableAnchor && (!customDock || avatarSurface)));
   // Keep the portal in its original host until pointerup. Moving its DOM node
   // during a drag drops browser pointer capture and cancels the gesture.
   const portalAnchor = conversationAnchor ?? (anchored || (dragging && dragRef.current?.customDock === false)
@@ -550,13 +557,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   useEffect(() => {
     if (compactPresence) document.body.setAttribute('data-hermes-compact-navigation', 'true');
     else document.body.removeAttribute('data-hermes-compact-navigation');
-    if (compact && anchorRect === null) document.body.setAttribute('data-hermes-compact-fallback', 'true');
+    if (compact && anchorRect === null && !avatarSurface) document.body.setAttribute('data-hermes-compact-fallback', 'true');
     else document.body.removeAttribute('data-hermes-compact-fallback');
     return () => {
       document.body.removeAttribute('data-hermes-compact-navigation');
       document.body.removeAttribute('data-hermes-compact-fallback');
     };
-  }, [anchorRect, compact, compactPresence]);
+  }, [anchorRect, avatarSurface, compact, compactPresence]);
 
   useClientLayoutEffect(() => {
     const bubble = bubbleRef.current;
@@ -895,27 +902,37 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
 
   useClientLayoutEffect(() => {
     const previousContext = assistantFocusContextRef.current;
+    const activeElement = document.activeElement;
+    const opener = presentation?.invocationRef?.current ?? (previousContext?.pathname === pathname ? previousContext.opener
+      : visualInvocationPathRef.current === pathname ? stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]') ?? null
+        : activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null);
     assistantFocusContextRef.current = assistantOpen
-      ? { pathname, editorOwned: presentation?.anchor.dataset.hermesFloatingOwner === 'editor' } : null;
+      ? { pathname, editorOwned: presentation?.anchor.dataset.hermesFloatingOwner === 'editor', inlineOwned: Boolean(conversationAnchor?.isConnected && conversationAnchor.closest('.hermes-inline-assistant')), avatarOwned: avatarSurface, invokedEntry: Boolean(presentation?.invocationRef?.current) || visualInvocationPathRef.current === pathname || Boolean(previousContext?.pathname === pathname && previousContext.invokedEntry), opener } : null;
     if (visualInvocationPathRef.current !== pathname) visualInvocationPathRef.current = null;
     if (previousContext && !assistantOpen) {
+      if (previousContext.pathname === pathname && presentation?.invocationRef) presentation.invocationRef.current = null;
       const restoreVisualFocus = previousContext.pathname === pathname
-        && (visualInvocationPathRef.current === pathname || previousContext.editorOwned);
+        && (visualInvocationPathRef.current === pathname || previousContext.inlineOwned || previousContext.invokedEntry);
       visualInvocationPathRef.current = null;
       pendingVisualFocusRef.current = restoreVisualFocus ? previousContext : null;
     }
     if (assistantOpen || pendingVisualFocusRef.current?.pathname !== pathname) pendingVisualFocusRef.current = null;
     const pending = pendingVisualFocusRef.current;
     if (!pending || !portal) return;
+    if (pending.opener?.isConnected && !stageRef.current?.contains(pending.opener)) {
+      pendingVisualFocusRef.current = null;
+      pending.opener.focus();
+      return;
+    }
     // The hidden editor seat is measured again after close; wait for the carrier to return there.
-    if (pending.editorOwned && (!presentation?.anchor || portalAnchor !== presentation.anchor)) return;
+    if ((pending.editorOwned || pending.avatarOwned) && (!presentation?.anchor || portalAnchor !== presentation.anchor)) return;
     const host = portalAnchor?.isConnected ? portalAnchor : document.body;
     if (portal.container.parentNode !== host) return;
-    const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
+    const trigger = pending.opener?.isConnected ? pending.opener : stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
     if (!trigger?.isConnected) return;
     pendingVisualFocusRef.current = null;
     trigger.focus();
-  }, [assistantOpen, conversationAnchor, pathname, portal, portalAnchor, presentation?.anchor]);
+  }, [assistantOpen, avatarSurface, conversationAnchor, pathname, portal, portalAnchor, presentation?.anchor]);
 
   useEffect(() => {
     setGuideReady(false);
@@ -1220,6 +1237,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [guideTarget, onDismissGuide]);
 
   const invokeHermes = () => {
+    if (!assistantOpen && presentation?.invocationRef) presentation.invocationRef.current = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]') ?? null;
     // Both callers activate the visual; external conversation buttons open their drawer directly.
     if (!assistantOpen) visualInvocationPathRef.current = pathname;
     setInvokeCount((count) => count + 1);
@@ -1484,6 +1502,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       data-hermes-action-started-at={visualActionStartedAtMs}
       data-hermes-anchored={anchored ? 'true' : 'false'}
       data-hermes-compact={compact ? 'true' : 'false'}
+      data-hermes-avatar={avatar ? 'true' : undefined}
       data-hermes-in-conversation={conversationAnchor ? 'true' : 'false'}
       data-hermes-bubble-horizontal={bubbleHorizontal}
       data-hermes-bubble-safe={speech.cue ? (anchored || bubblePlacement ? 'true' : 'false') : 'true'}
@@ -1537,6 +1556,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         actionStartedAtMs={actionStartedAtMs}
         assistantOpen={assistantOpen && !conversationAnchor}
         compactPresentation
+        avatarPresentation={avatar}
         inConversation={Boolean(conversationAnchor)}
         onInvoke={() => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
@@ -1645,6 +1665,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   // Keep the same React parent and child slot in every presentation. The owned
   // portal carrier moves between hosts; the actor and its WebGL canvas do not remount.
   const element = <div className={compact ? 'hermes-compact-dock' : undefined}
+    data-hermes-avatar={avatar ? 'true' : undefined}
     data-hermes-compact-placement={compact ? (anchored ? 'anchored' : 'fallback') : undefined}
     style={compact ? undefined : { display: 'contents' }}>
     {stageElement}
