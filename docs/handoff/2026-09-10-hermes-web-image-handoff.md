@@ -12,15 +12,16 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 科学修复已交；设计复用Native install.py/lifecycle的安装后恢复接口，先只读；cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | Native安装后restore-previous最小设计已交，待与transaction联合High；0source写，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 设计原transaction/state/test中的正常暂停、同FD9安装及先恢复Native后启旧应用接缝，先只读 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | Figma编辑稿像素QA已交；获编辑器/专属样式最多3文件实现权，六字段/保存行为保留 | `.worktrees/research-product-craft` / 原`codex/ui-patrol-origin-20261009`候选保留，新branch待回报 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | Figma编辑稿QA已交，实施editor.module.css与edit/workbench.module.css；六字段/保存行为保留 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
 - 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。三线无生产写窗口，不并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
 ## Git / CI / 运行事实
-- root已推`fd380e16b7aee9b989792d3d4c208d232140bfdb`；新校准修复`cc4321262e055495265247779c915a6ef2eaa3b3`待组合CI。远端2a历史已选择性合入motion恢复/fallback；拒收speech扩面、reader visible:first和宽泛API mocks。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推，尚非发布GO。
+- root已推`78694e6a0774324e8b42b22fdd55c09487b27450`（校准代码cc432）。保留远端0c588c历史但拒收其四边±1px测试容差；此前speech扩面、reader visible:first和宽泛mocks亦拒收。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推，尚非发布GO。
 - 7f精确CI：video37891494367、journal37891494343/90974、media37891494363/91022的主job（含Linux TERM/FD9）、auth、reading20/20、workspace11/11均过；Dashboard24/25，loading已过。巡游253帧0碰撞/0视口越界，top实测28.767超共享28，其他三边实测在限内。日志/artifact在root `tmp/session-coordination-20261008/*7f5945d6*`。
 - c041/0b95各High GO、TS/lint0，已测到真实新周期；UI两版私有候选保留、不收inline版。fd取证在真实360舞台完成10201相位组合+101rest，JSON在`dashboard-fd380e16-artifact/patrol-hover-phase-calibration.json`；原trace保留。cc432仅扩大共享L/R/T为52/35/30、B保27，18项unit/lint/High GO；临时66行已移除，spec与7f全等，原强断言不变。
+- 786新CI的video/两项journal、auth/reading/workspace已过；media37897401824主job待终态，Dashboard24/25仍失败，但移到第一处safe=false（尚未巡游）。其原JSON在`dashboard-78694e6a-artifact/`：stage/live-anchor同360，5保护区和viewport按新包络均clear、doze/geometry5，flag却持续false；root现有High窄查effect早退/缓存anchor/geometry触发，不再猜改阈值。此新失败不撤回已真实校准的常量。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 10-09 14:04 CST只读：app=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，Native/runtime/catalogue=`784c6b25342c29bdc5c2db193258d34dfafd4e64`；Web/API/Worker healthy、restart0、M3，无部署journal。原`live-release-prepublish-7f5945d6.json`保留额外容器inspect失败（exit1/109bytes）；不泛称全机验证。02:49:50Z video host42fe/admin关/audio缺为另一次旧读。
