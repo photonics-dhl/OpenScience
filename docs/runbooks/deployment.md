@@ -6,9 +6,9 @@
 
 ### Native目录与关闭中的视频执行器
 
-> 当前执行缺口（2026-10-09）：已核现行transaction只在迁移分支有限超时停旧API/Web/Worker，没有Native安装与后续回滚接缝，也没有已实现的持久写门禁。以下目标已过联合设计High，源码正在原transaction/installer中实施；仍须源码增量审查和对应Linux CI，不能当作已可直接运行的脚本。进展/写权以CURRENT为准，不新增另一套门禁、锁或状态库。
+> 当前候选（2026-10-09）：原`deploy.sh --refresh-native-resources`已接入同FD9事务，安装器已有`--restore-previous <candidate_sha>`；七文件联合源码Scoped GO，Linux lifecycle/FD9/TERM/CAS尚待验收，当前不是生产GO。该flag默认关闭；正常无flag路径保持原行为。只按CURRENT对应精确CI、运行锚点与串行窗口执行，不另建写门禁、锁或状态库。
 
-- 目标前置：沿原精确CI/High、备份和单FD9流程，在原journal保存实际旧应用/Native配对、timer层/活动及原容器运行状态。Refresh对exact容器请求无限daemon超时的正常停止，仅外层等待有界，不向容器发KILL；退出0且非OOM才算正常drain。合法pending队列/outbox/无lease journal及paid-unknown hold原样保留；running、无法解释processing、有效lease、Native实例或非空inbox阻止资源替换，不靠消费任务清空。SDK相同不等于目录相同，引用/科学正文变更仍按资源变更处理。
+- 前置：沿原精确CI/High、备份和单FD9流程；journal创建/暂停前先核旧API/Web/Worker实际env、mount、image与旧Native绑定，再保存原timer层/活动及容器状态。Refresh对exact容器正常stop采用无限daemon超时，仅等待客户端有界，不向容器发KILL；退出0且非OOM才算drain。初次工作分类在迁移完成后的native-install前执行，避免新Prisma读旧schema。已有旧Native marker的pending任务必须hold；未绑定的合法pending队列/outbox、无lease journal及明确paid-unknown hold原样保留。running、无法解释processing、lease、Native实例/inbox阻替换，不消费清空。SDK相同不代表资源不变。
 - 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。复用已装SDK，不改旧目录或手拼配对；stage必须在live写前让timer inactive+disabled。原journal先存install_attempting，严格核原四字段receipt后才存installed；无receipt中断保持停机/journal，不能猜成功。静态核candidate env/挂载/receipt，启动API/Web核binding/health，再恢复原timer层和活动，最后启动Worker；若原timer inactive且有待执行Native任务，停在Worker启动前。不能先让Worker写inbox等待已停timer。
 - 视频：仅上线不可用提示和新收费前检查时，可保留现有关闭的host；新reader对缺旁白声明/关闭/过期返回不可用，无需为此升级host。实际启用新配音请求前才另做完整bundle升级与配置验收；配置开关不证明Key权限，不自动选音色或调用供应商。模型接单关闭与systemd timer关闭是不同事实。
 - 回滚：先执行旧app纯只读preflight（reader/迁移兼容、active身份、旧source/images），通过后才正常停candidate并分类工作、恢复Native。为防候选启动后产生的未完成任务被旧Worker接管，candidate启动前在原journal存DB时点；之后新增/更新的未完成Native/outbox/paidunknown工作阻止自动旧app恢复，保留candidate配对与journal。Native restore先核全部fixed files为candidate/backup/原缺失，再用原previous文件恢复并核旧IDs；无receipt/restore_attempting中断不猜，任一恢复失败禁enable/start。旧API/Web健康且配对正确后，恢复原timer层/活动，再启原本running的旧Worker，最后health/CAS。旧app SHA不代替实际旧Native SHA；不删旧目录、CP或paid证据。
