@@ -16,8 +16,8 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 77f最终源码GO，全链→root79c全等；3485 Linux生命周期真实34/34，非图片质量验收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 632/4cf→root302/483全等且High GO；Linux事务step17过，收日志并核视频CI取消原因 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 头像12488→root053全等集入；独占原workspace-stage.spec更新跨页/portal/回焦，运行未验；未改WorkspaceShell | `.worktrees/research-product-craft` / `codex/ui-workspace-acceptance-20261009`（base053，旧分支保留） |
-- 各owner仅写已授范围，不回退他人修改；root持共享CI/docs/dashboard.spec及RO Hermes缺detail入口修复；UI独占workspace-stage.spec与journal首屏问题的account-journal-craft.css/JournalDirectory.module.css。单renderer/跨路由/焦点/任务/权限边界保留。三线无生产writer，不并行发布/资产写，不派重复检查。
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 21例spec afdf→root7b9、单CSS a0→503全等收取，写窗口关闭；High/static GO，运行待原CI | `.worktrees/research-product-craft` / `codex/ui-workspace-acceptance-20261009`（base053，旧分支保留） |
+- 各owner仅写已授范围，不回退他人修改；root持共享CI/docs及已交Web差额，UI spec/CSS本次交付已收。单renderer/跨路由/焦点/任务/权限边界保留；原Linux证据复用，新失败再派最小范围。三线无生产writer，不并行发布/资产写，不派重复检查。
 
 ## Git / CI / 运行事实
 - root已正常推`3485b9eee1534808e729801d46775826a761db2f`，保留远端a1bab48e导航/服务对象历史；合并接缝High GO，修正无type/unknown type误入blank草稿，2例浏览器待跑。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推；原0c588四边容差、speech扩面及宽泛mocks仍未收。尚非发布GO。
@@ -35,7 +35,7 @@
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
 - UI两处编辑CSS3989→root221b全等；PostCSS40/99规则parse0/diff0，六字段/保存/权限不变，运行视觉待新头像批次。Figma编辑2138:117及头像桌面2138:34/入口2169:23已交；root看过1440×1080桌面及148×56局部，56px头像与创建研究同排、完整研究图无遮挡，静态preview不代表运行/数据现状/审美认可。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png。原14journey/High、原文两尺寸/reading20证据保留。
-- Dashboard3485真实22/26，1440/390头像64px框内draw/视口两例已过，root看过两PNG。4差额：新Account tools入口、隐藏Retry先开对话、回焦头像attentive后Tab idle、RO缺detail无Drawer；root最小修和原跨RO守卫回归保留，High Scoped GO，Web/scoped TS与lint0，待浏览器重验。UI workspace独立收尾；Native验证不再等UI，不把旧RED抹掉。
+- Dashboard3485真实22/26，1440/390头像64px框内draw/视口两例已过，root看过两PNG。4差额在d1a修：新Account tools入口、先开对话再Retry、回焦attentive后Tab idle、RO缺detail走原route fallback；保留跨RO守卫，High GO/49unit/Web与scoped TS/lint0。UI afdf→7b9的21例经原High/static GO；a0→503仅手机标题间距32→28px。均待原浏览器CI，新Native Linux证据复用。
 - 共享包络按fd真实经验极值B8.6903/L51.9531/R34.2979/T29.2034向外取整，仅扩大三边，bottom旧27不收窄；各argmax落在已采关键帧/hover端点。29建议已撤回，不因left距52近就盲加1px，也不称网格为数学全域证明。786 push原实时巡游已过，PR另有前置就绪差额见上；loading连续handler修复已有真实通过。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
