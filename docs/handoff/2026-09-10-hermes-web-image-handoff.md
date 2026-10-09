@@ -15,18 +15,19 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | a780独立High为2P1/2P2，修终态authority/Serializable、唯一像素消费、retry分类和实际Skill receipt；不挡本批 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 45f9两文件最小修复已全等收取c85b，High GO，等root原Linux CI；声音目录消费者待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-video-flag-compat`（d754/4cf保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 8c的Docker24 stop修复已全等收取9eaa/High GO，等新原Linux CI；声音目录消费者待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-docker-stop-compat`（d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
 - 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs与唯一发布窗口，video限原部署lock/test，image图审独立，UI header已交待消费者。单renderer/任务/权限边界保留，不并行发布/资产写。
 
 ## Git / CI / 运行事实
-- 上一已推候选`cd81a7625dd633d04d212a5163990c4a16d57626`；当前在其上集入`c85b20866feb38fd14295795bb95710a04833785`及同步文档，精确HEAD由Git定锚，branch仍`release/onchip-production-line`。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、版本原文、精确管理行与Native配对仍是候选，image a780及UI header未混入。
-- cd81精确CI全过：media PR37969475678与push37969468594各5job、video37969475683、journal37969475702/37969468488成功；PR workspace job113952115912实际21/21(2.6m)，原Dashboard26/26等证据复用。`tmp/session-coordination-20261008/workspace-cd81-job.log`存原输出。ea1/f2/05b失败、修复与High及未改实现的证据保留Git cd81本页和原tmp，不追认旧失败。
-- 10-10 02:31:44 CST失败后只读：active=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Web/Worker原IDs/启动时点不变、healthy/restart0，Native runtime/catalogue仍784、主M3不变，timer active/enabled，无活动Native实例；journal/failure/pending marker均无、无部署锁。原回执`native-cd81-failure-readonly.json`在root同tmp；v1缺字段模板错误保留，不是生产拒绝。
-- 原受审发布命令含no-tests/复用未变能力镜像/refresh-native-resources，精确rollback=a6。02:24:14 CST exit64：build完成、post-build switch校验通过后，native-capture在创建journal/停服务/迁移/Native安装之前拒绝旧Worker两个video=true。通用报错“journal retained”不代表实际存在journal；无需恢复/回滚/清标记。private-cleanup installer已执行且明确无cleanup request；未切应用、未发模型/资产操作。
-- 独立High确定`verifyNativeContainerBinding`误将视频应用开关用于Native配对；host admin=false不等价。video 45f9→root c85b仅原lock删1行+原deploy.test加真实两true，RED→2PASS/0SKIP（Windows），High Scoped GO，Native身份/镜像/挂载/inbox/健康及原drain/CP/回滚守卫未变。原日志video `tmp/native-resource-transaction/video-flag-compat/`；新精确Linux CI通过后沿同受审范围串行发布，不重跑cd81。
-- 备份`/var/backups/openscience/db-set-20261009T181428Z-1360138`已沿原backup.sh --db且不加--confirm完成；独立核manifest/a6、双dump校验及0700/0600权限通过，原8组保留。原stdin未打印END，未重跑备份；`backup-before-native-cd81-verified.json`为核对回执。
-- Native七文件原Scoped GO、Linux lifecycle34/34与deploy105/105、精确CI仍是有效源码证据；本次实况揭示的前置不相容须补回归。付费未知/started CP、已绑定pending、lease等原hold不变；main/Native M3不切换。三线无生产writer，root保留本发布窗口，Fig2仍0写；必要真实产品入口/科学质量尚未验收。
+- branch仍`release/onchip-production-line`；c4e已推，其上全等收取video8c734d55→`9eaa3aabdf974da63b64fd5c2b16513983db623b`，同期文档构成新候选，精确HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID与Native配对仍未部署；image a780及UI header独立未混入。
+- cd81与`c4e465eaf1241aa0d459a5b63f3ce4cf46d23798`的原CI都全过；c4e media PR37974859564/push37974851210各5job、video37974859444、journal37974859485/37974851489成功。root `tmp/session-coordination-20261008/media-main-c4e.log`保存Linux lifecycle34/34、deploy+manifest105/105及两true捕获回归；workspace21/21等CI及旧RED/High见Git c4e本页和原tmp，不追认旧失败。
+- 10-10 03:20 CST恢复操作前双轮实核：active=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Web/Worker原ID/startedAt/image不变、healthy/restart0；实际runtime.env、unit、runtime/catalogue均784，主M3不变，timer enabled/active；候选容器/进程0。
+- cd81在journal创建前因Worker两video=true被错误配对守卫拒绝；45f9→c85b删该无关条件，定向RED→2PASS/High GO。c4e首轮SSH reset255留4个构建子进程，全部自然退出后才原命令重试，不仅据锁空重发。retry1在写migrating/quiescing后遇Docker24不支持`--timeout`，stop未生效，迁移/Native install未开始；原3服务一直运行。private-cleanup installer曾执行、无cleanup request。
+- 遗留850B journal于03:20由一次性精确受审FD9脚本放弃：固定c4e/a6/原startedAt及事故时间、先只读inspect、双轮live/marker/source核对、原字节0600备份与file/dir fsync后unlink并fsync parent，serviceOperations/taskWrites=0。备份`/opt/openscience/tmp/native-recovery-c4e-prestop-20261009T190131Z.json`；root同tmp `native-c4e-abandon-{inspect,confirmed}.json`及executed reader/script保留。普通clear未放宽，已执行脚本不可按旧next action重跑。
+- video8c→root9eaa仅lock与原deploy.test将`--timeout -1`改为Docker24支持的`--time -1`；定向RED→1PASS/0SKIP涵盖6场景、High Scoped GO，精确ID/无限daemon grace/600s client wait/noKILL及原drain/CP/回滚边界不变。新精确Linux CI通过后才串行发布，不能重用c4e作下一发布SHA。完整断线/退出码/原始日志保存在root同tmp `deploy-native-{cd81,c4e,c4e-retry1}*`。
+- 双库备份`/var/backups/openscience/db-set-20261009T181428Z-1360138`已沿原backup.sh --db且不加--confirm完成；独立核manifest/a6、双dump校验、0700/0600通过，8组保留；未因stdin缺END重跑。root `backup-before-native-cd81-verified.json`为凭据。
+- Root仍持唯一串行发布窗口；三owner无生产writer、Fig2仍0写，主Gateway/Native M3与host admin=false/audio absent不变。paid/started CP、Native-bound pending及lease原hold均保留。代码/CI不代表已上线；真实入口、自动科学质量和完整视频仍待验收。
 
 ## 当前交付与明确下一步
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。

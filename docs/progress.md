@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-10：cd81精确CI全过、workspace21/21；发布停服前被错误视频开关条件阻断，原应用/Native未切、无journal或恢复写。45f9→c85b两文件最小修复已High GO、定向RED→2PASS，交新精确Linux CI；备份、现场及下一步统一见CURRENT。
+- 2026-10-10：cd81/c4e原CI全过；正式发布先后发现配对误查视频开关、Docker24 stop参数不兼容。原服务/Native始终未切；遗留事务已独立审查并保原字节安全放弃，0服务/任务操作。两项最小修复已收，最新9eaa待新精确CI；现场与证据统一见CURRENT。
 - 2026-10-10前轮：05b除workspace外CI通过，workspace18/21；余项由原spec ed111+9ee3在后续CI闭合，失败/High/静态与trace证据保留。video目录消费者待host，UI header与image图审独立候选未交生产，细节见CURRENT。
 - 2026-10-09：按用户纠正，将本对话导航、Researchers、Industry / Investors 和邮箱隐藏合入既有 `frontend/nanqing`；保留该分支原工作，main 不动。前轮线上功能已发布，分支纠正不重部署其他候选。详情见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
