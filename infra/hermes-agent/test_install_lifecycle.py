@@ -43,6 +43,7 @@ class InstallLifecycleTests(unittest.TestCase):
         self.layers = {'runtime'}; self.active = True; self.events = []
         self.fail_stop = False; self.fail_copy = False
         self.fail_restore_reload = False; self.reloads = 0
+        self.broker_state = 'inactive'; self.instance_rows = ''
         self.patches = [patch.object(install, k, v) for k,v in {'ROOT':self.root,'NATIVE':self.native,'RELEASES':self.releases,'SYSTEMD_UNITS':self.units}.items()]
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
@@ -69,7 +70,8 @@ class InstallLifecycleTests(unittest.TestCase):
                 output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review',
                     'nativeEvidenceAlignmentInstructions':'Bind retained measurements to their objects, definitions, comparison and scope.', 'version':5})
         elif argv[1] == 'is-active':
-            output = ('active' if self.active else 'inactive') if argv[2].endswith('.timer') else 'inactive'
+            output = ('active' if self.active else 'inactive') if argv[2].endswith('.timer') else self.broker_state
+        elif argv[1] == 'list-units': output = self.instance_rows
         elif argv[1] == 'is-enabled':
             output = 'enabled' if 'persistent' in self.layers else ('enabled-runtime' if 'runtime' in self.layers else 'disabled')
         elif argv[1] == 'show': output = 'loaded'
@@ -210,6 +212,166 @@ class InstallLifecycleTests(unittest.TestCase):
         self.assertTrue(self.active)
         self.assertEqual(self.layers, {'runtime'})
         self.assertFalse((self.root/'releases'/self.source.name/'runtime/.runtime-id').exists())
+
+    def prepare_late_restore(self, absent=False):
+        if absent:
+            for name in install.UNIT_NAMES: (self.units/name).unlink()
+            (self.root/'runtime.env').unlink()
+            self.layers.clear(); self.active = False
+        else:
+            (self.root/'runtime.env').write_text(
+                'HERMES_NATIVE_AGENT_ENABLED=true\n'
+                'HERMES_NATIVE_RUNTIME_ID=installed-native-previous-observed\n'
+                'HERMES_NATIVE_SKILL_CATALOGUE_ID=project-catalogue-previous-observed\n'
+                'HERMES_NATIVE_AGENT_MODEL=MiniMax-M3\n'
+                'HERMES_NATIVE_AGENT_INBOX=/native-agent/inbox\n')
+            (self.root/'runtime.env').chmod(0o600)
+        paths = [*(self.units/name for name in install.UNIT_NAMES), self.root/'runtime.env']
+        self.previous_contents = {path: path.read_bytes() if path.exists() else None for path in paths}
+        self.previous_modes = {path: path.stat().st_mode & 0o777 for path in paths if path.exists()}
+        install.install(self.source, self.snapshot)
+        self.install_release = self.root/'releases'/self.source.name
+        self.candidate_contents = {path: path.read_bytes() for path in paths}
+        self.events.clear()
+
+    def assert_candidate_unchanged(self):
+        for path, value in self.candidate_contents.items(): self.assertEqual(path.read_bytes(), value)
+
+    def assert_no_producer_start(self):
+        self.assertFalse(self.active); self.assertEqual(self.layers, set())
+        self.assertFalse(any(event[1] in ('enable', 'start') for event in self.events if event[0] == 'systemctl'))
+
+    def test_late_restore_recovers_exact_files_modes_and_observed_ids_without_start(self):
+        self.prepare_late_restore()
+        result = install.restore_previous(self.source.name)
+        self.assertEqual(result, {'releaseSha': self.source.name, 'restored': True, 'timerDeferred': True,
+            'previousRuntimeId': 'installed-native-previous-observed',
+            'previousSkillCatalogueId': 'project-catalogue-previous-observed'})
+        for path, value in self.previous_contents.items():
+            self.assertEqual(path.read_bytes(), value)
+            self.assertEqual(path.stat().st_mode & 0o777, self.previous_modes[path])
+        self.assert_no_producer_start()
+        self.assertTrue((self.install_release/'runtime').is_dir())
+        self.assertTrue((self.install_release/'previous/state.json').is_file())
+
+    def test_late_restore_null_ids_only_for_recorded_original_absence(self):
+        self.prepare_late_restore(absent=True)
+        result = install.restore_previous(self.source.name)
+        self.assertIsNone(result['previousRuntimeId']); self.assertIsNone(result['previousSkillCatalogueId'])
+        for path in self.previous_contents: self.assertFalse(path.exists())
+        self.assert_no_producer_start()
+
+    def test_late_restore_accepts_only_known_partial_or_already_restored_files(self):
+        self.prepare_late_restore()
+        first = install.UNIT_NAMES[0]
+        install.shutil.copy2(self.install_release/'previous'/first, self.units/first)
+        first_result = install.restore_previous(self.source.name)
+        self.assertEqual(install.restore_previous(self.source.name), first_result)
+        self.assert_no_producer_start()
+
+    def test_late_restore_prevalidates_the_last_fixed_file_before_any_write(self):
+        self.prepare_late_restore()
+        env = self.root/'runtime.env'; env.write_text('foreign live configuration')
+        expected = {path: path.read_bytes() for path in self.candidate_contents}
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        for path, value in expected.items(): self.assertEqual(path.read_bytes(), value)
+        self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_missing_recorded_backup_before_any_write(self):
+        self.prepare_late_restore()
+        (self.install_release/'previous/runtime.env').unlink()
+        with self.assertRaises((ValueError, OSError)): install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_backup_conflicting_with_recorded_absence(self):
+        self.prepare_late_restore(absent=True)
+        (self.install_release/'previous/runtime.env').write_text('unexpected backup')
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_live_symlink_before_any_write(self):
+        self.prepare_late_restore()
+        env = self.root/'runtime.env'; target = self.root/'unrelated.env'
+        target.write_bytes(env.read_bytes()); env.unlink(); env.symlink_to(target)
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assertTrue(env.is_symlink()); self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_missing_or_duplicate_identity_keys(self):
+        self.prepare_late_restore()
+        env = self.install_release/'previous/runtime.env'; original = env.read_text()
+        for changed in (original.replace('HERMES_NATIVE_RUNTIME_ID=installed-native-previous-observed\n', ''),
+                        original + 'HERMES_NATIVE_RUNTIME_ID=installed-native-previous-observed\n',
+                        original.replace('HERMES_NATIVE_SKILL_CATALOGUE_ID=project-catalogue-previous-observed\n', ''),
+                        original + 'HERMES_NATIVE_SKILL_CATALOGUE_ID=project-catalogue-previous-observed\n',
+                        original.replace('HERMES_NATIVE_RUNTIME_ID=installed-native-previous-observed', 'HERMES_NATIVE_RUNTIME_ID=')):
+            with self.subTest(configuration=changed):
+                env.write_text(changed)
+                with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+                self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_invalid_receipt_and_backup_flags(self):
+        self.prepare_late_restore()
+        receipt = self.install_release/'installation.json'; original = receipt.read_text()
+        receipt.write_text(original.rstrip()[:-1] + ', "releaseSha": "' + self.source.name + '"}')
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        changed = json.loads(original); changed['releaseSha'] = 'c'*40
+        receipt.write_text(json.dumps(changed))
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        receipt.write_text(original)
+        state = self.install_release/'previous/state.json'; changed = json.loads(state.read_text())
+        changed['files']['runtime.env'] = 1
+        state.write_text(json.dumps(changed))
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+
+    def test_late_restore_rejects_unsafe_backup_mode_before_any_write(self):
+        self.prepare_late_restore()
+        (self.install_release/'previous'/install.UNIT_NAMES[-1]).chmod(0o666)
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+
+    def test_late_restore_refuses_broker_instance_or_inbox_work(self):
+        self.prepare_late_restore()
+        for busy in ('broker', 'instance', 'inbox'):
+            with self.subTest(busy=busy):
+                self.broker_state = 'deactivating' if busy == 'broker' else 'inactive'
+                self.instance_rows = 'an active native instance' if busy == 'instance' else ''
+                pending = self.root/'inbox/pending'; pending.unlink(missing_ok=True)
+                if busy == 'inbox': pending.write_text('preserved pending request')
+                with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+                self.assert_candidate_unchanged(); self.assert_no_producer_start()
+                if busy == 'inbox': self.assertEqual(pending.read_text(), 'preserved pending request')
+
+    def test_late_restore_copy_or_reload_failure_does_not_start(self):
+        self.prepare_late_restore()
+        with patch.object(install.shutil, 'copy2', side_effect=OSError('fixture late restore copy failed')):
+            with self.assertRaisesRegex(OSError, 'late restore copy'): install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assert_no_producer_start()
+        self.fail_restore_reload = True
+        with self.assertRaises(subprocess.CalledProcessError): install.restore_previous(self.source.name)
+        self.assert_no_producer_start()
+
+    def test_restore_cli_dispatches_only_restore_and_rejects_snapshot(self):
+        import contextlib
+        import io
+        result = {'releaseSha': self.source.name, 'restored': True, 'timerDeferred': True,
+                  'previousRuntimeId': 'old-runtime', 'previousSkillCatalogueId': 'old-catalogue'}
+        output = io.StringIO()
+        with patch.object(install, 'restore_previous', return_value=result) as restore, \
+             patch.object(install, 'install') as installing, contextlib.redirect_stdout(output):
+            install.main(['--restore-previous', self.source.name])
+        restore.assert_called_once_with(self.source.name); installing.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), result)
+        installation_receipt = {'releaseSha': self.source.name, 'runtimeId': 'new-runtime',
+                                'skillCatalogueId': 'new-catalogue', 'timerDeferred': True}
+        output = io.StringIO()
+        with patch.object(install, 'install', return_value=installation_receipt) as installing, \
+             patch.object(install, 'restore_previous') as restore, contextlib.redirect_stdout(output):
+            install.main(['--source', str(self.source), '--runtime-snapshot', str(self.snapshot)])
+        installing.assert_called_once_with(self.source, self.snapshot, True); restore.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue()), installation_receipt)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            install.main(['--restore-previous', self.source.name, '--runtime-snapshot', str(self.snapshot)])
 
 
 if __name__ == '__main__': unittest.main()
