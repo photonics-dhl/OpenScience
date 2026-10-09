@@ -620,7 +620,8 @@ async function persistAgentTaskCoreInTransaction(
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
-      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
+      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
+      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
     throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
@@ -633,7 +634,7 @@ async function persistAgentTaskCoreInTransaction(
         payload: input.payload as never,
         interestContext: interestContext as never,
         idempotencyKey: input.idempotencyKey,
-        ...(nativeReviewResult ? { result: nativeReviewResult } : nativeAgentResult ? { result: nativeAgentResult as unknown as Prisma.InputJsonObject } : {}),
+        ...(nativeReviewResult || nativeAgentResult ? { result: { ...nativeReviewResult, ...nativeAgentResult } as unknown as Prisma.InputJsonObject } : {}),
       },
     });
   } catch (error) {

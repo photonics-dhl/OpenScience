@@ -6,6 +6,7 @@ import { AiGateway } from '../src/gateway';
 import { AnthropicCompatProvider } from '../src/provider';
 import { nativeImageReviewPromptHash } from '../src/native-image-review';
 import type { ScienceReviewInput } from '../src/science-review-protocol';
+import type { ProviderResult } from '../src/provider';
 
 const bytes = readFileSync(resolve(__dirname, 'fixtures/minimax-reference.png'));
 const hash = createHash('sha256').update(bytes).digest('hex');
@@ -15,6 +16,8 @@ const input = (): ScienceReviewInput => ({ requestId: 'image-task', prompt: 'Ins
   source: { kind: 'illustration-image', researchObjectId: 'ro', versionId: 'v', candidateHash: hash, sourceEvidenceIdentity: 'b'.repeat(64) },
   attachments: [{ fileName: 'page-1.png', mediaType: 'image/png', bytes, sha256: hash, pageNumber: 1, width: 1, height: 1 }] });
 const guard = (value: unknown): value is { decision: string } => Boolean(value && typeof value === 'object' && (value as { decision?: string }).decision === 'accepted');
+const imageTools = [{ type: 'function' as const, function: { name: 'paper_image_view', description: 'Read this saved image only.',
+  parameters: { type: 'object', properties: {}, additionalProperties: false } } }];
 function setup(text = '{"decision":"accepted"}', model = 'MiniMax-M3') {
   const fetcher = vi.fn(async () => new Response(JSON.stringify({ model, content: [{ type: 'text', text }],
     stop_reason: 'end_turn', usage: { input_tokens: 17, output_tokens: 8 } }), { status: 200 }));
@@ -28,6 +31,42 @@ function setup(text = '{"decision":"accepted"}', model = 'MiniMax-M3') {
 }
 
 describe('server-bound Hermes native pixel review', () => {
+  it('binds actual Agent SDK turns to the isolated saved-image role without changing the paper primary', async () => {
+    const primary = setup(), pixel = setup(undefined, 'MiniMax-M3.1-Flash-Preview');
+    const authority = vi.fn(async () => undefined);
+    const gateway = new AiGateway({ providers: [primary.provider], nativeImageReviewProvider: pixel.provider,
+      illustrationReviewPolicy: async () => true, authorizeIllustrationReview: authority });
+    const request = { ...input(), illustrationContext: { ...input().illustrationContext!, imageReviewMode: 'agent-native' as const } };
+    const controls = { beforeProviderAttempt: async () => undefined,
+      submitProvider: async (_target: unknown, submit: () => Promise<ProviderResult>) => submit(),
+      imageReview: { input: request, target: { provider: pixel.provider.name, model: pixel.provider.model } } };
+    const result = await gateway.nativeAgentComplete([{ role: 'user', content: 'Inspect the saved image.',
+      images: [{ mediaType: 'image/png', data: bytes.toString('base64') }] }], { maxTokens: 100, tools: imageTools }, controls);
+    expect(result.model).toBe(pixel.provider.model);
+    expect(pixel.fetcher).toHaveBeenCalledOnce(); expect(primary.fetcher).not.toHaveBeenCalled();
+    expect(authority).toHaveBeenCalledOnce();
+    await gateway.nativeAgentComplete([{ role: 'user', content: 'The original paper task.' }], { maxTokens: 100 }, {
+      beforeProviderAttempt: async () => undefined, submitProvider: async (_target, submit) => submit(),
+    });
+    expect(primary.fetcher).toHaveBeenCalledOnce(); expect(pixel.fetcher).toHaveBeenCalledOnce();
+  });
+
+  it.each(['changed-target', 'changed-pixels'])('rejects an Agent image role %s before any checkpoint or provider', async change => {
+    const primary = setup(), pixel = setup(undefined, 'MiniMax-M3.1-Flash-Preview');
+    const gateway = new AiGateway({ providers: [primary.provider], nativeImageReviewProvider: pixel.provider,
+      illustrationReviewPolicy: async () => true, authorizeIllustrationReview: async () => undefined });
+    const request = { ...input(), illustrationContext: { ...input().illustrationContext!, imageReviewMode: 'agent-native' as const } };
+    const submitProvider = vi.fn(async (_target, submit) => submit());
+    const controls = { beforeProviderAttempt: async () => undefined, submitProvider,
+      imageReview: { input: request, target: { provider: pixel.provider.name,
+        model: change === 'changed-target' ? 'MiniMax-M3' : pixel.provider.model } } };
+    const changed = Buffer.from(bytes); if (change === 'changed-pixels') changed[changed.length - 1] ^= 1;
+    await expect(gateway.nativeAgentComplete([{ role: 'user', content: 'Inspect.', images: [
+      { mediaType: 'image/png', data: changed.toString('base64') },
+    ] }], { maxTokens: 100, tools: imageTools }, controls)).rejects.toThrow();
+    expect(submitProvider).not.toHaveBeenCalled(); expect(primary.fetcher).not.toHaveBeenCalled(); expect(pixel.fetcher).not.toHaveBeenCalled();
+  });
+
   it('uses a configured pixel model while the primary Native Agent model remains M3', async () => {
     const primary = setup(), vision = setup(undefined, 'MiniMax-M3.1-Flash-Preview');
     const checkpoint = vi.fn(async (_input, _target, submit) => submit());

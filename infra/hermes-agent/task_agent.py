@@ -240,7 +240,9 @@ def append_bound_page_images(calls, new_messages, messages, page_images):
     results = {m.get("tool_call_id"): m for m in new_messages if isinstance(m, dict) and m.get("role") == "tool"}
     content = []
     for call in calls or []:
-        if call.function.name != "paper_view":
+        statuses = {"paper_view": "page_view_ready", "paper_image_view": "image_view_ready"}
+        expected_status = statuses.get(call.function.name)
+        if expected_status is None:
             continue
         result = results.get(call.id)
         if not result or not isinstance(result.get("content"), str):
@@ -249,7 +251,7 @@ def append_bound_page_images(calls, new_messages, messages, page_images):
             output = json.loads(result["content"])
         except (ValueError, TypeError):
             continue
-        if not isinstance(output, dict) or output.get("status") != "page_view_ready":
+        if not isinstance(output, dict) or output.get("status") != expected_status:
             continue
         # Worker checks this exact successful result against its bound source before releasing pixels.
         parts = page_images(call.id, json.loads(call.function.arguments), output)

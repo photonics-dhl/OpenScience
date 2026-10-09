@@ -23,7 +23,7 @@ export function readStoredGeneratedImageReview(value: unknown, expected: ImageRe
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)
     || Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
     || saved.stage !== 'generated-image'
-    || (native ? !nativeImageReviewProvider(saved.provider, saved.model) || !nativeImageReviewMatches(native, expected, saved)
+    || (native ? !nativeImageReviewProvider(saved.provider, saved.model) || !nativeImageReviewMatches(native, expected, saved, owningTaskResult)
       : saved.provider !== 'chatgpt-web-science-review'
         && !(saved.provider === 'codex-sol-image-review' && saved.model === 'gpt-5.6-sol'))
     || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200

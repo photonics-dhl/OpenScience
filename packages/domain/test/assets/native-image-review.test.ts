@@ -4,6 +4,8 @@ import { createResearchObject } from '../../src/research-object/research-objects
 import { createAgentSession, submitAgentTask, markTaskProgress, projectAgentTaskResult, retryAgentTask } from '../../src/agent/agent';
 import { readStoredGeneratedImageReview, requireSceneImageParent, requireSceneImageRevision } from '../../src/assets/scene-image';
 import { startNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
+import * as nativeImage from '../../src/assets/native-image-review';
+import { readNativeAgentExecution } from '../../src/agent/native-agent-execution';
 import { initialNativeImageReviewResult } from '../../src/assets/scene-image';
 
 const review = (requestId = 'native-task') => ({ stage: 'generated-image', requestId, contentHash: 'a'.repeat(64),
@@ -15,13 +17,13 @@ const identity = (requestId = 'native-task') => ({ requestId, contentHash: 'a'.r
 const completed = (requestId = 'native-task') => ({ mode: 'model-native', state: 'completed', executionAttempt: 1,
   ...identity(requestId), promptHash: 'c'.repeat(64), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', review: review(requestId) });
 
-async function fixture() {
+async function fixture(nativeAgentRuntime?: { runtimeId: string; skillCatalogueId: string; model: string }) {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db, { id: 'native-review-user' });
   db.workspaces.push({ id: 'native-ws', type: 'team', name: 'Lab', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
   db.memberships.push({ id: 'native-member', workspaceId: 'native-ws', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
   db.usageLedger.push({ id: 'native-credit', userId: user.id, resource: 'ai_credit', delta: 100, kind: 'grant', createdAt: new Date() });
-  const deps = { prisma, mailer: {} as never, redis: { lpush: async () => 1 } } as never;
+  const deps = { prisma, mailer: {} as never, redis: { lpush: async () => 1 }, nativeAgentRuntime } as never;
   const ro = await createResearchObject(deps, { workspaceId: 'native-ws', userId: user.id, title: 'Native review' });
   const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
   const payload = { schemaVersion: 1, researchObjectId: ro.id, versionId: '11111111-1111-4111-8111-111111111111',
@@ -35,6 +37,84 @@ async function fixture() {
 }
 
 describe('server-owned native image review role', () => {
+  it('selects the actual image Agent only on fresh server-owned task creation without a second debit', async () => {
+    const f = await fixture({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' });
+    expect(readNativeAgentExecution(f.row.result)?.profile).toBe('image-review');
+    expect(f.row.result).toMatchObject({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    await submitAgentTask(f.deps, f.input);
+    expect(f.db.usageLedger.filter(entry => entry.kind === 'consume')).toHaveLength(1);
+  });
+
+  it('prepares one immutable image conversation envelope from the existing task reservation', async () => {
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(runtime); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    const before = f.db.usageLedger.length;
+    const prepared = await nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id,
+      executionAttempt: 1, identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000,
+      target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3.1-Flash-Preview' } });
+    expect(prepared).toMatchObject({ mode: 'agent-native', state: 'prepared', maxTurns: 4,
+      maxOutputTokens: 32768, maxTotalOutputTokens: 32768, executionAttempt: 1, ...identity(f.task.id), ...runtime,
+      model: 'MiniMax-M3.1-Flash-Preview' });
+    expect(prepared.deadlineAt - prepared.preparedAt).toBe(300000);
+    expect(f.db.usageLedger).toHaveLength(before);
+    await expect(nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id,
+      executionAttempt: 1, identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000,
+      target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3.1-Flash-Preview' } })).rejects.toThrow();
+    expect(f.db.usageLedger).toHaveLength(before);
+  });
+
+  it.each(['missing', 'wrong-user', 'wrong-delta', 'wrong-task'])('refuses a Native image conversation with %s reservation proof', async change => {
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(runtime); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    const entry = f.db.usageLedger.find(candidate => candidate.kind === 'consume')!;
+    if (change === 'missing') f.db.usageLedger.splice(f.db.usageLedger.indexOf(entry), 1);
+    if (change === 'wrong-user') entry.userId = 'foreign';
+    if (change === 'wrong-delta') entry.delta = -2;
+    if (change === 'wrong-task') entry.metadata = { taskId: 'foreign', kind: 'presentation.generate', policy: 'charged-on-submit' };
+    const previous = structuredClone(f.row.result);
+    await expect(nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1,
+      identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000,
+      target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' } })).rejects.toThrow(/reservation/);
+    expect(f.row.result).toEqual(previous);
+  });
+
+  it.each(['valid', 'started', 'tool-calls', 'length', 'wrong-provider', 'wrong-prompt', 'wrong-response', 'wrong-image'])('consumes only the exact final Agent CP: %s', async change => {
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(runtime); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    await nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1,
+      identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000, target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' } });
+    const cp: Record<string, unknown> = { taskId: f.task.id, sourceKind: 'illustration-image', imageIdentity: identity(f.task.id),
+      objectKey: `derived/native-agent/${'e'.repeat(64)}.json`, serializedSha256: 'e'.repeat(64), size: 1000,
+      executionAttempt: 1, turnCount: 2, state: 'completed', target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'c'.repeat(64) },
+      responseHash: 'd'.repeat(64), finishReason: 'stop', hasToolCalls: false };
+    if (change === 'started') { cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+    if (change === 'tool-calls') cp.hasToolCalls = true;
+    if (change === 'length') cp.finishReason = 'length';
+    if (change === 'wrong-provider') (cp.target as Record<string, unknown>).provider = 'minimax-key-2-model-1';
+    if (change === 'wrong-prompt') (cp.target as Record<string, unknown>).promptHash = 'f'.repeat(64);
+    if (change === 'wrong-response') cp.responseHash = 'f'.repeat(64);
+    if (change === 'wrong-image') (cp.imageIdentity as Record<string, unknown>).contentHash = 'f'.repeat(64);
+    ((f.row.result as Record<string, unknown>).nativeAgentExecution as Record<string, unknown>).checkpoint = cp;
+    if (change === 'valid') {
+      await completeNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, review: review(f.task.id) as never });
+      expect(readStoredGeneratedImageReview(review(f.task.id), identity(f.task.id), f.row.result)).toEqual(review(f.task.id));
+    } else {
+      await expect(completeNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, review: review(f.task.id) as never })).rejects.toThrow();
+      expect(nativeImage.readNativeImageReviewCheckpoint(f.row.result)?.state).toBe('prepared');
+    }
+  });
+
+  it.each(['started', 'completed'])('never upgrades a legacy %s single-shot checkpoint', async state => {
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    await startNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, identity: identity(f.task.id),
+      target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'c'.repeat(64) } });
+    if (state === 'completed') await completeNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, review: review(f.task.id) as never });
+    const old = structuredClone(f.row.result);
+    await expect(nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1,
+      identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000, target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' } })).rejects.toThrow();
+    expect(f.row.result).toEqual(old);
+  });
   it.each(['valid', 'missing', 'started', 'changed'])('binds the actual rejected-image correction path to the %s native checkpoint', async change => {
     const f = await fixture(); const payload = f.input.payload;
     const parentId = payload.sceneImage.storyboardAssetId;

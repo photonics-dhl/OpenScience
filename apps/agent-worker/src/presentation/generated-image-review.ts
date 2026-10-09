@@ -51,6 +51,7 @@ export async function reviewGeneratedImage(
     authorizationContext: ScienceReviewInput['authorizationContext']; illustrationContext: NonNullable<ScienceReviewInput['illustrationContext']>;
     researchObjectId: string; versionId: string; identity: ImageReviewIdentity;
   },
+  nativeAgent?: (request: ScienceReviewInput) => Promise<import('@openscience/ai-gateway').ScienceReviewProviderResult>,
 ): Promise<GeneratedImageReview> {
   const { bytes, identity, document, sceneIndex, settings } = input;
   const attachment = generatedImageReviewAttachment(bytes, identity.contentHash, input.contentType);
@@ -76,16 +77,20 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
     scene: { ...reviewScene, ...(scene.paperOriginal ? { paperOriginal: { assetId: scene.paperOriginal.assetId, contentHash: scene.paperOriginal.contentHash } } : {}) },
     claims: input.claims.map(claim => ({ id: claim.id, kind: claim.kind, statement: claim.statement, assessment: claim.assessment,
       conditions: claim.conditions, limitations: claim.limitations, evidence: claim.sourcePassages ?? [] })) })}`;
-  const promptLimit = input.illustrationContext.imageReviewMode === 'model-native'
+  const promptLimit = input.illustrationContext.imageReviewMode !== undefined
     ? ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS : SCIENCE_REVIEW_MAX_PROMPT_CHARS;
   if (prompt.length > promptLimit) throw new Error(`[blocked] Generated image review exceeds the source input budget (${prompt.length} > ${promptLimit} characters)`);
+  const agentMode = input.illustrationContext.imageReviewMode === 'agent-native';
   const request: ScienceReviewInput = {
     requestId: identity.requestId, authorizationContext: input.authorizationContext, illustrationContext: input.illustrationContext,
     source: { kind: 'illustration-image', researchObjectId: input.researchObjectId, versionId: input.versionId,
       candidateHash: identity.contentHash, sourceEvidenceIdentity: identity.sourceEvidenceIdentity },
-    prompt, attachments: [attachment],
+    prompt: agentMode ? prompt.replace('Do not browse, generate images, execute tools, or edit the scientific Claims or scene.',
+      'Use only the advertised read-only tools to view this saved image and relevant Skills. Do not browse, generate images or edit the scientific Claims or scene.') : prompt,
+    attachments: [attachment],
   };
-  const result = await gateway.reviewScientific(request, (value): value is Record<string, unknown> => {
+  if (agentMode && !nativeAgent) throw new Error('[blocked] Actual image Agent execution is unavailable');
+  const result = agentMode ? await nativeAgent!(request) : await gateway.reviewScientific(request, (value): value is Record<string, unknown> => {
     try { parseDecision(value); return true; } catch { return false; }
   });
   // A malformed/uncertain response keeps its original spool record; there is no model retry here.
@@ -93,8 +98,8 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
   // Reuse that parser here so a valid Gateway result is not rejected a second
   // time by a narrower JSON.parse call.
   const decision = parseDecision(parseStructuredJson(result.text));
-  const native = input.illustrationContext.imageReviewMode === 'model-native';
-  if (result.promptHash !== (native ? nativeImageReviewPromptHash(request) : sha256(prompt)) || result.responseHash !== sha256(result.text)
+  const native = input.illustrationContext.imageReviewMode !== undefined;
+  if ((!agentMode && result.promptHash !== (native ? nativeImageReviewPromptHash(request) : sha256(prompt))) || result.responseHash !== sha256(result.text)
     || (native ? !nativeImageReviewProvider(result.provider, result.model)
       : result.provider !== 'chatgpt-web-science-review'
         && !(result.provider === 'codex-sol-image-review' && result.model === 'gpt-5.6-sol'))

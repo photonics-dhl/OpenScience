@@ -463,6 +463,8 @@ export { requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboard
 
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, readStoredGeneratedImageReview, generatedSceneImageRequiresPixelReview, type GeneratedImageReview, type ImageReviewIdentity, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
 export { readNativeImageReviewCheckpoint, nativeImageReviewMatches, nativeImageReviewProvider, startNativeImageReview, completeNativeImageReview,
+  prepareAgentNativeImageReview, agentNativeImageReviewEnvelope, requireAgentNativeImageReviewReservation, readNativeImageAgentExecution,
+  type AgentNativeImageReviewPrepared, type AgentNativeImageReviewCompleted,
   type NativeImageReviewCheckpoint, type NativeImageReviewStarted, type NativeImageReviewCompleted,
   type NativeImageReviewTarget } from './assets/native-image-review';
 export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
@@ -471,6 +473,6 @@ export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllu
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
 export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority, supportsNativeIllustration,
-  type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
+  type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentImageCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
 
 export { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, hasSingleReviewedVisualSource, readVisualNarrativeSource } from './assets/illustration-source';

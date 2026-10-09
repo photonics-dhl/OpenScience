@@ -2,6 +2,7 @@ import type { AuditSink } from '@openscience/observability';
 import { snapshotToolDefinitions, validateToolHistory } from './native-tool-protocol';
 import { AiGatewayError } from './errors';
 import { isImageUsageLimit, validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
+import { createHash } from 'node:crypto';
 import { imagePromptHash } from './codex-image-protocol';
 import {
   DEFAULT_OCR_LIMITS,
@@ -102,7 +103,10 @@ type TextExecutionControls = {
   nativeAgent?: boolean;
 };
 
-export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>>;
+export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>> & {
+  /** Trusted Worker envelope, never an SDK/client-selected role or provider. */
+  imageReview?: { input: ScienceReviewInput; target: Pick<NativeImageReviewTarget, 'provider' | 'model'> };
+};
 
 export type StructuredGenerationOptions = TextGenerationOptions & {
   /** Do not submit a second key/model after an uncertain paid source-review call. */
@@ -215,7 +219,7 @@ export class AiGateway {
 
   private async reviewScientificControlled(input: ScienceReviewInput, guard: SchemaGuard<unknown> | undefined, completedOnly: boolean): Promise<ScienceReviewProviderResult> {
     if (input.illustrationContext?.imageReviewMode !== undefined) {
-      if (completedOnly || !guard || !this.authorizeIllustrationReview || !this.nativeImageReviewSubmission
+      if (input.illustrationContext.imageReviewMode !== 'model-native' || completedOnly || !guard || !this.authorizeIllustrationReview || !this.nativeImageReviewSubmission
         || !('kind' in input.source) || input.source.kind !== 'illustration-image')
         throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image review requires its durable submission owner');
       const sourceEvidenceIdentity = input.source.sourceEvidenceIdentity;
@@ -497,7 +501,46 @@ export class AiGateway {
     if (typeof controls?.beforeProviderAttempt !== 'function' || typeof controls?.submitProvider !== 'function') {
       throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native agent submission authority is required');
     }
+    if (controls.imageReview) {
+      const role = controls.imageReview;
+      const selected = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+      const target = this.resolveNativeImageReviewTarget();
+      const source = role.input.source;
+      if (role.input.illustrationContext?.imageReviewMode !== 'agent-native' || !('kind' in source) || source.kind !== 'illustration-image'
+        || target.provider !== role.target.provider || target.model !== role.target.model || !this.authorizeIllustrationReview
+        || role.input.requestId !== role.input.authorizationContext.taskId) {
+        throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review envelope changed');
+      }
+      const snapshot: ScienceReviewInput = { ...role.input, source: Object.freeze({ ...source }),
+        authorizationContext: Object.freeze({ ...role.input.authorizationContext }),
+        illustrationContext: Object.freeze({ ...role.input.illustrationContext }),
+        attachments: role.input.attachments?.map(image => Object.freeze({ ...image, bytes: Buffer.from(image.bytes) })) };
+      nativeImageReviewMessages(snapshot);
+      const attachment = snapshot.attachments![0]!;
+      const actual = snapshotChatMessages(messages);
+      if (actual.flatMap(message => message.images ?? []).some(image => image.mediaType !== attachment.mediaType
+        || createHash('sha256').update(Buffer.from(image.data, 'base64')).digest('hex') !== attachment.sha256)) {
+        throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent received pixels outside its saved image');
+      }
+      return this.completeWithControls(actual, opts, { primaryProviderOnly: true, nativeAgent: true,
+        reviewSourceIdentity: source.sourceEvidenceIdentity,
+        beforeProviderAttempt: async () => {
+          if (await this.illustrationReviewPolicy?.(snapshot.authorizationContext) !== true)
+            throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review denied');
+          await this.authorizeIllustrationReview!(snapshot);
+          await controls.beforeProviderAttempt();
+        }, submitProvider: controls.submitProvider,
+      }, selected);
+    }
     return this.completeWithControls(messages, opts, { ...controls, primaryProviderOnly: true, nativeAgent: true });
+  }
+
+  /** Non-secret identity only; resolving a role never submits or rotates a provider. */
+  resolveNativeImageReviewTarget(): Pick<NativeImageReviewTarget, 'provider' | 'model'> {
+    const provider = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+    if (!provider || provider.supportsImageInput !== true || !provider.preflightNativeImages || !provider.preflightNativeTools)
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'Native Agent pixel provider cannot inspect images and tools');
+    return Object.freeze({ provider: provider.name, model: provider.model });
   }
 
   private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}, nativeImageReviewProvider?: Provider): Promise<GatewayCompletion> {

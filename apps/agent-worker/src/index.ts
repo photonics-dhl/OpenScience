@@ -793,6 +793,7 @@ export function createHandlers(
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
+        runtime: nativeAgentRuntimeFromEnv(process.env),
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
     'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),

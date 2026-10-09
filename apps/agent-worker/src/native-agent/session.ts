@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse, type AiGateway, type GatewayCompletion,
   type ChatMessage, type TextGenerationOptions } from '@openscience/ai-gateway';
+import type { ScienceReviewInput } from '@openscience/ai-gateway';
+import type { AgentNativeImageReviewPrepared } from '@openscience/domain';
 
 export type NativeAgentSessionBinding = {
   taskId: string;
@@ -12,7 +14,8 @@ export type NativeAgentSessionBinding = {
   /** Private immutable review input; never included in the native host configuration. */
   sourceReview?: { sourceAgentTaskId: string; authorCheckpointSha256: string; boundDraft: unknown };
 } & ({ sourceKind?: 'paper'; artifactId: string; documentSha256: string; sourceMapHash: string }
-  | { sourceKind: 'journal-text'; journalText: { jobId: string; sourceDigest: string; revision: number; sourceTextSha256: string } });
+  | { sourceKind: 'journal-text'; journalText: { jobId: string; sourceDigest: string; revision: number; sourceTextSha256: string } }
+  | { sourceKind: 'illustration-image'; imageReview: AgentNativeImageReviewPrepared });
 type Target = { provider: string; model: string; promptHash: string };
 type Request = { messages: ChatMessage[]; options: TextGenerationOptions };
 type RejectedAttempt = { httpStatus: 529; maxOutputTokens: number };
@@ -40,9 +43,10 @@ const reservedOutput = (turn: Turn) => (turn.state === 'completed' ? turn.respon
 const reservedCalls = (turn: Turn) => 1 + (turn.rejectedAttempt ? 1 : 0);
 
 /** Owns SDK transport checkpoints; the installed AIAgent still owns every conversation/tool iteration. */
-export function createNativeAgentSession(input: { gateway: AiGateway; binding: NativeAgentSessionBinding;
+export function createNativeAgentSession(input: { gateway: AiGateway; binding: NativeAgentSessionBinding; imageReviewInput?: ScienceReviewInput;
   store: NativeAgentSessionStore; authorize: () => Promise<void>; now?: () => number }) {
   const binding = structuredClone(input.binding);
+  if (binding.sourceKind === 'illustration-image' && !input.imageReviewInput) blocked('saved image authorization missing');
   const now = input.now ?? Date.now;
   let cursor = 0;
   let inFlight = false;
@@ -116,6 +120,9 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
         const attempt: { rejection?: { started: NativeAgentSessionState; error: TextProviderError } } = {};
         try {
           result = await input.gateway.nativeAgentComplete(messages, boundedOptions, {
+            ...(binding.sourceKind === 'illustration-image' ? { imageReview: {
+              input: input.imageReviewInput!, target: { provider: binding.imageReview.provider, model: binding.imageReview.model },
+            } } : {}),
             beforeProviderAttempt: authorize,
             submitProvider: async (target, submit) => {
               await authorize(); state = await read(); checkHistory(messages, state);
