@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10恢复修复复核：f833的候选fixture仍用旧容器ID，5PASS不能证明真实候选恢复；原High判P1 NO-GO，root未集入。为区分同候选与替换容器，已批准现journal原子保存checkpoint+三ID，并保留空checkpoint/部分created回退路径；video唯一两文件writer实施，最终High与Linux CI待收，生产窗口关闭。
 - 2026-10-10续作：精确6f35候选的Node22只读诊断确认root ESM缺database、Worker可解析；首次诊断新增不兼容--pull造成16的记录保留，修正后仅一次元数据观测，无DB/Redis/model。原High批准Worker cwd/helper import最小修复，与重复pause/rollback交video唯一两文件writer及真实loader/顺序回归；尚未发布，不追认历史唯一因果。
 - 2026-10-10：6f35精确CI全过，发布越过Web停止并应用迁移51，但Native安装前失败、二次pause阻自动恢复。约6分钟后独立High/同FD9恢复原a6三服务/Native784，04:45公网200、journal已收尾/859B备份保留；迁移51保留。video正补首失败诊断及完整恢复顺序回归，写窗口关闭；image3a2/UI header及新头像仍未上线。
 - 前次21b：约9分钟不可用后原a6恢复，未迁移/Native安装，850B journal精确收尾完成；原证据保留，历史状态不能用于6f35事故。
