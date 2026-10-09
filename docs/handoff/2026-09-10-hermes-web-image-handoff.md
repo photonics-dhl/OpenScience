@@ -29,7 +29,7 @@
 - 04:40:52独立High/同FD9专用恢复成功：start原API/Web→healthy/publica6→恢复原timer→原Workerhealthy；约6分钟不可用，迁移51保留，无Native安装/DB回滚/任务重派。`recover-6f35-original-services{.log,-command.json}`及859B备份`/opt/openscience/tmp/native-recovery-6f35-stopped-20261009T203505Z.json`保留；04:44:19专用finalize先inspect后confirm成功，`native-6f35-finalize-once-confirmed.json`可核，禁止重放。
 - 旧Web兼容0f7→2c9仅原lock/test，原High/29场景与6f35 Linux回归均过；其单次pause验收没有覆盖失败后的完整恢复顺序，video继续补此缺口。当前保持旧a6可用，关闭写窗口，源码修复/High/对应CI和实际故障定位齐备前不再发版。
 - 05:19:58 CST受控module-only：exact6f/d6a7镜像、Node22.23.2/sourceMarker/cwd匹配；root ESM数据库包ERR_MODULE_NOT_FOUND/CJS亦失败，Worker CJS两包resolve+exists，确认当前loader缺口。`native-6f35-module-resolution-corrected-receipt.json`保结果；无业务import/DB/Redis/model，probe清空NODE_OPTIONS，不能追认20:35唯一因果。首probe被新增且Compose2.26不支持的--pull never阻16，原receipt/executed/help保留；High纠正后同FD9/精确本地镜像完成一次观测。无后续snapshot探针。
-- High仅准queryNativeWork改Worker cwd及classifier相对import；保留查询/classifier/JSON/权限/预算，不加根依赖/loader/fallback。原test需真实Node完整query/真实classifier/只读mock加载及旧root负控，并补首次pause→安装前失败→prepare、unsafe保持/自然收敛、hold→prepare序列；当前尚未交源码，不把设计或模块诊断称发布GO。
+- High仅准queryNativeWork改Worker cwd及classifier相对import，保留查询/classifier/JSON/权限/预算，不加依赖/loader/fallback；需完整query/真实classifier/只读mock的Node加载与旧root负控。恢复子集f833（parent6f35、仅lock/test）已交，连续流程5PASS/0skip，原High源码复核中；ESLint只报ignored，不称完整lint通过。loader增量仍由同owner补齐，root待最终组合收取，不构成发布GO。
 - 本轮新双库`db-set-20261009T202746Z-1790443`在`/var/backups/openscience`，双dump/checksum/0700-0600已核，旧181428Z仍保留；`backup-before-native-6f35-verified.json`存证。main/Native M3与video host admin=false/audio absent未改；无新增模型/供应商任务，Fig2仍0写；paid/started CP/Native-bound pending/lease保护保持。
 
 ## 当前交付与明确下一步
