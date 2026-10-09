@@ -108,6 +108,21 @@ def freeze(path):
     os.chmod(path, 0o555)
 
 
+def _restore_previous_files(backup, previous):
+    for name in UNIT_NAMES:
+        unit = SYSTEMD_UNITS/name
+        if previous[name]:
+            shutil.copy2(backup/name, unit, follow_symlinks=False)
+        else:
+            unit.unlink(missing_ok=True)
+    env_path = ROOT/'runtime.env'
+    if previous['runtime.env']:
+        shutil.copy2(backup/'runtime.env', env_path, follow_symlinks=False)
+    else:
+        env_path.unlink(missing_ok=True)
+    command(['systemctl', 'daemon-reload'])
+
+
 def install(source, runtime_snapshot, defer_timer=True):
     if os.geteuid() != 0:
         raise ValueError('Native installation requires root')
@@ -136,6 +151,7 @@ def install(source, runtime_snapshot, defer_timer=True):
         timer_enabled = command(['systemctl', 'is-enabled', 'openscience-hermes-broker.timer'], False).stdout.strip()
         if timer_enabled not in ('enabled', 'enabled-runtime', 'disabled', 'not-found'):
             raise ValueError('Native timer has an unsupported existing enable state')
+        previous_restored = True
         try:
             timer_loaded = command(['systemctl', 'show', 'openscience-hermes-broker.timer', '--property=LoadState', '--value'], False).stdout.strip()
             if timer_loaded == 'loaded':
@@ -150,6 +166,7 @@ def install(source, runtime_snapshot, defer_timer=True):
             inbox = ROOT/'inbox'
             if active or (inbox.exists() and any(inbox.iterdir())):
                 raise ValueError('Native executions must drain before replacing task resources')
+            command(['systemctl', 'disable', 'openscience-hermes-broker.timer'], check=timer_enabled != 'not-found')
             release.mkdir(parents=True, mode=0o755)
             backup = release/'previous'
             backup.mkdir(mode=0o700)
@@ -165,6 +182,7 @@ def install(source, runtime_snapshot, defer_timer=True):
                 shutil.copy2(env_path, backup/'runtime.env', follow_symlinks=False)
             (backup/'state.json').write_text(json.dumps({'files': previous, 'timerWasActive': timer_was_active,
                 'timerEnableState': timer_enabled}))
+            previous_restored = False
             try:
                 runtime = release/'runtime'
                 runtime.mkdir()
@@ -221,32 +239,22 @@ def install(source, runtime_snapshot, defer_timer=True):
                 configuration = f'HERMES_NATIVE_AGENT_ENABLED=true\nHERMES_NATIVE_RUNTIME_ID={runtime_id}\nHERMES_NATIVE_SKILL_CATALOGUE_ID={catalogue_id}\nHERMES_NATIVE_AGENT_MODEL=MiniMax-M3\nHERMES_NATIVE_AGENT_INBOX=/native-agent/inbox\n'
                 env_path.write_text(configuration); env_path.chmod(0o644)
                 command(['systemctl', 'daemon-reload'])
-                command(['systemctl', 'enable', 'openscience-hermes-broker.timer'])
                 (release/'installation.json').write_text(json.dumps({'releaseSha': sha, 'runtimeId': runtime_id,
                     'skillCatalogueId': catalogue_id, 'timerDeferred': defer_timer, 'productionTaskCalls': 0}))
                 return {'releaseSha': sha, 'runtimeId': runtime_id, 'skillCatalogueId': catalogue_id, 'timerDeferred': defer_timer}
             except BaseException:
-                for name in UNIT_NAMES:
-                    unit = SYSTEMD_UNITS/name
-                    if previous[name]:
-                        shutil.copy2(backup/name, unit, follow_symlinks=False)
-                    else:
-                        unit.unlink(missing_ok=True)
-                if previous['runtime.env']:
-                    shutil.copy2(backup/'runtime.env', env_path, follow_symlinks=False)
-                else:
-                    env_path.unlink(missing_ok=True)
-                command(['systemctl', 'daemon-reload'])
+                _restore_previous_files(backup, previous)
+                previous_restored = True
                 raise
         except BaseException:
             # Remove this attempt's persistent enable links before restoring the original layer.
             command(['systemctl', 'disable', 'openscience-hermes-broker.timer'], check=timer_enabled != 'not-found')
-            if timer_enabled in ('enabled', 'enabled-runtime'):
+            if previous_restored and timer_enabled in ('enabled', 'enabled-runtime'):
                 restore_enable = ['systemctl', 'enable', 'openscience-hermes-broker.timer']
                 if timer_enabled == 'enabled-runtime':
                     restore_enable.insert(2, '--runtime')
                 command(restore_enable)
-            if timer_was_active:
+            if previous_restored and timer_was_active:
                 command(['systemctl', 'start', 'openscience-hermes-broker.timer'])
             raise
 

@@ -42,6 +42,7 @@ class InstallLifecycleTests(unittest.TestCase):
         self.snapshot = self.folder/'runtime-snapshot.json'; self.snapshot.write_text('{}'); self.snapshot.chmod(0o400)
         self.layers = {'runtime'}; self.active = True; self.events = []
         self.fail_stop = False; self.fail_copy = False
+        self.fail_restore_reload = False; self.reloads = 0
         self.patches = [patch.object(install, k, v) for k,v in {'ROOT':self.root,'NATIVE':self.native,'RELEASES':self.releases,'SYSTEMD_UNITS':self.units}.items()]
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
@@ -78,6 +79,10 @@ class InstallLifecycleTests(unittest.TestCase):
         elif argv[1] == 'enable': self.layers.add('runtime' if '--runtime' in argv else 'persistent')
         elif argv[1] == 'disable': self.layers.clear()
         elif argv[1] == 'start': self.active = True
+        elif argv[1] == 'daemon-reload':
+            self.reloads += 1
+            if self.fail_restore_reload and self.reloads > 1:
+                raise subprocess.CalledProcessError(1, argv)
         return SimpleNamespace(stdout=output, returncode=0)
 
     def assert_old_files(self):
@@ -99,7 +104,7 @@ class InstallLifecycleTests(unittest.TestCase):
         self.assertFalse((self.root/'releases').exists())
         self.assertFalse(any(event[0] == 'systemctl' for event in self.events))
 
-    def test_failure_after_permanent_enable_restores_runtime_enable_then_active(self):
+    def test_failure_after_staging_restores_runtime_enable_then_active(self):
         original = Path.write_text
         def fail_receipt(path, *args, **kwargs):
             if path.name == 'installation.json': raise OSError('fixture receipt write failed')
@@ -126,7 +131,9 @@ class InstallLifecycleTests(unittest.TestCase):
     def test_success_is_staged_and_does_not_start_the_timer(self):
         receipt = install.install(self.source,self.snapshot)
         self.assertTrue(receipt['timerDeferred']); self.assertFalse(self.active)
+        self.assertEqual(self.layers, set())
         self.assertFalse(any(event[:2] == ('systemctl','start') for event in self.events))
+        self.assertFalse(any(event[:2] == ('systemctl','enable') for event in self.events))
         self.assertEqual((self.root/'releases'/self.source.name/'runtime/run_agent.py').stat().st_mode & 0o222, 0)
         self.assertTrue(any(event[0] == 'node' and 'runtime-verify' in event for event in self.events))
         runtime = self.root/'releases'/self.source.name/'runtime'
@@ -134,6 +141,43 @@ class InstallLifecycleTests(unittest.TestCase):
         self.assertEqual((runtime/'.runtime-id').read_text().strip(), receipt['runtimeId'])
         self.assertIn('OpenScience controlled thinking-only continuation', (runtime/'run_agent.py').read_text())
         self.assertEqual((self.native/'run_agent.py').read_text(), native_fixture_source())
+
+    def test_live_file_updates_happen_only_with_inactive_disabled_timer(self):
+        original = Path.write_text
+        def observe_write(path, *args, **kwargs):
+            if path.parent == self.units or path == self.root/'runtime.env':
+                self.assertFalse(self.active)
+                self.assertEqual(self.layers, set())
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'write_text', observe_write):
+            install.install(self.source, self.snapshot)
+
+    def test_file_restoration_failure_does_not_enable_or_start_timer(self):
+        original_write = Path.write_text
+        original_copy = install.shutil.copy2
+        def fail_receipt(path, *args, **kwargs):
+            if path.name == 'installation.json': raise OSError('fixture receipt write failed')
+            return original_write(path, *args, **kwargs)
+        def fail_restore(source, destination, *args, **kwargs):
+            if Path(source).parent.name == 'previous': raise OSError('fixture old file restore failed')
+            return original_copy(source, destination, *args, **kwargs)
+        with patch.object(Path, 'write_text', fail_receipt), patch.object(install.shutil, 'copy2', fail_restore):
+            with self.assertRaisesRegex(OSError, 'old file restore failed'):
+                install.install(self.source, self.snapshot)
+        self.assertFalse(self.active); self.assertEqual(self.layers, set())
+        self.assertFalse(any(event[1] in ('enable', 'start') for event in self.events if event[0] == 'systemctl'))
+
+    def test_reload_during_restoration_failure_does_not_enable_or_start_timer(self):
+        original = Path.write_text
+        def fail_receipt(path, *args, **kwargs):
+            if path.name == 'installation.json': raise OSError('fixture receipt write failed')
+            return original(path, *args, **kwargs)
+        self.fail_restore_reload = True
+        with patch.object(Path, 'write_text', fail_receipt), self.assertRaises(subprocess.CalledProcessError):
+            install.install(self.source, self.snapshot)
+        self.assert_old_files()
+        self.assertFalse(self.active); self.assertEqual(self.layers, set())
+        self.assertFalse(any(event[1] in ('enable', 'start') for event in self.events if event[0] == 'systemctl'))
 
     def test_catalogue_exposes_shared_evidence_alignment_through_restricted_skill_read(self):
         from task_agent import SkillScope
