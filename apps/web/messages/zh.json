@@ -1,4 +1,33 @@
 {
+  "services": {
+    "upload": { "title": "论文 PDF", "description": "AI 助手协助提取和整理研究内容，你可以修改，并在确认后发布。", "drop": "拖入论文 PDF", "hint": "每次上传一份 PDF；选择后仍需点击下方按钮开始解析。" },
+    "researchTypes": { "published": "已发表论文", "preprint": "预出版成果", "originalDetails": "原发表信息（用户填写）：" },
+    "navigation": "服务对象", "navigationHint": "按服务对象了解平台，无需选择账号身份。", "getStarted": "开始使用", "journalDirectory": "浏览期刊目录", "explore": "浏览研究成果", "researcherLink": "了解面向科研人员的服务",
+    "audiences": {
+      "researchers": { "name": "科研人员", "english": "Researchers" },
+      "journals": { "name": "期刊", "english": "Journals", "description": "面向编辑部，让已发表研究更容易被阅读与理解。", "heading": "从论文原文到结构化研究内容", "body": "通过 OpenScience 整理论文资料，借助 AI 助手解析研究内容，再由编辑核对。期刊目录提供期刊和论文的浏览入口；本页介绍面向期刊的服务。" },
+      "institutions": { "name": "高校与科研机构", "english": "Academic Institutions", "description": "了解 OpenScience 如何帮助研究者整理与展示研究成果。", "heading": "让研究成果更容易被发现", "body": "研究者可以维护学术资料、整理已发表论文，并在核对后公开研究成果。从公开研究页面了解不同团队的研究问题、方法与结果。" },
+      "industry": { "name": "产业界", "english": "Industry", "description": "从公开研究中了解方法、结果及其适用条件。", "heading": "理解与你相关的研究", "body": "浏览结构化研究内容，结合研究局限与可复现性信息理解成果，并访问相关原文，进一步了解研究背景。" },
+      "investors": { "name": "投资机构", "english": "Investors", "description": "通过公开研究内容，了解新研究方向与技术进展。", "heading": "从研究问题与证据出发", "body": "探索研究成果，阅读其方法、结果和局限，并回到原文了解更多信息。OpenScience 提供科研内容的阅读与发现入口。" }
+    },
+    "researchers": {
+      "description": "建立学术主页，整理已发表论文，发布新的研究，或发现与你相关的成果。从这里开始。",
+      "actionsLabel": "面向科研人员的四项服务", "accessNote": "服务介绍和公开研究可直接浏览。操作本人内容时再登录，登录后会回到刚才选择的功能。",
+      "cards": {
+        "profile": { "title": "管理我的学术主页", "description": "完善个人资料，集中管理自己的论文与研究成果，让他人了解你的研究。", "action": "开始使用：管理我的学术主页" },
+        "published": { "title": "解析已发表论文", "description": "上传已发表论文，保留原有发表信息。AI 助手协助提取和整理内容，由你核对后生成结构化研究页面。", "action": "开始使用：解析已发表论文" },
+        "preprint": { "title": "发布预出版成果", "description": "上传 PDF，或直接填写六字段。借助 AI 助手整理内容，保存草稿，并在核对后选择公开发布。", "action": "开始使用：创建预出版成果" },
+        "explore": { "title": "浏览研究成果", "description": "阅读其他人的结构化研究内容，了解问题、方法与发现，探索与你相关的研究。", "action": "开始使用：浏览研究成果" }
+      },
+      "faqTitle": "开始之前，你可能想了解",
+      "faq": {
+        "fields": { "question": "六字段分别是什么？", "answer": "问题、洞见、方法、结果、局限、可复现性。它们帮助你从六个角度说明研究，可以直接填写，也可以上传 PDF 后核对 AI 整理的草稿。" },
+        "types": { "question": "已发表论文与预出版成果有什么区别？", "answer": "已发表论文入口用于整理已有正式发表信息的研究，保留原题目、作者、期刊与 DOI。预出版入口用于尚未正式发表的成果，可从 PDF 或空白六字段开始创建。" },
+        "ai": { "question": "AI 助手会做什么？我可以修改结果吗？", "answer": "AI 助手协助提取和整理研究内容。解析结果需要你核对；你可以补充、修改，确认无误后再公开。上传文件和解析内容不会自动公开发布。" },
+        "publish": { "question": "可以先保存草稿，之后再公开吗？", "answer": "可以。创建与日常保存保留为私有草稿；准备好后，通过研究页面的发布入口核对并明确确认公开。公开后可查看与分享研究页面。" }
+      }
+    }
+  },
   "journalDirectory": {
     "eyebrow": "期刊",
     "title": "期刊目录",

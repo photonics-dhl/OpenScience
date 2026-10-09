@@ -1,0 +1,26 @@
+.page { max-width:1120px; margin:0 auto; padding:32px 28px 64px; color:var(--os-ink); font-family:var(--font-ui); }
+.intro { margin-bottom:24px; }
+.eyebrow { display:flex; gap:10px; margin:0 0 12px; color:#47717a; font-size:13px; line-height:1.5; }
+.intro h1 { margin:0; font-family:var(--font-ui); font-size:clamp(32px,4vw,46px); line-height:1.12; font-weight:550; letter-spacing:-.035em; }
+.lead { max-width:780px; margin:12px 0 0; color:var(--os-muted-paper); font-size:16px; line-height:1.7; }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.card { display:flex; flex-direction:column; min-width:0; padding:22px 26px; border:1px solid #dae5e6; border-radius:14px; background:#fff; }
+.cardTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; color:#176670; }
+.cardTop span { color:#718287; font-size:12px; font-variant-numeric:tabular-nums; }
+.card h2 { margin:0; font-size:20px; line-height:1.4; font-weight:600; letter-spacing:-.02em; }
+.cardDescription { margin:9px 0 18px; max-width:440px; color:var(--os-muted-paper); font-size:14px; line-height:1.75; }
+.action { display:inline-flex; align-items:center; justify-content:center; align-self:flex-start; gap:20px; min-height:42px; padding:9px 16px; border:1px solid #c9dddd; border-radius:7px; background:#eef6f5; color:#125d66; text-decoration:none; font-size:14px; line-height:1.5; font-weight:600; transition:background-color 150ms ease,border-color 150ms ease; }
+.card .action { margin-top:auto; }
+.action:focus-visible,.secondary:focus-visible,.faq summary:focus-visible { outline:2px solid #237e87; outline-offset:4px; }
+.privacy { margin:16px 0 0; color:var(--os-muted-paper); font-size:12px; line-height:1.7; }
+.faq { margin-top:56px; padding-top:28px; border-top:1px solid #dae5e6; }
+.faq h2,.serviceBody h2 { margin:0 0 18px; font-size:22px; font-weight:550; }
+.faq details { border-bottom:1px solid #dae5e6; }
+.faq summary { padding:17px 4px; cursor:pointer; font-size:15px; font-weight:500; }
+.faq details p { margin:0; padding:0 4px 20px; max-width:820px; font-size:14px; line-height:1.9; color:var(--os-muted-paper); }
+.serviceBody { max-width:740px; margin-top:40px; padding:28px; border:1px solid #dae5e6; border-radius:14px; background:#fff; }
+.serviceBody p { margin-bottom:24px; color:var(--os-muted-paper); font-size:16px; line-height:1.8; }
+.secondary { display:flex; align-items:center; gap:8px; width:fit-content; margin-top:24px; color:#125d66; font-size:14px; text-decoration:none; }
+@media(hover:hover) { .action:hover { background:#deeeeb; border-color:#87b6b3; } .secondary:hover { text-decoration:underline; } }
+@media(max-width:639px) { .page { padding:24px 18px 40px; } .grid { grid-template-columns:minmax(0,1fr); gap:14px; } .card { padding:22px; } .lead { font-size:15px; } .intro { margin-bottom:24px; } .faq { margin-top:36px; } .action { min-height:44px; } }
+@media(prefers-reduced-motion:reduce) { .action { transition:none; } }

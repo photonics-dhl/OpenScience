@@ -1,4 +1,5 @@
 .primary, .publicLinks { display:flex; align-items:center; gap:4px; margin:0; padding:0; list-style:none; }
+.publicLinks { flex-wrap:wrap; }
 .primary li, .publicLinks li { min-width:0; }
 .primaryLink, .publicLink, .deskLink, .accountLink { position:relative; display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 14px; border-radius:8px; font:500 14px/1.4 var(--font-ui); text-decoration:none; white-space:nowrap; color:var(--os-muted-paper); transition:transform 120ms var(--ease-standard), background-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
 .primaryLink[aria-current='page'], .publicLink[aria-current='page'] { color:var(--os-vermilion-ink); background:#e7f1f2; }

@@ -1,4 +1,33 @@
 {
+  "services": {
+    "upload": { "title": "Paper PDF", "description": "AI helps extract and organize your research. Edit and review it before choosing to publish.", "drop": "Drop your paper PDF here", "hint": "One PDF at a time. Use the button below to start processing after choosing a file." },
+    "researchTypes": { "published": "Published paper", "preprint": "Preprint", "originalDetails": "Original publication details (provided by user):" },
+    "navigation": "Who we serve", "navigationHint": "Explore our services without choosing an account role.", "getStarted": "Get started", "journalDirectory": "Browse the journal directory", "explore": "Explore research", "researcherLink": "Discover services for researchers",
+    "audiences": {
+      "researchers": { "name": "Researchers", "english": "Researchers" },
+      "journals": { "name": "Journals", "english": "Journals", "description": "Help readers understand the research your journal publishes.", "heading": "From original papers to structured research", "body": "Organize paper materials and use AI assistance to extract research content for editorial review. The journal directory is a separate place to find journals and papers; this page introduces services for journals." },
+      "institutions": { "name": "Academic Institutions", "english": "Academic Institutions", "description": "Help researchers organize and showcase their work with OpenScience.", "heading": "Make research easier to discover", "body": "Researchers can maintain their academic information, organize published papers and make reviewed work public. Explore public research pages to understand the questions, methods and findings of different teams." },
+      "industry": { "name": "Industry", "english": "Industry", "description": "Explore methods, findings and their conditions of use through public research.", "heading": "Understand research relevant to your work", "body": "Read structured research alongside its limitations and reproducibility information, then visit the original sources for further context." },
+      "investors": { "name": "Investors", "english": "Investors", "description": "Discover research directions and technical progress through public research.", "heading": "Start with research questions and evidence", "body": "Explore research methods, results and limitations, and return to the original sources for more detail. OpenScience provides a place to read and discover research." }
+    },
+    "researchers": {
+      "description": "Build your research profile, organize published papers, share new work or discover relevant research. Choose where to start.",
+      "actionsLabel": "Four services for researchers", "accessNote": "Browse these services and public research freely. Sign in when you need to manage your work, then return to the action you selected.",
+      "cards": {
+        "profile": { "title": "My research profile", "description": "Update your academic information and bring your papers and research together so others can understand your work.", "action": "Get started: manage my research profile" },
+        "published": { "title": "Published papers", "description": "Upload a published paper and retain its publication details. AI helps extract and organize content for you to review as a structured research page.", "action": "Get started: add a published paper" },
+        "preprint": { "title": "Preprints", "description": "Upload a PDF or write the six fields directly. Use AI assistance to organize your work, save a draft and choose to publish after review.", "action": "Get started: create a preprint" },
+        "explore": { "title": "Explore research", "description": "Read structured research from others, understand their questions, methods and findings, and discover work relevant to you.", "action": "Get started: explore research" }
+      },
+      "faqTitle": "Before you get started",
+      "faq": {
+        "fields": { "question": "What are the six fields?", "answer": "Problem, insight, method, results, limitations and reproducibility. These are six ways to explain your research. Write them directly or upload a PDF and review the AI-assisted draft." },
+        "types": { "question": "How do published papers and preprints differ?", "answer": "The published paper flow organizes work that already has formal publication details, retaining its title, authors, journal and DOI. The preprint flow is for work that has not been formally published, starting with a PDF or blank fields." },
+        "ai": { "question": "What does the AI assistant do? Can I edit the result?", "answer": "The AI assistant helps extract and organize research content. Review, complete and edit its draft before making it public. Uploading and parsing do not automatically publish your work." },
+        "publish": { "question": "Can I save a draft and publish later?", "answer": "Yes. Creation and everyday saving keep your work as a private draft. When ready, use the research page’s publishing action to review and explicitly confirm public release, then view and share the public page." }
+      }
+    }
+  },
   "journalDirectory": {
     "eyebrow": "Journals",
     "title": "Journal directory",

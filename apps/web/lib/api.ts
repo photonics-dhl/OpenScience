@@ -783,11 +783,11 @@ export async function listWorkspaces(): Promise<{ workspaces: WorkspaceApi[] }> 
 export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: unknown }, idempotencyKey = crypto.randomUUID()): Promise<{
   researchObject: { id: string; workspaceId: string; version: number };
 }> {
-  const { workspaceId, title } = input;
+  const { workspaceId, title, sdf } = input;
   return request('/api/research-objects', {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ workspaceId, title }),
+    body: JSON.stringify({ workspaceId, title, ...(sdf === undefined ? {} : { sdf }) }),
   });
 }
 

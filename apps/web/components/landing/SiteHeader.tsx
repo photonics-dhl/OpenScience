@@ -6,11 +6,12 @@ import { useSession } from '@/components/auth/SessionProvider';
 import { AccountLink } from '@/components/navigation/AccountLink';
 import { PUBLIC_PRODUCT_ROUTES } from '@/lib/product-navigation';
 import styles from '@/components/navigation/navigation.module.css';
+import { ServiceAudienceMenu } from '@/components/navigation/ServiceAudienceMenu';
 interface SiteHeaderProps { active?: 'explore' | 'developers' | 'journals' | 'guide'; context?: 'landing' | 'public-product'; tone?: 'dark' | 'paper'; }
 export default function SiteHeader({ active, tone = 'dark' }: SiteHeaderProps) {
   const routeT = useTranslations('productNavigation');
   return <div className={styles.publicNavigation} data-navigation-tone={tone} data-mobile-navigation-grid="true">
-    <ul className={styles.publicLinks}>{PUBLIC_PRODUCT_ROUTES.map(({ href, id }) => <li key={id}><Link href={href} aria-current={active === id ? 'page' : undefined} className={styles.publicLink}>{routeT(id)}</Link></li>)}</ul>
+    <ul className={styles.publicLinks}><li><ServiceAudienceMenu tone={tone} /></li>{PUBLIC_PRODUCT_ROUTES.map(({ href, id }) => <li key={id}><Link href={href} aria-current={active === id ? 'page' : undefined} className={styles.publicLink}>{routeT(id)}</Link></li>)}</ul>
   </div>;
 }
 
