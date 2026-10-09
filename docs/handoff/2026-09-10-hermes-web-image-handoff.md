@@ -14,20 +14,20 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | a780独立High为2P1/2P2，修终态authority/Serializable、唯一像素消费、retry分类和实际Skill receipt；不挡本批 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 8c的Docker24 stop修复已全等收取9eaa/High GO，等新原Linux CI；声音目录消费者待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-docker-stop-compat`（d754/4cf保留） |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 3a2九文件High Scoped GO，4项闭合；等待canonical CI/LinuxHost6/installedSDK及真实图片质量，未集入 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 8c已收/21bCI过；现收敛旧Web npm SIGTERM exit1的drain语义，原lock/test方案待High；声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-docker-stop-compat`（d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs与唯一发布窗口，video限原部署lock/test，image图审独立，UI header已交待消费者。单renderer/任务/权限边界保留，不并行发布/资产写。
+- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，已结束本次生产窗口，video限原部署lock/test，image图审独立，UI header已交待消费者。单renderer/任务/权限边界保留，不并行发布/资产写。
 
 ## Git / CI / 运行事实
-- branch仍`release/onchip-production-line`；c4e已推，其上全等收取video8c734d55→`9eaa3aabdf974da63b64fd5c2b16513983db623b`，同期文档构成新候选，精确HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID与Native配对仍未部署；image a780及UI header独立未混入。
-- cd81与`c4e465eaf1241aa0d459a5b63f3ce4cf46d23798`的原CI都全过；c4e media PR37974859564/push37974851210各5job、video37974859444、journal37974859485/37974851489成功。root `tmp/session-coordination-20261008/media-main-c4e.log`保存Linux lifecycle34/34、deploy+manifest105/105及两true捕获回归；workspace21/21等CI及旧RED/High见Git c4e本页和原tmp，不追认旧失败。
-- 10-10 03:20 CST恢复操作前双轮实核：active=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Web/Worker原ID/startedAt/image不变、healthy/restart0；实际runtime.env、unit、runtime/catalogue均784，主M3不变，timer enabled/active；候选容器/进程0。
-- cd81在journal创建前因Worker两video=true被错误配对守卫拒绝；45f9→c85b删该无关条件，定向RED→2PASS/High GO。c4e首轮SSH reset255留4个构建子进程，全部自然退出后才原命令重试，不仅据锁空重发。retry1在写migrating/quiescing后遇Docker24不支持`--timeout`，stop未生效，迁移/Native install未开始；原3服务一直运行。private-cleanup installer曾执行、无cleanup request。
-- 遗留850B journal于03:20由一次性精确受审FD9脚本放弃：固定c4e/a6/原startedAt及事故时间、先只读inspect、双轮live/marker/source核对、原字节0600备份与file/dir fsync后unlink并fsync parent，serviceOperations/taskWrites=0。备份`/opt/openscience/tmp/native-recovery-c4e-prestop-20261009T190131Z.json`；root同tmp `native-c4e-abandon-{inspect,confirmed}.json`及executed reader/script保留。普通clear未放宽，已执行脚本不可按旧next action重跑。
-- video8c→root9eaa仅lock与原deploy.test将`--timeout -1`改为Docker24支持的`--time -1`；定向RED→1PASS/0SKIP涵盖6场景、High Scoped GO，精确ID/无限daemon grace/600s client wait/noKILL及原drain/CP/回滚边界不变。新精确Linux CI通过后才串行发布，不能重用c4e作下一发布SHA。完整断线/退出码/原始日志保存在root同tmp `deploy-native-{cd81,c4e,c4e-retry1}*`。
-- 双库备份`/var/backups/openscience/db-set-20261009T181428Z-1360138`已沿原backup.sh --db且不加--confirm完成；独立核manifest/a6、双dump校验、0700/0600通过，8组保留；未因stdin缺END重跑。root `backup-before-native-cd81-verified.json`为凭据。
-- Root仍持唯一串行发布窗口；三owner无生产writer、Fig2仍0写，主Gateway/Native M3与host admin=false/audio absent不变。paid/started CP、Native-bound pending及lease原hold均保留。代码/CI不代表已上线；真实入口、自动科学质量和完整视频仍待验收。
+- 交付branch仍`release/onchip-production-line`，已推代码/文档候选`21b8a61007a8092491333a0075f49e106f9f6d26`；后续本地文档HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2及UI header独立未混入。
+- 21b精确原CI全过：media PR37979921748/push37979914255各5job、video37979921753、journal37979921881/37979914437。root `tmp/session-coordination-20261008/media-main-21b.log`保存Linux lifecycle34/34、deploy+manifest105/105；workspace21/21等均过。cd81/c4e完整CI与旧RED/High保留Git21b本页及原tmp，不追认旧失败。
+- 10-10 04:02 CST最终只读：active/public=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；原API/Web/Worker同ID/image、healthy/restart0，恢复后startedAt在19:49:25/41Z；实际runtime.env、unit、runtime/catalogue仍784、主M3不变；timer active/enabled（该瞬间broker activating，非idle）。公网root200，journal已无、原850B备份600保留；`21b-recovery-final-readonly.json`存原读数。
+- 已修两个实况阻点：45f9→c85b去掉Native配对错误的视频env拒绝；8c→9eaa将Docker24不支持的`--timeout -1`改为`--time -1`，定向RED/Green及High/21bCI通过。c4e SSH断线后4个孤儿build自然退出才重试；其pre-stop journal已单独审查收尾，原日志/850B备份保留。完整史见Git21b本页。
+- 21b发布在03:40:56–03:41停原容器后失败：API/Worker exit0，Web npm start SIGTERM exit1、非OOM，strict全服务exit0检查阻断；未进入迁移或Native安装。约9分钟不可用后，03:49:50按独立High/同FD9只start原API+Web→healthy/public200+exacta6→原Workerhealthy，未换镜像/资源/改任务队列；`recover-21b-original-services{.log,-command.json}`保留。
+- 21b原journal备份`/opt/openscience/tmp/native-recovery-21b-stopped-20261009T194056Z.json`（root0600/850B）。恢复态收尾先inspect通过，首confirm70仍保留原inode/字节；全条件诊断通过后High只许一次有界提交，04:01:32成功unlink+parent fsync。未追认首70唯一根因；失败/诊断/最终`native-21b-finalize-once-confirmed.json`及所有executed脚本保留，不能按旧next action重跑。
+- 当前未发布阻点是旧Web包装进程的停止语义。video仅原lock/test收敛角色区分方案：API/Worker业务drain仍exit0；Web需证明停止，拟仅精确npm/run/start及工作目录的exit1例外，其他退出/OOM/超时/身份变化继续拒，原High先判；不得直接重发21b或再以生产停止试验。Root完成恢复后已关闭写窗口，目前无生产/资产writer。
+- 双库备份`/var/backups/openscience/db-set-20261009T181428Z-1360138`独立校验/0700-0600通过、8组保留，原`backup-before-native-cd81-verified.json`留存。main/Native M3与视频host admin=false/audio absent未改；本轮无新增模型/供应商任务，Fig2仍0写。paid/started CP与Native-bound pending/lease保护保持；真实自动科学质量、完整视频及新UI产品验收仍待。
 
 ## 当前交付与明确下一步
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
