@@ -86,7 +86,10 @@ test('dashboard keeps process records behind history and opens the actual review
   await expect(continuation).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
   await expect(continuation.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  await continuation.getByRole('link').click();
+  await Promise.all([
+    page.waitForURL(/edit\?ingestionTask=journey-task$/),
+    continuation.getByRole('link').click(),
+  ]);
   await expect(page).toHaveURL(/edit\?ingestionTask=journey-task$/);
   await expect(page.locator('select option[value="journey-task"]')).toContainText('paper.pdf');
   await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText('Question');
@@ -284,7 +287,7 @@ test('partial extraction can be confirmed with empty fields and navigates to the
 
 test('saved materials survive Files refresh and same-name attachments create a merged manifest', async ({ page }) => {
   await fixtures(page);
-  const original = { artifactId: 'original', logicalPath: 'paper.pdf' };
+  const original = { artifactId: 'original', logicalPath: 'figure.png' };
   await page.route('**/api/research-objects/journey-ro/versions', route => route.fulfill({ json: { versions: [{ versionId: 'confirmed-version', versionNo: 2, status: 'draft' }] } }));
   await page.route('**/api/versions/confirmed-version', route => route.fulfill({ json: { version: { versionId: 'confirmed-version', snapshot: { core, artifacts: [original] } } } }));
   await page.route('**/api/csrf-token', route => route.fulfill({ json: { csrfToken: 'test-csrf' } }));
@@ -292,12 +295,12 @@ test('saved materials survive Files refresh and same-name attachments create a m
   let submitted: unknown;
   await page.route('**/api/research-objects/journey-ro/commits', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ json: { commit: { versionId: 'new' } } }); });
   await page.goto('/research-objects/journey-ro/files');
-  await expect(page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/api/artifacts/original/download');
+  await expect(page.locator('[data-artifact-row]').filter({ hasText: 'figure.png' }).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/api/artifacts/original/download');
   await page.reload();
   await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
-  await page.getByTestId('artifact-input').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('controlled fixture') });
+  await page.getByTestId('artifact-input').setInputFiles({ name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('controlled fixture') });
   await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
-  await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
+  await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'figure.png.1' }] });
 });
 
 async function versionEvidenceFixtures(page: Page) {
@@ -322,7 +325,10 @@ async function openVersionEvidence(page: Page, locale: 'en' | 'zh' = 'en') {
   await claim.locator(':scope > summary').click();
   await claim.locator('details > summary').filter({ hasText: locale === 'zh' ? /^证据（1）$/ : /^Evidence \(1\)$/ }).click();
   await claim.locator('[data-evidence-id="evidence"] > summary').click();
-  await claim.getByRole('button', { name: locale === 'zh' ? '查看来源原文' : 'View original source', exact: true }).click();
+  const originalSource = claim.getByRole('button', { name: locale === 'zh' ? '查看来源原文' : 'View original source', exact: true });
+  await originalSource.scrollIntoViewIfNeeded();
+  await expect(originalSource).toBeInViewport({ ratio: 1 });
+  await originalSource.click();
 }
 
 test('selected snapshot and original evidence remain scoped across version switches', async ({ page }) => {
@@ -508,7 +514,9 @@ for (const recoveryPhase of ['initial', 'after-save'] as const) {
     if (recoveryPhase === 'after-save') {
       await page.getByTestId('artifact-input').setInputFiles({ name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('first') });
       await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
-      await expect(page.locator('a[href="/api/artifacts/added-1/download"]')).toBeVisible();
+      await expect.poll(() => acceptedWrites).toBe(1);
+      await expect(page.locator('section[aria-labelledby="saved-materials-title"] [data-artifact-row]').filter({ hasText: 'first.txt' }).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/api/artifacts/added-1/download');
+      await expect(page.locator('[data-surface-state="saved"]')).toBeVisible();
     }
     await page.getByTestId('artifact-input').setInputFiles({ name: 'last.txt', mimeType: 'text/plain', buffer: Buffer.from('last') });
     await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
