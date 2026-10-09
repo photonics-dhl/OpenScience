@@ -27,6 +27,98 @@
 .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:scale(.98); }
 @media(hover:hover) { .primaryLink:hover, .publicLink:hover, .accountPanel a:hover { color:#125d66; background:#edf4f4; } .deskLink:hover { background:#e7f1f2; } [data-navigation-tone='dark'] .primaryLink:hover, [data-navigation-tone='dark'] .publicLink:hover, [data-navigation-tone='dark'] .deskLink:hover { background:rgb(241 238 231 / .08); color:var(--os-paper); } .accountTools summary:hover { background:#edf4f4; color:#125d66; } }
 @media(max-width:639px) { .primary { display:flex; justify-content:space-between; gap:0; width:100%; } .primary > li { flex:0 1 auto; } .primaryLink { display:flex; padding:0 4px; font-size:12px; } .primary button { padding-inline:4px; gap:3px; font-size:12px; } .primary button svg { width:12px; height:12px; } .publicNavigation { gap:8px; } .publicLinks { flex:1; } .publicLink { padding-inline:9px; } .access { gap:4px; } .deskLink, .access > .publicLink { padding-inline:9px; } [data-navigation-tone='dark'] .access { border-color:var(--os-rule-dark); } .accountName { max-width:60px; } }
+
+/* Wrapped paper headers keep identity/tools together and the four route groups below.
+   The existing dark Landing header and desktop navigation retain their layouts. */
+@media (max-width: 639px) {
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 8px;
+    padding-block: 8px;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) > :global(span) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) > :global(span) > :global(a) {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) > :global([data-shell-utility]) {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    width: 100%;
+    margin-left: 0;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) > :global(nav[data-mobile-navigation-layout='wrapped']) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    overflow: visible;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .access {
+    width: 100%;
+    min-width: 0;
+    gap: 4px;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .access > :global(div) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    gap: 4px;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .access > :is(.deskLink, .publicLink) {
+    flex: 0 1 104px;
+    min-width: 44px;
+    max-width: 104px;
+    padding: 4px 6px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .access > .deskLink { box-shadow: none; }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .accountLink {
+    flex-direction: column;
+    gap: 2px;
+    min-width: 44px;
+    width: 48px;
+    padding: 4px 0;
+    white-space: normal;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .accountName {
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])) .access :global(select) {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    height: auto;
+  }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) .primary { align-items: stretch; gap: 4px; }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) .primary > :global(li) { flex: 1 1 0; }
+  :global(.shell-header.border-os-rule-paper):has(> :global(nav[data-mobile-navigation-layout='wrapped'])):has(.access) .primary :is(:global(a), :global(button)) {
+    width: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 @keyframes arrive { from { opacity:.5; transform:translateY(-2px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .accountTools:has(summary:focus-visible) .accountPanel { animation:none; }
 @media(prefers-reduced-motion:reduce) { .primaryLink, .publicLink, .deskLink, .accountLink, .accountTools summary svg, .accountPanel a { transition:none; } .primaryLink:active, .publicLink:active, .deskLink:active, .accountLink:active { transform:none; } .accountPanel { animation:none; } }

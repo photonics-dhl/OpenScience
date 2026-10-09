@@ -42,7 +42,7 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
       )}
       data-shell-header="true"
     >
-      {compactBrandOnMobile ? (
+      {compactBrandOnMobile || (wrapActionsOnMobile && tone === 'paper') ? (
         <>
           <span className="hidden sm:inline-flex"><OpenScienceWordmark tone={tone} /></span>
           <span className="inline-flex sm:hidden"><OpenScienceWordmark compact tone={tone} /></span>
