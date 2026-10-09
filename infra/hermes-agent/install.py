@@ -155,6 +155,12 @@ def _protected_bytes(path, allow_missing=False):
     return path.read_bytes()
 
 
+def _write_private_json(path, value):
+    path.touch(mode=0o600, exist_ok=False)
+    path.chmod(0o600)
+    path.write_text(json.dumps(value))
+
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -249,8 +255,18 @@ def restore_previous(candidate_sha):
         for name, path in paths.items():
             if _protected_bytes(path, allow_missing=not previous[name]) != old[name]:
                 raise ValueError('Native previous file restoration is incomplete')
-        if command(['systemctl', 'is-active', timer], False).stdout.strip() not in ('inactive', 'failed') \
-            or command(['systemctl', 'is-enabled', timer], False).stdout.strip() not in ('disabled', 'not-found'):
+        loaded = command(['systemctl', 'show', timer, '--property=LoadState', '--value'], False).stdout.strip()
+        active = command(['systemctl', 'is-active', timer], False).stdout.strip()
+        enabled = command(['systemctl', 'is-enabled', timer], False)
+        enable_state = enabled.stdout.strip()
+        if not previous[timer] and state['timerEnableState'] == 'not-found':
+            # Older systemd versions can report an absent unit with empty is-enabled stdout.
+            # The restored file absence and manager LoadState must independently agree.
+            deferred = loaded == 'not-found' and active in ('unknown', 'inactive') \
+                and (enable_state == 'not-found' or (not enable_state and enabled.returncode != 0))
+        else:
+            deferred = loaded == 'loaded' and active in ('inactive', 'failed') and enable_state == 'disabled'
+        if not deferred:
             raise ValueError('Native restored timer is not deferred')
         return {'releaseSha': candidate_sha, 'restored': True, 'timerDeferred': True,
                 'previousRuntimeId': old_ids[0], 'previousSkillCatalogueId': old_ids[1]}
@@ -275,7 +291,11 @@ def install(source, runtime_snapshot, defer_timer=True):
     ROOT.mkdir(mode=0o755, exist_ok=True)
     if ROOT.is_symlink() or ROOT.stat().st_uid != 0 or ROOT.stat().st_mode & 0o022:
         raise ValueError('Native installation root changed')
-    with open(ROOT/'install.lock', 'a') as lock:
+    with os.fdopen(os.open(ROOT/'install.lock', os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600), 'a') as lock:
+        info = os.fstat(lock.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+            raise ValueError('Native installation lock is not protected')
+        os.fchmod(lock.fileno(), 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
         release = ROOT/'releases'/sha
         if release.exists():
@@ -300,7 +320,9 @@ def install(source, runtime_snapshot, defer_timer=True):
             if active or (inbox.exists() and any(inbox.iterdir())):
                 raise ValueError('Native executions must drain before replacing task resources')
             command(['systemctl', 'disable', 'openscience-hermes-broker.timer'], check=timer_enabled != 'not-found')
-            release.mkdir(parents=True, mode=0o755)
+            (ROOT/'releases').mkdir(mode=0o755, exist_ok=True)
+            _protected_directory(ROOT/'releases')
+            release.mkdir(mode=0o755)
             backup = release/'previous'
             backup.mkdir(mode=0o700)
             previous = {}
@@ -313,8 +335,8 @@ def install(source, runtime_snapshot, defer_timer=True):
             previous['runtime.env'] = env_path.exists()
             if env_path.exists():
                 shutil.copy2(env_path, backup/'runtime.env', follow_symlinks=False)
-            (backup/'state.json').write_text(json.dumps({'files': previous, 'timerWasActive': timer_was_active,
-                'timerEnableState': timer_enabled}))
+            _write_private_json(backup/'state.json', {'files': previous, 'timerWasActive': timer_was_active,
+                'timerEnableState': timer_enabled})
             previous_restored = False
             try:
                 runtime = release/'runtime'
@@ -365,8 +387,8 @@ def install(source, runtime_snapshot, defer_timer=True):
                 (ROOT/'bridges').mkdir(mode=0o755, exist_ok=True)
                 env_path.write_text(_runtime_configuration(runtime_id, catalogue_id)); env_path.chmod(0o644)
                 command(['systemctl', 'daemon-reload'])
-                (release/'installation.json').write_text(json.dumps({'releaseSha': sha, 'runtimeId': runtime_id,
-                    'skillCatalogueId': catalogue_id, 'timerDeferred': defer_timer, 'productionTaskCalls': 0}))
+                _write_private_json(release/'installation.json', {'releaseSha': sha, 'runtimeId': runtime_id,
+                    'skillCatalogueId': catalogue_id, 'timerDeferred': defer_timer, 'productionTaskCalls': 0})
                 return {'releaseSha': sha, 'runtimeId': runtime_id, 'skillCatalogueId': catalogue_id, 'timerDeferred': defer_timer}
             except BaseException:
                 _restore_previous_files(backup, previous)

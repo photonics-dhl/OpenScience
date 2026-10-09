@@ -44,6 +44,8 @@ class InstallLifecycleTests(unittest.TestCase):
         self.fail_stop = False; self.fail_copy = False
         self.fail_restore_reload = False; self.reloads = 0
         self.broker_state = 'inactive'; self.instance_rows = ''
+        self.missing_timer_active = 'unknown'; self.missing_timer_enabled = 'not-found'
+        self.missing_timer_load = 'not-found'; self.restored_timer_active = None
         self.patches = [patch.object(install, k, v) for k,v in {'ROOT':self.root,'NATIVE':self.native,'RELEASES':self.releases,'SYSTEMD_UNITS':self.units}.items()]
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
@@ -63,6 +65,8 @@ class InstallLifecycleTests(unittest.TestCase):
     def command(self, argv, check=True, timeout=120):
         self.events.append(tuple(argv))
         output = ''
+        returncode = 0
+        timer_exists = (self.units/'openscience-hermes-broker.timer').exists()
         if argv[0] == 'node':
             if any(action in argv for action in ('verify', 'runtime-verify')) and self.verification_seconds > timeout:
                 raise subprocess.TimeoutExpired(argv, timeout)
@@ -70,11 +74,17 @@ class InstallLifecycleTests(unittest.TestCase):
                 output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review',
                     'nativeEvidenceAlignmentInstructions':'Bind retained measurements to their objects, definitions, comparison and scope.', 'version':5})
         elif argv[1] == 'is-active':
-            output = ('active' if self.active else 'inactive') if argv[2].endswith('.timer') else self.broker_state
+            if argv[2].endswith('.timer'):
+                output = ('active' if self.active else 'inactive') if timer_exists else self.missing_timer_active
+                if timer_exists and self.reloads > 1 and self.restored_timer_active is not None:
+                    output = self.restored_timer_active
+                returncode = 0 if output == 'active' else (4 if output == 'unknown' else 3)
+            else: output = self.broker_state
         elif argv[1] == 'list-units': output = self.instance_rows
         elif argv[1] == 'is-enabled':
-            output = 'enabled' if 'persistent' in self.layers else ('enabled-runtime' if 'runtime' in self.layers else 'disabled')
-        elif argv[1] == 'show': output = 'loaded'
+            output = ('enabled' if 'persistent' in self.layers else ('enabled-runtime' if 'runtime' in self.layers else 'disabled')) if timer_exists else self.missing_timer_enabled
+            returncode = 0 if output in ('enabled', 'enabled-runtime') else (4 if output == 'not-found' else 1)
+        elif argv[1] == 'show': output = 'loaded' if timer_exists else self.missing_timer_load
         elif argv[1] == 'stop':
             if self.fail_stop: raise subprocess.CalledProcessError(1, argv)
             self.active = False
@@ -85,7 +95,7 @@ class InstallLifecycleTests(unittest.TestCase):
             self.reloads += 1
             if self.fail_restore_reload and self.reloads > 1:
                 raise subprocess.CalledProcessError(1, argv)
-        return SimpleNamespace(stdout=output, returncode=0)
+        return SimpleNamespace(stdout=output, returncode=returncode)
 
     def assert_old_files(self):
         for name in install.UNIT_NAMES: self.assertEqual((self.units/name).read_text(), 'old '+name)
@@ -259,6 +269,55 @@ class InstallLifecycleTests(unittest.TestCase):
         result = install.restore_previous(self.source.name)
         self.assertIsNone(result['previousRuntimeId']); self.assertIsNone(result['previousSkillCatalogueId'])
         for path in self.previous_contents: self.assertFalse(path.exists())
+        self.assert_no_producer_start()
+
+    def test_late_restore_accepts_inactive_missing_timer_and_empty_failed_enable_output(self):
+        self.prepare_late_restore(absent=True)
+        self.missing_timer_active = 'inactive'; self.missing_timer_enabled = ''
+        result = install.restore_previous(self.source.name)
+        self.assertTrue(result['restored']); self.assertIsNone(result['previousRuntimeId'])
+        self.assert_no_producer_start()
+
+    def test_late_restore_does_not_accept_absence_without_manager_load_evidence(self):
+        self.prepare_late_restore(absent=True)
+        self.missing_timer_load = 'loaded'
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_no_producer_start()
+
+    def test_late_restore_does_not_accept_empty_successful_enable_output(self):
+        self.prepare_late_restore(absent=True)
+        def command(argv, check=True, timeout=120):
+            result = self.command(argv, check, timeout)
+            if argv[1] == 'is-enabled' and not (self.units/'openscience-hermes-broker.timer').exists():
+                return SimpleNamespace(stdout='', returncode=0)
+            return result
+        with patch.object(install, 'command', command):
+            with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_no_producer_start()
+
+    def test_late_restore_does_not_accept_an_active_missing_timer(self):
+        self.prepare_late_restore(absent=True)
+        self.missing_timer_active = 'active'
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_no_producer_start()
+
+    def test_late_restore_existing_timer_still_requires_inactive_or_failed(self):
+        self.prepare_late_restore()
+        self.restored_timer_active = 'unknown'
+        with self.assertRaises(ValueError): install.restore_previous(self.source.name)
+        self.assert_no_producer_start()
+
+    def test_installer_private_records_and_recovery_ignore_permissive_umask(self):
+        previous_umask = os.umask(0o002)
+        try:
+            self.prepare_late_restore()
+        finally:
+            os.umask(previous_umask)
+        for path in (self.root/'install.lock', self.install_release/'previous/state.json',
+                     self.install_release/'installation.json'):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual((self.root/'releases').stat().st_mode & 0o022, 0)
+        self.assertTrue(install.restore_previous(self.source.name)['restored'])
         self.assert_no_producer_start()
 
     def test_late_restore_accepts_only_known_partial_or_already_restored_files(self):
