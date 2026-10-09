@@ -14,7 +14,7 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 77f最终源码GO，a64至77f全链→root79c全等集入；34生命周期方法待原Linux，非图片质量验收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 632/4cf→root302/483全等集入；原High确认三P1闭合，新增18pass/1 Linux skip；待image及原CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 632/4cf→root302/483全等集入；七文件最终High GO，新增18pass/1 Linux skip；待原Linux CI | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 头像12488→root053全等集入；独占原workspace-stage.spec更新跨页/portal/回焦，运行未验；未改WorkspaceShell | `.worktrees/research-product-craft` / `codex/ui-workspace-acceptance-20261009`（base053，旧分支保留） |
 - 各owner仅写已授范围，不回退他人修改；root持共享CI/docs及dashboard.spec，workspace-stage.spec已转UI独占；产品仍由UI维护。单renderer/跨路由/焦点/运行任务/权限与零POST边界保留，测试随新路径同步。三线无生产writer，不并行发布/资产写，不派重复检查。
 
@@ -35,7 +35,7 @@
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
 - UI两处编辑CSS3989→root221b全等；PostCSS40/99规则parse0/diff0，六字段/保存/权限不变，运行视觉待新头像批次。Figma编辑2138:117及头像桌面2138:34/入口2169:23已交；root看过1440×1080桌面及148×56局部，56px头像与创建研究同排、完整研究图无遮挡，静态preview不代表运行/数据现状/审美认可。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png。原14journey/High、原文两尺寸/reading20证据保留。
-- root Dashboard9a3＋423已交：旧外部巡游换1440/390的64px框内活动/内容避让，保留draw/任务/确认/API，入口Open conversation。目标TS/最终lint及完整Web TC均0，Playwright仅list26非浏览器PASS；原lint失败保留。待UI workspace spec汇合走原CI，不把替换旧呈现用例当旧RED已修。
+- root Dashboard9a3＋423已交：旧外部巡游换1440/390的64px框内活动/内容避让，保留draw/任务/确认/API，入口Open conversation。目标TS/最终lint及完整Web TC均0，Playwright仅list26非浏览器PASS；原lint失败保留。立即推送原CI，Native关键Linux检查与UI验收并行；不再等workspace spec，不把替换旧呈现用例当旧RED已修。
 - 共享包络按fd真实经验极值B8.6903/L51.9531/R34.2979/T29.2034向外取整，仅扩大三边，bottom旧27不收窄；各argmax落在已采关键帧/hover端点。29建议已撤回，不因left距52近就盲加1px，也不称网格为数学全域证明。786 push原实时巡游已过，PR另有前置就绪差额见上；loading连续handler修复已有真实通过。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
