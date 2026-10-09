@@ -15,12 +15,12 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 6f35纯模块诊断已交：Node22根目录缺database/Worker可解析；停止扩探，3a2待集成/LinuxHost6/SDK/PNG | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | f833因候选ID假阳性NO-GO；原High修订设计已授，唯一writer补Worker入口、候选身份原子记录及完整恢复回归 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（f833快照及0f/d754/4cf保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 最终4bc两文件经原High Scoped GO→root fbcee535全等收取；16项本机通过，待原Node22/Linux CI，保留host音色交付 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（f833/RED及0f/d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断仅tmp/原checkpoint已收；video唯一写原lock/test，新增差额须原High最终审查。UI待集成消费者。
+- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断已收、停止扩探；video4bc冻结交付，只有新增失败才交回原owner修复。image/UI仍待下一批集成消费者，不重跑未变检查。
 
 ## Git / CI / 运行事实
-- 交付branch仍`release/onchip-production-line`，已推候选`6f35e5680220b352c6702b042a860e76caffdf6d`；后续本地文档HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2及UI header独立未混入。
+- 交付branch仍`release/onchip-production-line`，本轮源码`fbcee5357558a9390fa063df56d7bf0e79075915`，后续文档HEAD与对应推送/CI由Git及root原receipt定锚；6f35为上一已推候选。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2/UI header独立未混入。
 - 6f35精确原CI全过：media PR37986078268/push37986071550各5job、video37986078242、journal37986078243/37986071694。root `tmp/session-coordination-20261008/media-main-6f35.log`保Linux producer pause新回归及deploy+manifest105/105、0skip。旧21b/c4e/cd81有效CI/RED/High均保留，不代证生产顺序。
 - 10-10 04:45 CST最终只读：active/public=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；原API/Web/Worker同ID/image、healthy/restart0，新startedAt20:40:26/42Z；Native runtime.env/unit/catalogue仍784、主M3不变，timer active/enabled、broker inactive。公网root200；journal无、原859B备份root600保留；`6f35-recovery-final-readonly.json`存读数。
 - 旧capture误拒视频env、Docker24停止参数已修；cd81/c4e断线、孤儿build与pre-stop journal历史见Git6f35本页/原tmp，均不重放。
@@ -30,7 +30,7 @@
 - 旧Web兼容0f7→2c9仅原lock/test，原High/29场景与6f35 Linux回归均过；其单次pause验收没有覆盖失败后的完整恢复顺序，video继续补此缺口。当前保持旧a6可用，关闭写窗口，源码修复/High/对应CI和实际故障定位齐备前不再发版。
 - 05:19:58 CST受控module-only：exact6f/d6a7镜像、Node22.23.2/sourceMarker/cwd匹配；root ESM数据库包ERR_MODULE_NOT_FOUND/CJS亦失败，Worker CJS两包resolve+exists，确认当前loader缺口。`native-6f35-module-resolution-corrected-receipt.json`保结果；无业务import/DB/Redis/model，probe清空NODE_OPTIONS，不能追认20:35唯一因果。首probe被新增且Compose2.26不支持的--pull never阻16，原receipt/executed/help保留；High纠正后同FD9/精确本地镜像完成一次观测。无后续snapshot探针。
 - queryNativeWork按原High改Worker cwd/helper import，保留真实查询/classifier/四字段JSON及权限预算，不增依赖/loader/fallback；完整Node query与只读mock/旧root负控由video补。f833仅lock/test的5PASS保留，但候选fixture误用旧ID；真实候选unsafe→safe重入会卡死，原High已判P1 NO-GO，未集入，ESLint ignored亦非完整lint通过。
-- 原High修订设计GO：现journal可选candidateContainers与checkpoint在before-start核对后原子保存、三ID不可变；非空checkpoint恢复必须同候选ID，legacy无ID不可补造。空checkpoint允许逐项旧ID或精确配对且从未启动的created候选，保全全量/部分create后查询失败回退；陌生exited/运行过的新ID拒绝。video仅原两文件实现及真实新ID/部分create回归，root待组合源码High与Node22 Linux CI；生产窗口关闭。
+- 最终4bc（parent6f35）仅原lock/test→root fbcee535两文件diff0，原High源码Scoped GO；旧f833 P1已闭合。journal可选candidateContainers与checkpoint在before-start核对后原子保存、三ID不可变；非空checkpoint恢复须同候选，legacy不可补造；空checkpoint保全旧ID与精确从未启动created的全量/部分create回退。owner原identity-final-green为Node24/Windows16PASS、0skip（12根+4子例），真实Node loader与身份RED保留；Node22/Linux CI尚未验收，不构成生产GO。
 - 本轮新双库`db-set-20261009T202746Z-1790443`在`/var/backups/openscience`，双dump/checksum/0700-0600已核，旧181428Z仍保留；`backup-before-native-6f35-verified.json`存证。main/Native M3与video host admin=false/audio absent未改；无新增模型/供应商任务，Fig2仍0写；paid/started CP/Native-bound pending/lease保护保持。
 
 ## 当前交付与明确下一步
