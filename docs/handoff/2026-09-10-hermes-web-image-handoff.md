@@ -14,8 +14,8 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | fresh括号误判已修；资源配对后由Native纠正真source/时空矛盾，cb未知保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟fixture已收且视频Linux过；TERM测试b023→1e已收/High GO，待Linux | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | mobile裁切已过；只读patrol geometry新差额，Figma14frame为候选 | `.worktrees/research-product-craft` / `codex/ui-conversation-control-20261009` |
-- 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。无production writer、无并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | mobile已过；patrol现证据不足定因，待原断言前一次几何JSON；Figma14frame为候选 | `.worktrees/research-product-craft` / `codex/ui-conversation-control-20261009` |
+- 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。三线无生产写窗口，不并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
 ## Git / CI / 运行事实
 - root上次推送bebe897c；远端另进`2a4333d102d2fae1c004f23895576b6d92057fef`，本地8ce/e0选择性合入。High只收RiggedPortrait static/motion key及compact fallback retry；拒收speech扩面/1s重试、reader visible:first、无消费者按钮及新宽泛API mocks，复用本地已审CI开关/静态合同/短文档。TC/lint0，非发布GO。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
@@ -32,6 +32,7 @@
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
 - UI原14个完整本地journey与High保留。513→e3仅conversation-slot顶留白，bebe实际390 Talk展开后ratio1/aboveStage/Pause→Enable/回compact均过；末尾cold reduced在从未建立owner时缺stopped属性，只复用input-ready=false/static/portrait/单canvas合同，不伪造运行状态。新增patrol hull不压blocker但envelope-safe=false由UI定因，不放宽几何断言。
+- patrol只读已收束：已知单个blocker与swept右边界仅差1px，不能证明全部保护区/viewport安全；trace缺完整测量返回。root在原断言前一次附stage/actual anchor/hull、同源过滤protected、viewport/clip及已有dataset JSON，原强断言/强制patrol尾段不变；下一CI用于必要定因，不造新source标记或假称已修。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
 - Fig2 exact5软回收已获human授权并High GO，接受成员旧URL在restore前404及初始30天条件；对象/任务/费用/Claims/sealed保留，禁止purge/补源/重写封存。e77实际published内部v8/OSR-2026-000023-v2，5项全excluded。10-08 23:03:59五项live/42fe；生图无认证、UI正常入口缺精确ID，双方0写释放。行标识165→ab3已收未发，发布后fresh核身份/引用再沿原授权操作，不重复问。

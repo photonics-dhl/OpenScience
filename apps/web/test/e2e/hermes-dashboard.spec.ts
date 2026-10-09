@@ -110,6 +110,44 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
     ]);
     return hull && blocker ? !overlaps(hull, blocker) : false;
   }).toBe(true);
+  const geometry = await stage.evaluate((element) => {
+    const rect = (node: Element | null) => {
+      if (!node) return null;
+      const bounds = node.getBoundingClientRect();
+      return { bottom: bounds.bottom, height: bounds.height, left: bounds.left,
+        right: bounds.right, top: bounds.top, width: bounds.width };
+    };
+    const visual = window.visualViewport;
+    const left = visual?.offsetLeft ?? 0, top = visual?.offsetTop ?? 0;
+    const width = visual?.width ?? innerWidth, height = visual?.height ?? innerHeight;
+    const viewport = { bottom: top + height, height, left, right: left + width, top, width };
+    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+      .map((node) => {
+        const bounds = rect(node)!;
+        return { className: node.className, id: node.id, rect: bounds,
+          included: bounds.width > 0 && bounds.height > 0 && bounds.right > viewport.left
+            && bounds.bottom > viewport.top && bounds.left < viewport.right && bounds.top < viewport.bottom };
+      });
+    const clippingAncestors = [];
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+      clippingAncestors.push({ className: node.className, id: node.id, rect: rect(node),
+        overflowX: style.overflowX, overflowY: style.overflowY, clientLeft: node.clientLeft,
+        clientTop: node.clientTop, clientWidth: node.clientWidth, clientHeight: node.clientHeight,
+        scrollLeft: node.scrollLeft, scrollTop: node.scrollTop });
+    }
+    const rig = element.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]');
+    return { capturedAtMs: performance.now(), stageRect: rect(element),
+      anchorRect: rect(element.closest('[data-hermes-dock-anchor]')),
+      travelHullRect: rect(element.querySelector('[data-hermes-carrier-travel-hull="true"]')),
+      viewport, innerViewport: { height: innerHeight, width: innerWidth },
+      visualViewportScale: visual?.scale ?? null, clippingAncestors, protectedRegions,
+      stage: { ...(element as HTMLElement).dataset }, rig: rig ? { ...rig.dataset } : null };
+  });
+  await test.info().attach('patrol-geometry-before-safety-assertion', {
+    body: JSON.stringify(geometry, null, 2), contentType: 'application/json',
+  });
   await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
 
   await page.evaluate(() => {

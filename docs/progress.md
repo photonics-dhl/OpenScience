@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-09：收TERM/CAS测试握手补丁1e（High GO、Windows真实FD9待Linux）；root保持原生产锁/超时。patrol现有trace不足证明全保护区安全，只在原断言前补一次DOM几何附件，保留原RED；与已审CI开关/静态合同同批验证，不伪造通过。
 - 2026-10-09：bebe视频Linux及reading20/20、auth通过；mobile控件可见/真实Pause→Enable已过。其余UI geometry/测试页开关、deploy TERM fixture及文档容量失败分别定因。a0b6远端仅选择性合入motion恢复/CSS fallback，拒收speech扩面和弱reader断言；具体CI与源写权见CURRENT。
 - 2026-10-09：生图9行fresh括号修复经独立High/目标回归，canonical依赖配套后完整WorkerTC0；真source错绑/时空矛盾仍须Native纠正，不重放cb未知任务。视频只读声音目录已收、实际Key目录/声音/成片仍待。
 - 2026-10-09：按用户认可的收敛主线，将生图owner调回已有论文理解→分镜/提示词→实际图核对；root接手UI/CI，不新增流水线/门禁/付费步骤。UI Figma14frame为候选，普通用户旅程、三篇科学质量和整站审美未验收。
