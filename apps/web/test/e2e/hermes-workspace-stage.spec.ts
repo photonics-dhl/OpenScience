@@ -78,6 +78,7 @@ async function mockWorkspace(page: Page) {
   });
   await mockGet(page, '/api/research-objects?limit=20', { researchObjects: [{ ...existingObject, version: 2 }] });
   await mockGet(page, '/api/ingestion?actionable=true', { tasks: [] });
+  await mockGet(page, '/api/ingestion?actionable=true&researchObjectId=ro-hermes', { tasks: [] });
   await mockGet(page, '/api/research-objects/ro-hermes/ingestion', { researchObjectId: 'ro-hermes', version: 2, tasks: [], latestConfirmation: null });
   await mockGet(page, '/api/research-objects/ro-hermes/authors', { authors: [] });
   await mockGet(page, '/api/research-objects/ro-hermes/versions', { versions: [] });
@@ -133,7 +134,7 @@ const overlaps = (a: { x: number; y: number; width: number; height: number }, b:
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 );
 
-async function assertAvatar(page: Page) {
+async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' = 'viewport') {
   const stage = page.locator(stageSelector);
   const host = page.locator(hostSelector);
   const input = graphic(page);
@@ -167,11 +168,21 @@ async function assertAvatar(page: Page) {
   const bounds = await composition.boundingBox();
   expect(bounds && { width: bounds.width, height: bounds.height }).toEqual({ width: 160, height: 160 });
   const visible = (await input.boundingBox())!;
+  const frame = (await host.boundingBox())!;
+  expect(visible).toEqual(frame);
+  expect(await stage.boundingBox()).toEqual(frame);
   const viewport = page.viewportSize()!;
   expect(visible.x).toBeGreaterThanOrEqual(0);
-  expect(visible.y).toBeGreaterThanOrEqual(0);
   expect(visible.x + visible.width).toBeLessThanOrEqual(viewport.width);
-  expect(visible.y + visible.height).toBeLessThanOrEqual(viewport.height);
+  if (placement === 'viewport') {
+    expect(visible.y).toBeGreaterThanOrEqual(0);
+    expect(visible.y + visible.height).toBeLessThanOrEqual(viewport.height);
+  } else {
+    // A page-owned avatar scrolls with its real header after query navigation or field focus.
+    const documentBounds = await page.evaluate(() => ({ scrollY: window.scrollY, height: document.documentElement.scrollHeight }));
+    expect(frame.y + documentBounds.scrollY).toBeGreaterThanOrEqual(0);
+    expect(frame.y + documentBounds.scrollY + frame.height).toBeLessThanOrEqual(documentBounds.height);
+  }
   const protectedWork = await input.evaluate((button) => Array.from(document.querySelectorAll('[data-hermes-protected="true"]'))
     .filter((region) => !region.contains(button)) // Exclude the avatar's own toolbar/header.
     .map((region) => { const box = region.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; })
@@ -633,21 +644,22 @@ test('RO run loading resolves to legacy backstage without changing the chosen fa
       await field.focus();
       await expect(field).toBeFocused();
       await expect(page.getByRole('button', { name: 'Confirm and create version', exact: true })).toBeEnabled();
-      await assertAvatar(page);
-      const awaitingStage = page.locator(stageSelector);
-      await expect(awaitingStage).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
-      await expect(awaitingStage).toHaveAttribute('data-hermes-motion-preference', 'full');
-      await expect(awaitingStage.locator('[data-hermes-input-ready]')).toHaveAttribute('data-hermes-input-ready', 'true');
-      await assertLive(page);
+      await assertAvatar(page, 'document-flow');
       await label(page).click();
       await assertConversation(page);
       await expect(guide(page).locator('.hermes-conversation-composer textarea')).toHaveValue(rememberedGoal);
       await identity.assert();
       await closeTo(page, label(page), true);
+      // The real opener is now visible again; offscreen Live2D legitimately suspends drawing.
+      const awaitingStage = page.locator(stageSelector);
+      await expect(awaitingStage).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
+      await expect(awaitingStage).toHaveAttribute('data-hermes-motion-preference', 'full');
+      await expect(awaitingStage.locator('[data-hermes-input-ready]')).toHaveAttribute('data-hermes-input-ready', 'true');
+      await assertLive(page);
       await page.getByRole('link', { name: 'Save this workflow link', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(roPath + '/hermes\\?run=run-review$'));
       await expect(page.getByRole('link', { name: 'Review paper structure and sources', exact: true })).toBeVisible();
-      await assertAvatar(page);
+      await assertAvatar(page, 'document-flow');
       await graphic(page).click();
       await assertConversation(page);
       await expect(guide(page).locator('.hermes-conversation-composer textarea')).toHaveValue(rememberedGoal);
