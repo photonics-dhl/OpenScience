@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10 06:12：783双media main均33/34，在researcher-services提交计数0≠1处失败；8个独立浏览器job、video及双journal成功，恢复/loader的Linux发布组117PASS/0skip。UI已从783另分支承接原spec最小修复，实际artifact仅error-context；root未开始新备份/生产读写，发布窗口关闭。
 - 2026-10-10最终恢复候选：4bc→fbcee535原两文件全等集入，原High源码Scoped GO闭合候选ID假阳性P1；真实loader、原子身份、unsafe→safe及部分created回退为本机16PASS/0skip，原RED保留。下一步原Node22/Linux CI，生产/资产窗口仍关闭，image/UI下批未混入。
 - 2026-10-10恢复修复复核：f833的候选fixture仍用旧容器ID，5PASS不能证明真实候选恢复；原High判P1 NO-GO，root未集入。为区分同候选与替换容器，已批准现journal原子保存checkpoint+三ID，并保留空checkpoint/部分created回退路径；video唯一两文件writer实施，最终High与Linux CI待收，生产窗口关闭。
 - 2026-10-10续作：精确6f35候选的Node22只读诊断确认root ESM缺database、Worker可解析；首次诊断新增不兼容--pull造成16的记录保留，修正后仅一次元数据观测，无DB/Redis/model。原High批准Worker cwd/helper import最小修复，与重复pause/rollback交video唯一两文件writer及真实loader/顺序回归；尚未发布，不追认历史唯一因果。
