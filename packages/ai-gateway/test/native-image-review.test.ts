@@ -51,7 +51,7 @@ describe('server-bound Hermes native pixel review', () => {
     expect(primary.fetcher).toHaveBeenCalledOnce(); expect(pixel.fetcher).toHaveBeenCalledOnce();
   });
 
-  it.each(['changed-target', 'changed-pixels'])('rejects an Agent image role %s before any checkpoint or provider', async change => {
+  it.each(['changed-target', 'changed-pixels', 'repeated-pixels'])('rejects an Agent image role %s before any checkpoint or provider', async change => {
     const primary = setup(), pixel = setup(undefined, 'MiniMax-M3.1-Flash-Preview');
     const gateway = new AiGateway({ providers: [primary.provider], nativeImageReviewProvider: pixel.provider,
       illustrationReviewPolicy: async () => true, authorizeIllustrationReview: async () => undefined });
@@ -63,6 +63,7 @@ describe('server-bound Hermes native pixel review', () => {
     const changed = Buffer.from(bytes); if (change === 'changed-pixels') changed[changed.length - 1] ^= 1;
     await expect(gateway.nativeAgentComplete([{ role: 'user', content: 'Inspect.', images: [
       { mediaType: 'image/png', data: changed.toString('base64') },
+      ...(change === 'repeated-pixels' ? [{ mediaType: 'image/png' as const, data: bytes.toString('base64') }] : []),
     ] }], { maxTokens: 100, tools: imageTools }, controls)).rejects.toThrow();
     expect(submitProvider).not.toHaveBeenCalled(); expect(primary.fetcher).not.toHaveBeenCalled(); expect(pixel.fetcher).not.toHaveBeenCalled();
   });

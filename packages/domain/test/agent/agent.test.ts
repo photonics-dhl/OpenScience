@@ -6,6 +6,156 @@ import {
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
 } from '../../src/agent/agent';
 import { buildInterestContext } from '../../src/research-intelligence/interest-context';
+import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
+import { requireSceneImageParent } from '../../src/assets/scene-image';
+import { presentationEvidenceIdentity, readReviewedPresentationEvidence } from '../../src/assets/illustration-source';
+
+async function nativeImageTerminalFixture(decision: 'accepted' | 'blocked' = 'accepted') {
+  const { prisma, db } = createFakePrisma();
+  const uuid = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const user = seedUser(db, { id: uuid(1) });
+  db.usageLedger.push({ id: 'image-fixture-credit', userId: user.id, resource: 'ai_credit', delta: 100, kind: 'grant', createdAt: new Date() });
+  db.workspaces.push({ id: uuid(2), status: 'active' });
+  db.memberships.push({ id: 'image-member', userId: user.id, workspaceId: uuid(2), role: 'owner' });
+  db.researchObjects.push({ id: uuid(3), workspaceId: uuid(2), createdBy: user.id, status: 'draft', visibility: 'private' });
+  db.commits.push({ id: uuid(9), branchId: uuid(10) });
+  db.versions.push({ id: uuid(4), researchObjectId: uuid(3), status: 'draft', versionNo: 1, commitId: uuid(9), publicVersionId: null, createdAt: new Date() });
+  db.claimNodes.push({ id: uuid(5), researchObjectId: uuid(3), versionId: uuid(4), kind: 'core', statement: 'The field points along x.',
+    assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded' });
+  db.evidenceRecords.push({ id: uuid(6), claimId: uuid(5), researchObjectId: uuid(3), versionId: uuid(4), artifactId: uuid(7), contentHash: 'a'.repeat(64),
+    exactQuote: 'The field points along x.', relation: 'supports', locator: { page: 1 }, extractionStatus: 'succeeded', updatedAt: new Date(), provenance: {} });
+  db.artifacts.push({ id: uuid(7), workspaceId: uuid(2), blobSha256: 'a'.repeat(64), deletedAt: null, bytesPurgedAt: null });
+  const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+  const deps = { prisma, redis: fakeRedis(), mailer: {} as never, nativeAgentRuntime: runtime };
+  const session = await createAgentSession(deps as never, { userId: user.id, researchObjectId: uuid(3), kind: 'visualization' });
+  const payload = { schemaVersion: 1, researchObjectId: uuid(3), versionId: uuid(4), kind: 'image', sourceClaimIds: [uuid(5)],
+    sceneImage: { storyboardAssetId: uuid(8), sceneIndex: 0 } };
+  const sourceEvidenceIdentity = presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload as never));
+  const parent = { id: uuid(8), researchObjectId: uuid(3), versionId: uuid(4), kind: 'interactive_html', status: 'approved', contentHash: 'c'.repeat(64),
+    provenance: { subtype: 'sourced_storyboard', sourceEvidenceIdentity,
+      storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain the field.', output: 'image' },
+      storyboardDocument: { schemaVersion: 1, title: 'Field', scenes: [{ title: 'Field direction', narration: 'The field points along x.',
+        visualAction: 'One arrow along x.', sourceClaimIds: [uuid(5)] }] } } };
+  db.presentationAssets.push(parent); db.presentationAssetClaims.push({ presentationAssetId: parent.id, claimId: uuid(5) });
+  const task = await submitAgentTask(deps as never, { userId: user.id, sessionId: session.id, kind: 'presentation.generate', payload,
+    idempotencyKey: 'native-image-terminal', dispatch: false });
+  const row = db.agentTasks.find(value => value.id === task.id)!;
+  await claimAgentTask(deps as never, task.id);
+  const parentProof = (await requireSceneImageParent(prisma, payload as never))!;
+  const identity = { requestId: task.id, contentHash: 'd'.repeat(64), sourceEvidenceIdentity, parentIdentity: parentProof.identity };
+  const envelope = await prisma.$transaction(tx => prepareAgentNativeImageReview(tx, { taskId: task.id, executionAttempt: row.executionAttempt,
+    identity, runtime, target: { provider: 'minimax-key-1-model-1', model: runtime.model }, maxInputBytes: 64_000_000 }));
+  const target = { provider: envelope.provider, model: envelope.model, promptHash: 'e'.repeat(64) };
+  row.result.nativeAgentExecution.checkpoint = { taskId: task.id, sourceKind: 'illustration-image', imageIdentity: identity,
+    objectKey: `derived/native-agent/${'f'.repeat(64)}.json`, serializedSha256: 'f'.repeat(64), size: 100,
+    executionAttempt: row.executionAttempt, turnCount: 2, state: 'completed', target,
+    responseHash: 'a'.repeat(64), finishReason: 'stop', hasToolCalls: false };
+  const review = { stage: 'generated-image', ...identity, ...target, responseHash: 'a'.repeat(64), decision,
+    summary: decision === 'accepted' ? 'The actual field direction matches its source.' : 'The drawn direction needs repair.', repairInstruction: null };
+  await prisma.$transaction(tx => completeNativeImageReview(tx, { taskId: task.id, executionAttempt: row.executionAttempt, review: review as never }));
+  const image = { id: task.id, researchObjectId: uuid(3), versionId: uuid(4), kind: 'image', status: 'draft', contentHash: identity.contentHash,
+    objectKey: 'derived/field.png', provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: task.id,
+      sceneImage: { ...payload.sceneImage }, parentIdentity: identity.parentIdentity, sourceEvidenceIdentity, contentType: 'image/png', imageReview: review } };
+  db.presentationAssets.push(image); db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: uuid(5) });
+  const result = { assetId: image.id, kind: 'image', status: 'draft', contentHash: identity.contentHash, sourceClaimIds: payload.sourceClaimIds, imageReview: review };
+  return { deps, prisma, db, task, row, session: db.agentSessions.find(value => value.id === session.id)!, parent, image, result, envelope };
+}
+
+describe('native image task public terminal completion', () => {
+  it.each(['accepted', 'blocked'] as const)('finishes a legitimate %s image review through markTaskProgress without another charge', async decision => {
+    const f = await nativeImageTerminalFixture(decision); const ledger = structuredClone(f.db.usageLedger);
+    const completed = await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded',
+      expectedExecutionAttempt: f.row.executionAttempt, result: f.result });
+    expect(completed.status).toBe('succeeded');
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.result.nativeAgentExecution.profile).toBe('image-review');
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it('consumes the original final receipt after deadline and lease advancement under Serializable authority', async () => {
+    const f = await nativeImageTerminalFixture(); f.row.executionAttempt += 1;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);
+    const transaction = vi.spyOn(f.prisma, '$transaction');
+    try {
+      await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded', expectedExecutionAttempt: f.row.executionAttempt,
+        result: f.result })).resolves.toMatchObject({ status: 'succeeded' });
+      expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
+    } finally { now.mockRestore(); transaction.mockRestore(); }
+  });
+  it.each(['Temporary database write conflict', 'Temporary storage error reading checkpoint.json', '[blocked] Native Agent original request deadline expired'])(
+    'makes canRetry and the actual retry agree for a paid final after %s, retaining the original envelope and zero-charge terminal adoption', async error => {
+    const f = await nativeImageTerminalFixture();
+    await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'failed', error });
+    const original = structuredClone(f.db.agentTasks.find(value => value.id === f.task.id)!.result);
+    const ledger = structuredClone(f.db.usageLedger);
+    const actor = f.session.userId;
+    expect((await getAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).canRetry).toBe(true);
+    await retryAgentTask(f.deps as never, { userId: actor, taskId: f.task.id });
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.result).toEqual(original);
+    await claimAgentTask(f.deps as never, f.task.id);
+    await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded',
+      expectedExecutionAttempt: f.db.agentTasks.find(value => value.id === f.task.id)!.executionAttempt, result: f.result })).resolves.toMatchObject({ status: 'succeeded' });
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['prepared-no-cp', 'started', 'intermediate', 'schema', 'invalid-json', 'invalid-decision', 'authority-blocked', 'exhausted'])(
+    'offers no retry or new attempt for unrecoverable %s image Agent state', async state => {
+    const f = await nativeImageTerminalFixture();
+    await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'failed', error: 'Temporary database write conflict' });
+    const row = f.db.agentTasks.find(value => value.id === f.task.id)!;
+    const envelope = row.result.nativeImageReview; envelope.state = 'prepared'; delete envelope.review;
+    const cp = row.result.nativeAgentExecution.checkpoint;
+    if (state === 'prepared-no-cp') delete row.result.nativeAgentExecution.checkpoint;
+    if (state === 'started') { cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+    if (state === 'intermediate') { cp.finishReason = 'tool_calls'; cp.hasToolCalls = true; }
+    if (state === 'schema') row.error = 'Native image review response failed schema validation; explicit review retry required';
+    if (state === 'invalid-json') row.error = 'Unexpected end of JSON input';
+    if (state === 'invalid-decision') row.error = '[blocked] Invalid generated image review decision';
+    if (state === 'authority-blocked') row.error = '[blocked] Native Agent execution binding changed';
+    if (state === 'exhausted') row.retryCount = 1;
+    const before = structuredClone(row); const ledger = structuredClone(f.db.usageLedger);
+    const actor = f.session.userId;
+    expect((await getAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).canRetry).toBe(false);
+    await expect(retryAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).rejects.toThrow();
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)).toEqual(before); expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['session-inactive', 'session-deleted', 'session-scope', 'membership', 'workspace', 'version', 'payload-scope',
+    'task-kind', 'lease', 'prepared', 'started-cp', 'tool-cp', 'response-hash', 'image-deleted', 'image-hash', 'image-kind', 'image-status',
+    'image-scene', 'image-claims', 'image-source', 'image-parent', 'source', 'claim-status', 'parent', 'parent-deleted', 'parent-status'])(
+    'refuses terminal adoption after %s changes without another debit', async change => {
+    const f = await nativeImageTerminalFixture(); const attempt = f.row.executionAttempt; const ledger = structuredClone(f.db.usageLedger);
+    if (change === 'session-inactive') f.session.status = 'closed';
+    if (change === 'session-deleted') f.session.deletedAt = new Date();
+    if (change === 'session-scope') f.session.researchObjectId = 'foreign';
+    if (change === 'membership') f.db.memberships[0].role = 'viewer';
+    if (change === 'workspace') f.db.workspaces[0].status = 'suspended';
+    if (change === 'version') f.db.versions[0].status = 'published';
+    if (change === 'payload-scope') f.row.payload.researchObjectId = '30000000-0000-4000-8000-000000000099';
+    if (change === 'task-kind') f.row.kind = 'sdf.extract';
+    if (change === 'lease') f.row.executionAttempt += 1;
+    if (change === 'prepared') { f.row.result.nativeImageReview.state = 'prepared'; delete f.row.result.nativeImageReview.review; }
+    if (change === 'started-cp') {
+      const cp = f.row.result.nativeAgentExecution.checkpoint; cp.state = 'started';
+      delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls;
+    }
+    if (change === 'tool-cp') f.row.result.nativeAgentExecution.checkpoint.hasToolCalls = true;
+    if (change === 'response-hash') f.row.result.nativeAgentExecution.checkpoint.responseHash = 'e'.repeat(64);
+    if (change === 'image-deleted') Object.assign(f.image, { deletedAt: new Date() });
+    if (change === 'image-hash') f.image.contentHash = 'f'.repeat(64);
+    if (change === 'image-kind') f.image.kind = 'video';
+    if (change === 'image-status') f.image.status = 'rejected';
+    if (change === 'image-scene') f.image.provenance.sceneImage.sceneIndex = 1;
+    if (change === 'image-claims') f.db.presentationAssetClaims.splice(f.db.presentationAssetClaims.findIndex(link => link.presentationAssetId === f.image.id), 1);
+    if (change === 'image-source') f.image.provenance.sourceEvidenceIdentity = 'f'.repeat(64);
+    if (change === 'image-parent') f.image.provenance.parentIdentity = 'foreign';
+    if (change === 'source') f.db.evidenceRecords[0].exactQuote = 'The field points along y.';
+    if (change === 'claim-status') f.db.claimNodes[0].extractionStatus = 'failed';
+    if (change === 'parent') f.parent.contentHash = 'f'.repeat(64);
+    if (change === 'parent-deleted') Object.assign(f.parent, { deletedAt: new Date() });
+    if (change === 'parent-status') f.parent.status = 'rejected';
+    await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded', expectedExecutionAttempt: attempt,
+      result: f.result })).rejects.toThrow();
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.status).toBe('running');
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+});
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {

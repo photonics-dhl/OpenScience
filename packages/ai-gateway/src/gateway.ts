@@ -518,7 +518,8 @@ export class AiGateway {
       nativeImageReviewMessages(snapshot);
       const attachment = snapshot.attachments![0]!;
       const actual = snapshotChatMessages(messages);
-      if (actual.flatMap(message => message.images ?? []).some(image => image.mediaType !== attachment.mediaType
+      const imageInputs = actual.flatMap(message => message.images ?? []);
+      if (imageInputs.length > 1 || imageInputs.some(image => image.mediaType !== attachment.mediaType
         || createHash('sha256').update(Buffer.from(image.data, 'base64')).digest('hex') !== attachment.sha256)) {
         throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent received pixels outside its saved image');
       }

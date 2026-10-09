@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
-import { createAgentSession, submitAgentTask } from '../../../../packages/domain/src/agent/agent';
+import { claimAgentTask, createAgentSession, getAgentTask, markTaskProgress, retryAgentTask, submitAgentTask } from '../../../../packages/domain/src/agent/agent';
 import { requireSceneImageParent, prepareAgentNativeImageReview } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider, NATIVE_IMAGE_REQUEST_MAX_BYTES, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { createNativeAgentSession, type NativeAgentSessionState } from '../../src/native-agent/session';
-import { NATIVE_IMAGE_REVIEW_TOOLS } from '../../src/native-agent/illustration-task';
+import { NATIVE_IMAGE_REVIEW_TOOLS, validateNativeImageReviewHistory } from '../../src/native-agent/illustration-task';
 import { createNativeImageReviewSubmission } from '../../src/index';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
 
@@ -77,7 +77,7 @@ async function fixture(native = false) {
   const generateImage = vi.fn(); Object.assign(gateway, { generateImage });
   const handler = createPresentationGenerationHandler({ gateway });
   const task = () => ({ id: owner.id, executionAttempt: db.agentTasks.find(value => value.id === owner.id)!.executionAttempt,
-    retryCount: 0, payload }) as never;
+    retryCount: db.agentTasks.find(value => value.id === owner.id)!.retryCount, payload }) as never;
   return { prisma, db, deps, handler, task, owner, fetcher, generateImage, parent, asset, runtime, gateway, evidenceIdentity, approvedParent };
 }
 
@@ -97,7 +97,8 @@ async function paidAgentFinal() {
   const answer = JSON.stringify({ decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null });
   const provider = new AnthropicCompatProvider(envelope.provider, { apiKey: 'fixture', baseUrl: 'https://offline.invalid', model: envelope.model },
     async () => { calls++; return new Response(JSON.stringify({ model: envelope.model,
-      content: calls === 1 ? [{ type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }] : [{ type: 'text', text: answer }],
+      content: calls === 1 ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: 'openscience-source-review' } },
+        { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }] : [{ type: 'text', text: answer }],
       stop_reason: calls === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } })); });
   const store = { read: async () => state, compareAndSet: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
     complete: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); }, publish: async <T>(_old: unknown, submit: () => Promise<T>) => submit() };
@@ -107,13 +108,15 @@ async function paidAgentFinal() {
     maxInputBytes: envelope.maxInputBytes, deadlineAt: envelope.deadlineAt, contextWindowTokens: 512000,
     generation: { thinking: 'adaptive' as const, temperature: 0.1 } };
   const session = createNativeAgentSession({ gateway: new AiGateway({ providers: [provider], illustrationReviewPolicy: async () => true,
-    authorizeIllustrationReview: async () => undefined }), binding, store, authorize: async () => undefined, imageReviewInput: request });
+    authorizeIllustrationReview: async () => undefined }), binding, store, authorize: async () => undefined, imageReviewInput: request,
+    validateImageHistory: (messages, final) => validateNativeImageReviewHistory(messages, identity, final) });
   const tools = [{ name: 'skills_list', description: 'List methods.', parameters: { type: 'object', properties: {} } },
     { name: 'skill_view', description: 'Read a method.', parameters: { type: 'object', properties: {} } }, ...NATIVE_IMAGE_REVIEW_TOOLS];
   const sdk = { model: envelope.model, max_tokens: 32768, tools: tools.map(tool => ({ type: 'function', function: tool })),
     messages: [{ role: 'system', content: 'Read-only check.' }, { role: 'user', content: request.prompt }] };
   const first = await session.complete(sdk) as { choices: Array<{ message: unknown }> };
   await session.complete({ ...sdk, messages: [...sdk.messages, first.choices[0]!.message,
+    { role: 'tool', tool_call_id: 'skill-1', content: JSON.stringify({ success: true, content: 'Fixed source-review method.' }) },
     { role: 'tool', tool_call_id: 'view-1', content: JSON.stringify({ status: 'image_view_ready', ...identity }) },
     { role: 'user', content: [{ type: 'image_url', image_url: { url: `data:image/png;base64,${bytes.toString('base64')}` } }] }] });
   const history = await store.read(); const last = history!.turns.at(-1)!;
@@ -127,6 +130,17 @@ async function paidAgentFinal() {
 }
 
 describe('real Worker native image review persistence and replay', () => {
+  it('retries a failed paid final through the public API and actually materializes it with zero additional provider calls', async () => {
+    const f = await paidAgentFinal(); const ledger = structuredClone(f.db.usageLedger);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, status: 'failed', error: 'Temporary database write conflict' });
+    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: f.owner.id })).canRetry).toBe(true);
+    await retryAgentTask(f.deps as never, { userId: id(1), taskId: f.owner.id }); await claimAgentTask(f.deps as never, f.owner.id);
+    const result = await f.handler(f.deps as never, f.task());
+    await expect(markTaskProgress(f.deps as never, { taskId: f.owner.id, status: 'succeeded',
+      expectedExecutionAttempt: f.db.agentTasks.find(value => value.id === f.owner.id)!.executionAttempt, result })).resolves.toMatchObject({ status: 'succeeded' });
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
   it('consumes the actual Agent final with no Host, new provider or extra charge, and replays it', async () => {
     const f = await paidAgentFinal(); const ledgerBefore = structuredClone(f.db.usageLedger);
     expect(f.envelope.parentIdentity.length).toBeGreaterThan(200);

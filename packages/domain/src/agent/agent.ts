@@ -170,6 +170,23 @@ function isRetryableSourceSearchIndex(
   try { return parseSourceMapSearchIndexPayload(task.payload) !== undefined; } catch { return false; }
 }
 
+/** Known final CP recovery consumes saved bytes only; it never restarts the Agent conversation. */
+function canRecoverAgentNativeImageFinal(task: AgentTaskRetrySnapshot): boolean {
+  const envelope = readNativeImageReviewCheckpoint(task.result);
+  const cp = readNativeAgentExecution(task.result)?.checkpoint;
+  const error = task.error ?? '';
+  const expiredAfterFinal = error === '[blocked] Native Agent original deadline expired'
+    || error === '[blocked] Native Agent original request deadline expired';
+  const invalidResponse = error === 'Native image review response invalid JSON; explicit review retry required'
+    || error === 'Native image review response failed schema validation; explicit review retry required'
+    || error === 'structured output is not JSON' || error === 'Unexpected end of JSON input'
+    || /^(?:Expected|Unexpected token|Unterminated string|Bad (?:control|escaped) character).*(?:in JSON|not valid JSON)/u.test(error);
+  return task.kind === 'presentation.generate' && task.status === 'failed' && task.retryCount === 0
+    && envelope?.mode === 'agent-native' && envelope.requestId === task.id && cp?.state === 'completed'
+    && cp.finishReason === 'stop' && cp.hasToolCalls === false
+    && !invalidResponse && (!error.startsWith('[blocked]') || expiredAfterFinal);
+}
+
 function evaluateAgentTaskRetryEligibility(
   task: AgentTaskRetrySnapshot,
   userId: string,
@@ -220,6 +237,13 @@ function evaluateAgentTaskRetryEligibility(
   let nativeCheckpoint: ReturnType<typeof readNativeImageReviewCheckpoint>;
   try { nativeCheckpoint = readNativeImageReviewCheckpoint(task.result); }
   catch { return { authorityValid: true, canRetry: false }; }
+  if (nativeCheckpoint?.mode === 'agent-native') {
+    try {
+      return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) && canRecoverAgentNativeImageFinal(task)
+        && Boolean(researchObject?.workspace.members.some(member => member.userId === userId
+          && ['owner', 'maintainer', 'author', 'contributor'].includes(member.role))) };
+    } catch { return { authorityValid: true, canRetry: false }; }
+  }
   if (task.status !== 'failed' || (task.retryCount !== 0 && !nativeImageReviewSchemaRecovery)
     || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
     || (nativeCheckpoint?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
@@ -1024,6 +1048,8 @@ export async function retryAgentTask(
         }
         const sourceSearch = sourceIndexRecovery || isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
+        if (nativeReview?.mode === 'agent-native' && !canRecoverAgentNativeImageFinal(task))
+          throw new AgentError('ILLEGAL_TRANSITION', 'Image Agent has no recoverable final receipt');
         const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
           && task.retryCount < 2
           && !('hermesRunAuthority' in (task.payload as Record<string, unknown>))
@@ -1259,7 +1285,7 @@ async function markTaskProgressOnce(
     const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
-  }, isNativeSourceCorrectionTaskKey(task.idempotencyKey) || ['paper-illustration', 'paper-source-review', 'paper-author'].includes(readNativeAgentExecution(task.result)?.profile ?? '')
+  }, isNativeSourceCorrectionTaskKey(task.idempotencyKey) || ['paper-illustration', 'paper-source-review', 'paper-author', 'image-review'].includes(readNativeAgentExecution(task.result)?.profile ?? '')
     ? { isolationLevel: 'Serializable' } : undefined);
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);

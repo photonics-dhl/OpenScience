@@ -11,7 +11,7 @@ import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecut
 import { journalSourceProcessingAllowed } from '../journal/enhancements';
 import { journalDigest } from '../journal/content';
 import { readNativeImageAgentExecution, readNativeImageReviewCheckpoint } from '../assets/native-image-review';
-import type { ImageReviewIdentity } from '../assets/scene-image';
+import { readStoredGeneratedImageReview, requireSceneImageParent, type ImageReviewIdentity } from '../assets/scene-image';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -57,6 +57,42 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   await lockTrashReferences(tx);
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   const marker = readNativeAgentExecution(task?.result);
+  if (marker?.profile === 'image-review') {
+    if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'running'
+      || task.executionAttempt !== input.executionAttempt || task.session.deletedAt || task.session.status !== 'active') blocked();
+    const planned = parsePresentationGenerationPayload(task.payload);
+    const checkpoint = readNativeImageReviewCheckpoint(task.result);
+    const cp = marker.checkpoint;
+    if (planned.kind !== 'image' || !planned.sceneImage || planned.researchObjectId !== task.session.researchObjectId
+      || checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed' || !cp || cp.state !== 'completed'
+      || cp.finishReason !== 'stop' || cp.hasToolCalls) blocked();
+    await requirePresentationWriteScope(tx, { userId: task.session.userId, researchObjectId: planned.researchObjectId, versionId: planned.versionId });
+    if (planned.hermesRunAuthority) await requireHermesPresentationTaskAuthority(tx, {
+      taskId: task.id, actorId: task.session.userId, payload: planned, authority: planned.hermesRunAuthority });
+    const ro = await tx.researchObject.findUnique({ where: { id: planned.researchObjectId } });
+    if (!ro || ro.deletedAt) blocked();
+    const { workspace } = await requireActiveMembership(tx, ro.workspaceId, task.session.userId);
+    const parent = await requireSceneImageParent(tx, planned);
+    const claims = await tx.claimNode.findMany({ where: { id: { in: planned.sourceClaimIds }, researchObjectId: ro.id, versionId: planned.versionId } });
+    if (!parent || claims.length !== planned.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')) blocked();
+    const lineage = planned.hermesRunAuthority ? new Map(claims.map(claim => {
+      const origin = record(claim.provenance) ? claim.provenance : {};
+      return [claim.id, origin.sourceTaskLineage ?? origin.sourceTaskId];
+    })) : undefined;
+    const evidence = await readReviewedPresentationEvidence(tx, planned, lineage);
+    const image = await tx.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: { select: { claimId: true } } } });
+    const provenance = record(image?.provenance) ? image.provenance : {};
+    const identity = { requestId: task.id, contentHash: checkpoint.contentHash,
+      sourceEvidenceIdentity: presentationEvidenceIdentity(evidence), parentIdentity: parent.identity };
+    if (!image || image.deletedAt || image.status !== 'draft' || image.kind !== 'image' || !image.objectKey
+      || image.researchObjectId !== ro.id || image.versionId !== planned.versionId || image.contentHash !== identity.contentHash
+      || provenance.source !== 'approved_storyboard_scene' || provenance.subtype !== 'storyboard_scene_image' || provenance.taskId !== task.id
+      || provenance.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity || provenance.parentIdentity !== identity.parentIdentity
+      || !isDeepStrictEqual(provenance.sceneImage, planned.sceneImage)
+      || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), planned.sourceClaimIds)
+      || !readStoredGeneratedImageReview(provenance.imageReview, identity, task.result)) blocked();
+    return { task, marker, artifact: null, researchObject: ro, workspace, sourceReview: undefined, sourceCorrection: undefined };
+  }
   const sourceCorrection = await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: input.taskId, executionAttempt: input.executionAttempt });
   const payload = task?.payload;
   let sourceReview: HermesAgentSourceReviewExecution | undefined;
