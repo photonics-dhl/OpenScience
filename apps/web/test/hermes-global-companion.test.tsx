@@ -81,7 +81,9 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('Current research object');
     expect(markup).not.toContain('data-hermes-presence-control');
     expect(markup).toContain('data-hermes-size-mode="automatic"');
-    expect(markup).toContain(`data-hermes-stage-size="${pathname === '/dashboard' ? 360 : 120}"`);
+    const isWorkspace = pathname === '/dashboard' || pathname === '/research-objects/object/edit';
+    expect(markup).toContain(`data-hermes-stage-size="${isWorkspace ? 64 : 120}"`);
+    if (isWorkspace) expect(markup).toContain('data-hermes-avatar="true"');
   });
 
   it.each(['/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {

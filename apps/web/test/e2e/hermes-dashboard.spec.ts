@@ -661,6 +661,7 @@ test('Hermes aborts and releases a pending initialization on SPA unmount', async
   // Enter through the existing Next Link so browser Back unmounts the global stage
   // without the wordmark's ordinary anchor replacing the document.
   await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
+  await page.getByLabel('Account tools', { exact: true }).click();
   await page.getByRole('link', { name: 'Research desk', exact: true }).click();
   await expect(page).toHaveURL(`${baseUrl}/dashboard`);
   try {
@@ -732,11 +733,11 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   await page.waitForTimeout(500);
   await expect(stage).toHaveAttribute('data-hermes-runtime-generation', boundedGeneration!);
   await expect(motionToggle).toHaveAttribute('data-motion-runtime', 'fallback');
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
   await expect(motionToggle).toBeEnabled();
   const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
-  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await motionToggle.click();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
   await expect(stage).toHaveAttribute('data-hermes-runtime-owner', 'running');
@@ -946,8 +947,9 @@ test('anchored Hermes opens an explicit contextual guide without leaving the wor
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
   await expect(opener).toBeFocused();
   await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'false');
-  await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
+  await expect(visual).toHaveAttribute('data-hermes-presence', 'attentive');
   await page.keyboard.press('Tab');
+  await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
   await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'false');
 
   await page.unroute('**/api/agent/tasks**');
@@ -1122,8 +1124,10 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
 
   await page.goto(`${baseUrl}/research-objects/${routeRo}/hermes?task=task-cross-ro`, { waitUntil: 'networkidle' });
   await expect(page.locator('main [data-literature-state]')).toHaveAttribute('data-literature-state', 'running');
+  await expect(page.getByRole('alert').filter({ hasText: 'This task does not belong to the current research object.' })).toBeVisible();
   const recoveryBaseline = recoveryGets;
   await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('download paper 10.1038/nature12373');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => submittedTarget).toEqual({ kind: 'research_object', researchObjectId: routeRo });

@@ -204,7 +204,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
   }
 
   const fallbackChosen = fallbackChoice === routeParams.id;
-  const usesFallbackAssistant = fallbackChosen || Boolean(companion?.companionOpen) || Boolean(runId && (!run || run.profile === 'visual-narrative-v1'));
+  const usesFallbackAssistant = fallbackChosen || Boolean(companion?.companionOpen) || Boolean(runId && (!run || run.profile === 'visual-narrative-v1'))
+    || Boolean(taskId && !detail);
   const openAssistant = () => {
     if (usesFallbackAssistant && companion) { chooseFallback(routeParams.id); companion.openCompanion(); }
     else setHermesOpen(true);

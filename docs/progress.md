@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-09：image77f＋video4cf最终七文件源码Scoped GO，全链→root79c/483全等集入；立即推送原CI验证Linux生命周期/FD9/TERM/CAS，不再等待UI。头像12488→053已收，root Dashboard9a3/423完成TS/lint/list26，完整Web TC0；UI独占workspace-stage spec并行收尾，验收分别报告。原ResearchSurfaceShell复用，WorkspaceShell未改；生产0写。
+- 2026-10-09：3485保留远端服务对象历史后已推；Native Linux生命周期34/34及部署事务通过。完整media仍有Web差额，root49unit/TS/lint已修验、浏览器待回归；64px头像1440/390真实框内活动两例通过并看图。UI独占workspace spec和journal首屏CSS收尾，video核CI取消原因；无生产写，科学质量仍单独验收。
 - 2026-10-09：按用户纠正，将本对话导航、Researchers、Industry / Investors 和邮箱隐藏合入既有 `frontend/nanqing`；保留该分支原工作，main 不动。前轮线上功能已发布，分支纠正不重部署其他候选。详情见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
 - 2026-10-09：生图9行fresh括号修复经独立High/目标回归，canonical依赖配套后完整WorkerTC0；真source错绑/时空矛盾仍须Native纠正，不重放cb未知任务。视频只读声音目录已收、实际Key目录/声音/成片仍待。

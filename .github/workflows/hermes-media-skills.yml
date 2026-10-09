@@ -190,6 +190,7 @@ on:
       - 'apps/api/src/routes/research-runs.ts'
       - 'apps/web/test/start-paper-narrative.test.ts'
       - 'apps/web/test/e2e/create-illustrated-research.spec.ts'
+      - 'apps/web/test/e2e/researcher-services.spec.ts'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/components/presentation/StoryboardPlans.tsx'
       - 'apps/web/test/presentation-storyboard-selection.test.tsx'
@@ -441,6 +442,7 @@ on:
       - 'apps/api/src/routes/research-runs.ts'
       - 'apps/web/test/start-paper-narrative.test.ts'
       - 'apps/web/test/e2e/create-illustrated-research.spec.ts'
+      - 'apps/web/test/e2e/researcher-services.spec.ts'
       - 'apps/web/components/presentation/StoryboardPanel.tsx'
       - 'apps/web/components/presentation/StoryboardPlans.tsx'
       - 'apps/web/test/presentation-storyboard-selection.test.tsx'
@@ -608,7 +610,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts researcher-services.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - name: Guide layout and contextual companion focus
