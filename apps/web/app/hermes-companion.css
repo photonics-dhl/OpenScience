@@ -12,7 +12,7 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
 .hermes-compact-dock .hermes-workspace-stage[data-hermes-compact='true'] { position: absolute; top: 10px; right: 0; bottom: auto; margin: 0; }
 .hermes-workspace-stage[data-hermes-compact='true'] { touch-action: manipulation; }
 .hermes-workspace-stage[data-hermes-compact='true'] .hermes-companion-actor { inset: 0; }
-.hermes-workspace-stage[data-hermes-compact='true'] :is(.hermes-pet-menu-button, .hermes-motion-enable, .hermes-visual-state-label, .hermes-visual-invoke-label, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
+.hermes-workspace-stage[data-hermes-compact='true'] :is(.hermes-pet-menu-button, .hermes-motion-enable:not([data-motion-runtime='fallback']), .hermes-visual-state-label, .hermes-visual-invoke-label, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
 [data-hermes-conversation-companion='true'] { display: none; }
 .drawer.hermes-companion-invitation { width: min(440px, calc(100vw - 24px)); top: 12px; right: 12px; bottom: 12px; height: auto; border-radius: 16px; background: var(--os-paper-strong); overflow-y: auto; }
 .hermes-companion-invitation [data-hermes-conversation-companion='true'] { display: grid; place-items: center; height: min(360px, 45dvh); margin-top: 44px; }
