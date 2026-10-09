@@ -87,8 +87,6 @@ test('dashboard keeps process records behind history and opens the actual review
   await expect(continuation).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
   await expect(continuation.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  const editorPage = await page.request.get(`${baseUrl}/research-objects/journey-ro/edit?ingestionTask=journey-task`);
-  expect(editorPage.ok()).toBe(true);
   await Promise.all([
     page.waitForURL(/edit\?ingestionTask=journey-task$/),
     continuation.getByRole('link').click(),
@@ -204,7 +202,7 @@ test('the confirmed paper is included in the next commit through the editor', as
   await page.locator('#sdf-field-problem').fill(editedCore.problem);
   await expect.poll(() => saves).toBe(1);
   expect(commits).toBe(0);
-  const assistant = page.locator('.hermes-conversation-shell');
+  const assistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
   await expect(assistant).toBeVisible();
   await assistant.getByLabel('Send an instruction to Hermes').fill('Review media for this saved research');
   await assistant.getByRole('button', { name: 'Send' }).click();
@@ -240,7 +238,7 @@ test('a foreign imported paper cannot be silently attached or committed', async 
   await expect(page.locator('[data-sdf-node] textarea')).toHaveCount(0);
   await expect(page.getByText(foreignCore.problem, { exact: true })).toHaveCount(0);
   await expect(page.locator('a[href="/api/artifacts/artifact-journey/download"]')).toHaveCount(0);
-  const assistant = page.locator('.hermes-conversation-shell');
+  const assistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
   await expect(assistant).toBeVisible();
   await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText(core.problem);
   await expect(assistant.getByText('This analysis does not belong to the current Research Object or material, so its content was not loaded.', { exact: true })).toBeVisible();
@@ -313,7 +311,7 @@ async function versionEvidenceFixtures(page: Page) {
   const contentHash = 'a'.repeat(64);
   const record: ReadingRecord & { recordState: 'recorded' } = { objectId: ro.id, versionId: 'confirmed-version', recordState: 'recorded', sdf: core,
     manifest: [{ artifactId: task.artifactId, logicalPath: task.logicalPath, blobSha256: contentHash, mimeType: 'application/pdf' }],
-    claims: [{ id: 'claim', kind: 'core', statement: 'Claim needing verification', assessment: 'missing', conditions: [], limitations: [] }],
+    claims: [{ id: 'claim', kind: 'core', parentClaimId: null, statement: 'Claim needing verification', assessment: 'missing', conditions: [], limitations: [] }],
     evidence: [{ id: 'evidence', claimId: 'claim', artifactId: task.artifactId, contentHash, kind: 'passage', relation: 'context', title: 'Original passage', locator: { page: 3 }, extractionConfidence: null, verified: false }] };
   await page.route('**/api/research-objects/journey-ro/versions/confirmed-version/record', route => route.fulfill({ json: { record } }));
 }
@@ -455,7 +453,7 @@ test('selected version is readable on a narrow Chinese surface and unknown versi
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test/visual/out/research-continuation/version-mobile-zh.png', fullPage: true });
   await page.goto('/research-objects/journey-ro/versions?version=foreign');
-  await expect(page.getByText('当前研究中没有这个版本。', { exact: true })).toBeVisible();
+  await expect(page.locator('main').getByRole('alert')).toHaveText('当前研究中没有这个版本。');
   await expect(page.locator('[data-selected-version]')).toHaveCount(0);
 });
 

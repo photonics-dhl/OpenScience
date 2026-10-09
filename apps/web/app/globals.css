@@ -3631,7 +3631,6 @@ body [data-reading-role='reading'] {
 
 .hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-guide-nudge {
   animation: none !important;
-  opacity: 1;
   transform: none;
   transition: none;
 }

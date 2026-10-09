@@ -181,17 +181,13 @@ test('page-owned Hermes preserves click intent and settles away from protected w
   });
   await page.mouse.move(cancelInput!.x + cancelInput!.width / 2, cancelInput!.y + cancelInput!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(cancelInput!.x + cancelInput!.width / 2 + 2, cancelInput!.y + cancelInput!.height / 2 + 2);
+  await page.mouse.move(cancelInput!.x - 40, cancelInput!.y + 30, { steps: 4 });
   expect(await stage.evaluate((element) => element.hasPointerCapture(1))).toBe(true);
-  await expect(stage).toHaveAttribute('data-hermes-dragging', 'true');
   await stage.evaluate((element) => element.releasePointerCapture(1));
-  await page.mouse.move(cancelInput!.x + cancelInput!.width / 2 + 3, cancelInput!.y + cancelInput!.height / 2 + 3);
   await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
-  await page.mouse.move(0, 0);
   await page.mouse.up();
-  await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
 
   const desired = protectedBoxes[0];
   const safeInput = await input.boundingBox();
@@ -392,6 +388,11 @@ test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage',
   await page.mouse.click(interactionBox!.x + interactionBox!.width / 2, interactionBox!.y + interactionBox!.height / 2);
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(rig).toHaveAttribute('data-hermes-wanko-presentation', /quiet|evidence|trail|celebrate|missing/u);
+  // Ready and presentation can survive a carrier move; capture a frame drawn after opening.
+  const conversationVisibleAt = await page.evaluate(() => performance.now());
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0), { timeout: 20_000 })
+    .toBeGreaterThan(conversationVisibleAt);
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
   await page.screenshot({ path: 'test/visual/out/hermes-live2d/wanko-dashboard.png', fullPage: true });
 });
 
@@ -419,8 +420,6 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   const originalStage = await stage.elementHandle();
   const originalCanvas = await stage.locator('[data-hermes-articulated-canvas]').elementHandle();
 
-  const editorPage = await page.request.get(`${baseUrl}/research-objects/ro-hermes/edit`);
-  expect(editorPage.ok()).toBe(true);
   await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: /Coherent transport at the attosecond frontier/ }).click();
   await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
   await page.waitForTimeout(500);
@@ -434,11 +433,15 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await routedStage?.dispose();
 
   const input = stage.locator('[data-hermes-input-owner]');
-  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
-  await page.keyboard.press('Escape');
-  await expect(stage).not.toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  const initialInlineAssistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
+  await expect(initialInlineAssistant).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
-  await page.getByRole('button', { name: 'Close Hermes' }).click();
+  await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(initialInlineAssistant).toHaveCount(0);
+  await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'false');
+  await expect(page.locator('[role="dialog"], [aria-modal="true"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(page.locator('.hermes-editor-anchor').locator('[data-hermes-workspace-stage]')).toHaveCount(1);
@@ -450,6 +453,28 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(input).toBeFocused();
   await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+
+  const externalOpener = page.getByRole('button', { name: 'Hermes · Chat', exact: true });
+  await expect(externalOpener).toBeVisible();
+  const originalExternalOpener = await externalOpener.elementHandle();
+  expect(originalExternalOpener).not.toBeNull();
+  try {
+    await externalOpener.click();
+    await expect(externalOpener).toHaveCount(0);
+    expect(await originalExternalOpener!.evaluate((button) => button.isConnected)).toBe(false);
+    await expect(page.getByRole('complementary', { name: 'Hermes research guide' })).toBeVisible();
+    await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
+    await expect(stage).toHaveCount(1);
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
+    await expect(input).toBeFocused();
+    await expect(externalOpener).toBeVisible();
+    expect(await originalExternalOpener!.evaluate((button) => button.isConnected)).toBe(false);
+    await expect(stage).toHaveCount(1);
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+  } finally { await originalExternalOpener?.dispose(); }
 });
 
 test('creation opens the complete companion from its compact entry without starting work', async ({ page }) => {

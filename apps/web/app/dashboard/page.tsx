@@ -17,6 +17,7 @@ import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
+import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { apiRequest, ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser, type DashboardResearchApi } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
@@ -267,7 +268,7 @@ export default function DashboardPage() {
             </details>
           </div>
           <div className={styles.taskRail}>
-            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
+            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={deriveHermesCompositeVisualState(tasks, guideWorking)} suggestion={suggestion} />
             <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
           </div>
         </div>

@@ -228,21 +228,21 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
             expect(await refinementSummary.evaluate(element => element === document.activeElement)).toBe(true);
             await refinementSummary.press('Enter');
             await expect.poll(() => refinement.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+            // Playwright's state queries follow the wrapping label to its SELECT.
+            // With each SELECT enabled, check the OPTION's own native disabled state.
             const availability = {
               subjectEnabled: await subject.isEnabled(), accessEnabled: await access.isEnabled(), sortEnabled: await sort.isEnabled(),
-              fixtureSubjectEnabled: await subject.locator('option[value="Open Science"]').isEnabled(),
-              openDisabled: await access.locator('option[value="open"]').isDisabled(),
-              closedDisabled: await access.locator('option[value="closed"]').isDisabled(),
-              unknownEnabled: await access.locator('option[value="unknown"]').isEnabled(),
-              paperCountEnabled: await sort.locator('option[value="paper_count"]').isEnabled(),
-              citationDisabled: await sort.locator('option[value="citation_count"]').isDisabled(),
+              fixtureSubjectEnabled: await subject.locator('option[value="Open Science"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              openDisabled: await access.locator('option[value="open"]').evaluate(option => (option as HTMLOptionElement).disabled),
+              closedDisabled: await access.locator('option[value="closed"]').evaluate(option => (option as HTMLOptionElement).disabled),
+              unknownEnabled: await access.locator('option[value="unknown"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              paperCountEnabled: await sort.locator('option[value="paper_count"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              citationDisabled: await sort.locator('option[value="citation_count"]').evaluate(option => (option as HTMLOptionElement).disabled),
             };
             directoryRefinement.availability = availability;
-            // The shared CI database now includes verified OA and citation fixtures;
-            // the no-source fallback remains covered by JournalDirectory's component test.
             expect(availability).toEqual({ subjectEnabled: true, accessEnabled: true, sortEnabled: true,
-              fixtureSubjectEnabled: true, openDisabled: false, closedDisabled: false, unknownEnabled: true,
-              paperCountEnabled: true, citationDisabled: false });
+              fixtureSubjectEnabled: true, openDisabled: true, closedDisabled: true, unknownEnabled: true,
+              paperCountEnabled: true, citationDisabled: true });
             await subject.selectOption('Open Science');
             expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
             await refinementSummary.press('Enter');

@@ -317,7 +317,9 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
-  const assistantWasOpenRef = useRef(false);
+  const assistantFocusContextRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
+  const pendingVisualFocusRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
+  const visualInvocationPathRef = useRef<string | null>(null);
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -404,10 +406,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     input.writing = writing || pageInterruptionActive;
     const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
     const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-    const speechAllowed = !compact && !navigationOnly && !effectiveReducedMotion && !writing && !pageInterruptionActive && !guideTarget && state !== 'awaiting_approval'
+    const speechAllowed = !compact && !navigationOnly && !effectiveReducedMotion && !writing && !pageInterruptionActive && !guideTarget && !presentation?.anchor && state !== 'awaiting_approval'
       && !assistantOpen && !modalOpen && document.visibilityState === 'visible';
     setPerformanceState((previous) => stepHermesPerformance(previous, { behaviorInput: input, speechAllowed }));
-  }, [compact, dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, navigationOnly, pageInterruptionActive, presentation?.assistantOpen, state, writing]);
+  }, [compact, dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, navigationOnly, pageInterruptionActive, presentation?.anchor, presentation?.assistantOpen, state, writing]);
 
   useClientLayoutEffect(() => { positionRef.current = position; }, [position]);
 
@@ -892,19 +894,28 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [assistantOpen, conversationAnchor]);
 
   useClientLayoutEffect(() => {
-    if (assistantWasOpenRef.current && !assistantOpen) {
-      // The conversation portal is removed in the same commit. Restore focus
-      // after that subtree has finished unmounting so the browser cannot send it
-      // back to <body> when the previously focused close button disappears.
-      const timer = window.setTimeout(() => {
-        const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
-        if (trigger?.isConnected) trigger.focus();
-      }, 0);
-      assistantWasOpenRef.current = assistantOpen;
-      return () => window.clearTimeout(timer);
+    const previousContext = assistantFocusContextRef.current;
+    assistantFocusContextRef.current = assistantOpen
+      ? { pathname, editorOwned: presentation?.anchor.dataset.hermesFloatingOwner === 'editor' } : null;
+    if (visualInvocationPathRef.current !== pathname) visualInvocationPathRef.current = null;
+    if (previousContext && !assistantOpen) {
+      const restoreVisualFocus = previousContext.pathname === pathname
+        && (visualInvocationPathRef.current === pathname || previousContext.editorOwned);
+      visualInvocationPathRef.current = null;
+      pendingVisualFocusRef.current = restoreVisualFocus ? previousContext : null;
     }
-    assistantWasOpenRef.current = assistantOpen;
-  }, [assistantOpen, conversationAnchor]);
+    if (assistantOpen || pendingVisualFocusRef.current?.pathname !== pathname) pendingVisualFocusRef.current = null;
+    const pending = pendingVisualFocusRef.current;
+    if (!pending || !portal) return;
+    // The hidden editor seat is measured again after close; wait for the carrier to return there.
+    if (pending.editorOwned && (!presentation?.anchor || portalAnchor !== presentation.anchor)) return;
+    const host = portalAnchor?.isConnected ? portalAnchor : document.body;
+    if (portal.container.parentNode !== host) return;
+    const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
+    if (!trigger?.isConnected) return;
+    pendingVisualFocusRef.current = null;
+    trigger.focus();
+  }, [assistantOpen, conversationAnchor, pathname, portal, portalAnchor, presentation?.anchor]);
 
   useEffect(() => {
     setGuideReady(false);
@@ -1209,6 +1220,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   }, [guideTarget, onDismissGuide]);
 
   const invokeHermes = () => {
+    // Both callers activate the visual; external conversation buttons open their drawer directly.
+    if (!assistantOpen) visualInvocationPathRef.current = pathname;
     setInvokeCount((count) => count + 1);
     (compact && navigationOnly ? fallbackOnInvoke : presentation?.onInvoke ?? fallbackOnInvoke)();
   };
@@ -1586,18 +1599,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
           visible={Boolean(bubblePlacement)}
         />
       ) : null}
-      {reducedMotion !== null && motionControl.action === 'retry' ? <button
-        className="hermes-motion-enable"
-        data-hermes-motion-retry
-        data-motion-runtime={runtimeStatus.phase}
-        onClick={(event) => {
-          event.stopPropagation();
-          setRuntimeStatus((status) => reduceHermesRuntimeStatus(status, { type: 'retry' }));
-        }}
-        onPointerDown={(event) => event.stopPropagation()}
-        type="button"
-      >{t('retryMotion')}</button> : null}
-      {reducedMotion !== null && motionControl.action !== 'retry' ? <button
+      {reducedMotion !== null ? <button
         className="hermes-motion-enable"
         data-hermes-motion-toggle
         data-motion-active={reducedMotion ? 'false' : 'true'}
@@ -1605,14 +1607,24 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         disabled={motionControl.action === 'none'}
         onClick={(event) => {
           event.stopPropagation();
+          if (motionControl.action === 'retry') {
+            setRuntimeStatus((current) => current.phase === 'fallback'
+              ? reduceHermesRuntimeStatus(current, { type: 'retry' }) : current);
+            return;
+          }
           const preference = reducedMotion ? 'full' : 'reduced';
+          if (motionControl.action === 'enable') {
+            setRuntimeStatus((current) => current.generation === runtimeStatus.generation
+              ? reduceHermesRuntimeStatus(current, { type: 'retry' }) : current);
+          }
           saveHermesMotionPreference(window.localStorage, preference);
           setReducedMotion(preference === 'reduced');
         }}
         onPointerDown={(event) => event.stopPropagation()}
         type="button"
       >{t(motionControl.label === 'enable' ? 'enableMotion'
-        : motionControl.label === 'disable' ? 'disableMotion' : 'startingMotion')}</button> : null}
+        : motionControl.label === 'disable' ? 'disableMotion'
+          : motionControl.label === 'retry' ? 'retryMotion' : 'startingMotion')}</button> : null}
       {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}

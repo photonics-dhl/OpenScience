@@ -42,7 +42,9 @@ export default function Drawer({
   // 记录触发按钮（还原焦点用）
   useEffect(() => {
     if (open && !inline) {
-      triggerRef.current = document.activeElement;
+      const activeElement = document.activeElement;
+      // Replayed open effects must not replace the opener with a control inside the drawer.
+      if (!ref.current?.contains(activeElement)) triggerRef.current = activeElement;
       const first = tabStops(ref.current)[0];
       (first ?? ref.current)?.focus();
     } else if (triggerRef.current instanceof HTMLElement) {
