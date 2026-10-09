@@ -105,7 +105,7 @@ const aggregateCoreText = (core: SdfCore) => SDF_FIELDS.map((field) => core[fiel
 type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[]; history?: string | string[] } };
 
 export default function EditorPage(props: EditorPageProps) {
-  return <EditorWorkspace key={`${props.params.id}:${props.searchParams?.ingestionTask ?? ''}`} {...props} />;
+  return <EditorWorkspace key={props.params.id} {...props} />;
 }
 
 function EditorWorkspace({ params, searchParams }: EditorPageProps) {
