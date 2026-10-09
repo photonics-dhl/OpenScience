@@ -107,8 +107,9 @@ function invalidNativeState() {
 
 export function validateNativeJournalState(value, candidateSha) {
   const hasInstallation = Object.hasOwn(value ?? {}, 'installation');
+  const hasCandidateContainers = Object.hasOwn(value ?? {}, 'candidateContainers');
   if (!SHA_PATTERN.test(candidateSha)
-    || !exactObjectKeys(value, ['before', 'quiesceState', 'installState', 'restoreState', 'candidateCheckpoint', ...(hasInstallation ? ['installation'] : [])])
+    || !exactObjectKeys(value, ['before', 'quiesceState', 'installState', 'restoreState', 'candidateCheckpoint', ...(hasInstallation ? ['installation'] : []), ...(hasCandidateContainers ? ['candidateContainers'] : [])])
     || !['not_started', 'quiescing', 'quiesced', 'rollback_quiescing', 'rollback_quiesced'].includes(value.quiesceState)
     || !['not_attempted', 'install_attempting', 'installed'].includes(value.installState)
     || !['not_started', 'restore_attempting', 'restored_verified'].includes(value.restoreState)
@@ -148,6 +149,12 @@ export function validateNativeJournalState(value, candidateSha) {
     normalized.installation = { releaseSha: receipt.releaseSha, runtimeId: receipt.runtimeId,
       skillCatalogueId: receipt.skillCatalogueId, timerDeferred: true };
   }
+  if (hasCandidateContainers) {
+    const containers = value.candidateContainers;
+    if (value.candidateCheckpoint === null || !exactObjectKeys(containers, ['api', 'web', 'agentWorker'])
+      || Object.values(containers).some(id => typeof id !== 'string' || !/^[a-f0-9]{64}$/u.test(id))) invalidNativeState();
+    normalized.candidateContainers = { api: containers.api, web: containers.web, agentWorker: containers.agentWorker };
+  }
   if ((value.installState === 'installed') !== hasInstallation
     || (value.restoreState !== 'not_started' && value.installState !== 'installed')
     || (value.candidateCheckpoint !== null && value.installState !== 'installed')
@@ -172,6 +179,11 @@ export function preserveNativeJournalState(current, supplied, candidateSha, crea
   const previous = validateNativeJournalState(current.nativeRefresh, candidateSha);
   if (supplied === undefined) return previous;
   const next = validateNativeJournalState(supplied, candidateSha);
+  const hadCandidateContainers = Object.hasOwn(previous, 'candidateContainers');
+  const hasCandidateContainers = Object.hasOwn(next, 'candidateContainers');
+  if ((hadCandidateContainers && (!hasCandidateContainers || JSON.stringify(next.candidateContainers) !== JSON.stringify(previous.candidateContainers)))
+    || (!hadCandidateContainers && previous.candidateCheckpoint !== null && hasCandidateContainers)
+    || (!hadCandidateContainers && previous.candidateCheckpoint === null && (next.candidateCheckpoint !== null) !== hasCandidateContainers)) invalidNativeState();
   if (JSON.stringify(next.before) !== JSON.stringify(previous.before)
     || !validMonotonicTransition(previous.installState, next.installState, ['not_attempted', 'install_attempting', 'installed'])
     || !validMonotonicTransition(previous.restoreState, next.restoreState, ['not_started', 'restore_attempting', 'restored_verified'])
@@ -205,8 +217,9 @@ export function transitionNativeJournalState(value, candidateSha, action, detail
       next.installState = 'installed'; next.installation = detail; break;
     case 'candidate-start':
       if (next.installState !== 'installed' || next.candidateCheckpoint !== null
-        || next.restoreState !== 'not_started' || next.quiesceState !== 'quiesced') invalidNativeState();
-      next.candidateCheckpoint = detail; break;
+        || Object.hasOwn(next, 'candidateContainers') || next.restoreState !== 'not_started' || next.quiesceState !== 'quiesced'
+        || !exactObjectKeys(detail, ['checkpoint', 'containers'])) invalidNativeState();
+      next.candidateCheckpoint = detail.checkpoint; next.candidateContainers = detail.containers; break;
     case 'rollback-quiesce-start':
       if (next.quiesceState !== 'quiesced' || next.installState === 'install_attempting') invalidNativeState();
       next.quiesceState = 'rollback_quiescing'; break;
@@ -310,9 +323,29 @@ async function captureNativeState(rollbackSha) {
   return { before, quiesceState: 'not_started', installState: 'not_attempted', restoreState: 'not_started', candidateCheckpoint: null };
 }
 
+function verifyNeverStartedCandidate(container, service, installation) {
+  const stopped = container?.State;
+  const zeroTime = /^0001-01-01T00:00:00(?:\.0+)?Z$/u;
+  if (!installation || !stopped || stopped.Running !== false || stopped.Status !== 'created'
+    || stopped.ExitCode !== 0 || stopped.OOMKilled !== false || stopped.Error !== '' || container.RestartCount !== 0
+    || typeof stopped.StartedAt !== 'string' || !zeroTime.test(stopped.StartedAt)
+    || typeof stopped.FinishedAt !== 'string' || !zeroTime.test(stopped.FinishedAt)) invalidNativeState();
+  verifyNativeContainerBinding(container, { service, releaseSha: installation.releaseSha, ...installation, running: false });
+}
+
 async function pauseNativeProducers(state, original) {
   const containers = await nativeContainers();
   if (original && Object.keys(containers).some(key => (containers[key]?.Id ?? null) !== state.before.containers[key])) invalidNativeState();
+  if (!original) {
+    if (state.candidateCheckpoint !== null) {
+      if (!state.candidateContainers || Object.keys(containers).some(key => (containers[key]?.Id ?? null) !== state.candidateContainers[key])) invalidNativeState();
+    } else {
+      for (const [key, container] of Object.entries(containers)) {
+        if ((container?.Id ?? null) === state.before.containers[key]) continue;
+        verifyNeverStartedCandidate(container, key === 'agentWorker' ? 'agent-worker' : key, state.installState === 'installed' ? state.installation : undefined);
+      }
+    }
+  }
   const running = Object.values(containers).filter(container => container?.State.Running).map(container => container.Id);
   // Docker receives an infinite daemon timeout. Only this client wait is bounded;
   // timeout cannot be interpreted as drain and never triggers docker kill.
@@ -320,8 +353,12 @@ async function pauseNativeProducers(state, original) {
   for (const [service, container] of Object.entries(containers).filter(([, value]) => value)) {
     const stopped = JSON.parse(await nativeCommand('docker', ['inspect', '--format', '{{json .State}}', container.Id]));
     const command = container.Config?.Cmd;
+    const previouslyQuiescedWeb = service === 'web' && container.State.Running === false
+      && state.quiesceState === 'rollback_quiescing' && state.installState !== 'install_attempting' && state.restoreState !== 'restore_attempting'
+      && state.before.producers.web === true
+      && (state.candidateCheckpoint === null ? state.before.containers.web : state.candidateContainers?.web) === container.Id;
     // The legacy Web npm wrapper can report exit1 on SIGTERM; it owns no durable task drain.
-    const webNpmStopExit = service === 'web' && container.State.Running === true
+    const webNpmStopExit = service === 'web' && (container.State.Running === true || previouslyQuiescedWeb)
       && container.Config?.Labels?.['com.docker.compose.service'] === 'web'
       && Array.isArray(command) && command.length === 3 && command[0] === 'npm' && command[1] === 'run' && command[2] === 'start'
       && container.Config?.WorkingDir === '/opt/openscience/apps/web'
@@ -401,7 +438,7 @@ export function verifyNativeContainerBinding(container, { service, releaseSha, r
 const NATIVE_WORK_QUERY = `
 import {createPrismaClient,createRedisClient} from '@openscience/database';
 import {AGENT_TASK_QUEUE,readNativeAgentExecution} from '@openscience/domain';
-import {classifyNativeWorkSnapshot} from './infra/scripts/production-deploy-lock.mjs';
+import {classifyNativeWorkSnapshot} from '../../infra/scripts/production-deploy-lock.mjs';
 if(!process.env.DATABASE_URL||!process.env.REDIS_URL)throw Error('Native work configuration missing');
 const prisma=createPrismaClient(),redis=createRedisClient();
 try {
@@ -420,7 +457,7 @@ async function queryNativeWork(candidateSha, checkpoint) {
   const root = `/opt/openscience-releases/${candidateSha}`;
   const output = await nativeCommand('docker', ['compose', '--project-name', 'openscience-prod', '--project-directory', root,
     '--env-file', '/opt/openscience/.env.prod', '-f', `${root}/infra/compose/docker-compose.prod.yml`,
-    'run', '--rm', '--no-deps', '-T', '-w', '/opt/openscience', '--entrypoint', 'node', 'agent-worker',
+    'run', '--rm', '--no-deps', '-T', '-w', '/opt/openscience/apps/agent-worker', '--entrypoint', 'node', 'agent-worker',
     '--input-type=module', '-e', NATIVE_WORK_QUERY, checkpoint ?? 'none'], { timeout: 120_000,
     env: { ...process.env, XGS_RELEASE_ROOT: root, XGS_RELEASE_IMAGE_TAG: candidateSha } });
   const result = JSON.parse(output);
@@ -505,20 +542,27 @@ async function nativeOperation(command, options) {
       await verifyNativeBinding(state.installation); await verifyNativeIdle();
     } finally { await file?.close().catch(() => {}); if (created) await rm(snapshot, { force: true }); }
   } else if (command === 'native-before-start') {
+    if (state.installState !== 'installed' || state.candidateCheckpoint !== null || Object.hasOwn(state, 'candidateContainers')
+      || state.restoreState !== 'not_started' || state.quiesceState !== 'quiesced') invalidNativeState();
     const work = await queryNativeWork(options.candidateSha, null);
-    await update('candidate-start', work.dbTime);
+    const containers = await nativeContainers(), ids = {};
+    for (const [key, service] of [['api', 'api'], ['web', 'web'], ['agentWorker', 'agent-worker']]) {
+      verifyNeverStartedCandidate(containers[key], service, state.installation);
+      ids[key] = containers[key].Id;
+    }
+    await update('candidate-start', { checkpoint: work.dbTime, containers: ids });
   } else if (command === 'native-hold-producers') {
     if (state.quiesceState === 'not_started') await update('quiesce-start');
     else if (state.quiesceState === 'quiesced') await update('rollback-quiesce-start');
     await pauseNativeProducers(state, false); await holdNativeTimer();
   } else if (command === 'native-prepare-rollback') {
     if (state.installState === 'install_attempting' || state.restoreState === 'restore_attempting'
-      || ['quiescing', 'rollback_quiescing'].includes(state.quiesceState)) invalidNativeState();
+      || !['not_started', 'quiesced', 'rollback_quiescing'].includes(state.quiesceState)) invalidNativeState();
     if (state.quiesceState === 'not_started') {
       await update('quiesce-start'); await pauseNativeProducers(state, true);
       await holdNativeTimer(); await verifyNativeIdle(); await update('quiesce-complete');
     }
-    await update('rollback-quiesce-start');
+    if (state.quiesceState === 'quiesced') await update('rollback-quiesce-start');
     await pauseNativeProducers(state, false); await holdNativeTimer(); await verifyNativeIdle();
     await queryNativeWork(options.candidateSha, state.candidateCheckpoint);
     await update('rollback-quiesce-complete');
