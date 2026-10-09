@@ -15,7 +15,7 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 新图审按High补PNG transport、固定预算/CP及局部pixel角色，受限代码/离线实现，不挡本批 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 仅edit/page.tsx修来源query触发整页卸载/草稿重置，保留来源刷新与隔离；Native105/105及视频CI复用，真实Key/声音待部署 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/editor-source-focus`（baseea1，4cf保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | edit/page.tsx两行修复已收，来源query不再重置工作台；High GO待原CI。真实Key目录/声音验收待正常发布 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/editor-source-focus`（baseea1，4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | bd1→6c10三项spec已收；下一独立批仅ShellPrimitives.tsx/navigation.module.css整理手机两行header，不挡本批 | `.worktrees/research-product-craft` / 原spec分支已交；获授同树`codex/ui-mobile-header-20261010` |
 - 各owner仅写已授范围，不回退他人修改；root持共享CI/docs/spec，video独占edit/page.tsx，UI仅上列两文件；image图审独立。单renderer/任务/权限及零POST边界保留；不重复未变检查。三线无生产writer，不并行发布/资产写。
 
@@ -24,7 +24,7 @@
 - 历史7f/786：7f除Dashboard24/25外通过；786 video/journal过，push media37897396616全过含Dashboard25/25，PR media37897401824为24/25（其余job过）。旧前置safe=false与实时clear差额未定根因，按最新头像需求停止外部全身呈现取证；原RED/253帧/10201相位/101rest及c041/cc432 High证据保留在root `tmp/session-coordination-20261008/*7f5945d6*`、`dashboard-{fd380e16,78694e6a}-artifact/`，不追认旧失败。
 - 3485旧失败保留在root同tmp `*-3485*`：Web68缺React/SSR旧尺寸，Dashboard22/26，journal标题814.953>812；video37946090212在临时runner下载FFmpeg阶段超15min，后续未执行，不是API拒绝证据。15→30补丁未应用，新7e正常CI已过。
 - 7e有效主CI/26项Dashboard/auth/reading/video/journal保留；5578/de4d补同RO GET与文档流Y后，ea1 PR media37958651845的主job及其余3个browser过，workspace17/21。剩menu62.08尺寸、创建页跨帧rect、390review回焦、editor overview入口4项；log与共享trace在root同tmp `workspace-ea1-job.log`/`workspace-ea1-artifact/`，未定根因不加容差或改弱断言。ea1 video37958651836、journal37958651849/44222过。
-- bd1ffdec→6c10ad53三项spec全文全等：真实mouseup后移开并核非active、同一浏览器任务读取三个rect严格相等、Research details真实入口；High Scoped GO/TS0/lint0/list21，未执行新浏览器。390失败在来源切换后的首次关闭；query误触RO/SDF整体加载卸载Drawer，video修复后同批CI。旧trace无computed pseudo，不宣称.97唯一根因。
+- bd1ffdec→6c10ad53三项spec全文全等：真实mouseup后移开并核非active、同一浏览器任务读取三个rect严格相等、Research details真实入口；High Scoped GO/TS0/lint0/list21。757add58单文件全等集入，RO初始化移除未使用的ingestionTaskId依赖，原任务同步/轮询/刷新/RO与locale隔离保留；root独立High GO、TSX语法0，旧3项lint与parent全等未混修。新浏览器待同批原CI；旧trace无computed pseudo，不宣称.97唯一根因。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 10-09 23:56 CST直接只读：app=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Worker Native/runtime/catalogue仍784，主模型仍M3。Web/API/Worker healthy、restart0，部署marker列表空；Codex runner.lock不证明paid在途。`live-release-before-native-7e-20261009.json`保留额外inspect exit1/109bytes，不泛称全机验收；原14:04/02:49读数降为历史。
