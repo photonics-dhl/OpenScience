@@ -448,6 +448,7 @@ test('anchored Hermes keeps the automatic contextual prompt suppressed', async (
 test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let releaseLoading!: () => void;
+  let failResearchIndex = false;
   const loadingGate = new Promise<void>((resolve) => { releaseLoading = resolve; });
   await page.route('**/api/auth/me', async (route) => {
     await loadingGate;
@@ -455,7 +456,9 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   });
   await page.route('**/api/research-objects?limit=20', async (route) => {
     await loadingGate;
-    await json(route, { researchObjects: [] });
+    await json(route, failResearchIndex
+      ? { error: { message: 'Research index unavailable' } }
+      : { researchObjects: [] }, failResearchIndex ? 503 : 200);
   });
   await page.route('**/api/ingestion?actionable=true*', async (route) => {
     await loadingGate;
@@ -475,21 +478,15 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   await expect(loadingSurface).toBeVisible();
   await expect(loadingSurface.getByRole('status')).toBeVisible();
   await page.screenshot({ path: `${outDir}/loading-390x844.png`, fullPage: true });
-  releaseLoading();
-
-  await page.unrouteAll({ behavior: 'wait' });
-  await page.route('**/api/auth/me', (route) => json(route, {
-    userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free',
-  }));
-  await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
-  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
-  await page.route('**/api/agent/tasks**', (route) => {
-    const url = new URL(route.request().url());
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
-      return json(route, { tasks: [] });
-    }
-    return route.fallback();
+  const initialResearchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/research-objects'
+      && url.searchParams.get('limit') === '20' && response.status() === 200;
   });
+  releaseLoading();
+  await initialResearchResponse;
+  // Keep handlers active while the first load schedules its follow-up requests.
+  failResearchIndex = true;
   const researchErrorResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === '/api/research-objects'
