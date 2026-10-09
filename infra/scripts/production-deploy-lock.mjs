@@ -317,9 +317,17 @@ async function pauseNativeProducers(state, original) {
   // Docker receives an infinite daemon timeout. Only this client wait is bounded;
   // timeout cannot be interpreted as drain and never triggers docker kill.
   if (running.length) await nativeCommand('docker', ['stop', '--time', '-1', ...running], { timeout: 600_000 });
-  for (const container of Object.values(containers).filter(Boolean)) {
+  for (const [service, container] of Object.entries(containers).filter(([, value]) => value)) {
     const stopped = JSON.parse(await nativeCommand('docker', ['inspect', '--format', '{{json .State}}', container.Id]));
-    if (container.State.Running && (stopped.Status !== 'exited' || stopped.ExitCode !== 0 || stopped.OOMKilled !== false)) invalidNativeState();
+    const command = container.Config?.Cmd;
+    // The legacy Web npm wrapper can report exit1 on SIGTERM; it owns no durable task drain.
+    const webNpmStopExit = service === 'web' && container.State.Running === true
+      && container.Config?.Labels?.['com.docker.compose.service'] === 'web'
+      && Array.isArray(command) && command.length === 3 && command[0] === 'npm' && command[1] === 'run' && command[2] === 'start'
+      && container.Config?.WorkingDir === '/opt/openscience/apps/web'
+      && stopped.Status === 'exited' && stopped.Running === false && stopped.OOMKilled === false && stopped.Error === '' && stopped.ExitCode === 1;
+    if ((container.State.Running && (stopped.Status !== 'exited' || stopped.OOMKilled !== false))
+      || (stopped.ExitCode !== 0 && !webNpmStopExit)) invalidNativeState();
     if (stopped.Running) invalidNativeState();
   }
   const after = await nativeContainers();

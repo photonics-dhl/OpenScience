@@ -161,30 +161,75 @@ test('Native producer pause uses exact identities and infinite daemon stop; time
   const body = deployLockSource.match(/async function pauseNativeProducers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
   const id = '1'.repeat(64);
-  for (const mode of ['graceful', 'client-timeout', 'oom', 'nonzero', 'replacement', 'original-identity-changed']) {
+  const modes = [
+    { name: 'graceful', accepted: true },
+    { name: 'client-timeout', clientTimeout: true },
+    { name: 'oom', stopped: { OOMKilled: true } },
+    { name: 'nonzero', exitCode: 137 },
+    { name: 'replacement', replacement: true },
+    { name: 'original-identity-changed', originalIdentityChanged: true },
+    { name: 'web-graceful', service: 'web', accepted: true },
+    { name: 'worker-graceful', service: 'agentWorker', accepted: true },
+    { name: 'web-npm-exit1', service: 'web', exitCode: 1, accepted: true },
+    { name: 'api-exit1', exitCode: 1 },
+    { name: 'worker-exit1', service: 'agentWorker', exitCode: 1 },
+    { name: 'web-wrong-command', service: 'web', exitCode: 1, config: { Cmd: ['npm', 'run', 'dev'] } },
+    { name: 'web-extra-command', service: 'web', exitCode: 1, config: { Cmd: ['npm', 'run', 'start', '--'] } },
+    { name: 'web-command-string', service: 'web', exitCode: 1, config: { Cmd: 'npm run start' } },
+    { name: 'web-wrong-directory', service: 'web', exitCode: 1, config: { WorkingDir: '/opt/openscience' } },
+    { name: 'web-wrong-service', service: 'web', exitCode: 1, config: { Labels: { 'com.docker.compose.service': 'api' } } },
+    { name: 'web-oom', service: 'web', exitCode: 1, stopped: { OOMKilled: true } },
+    { name: 'web-error', service: 'web', exitCode: 1, stopped: { Error: 'stop failed' } },
+    { name: 'web-missing-error', service: 'web', exitCode: 1, stopped: { Error: undefined } },
+    { name: 'web-null-error', service: 'web', exitCode: 1, stopped: { Error: null } },
+    { name: 'web-exit137', service: 'web', exitCode: 137 },
+    { name: 'web-exit143', service: 'web', exitCode: 143 },
+    { name: 'web-client-timeout', service: 'web', exitCode: 1, clientTimeout: true },
+    { name: 'web-replacement', service: 'web', exitCode: 1, replacement: true },
+    { name: 'web-still-running', service: 'web', exitCode: 1, stopped: { Running: true } },
+    { name: 'web-after-running', service: 'web', exitCode: 1, afterRunning: true },
+    { name: 'web-wrong-status', service: 'web', exitCode: 1, stopped: { Status: 'dead' } },
+    { name: 'web-original-stopped', service: 'web', exitCode: 1, originalRunning: false },
+    { name: 'web-original-running-string', service: 'web', exitCode: 1, originalRunning: 'true' },
+  ];
+  for (const mode of modes) {
     const calls = []; let inventory = 0;
+    const service = mode.service ?? 'api';
+    const originalRunning = mode.originalRunning ?? true;
+    const config = {
+      Labels: { 'com.docker.compose.service': service === 'agentWorker' ? 'agent-worker' : service },
+      Cmd: service === 'web' ? ['npm', 'run', 'start'] : ['node', 'dist/index.js'],
+      WorkingDir: service === 'web' ? '/opt/openscience/apps/web' : '/opt/openscience',
+      ...mode.config,
+    };
     const context = {
       invalidNativeState() { throw new Error('held'); },
-      async nativeContainers() { inventory += 1; return { api: { Id: mode === 'replacement' && inventory > 1 ? '2'.repeat(64) : id, State: { Running: inventory === 1 } }, web: null, agentWorker: null }; },
+      async nativeContainers() {
+        inventory += 1;
+        return { api: null, web: null, agentWorker: null,
+          [service]: { Id: mode.replacement && inventory > 1 ? '2'.repeat(64) : id, Config: config,
+            State: { Running: inventory === 1 ? originalRunning : Boolean(mode.afterRunning) } } };
+      },
       async nativeCommand(command, args, options) {
         calls.push({ command, args, options });
         if (args[0] === 'stop') {
-          if (mode === 'client-timeout') throw new Error('held');
+          if (mode.clientTimeout) throw new Error('held');
           return id;
         }
-        return JSON.stringify({ Status: 'exited', Running: false, ExitCode: mode === 'nonzero' ? 137 : 0, OOMKilled: mode === 'oom' });
+        return JSON.stringify({ Status: 'exited', Running: false, ExitCode: mode.exitCode ?? 0, OOMKilled: false, Error: '', ...mode.stopped });
       },
     };
     const pause = runInNewContext(`${body}; pauseNativeProducers`, context);
-    const state = { before: { containers: { api: mode === 'original-identity-changed' ? '4'.repeat(64) : id, web: null, agentWorker: null } } };
-    if (mode === 'graceful') await pause(state, true);
-    else await assert.rejects(pause(state, true), /held/u);
-    if (mode === 'original-identity-changed') assert.equal(calls.length, 0);
-    else {
+    const state = { before: { containers: { api: null, web: null, agentWorker: null,
+      [service]: mode.originalIdentityChanged ? '4'.repeat(64) : id } } };
+    if (mode.accepted) await assert.doesNotReject(pause(state, true), mode.name);
+    else await assert.rejects(pause(state, true), /held/u, mode.name);
+    if (mode.originalIdentityChanged) assert.equal(calls.length, 0);
+    else if (originalRunning) {
       assert.equal(calls[0].command, 'docker');
       assert.deepEqual(Array.from(calls[0].args), ['stop', '--time', '-1', id]);
       assert.equal(calls[0].options.timeout, 600_000);
-    }
+    } else assert.equal(calls.some(call => call.args[0] === 'stop'), false);
     assert.equal(calls.some(call => call.args.includes('kill') || call.args.includes('restart')), false);
   }
 });
