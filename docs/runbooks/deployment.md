@@ -6,12 +6,12 @@
 
 ### Native目录与关闭中的视频执行器
 
-> 当前执行缺口（2026-10-09，7f源码核对）：`production-deploy-transaction.sh`只在迁移分支停旧API/Web/Worker，没有Native安装与回滚入口；尚未核到下文所称现成的持久写门禁。以下是必须实现的目标顺序，不能当作已可直接运行的发布脚本。先在原transaction/installer中补接正常停接单、同FD9配对及恢复先后顺序；进展与写权以CURRENT为准，不为符合文字新增另一套门禁或锁。
+> 当前执行缺口（2026-10-09）：已核现行transaction只在迁移分支有限超时停旧API/Web/Worker，没有Native安装与后续回滚接缝，也没有已实现的持久写门禁。以下目标已过联合设计High，源码正在原transaction/installer中实施；仍须源码增量审查和对应Linux CI，不能当作已可直接运行的脚本。进展/写权以CURRENT为准，不新增另一套门禁、锁或状态库。
 
-- 目标前置：先完成原精确CI/High、备份及发布锁流程，记录实际应用/Native配对和timer原状态。在原transaction接入已有API正常停接单与Worker排空机制；在途任务自然完成后停生产者，再核DB活动任务、Native instances和inbox均空，不能只靠发布锁或一次inbox快照。未排空即退出，不强杀任务。SDK代码相同不等于目录内容相同；Skill引用或Worker科学正文变更，即使版本号没变，也按资源变更处理。
-- 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。安装器无catalogue-only模式；复用已装SDK，不改写旧目录、不手拼旧runtime与新catalogue。成功返回后立即确认timer inactive，并在配对期临时保持disabled，保留原始enable状态；`--defer-timer`不是跨重启的持久停用。保持写门禁和生产者停接单，禁止提前启动/重启；API/Worker身份、挂载和目录匹配后才恢复原timer与入口。
+- 目标前置：沿原精确CI/High、备份和单FD9流程，在原journal保存实际旧应用/Native配对、timer层/活动及原容器运行状态。Refresh对exact容器请求无限daemon超时的正常停止，仅外层等待有界，不向容器发KILL；退出0且非OOM才算正常drain。合法pending队列/outbox/无lease journal及paid-unknown hold原样保留；running、无法解释processing、有效lease、Native实例或非空inbox阻止资源替换，不靠消费任务清空。SDK相同不等于目录相同，引用/科学正文变更仍按资源变更处理。
+- 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。复用已装SDK，不改旧目录或手拼配对；stage必须在live写前让timer inactive+disabled。原journal先存install_attempting，严格核原四字段receipt后才存installed；无receipt中断保持停机/journal，不能猜成功。静态核candidate env/挂载/receipt，启动API/Web核binding/health，再恢复原timer层和活动，最后启动Worker；若原timer inactive且有待执行Native任务，停在Worker启动前。不能先让Worker写inbox等待已停timer。
 - 视频：仅上线不可用提示和新收费前检查时，可保留现有关闭的host；新reader对缺旁白声明/关闭/过期返回不可用，无需为此升级host。实际启用新配音请求前才另做完整bundle升级与配置验收；配置开关不证明Key权限，不自动选音色或调用供应商。模型接单关闭与systemd timer关闭是不同事实。
-- 回滚：安装器内部失败沿其原恢复流程；若安装成功后任何配对/应用发布步骤失败，在同一锁和写门禁内，使用原事务及新release的`previous/`中原unit文件、`runtime.env`与`state.json`恢复旧文件并daemon-reload，按保存的原状态精确恢复enabled/disabled/enabled-runtime，不一律enable。仅在旧应用/Native匹配且原timerWasActive为真时start；恢复失败保持门禁、生产者停接单和timer stopped。不重装/删除旧不可变目录，不把新paid请求盲交旧Worker，保留全部paid/unknown和回执。
+- 回滚：先执行旧app纯只读preflight（reader/迁移兼容、active身份、旧source/images），通过后才正常停candidate并分类工作、恢复Native。为防候选启动后产生的未完成任务被旧Worker接管，candidate启动前在原journal存DB时点；之后新增/更新的未完成Native/outbox/paidunknown工作阻止自动旧app恢复，保留candidate配对与journal。Native restore先核全部fixed files为candidate/backup/原缺失，再用原previous文件恢复并核旧IDs；无receipt/restore_attempting中断不猜，任一恢复失败禁enable/start。旧API/Web健康且配对正确后，恢复原timer层/活动，再启原本running的旧Worker，最后health/CAS。旧app SHA不代替实际旧Native SHA；不删旧目录、CP或paid证据。
 - 验证：只读核应用、API/Worker、broker/task unit的实际身份与资源挂载，确认新版Skill引用和科学正文进入目录；保持视频不可用时观察原站内入口、既有任务及capability，不新增付费任务。该核对不证明模型实际消费了Skill或科研质量合格。
 
 2026-10-04用户明确正常应用发布只保留当前发布版和一个回滚版。源修复恢复在公开验收成功后、同一FD9事务内以`prepare --prune-unused 1`准备精确旧版计划，再提交并执行`complete`；准备失败仍回滚候选，提交后清理失败保留pending，不把已接受应用回滚。Host执行器使用自己的完整运行包，模型、浏览器状态、上传数据与备份独立存放；不得用保留整份旧应用源解决运行依赖。该改动已定向验证/High GO，下一正常发版验证；当前清盘进度只见CURRENT。
