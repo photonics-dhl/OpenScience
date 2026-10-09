@@ -182,7 +182,7 @@ test('Native producer pause uses exact identities and infinite daemon stop; time
     if (mode === 'original-identity-changed') assert.equal(calls.length, 0);
     else {
       assert.equal(calls[0].command, 'docker');
-      assert.deepEqual(Array.from(calls[0].args), ['stop', '--timeout', '-1', id]);
+      assert.deepEqual(Array.from(calls[0].args), ['stop', '--time', '-1', id]);
       assert.equal(calls[0].options.timeout, 600_000);
     }
     assert.equal(calls.some(call => call.args.includes('kill') || call.args.includes('restart')), false);

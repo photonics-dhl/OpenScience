@@ -316,7 +316,7 @@ async function pauseNativeProducers(state, original) {
   const running = Object.values(containers).filter(container => container?.State.Running).map(container => container.Id);
   // Docker receives an infinite daemon timeout. Only this client wait is bounded;
   // timeout cannot be interpreted as drain and never triggers docker kill.
-  if (running.length) await nativeCommand('docker', ['stop', '--timeout', '-1', ...running], { timeout: 600_000 });
+  if (running.length) await nativeCommand('docker', ['stop', '--time', '-1', ...running], { timeout: 600_000 });
   for (const container of Object.values(containers).filter(Boolean)) {
     const stopped = JSON.parse(await nativeCommand('docker', ['inspect', '--format', '{{json .State}}', container.Id]));
     if (container.State.Running && (stopped.Status !== 'exited' || stopped.ExitCode !== 0 || stopped.OOMKilled !== false)) invalidNativeState();
