@@ -387,7 +387,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const stageSize = conversationAnchor ? conversationPlacement!.size
     : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
   const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock));
-  const portalAnchor = conversationAnchor ?? (anchored ? presentation?.anchor ?? null : null);
+  // Keep the portal in its original host until pointerup. Moving its DOM node
+  // during a drag drops browser pointer capture and cancels the gesture.
+  const portalAnchor = conversationAnchor ?? (anchored || (dragging && dragRef.current?.customDock === false)
+    ? presentation?.anchor ?? null : null);
   const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });
   const visualAction = menuFeedback?.action ?? (compact && autonomousAction === 'patrol' ? 'thinking-pause' : autonomousAction);
   const guidePlanCountRef = useRef(0);
@@ -401,10 +404,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
     input.writing = writing || pageInterruptionActive;
     const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
     const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-    const speechAllowed = !compact && !navigationOnly && !effectiveReducedMotion && !writing && !pageInterruptionActive && !guideTarget && !presentation?.anchor && state !== 'awaiting_approval'
+    const speechAllowed = !compact && !navigationOnly && !effectiveReducedMotion && !writing && !pageInterruptionActive && !guideTarget && state !== 'awaiting_approval'
       && !assistantOpen && !modalOpen && document.visibilityState === 'visible';
     setPerformanceState((previous) => stepHermesPerformance(previous, { behaviorInput: input, speechAllowed }));
-  }, [compact, dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, navigationOnly, pageInterruptionActive, presentation?.anchor, presentation?.assistantOpen, state, writing]);
+  }, [compact, dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, navigationOnly, pageInterruptionActive, presentation?.assistantOpen, state, writing]);
 
   useClientLayoutEffect(() => { positionRef.current = position; }, [position]);
 
@@ -890,9 +893,15 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
 
   useClientLayoutEffect(() => {
     if (assistantWasOpenRef.current && !assistantOpen) {
-      const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
-      if (!trigger?.isConnected) return;
-      trigger.focus();
+      // The conversation portal is removed in the same commit. Restore focus
+      // after that subtree has finished unmounting so the browser cannot send it
+      // back to <body> when the previously focused close button disappears.
+      const timer = window.setTimeout(() => {
+        const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
+        if (trigger?.isConnected) trigger.focus();
+      }, 0);
+      assistantWasOpenRef.current = assistantOpen;
+      return () => window.clearTimeout(timer);
     }
     assistantWasOpenRef.current = assistantOpen;
   }, [assistantOpen, conversationAnchor]);
@@ -1128,7 +1137,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       ?? stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
       ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
-    const motionClearance = settlingNewDock ? SETTLED_MOTION_CLEARANCE_PX : 0;
+    // Keep a small sub-pixel guard after the initial transition too. Browser
+    // transforms can otherwise round the measured hull just over a protected
+    // edge while the logical patrol envelope still reports safe.
+    const motionClearance = SETTLED_MOTION_CLEARANCE_PX;
     const footprint = includeHermesControlFootprint({
       bottom: Math.max(1, actorBounds.bottom - center.y) + motionClearance,
       left: Math.max(1, center.x - actorBounds.left) + motionClearance,
@@ -1574,6 +1586,17 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
           visible={Boolean(bubblePlacement)}
         />
       ) : null}
+      {reducedMotion !== null && motionControl.action === 'retry' ? <button
+        className="hermes-motion-enable"
+        data-hermes-motion-retry
+        data-motion-runtime={runtimeStatus.phase}
+        onClick={(event) => {
+          event.stopPropagation();
+          setRuntimeStatus((status) => reduceHermesRuntimeStatus(status, { type: 'retry' }));
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >{t('retryMotion')}</button> : null}
       {reducedMotion !== null && motionControl.action !== 'retry' ? <button
         className="hermes-motion-enable"
         data-hermes-motion-toggle

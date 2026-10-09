@@ -181,13 +181,17 @@ test('page-owned Hermes preserves click intent and settles away from protected w
   });
   await page.mouse.move(cancelInput!.x + cancelInput!.width / 2, cancelInput!.y + cancelInput!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(cancelInput!.x - 40, cancelInput!.y + 30, { steps: 4 });
+  await page.mouse.move(cancelInput!.x + cancelInput!.width / 2 + 2, cancelInput!.y + cancelInput!.height / 2 + 2);
   expect(await stage.evaluate((element) => element.hasPointerCapture(1))).toBe(true);
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'true');
   await stage.evaluate((element) => element.releasePointerCapture(1));
+  await page.mouse.move(cancelInput!.x + cancelInput!.width / 2 + 3, cancelInput!.y + cancelInput!.height / 2 + 3);
   await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await page.mouse.move(0, 0);
   await page.mouse.up();
+  await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
 
   const desired = protectedBoxes[0];
   const safeInput = await input.boundingBox();
@@ -415,6 +419,8 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   const originalStage = await stage.elementHandle();
   const originalCanvas = await stage.locator('[data-hermes-articulated-canvas]').elementHandle();
 
+  const editorPage = await page.request.get(`${baseUrl}/research-objects/ro-hermes/edit`);
+  expect(editorPage.ok()).toBe(true);
   await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: /Coherent transport at the attosecond frontier/ }).click();
   await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
   await page.waitForTimeout(500);
@@ -428,6 +434,11 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await routedStage?.dispose();
 
   const input = stage.locator('[data-hermes-input-owner]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  await page.keyboard.press('Escape');
+  await expect(stage).not.toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(page.locator('.hermes-editor-anchor').locator('[data-hermes-workspace-stage]')).toHaveCount(1);

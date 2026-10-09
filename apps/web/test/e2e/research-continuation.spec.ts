@@ -85,16 +85,17 @@ test('dashboard keeps process records behind history and opens the actual review
   const continuation = page.locator('aside[aria-labelledby="hermes-task-title"]');
   await expect(continuation).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
-  await expect(continuation.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/hermes?task=journey-task');
+  await expect(continuation.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/edit?ingestionTask=journey-task');
   await continuation.getByRole('link').click();
-  await expect(page).toHaveURL(/hermes\?task=journey-task$/);
-  await expect(page.getByText('paper.pdf', { exact: true })).toBeVisible();
-  await expect(page.locator('textarea').first()).toHaveValue('Question');
+  await expect(page).toHaveURL(/edit\?ingestionTask=journey-task$/);
+  await expect(page.locator('select option[value="journey-task"]')).toContainText('paper.pdf');
+  await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText('Question');
 });
 
 test('direct Hermes entry offers current RO tasks rather than a missing parameter error', async ({ page }) => {
   await fixtures(page);
   await page.goto('/research-objects/journey-ro/hermes');
+  await page.getByText('Existing analysis and manual workflows', { exact: true }).click();
   const row = page.locator('li').filter({ hasText: 'paper.pdf' });
   await expect(row.getByRole('link')).toHaveAttribute('href', '/research-objects/journey-ro/hermes?task=journey-task');
   await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
@@ -132,6 +133,7 @@ test('empty Hermes entry keeps editing and source material reachable on mobile',
   await page.setViewportSize({ width: 390, height: 844 });
   await fixtures(page, []);
   await page.goto('/research-objects/journey-ro/hermes');
+  await page.getByText('Existing analysis and manual workflows', { exact: true }).click();
   await expect(page.locator('main a[href="/research-objects/journey-ro/edit"]').last()).toBeVisible();
   await expect(page.locator('main a[href="/research-objects/journey-ro/files"]').last()).toBeVisible();
   await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
@@ -196,10 +198,10 @@ test('the confirmed paper is included in the next commit through the editor', as
   await page.locator('#sdf-field-problem').fill(editedCore.problem);
   await expect.poll(() => saves).toBe(1);
   expect(commits).toBe(0);
-  const assistant = page.getByRole('dialog', { name: 'Hermes research guide' });
+  const assistant = page.locator('.hermes-conversation-shell');
   await expect(assistant).toBeVisible();
-  await assistant.getByLabel('What would you like to advance today?').fill('Review media for this saved research');
-  await assistant.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+  await assistant.getByLabel('Send an instruction to Hermes').fill('Review media for this saved research');
+  await assistant.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => submitted).toEqual({ version: 2, message: 'Draft saved', artifacts, sdfCore: editedCore });
   expect(guideSubmissions).toHaveLength(1);
   expect(guideSubmissions[0].payload.context.editorDraft).toMatchObject({ researchObjectId: ro.id, version: 2, scope: 'sdf', core: {
@@ -232,12 +234,12 @@ test('a foreign imported paper cannot be silently attached or committed', async 
   await expect(page.locator('[data-sdf-node] textarea')).toHaveCount(0);
   await expect(page.getByText(foreignCore.problem, { exact: true })).toHaveCount(0);
   await expect(page.locator('a[href="/api/artifacts/artifact-journey/download"]')).toHaveCount(0);
-  const assistant = page.getByRole('dialog', { name: 'Hermes research guide' });
+  const assistant = page.locator('.hermes-conversation-shell');
   await expect(assistant).toBeVisible();
   await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText(core.problem);
   await expect(assistant.getByText('This analysis does not belong to the current Research Object or material, so its content was not loaded.', { exact: true })).toBeVisible();
-  await assistant.getByLabel('What would you like to advance today?').fill('Review media for this saved research');
-  await assistant.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+  await assistant.getByLabel('Send an instruction to Hermes').fill('Review media for this saved research');
+  await assistant.getByRole('button', { name: 'Send' }).click();
   await expect(assistant.getByRole('alert')).toContainText('Ordinary save and commit are paused until it is resolved');
   expect(guideSubmissions).toHaveLength(1);
   expect(writes).toBe(0);
@@ -290,11 +292,11 @@ test('saved materials survive Files refresh and same-name attachments create a m
   let submitted: unknown;
   await page.route('**/api/research-objects/journey-ro/commits', async route => { submitted = route.request().postDataJSON(); await route.fulfill({ json: { commit: { versionId: 'new' } } }); });
   await page.goto('/research-objects/journey-ro/files');
-  await expect(page.locator('a[href="/api/artifacts/original/download"]')).toHaveText('paper.pdf');
+  await expect(page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('link', { name: 'Download' })).toHaveAttribute('href', '/api/artifacts/original/download');
   await page.reload();
   await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
   await page.getByTestId('artifact-input').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('controlled fixture') });
-  await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+  await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
   await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'paper.pdf.1' }] });
 });
 
@@ -444,7 +446,7 @@ test('selected version is readable on a narrow Chinese surface and unknown versi
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test/visual/out/research-continuation/version-mobile-zh.png', fullPage: true });
   await page.goto('/research-objects/journey-ro/versions?version=foreign');
-  await expect(page.locator('main').getByRole('alert')).toHaveText('当前研究中没有这个版本。');
+  await expect(page.getByText('当前研究中没有这个版本。', { exact: true })).toBeVisible();
   await expect(page.locator('[data-selected-version]')).toHaveCount(0);
 });
 
@@ -505,11 +507,11 @@ for (const recoveryPhase of ['initial', 'after-save'] as const) {
     await expect(page.locator('a[href="/api/artifacts/original/download"]')).toBeVisible();
     if (recoveryPhase === 'after-save') {
       await page.getByTestId('artifact-input').setInputFiles({ name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('first') });
-      await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+      await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
       await expect(page.locator('a[href="/api/artifacts/added-1/download"]')).toBeVisible();
     }
     await page.getByTestId('artifact-input').setInputFiles({ name: 'last.txt', mimeType: 'text/plain', buffer: Buffer.from('last') });
-    await page.getByRole('button', { name: 'Attach to new version', exact: true }).click();
+    await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
     await expect.poll(() => requests.length).toBe(recoveryPhase === 'initial' ? 1 : 2);
     expect(serverArtifacts).toContainEqual(intervening);
     expect(requests.at(-1)?.version).toBe(serverRevision - 1);

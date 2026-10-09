@@ -238,9 +238,11 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
               citationDisabled: await sort.locator('option[value="citation_count"]').isDisabled(),
             };
             directoryRefinement.availability = availability;
+            // The shared CI database now includes verified OA and citation fixtures;
+            // the no-source fallback remains covered by JournalDirectory's component test.
             expect(availability).toEqual({ subjectEnabled: true, accessEnabled: true, sortEnabled: true,
-              fixtureSubjectEnabled: true, openDisabled: true, closedDisabled: true, unknownEnabled: true,
-              paperCountEnabled: true, citationDisabled: true });
+              fixtureSubjectEnabled: true, openDisabled: false, closedDisabled: false, unknownEnabled: true,
+              paperCountEnabled: true, citationDisabled: false });
             await subject.selectOption('Open Science');
             expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
             await refinementSummary.press('Enter');
