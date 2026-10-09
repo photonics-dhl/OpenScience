@@ -4,6 +4,7 @@
 ## 目标与边界
 - 依据[开发规格](../OpenScience_Kimi_Development_Spec.md)：真实 NousResearch Hermes Agent 理解全文、提炼六维/Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不做额外同行评议，不以 Codex 手稿替代自动科学能力。
 - 10-09用户明确纠正过度复杂化并同意继续：复用已有理解→按需回读关键原文/图页→简洁分镜、风格与提示词→出图→核对实际图片。只修涉及画面含义/定义和工具阻力，不再把UI收尾算作生图进度。
+- 最新UI直接human `01a11f6e-336f-7493-97fc-3a5fce810ccc`要求讨论研究桌面的Hermes放置，反对半透明全身角色遮科研图，倾向头像或可选点开；root已直接读取原话。UI已核官方案例并问“默认头像点击展开/常开对话头部头像”，待用户答复，root不代选；旧360常驻/宽屏常开不再当永久要求。暂不继续围绕该旧呈现补patrol诊断，已发现的就绪问题及证据保留，按新入口复用范围再闭合。
 - 2–3篇真实论文的凝练、用户确认、配图与公开展示仍是目标；三篇整体验收、普通用户旅程、完整视频、整站审美均未完成。单图认可、单测、CI或部署不代替质量认可，不批量冷启动。
 - 图片已验证gpt-image-2；新图片/视频按既有Synclip授权、视频目标LTX。旧gpt-image-2.5无receipt那次仍UNCERTAIN，不盲重试/自动换供应商。原生独立像素核验未通用验收，现Worker→Gateway单次vision不冒称Nous审阅loop。
 - 保留原PDF/SourceMap、认可图片、公开标识、sealed记录、原失败/费用/receipt/oncekey。日常结果私有，公开沿原确认流程；主Gateway/Native M3不全局切换，未知paid/started CP不重放，不因idle扩预算/安装/重启。
@@ -14,18 +15,18 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | Native安装后restore-previous最小设计已交，待与transaction联合High；0source写，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 设计原transaction/state/test中的正常暂停、同FD9安装及先恢复Native后启旧应用接缝，先只读 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | Figma编辑稿QA已交，实施editor.module.css与edit/workbench.module.css；六字段/保存行为保留 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两专属CSS的题名/保存/正文实施继续，六字段/行为保留；Hermes呈现按最新偏好待答复 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
 - 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。三线无生产写窗口，不并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
 ## Git / CI / 运行事实
 - root已推`78694e6a0774324e8b42b22fdd55c09487b27450`（校准代码cc432）。保留远端0c588c历史但拒收其四边±1px测试容差；此前speech扩面、reader visible:first和宽泛mocks亦拒收。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推，尚非发布GO。
 - 7f精确CI：video37891494367、journal37891494343/90974、media37891494363/91022的主job（含Linux TERM/FD9）、auth、reading20/20、workspace11/11均过；Dashboard24/25，loading已过。巡游253帧0碰撞/0视口越界，top实测28.767超共享28，其他三边实测在限内。日志/artifact在root `tmp/session-coordination-20261008/*7f5945d6*`。
 - c041/0b95各High GO、TS/lint0，已测到真实新周期；UI两版私有候选保留、不收inline版。fd取证在真实360舞台完成10201相位组合+101rest，JSON在`dashboard-fd380e16-artifact/patrol-hover-phase-calibration.json`；原trace保留。cc432仅扩大共享L/R/T为52/35/30、B保27，18项unit/lint/High GO；临时66行已移除，spec与7f全等，原强断言不变。
-- 786新CI的video/两项journal、auth/reading/workspace已过；media37897401824主job待终态，Dashboard24/25仍失败，但移到第一处safe=false（尚未巡游）。其原JSON在`dashboard-78694e6a-artifact/`：stage/live-anchor同360，5保护区和viewport按新包络均clear、doze/geometry5，flag却持续false；root现有High窄查effect早退/缓存anchor/geometry触发，不再猜改阈值。此新失败不撤回已真实校准的常量。
+- 786最终：video/两项journal过；push media37897396616全过含Dashboard25/25，PR media37897401824仅Dashboard24/25，其余主job/auth/reading/workspace过。PR base0a773是HEAD祖先，不能靠重跑抹掉时序差额。失败先于巡游：实时几何clear却safe=false，原JSON在`dashboard-78694e6a-artifact/`。High定位缓存anchor仅监听尺寸/scroll/resize，位置独变可能命中alignment早退；尚缺内部快照，不能定为已证根因。按最新UI放置讨论暂停进一步旧呈现取证，原RED/校准保留，不假称全绿。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 10-09 14:04 CST只读：app=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，Native/runtime/catalogue=`784c6b25342c29bdc5c2db193258d34dfafd4e64`；Web/API/Worker healthy、restart0、M3，无部署journal。原`live-release-prepublish-7f5945d6.json`保留额外容器inspect失败（exit1/109bytes）；不泛称全机验证。02:49:50Z video host42fe/admin关/audio缺为另一次旧读。
-- Native实装仍v17，缺新版风格/定义轴；SDK可复用，旧784/paid/CP保留。原runbook的配对顺序尚无执行接缝：当前transaction只在迁移分支stop旧应用，没有已核write gate/同锁Native安装及恢复入口。生图/视频先复用原installer和transaction设计最小差额，root一次联合High后给源码写权；不新造锁/门禁/执行平台。视频旧host继续不接单，本批未部署。
+- Native实装仍v17，旧784/paid/CP保留；runbook配对目标尚无执行接缝。两份最小设计已齐、root同一次High进行：生图`tmp/native-installer-rollback-design-20261009.md`；视频`tmp/native-release-seam-7f5945d6/transaction-design-20261009.md`。复用正常停接单/原FD9/原journal/previous，补stage保持timer disabled与应用失败先恢复Native；root launcher/journal窄调用方差额一并审。当前仅设计，不新锁/门禁/平台，旧video host不接单，生产0写。
 
 ## 当前交付与明确下一步
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
