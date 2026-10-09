@@ -15,7 +15,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | stage1两bug a64已交待联合源码审/集成；install.py+lifecycle继续restore-previous，设计High已返回，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原transaction/state、deploy.sh、lock.mjs、deploy.test五文件实施联合High三项P1；原journal/FD9复用 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两CSS3989→root221b已收；按human先交头像整桌面预览，原入口写权增加companion-surface.ts及现有unit，继续已选方向 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两CSS3989→root221b已收；头像整桌面/局部PNG已交且root看过，立即续入口源码；scope含原surface策略/unit，运行未验 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
 - 各owner仅写已授范围，不回退他人修改；root持有共享CI/docs及dashboard/workspace集成spec，UI持研究Hermes产品入口写权。单renderer/跨路由/焦点/运行任务/权限与零POST边界保留，测试随新真实路径同步。三线无生产写窗口，不并行发布/资产写；在途自然收尾，不派重复检查。
 
 ## Git / CI / 运行事实
@@ -34,7 +34,7 @@
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
-- UI两处编辑CSS3989→root221b全等集入；标题/正文层级与工具栏换行，六字段/保存/权限不变，PostCSS40/99规则parse0/diff0；实际运行视觉待新头像批次。Figma2138:117最终PNG已看，为闭合对话/两段示例，非产品验收。原14个本地journey/High、版本原文两尺寸与reading20/20证据保留，不把历史SyntaxError泛化为生产根因。
+- UI两处编辑CSS3989→root221b全等；PostCSS40/99规则parse0/diff0，六字段/保存/权限不变，运行视觉待新头像批次。Figma编辑2138:117及头像桌面2138:34/入口2169:23已交；root看过1440×1080桌面及148×56局部，56px头像与创建研究同排、完整研究图无遮挡，静态preview不代表运行/数据现状/审美认可。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png。原14journey/High、原文两尺寸/reading20证据保留。
 - 共享包络按fd真实经验极值B8.6903/L51.9531/R34.2979/T29.2034向外取整，仅扩大三边，bottom旧27不收窄；各argmax落在已采关键帧/hover端点。29建议已撤回，不因left距52近就盲加1px，也不称网格为数学全域证明。786 push原实时巡游已过，PR另有前置就绪差额见上；loading连续handler修复已有真实通过。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。

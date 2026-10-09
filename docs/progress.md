@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-09：Native联合设计High已返回三P1：回滚preflight先于Native、自然停止禁强杀、API/Web→timer→Worker；已派回原两线实施。生图stage1 a64已交、Windows AST/diff0，Linux行为待现有CI；完整源码仍须增量High。UI补原surface策略写权并按human先交头像预览，编辑两CSS221b已收。786 push全过/PR旧就绪差额保留，生产0写。
+- 2026-10-09：头像整桌面/局部效果图已交，root核图后让UI直接续入口源码，静态图不当运行验收；编辑CSS221b已收。Native联合设计High三P1已派回原两线实施：回滚preflight先于Native、自然停止禁强杀、API/Web→timer→Worker。生图stage1 a64仅Windows AST/diff0，Linux及完整源码增量High待验。786 push全过/PR旧就绪差额保留，生产0写。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
 - 2026-10-09：生图9行fresh括号修复经独立High/目标回归，canonical依赖配套后完整WorkerTC0；真source错绑/时空矛盾仍须Native纠正，不重放cb未知任务。视频只读声音目录已收、实际Key目录/声音/成片仍待。
 - 2026-10-09：按用户认可的收敛主线，将生图owner调回已有论文理解→分镜/提示词→实际图核对；root接手UI/CI，不新增流水线/门禁/付费步骤。UI Figma14frame为候选，普通用户旅程、三篇科学质量和整站审美未验收。
