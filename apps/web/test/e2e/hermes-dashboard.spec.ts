@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { expect, test, type Page, type Request, type Route } from 'playwright/test';
 
-import { HERMES_PATROL_MOTION_ENVELOPE, HERMES_PATROL_TRANSLATION_ENVELOPE } from '../../lib/hermes/companion-placement';
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
@@ -29,10 +28,6 @@ test.beforeEach(async ({ page }) => {
     throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
   });
 });
-
-const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
-  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-);
 
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -80,192 +75,75 @@ test('Dashboard protects semantic navigation, continuation, import and Hermes ta
   await expectDashboardProtectedRegions(page, true);
 });
 
-test('a patrol cycle stays inside its shared motion envelope and clears adjacent protected work', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await mockDashboard(page);
-  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-  const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
-  await expect(travelHull).toBeVisible();
-  await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  const patrolControl = await stage.evaluateHandle((element) => {
-    const stageNode = element as HTMLElement;
-    let action = 'doze';
-    const forceAction = () => {
-      if (stageNode.dataset.hermesAction !== action) stageNode.dataset.hermesAction = action;
-    };
-    const observer = new MutationObserver(forceAction);
-    observer.observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
-    forceAction();
-    return { begin: () => { action = 'patrol'; forceAction(); }, dispose: () => observer.disconnect() };
-  });
-  await expect.poll(() => stage.evaluate((element) => {
-    const actor = element.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
-    return (element as HTMLElement).dataset.hermesAction === 'doze'
-      && new DOMMatrixReadOnly(getComputedStyle(actor).transform).isIdentity
-      && actor.getAnimations().every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
-  })).toBe(true);
-  const geometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
-  await page.evaluate((motionEnvelope) => {
-    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
-    const blocker = document.createElement('div');
-    blocker.dataset.hermesProtected = 'true';
-    blocker.dataset.patrolEnvelopeBlocker = 'true';
-    const useRight = hull.right + motionEnvelope.right + 41 <= innerWidth;
-    Object.assign(blocker.style, {
-      height: `${hull.height}px`,
-      left: `${useRight ? hull.right + motionEnvelope.right + 1 : hull.left - motionEnvelope.left - 41}px`,
-      pointerEvents: 'none',
-      position: 'fixed', top: `${hull.top}px`, width: '40px', zIndex: '1',
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`Dashboard keeps a live interactive avatar inside its 64px tool entry at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+        writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+      }
     });
-    document.body.append(blocker);
-  }, HERMES_PATROL_MOTION_ENVELOPE);
-  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(geometryVersion);
-  await expect.poll(async () => {
-    const [hull, blocker] = await Promise.all([
-      travelHull.boundingBox(), page.locator('[data-patrol-envelope-blocker="true"]').boundingBox(),
-    ]);
-    return hull && blocker ? !overlaps(hull, blocker) : false;
-  }).toBe(true);
-  const geometry = await stage.evaluate((element) => {
-    const rect = (node: Element | null) => {
-      if (!node) return null;
-      const bounds = node.getBoundingClientRect();
-      return { bottom: bounds.bottom, height: bounds.height, left: bounds.left,
-        right: bounds.right, top: bounds.top, width: bounds.width };
-    };
-    const visual = window.visualViewport;
-    const left = visual?.offsetLeft ?? 0, top = visual?.offsetTop ?? 0;
-    const width = visual?.width ?? innerWidth, height = visual?.height ?? innerHeight;
-    const viewport = { bottom: top + height, height, left, right: left + width, top, width };
-    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
-      .map((node) => {
-        const bounds = rect(node)!;
-        return { className: node.className, id: node.id, rect: bounds,
-          included: bounds.width > 0 && bounds.height > 0 && bounds.right > viewport.left
-            && bounds.bottom > viewport.top && bounds.left < viewport.right && bounds.top < viewport.bottom };
-      });
-    const clippingAncestors = [];
-    for (let node = element.parentElement; node; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
-      clippingAncestors.push({ className: node.className, id: node.id, rect: rect(node),
-        overflowX: style.overflowX, overflowY: style.overflowY, clientLeft: node.clientLeft,
-        clientTop: node.clientTop, clientWidth: node.clientWidth, clientHeight: node.clientHeight,
-        scrollLeft: node.scrollLeft, scrollTop: node.scrollTop });
-    }
-    const rig = element.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]');
-    return { capturedAtMs: performance.now(), stageRect: rect(element),
-      anchorRect: rect(element.closest('[data-hermes-dock-anchor]')),
-      travelHullRect: rect(element.querySelector('[data-hermes-carrier-travel-hull="true"]')),
-      viewport, innerViewport: { height: innerHeight, width: innerWidth },
-      visualViewportScale: visual?.scale ?? null, clippingAncestors, protectedRegions,
-      stage: { ...(element as HTMLElement).dataset }, rig: rig ? { ...rig.dataset } : null };
+    await mockDashboard(page);
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+    const entry = page.locator('[data-hermes-avatar-entry="true"]');
+    const anchor = entry.locator('[data-hermes-avatar-anchor="true"]');
+    const stage = anchor.locator('[data-hermes-workspace-stage="true"]');
+    const visual = stage.locator('[data-hermes-input-owner="true"]');
+    const rig = stage.locator('[data-hermes-rig="live2d-wanko"]');
+    await expect(entry).toHaveCount(1);
+    await expect(entry).toHaveAttribute('data-hermes-entry-open', 'false');
+    await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', '64');
+    await expect(visual).toHaveCSS('width', '64px');
+    await expect(visual).toHaveCSS('height', '64px');
+    await expect(visual).toHaveCSS('overflow', 'hidden');
+    await expect(stage).toHaveCSS('opacity', '1');
+    await expect(visual).toBeInViewport({ ratio: 1 });
+    await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+    await expect(rig).toHaveAttribute('data-hermes-static-frame', 'false');
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+    const firstDraw = Number(await rig.getAttribute('data-hermes-last-draw-at'));
+    expect(firstDraw).toBeGreaterThan(0);
+    const face = await visual.boundingBox();
+    expect(face).not.toBeNull();
+    await page.mouse.move(face!.x + face!.width * .75, face!.y + face!.height * .4);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
+    await expect(rig).toHaveAttribute('data-hermes-gesture', 'focus');
+    await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(firstDraw);
+    const evidence = await visual.evaluate((element) => new Promise<{ frames: number; escaped: number; overlaps: number }>((resolve) => {
+      const host = element.closest('[data-hermes-avatar-anchor="true"]')!;
+      const content = [document.querySelector('header nav[data-hermes-primary-navigation="true"]')!, document.querySelector('main h1')!, document.querySelector('section[aria-labelledby="research-list-title"]')!];
+      const result = { frames: 0, escaped: 0, overlaps: 0 };
+      const started = performance.now();
+      const sample = () => {
+        const box = element.getBoundingClientRect();
+        const frame = host.getBoundingClientRect();
+        result.frames += 1;
+        if (box.left < frame.left || box.right > frame.right || box.top < frame.top || box.bottom > frame.bottom
+          || box.left < 0 || box.top < 0 || box.right > innerWidth || box.bottom > innerHeight) result.escaped += 1;
+        for (const region of content) {
+          const other = region.getBoundingClientRect();
+          if (box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top) result.overlaps += 1;
+        }
+        if (performance.now() - started >= 800) resolve(result);
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }));
+    expect(evidence.frames).toBeGreaterThan(1);
+    expect(evidence.escaped, JSON.stringify(evidence)).toBe(0);
+    expect(evidence.overlaps, JSON.stringify(evidence)).toBe(0);
+    await page.mouse.move(0, 0);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'false');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(writes).toEqual([]);
+    await test.info().attach('avatar-frame-evidence', { body: Buffer.from(JSON.stringify(evidence)), contentType: 'application/json' });
+    await page.screenshot({ path: `${outDir}/avatar-${viewport.width}x${viewport.height}.png`, fullPage: false });
   });
-  await test.info().attach('patrol-geometry-before-safety-assertion', {
-    body: JSON.stringify(geometry, null, 2), contentType: 'application/json',
-  });
-  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
-
-  // Predict the cycle from the hull before the patrol transform starts.
-  const settledEnvelope = await page.evaluate((motionEnvelope) => {
-    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
-    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!.getBoundingClientRect();
-    const restHullRect = { bottom: hull.bottom, left: hull.left, right: hull.right, top: hull.top };
-    const envelope = {
-      bottom: hull.bottom + motionEnvelope.bottom, left: hull.left - motionEnvelope.left,
-      right: hull.right + motionEnvelope.right, top: hull.top - motionEnvelope.top,
-    };
-    const overlapsEnvelope = envelope.left < blocker.right && envelope.right > blocker.left
-      && envelope.top < blocker.bottom && envelope.bottom > blocker.top;
-    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope, restHullRect };
-  }, HERMES_PATROL_MOTION_ENVELOPE);
-  expect(settledEnvelope.overlapsEnvelope, `settled patrol envelope: ${JSON.stringify(settledEnvelope)}`).toBe(false);
-  const patrolOrigin = await travelHull.boundingBox();
-  expect(patrolOrigin).not.toBeNull();
-  const evidence = await patrolControl.evaluate((control, origin) => new Promise<{
-    collisions: number; frames: number; maxBottomDelta: number; maxRightDelta: number; maxX: number; maxY: number;
-    minLeftDelta: number; minTopDelta: number; minX: number; minY: number; viewportViolations: number;
-  }>((resolveEvidence) => {
-    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
-    const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
-    const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
-    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!;
-    const result = {
-      collisions: 0, frames: 0, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY,
-      maxBottomDelta: Number.NEGATIVE_INFINITY, maxRightDelta: Number.NEGATIVE_INFINITY,
-      minLeftDelta: Number.POSITIVE_INFINITY, minTopDelta: Number.POSITIVE_INFINITY,
-      minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, viewportViolations: 0,
-    };
-    // Start a fresh cycle in the same browser task that starts its sampler.
-    control.begin();
-    if (!actor.getAnimations().some((animation) => (animation as CSSAnimation).animationName === 'hermes-companion-patrol')) {
-      throw new Error('The real patrol animation did not start from the held rest pose');
-    }
-    const started = performance.now();
-    const overlapsRect = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    const sample = () => {
-      const bounds = hull.getBoundingClientRect();
-      const obstacle = blocker.getBoundingClientRect();
-      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
-      result.frames += 1;
-      result.minX = Math.min(result.minX, matrix.m41);
-      result.maxX = Math.max(result.maxX, matrix.m41);
-      result.minY = Math.min(result.minY, matrix.m42);
-      result.maxY = Math.max(result.maxY, matrix.m42);
-      result.minLeftDelta = Math.min(result.minLeftDelta, bounds.left - origin.left);
-      result.maxRightDelta = Math.max(result.maxRightDelta, bounds.right - origin.right);
-      result.minTopDelta = Math.min(result.minTopDelta, bounds.top - origin.top);
-      result.maxBottomDelta = Math.max(result.maxBottomDelta, bounds.bottom - origin.bottom);
-      result.collisions += Number(overlapsRect(bounds, obstacle));
-      result.viewportViolations += Number(bounds.left < 0 || bounds.top < 0 || bounds.right > innerWidth || bounds.bottom > innerHeight);
-      if (performance.now() - started >= 4_190) resolveEvidence(result);
-      else requestAnimationFrame(sample);
-    };
-    requestAnimationFrame(sample);
-  }), settledEnvelope.restHullRect);
-  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
-  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
-  await patrolControl.evaluate((control) => control.dispose());
-  await patrolControl.dispose();
-  expect(evidence.frames).toBeGreaterThan(120);
-  expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
-  expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
-  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
-  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
-  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
-  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom);
-  const cssExtrema = await page.evaluate(async () => {
-    const probeStage = document.createElement('div');
-    probeStage.className = 'hermes-workspace-stage';
-    probeStage.dataset.hermesAction = 'patrol';
-    probeStage.dataset.hermesMotionEnvelopeSafe = 'true';
-    probeStage.dataset.hermesMotionPreference = 'full';
-    probeStage.style.visibility = 'hidden';
-    const actor = document.createElement('div');
-    actor.className = 'hermes-companion-actor';
-    probeStage.append(actor);
-    document.body.append(probeStage);
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    const animation = actor.getAnimations().find((candidate) => (candidate as CSSAnimation).animationName === 'hermes-companion-patrol')!;
-    animation.pause();
-    const result = { maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY, minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY };
-    for (const progress of [0, .18, .38, .58, .78, .9, 1]) {
-      animation.currentTime = 4_200 * progress;
-      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
-      result.minX = Math.min(result.minX, matrix.m41);
-      result.maxX = Math.max(result.maxX, matrix.m41);
-      result.minY = Math.min(result.minY, matrix.m42);
-      result.maxY = Math.max(result.maxY, matrix.m42);
-    }
-    probeStage.remove();
-    return result;
-  });
-  expect(Math.abs(cssExtrema.minX + HERMES_PATROL_TRANSLATION_ENVELOPE.left)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.maxX - HERMES_PATROL_TRANSLATION_ENVELOPE.right)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.minY + HERMES_PATROL_TRANSLATION_ENVELOPE.top)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.maxY - HERMES_PATROL_TRANSLATION_ENVELOPE.bottom)).toBeLessThanOrEqual(1);
-});
+}
 
 test('anchored Hermes suppresses automatic performance speech while a live runtime advances', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -335,7 +213,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
         canvas.getAttribute('data-hermes-torso'),
         canvas.getAttribute('data-hermes-tail'),
       ]);
-      const box = await rig.boundingBox();
+      const box = await visual.boundingBox();
       expect(box).not.toBeNull();
       await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
       await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
@@ -356,7 +234,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
       await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
       continue;
     }
-    const box = await rig.locator('[data-hermes-carrier-interaction-hull="true"]').boundingBox();
+    const box = await visual.boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
     await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
@@ -385,7 +263,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
   const mobileMotionToggle = page.locator('[data-hermes-motion-toggle]');
   await expect(mobileStage).toBeVisible();
   await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
-  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '64');
   await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'full');
   await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
@@ -426,7 +304,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await expect(mobileDialog).toHaveCount(0);
   await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'false');
   await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
-  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '64');
   await expect(mobileMotionToggle).toBeHidden();
   await expect(mobileStage).toHaveCount(1);
   await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
@@ -605,6 +483,8 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
 test('Hermes disposes and restores its mesh when the persistent motion control changes live', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 
@@ -855,6 +735,8 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
   await expect(motionToggle).toBeEnabled();
   const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
+  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await motionToggle.click();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
   await expect(stage).toHaveAttribute('data-hermes-runtime-owner', 'running');
@@ -883,6 +765,8 @@ test('Hermes retries with a fresh runtime after the required Cubism model fails'
   const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
 
   await page.unroute(`**${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.model3.json`);
+  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
@@ -894,7 +778,7 @@ test('Hermes retries with a fresh runtime after the required Cubism model fails'
   expect(await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'))).toBe(preferenceBeforeRetry);
 });
 
-test('Hermes keeps the real six-field approval surface still until confirmation succeeds', async ({ page }) => {
+test('Hermes keeps six-field confirmation explicit while its avatar remains interactive', async ({ page }) => {
   await mockDashboard(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: baseUrl }]);
   const detail = {
@@ -945,7 +829,12 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
   await expect(page.getByRole('heading', { name: '确认你的研究结构' })).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-avatar', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-stage-size', '64');
+  const approvalAvatar = page.locator('[data-hermes-rig="live2d-wanko"]');
+  await expect(approvalAvatar).toHaveAttribute('data-hermes-static-frame', 'false');
+  const approvalDraw = Number(await approvalAvatar.getAttribute('data-hermes-last-draw-at'));
+  await expect.poll(async () => Number(await approvalAvatar.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(approvalDraw);
   await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
   expect(confirmations).toBe(0);
   await page.getByRole('button', { name: '确认并创建版本' }).click();
