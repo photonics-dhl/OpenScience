@@ -172,11 +172,10 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(input).toHaveCSS('overflow', 'hidden');
   // The 160px composition is clipped by the 64px button; its carrier AABB is not a work collision.
   const composition = input.locator('[data-hermes-companion-actor="true"]');
-  const compositionSize = await composition.evaluate((node) => {
+  await expect.poll(() => composition.evaluate((node) => {
     const { width, height } = node.getBoundingClientRect();
     return { width, height };
-  });
-  expect(compositionSize).toEqual({ width: 160, height: 160 });
+  })).toEqual({ width: 160, height: 160 });
   // Read related boxes in one browser task while their shared page-entry animation runs.
   const { visible, frame, stageBounds } = await host.evaluate((anchor) => {
     const currentStage = anchor.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
@@ -278,13 +277,13 @@ async function assertLive(page: Page) {
   await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0), { timeout: 20_000 }).toBeGreaterThan(visibleAt);
 }
 
-async function closeTo(page: Page, opener: Locator, escape = false) {
+async function closeTo(page: Page, opener: Locator, escape = false, placement: 'viewport' | 'document-flow' = 'viewport') {
   const exactOpener = await opener.elementHandle();
   expect(exactOpener).not.toBeNull();
   try {
     if (escape) await guide(page).getByRole('button', { name: 'Close Hermes', exact: true }).press('Escape');
     else await guide(page).getByRole('button', { name: 'Close Hermes', exact: true }).click();
-    await assertAvatar(page);
+    await assertAvatar(page, placement);
     await expect(opener).toBeFocused();
     expect(await exactOpener!.evaluate((node) => node.isConnected && document.activeElement === node)).toBe(true);
   } finally { await exactOpener?.dispose(); }
@@ -604,7 +603,8 @@ for (const width of [1440, 390]) {
             await expect(guide(page).getByRole('combobox')).toHaveValue('task-review');
             await expect(guide(page).locator('#ingestion-proposal-heading')).toBeVisible();
           }
-          await closeTo(page, opener, width < 1024);
+          // A lower-page opener may have scrolled the page-owned avatar out of the viewport.
+          await closeTo(page, opener, width < 1024, 'document-flow');
           expect(await physicalOpener!.evaluate((node) => document.activeElement === node && node.isConnected)).toBe(true);
           await identity.assert();
         } finally { await physicalOpener?.dispose(); }
