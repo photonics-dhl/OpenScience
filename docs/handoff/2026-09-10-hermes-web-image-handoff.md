@@ -16,13 +16,13 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 6f35纯模块诊断已交：Node22根目录缺database/Worker可解析；停止扩探，3a2待集成/LinuxHost6/SDK/PNG | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 最终4bc→root fbcee535全等/原High GO；恢复与loader已过Linux发布组117，整批被UI单例阻断，保留host音色交付 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（f833/RED及0f/d754/4cf保留） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正修783双main同一researcher-services提交计数失败，仅原spec写权；header7b/68e保持独立下一批 | `.worktrees/research-product-craft` / `codex/ui-submit-ci-recovery-20261010`（base783，header与旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断已收、停止扩探；video4bc冻结交付。UI仅researcher-services.spec.ts诊断/最小修复，若需生产组件须报实证再扩scope；image3a/header68e仍独立，复用未变证据。
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 单spec391d经原Godel High GO→root8cfd1b47全等；交原Linux CI验证，header7b/68e独立下一批 | `.worktrees/research-product-craft` / `codex/ui-submit-ci-recovery-20261010`（base783，header与旧证据保留） |
+- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断已收、停止扩探；video4bc与UI391d均冻结交付，root接对应CI。image3a/header68e仍独立待后批消费者，复用未变证据。
 
 ## Git / CI / 运行事实
-- 交付branch仍`release/onchip-production-line`，4bc源码全等收为fbcee535，已推完整候选`783b0373ea235de01bfc13c0d64a04240fb39f01`；后续本地文档HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2/UI header独立未混入。
+- 交付branch仍`release/onchip-production-line`，4bc源码全等收为fbcee535，UI单spec391d全等收为`8cfd1b4730315d83cdb37634e272ebc25147fd27`；完整文档HEAD/推送与对应CI见Git及root原receipt，783为前次失败候选。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2/UI header独立未混入。
 - 783精确CI：media PR37997148486/push37997143598的main均在第72步researcher-services.spec.ts:122计数0≠1失败（各33/34）；其余8个browser-entry、video37997148355和双journal37997148345/37997143398成功。PR main Node22/Linux部署+manifest117PASS/0skip，原High恢复差额闭合；不是全CI绿。完整log、push failed log及唯一error-context在root `tmp/session-coordination-20261008/media-main-783-*`；无PNG/trace，UI已接修。
-- UI根因核对：原spec错mock `/api/auth/csrf`，实际为`/api/csrf-token`；页面先pending再await CSRF/POST，因此disabled不能证明handler已入，错mock亦不追认为唯一历史因果。仅spec修真实fixture、POST计数/有界到达见证及finally释放，保留键盘锁/exact1/editURL；原本机launcher已起Next但缺Chromium1234（仅1223），无页面断言、非有效RED，不安装/换runtime，复用双CI失败并待原High/后续Linux验证。
+- UI391d仅spec23+/11-：修实际`/api/csrf-token` mock，POST-only/GET fallback、10s有界handler见证后核真实token/focus/Enter；保留mode/exact1、精确editURL/最终count及覆盖全部操作的finally释放。root直读原Godel最终High Scoped GO、单文件diff0，复用targetTC0/lint0/list7。旧disabled只证pending、错mock不追认唯一历史因果；本机缺Chromium1234（仅1223）未进入页面、不算RED，不安装/换runtime。修复后原Linux运行尚未验收。
 - 6f35精确原CI全过：media PR37986078268/push37986071550各5job、video37986078242、journal37986078243/37986071694。root `tmp/session-coordination-20261008/media-main-6f35.log`保Linux producer pause新回归及deploy+manifest105/105、0skip。旧21b/c4e/cd81有效CI/RED/High均保留，不代证生产顺序。
 - 10-10 04:45 CST最终只读：active/public=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；原API/Web/Worker同ID/image、healthy/restart0，新startedAt20:40:26/42Z；Native runtime.env/unit/catalogue仍784、主M3不变，timer active/enabled、broker inactive。公网root200；journal无、原859B备份root600保留；`6f35-recovery-final-readonly.json`存读数。
 - 旧capture误拒视频env、Docker24停止参数已修；cd81/c4e断线、孤儿build与pre-stop journal历史见Git6f35本页/原tmp，均不重放。
