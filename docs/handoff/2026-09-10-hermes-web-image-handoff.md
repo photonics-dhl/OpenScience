@@ -14,20 +14,22 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 准备6f35纯模块解析诊断；本地root缺database/Worker可解析仅为佐证，服务器入口待核；3a2仍待集成/运行质量 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原High设计GO；正实现可信quiesce后重复pause/prepare-rollback续作及连续调用回归，声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（0f/d754/4cf保留） |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 6f35纯模块诊断已交：Node22根目录缺database/Worker可解析；停止扩探，3a2待集成/LinuxHost6/SDK/PNG | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原High双设计GO；唯一writer修Worker目录查询入口、可信quiesce恢复续作及真实loader/连续调用回归 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（0f/d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，生产窗口关闭。image仅专属tmp/原checkpoint准备安全诊断，必要服务器读交root；video原lock/test连续调用修复，新增差额须原High。UI待集成消费者，无生产/资产writer。
+- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断仅tmp/原checkpoint已收；video唯一写原lock/test，新增差额须原High最终审查。UI待集成消费者。
 
 ## Git / CI / 运行事实
 - 交付branch仍`release/onchip-production-line`，已推候选`6f35e5680220b352c6702b042a860e76caffdf6d`；后续本地文档HEAD由Git定锚。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2及UI header独立未混入。
 - 6f35精确原CI全过：media PR37986078268/push37986071550各5job、video37986078242、journal37986078243/37986071694。root `tmp/session-coordination-20261008/media-main-6f35.log`保Linux producer pause新回归及deploy+manifest105/105、0skip。旧21b/c4e/cd81有效CI/RED/High均保留，不代证生产顺序。
 - 10-10 04:45 CST最终只读：active/public=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；原API/Web/Worker同ID/image、healthy/restart0，新startedAt20:40:26/42Z；Native runtime.env/unit/catalogue仍784、主M3不变，timer active/enabled、broker inactive。公网root200；journal无、原859B备份root600保留；`6f35-recovery-final-readonly.json`存读数。
-- 已修两个实况阻点：45f9→c85b去掉Native配对错误的视频env拒绝；8c→9eaa将Docker24不支持的`--timeout -1`改为`--time -1`，定向RED/Green及High/21bCI通过。c4e SSH断线后4个孤儿build自然退出才重试；其pre-stop journal已单独审查收尾，原日志/850B备份保留。完整史见Git21b本页。
+- 旧capture误拒视频env、Docker24停止参数已修；cd81/c4e断线、孤儿build与pre-stop journal历史见Git6f35本页/原tmp，均不重放。
 - 21b历史停机约9分钟、未迁移/安装，原a6恢复及850B journal收尾见Git6f35本页/原`recover-21b-*`与`native-21b-finalize-*`；首confirm70未追认唯一根因。该事故已结束，不能重放旧恢复脚本。
 - 6f35在04:34:51–55正常停三服务后，迁移51成功、search无pending、原quota seed8项完成；04:35:05 journal switching/rollback_quiescing/install not_attempted/restore not_started/checkpoint null。Native安装前首故障未定因，自动恢复二次pause已停Web1被拒已确认；candidate Worker镜像实际存在，排除“尚未构建”假设。不盲重发。
 - 04:40:52独立High/同FD9专用恢复成功：start原API/Web→healthy/publica6→恢复原timer→原Workerhealthy；约6分钟不可用，迁移51保留，无Native安装/DB回滚/任务重派。`recover-6f35-original-services{.log,-command.json}`及859B备份`/opt/openscience/tmp/native-recovery-6f35-stopped-20261009T203505Z.json`保留；04:44:19专用finalize先inspect后confirm成功，`native-6f35-finalize-once-confirmed.json`可核，禁止重放。
 - 旧Web兼容0f7→2c9仅原lock/test，原High/29场景与6f35 Linux回归均过；其单次pause验收没有覆盖失败后的完整恢复顺序，video继续补此缺口。当前保持旧a6可用，关闭写窗口，源码修复/High/对应CI和实际故障定位齐备前不再发版。
+- 05:19:58 CST受控module-only：exact6f/d6a7镜像、Node22.23.2/sourceMarker/cwd匹配；root ESM数据库包ERR_MODULE_NOT_FOUND/CJS亦失败，Worker CJS两包resolve+exists，确认当前loader缺口。`native-6f35-module-resolution-corrected-receipt.json`保结果；无业务import/DB/Redis/model，probe清空NODE_OPTIONS，不能追认20:35唯一因果。首probe被新增且Compose2.26不支持的--pull never阻16，原receipt/executed/help保留；High纠正后同FD9/精确本地镜像完成一次观测。无后续snapshot探针。
+- High仅准queryNativeWork改Worker cwd及classifier相对import；保留查询/classifier/JSON/权限/预算，不加根依赖/loader/fallback。原test需真实Node完整query/真实classifier/只读mock加载及旧root负控，并补首次pause→安装前失败→prepare、unsafe保持/自然收敛、hold→prepare序列；当前尚未交源码，不把设计或模块诊断称发布GO。
 - 本轮新双库`db-set-20261009T202746Z-1790443`在`/var/backups/openscience`，双dump/checksum/0700-0600已核，旧181428Z仍保留；`backup-before-native-6f35-verified.json`存证。main/Native M3与video host admin=false/audio absent未改；无新增模型/供应商任务，Fig2仍0写；paid/started CP/Native-bound pending/lease保护保持。
 
 ## 当前交付与明确下一步
