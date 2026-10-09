@@ -231,6 +231,72 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
   expect(evidence.frames).toBeGreaterThan(120);
   expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
   expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
+  {
+    // Temporary unconditional calibration: patrol and perpetual hover start at independent phases.
+    const phaseGrid = await page.evaluate(() => {
+      const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+      const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
+      const carrier = stageNode.querySelector<HTMLElement>('[data-hermes-carrier="true"]')!;
+      const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
+      const named = (node: HTMLElement, name: string) => node.getAnimations()
+        .find((animation) => (animation as CSSAnimation).animationName === name)!;
+      const hover = named(carrier, 'hermes-carrier-hover');
+      const hoverDuration = Number(hover.effect!.getTiming().duration);
+      hover.pause();
+      const finishTransforms = () => {
+        for (const node of [actor, carrier]) {
+          for (const animation of node.getAnimations()) {
+            if (animation instanceof CSSTransition && animation.transitionProperty === 'transform') animation.finish();
+          }
+        }
+      };
+      const bounds = () => {
+        const rect = hull.getBoundingClientRect();
+        return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
+      };
+      stageNode.dataset.hermesAction = 'doze';
+      finishTransforms();
+      if (!new DOMMatrixReadOnly(getComputedStyle(actor).transform).isIdentity) throw new Error('Calibration rest is transformed');
+      const rest = [];
+      for (let h = 0; h <= 100; h += 1) {
+        hover.currentTime = hoverDuration * h / 100;
+        rest.push(bounds());
+      }
+      // Each edge uses the least favorable rest phase; this is a conservative independent-phase bound.
+      const restEdge = { bottom: Math.min(...rest.map((rect) => rect.bottom)),
+        left: Math.max(...rest.map((rect) => rect.left)), right: Math.min(...rest.map((rect) => rect.right)),
+        top: Math.max(...rest.map((rect) => rect.top)) };
+      stageNode.dataset.hermesAction = 'patrol';
+      finishTransforms();
+      const patrol = named(actor, 'hermes-companion-patrol');
+      const patrolDuration = Number(patrol.effect!.getTiming().duration);
+      patrol.pause();
+      const extrema = { bottom: 0, left: 0, right: 0, top: 0 };
+      const at: Record<string, { patrol: number; hover: number }> = {};
+      for (let p = 0; p <= 100; p += 1) {
+        patrol.currentTime = patrolDuration * p / 100;
+        for (let h = 0; h <= 100; h += 1) {
+          hover.currentTime = hoverDuration * h / 100;
+          const current = bounds();
+          const deltas = { bottom: current.bottom - restEdge.bottom, left: restEdge.left - current.left,
+            right: current.right - restEdge.right, top: restEdge.top - current.top };
+          for (const edge of ['bottom', 'left', 'right', 'top'] as const) {
+            if (deltas[edge] > extrema[edge]) {
+              extrema[edge] = deltas[edge];
+              at[edge] = { patrol: p / 100, hover: h / 100 };
+            }
+          }
+        }
+      }
+      const stageRect = stageNode.getBoundingClientRect();
+      return { stageSize: { width: stageRect.width, height: stageRect.height },
+        patrolDuration, hoverDuration, samples: 101 * 101, restSamples: rest.length, restEdge, extrema, at,
+        roundedOutward: Object.fromEntries(Object.entries(extrema).map(([edge, value]) => [edge, Math.ceil(value)])) };
+    });
+    await test.info().attach('patrol-hover-phase-calibration', {
+      body: JSON.stringify(phaseGrid, null, 2), contentType: 'application/json',
+    });
+  }
   expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
   expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
   expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
