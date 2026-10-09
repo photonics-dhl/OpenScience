@@ -4,7 +4,7 @@
 
 期刊改版与服务器续部署见 [期刊工作台交接](docs/handoff/2026-10-08-journal-workbench-handoff.md)：`apps/api/src/routes/journal-{core-routes,workbench,draft-policy,draft-guard}.ts` 保留原授权并提供草稿归档/恢复；`apps/web/lib/journal-{workbench-model,workbench-api,rights-form}.ts` 与 `components/journals/` 承接目录、草稿视图与显式来源授权；`scripts/test-journal-workbench.mjs`、Web journal 测试与 `apps/api/test/journal-browser.test.ts` 验证改版，精确 CI/部署事实见交接。
 
-并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。
+并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。Dashboard测量与请求phase回归集中在原 `apps/web/test/e2e/hermes-dashboard.spec.ts`；Linux信号恢复回归沿 `infra/scripts/deploy.test.mjs`，实际结果只记CURRENT。
 
 Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`规定原写门禁、排空、timer原状态和配对失败恢复；关闭video host可复用，真实启用另验，状态见CURRENT。
 
