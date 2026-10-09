@@ -15,7 +15,7 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 3a2九文件High Scoped GO，4项闭合；等待canonical CI/LinuxHost6/installedSDK及真实图片质量，未集入 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 8c已收/21bCI过；现收敛旧Web npm SIGTERM exit1的drain语义，原lock/test方案待High；声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-docker-stop-compat`（d754/4cf保留） |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 8c已收/21bCI过；现收敛旧Web npm SIGTERM exit1的drain语义，原lock/test方案High GO、实现中；声音目录仍待host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-web-stop-compat`（d754/4cf保留） |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header7b6698+原navigation spec68e8ec5已交，High/static/list5通过，待下一批原CI真实验收 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-tests-20261010`（base6c10，旧证据保留） |
 - 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，已结束本次生产窗口，video限原部署lock/test，image图审独立，UI header已交待消费者。单renderer/任务/权限边界保留，不并行发布/资产写。
 
@@ -26,7 +26,7 @@
 - 已修两个实况阻点：45f9→c85b去掉Native配对错误的视频env拒绝；8c→9eaa将Docker24不支持的`--timeout -1`改为`--time -1`，定向RED/Green及High/21bCI通过。c4e SSH断线后4个孤儿build自然退出才重试；其pre-stop journal已单独审查收尾，原日志/850B备份保留。完整史见Git21b本页。
 - 21b发布在03:40:56–03:41停原容器后失败：API/Worker exit0，Web npm start SIGTERM exit1、非OOM，strict全服务exit0检查阻断；未进入迁移或Native安装。约9分钟不可用后，03:49:50按独立High/同FD9只start原API+Web→healthy/public200+exacta6→原Workerhealthy，未换镜像/资源/改任务队列；`recover-21b-original-services{.log,-command.json}`保留。
 - 21b原journal备份`/opt/openscience/tmp/native-recovery-21b-stopped-20261009T194056Z.json`（root0600/850B）。恢复态收尾先inspect通过，首confirm70仍保留原inode/字节；全条件诊断通过后High只许一次有界提交，04:01:32成功unlink+parent fsync。未追认首70唯一根因；失败/诊断/最终`native-21b-finalize-once-confirmed.json`及所有executed脚本保留，不能按旧next action重跑。
-- 当前未发布阻点是旧Web包装进程的停止语义。video仅原lock/test收敛角色区分方案：API/Worker业务drain仍exit0；Web需证明停止，拟仅精确npm/run/start及工作目录的exit1例外，其他退出/OOM/超时/身份变化继续拒，原High先判；不得直接重发21b或再以生产停止试验。Root完成恢复后已关闭写窗口，目前无生产/资产writer。
+- 当前未发布阻点是旧Web包装进程的停止语义。video仅原lock/test收敛角色区分方案：API/Worker业务drain仍exit0；Web需证明停止，拟仅精确npm/run/start及工作目录的exit1例外，其他退出/OOM/超时/身份变化继续拒，原High已设计GO、video实现中；不得直接重发21b或再以生产停止试验。Root完成恢复后已关闭写窗口，目前无生产/资产writer。
 - 双库备份`/var/backups/openscience/db-set-20261009T181428Z-1360138`独立校验/0700-0600通过、8组保留，原`backup-before-native-cd81-verified.json`留存。main/Native M3与视频host admin=false/audio absent未改；本轮无新增模型/供应商任务，Fig2仍0写。paid/started CP与Native-bound pending/lease保护保持；真实自动科学质量、完整视频及新UI产品验收仍待。
 
 ## 当前交付与明确下一步
