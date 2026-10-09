@@ -231,10 +231,12 @@ test('a patrol cycle stays inside its shared motion envelope and clears adjacent
   expect(evidence.frames).toBeGreaterThan(120);
   expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
   expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
-  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
-  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
-  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
-  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom);
+  // Browser layout can differ from the CSS transform by a subpixel after the
+  // actor settles. Match the one-pixel tolerance used by the CSS extrema check.
+  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left - 1);
+  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right + 1);
+  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top - 1);
+  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom + 1);
   const cssExtrema = await page.evaluate(async () => {
     const probeStage = document.createElement('div');
     probeStage.className = 'hermes-workspace-stage';
