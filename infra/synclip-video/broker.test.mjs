@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { runSynclipVideoBrokerOnce, muxSynclipNarration, probeMedia, decodeSynclipAudio, rendererCommand } from './broker.mjs';
+import * as broker from './broker.mjs';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const nextId = '00000000-0000-4000-8000-000000000002';
@@ -22,6 +23,69 @@ const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const exists = async path => stat(path).then(() => true, error => {
   if (error.code === 'ENOENT') return false;
   throw error;
+});
+
+test('voice catalog reads once while admission is closed and preserves pending jobs and heartbeat', async t => {
+  const f = await fixture(t);
+  f.cfg.adminModelsEnabled = false;
+  await mkdir(f.privateDir);
+  await writeFile(join(f.privateDir, 'started'), 'preserved unknown submission');
+  await writeFile(join(f.cfg.results, '.ready'), 'preserved disabled heartbeat');
+  const beforeConfig = JSON.stringify(f.cfg);
+  assert.equal(typeof broker.listSynclipAudioCatalog, 'function');
+  const catalog = await broker.listSynclipAudioCatalog(f.cfg, { readKey: f.deps.readKey, fetch: f.deps.audioFetch });
+  assert.deepEqual(catalog, { provider: 'synclip', voices: [{ id: narration.voice, name: 'Offline catalog fixture',
+    gender: 'Female', languages: ['en'], is_premium: false, coins_per_char: 1, previewAvailable: false }] });
+  assert.deepEqual(f.audioCalls, [{ method: 'GET', url: 'https://api.synclip.ai/v1/voices', body: undefined }]);
+  assert.deepEqual(f.calls, []);
+  assert.equal(JSON.stringify(f.cfg), beforeConfig);
+  assert.equal(await readFile(join(f.privateDir, 'started'), 'utf8'), 'preserved unknown submission');
+  assert.equal(await readFile(join(f.cfg.results, '.ready'), 'utf8'), 'preserved disabled heartbeat');
+  assert.deepEqual(await readdir(f.cfg.inbox), []);
+  assert.deepEqual(await readdir(f.privateDir), ['started']);
+  assert.deepEqual(await readdir(f.cfg.results), ['.ready']);
+});
+
+test('voice catalog omits remote preview URLs and does not choose or synthesize a voice', async t => {
+  const f = await fixture(t), calls = [];
+  assert.equal(typeof broker.listSynclipAudioCatalog, 'function');
+  const catalog = await broker.listSynclipAudioCatalog(f.cfg, { readKey: f.deps.readKey, fetch: async (url, options) => {
+    calls.push({ url, method: options.method });
+    return Response.json({ success: true, data: [{ id: 'catalog-zh-voice', name: 'Catalog Chinese voice', gender: 'Female',
+      languages: ['zh-CN'], is_premium: true, coins_per_char: 2,
+      preview_url: 'https://cdn.synclip.ai/sample.mp3?signature=private-preview-token' }] });
+  } });
+  assert.equal(catalog.voices[0].previewAvailable, true);
+  assert.equal(catalog.voices[0].id, 'catalog-zh-voice');
+  assert.deepEqual(catalog.voices[0].languages, ['zh-CN']);
+  assert.equal(JSON.stringify(catalog).includes('private-preview-token'), false);
+  assert.equal(JSON.stringify(catalog).includes('preview_url'), false);
+  assert.equal(Object.hasOwn(f.cfg, 'audio'), false);
+  assert.deepEqual(calls, [{ url: 'https://api.synclip.ai/v1/voices', method: 'GET' }]);
+});
+
+test('voice catalog reports bounded HTTP or validation failures without retrying or exposing provider bodies', async t => {
+  const f = await fixture(t);
+  assert.equal(typeof broker.listSynclipAudioCatalog, 'function');
+  assert.equal(typeof broker.synclipAudioCatalogFailure, 'function');
+  for (const [response, expected] of [
+    [new Response('private-provider-error-body', { status: 403 }),
+      { error: 'SYNCLIP_AUDIO_CATALOG_FAILED', code: 'SYNCLIP_AUDIO_HTTP_FAILED', httpStatus: 403 }],
+    [Response.json({ success: true, data: [{ id: 'malformed' }] }),
+      { error: 'SYNCLIP_AUDIO_CATALOG_FAILED', code: 'SYNCLIP_AUDIO_RESPONSE_INVALID' }],
+  ]) {
+    const calls = [];
+    await assert.rejects(() => broker.listSynclipAudioCatalog(f.cfg, { readKey: f.deps.readKey,
+      fetch: async (url, options) => { calls.push({ url, method: options.method }); return response; } }), error => {
+      assert.deepEqual(broker.synclipAudioCatalogFailure(error), expected);
+      return true;
+    });
+    assert.deepEqual(calls, [{ url: 'https://api.synclip.ai/v1/voices', method: 'GET' }]);
+  }
+  assert.deepEqual(broker.synclipAudioCatalogFailure(new Error('synthetic-test-key private-provider-error-body')),
+    { error: 'SYNCLIP_AUDIO_CATALOG_FAILED', code: 'EXECUTION_FAILED' });
+  assert.deepEqual(await readdir(f.cfg.results), []);
+  assert.deepEqual(await readdir(f.cfg.privateRoot), []);
 });
 
 async function fixture(t) {

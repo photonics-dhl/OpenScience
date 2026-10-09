@@ -297,11 +297,17 @@ Avicenna 对上述合同差额独立 High 复核为 GO、无 P1/P2；复核只�
 | 激活前置 | 当前确切缺口与可执行接续 |
 |---|---|
 | Key权限与账户对应 | 通过供应商已有控制台／私密交接核对**服务器现用Key所属账户**及Admin/LTX授权；网页登录用户非Admin、图片成功、配置false均不替代此证明，不擅自新建或替换Key |
-| 受保护的只读API查询 | 复用现有Gateway客户端与host受保护认证边界，先取得服务器Key实际 `GET /v1/voices` 和 `GET /v1/usage` 结果；当前已核Synclip入口没有独立只读CLI可直接运行，不启动会消费spool的broker，不新建凭据脚本 |
+| 受保护的只读API查询 | 复用现有Gateway客户端与host受保护认证边界；10-09候选为原broker增加 `--list-voices --config /opt/openscience-synclip-video/config.json`，只做 `GET /v1/voices`，不执行队列、写心跳、选择音色或生成。当前服务器旧bundle未含此入口，须沿确切源交付后才能真实查询；`GET /v1/usage` 尚无实现，不把网页目录当Key目录 |
 | 当前external的声音配置 | `audio.provider=synclip` 已定；voice须由实际API目录确认、匹配旁白语言，speed与音色偏好仍未选定。网页目录没有可复用试听链接；不以宣传或ID名称验收自然度 |
 | 已审候选／host激活 | 总控沿已交付的defer升级／回滚安装器切换同源应用与含audio客户端的host bundle，保护旧队列与回执；填完受保护配置并取得权限证据后才显式启用，当前未执行安装、重启、配置写入或付费请求 |
 
 上述前置不新增模式、供应商或收费重试。旧paid／unknown未触碰，媒体／CI测试继续复用既有通过证据；真实声音与论文成片尚未验收。
+
+### 2026-10-09 只读声音目录入口
+
+原 `broker.mjs` 的 `--config` 调度行为保留；显式增加 `--list-voices --config /opt/openscience-synclip-video/config.json`。该模式仍要求root／gid1000、固定配置路径、root 0600普通非symlink配置与受保护Key，复用 `SynclipAudioClient.listVoices()` 的固定API源、响应校验和超时，不创建第二套认证或HTTP客户端。它在调用队列和更新heartbeat之前返回，因此可在 `adminModelsEnabled=false`、audio尚未配置时查询。输出仅已校验的voice字段及previewAvailable，不输出远端试听URL、认证头或供应商错误正文；失败只给固定诊断及HTTP状态，不重试、不声称LTX权限成立。
+
+验证限定为新增只读路径及原broker回归。候选已实际RED（缺入口）→3/3 GREEN；完整本地broker为42通过／2平台或codec跳过。独立High有界GO、Node语法及diff检查通过；现有ESLint规则忽略infra文件，不把该命令exit0算作源码lint覆盖。新测试直接调用目录helper，CLI分派经源码审查，尚缺实际CLI边界回归。02:45 UTC经既有SSH wrapper只读刷新：旧42fe bundle缺audio客户端、admin关闭、audio未配置，Key仅核文件元数据；新入口尚未在服务器调用。原installer、Linux codec与权限通过证据沿用，确切源CI、服务端目录结果及真实声音／视频仍须分别记录。总控保留共享状态与串行发布写权，不因本入口实现而启动broker或修改接单开关。
 
 Avicenna独立High仅复核本节及两份短证据，GO、无P1/P2；未运行模型、SSH或测试。
 
