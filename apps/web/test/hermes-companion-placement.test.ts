@@ -47,11 +47,11 @@ describe('Hermes companion placement', () => {
 
   it('expands a dock footprint by the full patrol translation envelope', () => {
     expect(HERMES_PATROL_TRANSLATION_ENVELOPE).toEqual({ bottom: 0, left: 34, right: 34, top: 25 });
-    expect(HERMES_PATROL_MOTION_ENVELOPE).toEqual({ bottom: 27, left: 51, right: 34, top: 28 });
+    expect(HERMES_PATROL_MOTION_ENVELOPE).toEqual({ bottom: 27, left: 52, right: 35, top: 30 });
     expect(expandHermesFootprintForMotion(
       { bottom: 42, left: 50, right: 48, top: 46 },
       'patrol',
-    )).toEqual({ bottom: 69, left: 101, right: 82, top: 74 });
+    )).toEqual({ bottom: 69, left: 102, right: 83, top: 76 });
   });
 
   it('does not inflate a non-translating guide action on a narrow viewport', () => {
