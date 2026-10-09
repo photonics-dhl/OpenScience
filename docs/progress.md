@@ -1,5 +1,7 @@
 # CURRENT Progress Window
 
+- 2026-10-09：扩展 Industry / Investors 检索入口、工作简报、来源比较/导出及联系草稿；机构与期刊页暂缓。实现、验证与后续范围见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+
 - 2026-10-09：新增服务对象导航、Researchers 四入口、已发表/预出版预设及无 PDF 草稿路径；本轮候选、验证、发布边界与后续范围见 [Researchers CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
@@ -7,7 +9,7 @@
 ## 最近检查点
 - 2026-10-08：建立并提交 `aaf24e29` 的 OpenScience 全站审美工作流（`.agents/skills/openscience-aesthetic-design/`，含能力台账与 eval prompts），并补入全站公共阅读分栏构图；Hermes 360px detached 舞台在路由渲染时强制收敛到可见视口，`/me` 重复 React key 随 `7d4f4731` 修正。真实 Chrome 巡检 `/guide`、`/explore`、`/journals`、`/developers`、`/auth/login`、公开研究阅读页、`/dashboard`、`/me`：均有 h1、无横向溢出、无页面错误；detached Hermes `top=70..430` 完整在视口内，指南/登录为 anchored。Web typecheck、Hermes 定向 25/25、Impeccable detector、docs lint 与 docs-sync 通过；本轮仍是候选，尚未部署或用户审美确认。Figma 账号连接已恢复，但尚未选定具体 file key，暂不宣称 Figma 文件级证据。
 - 2026-10-08：线上 `e4ed24571d7037e957c80808147faa54ae2e32cf` 已接入 Synclip 视频 bundle，timer/broker/Worker 环境和公网 release 已核对；RO9067 的真实站内视频任务 `321b013e-9606-4858-82a7-f767105d0069` 在 Hermes 分镜结构化阶段5次 schema/json失败后阻断，未发起 Synclip POST。新增修复让 Hermes 只生成科学 `videoProduction`/`videoDirection`，由服务端从核验 Claim 派生有界动画层；storyboard 定向测试1/1、Worker typecheck/build通过，待发布后再新建一次私有验证，不重放失败任务。
-- 2026-10-08：Worker 科学绑定修正提交 `52f6c1a3` 已上线，线上 release 为 `52f6c1a361d60fd6f7df7d308a24d282192c683f`、回滚 `decf3759b6d40764d39e7467f01e368be9022e92`；发布按 Worker-only 范围使用 `--no-tests --skip-migrate`，容器/active/public/retention 通过，深层 Parser/ScanSci/Embedding 与公网 auth/admin 探针未执行。Synclip 仍锁定已验证的 `gpt-image-2`。
+- 2026-10-08 历史发布：Worker 科学绑定修正 `52f6c1a3` 上线，基础发布检查通过；深层 Parser/ScanSci/Embedding 与 auth/admin 探针未执行。完整 release/rollback 收据见 Git 历史，当前身份按 Hermes CURRENT。
 - 2026-10-08：针对“结构正确但缺少美感”的反馈，重新审查指南真实首屏并完成一轮艺术指导：真实研究图解改为展品构图，增加轻微错位纸张色块、印刷式 metadata、错位投影与更有张力的标题比例；Hermes 仍保持页面自有锚定位。内置浏览器窄屏截图已观察到研究对象、光学丝带与 Hermes 的层次关系，尚未部署。
 - 2026-10-08：历史错误表述已撤回；Synclip 同时是图片和视频供应商。当前源码新增 Synclip LTX video candidate adapter/broker，尚未部署或完成真实私有解码验收；MiniMax H3 保留为独立 pilot。`openscience-research-video` Skill、能力台账和 CURRENT 已统一到 H3 的 `/v2/video_generation` + `/v2/query/video_generation/{task_id}`、15s/2K/16:9、参考图、原生音轨及逐幕 attempt/receipt 保护。
 - 2026-10-08：Synclip video candidate 已落入 canonical worktree：LTX `ltx23`/`ltx23fast`、5/10/15 秒、root-only broker、逐镜 receipts、首帧 inline reference、MP4 download/concat。源码和定向测试通过；尚未安装服务器 bundle、真实调用或宣称音频可用。
@@ -24,8 +26,7 @@
 - 2026-10-08：沿现有 Hermes 分镜链补入 provider-neutral 的 `videoProduction` 与逐幕 `videoDirection` 合同；它们承载论文来源约束下的叙事弧、主体连续性、生成元素、动作/相机、参考帧、音频候选策略、字幕和负向约束。Domain 分镜合同、Hermes 生成提示、视频 Skill 与本地 runner 兼容均已定向检查通过；当前为未部署候选，Synclip 视频 exact contract 与真实私有解码结果仍未确认，不发起付费视频请求。
 - 2026-10-08：依据真实页面几何和 UI Pro Max 的 Editorial Grid / purposeful reveal 建议，指南研究证据加载状态加入单一渐变扫光；减少动态效果时保持静态。TypeScript、tokens contrast 10/10 与 impeccable detector 通过，尚未部署。
 - 2026-10-08：研究阅读页完成第一轮出版物式收敛：正文从大白色圆角卡片和阴影中释放，改为规则线与纸面节奏；真实媒体保留轻量边角，标题、贡献和正文成为主视觉。TypeScript、tokens contrast 10/10 与 impeccable detector 通过，尚未部署。
-- 2026-10-08：候选 `784c6b25342c29bdc5c2db193258d34dfafd4e64` 已发布，回滚 `0c8fbf58824a59abc585643241a3083315b496df`；视频 CI `37652305743`、媒体技能 CI `37652305759` 全绿。Hermes 原生 catalogue/runtime 已切换并读回 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`，timer active/enabled。未发起 Synclip 视频请求，仍待 exact contract 与一次私有解码验收。
-- 2026-10-07：应用 release `0c8fbf58824a59abc585643241a3083315b496df` 已按既有发布事务成功上线，回滚为 `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`；CI `37643577812` 全绿。服务器原生 catalogue/runtime 已安装并读回 `project-catalogue-0c8fbf58824a59abc585643241a3083315b496df` / `installed-native-continuation-0c8fbf58824a59abc585643241a3083315b496df`，API/Worker healthy、Hermes timer active/enabled，Worker 绑定检查通过。此次部署使用 `--no-tests`，Parser/ScanSci/embedding 深层 canary 仍未观察。
+- 2026-10-07/08 历史发布：`0c8fbf58`、`784c6b25` 的应用、原生 catalogue/runtime 与对应 CI 通过；当时未验证深层 Parser/ScanSci/embedding 或真实 Synclip 视频。完整版本和收据保留 Git 历史，当前部署及视频验收按 Hermes CURRENT。
 - 2026-10-06：用户固定 GitHub 协作目标为 DHL 仓库 `frontend/nanqing`，不合并 `main`；Nanqing96 三条旧分支与旧前端 tip 已原样归档至 DHL `archive/*`，保留提交/文件。共享期刊 PDF 候选补实时页图和每次 OCR 外发授权修复 `81ae7d2c`，本地 Domain14、Gateway38、Worker6 与类型检查通过，独立 High 代码 GO；最终分支 CI、Linux socket、parser acceptance、服务器部署及真实 Hermes 科学验收尚未完成，详见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 - 2026-10-06：按用户要求建立期刊 PDF 与首页论文入口共用解析/核源候选：保留私有页码 SourceMap，新 PDF 调用首页 P 工具、六字段与 Claims 终审，期刊授权/编辑确认/发布仍独立；旧 J 检查点不变。基于共享分支 `0a773d93`，本地检查与期刊/共享 Hermes 两组 CI 成功；尚未做真实 Hermes PDF 或部署验收，运行收据与限制见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
 - 2026-10-06：修复随 `d6ddcd57` 发布后，用同一 RO 第二幕新任务 `e8b6cb5d-f251-426a-8017-8d5b79354976` 完成真实验证：Synclip `gpt-image-2` 产出私有 draft，MiniMax-M3 原生审校 `completed/accepted`，任务 100%/无错误；页面显示两张图片，未公开。公网 `/__release` 与 `.release-id` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，Worker 近10分钟无该解析错误。

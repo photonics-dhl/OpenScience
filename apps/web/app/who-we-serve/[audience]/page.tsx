@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import SiteHeader, { PublicProductAccess } from '@/components/landing/SiteHeader';
 import { PublicShell } from '@/components/shell/PublicShell';
 import { SERVICE_AUDIENCES } from '@/lib/service-audiences';
+import { TechnologyDiscovery } from '@/components/technology-discovery/TechnologyDiscovery';
 import styles from '../services.module.css';
 
 export default async function AudiencePage({ params }: { params: { audience: string } }) {
@@ -12,6 +13,11 @@ export default async function AudiencePage({ params }: { params: { audience: str
   if (!audience) notFound();
   const t = await getTranslations('services');
   const shell = await getTranslations('shell');
+  if (audience === 'industry' || audience === 'investors') return <PublicShell tone="paper" includeHermesDock={false} wrapHeaderActionsOnMobile
+    headerActions={<SiteHeader context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}
+    navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
+    <TechnologyDiscovery key={audience} audience={audience} />
+  </PublicShell>;
   return <PublicShell tone="paper" includeHermesDock={false} wrapHeaderActionsOnMobile
     headerActions={<SiteHeader context="public-product" tone="paper" />} headerUtilities={<PublicProductAccess />}
     navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>

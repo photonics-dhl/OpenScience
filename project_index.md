@@ -1,6 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
-`docs/handoff/2026-10-09-researchers-services-handoff.md`：Researchers 服务入口唯一 CURRENT；记录本轮候选、验证、部署边界及个人主页后续范围。
+`docs/handoff/2026-10-09-researchers-services-handoff.md`：服务对象入口唯一 CURRENT；记录 Researchers、Industry / Investors 候选、验证、部署边界及后续范围。
+
+Industry / Investors 页面和内部架构：`docs/specs/2026-10-09-technology-discovery-design.md`（[技术发现设计](docs/specs/2026-10-09-technology-discovery-design.md)）。实现：`apps/web/components/technology-discovery/{TechnologyDiscovery.tsx,technology-discovery.module.css}`、`apps/web/lib/technology-discovery/{types,service,storage,contact}.ts`；定向验证：`apps/web/test/technology-discovery.test.ts`、`apps/web/test/e2e/technology-discovery.spec.ts`。仅扩展这两类受众，机构与期刊介绍页暂缓。执行状态见上述服务对象 CURRENT。
 
 Researchers 服务入口：`apps/web/app/who-we-serve/{page.tsx,researchers/page.tsx,[audience]/page.tsx,services.module.css}`、`apps/web/components/navigation/{ServiceAudienceMenu.tsx,service-audience-menu.module.css,ProductRouteNavigation.tsx,navigation.module.css}`、`apps/web/components/landing/SiteHeader.tsx` 与 `apps/web/lib/service-audiences.ts` 提供五类介绍和四个操作入口。`apps/web/app/research-objects/new/page.tsx`、`apps/web/lib/{research-creation-copy,api}.ts`、`apps/web/components/intake/EvidenceIntake.tsx`、`apps/web/components/hermes/HermesWorkspaceStage.tsx` 实现模式、登录返回、PDF/手填创建和控件保护；`packages/domain/src/ingestion/ingestion-service.ts` 保留声明元数据，`apps/web/components/research/ResearchTypeLabel.tsx`、`apps/web/app/research-objects/[id]/edit/page.tsx`、`apps/web/components/public/PublicVersionPage.tsx` 显示类型。中英文资源 `apps/web/messages/{zh,en}.json`；定向测试 `apps/web/test/{research-creation-api.test.ts,e2e/researcher-services.spec.ts}`、`packages/domain/test/ingestion-service.test.ts`。状态与限制见 [Researchers CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)，不与 Hermes 媒体任务状态混写。
 
