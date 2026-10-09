@@ -4,7 +4,7 @@
 ## 目标与边界
 - 依据[开发规格](../OpenScience_Kimi_Development_Spec.md)：真实 NousResearch Hermes Agent 理解全文、提炼六维/Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不做额外同行评议，不以 Codex 手稿替代自动科学能力。
 - 10-09用户明确纠正过度复杂化并同意继续：复用已有理解→按需回读关键原文/图页→简洁分镜、风格与提示词→出图→核对实际图片。只修涉及画面含义/定义和工具阻力，不再把UI收尾算作生图进度。
-- 最新UI直接human `01a11f6e-336f-7493-97fc-3a5fce810ccc`要求讨论研究桌面的Hermes放置，反对半透明全身角色遮科研图，倾向头像或可选点开；root已直接读取原话。UI已核官方案例并问“默认头像点击展开/常开对话头部头像”，待用户答复，root不代选；旧360常驻/宽屏常开不再当永久要求。暂不继续围绕该旧呈现补patrol诊断，已发现的就绪问题及证据保留，按新入口复用范围再闭合。
+- 最新UI直接human反对半透明全身角色遮图，并已在`01a11f96-9a15-7fb0-a144-e771eb3859e0`选“默认头像，点击展开”；root直接核原问题及回复，不再待选/代问。研究桌面/工作区收起为Live2D头像＋Hermes，点击开对话，全身仅在助手专属区，Landing无角色不变。旧360常驻/宽屏常开已被新决定替代；原patrol失败/校准保留，按新入口仍复用的行为更新验收，不为旧呈现再堆诊断或容差。
 - 2–3篇真实论文的凝练、用户确认、配图与公开展示仍是目标；三篇整体验收、普通用户旅程、完整视频、整站审美均未完成。单图认可、单测、CI或部署不代替质量认可，不批量冷启动。
 - 图片已验证gpt-image-2；新图片/视频按既有Synclip授权、视频目标LTX。旧gpt-image-2.5无receipt那次仍UNCERTAIN，不盲重试/自动换供应商。原生独立像素核验未通用验收，现Worker→Gateway单次vision不冒称Nous审阅loop。
 - 保留原PDF/SourceMap、认可图片、公开标识、sealed记录、原失败/费用/receipt/oncekey。日常结果私有，公开沿原确认流程；主Gateway/Native M3不全局切换，未知paid/started CP不重放，不因idle扩预算/安装/重启。
@@ -15,8 +15,8 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | Native安装后restore-previous最小设计已交，待与transaction联合High；0source写，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 设计原transaction/state/test中的正常暂停、同FD9安装及先恢复Native后启旧应用接缝，先只读 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两专属CSS的题名/保存/正文实施继续，六字段/行为保留；Hermes呈现按最新偏好待答复 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
-- 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。三线无生产写窗口，不并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 先独立交两CSS；已授研究Hermes入口/呈现组件＋companion CSS/必要anchor调用方独占写权，直接实现已选头像入口 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
+- 各owner仅写已授范围，不回退他人修改；root持有共享CI/docs及dashboard/workspace集成spec，UI持研究Hermes产品入口写权。单renderer/跨路由/焦点/运行任务/权限与零POST边界保留，测试随新真实路径同步。三线无生产写窗口，不并行发布/资产写；在途自然收尾，不派重复检查。
 
 ## Git / CI / 运行事实
 - root已推`78694e6a0774324e8b42b22fdd55c09487b27450`（校准代码cc432）。保留远端0c588c历史但拒收其四边±1px测试容差；此前speech扩面、reader visible:first和宽泛mocks亦拒收。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推，尚非发布GO。
