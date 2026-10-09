@@ -13,7 +13,7 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | fresh括号误判已修；资源配对后由Native纠正真source/时空矛盾，cb未知保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟fixture已收且视频Linux过；只读定位deploy TERM fixture新失败 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟fixture已收且视频Linux过；仅修deploy.test该TERM用例的握手/自有进程清理，生产脚本不改 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | mobile裁切已过；只读patrol geometry新差额，Figma14frame为候选 | `.worktrees/research-product-craft` / `codex/ui-conversation-control-20261009` |
 - 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。无production writer、无并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
