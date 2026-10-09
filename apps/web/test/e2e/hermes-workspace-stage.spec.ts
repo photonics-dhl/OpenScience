@@ -184,6 +184,8 @@ test('page-owned Hermes preserves click intent and settles away from protected w
   await page.mouse.move(cancelInput!.x - 40, cancelInput!.y + 30, { steps: 4 });
   expect(await stage.evaluate((element) => element.hasPointerCapture(1))).toBe(true);
   await stage.evaluate((element) => element.releasePointerCapture(1));
+  // Explicit release is processed by the next pointer event, before mouseup.
+  await page.mouse.move(cancelInput!.x - 39, cancelInput!.y + 30);
   await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');

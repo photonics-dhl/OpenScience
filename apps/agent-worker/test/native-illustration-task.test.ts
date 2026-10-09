@@ -33,6 +33,15 @@ describe('native source notation compatibility', () => {
     const result = evaluate(source, 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).');
     expect(result, JSON.stringify(result)).toMatchObject({ status: 'science_ready' });
   });
+  it('accepts a sourced comparison through the native tool with or without prose parentheses', () => {
+    const source = 'The confined field satisfies FWHM_S ≪ λ0/2.';
+    expect(evaluate(source, 'The field satisfies FWHM_S ≪ λ0/2.')).toMatchObject({ status: 'science_ready' });
+    expect(evaluate(source, 'The field satisfies (FWHM_S ≪ λ0/2).')).toMatchObject({ status: 'science_ready' });
+  });
+  it('retains the complete denominator when a parenthesized comparison has no matching source', () => {
+    const result = evaluate('The confined field satisfies FWHM_S ≪ λ0/2.', 'The field satisfies (FWHM_S ≪ λ0/3).');
+    expect(result).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining('_source') });
+  });
   it('rejects an ambiguous display footer without an equation relation, retaining the full Eq.1 positive', () => {
     const ambiguous = String.raw`$$ (FWHM_S/V_e) \cdot (1-\beta\cos\theta) \quad (2)$$`;
     expect(normalizeScientificSourceNotation(ambiguous)).toEqual({ text: ambiguous,

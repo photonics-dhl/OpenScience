@@ -494,16 +494,39 @@ export async function runSynclipVideoBrokerOnce(cfg, deps = {}) {
   }
 }
 export function validateSynclipVideoBrokerConfig(value) { return config(value); }
+export async function listSynclipAudioCatalog(cfg, deps = {}) {
+  const apiKey = await (deps.readKey ?? key)(cfg.keyPath);
+  const client = new SynclipAudioClient({ apiKey, timeoutMs: 15000, fetch: deps.fetch });
+  const voices = await client.listVoices();
+  return { provider: 'synclip', voices: voices.map(({ preview_url, ...voice }) => ({
+    ...voice, previewAvailable: Boolean(preview_url),
+  })) };
+}
+export function synclipAudioCatalogFailure(error) {
+  const known = error instanceof SynclipAudioError;
+  return { error: 'SYNCLIP_AUDIO_CATALOG_FAILED', code: known ? error.code : 'EXECUTION_FAILED',
+    ...(known && Number.isInteger(error.httpStatus) && error.httpStatus >= 400 && error.httpStatus <= 599
+      ? { httpStatus: error.httpStatus } : {}) };
+}
 async function main() {
-  if (process.getuid?.() !== 0 || process.getgid?.() !== 1000 || process.argv.length !== 4
-    || process.argv[2] !== '--config' || resolve(process.argv[3]) !== ROOT + '/config.json') fail('VIDEO_CONFIG_REQUIRED');
-  const path = resolve(process.argv[3]), info = await lstat(path);
+  const catalogMode = process.argv[2] === '--list-voices';
+  const args = process.argv.slice(catalogMode ? 3 : 2);
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 1000 || args.length !== 2
+    || args[0] !== '--config' || resolve(args[1]) !== ROOT + '/config.json') fail('VIDEO_CONFIG_REQUIRED');
+  const path = resolve(args[1]), info = await lstat(path);
   if (!info.isFile() || info.isSymbolicLink() || info.uid !== 0 || (info.mode & 0o777) !== 0o600) fail('VIDEO_CONFIG_PERMISSIONS');
   const cfg = config(JSON.parse((await read(path, 16384)).toString()));
+  if (catalogMode) {
+    console.log(JSON.stringify(await listSynclipAudioCatalog(cfg)));
+    return;
+  }
   await key(cfg.keyPath);
   const result = await runSynclipVideoBrokerOnce(cfg);
   if (result) console.log(JSON.stringify(result));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(() => { console.error('SYNCLIP_VIDEO_BROKER_FAILED'); process.exitCode = 1; });
+  main().catch(error => {
+    console.error(process.argv[2] === '--list-voices' ? JSON.stringify(synclipAudioCatalogFailure(error)) : 'SYNCLIP_VIDEO_BROKER_FAILED');
+    process.exitCode = 1;
+  });
 }
