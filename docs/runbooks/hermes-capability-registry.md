@@ -1,5 +1,9 @@
 # Hermes Capability Registry
 
+公共导航的 About 联系、问题反馈、情报分析演示申请由 `apps/web/app/contact/` 提供主题说明；共用 `components/contact/EmailDraftButton.tsx`，点击才由 `POST /contact/email` 返回服务端配置的收件地址，正文仅在浏览器组装，不提供发信服务，也不保证阻止主动抓取。API 链接既有开发者文档，上传／创建研究复用原 `ResearchGuide`，没有新增 Hermes 模型能力。验证及候选见 [导航与服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)。
+
+Industry / Investors 技术发现入口复用已有 `/literature/acquisitions` 与精确 `source.retrieve` 任务：`apps/web/lib/technology-discovery/` 负责元数据适配、幂等恢复、账号/受众草稿及咨询资料，`components/technology-discovery/` 消费。新增能力为前端检索、来源比较/导出与用户自发邮件草稿；自然语言需求拆解、全文技术分析、技术成熟度判断和自动跟踪尚未接入，不将固定状态文案称作 Hermes 模型回答。实际验证/部署边界见 [服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)，架构见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。
+
 单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点

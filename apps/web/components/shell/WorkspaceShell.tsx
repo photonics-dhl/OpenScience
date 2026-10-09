@@ -3,7 +3,7 @@ import * as React from 'react';
 import styles from './research-workspace.module.css';
 import { cn } from '@/lib/utils';
 import { ProductRouteNavigation } from '@/components/navigation/ProductRouteNavigation';
-import { AccountLink } from '@/components/navigation/AccountLink';
+import { ProductHeaderActions } from '@/components/navigation/ProductHeaderActions';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
 interface WorkspaceShellProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -43,7 +43,7 @@ function WorkspaceShell({
         compactBrandOnMobile
         navigationLabel={navigationLabel}
         tone="paper"
-        utilities={headerActions ?? <AccountLink user={null} />}
+        utilities={<ProductHeaderActions existingActions={headerActions} />}
         wrapActionsOnMobile
       />
       <div className="flex min-h-16 items-center border-b border-os-rule-paper px-4 sm:px-6 lg:px-8" data-object-context-bar="true">

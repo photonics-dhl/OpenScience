@@ -240,7 +240,11 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   const openCompanion = useCallback(() => setRouteAssistantOpen(true), []);
   const context = useMemo(() => ({ openCompanion, register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting, companionOpen: routeAssistantOpen }), [openCompanion, register, registerAnchor, setGuideTarget, setRouteState, setWriting, routeAssistantOpen]);
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
-  const surface = resolveHermesCompanionSurface(pathname);
+  // These focused creation forms have no Hermes conversation target. Keep the
+  // global companion off the form so its detached actor cannot cover Submit.
+  const focusedCreation = pathname === '/research-objects/new'
+    && ['published', 'preprint'].includes(searchParams.get('type') ?? '');
+  const surface = focusedCreation ? null : resolveHermesCompanionSurface(pathname);
   const researchObjectId = researchObjectFromHermesPath(pathname);
   const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
     ? {

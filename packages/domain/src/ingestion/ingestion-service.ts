@@ -1827,6 +1827,25 @@ function assertReviewableIngestionProposal(task: { artifactId: string; artifact:
   }
 }
 
+const CREATION_METADATA_KEYS = ['researchType', 'originalAuthors', 'originalJournal', 'originalDoi'] as const;
+
+/** Only the existing RO declaration, never an extraction proposal, can supply creation metadata. */
+function preserveCreationMetadata(submitted: Record<string, string>, stored: unknown): Record<string, string> {
+  const core = { ...submitted };
+  for (const key of CREATION_METADATA_KEYS) delete core[key];
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return core;
+  const saved = stored as Record<string, unknown>;
+  if (saved.researchType !== 'published' && saved.researchType !== 'preprint') return core;
+  core.researchType = saved.researchType;
+  if (saved.researchType === 'published') {
+    for (const [key, maxLength] of [['originalAuthors', 1000], ['originalJournal', 300], ['originalDoi', 255]] as const) {
+      const value = saved[key];
+      if (typeof value === 'string' && value.length <= maxLength) core[key] = value;
+    }
+  }
+  return core;
+}
+
 async function savedConfirmation(deps: IngestionDeps, taskId: string, researchObjectId: string, key?: string): Promise<(CreateCommitResult & { origin?: SavedIngestionOrigin }) | null> {
   const saved = await findSavedIngestionCommit(deps.prisma, { taskId, researchObjectId, ...(key !== undefined ? { idempotencyKey: key } : {}) });
   if (!saved) return null;
@@ -1924,6 +1943,7 @@ async function saveIngestionTask(
           assertReviewableIngestionProposal(task, input.core);
           const document = await tx.sdfDocument.findUnique({ where: { researchObjectId: ro.id } });
           if (!document) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
+          const confirmedCore = preserveCreationMetadata(input.core, document.coreJson);
           const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id }, orderBy: { versionNo: 'desc' } });
           const previous = latest ? await tx.versionManifest.findUnique({ where: { versionId: latest.id }, include: { entries: true } }) : null;
           const artifacts = (previous?.entries ?? []).map(entry => ({ logicalPath: entry.logicalPath, artifactId: entry.artifactId }));
@@ -1933,9 +1953,9 @@ async function saveIngestionTask(
             artifacts.push({ logicalPath, artifactId: task.artifactId });
           }
           commit = await createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: input.version,
-            sdfCore: input.core, artifacts, message: `${internalRunId ? 'Hermes reviewed import' : 'Confirm import'}: ${task.artifact.logicalPath}`, idempotencyKey: commitKey }, ctx, tx,
+            sdfCore: confirmedCore, artifacts, message: `${internalRunId ? 'Hermes reviewed import' : 'Confirm import'}: ${task.artifact.logicalPath}`, idempotencyKey: commitKey }, ctx, tx,
             internalRunId ? { executor: 'hermes', runId: internalRunId } : undefined);
-          await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: input.core } });
+          await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: confirmedCore } });
           for (const nodeType of SDF_NODE_TYPES) await tx.sdfNode.update({
             where: { sdfDocumentId_nodeType: { sdfDocumentId: document.id, nodeType } }, data: { content: input.core[nodeType] ?? '' },
           });

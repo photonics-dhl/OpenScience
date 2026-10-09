@@ -1,4 +1,5 @@
 'use client';
+import { ResearchTypeLabel } from '@/components/research/ResearchTypeLabel';
 import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -1220,7 +1221,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             objectId={roId}
             saveState={serverSaveState === 'saving' ? 'saving' : serverSaveState === 'error' && state.dirty ? 'error' : state.dirty ? 'dirty' : 'saved'}
             title={objectMeta.title}
-            metadata={authorNames.length > 0 ? tw('platformAuthors', { names: authorNames.join(' · ') }) : undefined}
+            metadata={<><ResearchTypeLabel core={state.core} />{authorNames.length > 0 ? <span className="block">{tw('platformAuthors', { names: authorNames.join(' · ') })}</span> : null}</>}
             version={state.version}
             visibility="private"
             actions={publishedVersions[0] && objectMeta.publicId ? <><Link className={styles.detailsLink} href={`/research/${encodeURIComponent(objectMeta.publicId)}/v/${publishedVersions[0].publicationNo}`}>{tw('openPublicVersion', { number: publishedVersions[0].publicationNo! })}</Link><button type="button" className={styles.detailsLink} onClick={() => { setHermesInitialGoal(th('previewUpdateCommand')); setHermesOpen(true); }}>{th('previewUpdate')}</button></> : undefined}
