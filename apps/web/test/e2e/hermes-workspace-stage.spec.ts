@@ -440,6 +440,8 @@ test('one Hermes stage persists across workspace routes and expands from the edi
   await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
   await expect(initialInlineAssistant).toHaveCount(0);
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'false');
+  await expect(page.locator('[role="dialog"], [aria-modal="true"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '120');
   await expect(page.locator('.hermes-editor-anchor').locator('[data-hermes-workspace-stage]')).toHaveCount(1);
