@@ -8,7 +8,7 @@
 
 Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`规定原写门禁、排空、timer原状态和配对失败恢复；关闭video host可复用，真实启用另验，状态见CURRENT。
 
-紧凑研究入口与版式：`HermesDockAnchor.tsx`共用原120px锚点和对话按钮；`HermesWorkspaceStage.tsx`保留Drawer关闭回焦，并接既有fallback retry与generation恢复、保持偏好和单renderer边界，`hermes-dashboard.spec.ts`覆盖生命周期。`ResearchGuide.tsx`提供固定公开版本及原图大图入口；`vendor-ux.spec.ts`与`research-continuation.spec.ts`承接指南/阅读截图，原media CI保存正常PNG/捕获JSON及失败trace；实际验收见CURRENT。
+紧凑研究入口与版式：`HermesDockAnchor.tsx`共用原120px锚点和对话按钮；`HermesWorkspaceStage.tsx`与既有Drawer处理调用入口回焦，并接fallback retry与generation恢复、保持偏好和单renderer边界。`hermes-dashboard.spec.ts`覆盖生命周期；`hermes-workspace-stage.spec.ts`覆盖跨路由实例及editor外部入口卸载后的回退。`ResearchGuide.tsx`提供固定公开版本及原图大图入口；`vendor-ux.spec.ts`与`research-continuation.spec.ts`承接指南/阅读截图，原media CI保存正常PNG/捕获JSON及失败trace；实际验收见CURRENT。
 
 期刊阅读角色：`journals/[slug]/page.tsx`与`PublicJournalRelease.tsx`使用原页内anchor；公开版本页仅journalPackage关闭shell fallback。`JournalDirectory.tsx`默认折叠高级筛选并显示有效条件，原interaction测试和`apps/api/test/journal-browser.test.ts`覆盖键盘、URL恢复、首帧/位置与摘要无遮挡；`globals.css`/`tokens.css`复用站内CJK字体后备。真实图及观察边界见CURRENT。
 

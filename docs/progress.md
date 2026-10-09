@@ -3,7 +3,7 @@
 动态任务、分工、版本和未完成交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；本页只保留最近检查点。
 
 ## 最近检查点
-- 2026-10-09：586视频CI过、期刊/media未绿。ff→ab3独立Enable原RED1PASS12.2s，累计10不同完整代表；804→643焦点已High增量GO/TC/lint0，生图只验两Talk与既有editor case新增外部opener卸载回退。先前retry/nudge/离屏/两spec TC证据复用，撤回visual焦点两项不计；navigation及版本阅读待CI，reload/state-loop未复验。原证据/cache保留，差额齐再推，无生产/付费/资产动作。
+- 2026-10-09：586视频CI过、期刊/media未绿。loading原严格单例本次1PASS11.5s，累计11不同完整代表；历史SyntaxError未定因。643两Talk回焦仍RED；1ff→bd41扩editor用例，a600关闭初始wide inline前置已通过，后续guide展开仍阻断compact断言，原visual/新external分支未执行。UI按真实Talk差额修现有回焦并核editor引导语义，同High增量审查；视频无新增错误证据不重复检查，原11PASS/两spec静态复用。差额齐再推，navigation及版本阅读待CI；无生产/付费/资产动作。
 - 2026-10-09：be426视频及期刊三路CI通过，真实期刊图与六组锚点/首帧记录闭合原Hermes遮摘要；全页图黑skip-link先按滚动捕获差异处理，不误改键盘控件。媒体导航5过/1历史href旧断言失败/64未跑，生图接同文件完整验证；root让下一轮跑完整既定组收齐失败，UI接有实际375像素依据的目录控制栈优化。无生产、五项资产或付费动作。
 - 2026-10-09：9fb视频/期刊三路CI通过，media图文27与指南3通过后在导航旧标题断言失败，66项未执行；同一导航/blocked合同修复f865已全等集入，受影响3/3通过。真实期刊图发现窄屏浮卡挡摘要，UI页内入口修复68e已收/High GO；根补首帧/锚点/无遮挡捕获，并用现有字体补中文缺字后备。新组合WebTC/静态检查通过，实际图与下一批CI仍待；无生产或付费操作。
 - 2026-10-09：4ba后端CI已走通，媒体浏览器首组25过/2败已由真实DTO夹具差额闭合，Edge受影响2/2通过；无产品修补或付费。首轮UI14d最小集入c962，canonical24/24、TC/build0；阅读栏补截图点，指南补真实fixture/回焦用例后同批Linux CI。实际PNG、导航后续组与生产验收仍待，版本/保护边界见CURRENT。
