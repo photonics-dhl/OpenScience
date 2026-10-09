@@ -325,12 +325,56 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-  const mobileStageBox = await page.locator('[data-hermes-workspace-stage]').boundingBox();
-  const mobileMotionToggleBox = await page.locator('[data-hermes-motion-toggle]').boundingBox();
+  const mobileStage = page.locator('[data-hermes-workspace-stage]');
+  const mobileRig = page.locator('[data-hermes-rig="live2d-wanko"]');
+  const mobileMotionToggle = page.locator('[data-hermes-motion-toggle]');
+  await expect(mobileStage).toBeVisible();
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
+  await expect(mobileMotionToggle).toBeHidden();
+
+  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  const mobileDialog = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(mobileDialog).toBeVisible();
+  await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'false');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(mobileStage).toHaveCount(1);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
+  await expect(mobileMotionToggle).toBeVisible();
+  await expect(mobileMotionToggle).toBeEnabled();
+  await expect(mobileMotionToggle).toBeInViewport({ ratio: 1 });
+  const mobileStageBox = await mobileStage.boundingBox();
+  const mobileMotionToggleBox = await mobileMotionToggle.boundingBox();
   expect(mobileStageBox).not.toBeNull();
   expect(mobileMotionToggleBox).not.toBeNull();
   expect((mobileMotionToggleBox?.y ?? Infinity) + (mobileMotionToggleBox?.height ?? 0))
     .toBeLessThanOrEqual(mobileStageBox?.y ?? 0);
+
+  await mobileMotionToggle.click();
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'false');
+  await expect(mobileRig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'false');
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
+  await expect(mobileMotionToggle).toBeEnabled();
+  await mobileMotionToggle.click();
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'true');
+
+  await mobileDialog.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(mobileDialog).toHaveCount(0);
+  await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'false');
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '120');
+  await expect(mobileMotionToggle).toBeHidden();
+  await expect(mobileStage).toHaveCount(1);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
   await page.screenshot({ path: `${outDir}/suggesting-needs-review-390x844.png`, fullPage: true, animations: 'disabled' });
 
   await page.unrouteAll({ behavior: 'wait' });
