@@ -16,7 +16,7 @@ Native发布配对：`infra/hermes-agent/install.py`沿原runtime-snapshot制作
 
 紧凑研究入口与版式：`companion-surface.ts`集中判定研究workspace的64px头像；`HermesDockAnchor.tsx`、dashboard/edit/new/RO-hermes及`ResearchSurfaceShell.tsx`复用原controller和Drawer。`HermesWorkspaceStage.tsx`维护单portal/canvas与入口回焦；`HermesVisualAdapter.tsx`、`HermesRiggedPortrait.tsx`保留框内互动、motion偏好和对话内审批静止。`hermes-dashboard.spec.ts`覆盖帧内布局/互动与恢复，`hermes-workspace-stage.spec.ts`覆盖跨页/开关/焦点。`ResearchGuide.tsx`提供固定公开版本与原图；`vendor-ux.spec.ts`、`research-continuation.spec.ts`承接阅读截图。原media CI构建Web后经start-signup-web.mjs启动同产物并保存PNG/JSON/trace，实际验收见CURRENT。
 
-编辑来源切换：`apps/web/app/research-objects/[id]/edit/page.tsx`将RO/SDF初始化与来源query选择分开，复用已有任务同步、proposal轮询取消和材料操作后的显式刷新；原workspace-stage浏览器用例承接抽屉入口回焦与renderer身份，运行验收仍见CURRENT。
+编辑来源切换：`apps/web/app/research-objects/[id]/edit/page.tsx`按RO key保持实例，将RO/SDF初始化与来源query选择分开，复用已有任务同步、proposal轮询取消和材料操作后的显式刷新；原workspace-stage浏览器用例承接抽屉入口回焦、renderer身份及avatar菜单viewport。菜单沿`HermesVisualAdapter.tsx`和`globals.css`区分Radix头像定位与完整角色carried-sheet，运行验收仍见CURRENT。
 
 期刊阅读角色：`journals/[slug]/page.tsx`与`PublicJournalRelease.tsx`使用原页内anchor；公开版本页仅journalPackage关闭shell fallback。`JournalDirectory.tsx`默认折叠高级筛选并显示有效条件，原interaction测试和`apps/api/test/journal-browser.test.ts`覆盖键盘、URL恢复、首帧/位置与摘要无遮挡；`globals.css`/`tokens.css`复用站内CJK字体后备。真实图及观察边界见CURRENT。
 

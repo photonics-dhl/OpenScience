@@ -15,18 +15,18 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 新图审按High补PNG transport、固定预算/CP及局部pixel角色，受限代码/离线实现，不挡本批 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | edit/page.tsx两行修复已收，来源query不再重置工作台；High GO待原CI。真实Key目录/声音验收待正常发布 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/editor-source-focus`（baseea1，4cf保留） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | bd1→6c10三项spec已收；下一独立批仅ShellPrimitives.tsx/navigation.module.css整理手机两行header，不挡本批 | `.worktrees/research-product-craft` / 原spec分支已交；获授同树`codex/ui-mobile-header-20261010` |
-- 各owner仅写已授范围，不回退他人修改；root持共享CI/docs/spec，video独占edit/page.tsx，UI仅上列两文件；image图审独立。单renderer/任务/权限及零POST边界保留；不重复未变检查。三线无生产writer，不并行发布/资产写。
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 757初始化分离+d754上层RO key均已收/High GO，待原focus CI；真实Key目录/声音验收待正常发布 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/editor-source-focus`（4cf保留） |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | header两文件7b6698已交未集入/High与static GO；仅原navigation-refresh.spec必要覆盖，下一批不挡本批 | `.worktrees/research-product-craft` / `codex/ui-mobile-header-20261010`（base6c10，旧证据保留） |
+- 各owner仅写已授范围，不回退他人修改；root持当前Adapter/globals/workspace spec及CI/docs，video的edit窗口交付关闭，UI仅下一批原navigation spec；image图审独立。单renderer/任务/权限及零POST边界保留；三线无生产writer，不并行发布/资产写。
 
 ## Git / CI / 运行事实
-- 已正常推ea1b2f3bb10c961be8349bb5a2a050f444edf30c，保留a1bab48e历史及7e有效证据；5578→rootde4d全等。合并接缝High GO，无type/unknown type草稿2例已过。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推；原0c588容差、speech扩面及宽泛mocks未收。尚非发布GO。
-- 历史7f/786：7f除Dashboard24/25外通过；786 video/journal过，push media37897396616全过含Dashboard25/25，PR media37897401824为24/25（其余job过）。旧前置safe=false与实时clear差额未定根因，按最新头像需求停止外部全身呈现取证；原RED/253帧/10201相位/101rest及c041/cc432 High证据保留在root `tmp/session-coordination-20261008/*7f5945d6*`、`dashboard-{fd380e16,78694e6a}-artifact/`，不追认旧失败。
+- 上轮正常推f2a2677cef5e96f4d04366e75ee4bdcd24702483，保留a1bab48e历史及既有证据；本批其上集入下述新增修复。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推；原0c588容差、speech扩面及宽泛mocks未收，尚非发布GO。合并接缝High及无type/unknown type草稿2例证据复用。
+- 历史7f/786的Dashboard差额未定唯一根因，随最新头像需求停止外部全身取证。原RED、相位/帧及High证据保留root `tmp/session-coordination-20261008/*7f5945d6*`、`dashboard-{fd380e16,78694e6a}-artifact/`；完整当轮CI见Git f2a2677c本页，不追认失败。
 - 3485旧失败保留在root同tmp `*-3485*`：Web68缺React/SSR旧尺寸，Dashboard22/26，journal标题814.953>812；video37946090212在临时runner下载FFmpeg阶段超15min，后续未执行，不是API拒绝证据。15→30补丁未应用，新7e正常CI已过。
 - 7e有效主CI/26项Dashboard/auth/reading/video/journal保留；5578/de4d补同RO GET与文档流Y后，ea1 PR media37958651845的主job及其余3个browser过，workspace17/21。剩menu62.08尺寸、创建页跨帧rect、390review回焦、editor overview入口4项；log与共享trace在root同tmp `workspace-ea1-job.log`/`workspace-ea1-artifact/`，未定根因不加容差或改弱断言。ea1 video37958651836、journal37958651849/44222过。
-- bd1ffdec→6c10ad53三项spec全文全等：真实mouseup后移开并核非active、同一浏览器任务读取三个rect严格相等、Research details真实入口；High Scoped GO/TS0/lint0/list21。757add58单文件全等集入，RO初始化移除未使用的ingestionTaskId依赖，原任务同步/轮询/刷新/RO与locale隔离保留；root独立High GO、TSX语法0，旧3项lint与parent全等未混修。新浏览器待同批原CI；旧trace无computed pseudo，不宣称.97唯一根因。
-- d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
-- TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
+- bd1→6c10三项spec全等：真实mouseup后移开/非active、三个rect同帧严格相等、Research details入口；High/TS0/lint0/list21。757add单文件全等集入，初始化移除未用ingestionTaskId依赖，原同步/轮询/刷新/RO与locale隔离保留；High/TSX语法0，旧3项lint与parent全等未混修。f2结果见下；.97未定唯一根因。
+- f2的两media主job/Dashboard/auth/reading、video37964311008、两journal37964310560/00772全过；workspace PR37964310472/job113934698204仍17/21、push也失败。新trace确认上层EditorWorkspace key还含query造成卸载，d754仅改RO key且High GO；真实Overview/Files已过。root05651局部移除avatar菜单旧carried-sheet偏移并保留Radix边界/可滚动，新增整菜单ratio1；显式modal分支才按隐藏外部控件测物理布局，160直接DOMRect严格等值。High、Adapter/spec TS0/lint0、PostCSS718/0；待下一原CI，不把源码GO称浏览器Green。新log/trace/已看2JPEG在root同tmp `workspace-f2-*`。
+- CI沿d32同次Web build/next start及API_ORIGIN3101，保留原期限、身份/paid/SPA/reader断言；既有ENABLE_VISUAL_HARNESS仅CI开启，生产默认404。TERM helper1e258原FD9/exit143经High与Linux通过，5000ms/生产脚本未改；旧失败完整证据见Git f2a2677c本页。
 - 10-09 23:56 CST直接只读：app=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Worker Native/runtime/catalogue仍784，主模型仍M3。Web/API/Worker healthy、restart0，部署marker列表空；Codex runner.lock不证明paid在途。`live-release-before-native-7e-20261009.json`保留额外inspect exit1/109bytes，不泛称全机验收；原14:04/02:49读数降为历史。
 - Native仍是784，paid/CP保留；image77f＋video4cf七文件Scoped GO且全等集入。3485真实root lifecycle34/34、Node105/105已过，7e主CI也过；当前仍需workspace验证与串行配对发布，未生产写。High与日志在root同tmp `native-pairing-design-high-20261009.md`、`media-main-3485.log`。独立未来图审方案在image原OWNER_CHECKPOINT，不回放旧planning CP、不暗扩多轮预算或改全局M3。
 
@@ -38,7 +38,7 @@
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
 - UI两处编辑CSS3989→root221b全等；PostCSS40/99规则parse0/diff0，六字段/保存/权限不变，运行视觉待新头像批次。Figma编辑2138:117及头像桌面2138:34/入口2169:23已交；root看过1440×1080桌面及148×56局部，56px头像与创建研究同排、完整研究图无遮挡，静态preview不代表运行/数据现状/审美认可。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png。原14journey/High、原文两尺寸/reading20证据保留。
 - Dashboard的d1a差额已由7e真实26/26闭合：Account tools、Retry可见入口、回焦attentive/离开idle、缺detail的route fallback；跨RO守卫保留。64px 1440/390框内draw与PNG已核；UI a0→503的手机间距修复随journal通过，21例workspace余项见上。原High/49unit/Web与scoped TS/lint0复用，不等于线上或整体审美认可。
-- 共享包络按fd真实经验极值B8.6903/L51.9531/R34.2979/T29.2034向外取整，仅扩大三边，bottom旧27不收窄；各argmax落在已采关键帧/hover端点。29建议已撤回，不因left距52近就盲加1px，也不称网格为数学全域证明。786 push原实时巡游已过，PR另有前置就绪差额见上；loading连续handler修复已有真实通过。
+- 共享包络按fd已采关键帧/hover极值向外取整，bottom旧27保持；不为接近边界盲加余量，不称经验网格为全域证明。原数值/786差额/已过loading handler记录见Git f2a2677c本页，当前头像不重做旧巡游。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
 - Fig2 exact5软回收已获human授权并High GO，接受成员旧URL在restore前404及初始30天条件；对象/任务/费用/Claims/sealed保留，禁止purge/补源/重写封存。e77实际published内部v8/OSR-2026-000023-v2，5项全excluded。10-08 23:03:59五项live/42fe；生图无认证、UI正常入口缺精确ID，双方0写释放。行标识165→ab3已收未发，发布后fresh核身份/引用再沿原授权操作，不重复问。
