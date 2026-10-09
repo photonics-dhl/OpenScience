@@ -310,16 +310,19 @@ def install(source, runtime_snapshot, defer_timer=True):
         release = ROOT/'releases'/sha
         if release.exists():
             raise ValueError('Native immutable release already exists; inspect its installation receipt instead of overwriting')
-        timer_was_active = command(['systemctl', 'is-active', 'openscience-hermes-broker.timer'], False).stdout.strip() == 'active'
         timer = 'openscience-hermes-broker.timer'
+        timer_activity = command(['systemctl', 'is-active', timer], False).stdout.strip()
         timer_enablement = command(['systemctl', 'is-enabled', timer], False)
         timer_enabled = timer_enablement.stdout.strip()
-        if not timer_enabled and timer_enablement.returncode != 0 \
-            and _protected_bytes(SYSTEMD_UNITS/timer, allow_missing=True) is None \
-            and command(['systemctl', 'show', timer, '--property=LoadState', '--value'], False).stdout.strip() == 'not-found':
+        if not timer_enabled and timer_enablement.returncode != 0:
             timer_enabled = 'not-found'
+        if timer_enabled == 'not-found' and (timer_activity not in ('unknown', 'inactive') \
+            or _protected_bytes(SYSTEMD_UNITS/timer, allow_missing=True) is not None \
+            or command(['systemctl', 'show', timer, '--property=LoadState', '--value'], False).stdout.strip() != 'not-found'):
+            raise ValueError('Native timer has an unsupported existing enable state')
         if timer_enabled not in ('enabled', 'enabled-runtime', 'disabled', 'not-found'):
             raise ValueError('Native timer has an unsupported existing enable state')
+        timer_was_active = timer_activity == 'active'
         previous_restored = True
         try:
             timer_loaded = command(['systemctl', 'show', 'openscience-hermes-broker.timer', '--property=LoadState', '--value'], False).stdout.strip()

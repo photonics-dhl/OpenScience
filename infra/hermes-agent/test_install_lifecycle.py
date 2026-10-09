@@ -294,6 +294,7 @@ class InstallLifecycleTests(unittest.TestCase):
 
     def test_install_refuses_empty_enable_output_without_full_absence(self):
         timer = self.units/'openscience-hermes-broker.timer'
+        self.active = False; self.layers.clear()
         for kind in ('file-present', 'manager-loaded', 'successful-empty'):
             with self.subTest(kind=kind):
                 if kind != 'file-present': timer.unlink(missing_ok=True)
@@ -311,6 +312,22 @@ class InstallLifecycleTests(unittest.TestCase):
                 self.assertFalse((self.root/'releases'/self.source.name).exists())
                 self.assertFalse(any(event[0] == 'systemctl' and event[1] in ('stop', 'disable', 'enable', 'start')
                                      for event in self.events))
+
+    def assert_install_refuses_active_absent_timer(self, enable_output):
+        (self.units/'openscience-hermes-broker.timer').unlink()
+        self.missing_timer_active = 'active'; self.missing_timer_enabled = enable_output
+        self.layers.clear(); self.active = False
+        with self.assertRaisesRegex(ValueError, 'unsupported existing enable state'):
+            install.install(self.source, self.snapshot)
+        self.assertFalse((self.root/'releases'/self.source.name).exists())
+        self.assertFalse(any(event[0] == 'systemctl' and event[1] in ('stop', 'disable', 'enable', 'start')
+                             for event in self.events))
+
+    def test_install_refuses_active_absent_timer_with_literal_not_found(self):
+        self.assert_install_refuses_active_absent_timer('not-found')
+
+    def test_install_refuses_active_absent_timer_with_empty_failed_enable_output(self):
+        self.assert_install_refuses_active_absent_timer('')
 
     def test_late_restore_refuses_unknown_broker_without_full_absence(self):
         self.prepare_late_restore(absent=True)
