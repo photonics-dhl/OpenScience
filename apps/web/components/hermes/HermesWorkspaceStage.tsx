@@ -318,6 +318,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
   const assistantFocusContextRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
+  const pendingVisualFocusRef = useRef<{ pathname: string; editorOwned: boolean } | null>(null);
   const visualInvocationPathRef = useRef<string | null>(null);
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
@@ -898,12 +899,20 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       const restoreVisualFocus = previousContext.pathname === pathname
         && (visualInvocationPathRef.current === pathname || previousContext.editorOwned);
       visualInvocationPathRef.current = null;
-      if (!restoreVisualFocus) return;
-      const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
-      if (!trigger?.isConnected) return;
-      trigger.focus();
+      pendingVisualFocusRef.current = restoreVisualFocus ? previousContext : null;
     }
-  }, [assistantOpen, conversationAnchor, pathname, presentation?.anchor]);
+    if (assistantOpen || pendingVisualFocusRef.current?.pathname !== pathname) pendingVisualFocusRef.current = null;
+    const pending = pendingVisualFocusRef.current;
+    if (!pending || !portal) return;
+    // The hidden editor seat is measured again after close; wait for the carrier to return there.
+    if (pending.editorOwned && (!presentation?.anchor || portalAnchor !== presentation.anchor)) return;
+    const host = portalAnchor?.isConnected ? portalAnchor : document.body;
+    if (portal.container.parentNode !== host) return;
+    const trigger = stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]');
+    if (!trigger?.isConnected) return;
+    pendingVisualFocusRef.current = null;
+    trigger.focus();
+  }, [assistantOpen, conversationAnchor, pathname, portal, portalAnchor, presentation?.anchor]);
 
   useEffect(() => {
     setGuideReady(false);
