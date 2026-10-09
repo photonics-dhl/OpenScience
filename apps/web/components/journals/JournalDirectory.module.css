@@ -208,7 +208,7 @@
 }
 @media (max-width:760px) {
   .directory[data-journal-directory] { margin-top: 20px; }
-  .directory[data-journal-directory] .entries { margin-top: 16px; }
+  .directory[data-journal-directory] .entries { margin-top: 4px; }
   .directory[data-journal-directory] .entries .entry, .directory[data-journal-directory] .entries > li:first-child .entry { padding: 24px; gap: 12px; }
   .directory[data-journal-directory] .body { grid-template-columns: minmax(0,1fr); gap: 24px; }
   .directory[data-journal-directory] .entries [data-journal-entry] h2 { font-size: 32px; }
