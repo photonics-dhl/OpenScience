@@ -37,7 +37,7 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
     <header
       className={cn(
         'shell-header flex min-h-14 min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 sm:gap-4 sm:px-6 lg:px-8',
-        wrapActionsOnMobile && 'py-1 xl:py-0',
+        wrapActionsOnMobile && 'py-1 md:py-0',
         tone === 'dark' ? 'border-os-rule-dark' : 'border-os-rule-paper',
       )}
       data-shell-header="true"
@@ -51,8 +51,8 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
       {actions ? actionsKind === 'navigation' ? (
         <nav aria-label={navigationLabel}
           className={cn(
-            'ml-auto min-w-0 max-w-full overflow-x-auto overscroll-x-contain [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none',
-            wrapActionsOnMobile && 'order-3 basis-full xl:order-none xl:basis-auto',
+            'min-w-0 max-w-full overflow-x-auto overscroll-x-contain [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none',
+            wrapActionsOnMobile && 'order-3 basis-full md:order-none md:basis-auto',
           )}
           data-mobile-navigation-layout={wrapActionsOnMobile ? 'wrapped' : undefined}
           data-hermes-primary-navigation="true"
@@ -65,7 +65,7 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
           {actions}
         </div>
       ) : null}
-      {utilities ? <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0" data-shell-utility="true">{utilities}</div> : null}
+      {utilities ? <div className="ml-auto flex max-w-full shrink-0 items-center gap-2" data-shell-utility="true">{utilities}</div> : null}
     </header>
   );
 }

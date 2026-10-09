@@ -1,6 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
-`docs/handoff/2026-10-09-researchers-services-handoff.md`：服务对象入口唯一 CURRENT；记录 Researchers、Industry / Investors 候选、验证、部署边界及后续范围。
+`docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录全站导航、Researchers、Industry / Investors 候选、验证、部署边界及后续范围。
+
+统一导航：`apps/web/components/navigation/{NavigationMenu,ProductHeaderActions,ProductRouteNavigation,ServiceAudienceMenu,AccountLink}.tsx`、`apps/web/components/landing/SiteHeader.tsx`、`apps/web/lib/product-navigation.ts` 与 `apps/web/components/shell/{ShellPrimitives,DashboardShell,WorkspaceShell,IdentityShell}.tsx` 提供左侧四项导航与右侧上传/账号入口；上传复用原 `/guide` 整页。About 联系说明及邮件草稿：`apps/web/app/contact/{page.tsx,contact.module.css}`，使用既有集中联系邮箱。定向验证：`apps/web/test/e2e/navigation-refresh.spec.ts`、`apps/web/test/landing-page.test.tsx`；执行状态见上述 CURRENT。
 
 Industry / Investors 页面和内部架构：`docs/specs/2026-10-09-technology-discovery-design.md`（[技术发现设计](docs/specs/2026-10-09-technology-discovery-design.md)）。实现：`apps/web/components/technology-discovery/{TechnologyDiscovery.tsx,technology-discovery.module.css}`、`apps/web/lib/technology-discovery/{types,service,storage,contact}.ts`；定向验证：`apps/web/test/technology-discovery.test.ts`、`apps/web/test/e2e/technology-discovery.spec.ts`。仅扩展这两类受众，机构与期刊介绍页暂缓。执行状态见上述服务对象 CURRENT。
 

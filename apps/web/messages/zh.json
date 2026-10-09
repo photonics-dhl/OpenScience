@@ -486,6 +486,18 @@
     "primaryNavigation": "主导航"
   },
   "productNavigation": {
+    "features": "功能",
+    "about": "About",
+    "uploadCreate": "上传／创建研究",
+    "loginRegister": "登录／注册",
+    "personalCenter": "个人中心",
+    "contact": "联系我们",
+    "feedback": "反馈问题",
+    "analysisDemo": "申请情报分析演示",
+    "apiAccess": "接入 API",
+    "featureProfile": "管理我的学术主页",
+    "featurePublished": "解析已发表论文",
+    "featurePreprint": "发布预出版成果",
     "dashboard": "研究桌面",
     "dashboardShort": "工作台",
     "explore": "探索",
@@ -501,6 +513,42 @@
     "accountTools": "账户工具",
     "myJournals": "我的期刊",
     "developers": "开发者 API"
+  },
+  "aboutContact": {
+    "topicsLabel": "联系主题",
+    "detailsTitle": "告诉我们你的需求",
+    "emailLabel": "联系邮箱",
+    "mailNote": "点击后会打开你的邮件客户端，请核对内容后发送。也可复制邮箱地址，在常用邮箱中撰写邮件。",
+    "contact": {
+      "title": "联系我们",
+      "intro": "关于 OpenScience 的使用、研究合作或其他想法，欢迎与我们联系。",
+      "hint1": "介绍你的研究方向或所属机构。",
+      "hint2": "说明你希望了解的服务或合作方式。",
+      "hint3": "留下方便进一步沟通的联系方式。",
+      "action": "撰写联系邮件",
+      "subject": "OpenScience 联系咨询",
+      "body": "你好，我想了解 OpenScience。\n\n姓名／机构：\n研究方向：\n咨询或合作需求：\n联系方式："
+    },
+    "feedback": {
+      "title": "反馈问题",
+      "intro": "遇到页面或功能异常时，请告诉我们发生了什么，帮助我们定位并改进。",
+      "hint1": "提供出现问题的页面链接和操作步骤。",
+      "hint2": "说明预期结果、实际结果，以及使用的浏览器或设备。",
+      "hint3": "可在邮件中附上截图，请遮挡密码、验证码等敏感信息。",
+      "action": "撰写问题反馈",
+      "subject": "OpenScience 问题反馈",
+      "body": "你好，我在使用 OpenScience 时遇到了问题。\n\n页面链接：\n复现步骤：\n预期结果：\n实际结果：\n浏览器／设备：\n联系方式："
+    },
+    "demo": {
+      "title": "申请情报分析演示",
+      "intro": "告诉我们你关注的技术领域和希望回答的问题，一起讨论适合你的情报分析演示。",
+      "hint1": "说明关注的研究方向、技术主题或应用场景。",
+      "hint2": "列出希望通过分析回答的问题，可附上相关论文或公开资料链接。",
+      "hint3": "介绍所属机构，并留下联系方式和方便沟通的时间。",
+      "action": "撰写演示申请",
+      "subject": "OpenScience 情报分析演示申请",
+      "body": "你好，我希望了解 OpenScience 的情报分析演示。\n\n姓名／机构：\n技术领域／应用场景：\n希望回答的问题：\n相关公开资料链接：\n联系方式／方便沟通的时间："
+    }
   },
   "editor": {
     "savedVersionSources": "核查最近保存版本的来源",

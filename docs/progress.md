@@ -1,8 +1,6 @@
 # CURRENT Progress Window
 
-- 2026-10-09：扩展 Industry / Investors 检索入口、工作简报、来源比较/导出及联系草稿；机构与期刊页暂缓。实现、验证与后续范围见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
-
-- 2026-10-09：Researchers 按反馈更新介绍、英文标语及无编号/外框的横向四入口；创建预设与跳转保留。候选、验证与后续范围见 [Researchers CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-09：已实现 Researchers 横向四入口、Industry / Investors 检索与联系候选；本轮统一“服务对象/功能/探索/About”及右侧上传/账号入口，使用指南整页复用，About 接联系/反馈/演示/API。机构与期刊介绍页暂缓。候选、验证与后续范围见 [导航与服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 

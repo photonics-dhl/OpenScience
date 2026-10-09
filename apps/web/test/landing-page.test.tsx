@@ -13,7 +13,7 @@ const session = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/auth/SessionProvider', () => ({ useSession: () => session }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push: vi.fn() }) }));
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => {
@@ -184,13 +184,13 @@ describe('Optical Editorial landing page', () => {
     const { default: ExplorePage } = await import('../app/explore/page');
     const markup = renderToStaticMarkup(await ExplorePage());
     expect(markup).toContain('data-navigation-tone="paper"');
-    const navigation = markup.match(/<div[^>]*data-navigation-tone="paper"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? '';
+    const navigation = markup.match(/<ul[^>]*data-navigation-tone="paper"[^>]*>[\s\S]*?<\/ul>/)?.[0] ?? '';
     expect(navigation).toContain('href="/explore"');
-    expect(navigation).toContain('href="/journals"');
+    expect(navigation).toContain('data-route-item="about"');
     expect(navigation).not.toContain('text-os-muted-dark');
   });
 
-  it('shares public discovery links and one research desk entry on Landing and public product pages', async () => {
+  it('shares three discovery menus and one upload entry on Landing and public product pages', async () => {
     const { default: SiteHeader, PublicProductAccess } = await import('../components/landing/SiteHeader');
     const landing = await renderLandingHeader();
     const publicProduct = renderToStaticMarkup(<><SiteHeader active="explore" context="public-product" tone="paper" /><PublicProductAccess /></>);
@@ -198,14 +198,15 @@ describe('Optical Editorial landing page', () => {
     for (const markup of [landing, publicProduct]) {
       const publicLinks = markup.match(/<ul\b[^>]*>[\s\S]*?<\/ul>/u)?.[0] ?? '';
       expect(publicLinks.match(/href="([^"]+)"/gu)).toEqual([
-        'href="/explore"', 'href="/journals"', 'href="/guide"',
+        'href="/explore"',
       ]);
-      expect(markup.match(/href="\/dashboard"/gu)).toHaveLength(1);
+      expect(publicLinks.match(/aria-expanded="false"/gu)).toHaveLength(3);
+      expect(markup.match(/href="\/guide"/gu)).toHaveLength(1);
       expect(markup).toContain('href="/auth/login"');
       for (const href of ['/research-objects/new', '/settings', '/developers', '/admin/journals']) {
         expect(markup).not.toContain(`href="${href}"`);
       }
-      expect(markup).toContain('data-mobile-navigation-grid="true"');
+      expect(markup).toContain('data-product-route-navigation="true"');
     }
     expect(publicProduct).toMatch(/aria-current="page"[^>]*href="\/explore"/u);
   });
@@ -227,9 +228,10 @@ describe('Optical Editorial landing page', () => {
     expect(markup).toContain('href="/me"');
     expect(navigation).not.toContain('<details');
     expect(navigation.match(/href="([^"]+)"/gu)).toEqual([
-      'href="/explore"', 'href="/journals"', 'href="/guide"',
+      'href="/explore"',
     ]);
     expect(utilities).toContain('href="/dashboard"');
+    expect(utilities).toContain('href="/guide"');
     expect(utilities).toContain(tools);
     expect(utilities).not.toContain('<nav');
     expect(markup).not.toContain('href="/auth/login"');
@@ -247,7 +249,7 @@ describe('Optical Editorial landing page', () => {
     expect(outsideTools).not.toContain('href="/admin/journals"');
   });
 
-  it.each(['loading', 'unavailable'] as const)('keeps the desk reachable without claiming a session while %s', async (status) => {
+  it.each(['loading', 'unavailable'] as const)('keeps upload and sign-in reachable without exposing an old account while %s', async (status) => {
     session.status = status;
     session.user = {
       userId: 'stale-user', email: 'reader@example.test', displayName: 'Stale researcher',
@@ -255,8 +257,8 @@ describe('Optical Editorial landing page', () => {
     };
     const markup = await renderLandingHeader();
 
-    expect(markup.match(/href="\/dashboard"/gu)).toHaveLength(1);
-    expect(markup).not.toContain('href="/auth/login"');
+    expect(markup.match(/href="\/guide"/gu)).toHaveLength(1);
+    expect(markup).toContain('href="/auth/login"');
     expect(markup).not.toContain('href="/me"');
     expect(markup).not.toContain('<details');
     expect(markup).not.toContain('Stale researcher');

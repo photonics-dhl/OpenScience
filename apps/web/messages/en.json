@@ -486,6 +486,18 @@
     "primaryNavigation": "Primary navigation"
   },
   "productNavigation": {
+    "features": "Features",
+    "about": "About",
+    "uploadCreate": "Upload / Create research",
+    "loginRegister": "Log in / Sign up",
+    "personalCenter": "My account",
+    "contact": "Contact us",
+    "feedback": "Report a problem",
+    "analysisDemo": "Request an intelligence demo",
+    "apiAccess": "Access the API",
+    "featureProfile": "Manage my research profile",
+    "featurePublished": "Add a published paper",
+    "featurePreprint": "Create a preprint",
     "dashboard": "Research desk",
     "dashboardShort": "Desk",
     "explore": "Explore",
@@ -501,6 +513,42 @@
     "accountTools": "Account tools",
     "myJournals": "My journals",
     "developers": "Developer API"
+  },
+  "aboutContact": {
+    "topicsLabel": "Contact topic",
+    "detailsTitle": "Tell us what you need",
+    "emailLabel": "Contact email",
+    "mailNote": "This opens your email app. Review the draft before sending. You can also copy the address and write from your preferred email service.",
+    "contact": {
+      "title": "Contact us",
+      "intro": "Get in touch about using OpenScience, research collaborations or an idea you would like to discuss.",
+      "hint1": "Introduce your research area or organization.",
+      "hint2": "Describe the service or collaboration you are interested in.",
+      "hint3": "Include a convenient way to reach you.",
+      "action": "Write an email",
+      "subject": "OpenScience enquiry",
+      "body": "Hello, I would like to learn more about OpenScience.\n\nName / organization:\nResearch area:\nEnquiry or collaboration:\nContact details:"
+    },
+    "feedback": {
+      "title": "Report a problem",
+      "intro": "If a page or feature is not working as expected, tell us what happened so we can investigate and improve it.",
+      "hint1": "Include the page link and the steps that led to the problem.",
+      "hint2": "Describe the expected and actual results, plus your browser or device.",
+      "hint3": "You can attach screenshots to your email. Hide passwords, verification codes and other sensitive information.",
+      "action": "Write a problem report",
+      "subject": "OpenScience problem report",
+      "body": "Hello, I encountered a problem while using OpenScience.\n\nPage link:\nSteps to reproduce:\nExpected result:\nActual result:\nBrowser / device:\nContact details:"
+    },
+    "demo": {
+      "title": "Request an intelligence demo",
+      "intro": "Share the technology area and questions you are exploring, and we can discuss an intelligence analysis demo for your needs.",
+      "hint1": "Describe your research area, technology topic or application.",
+      "hint2": "List the questions you want to answer. Include relevant papers or public sources if useful.",
+      "hint3": "Introduce your organization and share your contact details and availability.",
+      "action": "Write a demo request",
+      "subject": "OpenScience intelligence analysis demo request",
+      "body": "Hello, I am interested in an OpenScience intelligence analysis demo.\n\nName / organization:\nTechnology area / application:\nQuestions to explore:\nRelevant public sources:\nContact details / availability:"
+    }
   },
   "editor": {
     "savedVersionSources": "Check sources in the latest saved version",
