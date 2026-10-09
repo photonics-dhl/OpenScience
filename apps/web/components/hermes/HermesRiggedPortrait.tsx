@@ -55,7 +55,10 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
     if (!canvas || !stage) return;
     const startingStatus = createHermesRuntimeStatus(rendererGeneration);
     publishStatus(startingStatus);
-    if (reducedMotion) return;
+    if (reducedMotion) {
+      stage.dataset.hermesRuntimeOwner = 'stopped';
+      return;
+    }
     const abortController = new AbortController();
     let cancelled = false;
     let contextLost = false;

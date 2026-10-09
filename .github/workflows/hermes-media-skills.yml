@@ -513,6 +513,7 @@ jobs:
     timeout-minutes: 20
     env:
       PLAYWRIGHT_WEB_MODE: production
+      ENABLE_VISUAL_HARNESS: '1'
       API_ORIGIN: http://127.0.0.1:3101
     steps:
       - uses: actions/checkout@v4
@@ -656,6 +657,7 @@ jobs:
     timeout-minutes: 20
     env:
       PLAYWRIGHT_WEB_MODE: production
+      ENABLE_VISUAL_HARNESS: '1'
       API_ORIGIN: http://127.0.0.1:3101
     strategy:
       fail-fast: false
