@@ -21,15 +21,15 @@ export default async function ResearchersPage() {
         <p className={styles.eyebrow}>{t('navigation')}<span aria-hidden="true"> / </span>{t('audiences.researchers.name')}</p>
         <h1>Researchers</h1>
         <p className={styles.lead}>{t('researchers.description')}</p>
+        <p className={styles.researcherTagline}>{t('researchers.tagline')}</p>
       </header>
-      <section className={styles.grid} aria-label={t('researchers.actionsLabel')}>
-        {RESEARCHER_ACTIONS.map(({ id, href }, index) => {
+      <section className={`${styles.grid} ${styles.researcherRows}`} aria-label={t('researchers.actionsLabel')}>
+        {RESEARCHER_ACTIONS.map(({ id, href }) => {
           const Icon = icons[id];
-          return <article className={styles.card} key={id}>
-            <div className={styles.cardTop}><Icon size={24} strokeWidth={1.5} aria-hidden="true" /><span aria-hidden="true">0{index + 1}</span></div>
-            <h2>{t(`researchers.cards.${id}.title`)}</h2>
-            <p className={styles.cardDescription}>{t(`researchers.cards.${id}.description`)}</p>
-            <Link href={href} className={styles.action} aria-label={t(`researchers.cards.${id}.action`)}>
+          return <article className={styles.researcherRow} key={id}>
+            <div className={styles.researcherRowTitle}><Icon size={22} strokeWidth={1.6} aria-hidden="true" /><h2>{t(`researchers.cards.${id}.title`)}</h2></div>
+            <p className={styles.researcherRowDescription}>{t(`researchers.cards.${id}.description`)}</p>
+            <Link href={href} className={`${styles.action} ${styles.researcherAction}`} aria-label={t(`researchers.cards.${id}.action`)}>
               {t('getStarted')}<ArrowRight size={17} aria-hidden="true" />
             </Link>
           </article>;

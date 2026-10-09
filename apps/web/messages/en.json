@@ -97,12 +97,13 @@
       "investors": { "name": "Investors", "english": "Investors", "description": "Discover research directions and technical progress through public research.", "heading": "Start with research questions and evidence", "body": "Explore research methods, results and limitations, and return to the original sources for more detail. OpenScience provides a place to read and discover research." }
     },
     "researchers": {
-      "description": "Build your research profile, organize published papers, share new work or discover relevant research. Choose where to start.",
+      "description": "Build your personal academic profile and turn published papers into AI-friendly research content that agents can discover, understand and share. Upload new, unpublished research earlier to grow your academic impact over time.",
+      "tagline": "Share early. Be discovered by AI. Make an impact.",
       "actionsLabel": "Four services for researchers", "accessNote": "Browse these services and public research freely. Sign in when you need to manage your work, then return to the action you selected.",
       "cards": {
-        "profile": { "title": "My research profile", "description": "Update your academic information and bring your papers and research together so others can understand your work.", "action": "Get started: manage my research profile" },
-        "published": { "title": "Published papers", "description": "Upload a published paper and retain its publication details. AI helps extract and organize content for you to review as a structured research page.", "action": "Get started: add a published paper" },
-        "preprint": { "title": "Preprints", "description": "Upload a PDF or write the six fields directly. Use AI assistance to organize your work, save a draft and choose to publish after review.", "action": "Get started: create a preprint" },
+        "profile": { "title": "My research profile", "description": "Complete and update your academic profile; connect your papers and research outputs; help peers understand your academic record and help AI better understand your field and research interests.", "action": "Get started: manage my research profile" },
+        "published": { "title": "Published papers", "description": "Upload published papers and supplementary materials. An AI assistant extracts and organizes the research content and creates multimodal materials such as images, video and audio. After you review and confirm them, the content becomes a structured research page that you can revise and version over time.", "action": "Get started: add a published paper" },
+        "preprint": { "title": "Preprints", "description": "Upload a PDF or describe your research’s core contribution. An AI assistant helps organize the content and present your research in multiple formats. After review, you can choose to publish it publicly, then continue improving it through revisions and new versions.", "action": "Get started: create a preprint" },
         "explore": { "title": "Explore research", "description": "Read structured research from others, understand their questions, methods and findings, and discover work relevant to you.", "action": "Get started: explore research" }
       },
       "faqTitle": "Before you get started",
