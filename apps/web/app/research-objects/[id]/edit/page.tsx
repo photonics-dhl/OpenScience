@@ -282,7 +282,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const serverVersion = useRef(1);
   const confirmedReanalysisIntent = useRef<{ sourceTaskId: string; sourceAgentTaskId: string; idempotencyKey: string } | null>(null);
 
-  // 加载 RO + SDF + 版本
+  // 加载 RO + SDF + 版本；来源 query 由下方同步/轮询处理，不重新初始化工作台或草稿。
   useEffect(() => {
     let cancelled = false;
     setEditorLoaded(false);
@@ -317,7 +317,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [roId, ingestionTaskId, locale]);
+  }, [roId, locale]);
 
   useEffect(() => { setSelectedIngestionTaskId(ingestionTaskId); }, [ingestionTaskId]);
 
