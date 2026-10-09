@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-10：21b精确CI全绿；发布在旧Web停止返回1处中断，约9分钟不可用后已恢复原a6三服务/Native784，公网200。独立审查后的精确journal收尾完成、原备份与失败证据保留。Web drain角色方案交video/High；image3a2已源码Scoped GO、UI header已交待消费者，均未上线。
+- 2026-10-10：21b精确CI全绿；发布在旧Web停止返回1处中断，约9分钟不可用后已恢复原a6三服务/Native784，公网200。精确journal收尾完成、原备份/失败证据保留。Web停止兼容0f7→2c9两文件全等收取、High源码GO、29场景GREEN，待新SHA原CI；image3a2及UI header待下一批消费者，均未上线。
 - 2026-10-10前轮：05b除workspace外CI通过，workspace18/21；余项由原spec ed111+9ee3在后续CI闭合，失败/High/静态与trace证据保留。video目录消费者待host，UI header与image图审独立候选未交生产，细节见CURRENT。
 - 2026-10-09：按用户纠正，将本对话导航、Researchers、Industry / Investors 和邮箱隐藏合入既有 `frontend/nanqing`；保留该分支原工作，main 不动。前轮线上功能已发布，分支纠正不重部署其他候选。详情见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
