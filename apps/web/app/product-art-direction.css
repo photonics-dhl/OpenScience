@@ -46,7 +46,7 @@
 .craft-journal-public .journal-directory-heading > div > p:first-child { color: #54686b; font-size: 11px; letter-spacing: .08em; }
 .craft-journal-public .journal-directory-heading > div > p:last-child { color: #54686b; font-size: 16px; line-height: 1.85; }
 @media (max-width: 700px) {
-  .craft-journal-public:has([data-journal-directory]) { padding-top: 16px; }
+  .craft-journal-public:has([data-journal-directory]) { padding-top: 4px; }
   .craft-journal-public .journal-directory-heading h1 { margin-block: 12px; font-size: 40px; }
   .craft-journal-public .journal-directory-companion { min-height: 120px; margin-top: 12px; }
   .craft-journal-public .journal-directory-companion .hermes-dock-anchor { min-height: 120px; }
