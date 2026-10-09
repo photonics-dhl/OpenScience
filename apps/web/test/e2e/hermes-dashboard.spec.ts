@@ -269,7 +269,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
   await expect(mobileMotionToggle).toBeHidden();
 
-  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   const mobileDialog = page.getByRole('dialog', { name: 'Hermes research guide' });
   await expect(mobileDialog).toBeVisible();
   await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'true');
@@ -467,7 +467,7 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
-  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const retry = page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i });
   await expect(retry).toBeVisible();
@@ -483,7 +483,7 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
 test('Hermes disposes and restores its mesh when the persistent motion control changes live', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
@@ -694,7 +694,7 @@ test('Hermes focus and open presence drive real mesh articulation', async ({ pag
   await visual.focus();
   await expect(visual).toHaveAttribute('data-hermes-presence', 'attentive');
   await expect(canvas).toHaveAttribute('data-hermes-gesture', 'focus');
-  const opener = page.getByRole('button', { name: 'Talk with Hermes', exact: true });
+  const opener = page.getByRole('button', { name: 'Open conversation', exact: true });
   await opener.click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'true');
@@ -735,7 +735,7 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
   await expect(motionToggle).toBeEnabled();
   const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
-  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await motionToggle.click();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
@@ -765,7 +765,7 @@ test('Hermes retries with a fresh runtime after the required Cubism model fails'
   const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
 
   await page.unroute(`**${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.model3.json`);
-  await page.getByRole('button', { name: 'Talk with Hermes', exact: true }).click();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
@@ -922,7 +922,7 @@ test('anchored Hermes opens an explicit contextual guide without leaving the wor
   await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('opacity', '0');
   await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('pointer-events', 'none');
 
-  const opener = page.getByRole('button', { name: 'Talk with Hermes', exact: true });
+  const opener = page.getByRole('button', { name: 'Open conversation', exact: true });
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
   await expect(dialog).toBeVisible();
