@@ -8,13 +8,14 @@
 - 2026-10-09 用户追加：实现 Industry / Investors 前端展示与内部功能架构；高校与科研机构、期刊介绍页暂不开发。两页采用对话入口、需求整理、来源结果、比较/清单与联系流程；AI 技术分析不得冒充已有元数据能力。
 - 联系接收邮箱由用户指定，最新要求公开页面隐藏地址，写邮件时才获取；集中配置可更改，用户确认草稿后自行发送。
 - 最新导航要求：左侧“服务对象、功能、探索、About”，右侧“上传／创建研究、登录／注册或个人中心”。About 文案已确认：联系我们、反馈问题、申请情报分析演示、接入 API。原使用指南整页由上传入口承接；功能采用已告知用户的默认方案：学术主页、已发表解析、预出版创建三个下拉入口。
+- 用户最新授权：本对话今天全部功能推送至 `photonics-dhl/OpenScience` 的 `dhl-nanqing-front` 并部署服务器；此目标替代早先 `frontend/nanqing` 整合安排，不修改或推送 `main`。
 
 ## 候选锚点
 
-- branch：`codex/researchers-services-20261009`；base HEAD：`45a577a3a8f6bca78a063e7478fba131c5efb375`（已 fetch 的 canonical `origin/release/onchip-production-line`）；最终提交见 Git。
+- branch：`dhl-nanqing-front`（远端尚无同名分支，按用户授权创建）；base HEAD：`45a577a3a8f6bca78a063e7478fba131c5efb375`；功能提交 `a905f146`、`6a8da371`、`3aef0505`、`18195ae7`、`ffe87eb8`；最终提交见 Git。
 - worktree：`.worktrees/researchers-services`，供本轮预览与整合；保留到用户审阅/并入交付分支后清理。
 - 收尾观察：仓库根目录已在另一任务的 `codex/r1-record-hardening`，含未跟踪 CI 产物；本轮保留不动，只提交本任务工作树。
-- release / rollback：本轮未部署、未确认当前值；早期只读 SSH 认证失败，旧文档版本不当作本轮观测。其他交付仍读 Hermes CURRENT。
+- 发布前实读：服务器 active `45a577a3a8f6bca78a063e7478fba131c5efb375`，与候选基线相同，核心容器 healthy；本轮以此作为精确 rollback，尚未切换。SSH 已通过当前用户环境，早期 sandbox 缺密钥不代表服务器认证失效。
 
 ## 已实现
 
@@ -45,6 +46,6 @@
 
 ## 下一步
 
-- 导航与服务对象候选已完成，供用户本机审阅；功能菜单可按后续反馈调整。内部能力与后续 AI 接线见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。不改 Provider、数据库或生产服务，正式部署与真实模型效果不纳入本轮前端完成声明。
-- 审阅页面后将提交整合至指定协作分支 `frontend/nanqing`；发布及真实账号验收另按部署权限执行。本轮未推送主分支或触发 CI。
+- 将干净精确提交推送 `dhl-nanqing-front` 后，沿原部署事务正常构建/启动：`--no-tests --skip-migrate --reuse-unchanged-capability-images`，保留祖先、锁、journal、健康和回滚保护。改动无迁移；该分支不匹配现有 CI 的分支触发，复用前述相关验证，不改 main。上线后核验实际导航/页面/联系入口。
+- 内部能力与后续 AI 接线见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。发布不触发真实模型、论文公开或邮件发送；深层 Parser/ScanSci/embedding 验收不纳入本轮。
 - Researchers 公开主页的独立地址、栏目与公开成果列表属于后续个人主页设计范围。
