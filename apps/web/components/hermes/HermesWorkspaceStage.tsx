@@ -389,7 +389,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const stageSize = conversationAnchor ? conversationPlacement!.size
     : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
   const anchored = Boolean(conversationAnchor || (hasUsableAnchor && !customDock));
-  const portalAnchor = conversationAnchor ?? (anchored ? presentation?.anchor ?? null : null);
+  // Keep the portal in its original host until pointerup. Moving its DOM node
+  // during a drag drops browser pointer capture and cancels the gesture.
+  const portalAnchor = conversationAnchor ?? (anchored || (dragging && dragRef.current?.customDock === false)
+    ? presentation?.anchor ?? null : null);
   const autonomousAction = resolveHermesAutonomousAction(behavior, { seed: HERMES_BEHAVIOR_SEED, patrolEnvelopeSafe });
   const visualAction = menuFeedback?.action ?? (compact && autonomousAction === 'patrol' ? 'thinking-pause' : autonomousAction);
   const guidePlanCountRef = useRef(0);
@@ -1145,7 +1148,10 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       ?? stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
       ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
-    const motionClearance = settlingNewDock ? SETTLED_MOTION_CLEARANCE_PX : 0;
+    // Keep a small sub-pixel guard after the initial transition too. Browser
+    // transforms can otherwise round the measured hull just over a protected
+    // edge while the logical patrol envelope still reports safe.
+    const motionClearance = SETTLED_MOTION_CLEARANCE_PX;
     const footprint = includeHermesControlFootprint({
       bottom: Math.max(1, actorBounds.bottom - center.y) + motionClearance,
       left: Math.max(1, center.x - actorBounds.left) + motionClearance,
