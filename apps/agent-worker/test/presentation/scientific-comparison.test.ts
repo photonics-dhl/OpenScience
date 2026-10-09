@@ -12,8 +12,8 @@ describe('scientific comparison binding', () => {
     const text = `${'context '.repeat(30)}the z-direction (~77 nm)`;
     expect(scientificComparisonBinding(text, text.lastIndexOf('77'))).toBeUndefined();
   });
-  it.each(['a>b≈27', 'a≤b≈27', `a + ${' '.repeat(161)}b≈27`, 'a/(b≈27)', 'sin (a+b)≈27', 'sin(a+b)≈27', 'a^b≈27', 'a%b≈27', 'a÷b≈27'])
-    ('does not relabel an unsupported expression as its last operand: %s', text => {
+  it.each(['a>b≈27', 'a≤b≈27', `a + ${' '.repeat(161)}b≈27`, 'a/(b≈27)', 'sin (a+b)≈27', 'sin(a+b)≈27', 'a^b≈27', 'a%b≈27', 'a÷b≈27'])(
+    'does not relabel an unsupported expression as its last operand: %s', text => {
       expect(binding(text)?.binding).toEqual({ kind: 'unsupported-expression' });
     });
   it('keeps a precise unsupported LHS range', () => {
@@ -48,10 +48,32 @@ describe('scientific comparison binding', () => {
   });
 });
 
+describe('standalone parenthesized comparisons in fresh source notation', () => {
+  it.each(['FWHM_S ≪ λ0/2', 'FWHM_S < λ0/2', 'FWHM_S ≥ λ0/2'])(
+    'retains the same complete expression with or without prose parentheses: %s', comparison => {
+      const bare = scientificExpressionReferences(comparison, true);
+      const wrapped = scientificExpressionReferences(`(${comparison})`, true);
+      expect(bare.some(reference => reference.unsupported)).toBe(false);
+      expect(wrapped.some(reference => reference.unsupported)).toBe(false);
+      expect(wrapped.map(reference => reference.key)).toEqual(bare.map(reference => reference.key));
+    });
+
+  it.each(['(FWHM_S ≪ λ0/2', '(FWHM_S < f(θ)/2)', '(FWHM_S < λ0/2)*β',
+    '(FWHM_S < λ0/2) f(θ)', 'f(FWHM_S < λ0/2)'])(
+    'does not crop unsupported mathematics into a standalone comparison: %s', value => {
+      expect(scientificExpressionReferences(value, true).some(reference => reference.unsupported)).toBe(true);
+    });
+
+  it('preserves the historical reference and range without fresh notation', () => {
+    expect(scientificExpressionReferences('(FWHM_S ≪ λ0/2)', false))
+      .toEqual([{ key: '(λ0/2)', start: 10, end: 14 }]);
+  });
+});
+
 describe('complete expression references with spaced trigonometric terms', () => {
   const references = (text: string) => scientificExpressionReferences(text.replaceAll('−', '-'));
-  it.each(['(1−β cosθ)', '(1 − β cos θ)', '(1-βcos θ)', '(1-β\tcosθ)'])
-    ('compares the whole %s with compact notation', text => {
+  it.each(['(1−β cosθ)', '(1 − β cos θ)', '(1-βcos θ)', '(1-β\tcosθ)'])(
+    'compares the whole %s with compact notation', text => {
       const compact = references('(1-βcosθ)');
       const spaced = references(text);
       expect(spaced).toHaveLength(1);
@@ -60,8 +82,8 @@ describe('complete expression references with spaced trigonometric terms', () =>
     });
 
   it.each(['(1-β f(θ))', '(1-β cos(θ+φ))', '(1-β cosθ extra)', '(1-β cos)', '(1-β cosθ', '(1-β cosθ +)', '(1-β\ncosθ)',
-    '1-β f(θ)', '1-β cosθ1', `(1-${' '.repeat(161)}βcosθ)`])
-    ('does not turn incomplete or unsupported %s into a shorter reference', text => {
+    '1-β f(θ)', '1-β cosθ1', `(1-${' '.repeat(161)}βcosθ)`])(
+    'does not turn incomplete or unsupported %s into a shorter reference', text => {
       const parsed = references(text);
       expect(parsed.some(item => item.unsupported)).toBe(true);
       expect(parsed.filter(item => !item.unsupported)).not.toContainEqual(expect.objectContaining({ key: references('(1-β)')[0]!.key }));
@@ -74,15 +96,15 @@ describe('complete expression references with spaced trigonometric terms', () =>
     expect(input.slice(parsed[0]!.start, parsed[0]!.end)).toBe('(1-β cos(θ+φ))');
   });
 
-  it.each(['(1-β cosθ) sinφ', '(1-β cosθ)foo', '(1-β cosθ) sin φ', '(1-β cosθ) β', '(1-β cosθ) f(φ)'])
-    ('does not discard a factor following a complete group: %s', text => {
+  it.each(['(1-β cosθ) sinφ', '(1-β cosθ)foo', '(1-β cosθ) sin φ', '(1-β cosθ) β', '(1-β cosθ) f(φ)'])(
+    'does not discard a factor following a complete group: %s', text => {
       const parsed = references(text);
       expect(parsed).toHaveLength(1);
       expect(parsed[0]).toMatchObject({ start: 0, end: text.length, unsupported: true });
     });
 
-  it.each(['1/β cosθ', '1/βcosθ', '1/-β cosθ', '(1/β cosθ)'])
-    ('refuses an ambiguous implicit denominator in references, comparisons and equalities: %s', text => {
+  it.each(['1/β cosθ', '1/βcosθ', '1/-β cosθ', '(1/β cosθ)'])(
+    'refuses an ambiguous implicit denominator in references, comparisons and equalities: %s', text => {
       const parsed = references(text);
       expect(parsed).toHaveLength(1);
       expect(parsed[0]).toMatchObject({ start: 0, end: text.length, unsupported: true });
@@ -101,8 +123,8 @@ describe('complete expression references with spaced trigonometric terms', () =>
     expect(product[0]!.key).not.toBe(denominator[0]!.key);
   });
 
-  it.each(['(1-β cosφ)', '(1+β cosθ)', '(1-β/cosθ)', '(1-β sinθ)', '(1-β cosθ1)', '(1-β cosθ+φ)'])
-    ('does not equate an altered angle, operator or argument: %s', text => {
+  it.each(['(1-β cosφ)', '(1+β cosθ)', '(1-β/cosθ)', '(1-β sinθ)', '(1-β cosθ1)', '(1-β cosθ+φ)'])(
+    'does not equate an altered angle, operator or argument: %s', text => {
       const compactKey = references('(1-βcosθ)')[0]!.key;
       expect(references(text).filter(item => !item.unsupported).map(item => item.key)).not.toContain(compactKey);
     });

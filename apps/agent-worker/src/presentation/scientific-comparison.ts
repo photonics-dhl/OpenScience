@@ -313,6 +313,15 @@ export function scientificExpressionReferences(input: string, sourceNotation = f
     // have its constant in a later group. Do not silently lose that group or
     // recover a shorter, valid interior expression in fresh native notation.
     if (sourceNotation && !value && token.text === '(') {
+      // A complete standalone comparison is prose grouping, not a failed
+      // arithmetic product. Scan its operands normally without dropping a
+      // denominator or allowing a factor outside the closing parenthesis.
+      const left = mathParser(local)(1);
+      const right = left && !left.ambiguousDivision && ['<', '>', '≤', '≥', '≪'].includes(local[left.next]?.text ?? '')
+        ? mathParser(local)(left.next + 1) : undefined;
+      const closing = right && local[right.next], following = right && tokens[index + right.next + 1];
+      if (right && !right.ambiguousDivision && closing?.text === ')' && closing.end - token.start <= 160
+        && (!following || proseBoundary.test(following.text))) continue;
       const endIndex = local.findIndex(item => proseBoundary.test(item.text));
       const span = local.slice(0, endIndex < 0 ? local.length : endIndex)
         .filter(item => item.end - token.start <= 160);
