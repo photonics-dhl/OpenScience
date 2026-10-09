@@ -46,6 +46,9 @@ class InstallLifecycleTests(unittest.TestCase):
         self.broker_state = 'inactive'; self.instance_rows = ''
         self.missing_timer_active = 'unknown'; self.missing_timer_enabled = 'not-found'
         self.missing_timer_load = 'not-found'; self.restored_timer_active = None
+        self.loaded_timer_load = 'loaded'
+        self.missing_broker_active = 'unknown'; self.missing_broker_load = 'not-found'
+        self.loaded_broker_load = 'loaded'
         self.patches = [patch.object(install, k, v) for k,v in {'ROOT':self.root,'NATIVE':self.native,'RELEASES':self.releases,'SYSTEMD_UNITS':self.units}.items()]
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
@@ -79,12 +82,18 @@ class InstallLifecycleTests(unittest.TestCase):
                 if timer_exists and self.reloads > 1 and self.restored_timer_active is not None:
                     output = self.restored_timer_active
                 returncode = 0 if output == 'active' else (4 if output == 'unknown' else 3)
-            else: output = self.broker_state
+            else:
+                output = self.broker_state if (self.units/argv[2]).exists() else self.missing_broker_active
+                returncode = 0 if output == 'active' else (4 if output == 'unknown' else 3)
         elif argv[1] == 'list-units': output = self.instance_rows
         elif argv[1] == 'is-enabled':
             output = ('enabled' if 'persistent' in self.layers else ('enabled-runtime' if 'runtime' in self.layers else 'disabled')) if timer_exists else self.missing_timer_enabled
             returncode = 0 if output in ('enabled', 'enabled-runtime') else (4 if output == 'not-found' else 1)
-        elif argv[1] == 'show': output = 'loaded' if timer_exists else self.missing_timer_load
+        elif argv[1] == 'show':
+            if argv[2].endswith('.timer'):
+                output = self.loaded_timer_load if timer_exists else self.missing_timer_load
+            else:
+                output = self.loaded_broker_load if (self.units/argv[2]).exists() else self.missing_broker_load
         elif argv[1] == 'stop':
             if self.fail_stop: raise subprocess.CalledProcessError(1, argv)
             self.active = False
@@ -267,16 +276,58 @@ class InstallLifecycleTests(unittest.TestCase):
     def test_late_restore_null_ids_only_for_recorded_original_absence(self):
         self.prepare_late_restore(absent=True)
         result = install.restore_previous(self.source.name)
+        self.assertEqual(install.restore_previous(self.source.name), result)
         self.assertIsNone(result['previousRuntimeId']); self.assertIsNone(result['previousSkillCatalogueId'])
         for path in self.previous_contents: self.assertFalse(path.exists())
         self.assert_no_producer_start()
 
     def test_late_restore_accepts_inactive_missing_timer_and_empty_failed_enable_output(self):
-        self.prepare_late_restore(absent=True)
         self.missing_timer_active = 'inactive'; self.missing_timer_enabled = ''
+        self.missing_broker_active = 'inactive'
+        self.prepare_late_restore(absent=True)
+        state = json.loads((self.install_release/'previous/state.json').read_text())
+        self.assertEqual(state['timerEnableState'], 'not-found')
         result = install.restore_previous(self.source.name)
+        self.assertEqual(install.restore_previous(self.source.name), result)
         self.assertTrue(result['restored']); self.assertIsNone(result['previousRuntimeId'])
         self.assert_no_producer_start()
+
+    def test_install_refuses_empty_enable_output_without_full_absence(self):
+        timer = self.units/'openscience-hermes-broker.timer'
+        for kind in ('file-present', 'manager-loaded', 'successful-empty'):
+            with self.subTest(kind=kind):
+                if kind != 'file-present': timer.unlink(missing_ok=True)
+                self.loaded_timer_load = 'not-found'
+                self.missing_timer_load = 'loaded' if kind == 'manager-loaded' else 'not-found'
+                self.events.clear()
+                def command(argv, check=True, timeout=120):
+                    result = self.command(argv, check, timeout)
+                    if argv[1] == 'is-enabled':
+                        return SimpleNamespace(stdout='', returncode=0 if kind == 'successful-empty' else 1)
+                    return result
+                with patch.object(install, 'command', command):
+                    with self.assertRaisesRegex(ValueError, 'unsupported existing enable state'):
+                        install.install(self.source, self.snapshot)
+                self.assertFalse((self.root/'releases'/self.source.name).exists())
+                self.assertFalse(any(event[0] == 'systemctl' and event[1] in ('stop', 'disable', 'enable', 'start')
+                                     for event in self.events))
+
+    def test_late_restore_refuses_unknown_broker_without_full_absence(self):
+        self.prepare_late_restore(absent=True)
+        install.restore_previous(self.source.name)
+        broker = self.units/'openscience-hermes-broker.service'
+        for kind in ('file-present', 'manager-loaded'):
+            with self.subTest(kind=kind):
+                if kind == 'file-present':
+                    broker.write_bytes(self.candidate_contents[broker]); broker.chmod(0o644)
+                else:
+                    broker.unlink()
+                self.loaded_broker_load = 'not-found'; self.broker_state = 'unknown'
+                self.missing_broker_load = 'loaded' if kind == 'manager-loaded' else 'not-found'
+                self.events.clear()
+                with self.assertRaisesRegex(ValueError, 'broker must drain'):
+                    install.restore_previous(self.source.name)
+                self.assert_no_producer_start()
 
     def test_late_restore_does_not_accept_absence_without_manager_load_evidence(self):
         self.prepare_late_restore(absent=True)
@@ -391,9 +442,9 @@ class InstallLifecycleTests(unittest.TestCase):
 
     def test_late_restore_refuses_broker_instance_or_inbox_work(self):
         self.prepare_late_restore()
-        for busy in ('broker', 'instance', 'inbox'):
+        for busy in ('broker', 'broker-unknown', 'instance', 'inbox'):
             with self.subTest(busy=busy):
-                self.broker_state = 'deactivating' if busy == 'broker' else 'inactive'
+                self.broker_state = 'deactivating' if busy == 'broker' else ('unknown' if busy == 'broker-unknown' else 'inactive')
                 self.instance_rows = 'an active native instance' if busy == 'instance' else ''
                 pending = self.root/'inbox/pending'; pending.unlink(missing_ok=True)
                 if busy == 'inbox': pending.write_text('preserved pending request')

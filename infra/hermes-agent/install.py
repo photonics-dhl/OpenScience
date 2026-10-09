@@ -232,10 +232,12 @@ def restore_previous(candidate_sha):
             candidate[name] = _unit_text(source, release, name).encode('utf-8')
         paths = {**{name: SYSTEMD_UNITS/name for name in UNIT_NAMES}, 'runtime.env': ROOT/'runtime.env'}
         # Validate the entire fixed set before any service or file mutation.
+        current_files = {}
         for name, path in paths.items():
             current = _protected_bytes(path, allow_missing=not previous[name])
             if current != candidate[name] and current != old[name]:
                 raise ValueError('Native live installation is neither candidate nor previous')
+            current_files[name] = current
         timer = 'openscience-hermes-broker.timer'
         loaded = command(['systemctl', 'show', timer, '--property=LoadState', '--value'], False).stdout.strip()
         if loaded == 'loaded':
@@ -245,7 +247,15 @@ def restore_previous(candidate_sha):
         elif loaded != 'not-found':
             raise ValueError('Native timer load state is unknown')
         command(['systemctl', 'disable', timer], check=loaded != 'not-found')
-        if command(['systemctl', 'is-active', 'openscience-hermes-broker.service'], False).stdout.strip() not in ('inactive', 'failed'):
+        broker = 'openscience-hermes-broker.service'
+        broker_loaded = command(['systemctl', 'show', broker, '--property=LoadState', '--value'], False).stdout.strip()
+        broker_active = command(['systemctl', 'is-active', broker], False).stdout.strip()
+        if not previous[broker] and current_files[broker] is None and broker_loaded == 'not-found':
+            broker_idle = broker_active in ('unknown', 'inactive')
+        else:
+            broker_idle = current_files[broker] is not None and broker_loaded == 'loaded' \
+                and broker_active in ('inactive', 'failed')
+        if not broker_idle:
             raise ValueError('Native broker must drain before restoration')
         active = command(['systemctl', 'list-units', '--no-legend', '--plain', '--state=active,activating,deactivating', 'openscience-hermes@*.service']).stdout.strip()
         inbox = ROOT/'inbox'
@@ -301,7 +311,13 @@ def install(source, runtime_snapshot, defer_timer=True):
         if release.exists():
             raise ValueError('Native immutable release already exists; inspect its installation receipt instead of overwriting')
         timer_was_active = command(['systemctl', 'is-active', 'openscience-hermes-broker.timer'], False).stdout.strip() == 'active'
-        timer_enabled = command(['systemctl', 'is-enabled', 'openscience-hermes-broker.timer'], False).stdout.strip()
+        timer = 'openscience-hermes-broker.timer'
+        timer_enablement = command(['systemctl', 'is-enabled', timer], False)
+        timer_enabled = timer_enablement.stdout.strip()
+        if not timer_enabled and timer_enablement.returncode != 0 \
+            and _protected_bytes(SYSTEMD_UNITS/timer, allow_missing=True) is None \
+            and command(['systemctl', 'show', timer, '--property=LoadState', '--value'], False).stdout.strip() == 'not-found':
+            timer_enabled = 'not-found'
         if timer_enabled not in ('enabled', 'enabled-runtime', 'disabled', 'not-found'):
             raise ValueError('Native timer has an unsupported existing enable state')
         previous_restored = True
