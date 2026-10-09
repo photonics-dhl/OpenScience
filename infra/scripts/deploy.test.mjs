@@ -11,13 +11,484 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { runInNewContext } from 'node:vm';
+import * as deployLock from './production-deploy-lock.mjs';
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
 const transactionStateSource = readFileSync(new URL('./production-deploy-transaction-state.sh', import.meta.url), 'utf8');
 const retentionSource = readFileSync(new URL('./production-release-retention.mjs', import.meta.url), 'utf8');
 const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
+const deployLockSource = readFileSync(new URL('./production-deploy-lock.mjs', import.meta.url), 'utf8');
 const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
+
+function nativeJournalFixture() {
+  return {
+    before: {
+      runtimeId: `installed-native-continuation-${'c'.repeat(40)}`,
+      skillCatalogueId: `project-catalogue-${'c'.repeat(40)}`,
+      timerEnableState: 'enabled-runtime', timerWasActive: true,
+      producers: { api: true, web: true, agentWorker: true },
+      containers: { api: '1'.repeat(64), web: '2'.repeat(64), agentWorker: '3'.repeat(64) },
+    },
+    quiesceState: 'not_started', installState: 'not_attempted', restoreState: 'not_started', candidateCheckpoint: null,
+  };
+}
+
+test('Native journal validates original state and rejects malformed or foreign receipts', () => {
+  const candidate = 'b'.repeat(40), original = nativeJournalFixture();
+  assert.equal(typeof deployLock.validateNativeJournalState, 'function');
+  const validated = deployLock.validateNativeJournalState(original, candidate);
+  assert.deepEqual(validated, original);
+  validated.before.producers.api = false;
+  assert.equal(original.before.producers.api, true);
+  const installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`,
+    skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  assert.deepEqual(deployLock.validateNativeJournalState({ ...original, quiesceState: 'quiesced', installState: 'installed', installation }, candidate).installation, installation);
+  const absent = nativeJournalFixture();
+  absent.before.runtimeId = null; absent.before.skillCatalogueId = null;
+  absent.before.timerEnableState = 'not-found'; absent.before.timerWasActive = false;
+  assert.deepEqual(deployLock.validateNativeJournalState(absent, candidate), absent);
+  for (const invalid of [
+    { ...original, apiKey: 'must-not-persist' },
+    { ...original, before: { ...original.before, timerEnableState: 'static' } },
+    { ...original, before: { ...original.before, runtimeId: null } },
+    { ...original, before: { ...original.before, producers: { ...original.before.producers, api: 'true' } } },
+    { ...original, installation },
+    { ...original, installState: 'installed', installation: { ...installation, releaseSha: 'd'.repeat(40) } },
+    { ...original, installState: 'installed', installation: { ...installation, timerDeferred: false } },
+    { ...original, candidateCheckpoint: 'not-db-time' },
+  ]) assert.throws(() => deployLock.validateNativeJournalState(invalid, candidate), /Native deployment state/u);
+});
+
+test('Native journal preserves the original capture and rejects reset, late mode and receipt replacement', () => {
+  const candidate = 'b'.repeat(40), before = nativeJournalFixture();
+  assert.equal(typeof deployLock.preserveNativeJournalState, 'function');
+  assert.equal(deployLock.preserveNativeJournalState(null, undefined, candidate, true), undefined);
+  assert.deepEqual(deployLock.preserveNativeJournalState(null, before, candidate, true), before);
+  assert.deepEqual(deployLock.preserveNativeJournalState({ nativeRefresh: before }, undefined, candidate, false), before);
+  const quiesced = { ...before, quiesceState: 'quiesced' };
+  const attempted = { ...quiesced, installState: 'install_attempting' };
+  assert.deepEqual(deployLock.preserveNativeJournalState({ nativeRefresh: quiesced }, attempted, candidate, false), attempted);
+  const installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`,
+    skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  const completed = { ...attempted, installState: 'installed', installation };
+  assert.deepEqual(deployLock.preserveNativeJournalState({ nativeRefresh: attempted }, completed, candidate, false), completed);
+  assert.deepEqual(deployLock.preserveNativeJournalState({ nativeRefresh: completed }, undefined, candidate, false), completed);
+  for (const [previous, incoming] of [
+    [{}, before],
+    [{ nativeRefresh: before }, { ...before, before: { ...before.before, timerWasActive: false } }],
+    [{ nativeRefresh: attempted }, quiesced],
+    [{ nativeRefresh: quiesced }, completed],
+    [{ nativeRefresh: completed }, attempted],
+    [{ nativeRefresh: completed }, { ...completed, installation: { ...installation, runtimeId: 'foreign-runtime' } }],
+  ]) assert.throws(() => deployLock.preserveNativeJournalState(previous, incoming, candidate, false), /Native deployment state/u);
+});
+
+test('Native refresh flag defaults off and forwards only the explicit sixth argument', () => {
+  assert.match(launcherSource, /^REFRESH_NATIVE_RESOURCES=0$/mu);
+  assert.match(launcherSource, /--refresh-native-resources\) REFRESH_NATIVE_RESOURCES=1; shift/u);
+  const tail = launcherSource.match(/^NATIVE_REFRESH_ARG=""[\s\S]*$/mu)?.[0];
+  assert.ok(tail, 'use the real narrow forwarding code without source/config/SSH preparation');
+  const candidate = 'b'.repeat(40), rollback = 'a'.repeat(40);
+  for (const selected of [0, 1]) {
+    const setup = [
+      'fixture_ssh(){ printf "%s\\n" "$@"; }',
+      'SSH_EXECUTABLE=fixture_ssh; SSH_OPTS=(); SSH_USER=fixture; SSH_HOST=example.invalid',
+      `REMOTE_TRANSACTION_RUNNER='/opt/openscience-releases/${candidate}/infra/scripts/production-deploy-transaction.sh'`,
+      `RELEASE_SHA='${candidate}'; ROLLBACK_SHA='${rollback}'; SKIP_MIGRATE=0; NO_TESTS=0; REUSE_UNCHANGED_CAPABILITY_IMAGES=0; REFRESH_NATIVE_RESOURCES=${selected}`,
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', `${setup}\n${tail}`], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const expected = `exec /bin/bash '/opt/openscience-releases/${candidate}/infra/scripts/production-deploy-transaction.sh' '${candidate}' '${rollback}' '0' '0' '0'${selected ? " '1'" : ''} </dev/null`;
+    assert.equal(result.stdout.trim(), `fixture@example.invalid\n${expected}`);
+  }
+});
+
+test('Native refresh rejects invalid or excess transaction arguments before host operations', () => {
+  const runner = fileURLToPath(new URL('./production-deploy-transaction.sh', import.meta.url)).replaceAll('\\', '/');
+  const args = ['b'.repeat(40), 'a'.repeat(40), '0', '0', '0'];
+  const invalid = spawnSync(bash, [runner, ...args, '2'], { encoding: 'utf8' });
+  assert.equal(invalid.status, 64);
+  assert.match(invalid.stderr, /Native/u);
+  const excess = spawnSync(bash, [runner, ...args, '0', 'extra'], { encoding: 'utf8' });
+  assert.equal(excess.status, 64);
+  assert.match(excess.stderr, /runner/u);
+});
+
+test('Native transitions persist install and restore intent before accepting exact receipts', () => {
+  const candidate = 'b'.repeat(40);
+  let state = nativeJournalFixture();
+  assert.equal(typeof deployLock.transitionNativeJournalState, 'function');
+  const transition = (action, detail) => {
+    const next = deployLock.transitionNativeJournalState(state, candidate, action, detail);
+    state = deployLock.preserveNativeJournalState({ nativeRefresh: state }, next, candidate, false);
+  };
+  assert.throws(() => transition('install-start'), /Native deployment state/u);
+  transition('quiesce-start'); transition('quiesce-complete'); transition('install-start');
+  const installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`,
+    skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  assert.throws(() => transition('install-complete', { ...installation, releaseSha: 'd'.repeat(40) }), /Native deployment state/u);
+  transition('install-complete', installation);
+  transition('candidate-start', '2026-10-09T08:00:00.000Z');
+  transition('rollback-quiesce-start'); transition('rollback-quiesce-complete');
+  assert.throws(() => transition('restore-complete', {}), /Native deployment state/u);
+  transition('restore-start');
+  const restored = { releaseSha: candidate, restored: true, timerDeferred: true,
+    previousRuntimeId: state.before.runtimeId, previousSkillCatalogueId: state.before.skillCatalogueId };
+  assert.throws(() => transition('restore-complete', { ...restored, previousRuntimeId: 'foreign' }), /Native deployment state/u);
+  transition('restore-complete', restored);
+  assert.equal(state.restoreState, 'restored_verified');
+  assert.equal(state.candidateCheckpoint, '2026-10-09T08:00:00.000Z');
+});
+
+test('Native work classification preserves pending queues and holds unknown, live and candidate-bound work', () => {
+  assert.equal(typeof deployLock.classifyNativeWorkSnapshot, 'function');
+  const task = { id: 't1', status: 'pending', deletedAt: null, nativePending: true,
+    providerUncertain: false, updatedAt: '2026-10-09T07:00:00.000Z' };
+  const snapshot = { tasks: [task], queue: ['t1'], processing: ['t1'], journals: [] };
+  assert.deepEqual(deployLock.classifyNativeWorkSnapshot(snapshot, null), { safe: true, nativePending: true });
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, status: 'running' }] }, null).safe, false);
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, processing: ['missing'] }, null).safe, false);
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, providerUncertain: true }] }, null).safe, false);
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ tasks: [{ ...task, status: 'failed', providerUncertain: true }], queue: [], processing: [], journals: [] }, null).safe, true);
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, journals: [{ state: 'pending', leaseToken: 'live', leaseExpiresAt: null, updatedAt: task.updatedAt }] }, null).safe, false);
+  assert.equal(deployLock.classifyNativeWorkSnapshot(snapshot, '2026-10-09T06:00:00.000Z').safe, false);
+  assert.equal(deployLock.classifyNativeWorkSnapshot(snapshot, '2026-10-09T08:00:00.000Z').safe, true);
+  assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, status: 'succeeded' }], queue: [], processing: [] }, '2026-10-09T06:00:00.000Z').safe, true);
+});
+
+test('Native producer pause uses exact identities and infinite daemon stop; timeout, OOM and replacement remain held', async () => {
+  const body = deployLockSource.match(/async function pauseNativeProducers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(body);
+  const id = '1'.repeat(64);
+  for (const mode of ['graceful', 'client-timeout', 'oom', 'nonzero', 'replacement', 'original-identity-changed']) {
+    const calls = []; let inventory = 0;
+    const context = {
+      invalidNativeState() { throw new Error('held'); },
+      async nativeContainers() { inventory += 1; return { api: { Id: mode === 'replacement' && inventory > 1 ? '2'.repeat(64) : id, State: { Running: inventory === 1 } }, web: null, agentWorker: null }; },
+      async nativeCommand(command, args, options) {
+        calls.push({ command, args, options });
+        if (args[0] === 'stop') {
+          if (mode === 'client-timeout') throw new Error('held');
+          return id;
+        }
+        return JSON.stringify({ Status: 'exited', Running: false, ExitCode: mode === 'nonzero' ? 137 : 0, OOMKilled: mode === 'oom' });
+      },
+    };
+    const pause = runInNewContext(`${body}; pauseNativeProducers`, context);
+    const state = { before: { containers: { api: mode === 'original-identity-changed' ? '4'.repeat(64) : id, web: null, agentWorker: null } } };
+    if (mode === 'graceful') await pause(state, true);
+    else await assert.rejects(pause(state, true), /held/u);
+    if (mode === 'original-identity-changed') assert.equal(calls.length, 0);
+    else {
+      assert.equal(calls[0].command, 'docker');
+      assert.deepEqual(Array.from(calls[0].args), ['stop', '--timeout', '-1', id]);
+      assert.equal(calls[0].options.timeout, 600_000);
+    }
+    assert.equal(calls.some(call => call.args.includes('kill') || call.args.includes('restart')), false);
+  }
+});
+
+test('Native binding rejects stale source, mount, runtime and unhealthy API before producers are permitted', () => {
+  const candidate = 'b'.repeat(40), runtimeId = `installed-native-continuation-${candidate}`, skillCatalogueId = `project-catalogue-${candidate}`;
+  const expected = { service: 'api', releaseSha: candidate, runtimeId, skillCatalogueId, running: true };
+  const container = {
+    Config: { Labels: { 'com.docker.compose.service': 'api', 'com.docker.compose.project.working_dir': `/opt/openscience-releases/${candidate}` },
+      Env: ['HERMES_NATIVE_AGENT_ENABLED=true', `HERMES_NATIVE_RUNTIME_ID=${runtimeId}`, `HERMES_NATIVE_SKILL_CATALOGUE_ID=${skillCatalogueId}`, 'HERMES_NATIVE_AGENT_MODEL=MiniMax-M3', 'HERMES_NATIVE_AGENT_INBOX=/native-agent/inbox'] },
+    State: { Running: true, Health: { Status: 'healthy' } },
+    Mounts: [{ Type: 'bind', Source: `/opt/openscience-releases/${candidate}`, Destination: '/opt/openscience', RW: false }],
+  };
+  deployLock.verifyNativeContainerBinding(container, expected);
+  for (const change of [
+    c => { c.Config.Labels['com.docker.compose.project.working_dir'] = '/opt/openscience'; },
+    c => { c.Mounts[0].Source = '/opt/openscience'; },
+    c => { c.State.Health.Status = 'unhealthy'; },
+    c => { c.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign'; },
+    c => { c.Config.Env.push('HERMES_NATIVE_RUNTIME_ID=foreign'); },
+  ]) { const changed = structuredClone(container); change(changed); assert.throws(() => deployLock.verifyNativeContainerBinding(changed, expected), /Native deployment state/u); }
+});
+
+test('Native real startup adapter verifies stopped pair then API/Web, timer and Worker in order', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-start-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const [target, failure, worker] of [['candidate', '', '1'], ['original', '', '1'], ['candidate', 'native-verify-stopped', '1'], ['candidate', 'native-api-web-ready', '1'], ['candidate', 'native-restore-timer', '1'], ['candidate', '', '0']]) {
+    const trace = join(root, `${target}-${failure}-${worker}.log`).replaceAll('\\', '/');
+    const script = [
+      'set -eEuo pipefail', `TRACE='${trace}'; FAIL='${failure}'; WORKER='${worker}'`,
+      'RELEASE_ROOT=/candidate; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; COMPOSE_FILE=/candidate/compose; PROD_ENV=/private',
+      'PREVIOUS_RELEASE_ROOT=/original; PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; ROLLBACK_COMPOSE_FILE=/original/compose; PREVIOUS_RUNTIME_ENV=',
+      'run_remote(){ if [[ "$1" = *" create "* ]]; then printf "create\\n" >> "$TRACE"; elif [[ "$1" = *" agent-worker" ]]; then printf "worker\\n" >> "$TRACE"; else printf "api-web\\n" >> "$TRACE"; fi; }',
+      'transaction_native_command(){ printf "%s\\n" "$1" >> "$TRACE"; [ "$1" != "$FAIL" ] || return 65; if [ "$1" = native-original-running ]; then if [ "$3" = agent-worker ]; then printf "%s\\n" "$WORKER"; else printf "1\\n"; fi; fi; }',
+      deploymentFunction('transaction_start_native_application'),
+      `transaction_start_native_application ${target}`,
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    const calls = (await readFile(trace, 'utf8')).trim().split('\n');
+    assert.equal(result.status, failure ? 65 : 0, result.stderr);
+    assert.equal(calls[0], 'create'); assert.equal(calls[1], 'native-verify-stopped');
+    if (failure === 'native-verify-stopped') assert.deepEqual(calls, ['create', failure]);
+    else if (failure) {
+      assert.equal(calls.at(-1), failure);
+      assert.equal(calls.includes('worker'), false);
+      if (failure === 'native-api-web-ready') assert.equal(calls.includes('native-restore-timer'), false);
+    } else {
+      assert.equal(calls.includes('native-before-start'), target === 'candidate');
+      assert.ok(calls.indexOf('native-api-web-ready') < calls.indexOf('native-restore-timer'));
+      assert.equal(calls.includes('worker'), worker === '1');
+      if (worker === '1') assert.ok(calls.indexOf('native-restore-timer') < calls.indexOf('worker'));
+      assert.equal(calls.at(-1), 'native-worker-ready');
+    }
+  }
+});
+
+test('Native real rollback adapter checks feasibility before restore and never starts old pair on held recovery', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-rollback-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const failure of ['', 'preflight', 'restore']) {
+    const trace = join(root, `${failure || 'success'}.log`).replaceAll('\\', '/');
+    const script = [
+      'set -eEuo pipefail', `TRACE='${trace}'; FAIL='${failure}'`,
+      'REFRESH_NATIVE_RESOURCES=1; EMBEDDING_DEPLOY=0; PREVIOUS_HAS_EMBEDDING=0; PREVIOUS_HAS_SCANSCI=1; NO_TESTS=1',
+      'PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'PREVIOUS_RELEASE_ROOT=/previous; PREVIOUS_RUNTIME_ENV=; ROLLBACK_COMPOSE_FILE=/previous/compose; PROD_ENV=/private; NGINX_CONF=/nginx; REMOTE_ROOT=/production; RELEASE_ROOT=/candidate',
+      'log(){ :; }; run_remote(){ printf "application-command\\n" >> "$TRACE"; }',
+      'transaction_preflight_application_rollback(){ printf "preflight\\n" >> "$TRACE"; ROLLBACK_ACTIVE_SHA="$RELEASE_SHA"; [ "$FAIL" != preflight ] || return 70; }',
+      'transaction_native_command(){ printf "%s\\n" "$1" >> "$TRACE"; [ "$FAIL" != restore ] || [ "$1" != native-prepare-rollback ] || return 70; }',
+      'transaction_restore_scansci_rollback(){ printf "scansci\\n" >> "$TRACE"; }',
+      'transaction_start_native_application(){ printf "old-pair-start\\n" >> "$TRACE"; }',
+      deploymentFunction('transaction_perform_application_rollback'),
+      'transaction_perform_application_rollback',
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    const calls = (await readFile(trace, 'utf8')).trim().split('\n');
+    assert.equal(result.status, failure ? 70 : 0, result.stderr);
+    assert.equal(calls[0], 'preflight');
+    if (failure === 'preflight') assert.deepEqual(calls, ['preflight', 'native-hold-producers']);
+    else if (failure === 'restore') assert.deepEqual(calls, ['preflight', 'native-prepare-rollback']);
+    else assert.ok(calls.indexOf('native-prepare-rollback') < calls.indexOf('old-pair-start'));
+  }
+});
+
+test('Native actual rollback feasibility preflight is read-only and refuses reader, stale source and image incompatibility', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-preflight-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const mode of ['healthy', 'reader', 'active', 'source', 'image']) {
+    const candidate = join(root, mode, 'candidate'), previous = join(root, mode, 'previous'), trace = join(root, `${mode}.log`).replaceAll('\\', '/');
+    await mkdir(candidate, { recursive: true }); await mkdir(previous, { recursive: true });
+    if (mode === 'reader') await mkdir(join(candidate, 'infra/migrations/20260913010000_publication_identity'), { recursive: true });
+    const script = [
+      'set -eEuo pipefail', `TRACE='${trace}'; MODE='${mode}'; RELEASE_ROOT='${candidate.replaceAll('\\', '/')}'; PREVIOUS_RELEASE_ROOT='${previous.replaceAll('\\', '/')}'`,
+      'PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; REMOTE_ROOT=/production',
+      'run_remote(){ case "$1" in "cat "*) printf "active\\n" >> "$TRACE"; if [ "$MODE" = active ]; then printf "cccccccccccccccccccccccccccccccccccccccc\\n"; else printf "%s\\n" "$RELEASE_SHA"; fi ;; "test "*) printf "source\\n" >> "$TRACE"; [ "$MODE" != source ] ;; "docker image inspect "*) printf "image\\n" >> "$TRACE"; [ "$MODE" != image ] ;; *) printf "unexpected-mutation\\n" >> "$TRACE"; return 90 ;; esac; }',
+      deploymentFunction('transaction_preflight_application_rollback'),
+      'transaction_preflight_application_rollback',
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    const calls = existsSync(trace) ? (await readFile(trace, 'utf8')).trim().split('\n') : [];
+    assert.equal(result.status, mode === 'healthy' ? 0 : ['source', 'image'].includes(mode) ? 71 : 70, result.stderr);
+    assert.equal(calls.includes('unexpected-mutation'), false);
+    if (mode === 'reader') assert.deepEqual(calls, []);
+    if (mode === 'active') assert.deepEqual(calls, ['active']);
+    if (mode === 'source') assert.deepEqual(calls, ['active', 'source']);
+    if (mode === 'healthy') assert.deepEqual(calls, ['active', 'source', 'image']);
+  }
+});
+
+test('Native journal CLI rejects unknown fields and malformed JSON without echoing their contents', () => {
+  const utility = fileURLToPath(new URL('./production-deploy-lock.mjs', import.meta.url));
+  const common = ['journal-start', '--journal', '/opt/openscience/.deploy-transaction.json', '--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--phase', 'prepared', '--lock-fd', '9'];
+  const sentinel = 'private-content-must-not-appear';
+  for (const value of [`{"secret":"${sentinel}"}`, `{"secret":"${sentinel}`, 'x'.repeat(4097)]) {
+    const result = spawnSync(process.execPath, [utility, ...common, '--native-state', value], { encoding: 'utf8' });
+    assert.equal(result.status, 64);
+    assert.match(result.stderr, /Native deployment state/u);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(sentinel), false);
+  }
+  const result = spawnSync(process.execPath, [utility, 'native-restore-timer', '--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--lock-fd', '9', '--target', '/arbitrary'], { encoding: 'utf8' });
+  assert.equal(result.status, 64);
+  assert.match(result.stderr, /Native deployment operation failed/u);
+});
+
+test('Native actual work-query code only reads queues and task markers and returns bounded nonsecret status', async () => {
+  const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
+  assert.ok(declaration);
+  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: code, encoding: 'utf8' });
+  assert.equal(syntax.status, 0, syntax.stderr);
+  const calls = []; let output = '';
+  const context = {
+    process: { env: { DATABASE_URL: 'fixture', REDIS_URL: 'fixture' }, argv: ['node', 'none'], stdout: { write(value) { output += value; } } },
+    AGENT_TASK_QUEUE: 'agent:queue', classifyNativeWorkSnapshot: deployLock.classifyNativeWorkSnapshot,
+    readNativeAgentExecution(result) { return result?.nativeAgentExecution; },
+    createPrismaClient() { return {
+      async $queryRawUnsafe(sql) {
+        calls.push(sql); assert.match(sql, /^SELECT /u);
+        if (sql.includes('clock_timestamp')) return [{ now: new Date('2026-10-09T08:00:00.000Z') }];
+        assert.ok(sql.includes("jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution')"));
+        return [{ id: 't1', status: 'pending', kind: 'sdf.extract', deleted_at: null, updated_at: new Date('2026-10-09T07:00:00.000Z'), error: null, result: null }];
+      },
+      journalJob: { async findMany() { calls.push('journal-read'); return []; } },
+      async $disconnect() { calls.push('db-close'); },
+    }; },
+    createRedisClient() { return { async lrange(key) { calls.push(key); return key.endsWith(':processing') ? [] : ['t1']; }, async quit() { calls.push('redis-close'); } }; },
+  };
+  await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context);
+  assert.deepEqual(JSON.parse(output), { safe: true, nativePending: true, dbTime: '2026-10-09T08:00:00.000Z' });
+  assert.equal(calls.at(-2), 'db-close'); assert.equal(calls.at(-1), 'redis-close');
+  assert.equal(output.includes('t1'), false);
+});
+
+test('Native actual installer operation holds interrupted and unpersisted success instead of invoking restore', async () => {
+  const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(body);
+  const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  for (const mode of ['success', 'installer-interrupted', 'receipt-persistence-failed', 'foreign-receipt']) {
+    const initial = { ...nativeJournalFixture(), quiesceState: 'quiesced' };
+    let journal = { phase: 'switching', candidateSha: candidate, rollbackSha: 'a'.repeat(40), nativeRefresh: initial };
+    const calls = [];
+    const context = {
+      validateNativeJournalState: deployLock.validateNativeJournalState,
+      transitionNativeJournalState: deployLock.transitionNativeJournalState,
+      invalidNativeState() { throw new Error('held'); },
+      async verifyProductionDeployLockOnHost() {}, async readTrustedJournal() { return structuredClone(journal); },
+      async writeProductionDeployJournal(options) {
+        calls.push(options.native.installState);
+        if (mode === 'receipt-persistence-failed' && options.native.installState === 'installed') throw new Error('held');
+        journal.nativeRefresh = deployLock.preserveNativeJournalState(journal, options.native, candidate, false);
+      },
+      async nativeContainers() { return {}; }, async verifyNativeIdle() { calls.push('idle'); }, async verifyNativeBinding() { calls.push('binding'); },
+      async open() { return { async writeFile() {}, async sync() {}, async close() {} }; },
+      async rm() { calls.push('snapshot-cleanup'); }, randomUUID() { return 'fixture'; },
+      async nativeCommand(command, args) {
+        if (command === '/usr/bin/node') return '{}';
+        calls.push('installer');
+        assert.ok(args.includes('--defer-timer'));
+        if (mode === 'installer-interrupted') throw new Error('held');
+        return JSON.stringify(mode === 'foreign-receipt' ? { ...installation, releaseSha: 'd'.repeat(40) } : installation);
+      },
+    };
+    const operation = runInNewContext(`${body}; nativeOperation`, context);
+    const options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
+    if (mode === 'success') {
+      assert.equal(await operation('native-install', options), 'NATIVE_OPERATION_OK');
+      assert.equal(journal.nativeRefresh.installState, 'installed');
+    } else {
+      await assert.rejects(operation('native-install', options), /held|Native deployment state/u);
+      assert.equal(journal.nativeRefresh.installState, 'install_attempting');
+      await assert.rejects(operation('native-prepare-rollback', options), /held/u);
+      assert.equal(calls.filter(call => call === 'installer').length, 1);
+    }
+    assert.ok(calls.indexOf('install_attempting') < calls.indexOf('installer'));
+    assert.ok(calls.includes('snapshot-cleanup'));
+  }
+});
+
+test('Native actual restore operation records intent and holds partial or unverified restoration', async () => {
+  const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(body);
+  const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  for (const mode of ['success', 'restore-interrupted', 'binding-failed', 'restored-receipt-persistence-failed']) {
+    let journal = { phase: 'switching', candidateSha: candidate, rollbackSha: 'a'.repeat(40), nativeRefresh: {
+      ...nativeJournalFixture(), quiesceState: 'quiesced', installState: 'installed', installation,
+      candidateCheckpoint: '2026-10-09T08:00:00.000Z',
+    } };
+    const calls = [], old = journal.nativeRefresh.before;
+    const context = {
+      transitionNativeJournalState: deployLock.transitionNativeJournalState,
+      invalidNativeState() { throw new Error('held'); }, async verifyProductionDeployLockOnHost() {},
+      async readTrustedJournal() { return structuredClone(journal); },
+      async writeProductionDeployJournal(options) {
+        calls.push(options.native.restoreState);
+        if (mode === 'restored-receipt-persistence-failed' && options.native.restoreState === 'restored_verified') throw new Error('held');
+        journal.nativeRefresh = deployLock.preserveNativeJournalState(journal, options.native, candidate, false);
+      },
+      async pauseNativeProducers() { calls.push('pause'); }, async holdNativeTimer() { calls.push('timer-hold'); },
+      async verifyNativeIdle() { calls.push('idle'); },
+      async queryNativeWork(sha, checkpoint) { assert.equal(checkpoint, journal.nativeRefresh.candidateCheckpoint); calls.push('work-check'); return { safe: true }; },
+      async nativeCommand(command, args) {
+        assert.ok(args.includes('--restore-previous')); calls.push('restore');
+        if (mode === 'restore-interrupted') throw new Error('held');
+        return JSON.stringify({ releaseSha: candidate, restored: true, timerDeferred: true, previousRuntimeId: old.runtimeId, previousSkillCatalogueId: old.skillCatalogueId });
+      },
+      async verifyNativeBinding(binding) {
+        assert.equal(binding.runtimeId, old.runtimeId); calls.push('old-binding');
+        if (mode === 'binding-failed') throw new Error('held');
+      },
+    };
+    const operation = runInNewContext(`${body}; nativeOperation`, context), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
+    if (mode === 'success') {
+      assert.equal(await operation('native-prepare-rollback', options), 'NATIVE_OPERATION_OK');
+      assert.equal(journal.nativeRefresh.restoreState, 'restored_verified');
+    } else {
+      await assert.rejects(operation('native-prepare-rollback', options), /held/u);
+      assert.equal(journal.nativeRefresh.restoreState, 'restore_attempting');
+      await assert.rejects(operation('native-prepare-rollback', options), /held/u);
+    }
+    assert.ok(calls.indexOf('pause') < calls.indexOf('restore'));
+    assert.ok(calls.indexOf('work-check') < calls.indexOf('restore'));
+    assert.ok(calls.indexOf('restore_attempting') < calls.indexOf('restore'));
+    assert.equal(calls.filter(call => call === 'restore').length, 1);
+  }
+});
+
+test('Native quiesce persists switching before stopping producers and prepared uncertainty retains its journal', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-phase-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const trace = join(root, 'trace').replaceAll('\\', '/');
+  const setup = ['set -eEuo pipefail', `TRACE='${trace}'`, transactionStateSource,
+    'transaction_initialize_state; REFRESH_NATIVE_RESOURCES=1; TRANSACTION_PHASE=prepared',
+    'transaction_journal_update(){ printf "phase:%s\\n" "$1" >> "$TRACE"; }',
+    'transaction_pause_native_producers(){ printf "pause:%s\\n" "$TRANSACTION_PHASE" >> "$TRACE"; }',
+  ];
+  let result = spawnSync(bash, ['-c', [...setup, 'transaction_quiesce_native_refresh', 'trap - HUP INT TERM'].join('\n')], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual((await readFile(trace, 'utf8')).trim().split('\n'), ['phase:switching', 'pause:switching']);
+  result = spawnSync(bash, ['-c', [...setup,
+    'TRANSACTION_NATIVE_STARTED=1; TRANSACTION_JOURNAL_ACTIVE=1',
+    'transaction_assert_lock(){ return 0; }; transaction_journal_clear(){ printf "cleared\\n" >> "$TRACE"; }',
+    'transaction_rollback_application 143',
+  ].join('\n')], { encoding: 'utf8' });
+  assert.equal(result.status, 70);
+  assert.match(result.stderr, /ROLLBACK_FAILED_NATIVE_UNCERTAIN/u);
+  assert.equal((await readFile(trace, 'utf8')).includes('cleared'), false);
+});
+
+test('Native real journal preserves metadata on phase updates and refuses clearing interrupted installation under FD9', async t => {
+  if (process.platform === 'win32' || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
+    t.skip('Linux CI executes the real Native inherited-FD atomic-journal behavior'); return;
+  }
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-journal-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const lockDirectory = join(root, 'private'), journalPath = join(root, 'journal.json'), helperPath = join(root, 'helper.mjs');
+  const fixture = nativeJournalFixture(), candidateSha = 'b'.repeat(40), rollbackSha = 'a'.repeat(40);
+  const helper = `
+import assert from 'node:assert/strict';
+import {readFile,stat} from 'node:fs/promises';
+import {writeProductionDeployJournal,clearProductionDeployJournal} from ${JSON.stringify(new URL('./production-deploy-lock.mjs', import.meta.url).href)};
+const original=${JSON.stringify(fixture)};
+const common=${JSON.stringify({ lockDirectory, journalPath, candidateSha, rollbackSha, requiredUid: process.getuid(), lockFd: 9 })};
+await writeProductionDeployJournal({...common,phase:'prepared',create:true,native:original});
+await writeProductionDeployJournal({...common,phase:'switching',create:false});
+assert.deepEqual(JSON.parse(await readFile(common.journalPath,'utf8')).nativeRefresh,original);
+await assert.rejects(writeProductionDeployJournal({...common,candidateSha:'c'.repeat(40),phase:'switching',create:false}),/another transaction/);
+const quiescing={...original,quiesceState:'quiescing'};
+await writeProductionDeployJournal({...common,phase:'switching',create:false,native:quiescing});
+const quiesced={...quiescing,quiesceState:'quiesced'};
+await writeProductionDeployJournal({...common,phase:'switching',create:false,native:quiesced});
+const attempted={...quiesced,installState:'install_attempting'};
+await writeProductionDeployJournal({...common,phase:'switching',create:false,native:attempted});
+await writeProductionDeployJournal({...common,phase:'published',create:false});
+assert.deepEqual(JSON.parse(await readFile(common.journalPath,'utf8')).nativeRefresh,attempted);
+await assert.rejects(clearProductionDeployJournal(common),/uncertain; journal retained/);
+assert.equal((await stat(common.journalPath)).mode & 0o777,0o600);
+process.stdout.write('NATIVE_JOURNAL_PRESERVED\\n');
+`;
+  await writeFile(helperPath, helper);
+  const result = spawnSync(bash, ['-c', transactionLockHarness(lockDirectory, process.getuid(), `node '${helperPath}'`)], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'NATIVE_JOURNAL_PRESERVED');
+  assert.deepEqual(JSON.parse(await readFile(journalPath, 'utf8')).nativeRefresh.before, fixture.before);
+});
 
 function deploymentFunction(name) {
   const body = transactionSource.match(new RegExp(`${name}\\(\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
@@ -774,7 +1245,7 @@ test('one foreground SSH runs the complete transaction under its own inherited F
   assert.doesNotMatch(runRemote, /\bssh\b/);
   assert.doesNotMatch(source, /coproc|DEPLOY_LOCK_ASSERT_COMMAND|lock-command|assert-command/);
   assert.doesNotMatch(transactionSource, /release-contract-test|TRANSACTION_TEST|XGS_TEST/);
-  assert.match(transactionSource, /\[ "\$#" -ge 3 \] && \[ "\$#" -le 5 \]/u);
+  assert.match(transactionSource, /\[ "\$#" -ge 3 \] && \[ "\$#" -le 6 \]/u);
   assert.match(transactionSource, /NO_TESTS="\$\{4:-0\}"/u);
   assert.match(transactionSource, /REUSE_UNCHANGED_CAPABILITY_IMAGES="\$\{5:-0\}"/u);
   assert.match(transactionSource, /\[\[ "\$NO_TESTS" =~ \^\[01\]\$ \]\]/u);
@@ -1288,8 +1759,12 @@ test('production Compose operations pin the immutable release as project directo
   const transactionComposeCalls = transactionSource.match(/docker compose[^\n]*/gu) ?? [];
   assert.ok(transactionComposeCalls.length > 0, 'production transaction must contain Compose operations');
   for (const call of transactionComposeCalls) {
-    assert.match(call, /--project-directory (?:\$RELEASE_ROOT|'\$RELEASE_ROOT'|\$PREVIOUS_RELEASE_ROOT)/u);
+    assert.match(call, /--project-directory (?:\$RELEASE_ROOT|'\$RELEASE_ROOT'|\$PREVIOUS_RELEASE_ROOT|'\$root')/u);
   }
+  const native = deploymentFunction('transaction_start_native_application');
+  assert.match(native, /candidate\) root="\$RELEASE_ROOT"; sha="\$RELEASE_SHA"/u);
+  assert.match(native, /original\) root="\$PREVIOUS_RELEASE_ROOT"; sha="\$PREVIOUS_RELEASE_SHA"/u);
+  assert.match(native, /\*\) return 64/u);
   assert.match(
     transactionStateSource,
     /docker compose --project-directory '\$RELEASE_ROOT' --profile embedding/u,
