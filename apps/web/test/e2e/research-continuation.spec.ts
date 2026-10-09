@@ -227,13 +227,15 @@ test('selected version is readable on a narrow Chinese surface and unknown versi
   await expect(page.locator('[data-selected-version]')).toHaveCount(0);
 });
 
-test('missing upload form input is separate from Hermes task failure', async ({ page }) => {
+test('empty research intake stays inactive without putting Hermes into a failed state', async ({ page }) => {
   await fixtures(page);
   await page.route('**/api/workspaces', route => route.fulfill({ json: { workspaces: [{ id: 'workspace-journey', name: 'Research workspace', role: 'owner' }] } }));
   await page.goto('/research-objects/new?mode=import');
-  await page.locator('input[name="title"]').fill('Incomplete intake');
-  await page.getByRole('button', { name: 'Create research object', exact: true }).click();
-  await expect(page.locator('main').getByRole('alert')).toHaveText('Choose at least one source file to start an import.');
+  await expect(page.getByRole('heading', { name: 'New research', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start research', exact: true })).toBeDisabled();
+  await page.getByText('Workspace and title', { exact: true }).click();
+  await page.locator('input[name="title"]').fill('Private title-only study');
+  await expect(page.getByRole('button', { name: 'Start research', exact: true })).toBeEnabled();
   await expect(page.locator('[data-hermes-state="failed"]')).toHaveCount(0);
   await expect(page.locator('[data-hermes-workspace-stage]')).toBeVisible();
 });

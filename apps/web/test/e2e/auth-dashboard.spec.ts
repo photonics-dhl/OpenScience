@@ -150,6 +150,13 @@ for (const viewport of [
     await page.route('**/api/ingestion/batch-1', async (route) => {
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-created', tasks }) });
     });
+    await page.route('**/api/research-objects/ro-created', route => route.fulfill({ json: { researchObject: {
+      id: 'ro-created', workspaceId: 'workspace-1', title: 'Imported study', visibility: 'private', version: 1,
+      sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+    } } }));
+    await page.route('**/api/research-objects/ro-created/versions', route => route.fulfill({ json: { versions: [] } }));
+    await page.route('**/api/research-objects/ro-created/ingestion', route => route.fulfill({ json: { researchObjectId: 'ro-created', version: 1, tasks: tasks.map(task => ({ ...task, confirmation: null })), latestConfirmation: null } }));
+    await page.route('**/api/research-objects/ro-created/authors', route => route.fulfill({ json: { authors: [] } }));
     await page.goto(`${baseUrl}/dashboard`);
 
     await expect(page.getByRole('heading', { name: /research desk/i })).toBeVisible();
@@ -165,17 +172,18 @@ for (const viewport of [
     expect(overflow).toBe(false);
     await page.locator('[data-action-priority="primary"]').click();
     await expect(page).toHaveURL(`${baseUrl}/research-objects/new?mode=import`);
-    await expect(page.getByRole('heading', { name: /create a research object/i })).toBeVisible();
-    await page.getByLabel(/research title/i).fill('Imported study');
+    await expect(page.getByRole('heading', { name: /^new research$/i })).toBeVisible();
+    await page.getByText('Workspace and title', { exact: true }).click();
+    await page.getByLabel(/title \(optional\)/i).fill('Imported study');
     await page.getByLabel(/choose files/i).setInputFiles([
       { name: 'paper.md', mimeType: 'text/markdown', buffer: Buffer.from('# evidence') },
       { name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('png') },
       { name: 'measurements.csv', mimeType: 'text/csv', buffer: Buffer.from('x,y\n1,2') },
       { name: 'analysis.py', mimeType: 'text/x-python', buffer: Buffer.from('print(1)') },
     ]);
-    await page.getByRole('button', { name: /create research object/i }).click();
-    await expect(page.getByText(/evidence is ready for review/i)).toBeVisible();
-    await expect(page.getByRole('link', { name: /paper.md/i })).toHaveAttribute('href', '/research-objects/ro-created/hermes?task=task-paper');
+    await page.getByRole('button', { name: /^start research$/i }).click();
+    await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-created/edit?ingestionTask=task-paper`);
+    await expect(page.getByText('paper.md', { exact: true }).first()).toBeVisible();
     for (const filename of ['paper.md', 'figure.png', 'measurements.csv', 'analysis.py']) expect(uploadedBody).toContain(filename);
     const finalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(finalOverflow).toBe(false);
@@ -232,9 +240,10 @@ test('a server-blocked material remains visible without a retry action', async (
   });
 
   await page.goto(`${baseUrl}/research-objects/new?mode=import`);
-  await page.getByLabel(/research title/i).fill('Blocked evidence study');
+  await page.getByText('Workspace and title', { exact: true }).click();
+  await page.getByLabel(/title \(optional\)/i).fill('Blocked evidence study');
   await page.getByLabel(/choose files/i).setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg><script /></svg>') });
-  await page.getByRole('button', { name: /create research object/i }).click();
+  await page.getByRole('button', { name: /^start research$/i }).click();
   await expect(page.getByText('Security scan blocked this file').first()).toBeVisible();
   await expect(page.getByText(/KB · Blocked/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);

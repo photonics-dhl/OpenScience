@@ -548,10 +548,6 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
-      - name: Hermes navigation and existing research entry
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-workspace-stage.spec.ts hermes-dashboard.spec.ts auth-dashboard.spec.ts research-continuation.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/hermes-entry-browser
-        env:
-          PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
       - name: Storyboard selection lifecycle and media retention
         run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
@@ -564,3 +560,37 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/surface-shells.test.tsx -t "review-only preflight recovery"
       - run: npx pnpm@9.15.0 docs:lint
+
+  # These 68 browser cases outgrew the remaining time in the backend/media job.
+  # Keep every case, with isolated dev servers and visible per-case failure logs.
+  browser-entry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [hermes-workspace-stage, hermes-dashboard, auth-dashboard, research-continuation]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - run: npx pnpm@9.15.0 --filter @openscience/database generate
+      - run: npx pnpm@9.15.0 --filter '@openscience/web^...' build
+      - name: Hermes navigation and existing research entry
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test '${{ matrix.suite }}.spec.ts' --config playwright.config.ts --workers 1 --reporter=line --trace retain-on-failure --output ../../tmp/hermes-entry-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+      - name: Preserve isolated browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-entry-${{ matrix.suite }}
+          path: tmp/hermes-entry-browser/
+          if-no-files-found: ignore
+          retention-days: 7
