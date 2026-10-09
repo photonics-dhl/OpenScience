@@ -960,8 +960,8 @@ test('anchored Hermes opens an explicit contextual guide without leaving the wor
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
   await expect(opener).toBeFocused();
   await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'false');
-  await page.keyboard.press('Tab');
   await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
+  await page.keyboard.press('Tab');
   await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'false');
 
   await page.unroute('**/api/agent/tasks**');
