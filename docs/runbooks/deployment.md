@@ -6,7 +6,7 @@
 
 ### Native目录与关闭中的视频执行器
 
-> 当前候选（2026-10-09）：原`deploy.sh --refresh-native-resources`已接入同FD9事务，安装器已有`--restore-previous <candidate_sha>`；七文件联合源码Scoped GO，Linux lifecycle/FD9/TERM/CAS尚待验收，当前不是生产GO。该flag默认关闭；正常无flag路径保持原行为。只按CURRENT对应精确CI、运行锚点与串行窗口执行，不另建写门禁、锁或状态库。
+> 当前候选（2026-10-10）：原`deploy.sh --refresh-native-resources`已接入同FD9事务，安装器已有`--restore-previous <candidate_sha>`；七文件联合源码Scoped GO，Linux lifecycle34/34与部署105/105已过，当前仍非生产GO。该flag默认关闭；正常无flag路径保持原行为。完整CI、运行锚点与串行窗口见CURRENT，不另建写门禁、锁或状态库。
 
 - 前置：沿原精确CI/High、备份和单FD9流程；journal创建/暂停前先核旧API/Web/Worker实际env、mount、image与旧Native绑定，再保存原timer层/活动及容器状态。Refresh对exact容器正常stop采用无限daemon超时，仅等待客户端有界，不向容器发KILL；退出0且非OOM才算drain。初次工作分类在迁移完成后的native-install前执行，避免新Prisma读旧schema。已有旧Native marker的pending任务必须hold；未绑定的合法pending队列/outbox、无lease journal及明确paid-unknown hold原样保留。running、无法解释processing、lease、Native实例/inbox阻替换，不消费清空。SDK相同不代表资源不变。
 - 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。复用已装SDK，不改旧目录或手拼配对；stage必须在live写前让timer inactive+disabled。原journal先存install_attempting，严格核原四字段receipt后才存installed；无receipt中断保持停机/journal，不能猜成功。静态核candidate env/挂载/receipt，启动API/Web核binding/health，再恢复原timer层和活动，最后启动Worker；若原timer inactive且有待执行Native任务，停在Worker启动前。不能先让Worker写inbox等待已停timer。
