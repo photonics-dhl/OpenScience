@@ -2584,6 +2584,13 @@ body {
 .hermes-context-menu[data-compact='true'][data-side='left'] { translate: calc(50% + var(--hermes-menu-correction-x, 0px)) calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
 .hermes-context-menu[data-compact='true'][data-side='right'] { translate: calc(-50% + var(--hermes-menu-correction-x, 0px)) calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
 
+/* The avatar uses Radix viewport placement, without the full character's carried-sheet offsets. */
+.hermes-context-menu[data-hermes-menu-layout='avatar'][data-compact] {
+  translate: none;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+
 .hermes-context-menu[data-hermes-menu-fallback='wide'] {
   width: min(56rem, calc(100vw - 1rem));
   padding-block: .62rem .58rem;

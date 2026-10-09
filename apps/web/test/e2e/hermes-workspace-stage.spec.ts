@@ -122,22 +122,28 @@ function guide(page: Page) {
     .or(page.getByRole('complementary', { name: 'Hermes research guide', exact: true }));
 }
 
-function graphic(page: Page) {
-  return page.locator(hostSelector).getByRole('button', { name: 'Open conversation', exact: true });
+function graphic(page: Page, includeHidden = false) {
+  return page.locator(hostSelector).getByRole('button', { name: 'Open conversation', exact: true, includeHidden });
 }
 
-function label(page: Page) {
-  return page.locator('[data-hermes-avatar-entry="true"]').getByRole('button', { name: /^Open conversation · .+/u });
+function label(page: Page, includeHidden = false) {
+  return page.locator('[data-hermes-avatar-entry="true"]').getByRole('button', { name: /^Open conversation · .+/u, includeHidden });
 }
 
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 );
 
-async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' = 'viewport') {
+async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' = 'viewport', modalMenuOpen = false) {
   const stage = page.locator(stageSelector);
   const host = page.locator(hostSelector);
-  const input = graphic(page);
+  // An open modal menu hides outside controls from the accessibility tree, not from layout.
+  const input = graphic(page, modalMenuOpen);
+  const entryLabel = label(page, modalMenuOpen);
+  if (modalMenuOpen) {
+    await expect(page.getByRole('menu', { name: 'Hermes action menu', exact: true })).toBeVisible();
+    await expect(input).toHaveAttribute('data-hermes-menu-open', 'true');
+  }
   await expect(page.locator('[data-hermes-avatar-entry="true"]')).toHaveCount(1);
   await expect(host).toHaveCount(1);
   await expect(host.locator(stageSelector)).toHaveCount(1);
@@ -150,11 +156,12 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(guide(page)).toHaveCount(0);
   await expect(page.locator(slotSelector)).toHaveCount(0);
   await expect(input).toHaveAttribute('data-hermes-input-owner', 'true');
-  await expect(input).toHaveAccessibleName('Open conversation');
+  if (modalMenuOpen) await expect(input).toHaveAttribute('aria-label', 'Open conversation');
+  else await expect(input).toHaveAccessibleName('Open conversation');
   await expect(input).toBeEnabled();
-  await expect(label(page)).toHaveClass('hermes-avatar-entry-label');
-  await expect(label(page)).toContainText('Hermes');
-  await expect(label(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(entryLabel).toHaveClass('hermes-avatar-entry-label');
+  await expect(entryLabel).toContainText('Hermes');
+  await expect(entryLabel).toHaveAttribute('aria-expanded', 'false');
   for (const viewport of [host, stage, input, host.locator('[data-hermes-compact-placement]')]) {
     await expect(viewport).toBeVisible();
     await expect.poll(async () => {
@@ -165,8 +172,11 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(input).toHaveCSS('overflow', 'hidden');
   // The 160px composition is clipped by the 64px button; its carrier AABB is not a work collision.
   const composition = input.locator('[data-hermes-companion-actor="true"]');
-  const bounds = await composition.boundingBox();
-  expect(bounds && { width: bounds.width, height: bounds.height }).toEqual({ width: 160, height: 160 });
+  const compositionSize = await composition.evaluate((node) => {
+    const { width, height } = node.getBoundingClientRect();
+    return { width, height };
+  });
+  expect(compositionSize).toEqual({ width: 160, height: 160 });
   // Read related boxes in one browser task while their shared page-entry animation runs.
   const { visible, frame, stageBounds } = await host.evaluate((anchor) => {
     const currentStage = anchor.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
@@ -353,7 +363,8 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
       if (openMenu === 'pointer') await input.click({ button: 'right' });
       else { await input.focus(); await input.press('Shift+F10'); }
       await expect(page.locator('[data-hermes-action-menu="true"]')).toBeVisible();
-      await assertAvatar(page); // Physical bounds catch the old mobile 120×140/28rem menu rules.
+      await expect(page.locator('[data-hermes-action-menu="true"]')).toBeInViewport({ ratio: 1 });
+      await assertAvatar(page, 'viewport', true); // Physical bounds catch the old mobile 120×140/28rem menu rules.
       expect(await host.boundingBox()).toEqual(bounds);
       expect(await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }))).toEqual(scroll);
       expect(await page.locator(stageSelector).evaluate((node) => (node as HTMLElement).style.translate)).toBe(translate);

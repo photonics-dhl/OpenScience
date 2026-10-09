@@ -747,7 +747,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         collisionPadding={8}
         data-compact={compactMenu ? 'true' : 'false'}
         data-hermes-action-menu="true"
-        data-hermes-menu-layout="carried-sheet"
+        data-hermes-menu-layout={avatarPresentation ? 'avatar' : 'carried-sheet'}
         data-hermes-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-locale={locale}
         loop
