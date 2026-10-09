@@ -6,7 +6,7 @@
 
 并行协作职责与活动工作树统一见 [Hermes CURRENT 的总控分工](docs/handoff/2026-09-10-hermes-web-image-handoff.md#总控与并行分工)；总控汇总状态与集成排程，各开发 session 维护各自实现和专属计划。Dashboard测量与请求phase回归集中在原 `apps/web/test/e2e/hermes-dashboard.spec.ts`；Linux信号恢复回归沿 `infra/scripts/deploy.test.mjs`，实际结果只记CURRENT。
 
-Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`规定原写门禁、排空、timer原状态和配对失败恢复；关闭video host可复用，真实启用另验，状态见CURRENT。
+Native发布配对：`infra/hermes-agent/install.py`使用确切Worker构建与原runtime-snapshot制作不可变SDK/adapter/catalogue配对；SDK复用与资源刷新分别判断。`docs/runbooks/deployment.md`区分配对目标与尚缺的原transaction/installer恢复接缝；不声称已有持久写门禁。正常暂停、timer原状态与配对恢复沿现有deploy/lock/journal实现，状态见CURRENT。
 
 紧凑研究入口与版式：`HermesDockAnchor.tsx`共用原120px锚点和对话按钮；`HermesWorkspaceStage.tsx`与`components/editor/Drawer.tsx`处理入口回焦/portal归位、拖动host及retry/generation恢复。`HermesVisualAdapter.tsx`在退出会话时核真实hover/focus，Dashboard复用`hermes-state.ts`的Composite。`HermesRiggedPortrait.tsx`在motion偏好切换时重建canvas，审批静止仍保留同canvas。`hermes-dashboard.spec.ts`覆盖生命周期及窄屏Talk展开后的动画开关；`hermes-workspace-stage.spec.ts`覆盖跨路由实例及editor外部入口卸载回退。`ResearchGuide.tsx`提供固定公开版本及原图入口；`vendor-ux.spec.ts`与`research-continuation.spec.ts`承接阅读截图；原media CI构建Web后经start-signup-web.mjs启动同产物，用四套完整导航矩阵保存PNG/捕获JSON和取消trace，实际验收见CURRENT。
 
