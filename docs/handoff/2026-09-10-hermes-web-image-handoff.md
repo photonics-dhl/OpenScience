@@ -15,7 +15,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | stage1两bug a64已交待联合源码审/集成；install.py+lifecycle继续restore-previous，设计High已返回，cb保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原transaction/state、deploy.sh、lock.mjs、deploy.test五文件实施联合High三项P1；原journal/FD9复用 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两CSS3989→root221b已收；56px预览已看，源码并入新64px/框内互动要求；scope含原surface策略/unit，运行未验 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两CSS3989→root221b已收；56px预览保留，实施64px/框内互动；scope含原surface/unit及WorkspaceShell局部host，补RO概览fallback对话，运行未验 | `.worktrees/research-product-craft` / `codex/ui-editor-craft-20261009`（旧patrol候选已归档） |
 - 各owner仅写已授范围，不回退他人修改；root持有共享CI/docs及dashboard/workspace集成spec，UI持研究Hermes产品入口写权。单renderer/跨路由/焦点/运行任务/权限与零POST边界保留，测试随新真实路径同步。三线无生产写窗口，不并行发布/资产写；在途自然收尾，不派重复检查。
 
 ## Git / CI / 运行事实
