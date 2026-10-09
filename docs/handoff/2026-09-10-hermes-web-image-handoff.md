@@ -13,14 +13,15 @@
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | fresh括号误判已修；资源配对后由Native纠正真source/时空矛盾，cb未知保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟fixture已收且视频Linux过；仅修deploy.test该TERM用例的握手/自有进程清理，生产脚本不改 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟fixture已收且视频Linux过；TERM测试b023→1e已收/High GO，待Linux | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | mobile裁切已过；只读patrol geometry新差额，Figma14frame为候选 | `.worktrees/research-product-craft` / `codex/ui-conversation-control-20261009` |
 - 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。无production writer、无并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
 ## Git / CI / 运行事实
-- 已推`bebe897c2b11a3684b2a6f53a97b4993c4a86d58`；远端另进`a0b6dc2884c869c1305908314f09db8940341bb0`，本地8ce1a2e4选择性合入。独立High只收RiggedPortrait static/motion canvas key及compact fallback retry；拒收自主speech扩面/1s重试、reader visible:first、无消费者harness按钮。目标TC/lint0，非发布GO。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
+- root上次推送bebe897c；远端另进`2a4333d102d2fae1c004f23895576b6d92057fef`，本地8ce/e0选择性合入。High只收RiggedPortrait static/motion key及compact fallback retry；拒收speech扩面/1s重试、reader visible:first、无消费者按钮及新宽泛API mocks，复用本地已审CI开关/静态合同/短文档。TC/lint0，非发布GO。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
 - bebe CI：视频PR37880486789过；media37880486623的auth和reading20/20过、workspace10/11、dashboard22/25；主job在deploy.test TERM rollback输出空超时。期刊37880486999因progress超16KiB失败。日志/artifact在root `tmp/session-coordination-20261008/*bebe897c*`；旧5af/cf3/7c证据仅历史，a0b6新CI不能代替本地选择性结果。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
+- TERM测试b023→1e258328仅改原deploy.test用例/直接helper；builtin read握手、回滚中真实FD9竞争、exit143/clear和自有进程close后清理均经High Scoped GO，5000ms/生产脚本不变。helper/JS/生成shell语法过，Windows该例skip，必须由下一批Linux验证；不宣称原CI唯一根因已证。CURRENT/progress已轮转到16KiB以内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 最新已记录生产只读：app=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，Native/runtime/catalogue=`784c6b25342c29bdc5c2db193258d34dfafd4e64`。10-09 00:42/01:26–01:29服务healthy、restart0、M3；02:49:50Z video host仍42fe/admin关闭/audio客户端缺。均为带时点证据，不冒称此刻fresh。
 - Native实装illustration目录仍v17，缺新版风格/定义轴资源；SDK/adapter可复用，须原installer制作新不可变runtime/catalogue配对，保留784、旧paid/CP。闭合视频UI提示可保持旧host不接单，真实配音启用前须同源升级。原发布锁、drain、timer状态、备份与双库账本顺序见[deployment](../runbooks/deployment.md)，本批未执行。
 
