@@ -356,11 +356,20 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
     expect(await page.evaluate(() => window.scrollY)).toBe(8);
     await assertAvatar(page);
     for (const openMenu of ['pointer', 'keyboard']) {
+      if (openMenu === 'keyboard') {
+        await input.focus();
+        await expect(input).toBeFocused();
+      }
       const scroll = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+      expect(scroll.y).toBeGreaterThan(0);
       const bounds = await host.boundingBox();
       const translate = await page.locator(stageSelector).evaluate((node) => (node as HTMLElement).style.translate);
-      if (openMenu === 'pointer') await input.click({ button: 'right' });
-      else { await input.focus(); await input.press('Shift+F10'); }
+      if (openMenu === 'pointer') {
+        // Locator.click can scroll before input; send a real right click at the already visible target.
+        const target = await input.boundingBox();
+        expect(target).not.toBeNull();
+        await page.mouse.click(target!.x + target!.width / 2, target!.y + target!.height / 2, { button: 'right' });
+      } else await input.press('Shift+F10');
       await expect(page.locator('[data-hermes-action-menu="true"]')).toBeVisible();
       await expect(page.locator('[data-hermes-action-menu="true"]')).toBeInViewport({ ratio: 1 });
       await assertAvatar(page, 'viewport', true); // Physical bounds catch the old mobile 120×140/28rem menu rules.
