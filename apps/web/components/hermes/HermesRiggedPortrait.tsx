@@ -174,7 +174,7 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
           data-hermes-articulated-canvas="true"
           data-hermes-live2d-canvas="true"
           data-live2d-instance="wanko"
-          key={`wanko-${rendererGeneration}`}
+          key={`wanko-${rendererGeneration}-${reducedMotion ? 'static' : 'motion'}`}
           ref={canvasRef}
         />
       </WankoCarrierScene>

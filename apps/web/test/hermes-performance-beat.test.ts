@@ -69,6 +69,18 @@ describe('Hermes performance speech policy', () => {
     expect(suppressed.nextAtMs).toBeGreaterThan(initial.nextAtMs);
   });
 
+  it('retries soon when the cadence lands on a silent motion beat', () => {
+    const initial = createHermesSpeechState(0, 29);
+    const silent = stepHermesSpeech(initial, {
+      action: 'drag', actionStartedAtMs: initial.nextAtMs, allowed: true,
+      nowMs: initial.nextAtMs, seed: 29,
+    });
+
+    expect(silent.cue).toBeNull();
+    expect(silent.sequence).toBe(initial.sequence);
+    expect(silent.nextAtMs - initial.nextAtMs).toBe(1_000);
+  });
+
   it('does not repeat the immediately previous phrase for the same action', () => {
     const initial = createHermesSpeechState(0, 31);
     const first = stepHermesSpeech(initial, {

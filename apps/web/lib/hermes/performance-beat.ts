@@ -32,13 +32,23 @@ interface SpeechDefinition {
 // One short sentence needs enough time to read and reach its dismiss target,
 // while remaining visibly subordinate to the research workspace.
 const HERMES_AUTONOMOUS_CUE_VISIBLE_MS = 4_000;
+const HERMES_UNSPOKEN_ACTION_RETRY_MS = 1_000;
 
 const speechByAction: Partial<Record<HermesActionId, SpeechDefinition>> = {
+  'blink-double': { keys: ['performance.observe.one', 'performance.observe.two'], tone: 'curious' },
   'cap-check': { keys: ['performance.capCheck.one', 'performance.capCheck.two'], tone: 'focused' },
+  'citation-trace': { keys: ['performance.evidenceCheck.one', 'performance.evidenceCheck.two'], tone: 'focused' },
+  'doze': { keys: ['performance.thinkingPause.one', 'performance.thinkingPause.two'], tone: 'reflective' },
   'ear-perk': { keys: ['performance.earPerk.one', 'performance.earPerk.two'], tone: 'curious' },
   'lamp-listen': { keys: ['performance.lampListen.one', 'performance.lampListen.two'], tone: 'reflective' },
   'happy-wiggle': { keys: ['performance.happyWiggle.one', 'performance.happyWiggle.two'], tone: 'friendly' },
+  'page-tidy': { keys: ['performance.evidenceCheck.one', 'performance.evidenceCheck.two'], tone: 'focused' },
+  'patrol': { keys: ['performance.observe.one', 'performance.observe.two'], tone: 'curious' },
+  'return-dock': { keys: ['performance.thinkingPause.one', 'performance.thinkingPause.two'], tone: 'reflective' },
+  'stretch': { keys: ['performance.happyWiggle.one', 'performance.happyWiggle.two'], tone: 'friendly' },
+  'surprise-settle': { keys: ['performance.observe.one', 'performance.observe.two'], tone: 'curious' },
   'thinking-pause': { keys: ['performance.thinkingPause.one', 'performance.thinkingPause.two'], tone: 'reflective' },
+  'wake': { keys: ['performance.earPerk.one', 'performance.earPerk.two'], tone: 'curious' },
   'evidence-check': { keys: ['performance.evidenceCheck.one', 'performance.evidenceCheck.two'], tone: 'focused' },
   'observe-left': { keys: ['performance.observe.one', 'performance.observe.two'], tone: 'curious' },
   'observe-right': { keys: ['performance.observe.two', 'performance.observe.one'], tone: 'curious' },
@@ -82,9 +92,14 @@ export function stepHermesSpeech(previous: HermesSpeechState, input: HermesSpeec
   if (input.nowMs < previous.nextAtMs) return previous.cue ? { ...previous, cue: null } : previous;
 
   const definition = speechByAction[input.action];
+  if (!definition) {
+    // The speech cadence is independent from motion. If it lands on a silent
+    // beat, retry soon enough to catch the next supported action instead of
+    // accidentally postponing the companion for another full 25–45 seconds.
+    return { ...previous, cue: null, nextAtMs: input.nowMs + HERMES_UNSPOKEN_ACTION_RETRY_MS };
+  }
   const sequence = previous.sequence + 1;
   const nextAtMs = input.nowMs + interval(input.seed, input.nowMs, sequence, 25_000, 45_000, 0x73);
-  if (!definition) return { ...previous, cue: null, nextAtMs, sequence };
 
   let index = hash(input.seed, input.actionStartedAtMs + sequence, 0x74) % definition.keys.length;
   if (definition.keys.length > 1 && definition.keys[index] === previous.previousMessageKey) {

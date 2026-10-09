@@ -10,6 +10,7 @@ import type { HermesActionId } from '@/lib/hermes/action-catalog';
 
 export default function HermesArticulationVisualRoute() {
   const [state, setState] = useState<HermesVisualState>('idle');
+  const [mounted, setMounted] = useState(true);
   const inputRef = useRef<HermesPetMeshInput & { motionTimeMs?: number }>({
     engaged: false,
     motionTimeMs: 9_000,
@@ -67,14 +68,15 @@ export default function HermesArticulationVisualRoute() {
         <button type="button" onClick={() => setAction('guide-arrive')}>Arrival action</button>
         <button type="button" onClick={() => setAction('success')}>Success action</button>
         <button type="button" onClick={() => setProbe(true)}>Fixed pointer</button>
+        <button type="button" onClick={() => setMounted((current) => !current)}>{mounted ? 'Unmount portrait' : 'Mount portrait'}</button>
       </div>
       <div className="h-[520px] w-[520px]" data-hermes-articulation-harness="true">
-        <HermesRiggedPortrait
+        {mounted ? <HermesRiggedPortrait
           fallback={<span aria-hidden="true" />}
           inputRef={inputRef}
           reducedMotion={false}
           state={state}
-        />
+        /> : null}
       </div>
     </main>
   );

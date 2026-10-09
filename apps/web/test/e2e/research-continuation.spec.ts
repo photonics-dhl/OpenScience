@@ -2,6 +2,7 @@ import { expect, test, type Page, type Request, type Route } from 'playwright/te
 import type { WorkspaceGuidePayload } from '../../lib/api';
 import type { ReadingRecord } from '../../components/research/WorkbenchClaimReader';
 
+const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const ro = { id: 'journey-ro', workspaceId: 'workspace-journey', publicId: 'OSR-JOURNEY', title: 'Research continuation', version: 1, status: 'draft', visibility: 'private' };
 const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', method: 'Measurement', results: 'Result', limitations: 'Limits', reproducibility: 'Data' };
 const confirmation = { commitId: 'confirmed-commit', versionId: 'confirmed-version', versionNo: 2, version: 7, evidenceStatus: 'needs_review', missingFields: ['results'] };
@@ -318,7 +319,7 @@ async function versionEvidenceFixtures(page: Page) {
 }
 
 async function openVersionEvidence(page: Page, locale: 'en' | 'zh' = 'en') {
-  const reader = page.locator('[data-version-claim-reader="confirmed-version"]');
+  const reader = page.locator('[data-version-claim-reader="confirmed-version"]').filter({ visible: true }).first();
   await expect(reader).toBeVisible();
   const narrative = reader.locator('[data-claim-narrative]');
   await expect(narrative).not.toHaveAttribute('open', '');
