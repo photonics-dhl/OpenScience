@@ -59,9 +59,12 @@ describe('standalone parenthesized comparisons in fresh source notation', () => 
     });
 
   it.each(['(FWHM_S ≪ λ0/2', '(FWHM_S < f(θ)/2)', '(FWHM_S < λ0/2)*β',
-    '(FWHM_S < λ0/2) f(θ)', 'f(FWHM_S < λ0/2)'])(
+    '(FWHM_S < λ0/2) f(θ)', 'f(FWHM_S < λ0/2)',
+    '(FWHM_S < λ0/2)/β', '(FWHM_S < λ0/2 < λ1/3)'])(
     'does not crop unsupported mathematics into a standalone comparison: %s', value => {
-      expect(scientificExpressionReferences(value, true).some(reference => reference.unsupported)).toBe(true);
+      const references = scientificExpressionReferences(value, true);
+      expect(references.some(reference => reference.unsupported)).toBe(true);
+      expect(references.filter(reference => !reference.unsupported)).toEqual([]);
     });
 
   it('preserves the historical reference and range without fresh notation', () => {
