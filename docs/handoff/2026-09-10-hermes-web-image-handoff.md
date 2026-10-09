@@ -14,16 +14,16 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
 | Session / ID | 当前责任与依赖 | 活动工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 77f→root79c全等且Linux34/34；原生像素图审最小复用方案已交原High核预算/CP/角色，非本批发布门槛 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | installer已交；新图审方案High要求补精确PNG transport、固定预算、CP分支和局部pixel角色，已授受限代码/离线实现，不挡本批 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / 原77f分支保留，新分支以Git为准 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 632/4cf→root302/483全等；Linux105/105，新7e视频CI通过；真实Key/声音目录待部署 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-resource-transaction`（base221b） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | afdf/a0已收；7e workspace3/21，独占原spec修Dashboard精确GET与focus后滚动测量；手机header方案后置 | `.worktrees/research-product-craft` / `codex/ui-workspace-prefetch-20261009`（base7e，旧分支保留） |
-- 各owner仅写已授范围，不回退他人修改；root持共享CI/docs及已交Web差额，UI重开仅workspace-stage.spec写权，CSS窗口已关。单renderer/跨路由/焦点/任务/权限边界保留；原Linux证据复用，新失败只派最小范围。三线无生产writer，不并行发布/资产写，不派重复检查。
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 5578→rootde4d已全等收取，精确GET/文档流32行差额经同High/static GO；21例待CI，源/CSS窗口关闭 | `.worktrees/research-product-craft` / `codex/ui-workspace-prefetch-20261009`（base7e，旧分支保留） |
+- 各owner仅写已授范围，不回退他人修改；root持共享CI/docs及已交Web差额，UI本次写窗口关闭。单renderer/跨路由/焦点/任务/权限边界保留；原Linux证据复用，新失败只派最小范围。三线无生产writer，不并行发布/资产写，不派重复检查。
 
 ## Git / CI / 运行事实
-- root已正常推`7e862109e4e794c50d2340186302065a21dfd82e`，保留a1bab48e服务对象历史；合并接缝High GO，无type/unknown type误入blank草稿的2例已随主CI通过。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推；原0c588容差、speech扩面及宽泛mocks仍未收。尚非发布GO。
+- 已推7e862109为本轮有效CI锚点，保留a1bab48e历史；最新spec跟进为rootde4d4ab0（final HEAD以Git为准）。合并接缝High GO，无type/unknown type草稿2例已过。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推；原0c588容差、speech扩面及宽泛mocks仍未收。尚非发布GO。
 - 历史7f/786：7f除Dashboard24/25外通过；786 video/journal过，push media37897396616全过含Dashboard25/25，PR media37897401824为24/25（其余job过）。旧前置safe=false与实时clear差额未定根因，按最新头像需求停止外部全身呈现取证；原RED/253帧/10201相位/101rest及c041/cc432 High证据保留在root `tmp/session-coordination-20261008/*7f5945d6*`、`dashboard-{fd380e16,78694e6a}-artifact/`，不追认旧失败。
 - 3485旧失败保留在root同tmp `*-3485*`：Web68缺React/SSR旧尺寸，Dashboard22/26，journal标题814.953>812；video37946090212在临时runner下载FFmpeg阶段超15min，后续未执行，不是API拒绝证据。15→30补丁未应用，新7e正常CI已过。
-- 7e：media PR37953297845/push37953290784的主job、Dashboard26/26、auth、reading均过；video37953297590、journal37953297656/90684过。仅workspace3/21：多数缺Dashboard自身actionable-ingestion同RO GET fixture（不能仅归为NextLink预取），另query例field.focus造成自然滚动后误验头像在视口；UI正按真实consumer/trace修，不放宽unknown请求或菜单不滚动断言。
+- 7e：media PR37953297845/push37953290784主job、Dashboard26/26、auth、reading均过；video37953297590、journal37953297656/90684过。workspace3/21已定位并由5578/de4d修：Dashboard精确同RO GET、两个query/focus时点文档流Y，补Stage/input等于64host；默认视口/unknown请求/菜单不滚动强断言不变，离屏暂停draw按真实可见点击后再验，待原CI。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 10-09 23:56 CST直接只读：app=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；API/Worker Native/runtime/catalogue仍784，主模型仍M3。Web/API/Worker healthy、restart0，部署marker列表空；Codex runner.lock不证明paid在途。`live-release-before-native-7e-20261009.json`保留额外inspect exit1/109bytes，不泛称全机验收；原14:04/02:49读数降为历史。

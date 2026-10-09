@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-10：已推7e；主CI、Dashboard26/26、auth/reading、video与两journal均过。UI独占workspace spec收尾3/21的精确GET及滚动测量差额。10-09 23:56直接只读app a6/rollback45、Native784、M3，尚未配对新资源；三线无生产写。image未来原生图审复用方案交原High核预算/CP，与本批发布分开。
+- 2026-10-10：7e主CI、Dashboard26/26、auth/reading、video与两journal均过；UI5578→rootde4d的精确GET/文档流差额经High/static GO，走原21例CI。23:56直接只读app a6/rollback45、Native784、M3，未配对新资源；三线无生产写。image新图审方案按High补transport/预算/CP/局部角色，受限代码与本批发布分开。
 - 2026-10-09：按用户纠正，将本对话导航、Researchers、Industry / Investors 和邮箱隐藏合入既有 `frontend/nanqing`；保留该分支原工作，main 不动。前轮线上功能已发布，分支纠正不重部署其他候选。详情见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-09：patrol原JSON在采样时对全部保护区/viewport安全；后0.704px是运动AABB重复外扩，不据此称实体碰撞。远端仅选择性合入已审motion恢复/CSS fallback，拒收speech扩面和弱reader/API断言；具体证据/写权见CURRENT。
 - 2026-10-09：生图9行fresh括号修复经独立High/目标回归，canonical依赖配套后完整WorkerTC0；真source错绑/时空矛盾仍须Native纠正，不重放cb未知任务。视频只读声音目录已收、实际Key目录/声音/成片仍待。
