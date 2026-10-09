@@ -10,12 +10,12 @@
 - 最新导航要求：左侧“服务对象、功能、探索、About”，右侧“上传／创建研究、登录／注册或个人中心”。About 文案已确认：联系我们、反馈问题、申请情报分析演示、接入 API。原使用指南整页由上传入口承接；功能采用已告知用户的默认方案：学术主页、已发表解析、预出版创建三个下拉入口。
 - 用户最新授权：本对话今天全部功能推送至 `photonics-dhl/OpenScience` 的 `dhl-nanqing-front` 并部署服务器；此目标替代早先 `frontend/nanqing` 整合安排，不修改或推送 `main`。
 
-## 候选锚点
+## 发布锚点
 
-- branch：`dhl-nanqing-front`（远端尚无同名分支，按用户授权创建）；base HEAD：`45a577a3a8f6bca78a063e7478fba131c5efb375`；功能提交 `a905f146`、`6a8da371`、`3aef0505`、`18195ae7`、`ffe87eb8`；最终提交见 Git。
-- worktree：`.worktrees/researchers-services`，供本轮预览与整合；保留到用户审阅/并入交付分支后清理。
+- branch：`dhl-nanqing-front` 已推送至 `photonics-dhl/OpenScience`；功能提交 `a905f146`、`6a8da371`、`3aef0505`、`18195ae7`、`ffe87eb8`；发布提交后仅追加本次文档回执，最终 HEAD 见 Git。
+- worktree：`.worktrees/researchers-services`，保留为本次发布/回退引用，下一次成功发布后按生命周期清理。
 - 收尾观察：仓库根目录已在另一任务的 `codex/r1-record-hardening`，含未跟踪 CI 产物；本轮保留不动，只提交本任务工作树。
-- 发布前实读：服务器 active `45a577a3a8f6bca78a063e7478fba131c5efb375`，与候选基线相同，核心容器 healthy；本轮以此作为精确 rollback，尚未切换。SSH 已通过当前用户环境，早期 sandbox 缺密钥不代表服务器认证失效。
+- 2026-10-09 已部署：服务器 active 与公网 `/__release` 均为 `a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback 为 `45a577a3a8f6bca78a063e7478fba131c5efb375`。`main` 远端仍为 `62b83372e51285b31a65f89bc0fabeb88d7c09bf`，本轮未修改它或其他远端分支。
 
 ## 已实现
 
@@ -42,10 +42,12 @@
 - 前轮 Researchers 样式/文案：从实际服务对象菜单进入，观察桌面与窄屏；既有桌面四入口/键盘导航、手机入口/登录返回两条用例 2/2 通过，Web TypeScript 与页面 ESLint 通过。桌面四动作首屏可见，窄屏无溢出、按钮高度 44px。
 - 前轮导航：Sol/medium 实现、Sol/high 增量审查 GO；Landing 定向 14/14、导航浏览器 3/3、Web TypeScript/ESLint 通过。真实 IAB 从指南打开 About/联系，桌面导航左右分组、手机四项同排；修正滚动条造成的菜单右缘裁切，375px 可见区内保留 12px 边距。浏览器登录身份为模拟数据，未发邮件/真实模型/业务写入。
 - 本轮邮箱隐藏：Sol/medium 实现、Sol/high 增量 GO；定向单测 8/8、联系导航/咨询浏览器 2/2、TypeScript/ESLint 通过。真实 IAB 从 About 进入联系页，确认无邮箱展示；初始 HTML 与相关编译客户端包无固定收件地址。实际 GET 405、localhost/127 同源 POST 200 且 no-store（修复内部 URL 别名误拦截）。浏览器以失败响应验证延迟读取、重试和私有输入保留，不启动邮件客户端或发送邮件。
+- 本次发布由 Sol/high 独立审查 GO，复用上述测试；正常服务器全量 build/start 成功，所有生产容器 healthy，Nginx、精确公网版本、journal 清除及 retention PREPARE/COMPLETE 均通过。部署日志：`tmp/deploy-dhl-nanqing-front/1791551684071-9e6d2196-2e36-491f-9b6f-0f94cb78026d.log`。原受控配置通过 `XGS_CONFIG_ROOT` 复用；无凭据复制、迁移或模型调用。
+- 线上 IAB 实际从导航进入 Researchers、Industry、Investors、联系/反馈/演示、原 API 和上传指南；四项文案及横向布局、两类检索提示、咨询表单与无静态邮箱均已观察，已发表入口登录 returnTo 保留模式。公网 `/contact/email` GET 405、固定 compose POST 200 且 no-store；没有发送邮件、真实检索/上传/发布。登录后操作继续沿用前轮受控模拟证据，不声称完成真实账号验收。
 - 开发预览曾单次首屏加载超时；未确定原因，未宣称已修。冻结代码后该单例及完整 7 条均通过；失败/最终日志保留于 ignored `apps/web/tmp/technology-discovery-{timeout,final-e2e}.log`，测试新增失败诊断附件便于再现定位。成功 API 交互仍仅为受控模拟。
 
-## 下一步
+## 后续与边界
 
-- 将干净精确提交推送 `dhl-nanqing-front` 后，沿原部署事务正常构建/启动：`--no-tests --skip-migrate --reuse-unchanged-capability-images`，保留祖先、锁、journal、健康和回滚保护。改动无迁移；该分支不匹配现有 CI 的分支触发，复用前述相关验证，不改 main。上线后核验实际导航/页面/联系入口。
+- 用户要求的推送和部署已完成。部署使用 `--no-tests --skip-migrate --reuse-unchanged-capability-images`；改动无迁移，该分支不匹配现有 CI 的分支触发，复用相关验证，不修改 CI 规避检查。
 - 内部能力与后续 AI 接线见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。发布不触发真实模型、论文公开或邮件发送；深层 Parser/ScanSci/embedding 验收不纳入本轮。
 - Researchers 公开主页的独立地址、栏目与公开成果列表属于后续个人主页设计范围。

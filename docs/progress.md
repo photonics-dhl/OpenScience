@@ -1,6 +1,6 @@
 # CURRENT Progress Window
 
-- 2026-10-09：已实现 Researchers 四入口、Industry / Investors 检索与联系；统一左侧四项导航和右侧上传/账号，复用指南整页及 API。联系邮箱改为点击写邮件才获取，机构与期刊介绍暂缓。候选、验证与后续范围见 [导航与服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-09：Researchers、Industry / Investors、全站导航和邮箱隐藏已推送 `dhl-nanqing-front` 并部署；main 未改。线上入口与公网版本已核对，机构/期刊介绍暂缓。版本、验证及后续范围见 [导航与服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 
 动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
 

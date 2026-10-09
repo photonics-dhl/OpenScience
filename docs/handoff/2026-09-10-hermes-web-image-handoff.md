@@ -1,5 +1,6 @@
 # Hermes / 论文视觉叙事 CURRENT
 > 唯一交付树 .worktrees/onchip-video-release，分支 release/onchip-production-line；根 main 只作导航。
+> 2026-10-09 应用发布锚点已由用户授权的导航/服务对象发布更新，当前应用/回滚编号见 [服务对象 CURRENT](2026-10-09-researchers-services-handoff.md)。下方旧发布编号保留为历史；Hermes 科学质量与未完成目标不因此次前端发布改变。
 
 ## 目标与决定
 - 用户目标仍是通用、稳定、可靠的前置链路：真实 NousResearch Hermes Agent 先理解全文、核对转述、生成六维/Claims/Evidence、科学分镜、完整提示词和适配风格，再交给 Synclip；论文是事实来源，不把图像模型或固定样本答案当作科学理解。

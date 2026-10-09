@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-`docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录全站导航、Researchers、Industry / Investors 候选、验证、部署边界及后续范围。
+`docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录全站导航、Researchers、Industry / Investors 的分支、发布/回滚身份、验证及后续范围。
 
 统一导航：`apps/web/components/navigation/{NavigationMenu,ProductHeaderActions,ProductRouteNavigation,ServiceAudienceMenu,AccountLink}.tsx`、`apps/web/components/landing/SiteHeader.tsx`、`apps/web/lib/product-navigation.ts` 与 `apps/web/components/shell/{ShellPrimitives,DashboardShell,WorkspaceShell,IdentityShell}.tsx` 提供左侧四项导航与右侧上传/账号入口；上传复用原 `/guide` 整页。About 联系说明及邮件草稿：`apps/web/app/contact/{page.tsx,contact.module.css,email/route.ts}`、`apps/web/components/contact/EmailDraftButton.tsx`；邮箱只在点击写邮件后读取服务端配置。定向验证：`apps/web/test/{contact-email.test.ts,landing-page.test.tsx,e2e/navigation-refresh.spec.ts}`；执行状态见上述 CURRENT。
 
