@@ -1,5 +1,11 @@
 # OpenScience (XGS) 项目文件索引
 
+`docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录本对话功能向既有 `frontend/nanqing` 的整合、实际发布/回滚和后续范围。
+
+统一导航：`apps/web/components/navigation/{NavigationMenu,ProductHeaderActions,ProductRouteNavigation,ServiceAudienceMenu,AccountLink}.tsx`、`apps/web/components/landing/SiteHeader.tsx`、`apps/web/lib/product-navigation.ts` 与 `apps/web/components/shell/{ShellPrimitives,DashboardShell,WorkspaceShell,IdentityShell}.tsx`；上传入口复用 `/guide`，API 复用 `/developers`。联系说明/邮件草稿：`apps/web/app/contact/{page.tsx,contact.module.css,email/route.ts}`、`apps/web/components/contact/EmailDraftButton.tsx`，点击写邮件才读取收件地址；定向验证 `apps/web/test/{contact-email.test.ts,landing-page.test.tsx,e2e/navigation-refresh.spec.ts}`。
+
+服务对象：`apps/web/app/who-we-serve/`、`apps/web/lib/service-audiences.ts` 提供五类介绍及 Researchers 四入口；`apps/web/app/research-objects/new/page.tsx`、`components/intake/EvidenceIntake.tsx`、`lib/research-creation-copy.ts` 与 Domain `ingestion/ingestion-service.ts` 保留已发表/预出版、无 PDF 手填及来源声明。Industry / Investors 的元数据检索/比较/咨询复用 `apps/web/components/technology-discovery/` 和 `apps/web/lib/technology-discovery/`，设计定位 `docs/specs/2026-10-09-technology-discovery-design.md`（[技术发现设计](docs/specs/2026-10-09-technology-discovery-design.md)）。验证：`apps/web/test/{research-creation-api.test.ts,technology-discovery.test.ts,e2e/researcher-services.spec.ts,e2e/technology-discovery.spec.ts}`；执行边界见服务对象 CURRENT。
+
 `docs/handoff/2026-10-08-journal-workbench-handoff.md`：期刊完整重做、共用论文管线、显式回滚与后续发布的唯一执行状态；需求见期刊设计的 2026-10-08 节。
 
 期刊改版与服务器续部署见 [期刊工作台交接](docs/handoff/2026-10-08-journal-workbench-handoff.md)：`apps/api/src/routes/journal-{core-routes,workbench,draft-policy,draft-guard}.ts` 保留原授权并提供草稿归档/恢复；`apps/web/lib/journal-{workbench-model,workbench-api,rights-form}.ts` 与 `components/journals/` 承接目录、草稿视图与显式来源授权；`scripts/test-journal-workbench.mjs`、Web journal 测试与 `apps/api/test/journal-browser.test.ts` 验证改版，精确 CI/部署事实见交接。

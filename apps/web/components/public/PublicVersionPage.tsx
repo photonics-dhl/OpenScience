@@ -13,6 +13,7 @@ import { EvidenceSheet } from './EvidenceSheet';
 import { PresentationAssetGallery } from './PresentationAssetGallery';
 import { ScientificText } from '@/components/content/ScientificText';
 import styles from './PublicReadingProduct.module.css';
+import { ResearchTypeLabel } from '@/components/research/ResearchTypeLabel';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
@@ -249,6 +250,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
         <article className="pub-reading-column" data-public-reading-column="true" data-hermes-protected="true">
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <h1>{research.title}</h1>
+            <ResearchTypeLabel core={version.core} />
             <div className={styles.identityMeta}>
               <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
               <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>

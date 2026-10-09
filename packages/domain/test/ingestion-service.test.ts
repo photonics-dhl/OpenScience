@@ -63,6 +63,37 @@ describe('ingestion confirmation research record', () => {
     expect(db.researchObjects[0].version).toBe(2);
   });
 
+  it.each([
+    { researchType: 'published', stored: { originalAuthors: 'A. Author; B. Author', originalJournal: 'Journal of Evidence', originalDoi: '10.1234/source' },
+      expected: { originalAuthors: 'A. Author; B. Author', originalJournal: 'Journal of Evidence', originalDoi: '10.1234/source' } },
+    { researchType: 'preprint', stored: { originalAuthors: 'unrelated author', originalJournal: 'unrelated journal', originalDoi: '10.1234/unrelated' },
+      expected: {} },
+  ])('preserves stored $researchType classification across confirmation and an editor commit', async ({ researchType, stored, expected }) => {
+    const { deps, db, input } = await confirmationFixture();
+    db.sdfDocuments[0].coreJson = { ...CORE, researchType, ...stored, unrelatedStoredKey: 'do not copy' };
+    const scientificCore = { ...CORE, problem: 'Reviewed finding', method: 'Reviewed method' };
+    db.agentTasks[0].result = { core: scientificCore, evidence: {}, needsMoreInformation: [] };
+    const confirmed = await confirmIngestionTask(deps, { ...input, core: {
+      ...scientificCore, researchType: 'spoofed', originalAuthors: 'spoofed', originalJournal: 'spoofed', originalDoi: 'spoofed',
+    } });
+    const expectedCore = { ...scientificCore, researchType, ...expected };
+    expect(confirmed.sdf.core).toEqual(expectedCore);
+    expect(db.sdfDocuments[0].coreJson).toEqual(expectedCore);
+    expect(db.versionManifests.find(row => row.versionId === confirmed.confirmation.versionId)?.coreJson).toEqual(expectedCore);
+    expect(confirmed.sdf.core).not.toHaveProperty('unrelatedStoredKey');
+    const edited = await createCommit(deps, { researchObjectId: TEST_RO_ID, userId: input.userId, version: 2,
+      message: 'Edit reviewed finding', sdfCore: { ...confirmed.sdf.core, results: 'Later result' } });
+    expect(edited.snapshot.core).toMatchObject({ researchType, ...expected, results: 'Later result' });
+  });
+
+  it('does not copy invalid stored classification or unrelated metadata during confirmation', async () => {
+    const { deps, db, input } = await confirmationFixture();
+    db.sdfDocuments[0].coreJson = { ...CORE, researchType: 'journal-verified', originalAuthors: 'No declaration', unrelatedStoredKey: 'private' };
+    const confirmed = await confirmIngestionTask(deps, input);
+    expect(confirmed.sdf.core).toEqual(CORE);
+    expect(db.sdfDocuments[0].coreJson).toEqual(CORE);
+  });
+
   it('rolls back every write when confirmation state cannot be claimed', async () => {
     const { deps, db, input } = await confirmationFixture();
     vi.spyOn(deps.prisma.ingestionTask, 'updateMany').mockResolvedValueOnce({ count: 0 });

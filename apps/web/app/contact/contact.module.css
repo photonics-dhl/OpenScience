@@ -1,0 +1,21 @@
+.page { max-width: 920px; margin: 0 auto; padding: 56px 28px 72px; color: var(--os-ink); font-family: var(--font-ui); }
+.intro { max-width: 730px; }
+.eyebrow { margin: 0 0 18px; color: #47717a; font-size: 13px; line-height: 1.6; }
+.intro h1 { margin: 0; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.25; font-weight: 550; letter-spacing: -.025em; }
+.lead { margin: 20px 0 0; color: var(--os-muted-paper); font-size: 17px; line-height: 1.8; }
+.details { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--os-rule-paper); }
+.details h2 { margin: 0 0 16px; font-size: 20px; font-weight: 550; }
+.details ul { margin: 0; padding-left: 22px; color: var(--os-muted-paper); font-size: 15px; line-height: 1.9; }
+.details li + li { margin-top: 8px; }
+.mailbox { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin-top: 32px; }
+.action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; gap: 10px; padding: 10px 18px; border: 0; border-radius: 7px; background: #126873; color: #fff; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background-color 150ms ease; }
+.action:disabled { opacity: .7; cursor: wait; }
+.mailbox p[role='alert'] { margin: 8px 0 0; color: #9b302c; font-size: 13px; }
+.note { max-width: 720px; margin: 18px 0 0; font-size: 13px; line-height: 1.8; color: var(--os-muted-paper); }
+.topics { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--os-rule-paper); }
+.topics a { display: inline-flex; align-items: center; min-height: 44px; color: #126873; font-size: 14px; text-underline-offset: 4px; }
+.topics a[aria-current='page'] { color: var(--os-ink); font-weight: 600; }
+.action:focus-visible, .topics a:focus-visible { outline: 2px solid #237e87; outline-offset: 4px; }
+@media (hover:hover) { .action:hover { background: #0c535d; } }
+@media (max-width:639px) { .page { padding: 32px 18px 48px; } .lead { font-size: 16px; } .details { margin-top: 28px; } .mailbox { align-items: flex-start; flex-direction: column; gap: 12px; } .topics { gap: 4px 20px; } }
+@media (prefers-reduced-motion:reduce) { .action { transition: none; } }

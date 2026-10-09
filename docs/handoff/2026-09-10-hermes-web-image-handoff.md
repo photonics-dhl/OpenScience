@@ -1,5 +1,6 @@
 # Hermes / 论文视觉叙事 CURRENT
 > 唯一交付树 `.worktrees/onchip-video-release`，分支 `release/onchip-production-line`；根 main 只导航。Git、CI、真实运行和用户最新决定优先。
+> 2026-10-09 导航/服务对象已独立发布，实读应用/回滚编号见 [服务对象 CURRENT](2026-10-09-researchers-services-handoff.md)；本轮向既有 `frontend/nanqing` 纠正整合，不发布下方其他候选，也不改变 Hermes 科学质量与未完成目标。
 
 ## 目标与边界
 - 依据[开发规格](../OpenScience_Kimi_Development_Spec.md)：真实 NousResearch Hermes Agent 理解全文、提炼六维/Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不做额外同行评议，不以 Codex 手稿替代自动科学能力。

@@ -1,14 +1,30 @@
 'use client';
-import * as React from 'react';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { PRODUCT_PRIMARY_ROUTES, type PrimaryProductRouteId } from '@/lib/product-navigation';
+import { PRODUCT_ABOUT_ROUTES, PRODUCT_FEATURE_ROUTES, type PrimaryProductRouteId } from '@/lib/product-navigation';
 import styles from './navigation.module.css';
-export type ProductRouteId = PrimaryProductRouteId | 'create' | 'settings' | 'profile' | 'journalAdmin';
-export function ProductRouteNavigation({ active, variant = 'product' }: { active?: ProductRouteId; variant?: 'identity' | 'product' }) {
+import { NavigationMenu } from './NavigationMenu';
+import { ServiceAudienceMenu } from './ServiceAudienceMenu';
+
+export type ProductRouteId = PrimaryProductRouteId | 'dashboard' | 'journals' | 'guide' | 'developers' | 'create' | 'settings' | 'profile' | 'journalAdmin';
+
+export function ProductRouteNavigation({ active, tone = 'paper' }: {
+  active?: ProductRouteId; variant?: 'identity' | 'product'; tone?: 'paper' | 'dark';
+}) {
   const t = useTranslations('productNavigation');
-  const routes = variant === 'identity' ? PRODUCT_PRIMARY_ROUTES.filter(({ id }) => id === 'explore' || id === 'dashboard') : PRODUCT_PRIMARY_ROUTES;
-  return <ul className={styles.primary} data-product-route-navigation="true" data-navigation-variant={variant}>
-    {routes.map(({ href, id }) => <li key={id} data-route-item={id}><Link href={href} className={styles.primaryLink} aria-current={active === id || (active === 'create' && id === 'dashboard') ? 'page' : undefined} data-reading-role="control">{t(id)}</Link></li>)}
+  const pathname = usePathname();
+  return <ul className={styles.primary} data-product-route-navigation="true" data-navigation-tone={tone}>
+    <li data-route-item="services"><ServiceAudienceMenu tone={tone} /></li>
+    <li data-route-item="features"><NavigationMenu label={t('features')} tone={tone}
+      active={pathname === '/me' || pathname.startsWith('/research-objects/new')}
+      items={PRODUCT_FEATURE_ROUTES.map(({ href, id }) => ({ href, label: t(id) }))} /></li>
+    <li data-route-item="explore"><Link href="/explore" className={styles.primaryLink}
+      aria-current={active === 'explore' || pathname.startsWith('/explore') ? 'page' : undefined}
+      data-reading-role="control">{t('explore')}</Link></li>
+    <li data-route-item="about"><NavigationMenu label={t('about')} tone={tone}
+      active={pathname === '/contact' || pathname === '/developers'}
+      items={PRODUCT_ABOUT_ROUTES.map(({ href, id }) => ({ href, label: t(id) }))} /></li>
   </ul>;
 }

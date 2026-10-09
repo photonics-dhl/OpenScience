@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
@@ -25,6 +25,7 @@ import {
 import type { Locale } from '@/i18n/locale';
 import { getHermesDraftStorage } from '@/lib/hermes/draft-state';
 import { startPaperNarrative } from '@/lib/hermes/start-paper-narrative';
+import { researchCreationCopy } from '@/lib/research-creation-copy';
 
 const CREATION_SUGGESTION: HermesGuideSuggestion = {
   bodyKey: 'guide.neutral.body',
@@ -46,11 +47,21 @@ export default function NewResearchObjectPage() {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const companion = useOptionalHermesWorkspaceStage();
+  const searchParams = useSearchParams();
   const session = useSession();
+  const requestedType = searchParams.get('type');
+  const researchType = requestedType === 'published' || requestedType === 'preprint' ? requestedType : null;
+  const draftMode = searchParams.get('mode') === 'blank' && researchType !== 'published';
+  const copy = researchCreationCopy(locale);
+  const returnTo = `/research-objects/new${searchParams.size ? `?${searchParams.toString()}` : ''}`;
+  const loginHref = `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
   const [viewerId, setViewerId] = useState('');
   const [title, setTitle] = useState('');
+  const [authors, setAuthors] = useState('');
+  const [journal, setJournal] = useState('');
+  const [doi, setDoi] = useState('');
   const [goal, setGoal] = useState('');
   const [autoIllustrate, setAutoIllustrate] = useState(true);
   const [materials, setMaterials] = useState<IntakeMaterial[]>([]);
@@ -68,6 +79,7 @@ export default function NewResearchObjectPage() {
   const lastIngestionTaskId = useRef('');
   const goalInput = useRef<HTMLTextAreaElement>(null);
   const ownerRef = useRef('');
+  const flowRef = useRef('');
   const pendingRef = useRef(false);
   const canIllustrate = materials.length === 1 && (materials[0]?.file.type === 'application/pdf' || /\.pdf$/iu.test(materials[0]?.file.name ?? ''));
 
@@ -76,6 +88,9 @@ export default function NewResearchObjectPage() {
     setWorkspaceId('');
     setViewerId('');
     setTitle('');
+    setAuthors('');
+    setJournal('');
+    setDoi('');
     setGoal('');
     setAutoIllustrate(true);
     setMaterials([]);
@@ -94,13 +109,23 @@ export default function NewResearchObjectPage() {
     pendingRef.current = false;
   }, []);
 
+  // A client-side route change must never carry an already created RO into another flow.
+  useEffect(() => {
+    const flow = `${researchType ?? 'general'}:${draftMode ? 'blank' : 'upload'}`;
+    if (flowRef.current && flowRef.current !== flow) {
+      clearCreationState();
+      if (session.status === 'authenticated' && session.user?.userId) setViewerId(session.user.userId);
+    }
+    flowRef.current = flow;
+  }, [clearCreationState, draftMode, researchType, session.status, session.user?.userId]);
+
   useEffect(() => {
     if (session.status !== 'authenticated') {
       if (ownerRef.current) {
         ownerRef.current = '';
         clearCreationState();
       }
-      if (session.status === 'anonymous') router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew');
+      if (session.status === 'anonymous') router.replace(loginHref);
       return;
     }
     const nextOwner = session.user?.userId || '';
@@ -118,7 +143,7 @@ export default function NewResearchObjectPage() {
     }
     ownerRef.current = nextOwner;
     setViewerId(nextOwner);
-  }, [clearCreationState, router, session.status, session.user?.userId]);
+  }, [clearCreationState, loginHref, router, session.status, session.user?.userId]);
 
   useEffect(() => {
     const owner = session.user?.userId;
@@ -130,11 +155,21 @@ export default function NewResearchObjectPage() {
         setWorkspaces(rows);
         setWorkspaceId((current) => current || rows[0]?.id || '');
       })
-      .catch((cause) => active && ownerRef.current === owner && setError(cause instanceof Error ? cause.message : t('error')));
+      .catch((cause) => {
+        if (!active || ownerRef.current !== owner) return;
+        if (cause instanceof ApiClientError && cause.status === 401) {
+          clearCreationState();
+          router.replace(loginHref);
+          return;
+        }
+        setError(cause instanceof Error ? cause.message : t('error'));
+      });
     return () => { active = false; };
-  }, [session.status, session.user?.userId, t]);
+  }, [clearCreationState, draftMode, loginHref, researchType, router, session.status, session.user?.userId, t]);
 
   function changeMaterials(next: IntakeMaterial[]) {
+    if (pendingRef.current) return;
+    setError(researchType && next.length > 0 && (next.length !== 1 || !/\.pdf$/iu.test(next[0]!.file.name)) ? copy.pdfOnly : '');
     setMaterials(next);
   }
 
@@ -150,8 +185,14 @@ export default function NewResearchObjectPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const owner = ownerRef.current;
-    if (pendingRef.current || session.status !== 'authenticated' || session.user?.userId !== owner || !owner || owner !== viewerId || !workspaceId || (!goal.trim() && !title.trim() && materials.length === 0)) return;
-    if (canIllustrate && autoIllustrate && goal.trim().length > 1000) { setError(t('illustrationInstructionTooLong')); return; }
+    const operationFlow = flowRef.current;
+    if (pendingRef.current || session.status !== 'authenticated' || session.user?.userId !== owner || !owner || owner !== viewerId || !workspaceId) return;
+    if (researchType && !title.trim()) { setError(copy.titleRequired); return; }
+    if (researchType && !draftMode && materials.length === 0) { setError(copy.pdfRequired); return; }
+    if (researchType && !draftMode && (materials.length !== 1 || !/\.pdf$/iu.test(materials[0]!.file.name))) { setError(copy.pdfOnly); return; }
+    if (researchType === 'published' && (!authors.trim() || !journal.trim())) return;
+    if (!researchType && !goal.trim() && !title.trim() && materials.length === 0) return;
+    if (!researchType && canIllustrate && autoIllustrate && goal.trim().length > 1000) { setError(t('illustrationInstructionTooLong')); return; }
     pendingRef.current = true;
     setPending(true);
     setError('');
@@ -159,9 +200,20 @@ export default function NewResearchObjectPage() {
     try {
       const resolvedTitle = title.trim() || temporaryTitle(goal, materials, t('untitled'));
       if (!createKey.current) createKey.current = crypto.randomUUID();
-      const roId = researchObjectId || (await createResearchObject({ workspaceId, title: resolvedTitle }, createKey.current)).researchObject.id;
-      if (ownerRef.current !== owner) return;
+      const core = researchType ? {
+        schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '',
+        researchType,
+        ...(researchType === 'published' ? {
+          originalAuthors: authors.trim(), originalJournal: journal.trim(), originalDoi: doi.trim(),
+        } : {}),
+      } : undefined;
+      const roId = researchObjectId || (await createResearchObject({ workspaceId, title: resolvedTitle, ...(core ? { sdf: { core } } : {}) }, createKey.current)).researchObject.id;
+      if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
       setResearchObjectId(roId);
+      if (draftMode) {
+        router.push(`/research-objects/${encodeURIComponent(roId)}/edit`);
+        return;
+      }
       firstGoal.current ||= goal.trim();
       let ingestionTaskId = lastIngestionTaskId.current;
       let ingestionTasks = [...uploadedTasks.current];
@@ -176,14 +228,14 @@ export default function NewResearchObjectPage() {
             newFiles,
             uploadKey.current,
             (percent) => {
-              if (ownerRef.current !== owner) return;
+              if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
               setMaterials((current) => current.map((material) => material.status === 'uploading' ? { ...material, progress: Math.round(percent * 0.35) } : material));
             },
           ).catch((cause) => {
           uploadFailed = true;
           throw cause;
         });
-        if (ownerRef.current !== owner) return;
+        if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
         ingestionTaskId = result.tasks[0]?.id ?? '';
         const newTasks = result.tasks.map((task) => ({ id: task.id, researchObjectId: roId, state: task.state }));
         setMaterials((current) => current.map((material) => {
@@ -197,15 +249,15 @@ export default function NewResearchObjectPage() {
         uploadKey.current = '';
       }
 
-      if (canIllustrate && autoIllustrate && ingestionTaskId) {
+      if (!researchType && canIllustrate && autoIllustrate && ingestionTaskId) {
         const run = await startPaperNarrative({
           scope: { userId: owner, researchObjectId: roId, ingestionTaskId },
           generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale, style: 'auto', instruction: firstGoal.current || t('illustrationGoal') },
           storage: getHermesDraftStorage(),
-          isCurrent: () => ownerRef.current === owner,
+          isCurrent: () => ownerRef.current === owner && flowRef.current === operationFlow,
           identityError: t('error'), storageError: t('illustrationStorageError'),
         });
-        if (ownerRef.current !== owner) return;
+        if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
         router.push(`/research-objects/${encodeURIComponent(roId)}/hermes?run=${encodeURIComponent(run.id)}`);
         return;
       }
@@ -216,7 +268,7 @@ export default function NewResearchObjectPage() {
         guideTaskKey.current ||= crypto.randomUUID();
         if (!guideSessionId.current) {
           const createdSessionId = (await createWorkspaceGuideSession(firstGoal.current, guideSessionKey.current, roId)).session.id;
-          if (ownerRef.current !== owner) return;
+          if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
           guideSessionId.current = createdSessionId;
         }
         hermesTaskId = (await submitWorkspaceGuideTask({
@@ -239,7 +291,7 @@ export default function NewResearchObjectPage() {
             },
           },
         })).task.id;
-        if (ownerRef.current !== owner) return;
+        if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
         window.sessionStorage.setItem(`openscience.hermes-handoff:${owner}:${roId}:${hermesTaskId}`, JSON.stringify({
           viewerId: owner,
           researchObjectId: roId,
@@ -250,10 +302,14 @@ export default function NewResearchObjectPage() {
       const params = new URLSearchParams();
       if (ingestionTaskId && !hermesTaskId) params.set('ingestionTask', ingestionTaskId);
       if (hermesTaskId) params.set('hermesTask', hermesTaskId);
-      if (ownerRef.current !== owner) return;
+      if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
       router.push(`/research-objects/${encodeURIComponent(roId)}/edit${params.size ? `?${params.toString()}` : ''}`);
     } catch (cause) {
-      if (ownerRef.current !== owner) return;
+      if (ownerRef.current !== owner || flowRef.current !== operationFlow) return;
+      if (cause instanceof ApiClientError && cause.status === 401) {
+        router.replace(loginHref);
+        return;
+      }
       const blocked = cause instanceof ApiClientError && ['MALICIOUS_FILE', 'UNSUPPORTED_INGESTION_FORMAT', 'FILE_TOO_LARGE'].includes(cause.code);
       if (uploadFailed) setMaterials((current) => current.map((material) => material.status === 'uploading' ? {
         ...material,
@@ -262,7 +318,7 @@ export default function NewResearchObjectPage() {
       } : material));
       setError(cause instanceof Error ? cause.message : t('error'));
     } finally {
-      if (ownerRef.current === owner) {
+      if (ownerRef.current === owner && flowRef.current === operationFlow) {
         pendingRef.current = false;
         setPending(false);
       }
@@ -274,7 +330,7 @@ export default function NewResearchObjectPage() {
     && session.user?.userId === viewerId
     && workspaceId
     && viewerId
-    && (goal.trim() || title.trim() || materials.length),
+    && (researchType ? (title.trim() && (draftMode || (materials.length === 1 && /\.pdf$/iu.test(materials[0]!.file.name))) && (researchType !== 'published' || (authors.trim() && journal.trim()))) : (goal.trim() || title.trim() || materials.length)),
   );
 
   return (
@@ -286,17 +342,21 @@ export default function NewResearchObjectPage() {
       <div className="mx-auto max-w-4xl" data-research-create="true">
         <Link href="/dashboard" className="research-return-link"><span aria-hidden="true">←</span>{t('backToDesk')}</Link>
         <header className="border-b border-os-rule-paper pb-5">
-          <h1 className="m-0 text-2xl font-semibold leading-8 tracking-[-0.02em] text-os-ink">{t('title')}</h1>
-          <p data-reading-role="body" className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-os-muted-paper">{t('description')}</p>
+          <h1 className="m-0 text-2xl font-semibold leading-8 tracking-[-0.02em] text-os-ink">{researchType === 'published' ? copy.publishedTitle : researchType === 'preprint' ? copy.preprintTitle : t('title')}</h1>
+          <p data-reading-role="body" className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-os-muted-paper">{researchType === 'published' ? copy.publishedDescription : researchType === 'preprint' ? copy.preprintDescription : t('description')}</p>
         </header>
 
         <form className="mt-6" onSubmit={submit} aria-busy={pending}>
           <fieldset className="m-0 min-w-0 border-0 p-0" disabled={pending} onDropCapture={(event) => { if (pending) { event.preventDefault(); event.stopPropagation(); } }}>
-          <div>
-            <EvidenceIntake literature={{ instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} variant="research-start" />
-          </div>
+          {researchType === 'preprint' ? <nav className="mb-6 grid gap-3 sm:grid-cols-2" aria-label={copy.preprintTitle}>
+            <Link href="/research-objects/new?type=preprint" aria-disabled={pending} tabIndex={pending ? -1 : undefined} onClick={event => { if (pendingRef.current) event.preventDefault(); }} aria-current={!draftMode ? 'page' : undefined} className={`rounded-control border p-4 text-os-ink ${!draftMode ? 'border-os-vermilion-ink bg-os-paper' : 'border-os-rule-paper'}`}><span className="block font-semibold">{copy.uploadPdf}</span><span className="mt-1 block text-sm text-os-muted-paper">{copy.uploadPdfDescription}</span></Link>
+            <Link href="/research-objects/new?type=preprint&mode=blank" aria-disabled={pending} tabIndex={pending ? -1 : undefined} onClick={event => { if (pendingRef.current) event.preventDefault(); }} aria-current={draftMode ? 'page' : undefined} className={`rounded-control border p-4 text-os-ink ${draftMode ? 'border-os-vermilion-ink bg-os-paper' : 'border-os-rule-paper'}`}><span className="block font-semibold">{copy.writeDraft}</span><span className="mt-1 block text-sm text-os-muted-paper">{copy.writeDraftDescription}</span></Link>
+          </nav> : null}
+          {!draftMode ? <div>
+            <EvidenceIntake pdfOnly={Boolean(researchType)} disabled={pending} literature={researchType ? undefined : { instanceId: 'research-start-literature', onAuthenticationRequired: () => router.replace(loginHref), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={changeMaterials} variant="research-start" />
+          </div> : null}
 
-          {canIllustrate ? <div className="mt-4">
+          {!researchType && canIllustrate ? <div className="mt-4">
             <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-os-ink">
               <input type="checkbox" className="size-4 accent-os-vermilion-ink" checked={autoIllustrate} onChange={(event) => setAutoIllustrate(event.target.checked)} disabled={pending || Boolean(researchObjectId)} aria-describedby="auto-illustrate-description" />
               {t('autoIllustrate')}
@@ -304,15 +364,23 @@ export default function NewResearchObjectPage() {
             <p id="auto-illustrate-description" className="m-0 pl-7 text-sm leading-6 text-os-muted-paper">{t('autoIllustrateDescription')}</p>
           </div> : null}
 
-          <section className="mt-6">
+          {!researchType ? <section className="mt-6">
             <HermesDockAnchor floating state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} onInvoke={() => { if (companion) companion.openCompanion(); else goalInput.current?.focus(); }} />
             <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
               <span className="flex flex-wrap items-baseline justify-between gap-2"><span>{t('hermesPrompt')}</span><span className="font-normal text-os-muted-paper">{t('hermesPromptNote')}</span></span>
               <textarea ref={goalInput} rows={2} className="min-h-24 w-full resize-y rounded-control border border-os-rule-paper bg-os-paper px-4 py-3 text-base leading-7 text-os-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-os-muted-paper focus:border-os-vermilion-ink focus:shadow-[0_0_0_3px_rgba(18,93,102,.12)]" maxLength={canIllustrate && autoIllustrate ? 1000 : 2000} value={goal} onChange={(event) => changeGoal(event.target.value)} placeholder={t('hermesPlaceholder')} />
             </label>
-          </section>
+          </section> : null}
 
-          <details className="mt-5 border-t border-os-rule-paper">
+          {researchType ? <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-os-ink">{copy.title}<input className="min-h-12 rounded-control border border-os-rule-paper bg-os-paper px-3 text-base" required maxLength={200} value={title} onChange={(event) => { createKey.current = ''; setTitle(event.target.value); }} disabled={Boolean(researchObjectId)} /></label>
+            <label className="grid gap-2 text-sm font-medium text-os-ink">{t('workspace')}<select className="min-h-12 rounded-control border border-os-rule-paper bg-os-paper px-3 text-base" value={workspaceId} onChange={(event) => { createKey.current = ''; setWorkspaceId(event.target.value); }} disabled={Boolean(researchObjectId)} required><option value="">{t('workspaceLoading')}</option>{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select></label>
+            {researchType === 'published' ? <>
+              <label className="grid gap-2 text-sm font-medium text-os-ink">{copy.authors}<input className="min-h-12 rounded-control border border-os-rule-paper bg-os-paper px-3 text-base" required maxLength={1000} value={authors} onChange={(event) => { createKey.current = ''; setAuthors(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={copy.authorsPlaceholder} /></label>
+              <label className="grid gap-2 text-sm font-medium text-os-ink">{copy.journal}<input className="min-h-12 rounded-control border border-os-rule-paper bg-os-paper px-3 text-base" required maxLength={300} value={journal} onChange={(event) => { createKey.current = ''; setJournal(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={copy.journalPlaceholder} /></label>
+              <label className="grid gap-2 text-sm font-medium text-os-ink sm:col-span-2">{copy.doi}<input className="min-h-12 rounded-control border border-os-rule-paper bg-os-paper px-3 text-base" maxLength={255} value={doi} onChange={(event) => { createKey.current = ''; setDoi(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={copy.doiPlaceholder} /></label>
+            </> : null}
+          </div> : <details className="mt-5 border-t border-os-rule-paper">
             <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-os-muted-paper transition-colors duration-150 hover:text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">{t('details')}</summary>
             <div className="mt-5 grid gap-6 sm:grid-cols-2">
               <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
@@ -327,7 +395,7 @@ export default function NewResearchObjectPage() {
                 <input name="title" className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-base text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" maxLength={200} value={title} onChange={(event) => { createKey.current = ''; setTitle(event.target.value); }} disabled={Boolean(researchObjectId)} placeholder={t('titlePlaceholder')} />
               </label>
             </div>
-          </details>
+          </details>}
           </fieldset>
 
           {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
@@ -335,7 +403,7 @@ export default function NewResearchObjectPage() {
             <p className="m-0 max-w-lg text-sm leading-6 text-os-muted-paper">{t('privacyNote')}</p>
             <div className="flex items-center gap-4">
               {researchObjectId ? <Link className="min-h-12 px-4 py-3 text-sm text-os-muted-paper hover:text-os-ink" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{intakeT('openDraft')}</Link> : null}
-              <button className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:brightness-90 active:scale-[.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || !canCreate} type="submit">{pending ? t('creating') : canIllustrate && autoIllustrate ? t('createIllustrated') : researchObjectId ? t('continue') : t('create')}</button>
+              <button className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:brightness-90 active:scale-[.98] motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-50" disabled={pending || !canCreate} type="submit">{pending ? t('creating') : researchType ? (draftMode ? copy.draftStart : copy.uploadStart) : canIllustrate && autoIllustrate ? t('createIllustrated') : researchObjectId ? t('continue') : t('create')}</button>
             </div>
           </footer>
         </form>
