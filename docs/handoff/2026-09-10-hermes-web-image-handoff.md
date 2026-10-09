@@ -14,12 +14,13 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | fresh括号误判已修；资源配对后由Native纠正真source/时空矛盾，cb未知保护 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/hermes-dashboard-ci` |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 声音目录/时钟/TERM fixture已收且Linux过；真实目录待同源host配对 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-audio-catalog-readonly` |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 已授原patrol case测量时点修复，保留全周期强断言；Figma14frame为候选 | `.worktrees/research-product-craft` / `codex/ui-conversation-control-20261009` |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | patrol几何分析交root闭合；私有候选冻结，继续已有Figma编辑页像素QA | `.worktrees/research-product-craft` / `codex/ui-patrol-origin-20261009` |
 - 各owner仅写已冻结范围，不回退他人修改；root持有共享CI/docs写权。三线无生产写窗口，不并行发布/资产写；有在途任务先自然收尾，依赖变化即交接真实下一步，不长期空等或派重复检查。
 
 ## Git / CI / 运行事实
 - root已推`fbf9efd7802a9544a9888708a036900b4a38d008`；远端2a历史经8ce/e0选择性合入。High只收RiggedPortrait static/motion key及compact fallback retry；拒收speech扩面/1s重试、reader visible:first、无消费者按钮及宽泛API mocks，保留本地CI开关/静态合同。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推，尚非发布GO。
 - fbf CI：视频PR37884104167、期刊37884104186过；media37884104158的skill-path（含Linux deploy/TERM）、auth、reading20/20、workspace11/11过，dashboard23/25。剩patrol动画后AABB重复外扩与loading handler切换空档；日志/artifact在root `tmp/session-coordination-20261008/*fbf9efd7*`。bebe旧失败、远端2a通过均不能代替下一修复组合CI。
+- 当前新增仅Dashboard测试：loading c041与patrol `0b95d8ec8571342de943c2f352dedd6f2cc40af1`已各获独立High GO、目标TS/lint0；组合推送后按正常工作流运行，未提前声称浏览器全绿。UI两个私有测量候选/审查原件保留，root只采共同原点思路，不收其inline animation版。
 - d32将media CI改为同次Web build后next start，build/start API_ORIGIN3101一致；保持20min/冷导航/paid/身份/SPA counter/严格reader与全部例。两个_visual页面有既有ENABLE_VISUAL_HARNESS开关，CI复用开启、生产默认404保持；不因测试页缺失跳过用例。未知无位置SyntaxError不宣称已定位。
 - TERM测试b023→1e258328仅改原用例/helper；builtin read握手、真实FD9竞争、exit143/clear和自有进程清理经High Scoped GO；5000ms/生产脚本不变。fbf的Linux deploy step及整个skill-path过，关闭该待验，不宣称原超时唯一根因已证。CURRENT/progress在16KiB内，8/8及DOCS_SYNC_OK，完整历史在下方Git引用。
 - 最新已记录生产只读：app=`45a577a3a8f6bca78a063e7478fba131c5efb375`，rollback=`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，Native/runtime/catalogue=`784c6b25342c29bdc5c2db193258d34dfafd4e64`。10-09 00:42/01:26–01:29服务healthy、restart0、M3；02:49:50Z video host仍42fe/admin关闭/audio客户端缺。均为带时点证据，不冒称此刻fresh。
@@ -32,7 +33,7 @@
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
 - 视频仍待新host交付后的服务器Key目录/LTX资格、声音选择与真实成片；网页账号层级不证明API Key被拒，图片成功也不证明LTX可用。未查询真实目录、未选声音或付费探测。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`无receipt且POST未知，需真实关联/幂等查询合同，不为4/4重发。
 - UI原14个完整本地journey与High保留。513→e3仅conversation-slot顶留白；fbf Dashboard23/25含真实390 Talk展开、Pause→Enable和cold reduced静态合同通过，source不伪造owner运行。版本原文reader/CSS证据亦复用，reading20/20；不把历史未定位SyntaxError泛化为生产根因。
-- fbf原JSON证明采样时flag=true、全保护区/viewport安全；后0.704px重叠来自动画AABB再加整周期包络，实体当帧距blocker仍33.30px。UI原patrol case共用force前原点；High新P2指出自主patrol可能已启动，须保持并核静止后开始新周期，仍在修。4190ms/帧数/碰撞/viewport/四向delta/CSS极值全保留，尾段未过。root loading修复c041连续handler phase移除unrouteAll空档，窄URL/200→reload503/严格API断言不改，TC/lint0、High GO；组合CI待收。
+- fbf原JSON证明采样时安全，后0.704px为运动AABB再外扩，非实体碰撞证明。root patrol0b95以doze observer保持并验证实际静止；采同restRect后在同browser task启动新真实CSS周期和4190ms sampler，关闭首版High P2。原帧数/碰撞/viewport/四向delta/CSS极值全保留、结束仍核action/safe，目标TS/lint与独立High GO；真实尾段待CI。loading c041连续handler phase移除unrouteAll空档，窄URL/200→reload503/严格API断言不变。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
 - Fig2 exact5软回收已获human授权并High GO，接受成员旧URL在restore前404及初始30天条件；对象/任务/费用/Claims/sealed保留，禁止purge/补源/重写封存。e77实际published内部v8/OSR-2026-000023-v2，5项全excluded。10-08 23:03:59五项live/42fe；生图无认证、UI正常入口缺精确ID，双方0写释放。行标识165→ab3已收未发，发布后fresh核身份/引用再沿原授权操作，不重复问。
