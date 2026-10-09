@@ -415,6 +415,7 @@
   .craft-collection [data-editorial-collection] ol > li > a > span:nth-child(2) > span:first-child { font-size: 1.5rem; }
 
   .craft-journal-public, .craft-journal-form, .craft-collection { padding: 24px 20px; }
+  .craft-journal-public .journal-directory-heading { margin-bottom: 28px; }
   .craft-journal-public [data-journal-directory] [data-journal-entries] { grid-template-columns: minmax(0, 1fr); }
   .craft-journal-public [data-journal-directory] form { grid-template-columns: minmax(0, 1fr); }
   .craft-journal-public [data-journal-directory] [data-journal-resources] { justify-content: flex-start; gap: 4px 16px; }
