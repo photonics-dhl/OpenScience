@@ -514,6 +514,7 @@ jobs:
     env:
       PLAYWRIGHT_WEB_MODE: production
       API_ORIGIN: http://127.0.0.1:3101
+      ENABLE_VISUAL_HARNESS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -657,6 +658,7 @@ jobs:
     env:
       PLAYWRIGHT_WEB_MODE: production
       API_ORIGIN: http://127.0.0.1:3101
+      ENABLE_VISUAL_HARNESS: '1'
     strategy:
       fail-fast: false
       matrix:

@@ -384,7 +384,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await expect(reducedVisual).toHaveAttribute('data-hermes-input-ready', 'false');
   const reducedRig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(reducedRig).toHaveAttribute('data-hermes-static-frame', 'true');
-  await expect(reducedRig).toHaveAttribute('data-hermes-runtime-owner', 'stopped');
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'false');
   await expect(reducedRig.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
   await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'block');
