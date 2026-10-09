@@ -208,7 +208,7 @@ test('Native binding rejects stale source, mount, runtime and unhealthy API befo
   ]) { const changed = structuredClone(container); change(changed); assert.throws(() => deployLock.verifyNativeContainerBinding(changed, expected), /Native deployment state/u); }
 });
 
-test('Native actual old-pair capture rejects cached environment and mounts before journal creation or producer stop', async t => {
+test('Native actual old-pair capture accepts enabled video flags and rejects cached environment and mounts before journal creation or producer stop', async t => {
   const capture = deployLockSource.match(/async function captureNativeState\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const inventory = deployLockSource.match(/async function nativeContainers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const operation = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
@@ -228,6 +228,7 @@ test('Native actual old-pair capture rejects cached environment and mounts befor
       Mounts: [{ Type: 'bind', Source: `/opt/openscience-releases/${rollback}`, Destination: '/opt/openscience', RW: false },
         ...(service === 'agent-worker' ? [{ Type: 'bind', Source: '/opt/openscience-hermes/inbox', Destination: '/native-agent/inbox', RW: true }] : [])],
     }]));
+    containers['agent-worker'].Config.Env.push('HERMES_VIDEO_ENABLED=true', 'SYNCLIP_VIDEO_ENABLED=true');
     if (mode === 'api-runtime') containers.api.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign';
     if (['worker-runtime', 'stopped-worker-runtime'].includes(mode)) containers['agent-worker'].Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign';
     if (mode === 'api-catalogue') containers.api.Config.Env[2] = 'HERMES_NATIVE_SKILL_CATALOGUE_ID=foreign';

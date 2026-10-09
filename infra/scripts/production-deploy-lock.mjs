@@ -388,7 +388,6 @@ export function verifyNativeContainerBinding(container, { service, releaseSha, r
     || env.get('HERMES_NATIVE_AGENT_INBOX') !== '/native-agent/inbox') invalidNativeState();
   if (service === 'agent-worker' && !container.Mounts?.some(mount => mount.Type === 'bind'
     && mount.Source === `${NATIVE_ROOT}/inbox` && mount.Destination === '/native-agent/inbox' && mount.RW === true)) invalidNativeState();
-  if (service === 'agent-worker' && (container.Config.Env ?? []).some(value => value === 'HERMES_VIDEO_ENABLED=true' || value === 'SYNCLIP_VIDEO_ENABLED=true')) invalidNativeState();
 }
 
 const NATIVE_WORK_QUERY = `
