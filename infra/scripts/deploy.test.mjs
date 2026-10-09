@@ -146,7 +146,7 @@ test('Native work classification preserves pending queues and holds unknown, liv
   const task = { id: 't1', status: 'pending', deletedAt: null, nativePending: true,
     providerUncertain: false, updatedAt: '2026-10-09T07:00:00.000Z' };
   const snapshot = { tasks: [task], queue: ['t1'], processing: ['t1'], journals: [] };
-  assert.deepEqual(deployLock.classifyNativeWorkSnapshot(snapshot, null), { safe: true, nativePending: true });
+  assert.deepEqual(deployLock.classifyNativeWorkSnapshot(snapshot, null), { safe: true, nativePending: true, nativeBoundPending: false });
   assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, status: 'running' }] }, null).safe, false);
   assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, processing: ['missing'] }, null).safe, false);
   assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, providerUncertain: true }] }, null).safe, false);
@@ -206,6 +206,79 @@ test('Native binding rejects stale source, mount, runtime and unhealthy API befo
     c => { c.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign'; },
     c => { c.Config.Env.push('HERMES_NATIVE_RUNTIME_ID=foreign'); },
   ]) { const changed = structuredClone(container); change(changed); assert.throws(() => deployLock.verifyNativeContainerBinding(changed, expected), /Native deployment state/u); }
+});
+
+test('Native actual old-pair capture rejects cached environment and mounts before journal creation or producer stop', async t => {
+  const capture = deployLockSource.match(/async function captureNativeState\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  const inventory = deployLockSource.match(/async function nativeContainers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  const operation = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(capture && inventory && operation);
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-old-pair-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const rollback = 'a'.repeat(40), candidate = 'b'.repeat(40), nativeSha = 'c'.repeat(40);
+  const binding = { runtimeId: `installed-native-continuation-${nativeSha}`, skillCatalogueId: `project-catalogue-${nativeSha}` };
+  for (const mode of ['matching', 'api-runtime', 'worker-runtime', 'api-catalogue', 'web-mount', 'worker-image', 'worker-inbox', 'working-directory', 'stopped-worker-runtime', 'absent-worker', 'stopped-worker']) {
+    const containers = Object.fromEntries(['api', 'web', 'agent-worker'].map((service, index) => [service, {
+      Id: String(index + 1).repeat(64),
+      Config: { Image: service === 'agent-worker' ? `openscience-agent-worker:${rollback}` : 'node:22', StopSignal: 'SIGTERM',
+        Labels: { 'com.docker.compose.project': 'openscience-prod', 'com.docker.compose.service': service, 'com.docker.compose.project.working_dir': `/opt/openscience-releases/${rollback}` },
+        Env: service === 'web' ? [] : ['HERMES_NATIVE_AGENT_ENABLED=true', `HERMES_NATIVE_RUNTIME_ID=${binding.runtimeId}`, `HERMES_NATIVE_SKILL_CATALOGUE_ID=${binding.skillCatalogueId}`, 'HERMES_NATIVE_AGENT_MODEL=MiniMax-M3', 'HERMES_NATIVE_AGENT_INBOX=/native-agent/inbox'] },
+      HostConfig: { RestartPolicy: { Name: 'unless-stopped' } },
+      State: { Running: true, Status: 'running', Health: { Status: 'healthy' } },
+      Mounts: [{ Type: 'bind', Source: `/opt/openscience-releases/${rollback}`, Destination: '/opt/openscience', RW: false },
+        ...(service === 'agent-worker' ? [{ Type: 'bind', Source: '/opt/openscience-hermes/inbox', Destination: '/native-agent/inbox', RW: true }] : [])],
+    }]));
+    if (mode === 'api-runtime') containers.api.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign';
+    if (['worker-runtime', 'stopped-worker-runtime'].includes(mode)) containers['agent-worker'].Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign';
+    if (mode === 'api-catalogue') containers.api.Config.Env[2] = 'HERMES_NATIVE_SKILL_CATALOGUE_ID=foreign';
+    if (mode === 'web-mount') containers.web.Mounts[0].Source = '/foreign';
+    if (mode === 'worker-image') containers['agent-worker'].Config.Image = `openscience-agent-worker:${candidate}`;
+    if (mode === 'worker-inbox') containers['agent-worker'].Mounts[1].Source = '/foreign/inbox';
+    if (mode === 'working-directory') containers.api.Config.Labels['com.docker.compose.project.working_dir'] = `/opt/openscience-releases/${candidate}`;
+    if (['stopped-worker', 'stopped-worker-runtime'].includes(mode)) containers['agent-worker'].State = { Running: false, Status: 'exited' };
+    if (mode === 'absent-worker') containers['agent-worker'] = null;
+    const reads = [];
+    const context = {
+      NATIVE_ROOT: '/opt/openscience-hermes', NATIVE_TIMER: 'openscience-hermes-broker.timer',
+      validateNativeJournalState: deployLock.validateNativeJournalState,
+      verifyNativeContainerBinding: deployLock.verifyNativeContainerBinding,
+      invalidNativeState() { throw new Error('Native deployment state is invalid'); },
+      async verifyProductionDeployLockOnHost() {}, async nativeBinding() { return binding; }, async verifyNativeBinding(actual) { assert.equal(actual.runtimeId, binding.runtimeId); },
+      async nativeCommand(command, args) {
+        reads.push(`${command}:${args[0]}`);
+        if (command === 'systemctl') {
+          if (args[0] === 'show') return 'loaded';
+          if (args[0] === 'is-active') return 'active';
+          if (args[0] === 'is-enabled') return 'enabled';
+        } else if (command === 'docker') {
+          if (args[0] === 'ps') return containers[args.at(-1).split('=').at(-1)]?.Id ?? '';
+          if (args[0] === 'inspect') return JSON.stringify(Object.values(containers).find(container => container?.Id === args.at(-1)));
+        }
+        throw new Error('unexpected mutation');
+      },
+    };
+    const run = runInNewContext(`${inventory}\n${capture}\n${operation}; nativeOperation`, context);
+    let captured, status = 0;
+    const valid = ['matching', 'absent-worker', 'stopped-worker'].includes(mode);
+    if (valid) captured = await run('native-capture', { candidateSha: candidate, rollbackSha: rollback });
+    else { await assert.rejects(run('native-capture', { candidateSha: candidate, rollbackSha: rollback }), /Native deployment state/u); status = 64; }
+    if (valid) {
+      const state = JSON.parse(captured);
+      assert.deepEqual({ runtimeId: state.before.runtimeId, skillCatalogueId: state.before.skillCatalogueId }, binding);
+      assert.equal(state.before.producers.agentWorker, mode === 'matching');
+      assert.equal(state.before.containers.agentWorker, mode === 'absent-worker' ? null : '3'.repeat(64));
+    }
+    assert.equal(reads.some(read => !['docker:ps', 'docker:inspect', 'systemctl:show', 'systemctl:is-active', 'systemctl:is-enabled'].includes(read)), false);
+    const trace = join(root, mode).replaceAll('\\', '/');
+    const script = ['set -eEuo pipefail', `TRACE='${trace}'; REFRESH_NATIVE_RESOURCES=1; SCRIPT_DIR=/candidate/infra/scripts; DEPLOY_JOURNAL=/unused; RELEASE_SHA=${candidate}; ROLLBACK_SHA=${rollback}`,
+      `transaction_native_command(){ printf '%s\\n' '${captured ?? ''}'; return ${status}; }`,
+      'node(){ printf "journal\\n" >> "$TRACE"; }; transaction_pause_native_producers(){ printf "stop\\n" >> "$TRACE"; }',
+      deploymentFunction('journal_start'), 'journal_start && transaction_pause_native_producers'].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    assert.equal(result.status, status, result.stderr);
+    assert.equal(existsSync(trace), valid);
+    if (valid) assert.deepEqual((await readFile(trace, 'utf8')).trim().split('\n'), ['journal', 'stop']);
+  }
 });
 
 test('Native real startup adapter verifies stopped pair then API/Web, timer and Worker in order', async t => {
@@ -315,7 +388,9 @@ test('Native actual work-query code only reads queues and task markers and retur
   const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
   const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: code, encoding: 'utf8' });
   assert.equal(syntax.status, 0, syntax.stderr);
+  for (const [kind, queued, bound] of [['sdf.extract', true, false], ['sdf.extract', true, true], ['sdf.extract', false, true], ['presentation.generate', true, true], ['presentation.generate', false, true]]) {
   const calls = []; let output = '';
+  const oldMarker = { kind: 'hermes-agent', profile: 'paper-understanding', runtimeId: `installed-native-continuation-${'c'.repeat(40)}`, skillCatalogueId: `project-catalogue-${'c'.repeat(40)}`, model: 'MiniMax-M3' };
   const context = {
     process: { env: { DATABASE_URL: 'fixture', REDIS_URL: 'fixture' }, argv: ['node', 'none'], stdout: { write(value) { output += value; } } },
     AGENT_TASK_QUEUE: 'agent:queue', classifyNativeWorkSnapshot: deployLock.classifyNativeWorkSnapshot,
@@ -325,17 +400,64 @@ test('Native actual work-query code only reads queues and task markers and retur
         calls.push(sql); assert.match(sql, /^SELECT /u);
         if (sql.includes('clock_timestamp')) return [{ now: new Date('2026-10-09T08:00:00.000Z') }];
         assert.ok(sql.includes("jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution')"));
-        return [{ id: 't1', status: 'pending', kind: 'sdf.extract', deleted_at: null, updated_at: new Date('2026-10-09T07:00:00.000Z'), error: null, result: null }];
+        return [{ id: 't1', status: 'pending', kind, deleted_at: null, updated_at: new Date('2026-10-09T07:00:00.000Z'), error: null, result: bound ? { nativeAgentExecution: oldMarker } : null }];
       },
       journalJob: { async findMany() { calls.push('journal-read'); return []; } },
       async $disconnect() { calls.push('db-close'); },
     }; },
-    createRedisClient() { return { async lrange(key) { calls.push(key); return key.endsWith(':processing') ? [] : ['t1']; }, async quit() { calls.push('redis-close'); } }; },
+    createRedisClient() { return { async lrange(key) { calls.push(key); return key.endsWith(':processing') || !queued ? [] : ['t1']; }, async quit() { calls.push('redis-close'); } }; },
   };
   await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context);
-  assert.deepEqual(JSON.parse(output), { safe: true, nativePending: true, dbTime: '2026-10-09T08:00:00.000Z' });
+  assert.deepEqual(JSON.parse(output), { safe: true, nativePending: true, nativeBoundPending: bound, dbTime: '2026-10-09T08:00:00.000Z' });
   assert.equal(calls.at(-2), 'db-close'); assert.equal(calls.at(-1), 'redis-close');
   assert.equal(output.includes('t1'), false);
+  assert.equal(output.includes(oldMarker.runtimeId), false);
+  }
+});
+
+test('Native actual pause defers candidate-schema reads until migration and install rejects old-bound pending before resource writes', async () => {
+  const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(body);
+  const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
+  for (const [kind, location, bound] of [['sdf.extract', 'queue', true], ['sdf.extract', 'outbox', true], ['presentation.generate', 'queue', true], ['presentation.generate', 'outbox', true], ['search.index', 'queue', false], ['journal.generate', 'outbox', false]]) {
+    let journal = { phase: 'migrating', candidateSha: candidate, rollbackSha: 'a'.repeat(40), nativeRefresh: nativeJournalFixture() }, migrated = false;
+    const calls = [], task = { id: 't1', kind, status: 'pending', deletedAt: null, nativeBound: bound, nativePending: bound, providerUncertain: false, updatedAt: '2026-10-09T07:00:00.000Z' };
+    const snapshot = { tasks: kind === 'journal.generate' ? [] : [task], queue: kind !== 'journal.generate' && location === 'queue' ? ['t1'] : [], processing: [], journals: kind === 'journal.generate' ? [{ state: 'pending', kind: 'generate', leaseToken: null, leaseExpiresAt: null, updatedAt: task.updatedAt }] : [] };
+    const preserved = JSON.stringify(snapshot);
+    const context = {
+      validateNativeJournalState: deployLock.validateNativeJournalState, transitionNativeJournalState: deployLock.transitionNativeJournalState,
+      invalidNativeState() { throw new Error('Native deployment state held'); },
+      async verifyProductionDeployLockOnHost() {}, async readTrustedJournal() { return structuredClone(journal); },
+      async writeProductionDeployJournal(options) { calls.push(`journal:${options.native.installState}:${options.native.quiesceState}`); journal.nativeRefresh = deployLock.preserveNativeJournalState(journal, options.native, candidate, false); },
+      async pauseNativeProducers() { calls.push('pause'); }, async holdNativeTimer() { calls.push('timer-hold'); }, async verifyNativeIdle() { calls.push('idle'); },
+      async nativeContainers() { return {}; }, async verifyNativeBinding() {},
+      async queryNativeWork() {
+        calls.push('candidate-db-read'); assert.equal(migrated, true, 'new Prisma must not query the pre-migration database');
+        return { ...deployLock.classifyNativeWorkSnapshot(snapshot, null), dbTime: '2026-10-09T08:00:00.000Z' };
+      },
+      async open() { calls.push('resource-write'); return { async writeFile() {}, async sync() {}, async close() {} }; },
+      async rm() {}, randomUUID() { return 'fixture'; },
+      async nativeCommand(command) { if (command === '/usr/bin/node') return '{}'; calls.push('installer'); return JSON.stringify(installation); },
+    };
+    const operation = runInNewContext(`${body}; nativeOperation`, context), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
+    assert.equal(await operation('native-pause-original', options), 'NATIVE_OPERATION_OK');
+    assert.equal(calls.includes('candidate-db-read'), false);
+    await assert.rejects(operation('native-install', options), /Native deployment state/u);
+    assert.equal(calls.includes('candidate-db-read'), false);
+    migrated = true; journal.phase = 'switching'; calls.push('migration-complete');
+    if (bound) {
+      await assert.rejects(operation('native-install', options), /Native deployment state/u);
+      assert.equal(journal.nativeRefresh.installState, 'not_attempted');
+      assert.equal(calls.includes('resource-write'), false); assert.equal(calls.includes('installer'), false);
+      assert.equal(calls.some(call => call.startsWith('journal:install_attempting')), false);
+    } else {
+      assert.equal(await operation('native-install', options), 'NATIVE_OPERATION_OK');
+      assert.ok(calls.indexOf('candidate-db-read') < calls.indexOf('resource-write'));
+      assert.ok(calls.indexOf('candidate-db-read') < calls.findIndex(call => call.startsWith('journal:install_attempting')));
+    }
+    assert.ok(calls.indexOf('migration-complete') < calls.indexOf('candidate-db-read'));
+    assert.equal(JSON.stringify(snapshot), preserved, 'pending rows/outbox and queues remain unchanged');
+  }
 });
 
 test('Native actual installer operation holds interrupted and unpersisted success instead of invoking restore', async () => {
@@ -357,6 +479,7 @@ test('Native actual installer operation holds interrupted and unpersisted succes
         journal.nativeRefresh = deployLock.preserveNativeJournalState(journal, options.native, candidate, false);
       },
       async nativeContainers() { return {}; }, async verifyNativeIdle() { calls.push('idle'); }, async verifyNativeBinding() { calls.push('binding'); },
+      async queryNativeWork() { calls.push('work-check'); return { safe: true, nativePending: false, nativeBoundPending: false }; },
       async open() { return { async writeFile() {}, async sync() {}, async close() {} }; },
       async rm() { calls.push('snapshot-cleanup'); }, randomUUID() { return 'fixture'; },
       async nativeCommand(command, args) {

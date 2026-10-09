@@ -240,7 +240,8 @@ export function classifyNativeWorkSnapshot({ tasks, queue, processing, journals 
     && !journals.some(job => !['staging', 'pending', 'succeeded', 'failed', 'cancelled'].includes(job.state) || job.leaseToken !== null
       || job.leaseExpiresAt !== null || (!['succeeded', 'failed', 'cancelled'].includes(job.state) && changed(job.updatedAt)));
   return { safe, nativePending: tasks.some(task => task.status === 'pending' && !task.deletedAt && task.nativePending)
-    || journals.some(job => job.state === 'pending' && job.kind !== 'source_parse') };
+    || journals.some(job => job.state === 'pending' && job.kind !== 'source_parse'),
+  nativeBoundPending: tasks.some(task => task.status === 'pending' && !task.deletedAt && task.nativeBound === true) };
 }
 
 async function nativeCommand(executable, args, { timeout = 30_000, allowFailure = false, env } = {}) {
@@ -289,7 +290,7 @@ async function nativeContainers() {
   return result;
 }
 
-async function captureNativeState() {
+async function captureNativeState(rollbackSha) {
   const containers = await nativeContainers();
   const activity = await nativeCommand('systemctl', ['is-active', NATIVE_TIMER], { allowFailure: true });
   if (!['active', 'inactive', 'failed', 'unknown'].includes(activity)) invalidNativeState();
@@ -301,6 +302,10 @@ async function captureNativeState() {
   for (const key of ['api', 'web', 'agentWorker']) {
     before.producers[key] = containers[key]?.State.Running === true;
     before.containers[key] = containers[key]?.Id ?? null;
+    if (containers[key] !== null) {
+      verifyNativeContainerBinding(containers[key], { service: key === 'agentWorker' ? 'agent-worker' : key,
+        releaseSha: rollbackSha, ...before, running: before.producers[key] });
+    }
   }
   return { before, quiesceState: 'not_started', installState: 'not_attempted', restoreState: 'not_started', candidateCheckpoint: null };
 }
@@ -396,7 +401,7 @@ try {
  const tasks=await prisma.$queryRawUnsafe("SELECT id,status,kind,deleted_at,updated_at,error, CASE WHEN result ? 'nativeAgentExecution' THEN jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution') ELSE NULL END AS result FROM agent_tasks WHERE status IN ('pending','running') OR result#>>'{nativeAgentExecution,checkpoint,state}'='started' OR error ~* 'unknown|uncertain'");
  const journals=await prisma.journalJob.findMany({select:{state:true,kind:true,leaseToken:true,leaseExpiresAt:true,updatedAt:true}});
  const [queue,processing]=await Promise.all([redis.lrange(AGENT_TASK_QUEUE,0,-1),redis.lrange(AGENT_TASK_QUEUE+':processing',0,-1)]);
- const snapshot={tasks:tasks.map(t=>{const n=readNativeAgentExecution(t.result);return{id:t.id,status:t.status,deletedAt:t.deleted_at,nativePending:!!n||['sdf.extract','presentation.generate'].includes(t.kind),providerUncertain:n?.checkpoint?.state==='started'||/unknown|uncertain/i.test(t.error??''),updatedAt:t.updated_at.toISOString()};}),journals:journals.map(j=>({...j,updatedAt:j.updatedAt.toISOString()})),queue,processing};
+ const snapshot={tasks:tasks.map(t=>{const n=readNativeAgentExecution(t.result);return{id:t.id,status:t.status,deletedAt:t.deleted_at,nativeBound:!!n,nativePending:!!n||['sdf.extract','presentation.generate'].includes(t.kind),providerUncertain:n?.checkpoint?.state==='started'||/unknown|uncertain/i.test(t.error??''),updatedAt:t.updated_at.toISOString()};}),journals:journals.map(j=>({...j,updatedAt:j.updatedAt.toISOString()})),queue,processing};
  const checkpoint=process.argv[1]==='none'?null:process.argv[1];
  const classified=classifyNativeWorkSnapshot(snapshot,checkpoint);
  const [clock]=await prisma.$queryRawUnsafe('SELECT clock_timestamp() AS now');
@@ -412,8 +417,9 @@ async function queryNativeWork(candidateSha, checkpoint) {
     '--input-type=module', '-e', NATIVE_WORK_QUERY, checkpoint ?? 'none'], { timeout: 120_000,
     env: { ...process.env, XGS_RELEASE_ROOT: root, XGS_RELEASE_IMAGE_TAG: candidateSha } });
   const result = JSON.parse(output);
-  if (!exactObjectKeys(result, ['safe', 'nativePending', 'dbTime']) || result.safe !== true
-    || typeof result.nativePending !== 'boolean' || !Number.isFinite(Date.parse(result.dbTime))) invalidNativeState();
+  if (!exactObjectKeys(result, ['safe', 'nativePending', 'nativeBoundPending', 'dbTime']) || result.safe !== true
+    || typeof result.nativePending !== 'boolean' || typeof result.nativeBoundPending !== 'boolean'
+    || !Number.isFinite(Date.parse(result.dbTime))) invalidNativeState();
   return result;
 }
 
@@ -438,7 +444,7 @@ function parseNativeCli(argv, command) {
 async function nativeOperation(command, options) {
   await verifyProductionDeployLockOnHost(options);
   if (command === 'native-capture') {
-    const state = validateNativeJournalState(await captureNativeState(), options.candidateSha);
+    const state = validateNativeJournalState(await captureNativeState(options.rollbackSha), options.candidateSha);
     await verifyNativeBinding(state.before);
     return JSON.stringify(state);
   }
@@ -469,12 +475,15 @@ async function nativeOperation(command, options) {
     await update('quiesce-start');
     await pauseNativeProducers(state, true);
     await holdNativeTimer(); await verifyNativeIdle();
-    await queryNativeWork(options.candidateSha, null);
     await update('quiesce-complete');
   } else if (command === 'native-install') {
     if (journal.phase !== 'switching') invalidNativeState();
     if (Object.values(await nativeContainers()).some(container => container?.State.Running)) invalidNativeState();
     await verifyNativeIdle();
+    // The candidate schema is available only after the outer migration completes.
+    // Existing Native markers pin pending tasks to their original immutable host.
+    const work = await queryNativeWork(options.candidateSha, null);
+    if (work.nativeBoundPending) invalidNativeState();
     const root = `/opt/openscience-releases/${options.candidateSha}`;
     const snapshot = `/opt/openscience/.native-runtime-${options.candidateSha}-${randomUUID()}.json`;
     let file, created = false;
