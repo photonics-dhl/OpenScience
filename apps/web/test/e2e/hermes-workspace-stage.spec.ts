@@ -574,6 +574,106 @@ test('editing presents the contribution and six fields from the existing researc
   }
 });
 
+test('Hermes opens an empty editor conversation with its full companion visible', async ({ page }) => {
+  await mockWorkspace(page);
+  await mockPublishedPreview(page);
+  const observations = [];
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(baseUrl + '/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
+    await enterEditor(page);
+    const opener = label(page);
+    await opener.click();
+    await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+    const geometry = await guide(page).locator('.hermes-conversation-transcript').evaluate((pane) => {
+      const bounds = (node: Element) => {
+        const { top, bottom, left, right, width, height } = node.getBoundingClientRect();
+        return { top, bottom, left, right, width, height };
+      };
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        scrollTop: pane.scrollTop, clientHeight: pane.clientHeight, scrollHeight: pane.scrollHeight,
+        pane: bounds(pane),
+        companion: bounds(pane.querySelector('[data-hermes-conversation-companion="true"]')!),
+        stage: bounds(pane.querySelector('[data-hermes-workspace-stage="true"]')!),
+        composer: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-composer textarea')!),
+      };
+    });
+    observations.push(geometry);
+    await page.screenshot({ path: test.info().outputPath(`hermes-empty-open-${viewport.width}.png`), fullPage: false });
+    await expect(guide(page).locator('.hermes-conversation-composer textarea')).toBeEditable();
+    await closeTo(page, opener, viewport.width < 1024, 'document-flow');
+  }
+  await test.info().attach('empty-conversation-geometry', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
+  console.log('Empty conversation geometry:', JSON.stringify(observations));
+  for (const geometry of observations) {
+    expect(geometry.scrollTop, `Empty ${geometry.viewport.width}px conversation must start with Hermes`).toBe(0);
+    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.pane.top);
+    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.pane.bottom);
+    expect(geometry.composer.bottom).toBeLessThanOrEqual(geometry.viewport.height);
+  }
+});
+
+for (const follow of [true, false]) {
+  test(`Hermes ${follow ? 'follows restored messages' : 'keeps a reader who scrolled up'} in the editor`, async ({ page }) => {
+    await mockWorkspace(page);
+    await mockPublishedPreview(page);
+    await page.addInitScript(() => sessionStorage.setItem('openscience.hermes-handoff:hermes-user:ro-hermes:scroll-task', JSON.stringify({
+      viewerId: 'hermes-user', researchObjectId: 'ro-hermes', taskId: 'scroll-task', expiresAt: Date.now() + 60_000,
+    })));
+    const running: AgentTaskView = {
+      id: 'scroll-task', sessionId: 'scroll-session', researchObjectId: 'ro-hermes', kind: 'workspace.guide',
+      status: 'running', progress: 10, retryCount: 0, canRetry: false, result: null, error: null,
+      createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z',
+    };
+    const summary = Array.from({ length: 12 }, (_, index) => `Restored research result ${index + 1}: Continue developing the research in the existing workspace.`).join('\n\n');
+    const completed: AgentTaskView = { ...running, status: 'succeeded', progress: 100,
+      result: { summary, nextSteps: [], needsMoreInformation: true },
+    };
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 640 }]) {
+      let release!: () => void;
+      const completion = new Promise<void>((resolve) => { release = resolve; });
+      let reads = 0;
+      const taskUrl = (url: URL) => url.pathname + url.search === '/api/agent/tasks/scroll-task';
+      const taskRoute = async (route: Route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        if (++reads === 1) return json(route, { task: running });
+        await completion;
+        return json(route, { task: completed });
+      };
+      await page.route(taskUrl, taskRoute);
+      try {
+        await page.setViewportSize(viewport);
+        await page.goto(baseUrl + roPath + '/edit?hermesTask=scroll-task', { waitUntil: 'domcontentloaded' });
+        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+        await guide(page).getByRole('button', { name: 'Close Hermes', exact: true }).click();
+        await assertAvatar(page, 'document-flow');
+        const opener = label(page);
+        await opener.click();
+        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+        const pane = guide(page).locator('.hermes-conversation-transcript');
+        const distance = () => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
+        await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
+        await pane.hover();
+        await page.mouse.wheel(0, 1000);
+        await expect.poll(distance).toBeLessThanOrEqual(1);
+        if (!follow) {
+          await pane.hover();
+          await page.mouse.wheel(0, -1000);
+          await expect.poll(() => pane.evaluate((node) => node.scrollTop)).toBe(0);
+          expect(await distance()).toBeGreaterThanOrEqual(64);
+        }
+        release();
+        await expect(guide(page).locator('[data-hermes-drawer-state="succeeded"]')).toBeVisible();
+        await expect(pane.getByText(/Restored research result 12:/u)).toHaveCount(1);
+        if (follow) await expect.poll(distance).toBeLessThanOrEqual(1);
+        else await expect.poll(() => pane.evaluate((node) => node.scrollTop)).toBe(0);
+        await closeTo(page, opener, viewport.width < 1024, 'document-flow');
+      } finally { release(); if (!page.isClosed()) await page.unroute(taskUrl, taskRoute); }
+    }
+  });
+}
+
 test('Hermes respects system motion and persists explicit preferences after conversation and travel', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });

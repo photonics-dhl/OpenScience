@@ -421,7 +421,9 @@ function HermesAssistantDrawerContent({
 
   useEffect(() => {
     const pane = transcript.current;
-    if (pane && followTranscript.current) pane.scrollTop = pane.scrollHeight;
+    const hasConversationContent = Boolean(sentGoal || turns.length || task || result?.summary || result?.writingDraft
+      || presentationIntent || editOutcome || localMessage || publicationVersion || preparing || writingDirty);
+    if (open && pane && followTranscript.current && hasConversationContent) pane.scrollTop = pane.scrollHeight;
   }, [open, sentGoal, turns, task?.status, result?.summary, result?.writingDraft, presentationIntent, editOutcome, localMessage, publicationVersion, preparing, writingDirty]);
 
   useEffect(() => {
@@ -696,7 +698,7 @@ function HermesAssistantDrawerContent({
           <button type="button" className="hermes-conversation-close" onClick={() => onOpenChange(false)} aria-label={t('guide.close')}>×</button>
         </header>
 
-        <div className="hermes-conversation-transcript" ref={transcript} role="log" aria-label={tc('conversation')} aria-live="polite" aria-relevant="additions text"
+        <div className="hermes-conversation-transcript" ref={transcript} style={{ containerType: 'size' }} role="log" aria-label={tc('conversation')} aria-live="polite" aria-relevant="additions text"
           onScroll={(event) => { const pane = event.currentTarget; followTranscript.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 64; }}>
           <div data-hermes-conversation-companion="true" aria-live="off" />
           <p className="hermes-message hermes-message-assistant">{dashboardContext.editorDraft ? tc('welcomeEditor') : t(suggestion.bodyKey)}</p>
