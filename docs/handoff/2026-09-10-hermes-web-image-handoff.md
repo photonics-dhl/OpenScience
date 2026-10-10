@@ -14,9 +14,9 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | Fig2最终5/5只读对账完成；human要求落实稳定准确全链，现沿cb原CP核s24是否实际进入Agent及SDK循环/像素工具断点，不猜测叠提示。拥有指定native-agent/host task文件及直接测试；无新模型调用 | 原illustration-chain-repair树 / `codex/native-illustration-source-repair`@59a；原2cd/870/SDK/Fig2证据全保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 安装器029b已审、Linux40/40零skip；focus f868已上线且原Linux32/32。独立host仍42fe，正在准备59a完整bundle升级/回退与只读音色目录的精确操作包，root统一High/串行执行 | 原synclip-video-delivery树；原06b/4f失败trace/d070证据保留，未升级host/调用目录 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | Fig2五项产品操作及正常Trash/search/公开阅读收尾，资产写窗口全关；正在从可见入口对正式59a编辑页/头像展开关闭做最小观察，复用原CI/双尺寸fixture，不发模型或业务写 | `.worktrees/research-product-craft` / `codex/ui-hermes-initial-scroll`@af231a；原证据、旧失败/人工操作时段保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | cb完整context50,204字/25来源含s24、6Skill/page3已实际消费，无截断证据；科学错绑未修，不猜叠提示。offline_native_loop.py新增80行真实SDK离线图片工具loop候选及原393venv隔离producer等待窄High，尚未执行/付费 | 原illustration-chain-repair树 / `codex/native-illustration-source-repair`@59a；原2cd/870/SDK/Fig2/CP证据全保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 安装器029b已审、Linux40/40；精确59a升级/回退包完成，host仍42fe。root补High要求的同FD9下timer自然排空后fresh producer/全9active video run/unknown cohort核对，待最终窄审才安装，音色GET尚0 | 原synclip-video-delivery树；host-59a-execution-plan/commands及原06b/4f失败trace/d070保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 59a实际编辑布局/64px/焦点及开闭已观察，但1536×681空会话slot约11.69而stage90导致只露帽沿。立即授Stage/Drawer/companion.css及原workspace spec最小修复写权，原Controller/Portal/API/资产不动；先同尺寸RED | `.worktrees/research-product-craft`，从59a另分支修复；原af/生产截图/精确geometry保留 |
 - root独占生产排程；human直接确认1961/ead6/2ef0三项非target回收与1614采用属于其手动操作，原样保留、无restore。Fig2五项已结束，59a普通应用发布已完成；下一生产阶段为独立Synclip host，不能把应用发布冒称host升级。
 
 ## Git / CI / 运行事实
@@ -37,7 +37,7 @@
 
 ## 当前交付与明确下一步
 - 图审a780/3a2→d9cc/f016及a6fa消费者、High paired query ea9组合dca5已全等收为7cd343；原Domain40/Gateway27/Worker39/video26/query24不相加。Linux Host六例与393 installed-SDK有限消费已核；实际Agent构造/循环、真实PNG和通用质量仍未验收，原paid/unknown拒绝保持。
-- UI5b009/6ebb/a917及Settings eaf→32b27随393上线，正常设置入口已观察。0a编辑版式及af空会话修复、f868互动保持均随59a发布；原High/TS/lint/双尺寸截图复用，59a Linux真实32/25例闭合原focus及恢复中会话fixture差额。生产可见入口观察进行中，不把CI/健康冒称整站审美认可。
+- UI5b009/6ebb/a917及Settings eaf→32b27随393上线，正常设置入口已观察；0a/af/f868随59a发布。实际reload→个人中心→RO9067编辑，正文1000px/单列无空侧栏，64px/键盘focus→Enter开→close回焦/输入可达；1536×681真实短窗口角色被裁切，root已看原JPG，明确FAIL并派最小修复。独立hover工具不支持，未冒称通过；原32/25 CI及双尺寸fixture复用，不能覆盖这处新视觉缺口。
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知。无新计划/图片，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待Native纠正，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。
