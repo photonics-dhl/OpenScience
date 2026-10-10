@@ -45,6 +45,15 @@ source_path() {
   permissions=$(stat -c '%a' "$1")
   [[ $permissions =~ ^[0-7]{3,4}$ ]] && (( (8#$permissions & 0022) == 0 ))
 }
+release_source_path() {
+  local permissions
+  # Archive modes are bound by the existing release manifest. This exception
+  # applies only to that source, never generated dist or installed/backup files.
+  [[ $1 == "$source_root" || $1 == "$source_root/"* ]] && canonical "$1" \
+    && [[ -f $1 || -d $1 ]] && [[ $(stat -c '%u %g' "$1") == '0 0' ]] || return 1
+  permissions=$(stat -c '%a' "$1")
+  [[ $permissions =~ ^[0-7]{3,4}$ ]] && (( (8#$permissions & 0002) == 0 ))
+}
 for path in "$root" "$root/releases" "$root/spool" "$root/private"; do
   canonical "$path" && [[ ! -e $path || -d $path ]] || die 68 SYNCLIP_VIDEO_PATH_UNSAFE
   if [[ -e $path ]]; then safe_dir "$path" '0 0 700' || die 68 SYNCLIP_VIDEO_PATH_UNSAFE; fi
@@ -76,17 +85,24 @@ if [[ $mode == install ]]; then
   [[ $installed == false || $defer == true ]] || die 69 SYNCLIP_VIDEO_EXISTING_INSTALL_REQUIRES_DEFER
   [[ ! -e $bundle && ! -L $bundle ]] || die 69 SYNCLIP_VIDEO_BUNDLE_EXISTS
   for path in "$source_root" "$source_root/scripts" "$source_root/scripts/release-input-manifest.mjs" \
-    "$source_root/infra/synclip-video" "$source_root/packages/ai-gateway/dist"; do
-    source_path "$path" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
+    "$source_root/infra/synclip-video"; do
+    release_source_path "$path" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
+  done
+  for path in "$source_root/.release-source" "$source_root/.release-inputs.sha256"; do
+    safe_file "$path" '0 0 444' && [[ $(stat -c '%h' "$path") == 1 ]] \
+      || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
+  done
+  [[ $(stat -c '%s' "$source_root/.release-source") == 41 && $(<"$source_root/.release-source") == "$sha" ]] \
+    || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
+  source_path "$source_root/packages/ai-gateway/dist" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
+  for module in broker.mjs image-reference.mjs; do
+    path="$source_root/infra/synclip-video/$module"
+    [[ -f $path ]] && release_source_path "$path" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
   done
   node "$source_root/scripts/release-input-manifest.mjs" verify --root "$source_root" --sha "$sha" >/dev/null 2>&1 \
     || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
   for module in synclip-video-api synclip-audio-api synclip-image-api codex-image-protocol image ocr errors; do
     path="$source_root/packages/ai-gateway/dist/$module.js"
-    [[ -f $path ]] && source_path "$path" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
-  done
-  for module in broker.mjs image-reference.mjs; do
-    path="$source_root/infra/synclip-video/$module"
     [[ -f $path ]] && source_path "$path" || die 66 SYNCLIP_VIDEO_SOURCE_INVALID
   done
   if [[ -n $selected_config ]]; then

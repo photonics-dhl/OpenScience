@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createReleaseInputManifest } from '../../scripts/release-input-manifest.mjs';
 
 // The image installer's real-shell fixture, with only host commands and /opt,
 // /etc paths relocated. Gateway modules and broker validation remain real.
@@ -34,6 +35,7 @@ const runtimeModules = ['synclip-video-api', 'synclip-audio-api', 'synclip-image
 const installerSource = await readFile(join(repo, 'infra/synclip-video/install.sh'), 'utf8');
 
 async function fixture({ existing = true, version = 'v1', audio, admin, installerPath,
+  sourceArchiveModes = false, realManifest = false,
   active = existing ? 'active' : 'inactive', enabled = existing ? 'enabled' : 'not-found' } = {}) {
   await mkdir(fixtureRoot, { recursive: true });
   const base = await mkdtemp(join(fixtureRoot, 'isolated-video-install-'));
@@ -103,6 +105,10 @@ async function fixture({ existing = true, version = 'v1', audio, admin, installe
   }
   const manifest = join(release, 'scripts/release-input-manifest.mjs');
   await mkdir(dirname(manifest), { recursive: true }); await copyFile(join(repo, 'scripts/release-input-manifest.mjs'), manifest);
+  await writeFile(join(release, '.release-source'), sha + '\n', { mode: 0o444 });
+  await mkdir(join(release, 'packages/ai-gateway'), { recursive: true });
+  if (realManifest) await createReleaseInputManifest({ root: release, sourceSha: sha });
+  else await writeFile(join(release, '.release-inputs.sha256'), '{}\n', { mode: 0o444 });
   if (existing) {
     const oldBundle = join(root, 'releases', oldSha);
     await mkdir(join(oldBundle, 'infra/synclip-video'), { recursive: true });
@@ -176,17 +182,23 @@ syncBuiltinESMExports();
 `);
   const commands = {
     id: 'printf "%s\\n" "${INSTALL_UID:-0}"',
-    stat: `path=\${@: -1}; uid=0; gid=0; mode=600
+    stat: `path=\${@: -1}; uid=0; gid=0; mode=600; links=1
       if [[ -d $path ]]; then mode=700; fi
+      if [[ $SOURCE_ARCHIVE_MODES == 1 && ( $path == "$FIXTURE_SOURCE" || $path == "$FIXTURE_SOURCE/"* ) ]]; then
+        if [[ -d $path ]]; then mode=775; else mode=664; fi
+        if [[ $path == "$FIXTURE_SOURCE" || $path == "$FIXTURE_SOURCE/packages/ai-gateway/dist" ]]; then mode=755; fi
+        if [[ $path == "$FIXTURE_SOURCE/packages/ai-gateway/dist/"* ]]; then mode=644; fi
+      fi
+      if [[ $path == "$FIXTURE_SOURCE/.release-source" || $path == "$FIXTURE_SOURCE/.release-inputs.sha256" ]]; then mode=444; fi
       if [[ $path == "$FIXTURE_UNITS/"* ]]; then mode=644; fi
       if [[ $path == */source-id || $path == "$FIXTURE_ROOT/releases/"*/service || $path == "$FIXTURE_ROOT/releases/"*/timer ]]; then mode=444; fi
       if [[ $path == */previous/service || $path == */previous/timer ]]; then mode=644; fi
       if [[ $path == "$FIXTURE_ROOT/spool/results/.ready" || $path == */previous/ready ]]; then gid=1000; mode=640; fi
       if [[ $path == "$FIXTURE_ROOT/spool/inbox" ]]; then uid=1000; gid=1000; mode=700; fi
       if [[ $path == "$FIXTURE_ROOT/spool/results" ]]; then gid=1000; mode=2750; fi
-      if [[ $path == "$STAT_PATH" ]]; then uid=\${STAT_UID:-$uid}; gid=\${STAT_GID:-$gid}; mode=\${STAT_MODE:-$mode}; fi
-      if [[ $1 == -c && $2 == *%[uga]* ]]; then
-        format=$2; format=\${format//%u/$uid}; format=\${format//%g/$gid}; format=\${format//%a/$mode}; printf '%s\\n' "$format"
+      if [[ $path == "$STAT_PATH" ]]; then uid=\${STAT_UID:-$uid}; gid=\${STAT_GID:-$gid}; mode=\${STAT_MODE:-$mode}; links=\${STAT_NLINK:-$links}; fi
+      if [[ $1 == -c && $2 == *%[ugah]* ]]; then
+        format=$2; format=\${format//%u/$uid}; format=\${format//%g/$gid}; format=\${format//%a/$mode}; format=\${format//%h/$links}; printf '%s\\n' "$format"
       else /usr/bin/stat "$@"; fi`,
     install: `source "$REPLACEMENT_FAULT"
       args=(); directory=false; target=''; while (( $# )); do case "$1" in
@@ -204,7 +216,9 @@ syncBuiltinESMExports();
     docker: '[[ ${BAD_RENDERER:-0} == 0 || $1 != run ]]',
     getent: '[[ ${GROUP_1000:-0} == 1 ]]', groupadd: ':',
     timeout: 'shift; "$@"',
-    node: `if [[ \${2:-} == verify ]]; then [[ \${BAD_MANIFEST:-0} == 0 ]];
+    node: `if [[ \${2:-} == verify ]]; then
+        [[ \${BAD_MANIFEST:-0} == 0 ]] || exit 1
+        if [[ $REAL_MANIFEST == 1 ]]; then exec "$REAL_NODE" --import "$NODE_GUARD" "$@"; fi
       elif [[ \${1:-} == */broker.mjs ]]; then echo FORBIDDEN_BROKER_EXECUTION >&2; exit 97;
       else export INSTALLER_PID=$PPID; exec "$REAL_NODE" --import "$NODE_GUARD" "$@"; fi`,
     curl: 'echo FORBIDDEN_PROVIDER_REQUEST >> "$CALLS"; exit 97',
@@ -239,6 +253,7 @@ syncBuiltinESMExports();
     CALLS: posix(calls), FIXTURE_BASE: posix(base), FIXTURE_ROOT: posix(root), FIXTURE_UNITS: posix(units),
     CALLS_NATIVE: calls, FIXTURE_KEY: posix(key), FIXTURE_KEY_NATIVE: key, NODE_GUARD: pathToFileURL(guard).href,
     FIXTURE_BASE_NATIVE: base, FIXTURE_BASH: bash,
+    FIXTURE_SOURCE: posix(release), SOURCE_ARCHIVE_MODES: sourceArchiveModes ? '1' : '0', REAL_MANIFEST: realManifest ? '1' : '0',
     REPLACEMENT_FAULT: posix(fault), FAKE_BIN: posix(bin), REAL_NODE: posix(process.execPath),
     STAT_PATH: '', FAIL_ACTION: '', FAULT_AFTER: '', FAULT_SIGNAL: '' };
   const run = ({ extra = {}, defer = true, candidate, rollback = false, preserveFd9 = false, args } = {}) => {
@@ -317,6 +332,112 @@ function privateFailure(result, marker) {
   assert.ok(!(result.stdout + result.stderr).includes(marker), 'rejection must not disclose private config or import diagnostics');
   assert.match(result.stderr, /SYNCLIP_VIDEO_RUNTIME_OR_CONFIG_INVALID/u);
 }
+
+test('manifest-bound root-owned archive modes0775/0664 upgrade and first-install without changing admission or private work', async () => {
+  for (const existing of [true, false]) {
+    const f = await fixture({ existing, version: 'v2', sourceArchiveModes: true, realManifest: true });
+    successful(f.run({ preserveFd9: true }));
+    assert.deepEqual(JSON.parse(await readFile(f.config, 'utf8')), f.defaultConfig);
+    assert.equal((await readFile(join(f.bundle, 'source-id'), 'utf8')).trim(), sha);
+    for (const file of ['infra/synclip-video/broker.mjs', 'infra/synclip-video/image-reference.mjs',
+      ...runtimeModules.map(name => `packages/ai-gateway/dist/${name}.js`)]) {
+      assert.deepEqual(await readFile(join(f.bundle, file)), await readFile(join(f.release, file)));
+    }
+    if (existing) {
+      assert.equal(await readFile(join(f.bundle, 'previous/config.json'), 'utf8'), JSON.stringify(f.oldConfig) + '\n');
+      assert.equal(await readFile(join(f.bundle, 'previous/service'), 'utf8'), f.oldService);
+    }
+    const calls = await f.calls();
+    const verification = calls.indexOf('/scripts/release-input-manifest.mjs> <verify>');
+    assert.ok(verification >= 0 && verification < calls.indexOf('flock <-n> <8>'), 'real source verification must precede the provider lock and install');
+    assert.doesNotMatch(calls, /flock <-n> <9>|systemctl <(?:enable|start)>/u);
+    await failClosed(f);
+  }
+});
+
+test('archive permissions never excuse a changed source, manifest identity, marker SHA or invalid manifest', async () => {
+  for (const variant of ['source-content', 'manifest-identity', 'marker-sha', 'manifest-json']) {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    const manifest = join(f.release, '.release-inputs.sha256');
+    if (variant === 'source-content') {
+      const broker = join(f.release, 'infra/synclip-video/broker.mjs');
+      await writeFile(broker, (await readFile(broker, 'utf8')) + '\n// unapproved source change\n');
+    } else {
+      const target = variant === 'marker-sha' ? join(f.release, '.release-source') : manifest;
+      await chmod(target, 0o600);
+      if (variant === 'marker-sha') await writeFile(target, oldSha + '\n');
+      else if (variant === 'manifest-json') await writeFile(target, '{invalid\n');
+      else {
+        const value = JSON.parse(await readFile(manifest, 'utf8'));
+        value.entries.find(entry => entry.path === 'infra/synclip-video/broker.mjs').mode ^= 0o020;
+        await writeFile(manifest, JSON.stringify(value));
+      }
+      await chmod(target, 0o444);
+    }
+    const result = f.run(); assert.equal(result.status, 66, variant);
+    assert.match(result.stderr, /SYNCLIP_VIDEO_SOURCE_INVALID/u);
+    if (variant !== 'marker-sha') assert.match(await f.calls(), /release-input-manifest\.mjs> <verify>/u);
+    await unchanged(f); await absent(f.bundle);
+    assert.doesNotMatch(await f.calls(), /flock|systemctl <(?:stop|disable|daemon-reload)>/u);
+  }
+});
+
+test('formal archive paths still reject non-root owners, world-write and symlinked source components', async () => {
+  for (const [name, extra] of [
+    ['.', { STAT_UID: '1000' }], ['scripts', { STAT_MODE: '777' }],
+    ['scripts/release-input-manifest.mjs', { STAT_UID: '1000' }],
+    ['infra/synclip-video', { STAT_UID: '1000' }], ['infra/synclip-video/broker.mjs', { STAT_MODE: '666' }],
+  ]) {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    const result = f.run({ extra: { STAT_PATH: posix(join(f.release, name)), ...extra } });
+    assert.equal(result.status, 66, name); await unchanged(f); await absent(f.bundle);
+    assert.doesNotMatch(await f.calls(), /flock|systemctl <(?:stop|disable|daemon-reload)>/u);
+  }
+  for (const name of ['scripts', 'infra/synclip-video']) {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    const original = join(f.release, name), target = join(f.base, 'retained-source');
+    await rename(original, target); await symlink(target, original, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(f.run().status, 66, name); await unchanged(f); await absent(f.bundle);
+    assert.doesNotMatch(await f.calls(), /flock|systemctl <(?:stop|disable|daemon-reload)>/u);
+  }
+});
+
+for (const name of ['scripts', 'scripts/release-input-manifest.mjs', 'infra/synclip-video/broker.mjs']) {
+  test(`root-owned archive rejects writable group1000 before manifest or installation: ${name}`, async () => {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    const result = f.run({ extra: { STAT_PATH: posix(join(f.release, name)), STAT_GID: '1000' } });
+    assert.equal(result.status, 66, diagnostic(result));
+    assert.match(result.stderr, /SYNCLIP_VIDEO_SOURCE_INVALID/u);
+    await unchanged(f); await absent(f.bundle);
+    assert.doesNotMatch(await f.calls(), /release-input-manifest\.mjs> <verify>|flock|systemctl/u);
+  });
+}
+
+test('formal source marker and manifest stay root-owned0444 single-link trust anchors', async () => {
+  for (const [name, extra] of [
+    ['.release-source', { STAT_UID: '1000' }], ['.release-inputs.sha256', { STAT_GID: '1000' }],
+    ['.release-source', { STAT_MODE: '664' }], ['.release-inputs.sha256', { STAT_MODE: '664' }],
+    ['.release-source', { STAT_NLINK: '2' }], ['.release-inputs.sha256', { STAT_NLINK: '2' }],
+  ]) {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    assert.equal(f.run({ extra: { STAT_PATH: posix(join(f.release, name)), ...extra } }).status, 66, name);
+    await unchanged(f); await absent(f.bundle);
+    assert.doesNotMatch(await f.calls(), /release-input-manifest\.mjs> <verify>|flock|systemctl <(?:stop|disable|daemon-reload)>/u);
+  }
+});
+
+test('archive permission exception never reaches generated dist or installed and rollback bundles', async () => {
+  for (const variant of ['generated-module', 'installed-broker', 'rollback-broker']) {
+    const f = await fixture({ version: 'v2', sourceArchiveModes: true, realManifest: true });
+    if (variant === 'rollback-broker') successful(f.run());
+    const target = variant === 'generated-module' ? join(f.release, 'packages/ai-gateway/dist/synclip-audio-api.js')
+      : join(f.root, 'releases', variant === 'installed-broker' ? oldSha : sha, 'infra/synclip-video/broker.mjs');
+    const before = await liveState(f);
+    const result = f.run({ rollback: variant === 'rollback-broker', extra: { STAT_PATH: posix(target), STAT_MODE: '664' } });
+    assert.equal(result.status, variant === 'generated-module' ? 66 : 68, variant);
+    assert.deepEqual(await liveState(f), before); await preservedWork(f);
+  }
+});
 
 test('upgrades existing v1 with a complete previous snapshot and a deferred v2 runtime', async () => {
   const f = await fixture(); successful(f.run());
