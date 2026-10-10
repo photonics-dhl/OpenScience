@@ -157,7 +157,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `apps/api/src/routes/research.ts` / `apps/api/src/routes/research-record.ts` / `apps/api/src/routes/research-record-schema.ts` | latest/exact统一公开读取、版本固定及机器发现头，描述全部8个真实GET的OpenAPI3.1 |
 | `apps/web/app/developers/page.tsx` / `apps/web/app/developers/developers.module.css` / `apps/web/messages/zh.json` / `apps/web/messages/en.json` | 统一中英API文档与公开产品视觉；Python真实应用User-Agent/403说明，线上curl/Python执行成功、六字段与链接一致，DEPLOYED6af9c984 |
 | `apps/web/components/landing/SiteHeader.tsx` / `apps/web/app/layout.tsx` / `apps/web/app/research/[publicId]/page.tsx` / `apps/web/app/research/[publicId]/v/[versionNo]/page.tsx` | 导航与OpenAPI发现、真实公开版本的HTML JSON alternate |
-| `apps/web/components/public/PublicVersionPage.tsx` / `apps/web/lib/public-server-api.ts` / `apps/web/lib/api.ts` | 阅读区移除技术链接，latest完整响应一次读取及类型同步 |
+| `apps/web/components/public/PublicVersionPage.tsx` / `apps/web/lib/public-server-api.ts` / `apps/web/lib/api.ts` | 阅读区移除技术链接，latest完整响应一次读取及类型同步；附件非链接分支解释无公开下载，保持public+URL条件，原public-reading-surface测试覆盖四种返回形态；候选/上线见Hermes CURRENT |
 | `docs/specs/2026-09-07-open-research-publication-prd.md` §3.4 / `docs/OpenScience_Kimi_Development_Spec.md` §16 | 用户确认的标准接口寻址、集中入口、Crossref/OpenAlex/OpenAPI方法参考 |
 
 > 以下为历史交付索引，不作当前release或next action。唯一续作入口为上方CURRENT handoff。
@@ -200,7 +200,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `docs/proposals/2026-09-11-ui-skill-references.md` | UI skill 主源/候选适配、当前布局问题与逐项访谈问题 | 参考目录；相关结构/风格已获用户批准，未安装新能力 |
 | `docs/proposals/2026-09-11-ro-workbench-wireframe.html` | 成稿/Hermes/图视频/公开预览可点击灰度线框，两个主要确认节点 | 已在服务器浏览器打开供用户讨论；无生产接口/真实媒体/发布，非生产UI部署 |
 | `apps/web/components/auth/SessionProvider.tsx` / `apps/web/components/landing/SiteHeader.tsx` / `apps/api/src/routes/session-guard.ts` | 跨导航账户状态、有效会话Cookie续期、跨标签会话同步 | 363257aa已部署；状态与部署见唯一CURRENT handoff |
-| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；稳定倒序游标 | 363257aa已部署；不把最新公开冒称精选 |
+| `apps/web/components/explore/ResearchCard.tsx` / `apps/web/components/explore/research-discovery.module.css` / `packages/domain/src/explore/explore.ts` | 首页与探索复用真实公开版卡片/图片；publicId稳定倒序游标，卡片日期为各RO最新公开版本，提示明确公开号排序 | 363257aa已部署；不把最新公开冒称精选 |
 | `apps/web/components/dashboard/HermesConversationCard.tsx` / `apps/web/components/hermes/HermesRail.tsx` | Hermes唯一对话入口、需处理/后台任务、历史去重与可见页更新 | 363257aa已部署；保持真实并发和恢复入口 |
 | `docs/proposals/2026-09-11-ro-product-preview.html` | 保留已认可布局的视觉与Hermes对话交互稿，固定输入、精简制作确认、公开媒体与正文共享状态 | 已批准的视觉参考；原样稿仅预设短句/内存演示，生产实现与未决事项见CURRENT handoff |
 | `apps/web/lib/hermes/conversation-action.ts` / `apps/web/components/hermes/HermesMediaReview.tsx` | Hermes对话确认的前端动作接口、当前版本实际素材审核及结果回写 | DEPLOYED1cdd4602；复用原权限/版本/updatedAt；实际观察与未决项见CURRENT |
