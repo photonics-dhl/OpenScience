@@ -32,6 +32,7 @@ async function setup(page: Page, loseResponse = false) {
     if (get === '/api/ingestion?actionable=true' || get === `/api/ingestion?actionable=true&researchObjectId=${ro.id}`)
       return route.fulfill({ json: { tasks: [] } });
     if (get === '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal'
+      || get === `/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${ro.id}`
       || get === '/api/agent/tasks?actionable=false&kind=workspace.guide') return route.fulfill({ json: { tasks: [] } });
     if (get === `/api/ingestion/tasks/${source.id}`) return route.fulfill({ json: { task: { ...source, result: null }, batchId: 'batch', researchObjectId: ro.id, version: ro.version } });
     if (get === `${researchPath}/hermes-runs?ingestionTaskId=${source.id}`) return route.fulfill({ json: { run: runCreated ? run : null } });
