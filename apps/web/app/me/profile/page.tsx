@@ -23,9 +23,11 @@ export default function AcademicProfileEditor() {
   const [saved, setSaved] = useState<OwnerAcademicProfile | null>(null); const [profile, setProfile] = useState<AcademicProfile | null>(null);
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const editTarget = useRef<'identity' | 'works' | 'interests' | 'more' | null>(null);
   const [reload, setReload] = useState(0); const [conflict, setConflict] = useState(false);
   const [avatarReading, setAvatarReading] = useState(false);
   useEffect(() => { if (status === 'anonymous') router.replace('/auth/login?returnTo=%2Fme%2Fprofile'); }, [status, router]);
+  useEffect(() => { if (!editing || !editTarget.current) return; document.getElementById(`academic-editor-${editTarget.current}`)?.focus(); editTarget.current = null; }, [editing]);
   useEffect(() => {
     if (status !== 'authenticated' || !user) { setSaved(null); setProfile(null); return; }
     let active = true; avatarReadId.current++; setLoading(true); setSaved(null); setProfile(null); setBusy(false); setConflict(false); setAvatarReading(false); setMessage('');
@@ -99,12 +101,10 @@ export default function AcademicProfileEditor() {
     </div>;
   }
   const connectedOrcid = saved?.userId === user.userId ? saved.connectedOrcid : null;
-  if (!editing) return <DashboardShell activeRoute="profile" skipLabel={t.pageTitle}><div className={styles.editor}>
-    <div className={styles.actions}><Link href="/me" className={styles.link}>← {t.identity}</Link><button className={styles.button} onClick={() => setEditing(true)}>{t.editor}</button>{saved?.userId === user.userId && saved.published && <Link href={`/researchers/${user.userId}`} className={styles.link}>{t.preview}</Link>}</div>
-    <p className={styles.notice}>{saved?.userId === user.userId && saved.published ? t.publishedState : t.unpublished} · {t.privateHint}</p>
+  function edit(section: 'identity' | 'works' | 'interests' | 'more') { editTarget.current = section; setEditing(true); }
+  if (!editing) return <DashboardShell activeRoute="profile" skipLabel={t.pageTitle} mainClassName={styles.ownerMain}><div className={styles.previewShell}>
     {loading || !profile || !saved || saved.userId !== user.userId ? <div><p role="status">{message || t.loading}</p>{!loading && <button className={styles.buttonSecondary} onClick={() => setReload(value => value + 1)}>{t.retry}</button>}</div> : <>
-      {(saved.version === 0 || (!profile.works.length && !profile.interests.length && !profile.materials.length && !profile.bio)) && <div className={styles.editorSection}><p className={styles.notice}>{t.emptyHint}</p><div className={styles.actions}><button className={styles.link} onClick={() => setEditing(true)}>{t.works} →</button><button className={styles.link} onClick={() => setEditing(true)}>{t.interests} →</button><button className={styles.link} onClick={() => setEditing(true)}>{t.more} →</button></div></div>}
-      <AcademicProfileView userId={user.userId} preview={{ profile, publications: [], orcidVerified: profile.orcid === saved.profile.orcid && saved.orcidVerified }} />
+      <AcademicProfileView userId={user.userId} preview={{ profile, publications: [], orcidVerified: profile.orcid === saved.profile.orcid && saved.orcidVerified }} onEdit={edit} ownerNotice={`${saved.published ? t.publishedState : t.unpublished} · ${t.privateHint}`} ownerActions={<div className={styles.bannerActions}><button className={styles.button} onClick={() => edit('identity')}>{t.editor}</button>{saved.published && <Link href={`/researchers/${user.userId}`} className={styles.link}>{t.preview}</Link>}</div>} />
     </>}
   </div></DashboardShell>;
   return <DashboardShell activeRoute="profile" skipLabel={t.pageTitle}><div className={styles.editor}>
@@ -116,7 +116,7 @@ export default function AcademicProfileEditor() {
         {saved.published && <button className={styles.buttonSecondary} disabled={busy || avatarReading || conflict || dirty} onClick={() => void transition('unpublish')}>{t.unpublish}</button>}
         {saved.published && <Link className={styles.link} href={`/researchers/${user.userId}`}>{t.preview}</Link>}
       </div><p role="status" className={styles.notice}>{message || (!profile.name ? t.emptyHint : '')}</p>{conflict && <button className={styles.buttonSecondary} onClick={() => setReload(value => value + 1)}>{t.discardReload}</button>}
-      <fieldset disabled={busy} className={styles.editorFields}><section className={styles.editorSection}><h2>{t.identity}</h2><label className={styles.field}>{t.avatar}<input type="file" disabled={avatarReading} accept="image/png,image/jpeg,image/webp" onChange={event => void upload(event.target.files?.[0])} /></label>
+      <fieldset disabled={busy} className={styles.editorFields}><section id="academic-editor-identity" tabIndex={-1} className={styles.editorSection}><h2>{t.identity}</h2><label className={styles.field}>{t.avatar}<input type="file" disabled={avatarReading} accept="image/png,image/jpeg,image/webp" onChange={event => void upload(event.target.files?.[0])} /></label>
         {profile.avatar && <img src={profile.avatar} alt="" className={styles.avatar} />}
         <div className={styles.fieldGrid}>{field('name', t.name)}{field('englishName', t.englishName)}{field('title', t.title)}{field('institution', t.institution)}{field('lab', t.labName)}{field('bio', t.bio, true)}{field('contactEmail', t.contactEmail)}{field('orcid', t.orcid)}{field('scholar', t.scholar)}</div>
         <div className={styles.actions}><span className={styles.notice}>{connectedOrcid ? `${t.orcidVerified}: ${connectedOrcid}` : t.orcidUnverified}</span>
@@ -124,19 +124,19 @@ export default function AcademicProfileEditor() {
           <button className={styles.buttonSecondary} disabled={!saved.version || dirty || conflict || avatarReading} onClick={() => void connectOrcid()}>{t.connectOrcid}</button></div>
         <h3>{t.personalLinks}</h3>{linksEditor(profile.personalLinks, next => top('personalLinks', next), t.addLink)}
       </section>
-      <section className={styles.editorSection}><h2>{t.works}</h2>{profile.works.map((work, i) => <div className={styles.entry} key={i}><div className={styles.actions}><h3>{work.shortTitle || `${t.works} ${i + 1}`}</h3><button className={styles.link} onClick={() => top('works', profile.works.filter((_, j) => i !== j))}>{t.remove}</button></div>
+      <section id="academic-editor-works" tabIndex={-1} className={styles.editorSection}><h2>{t.works}</h2>{profile.works.map((work, i) => <div className={styles.entry} key={i}><div className={styles.actions}><h3>{work.shortTitle || `${t.works} ${i + 1}`}</h3><button className={styles.link} onClick={() => top('works', profile.works.filter((_, j) => i !== j))}>{t.remove}</button></div>
         <div className={styles.fieldGrid}>{([['category',t.workCategory],['period',t.period],['shortTitle',t.shortTitle],['outcome',t.outcome],['summary',t.summary],['fullTitle',t.fullTitle],['problem',t.workProblem],['contribution',t.contribution],['process',t.workProcess]] as const).map(([key,label]) => <label className={styles.field} key={key}>{label}{['outcome','summary','problem','contribution','process'].includes(key) ? <textarea value={work[key]} onChange={event => updateWork(i,key,event.target.value)} /> : <input value={work[key]} onChange={event => updateWork(i,key,event.target.value)} />}</label>)}</div>
         <h3>{t.capabilities}</h3>{work.capabilities.map((capability,j) => <div className={styles.actions} key={j}><label className={styles.field}>{t.capability}<input value={capability} onChange={event => { const works=[...profile.works]; works[i]={...work,capabilities:work.capabilities.map((item,k)=>k===j?event.target.value:item)}; top('works',works); }} /></label><button className={styles.link} onClick={() => { const works=[...profile.works]; works[i]={...work,capabilities:work.capabilities.filter((_,k)=>k!==j)}; top('works',works); }}>{t.remove}</button></div>)}<button className={styles.buttonSecondary} disabled={work.capabilities.length>=5} onClick={() => { const works=[...profile.works]; works[i]={...work,capabilities:[...work.capabilities,'']}; top('works',works); }}>{t.addCapability}</button>
         <h3>{t.links}</h3>{work.links.map((link,j) => <div className={styles.fieldGrid} key={j}><label className={styles.field}>{t.linkLabel}<input value={link.label} onChange={event => updateWorkLink(i,j,'label',event.target.value)} /></label><label className={styles.field}>{t.linkUrl}<input value={link.url} onChange={event => updateWorkLink(i,j,'url',event.target.value)} /></label><button className={styles.link} onClick={() => { const works=[...profile.works]; works[i]={...work,links:work.links.filter((_,k)=>k!==j)}; top('works',works); }}>{t.remove}</button></div>)}<button className={styles.buttonSecondary} onClick={() => { const works=[...profile.works]; works[i]={...work,links:[...work.links,emptyLink()]}; top('works',works); }}>{t.addLink}</button>
       </div>)}<button className={styles.buttonSecondary} onClick={() => top('works',[...profile.works,emptyWork()])}>{t.addWork}</button></section>
-      <section className={styles.editorSection}><h2>{t.interests}</h2>{profile.interests.map((item,i) => <div className={styles.entry} key={i}><div className={styles.fieldGrid}>
+      <section id="academic-editor-interests" tabIndex={-1} className={styles.editorSection}><h2>{t.interests}</h2>{profile.interests.map((item,i) => <div className={styles.entry} key={i}><div className={styles.fieldGrid}>
         <label className={styles.field}>{t.interestKind}<select value={item.kind} onChange={event => top('interests',profile.interests.map((x,j)=>j===i?{...x,kind:event.target.value as typeof item.kind}:x))}>{Object.entries(t.interestKinds).map(([key,label]) => <option value={key} key={key}>{label}</option>)}</select></label>
         <label className={styles.field}>{t.interestTitle}<input value={item.title} onChange={event => top('interests',profile.interests.map((x,j)=>j===i?{...x,title:event.target.value}:x))} /></label>
         <label className={styles.field}>{t.interestBody}<textarea value={item.body} onChange={event => top('interests',profile.interests.map((x,j)=>j===i?{...x,body:event.target.value}:x))} /></label>
         <label className={styles.field}>{t.interestContact}<input value={item.contact} onChange={event => top('interests',profile.interests.map((x,j)=>j===i?{...x,contact:event.target.value}:x))} /></label></div>
         <label className={styles.check}><input type="checkbox" checked={item.active} onChange={event => top('interests',profile.interests.map((x,j)=>j===i?{...x,active:event.target.checked}:x))} />{item.active?t.interestActive:t.interestClosed}</label>
         <button className={styles.link} onClick={() => top('interests',profile.interests.filter((_,j)=>j!==i))}>{t.remove}</button></div>)}<button className={styles.buttonSecondary} onClick={() => top('interests',[...profile.interests,{title:'',body:'',kind:'custom',contact:'',active:true}])}>{t.addInterest}</button></section>
-      <section className={styles.editorSection}><h2>{t.more}</h2>{field('cv',t.cvUrl)}
+      <section id="academic-editor-more" tabIndex={-1} className={styles.editorSection}><h2>{t.more}</h2>{field('cv',t.cvUrl)}
         <h3>{t.team}</h3><p className={styles.notice}>{t.teamHint}</p>{linksEditor(profile.teamLinks, next => top('teamLinks',next),t.addLink)}
         <h3>{t.education}</h3><p className={styles.notice}>{t.educationHint}</p>{profile.education.map((entry,i) => <div className={styles.entry} key={i}><div className={styles.fieldGrid}>
           <label className={styles.field}>{t.educationTitle}<input value={entry.title} onChange={event => top('education',profile.education.map((x,j)=>j===i?{...x,title:event.target.value}:x))} /></label>

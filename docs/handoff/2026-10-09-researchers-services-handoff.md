@@ -2,6 +2,7 @@
 
 ## 2026-10-10 个人学术主页开发
 
+- 043 版式返工已完成、本地候选尚未推送/部署：移除空数据隐藏与本人嵌套限宽，保留左224px/右三卡及灰色字段提示；删除返回个人资料，空槽仅展示、不入库。浏览器10/10、类型/lint通过，root已观察1440/390空账户及填写区定位。日志 `%TEMP%/token-smart-checks/1791631168018-74d4a19f-7520-44fb-a359-3d8716e8ebf8.log`；隔离空账户预览 `http://127.0.0.1:3020/api/test/profile-preview`（代理3020/API3102，临时内存），原3010示例保留。此前 /guide 本页上传与Hermes操作化需求仍待开发，本轮优先完成用户明确纠正的主页。
 - 用户已明确授权推送及部署；现有 `frontend/nanqing` 合入远端 `8cc8eff7` 后，以干净提交 `04352895148395465fbeaaa29e1cd6540331f36e` 正常推送并部署成功。active/公网版本同该 SHA，rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；没有新建分支、强推或修改 main。应用仍为该发布 SHA；收尾合并保留其他会话后续候选，并未自动部署这些新改动。
 - 精确候选 GitHub CI 全成功：media `38045814883`（含四个独立 browser-entry）、video `38045814902`、journals `38045814954`；期刊 CI 的隔离 PostgreSQL 已应用全部源码迁移。原个人主页 API 5/5、浏览器 7/7、类型/lint 与独立 High 证据复用，发布增量 High GO。
 - 发布前双库备份 `/var/backups/openscience/db-set-20261010T104238Z-340790` 校验和及 0700/0600 权限通过；正式任务只读 safe=true、nativePending/nativeBoundPending=false，无并发部署。正常迁移、全量构建/启动、精确公网版本、retention 与 journal 清除成功；未刷新 Native，未变化的能力镜像按守卫复用。

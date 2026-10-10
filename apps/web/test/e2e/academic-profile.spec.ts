@@ -3,9 +3,10 @@ import { expect, test, type Page } from 'playwright/test';
 const userId = '11111111-1111-4111-8111-111111111111';
 const work = { category: 'Platform', period: '2025', shortTitle: 'Short work title', summary: 'Short personal contribution', fullTitle: 'Full work title', problem: 'A real question', contribution: 'My specific contribution', process: 'The work process', outcome: 'Team delivery', capabilities: ['Field work', 'Data analysis', 'Writing'], links: [{ label: 'Original paper', url: 'https://example.org/paper' }] };
 const initial = { avatar: '', name: 'Test Researcher', englishName: '', title: 'Researcher', institution: 'Test Institute', lab: '', bio: 'A short biography', contactEmail: 'author@example.org', orcid: '', scholar: '', personalLinks: [{ label: 'Personal site', url: 'https://example.org/me' }], works: [work, { ...work, shortTitle: 'Second work', fullTitle: 'Second full title', links: [] }, { ...work, shortTitle: 'Third work', fullTitle: 'Third full title', links: [] }], interests: [{ title: 'Open questions', body: 'Looking for collaborators', kind: 'collaboration' as const, contact: 'Email welcome', active: true }, { title: 'Closed hiring', body: 'No longer hiring', kind: 'hiring' as const, contact: '', active: false }], materials: [{ label: 'Interview', url: 'https://example.org/interview' }], cv: '', labUrl: '', teamLinks: [{ label: 'Research team', url: 'https://example.org/team' }], education: [{ title: 'Doctoral study', details: 'Training group', url: '', stage: 'PhD', period: '2020–2024', links: [{ label: 'Mentor group', url: 'https://example.org/mentor' }] }] };
+const emptyProfile: typeof initial = { ...initial, title: '', institution: '', lab: '', bio: '', contactEmail: '', personalLinks: [], works: [], interests: [], materials: [], teamLinks: [], education: [] };
 
-async function setup(page: Page, authenticated = true) {
-  let state = { profile: structuredClone(initial), version: 1, published: false, userId, connectedOrcid: null as string | null, orcidVerified: false };
+async function setup(page: Page, authenticated = true, profile = initial) {
+  let state = { profile: structuredClone(profile), version: 1, published: false, userId, connectedOrcid: null as string | null, orcidVerified: false };
   let publicProfile: typeof initial | null = null;
   type Body = { ownerId?: string; expectedVersion?: number; profile?: typeof initial };
   const writes: Array<{ method: string; path: string; body: Body | null }> = [];
@@ -28,6 +29,42 @@ async function setup(page: Page, authenticated = true) {
   });
   return { writes, readState: () => state, setPublic: (profile: typeof initial | null) => { publicProfile = profile; } };
 }
+
+for (const width of [1440, 390]) {
+  test(`empty owner and published layouts retain three cards and safe prompts at ${width}px`, async ({ page }) => {
+    const fixture = await setup(page, true, emptyProfile);
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.goto('/me/profile');
+    await expect(page.getByRole('heading', { name: '你的学术生态主页' })).toBeVisible();
+    await expect(page.locator('#main-content a[href="/me"]')).toHaveCount(0);
+    for (const heading of ['代表工作与贡献', '当前关注与交流', '更多了解我']) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await expect(page.getByText('工作名称')).toHaveCount(3);
+    await expect(page.getByText('招生／求职／招聘／合作等意向')).toHaveCount(3);
+    await expect(page.getByText('可添加公开邮箱、ORCID、个人主页链接')).toBeVisible();
+    await page.screenshot({ path: `../../tmp/profile-20261010/academic-profile-empty-owner-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: '添加代表工作' }).first().click();
+    await expect(page.locator('#academic-editor-works')).toBeFocused();
+    expect(fixture.readState().profile.works).toHaveLength(0);
+    fixture.setPublic(emptyProfile);
+    await page.goto(`/researchers/${userId}`);
+    await expect(page.getByRole('heading', { name: '学术生态主页' })).toBeVisible();
+    await expect(page.getByText('工作名称')).toHaveCount(3);
+    await expect(page.getByText('招生／求职／招聘／合作等意向')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: '添加代表工作' })).toHaveCount(0);
+    await page.screenshot({ path: `../../tmp/profile-20261010/academic-profile-empty-public-${width}.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+test('partially filled public data keeps real items beside empty slots without showing closed intent', async ({ page }) => {
+  const fixture = await setup(page, false);
+  fixture.setPublic({ ...initial, works: [work], interests: initial.interests });
+  await page.goto(`/researchers/${userId}`);
+  await expect(page.getByRole('button', { name: 'Short work title' })).toBeVisible();
+  await expect(page.getByText('工作名称')).toHaveCount(2);
+  await expect(page.getByText('招生／求职／招聘／合作等意向')).toHaveCount(2);
+  await expect(page.getByText('Closed hiring')).toHaveCount(0);
+});
 
 test('a transient public load error offers retry and then shows the profile', async ({ page }) => {
   const fixture = await setup(page, false); fixture.setPublic(initial);
