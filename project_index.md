@@ -2,7 +2,7 @@
 
 `docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录本对话功能向既有 `frontend/nanqing` 的整合、实际发布/回滚和后续范围。
 
-个人学术主页设计与示例边界：`docs/specs/2026-10-10-academic-profile-design.md`；本人 `/me/profile`、访客 `/researchers/[userId]`，`apps/web/components/profile/AcademicProfileView.tsx` 与编辑页消费 `apps/api/src/routes/academic-profile.ts`，数据模型在 `infra/schema.prisma` 与 `infra/migrations/20261010010000_academic_profiles/`。草稿、公开快照、外链存储和实际验收只见 [服务对象 CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)。
+个人学术主页设计与示例边界：`docs/specs/2026-10-10-academic-profile-design.md`；本人 `/me/profile`、访客 `/researchers/[userId]`，`apps/web/components/profile/AcademicProfileView.tsx` 与编辑页消费 `apps/api/src/routes/academic-profile.ts`，模型/迁移在 `infra/schema.prisma` 与 `infra/migrations/20261010010000_academic_profiles/`。`apps/api/test/academic-profile-database.test.ts`由既有journal PostgreSQL job验证实际草稿/快照/CAS；原mock边界测试保留。存储/产品证据见 [服务对象 CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)，统一发布见Hermes CURRENT。
 
 统一导航：`apps/web/components/navigation/{NavigationMenu,ProductHeaderActions,ProductRouteNavigation,ServiceAudienceMenu,AccountLink}.tsx`、`apps/web/components/landing/SiteHeader.tsx`、`apps/web/lib/product-navigation.ts` 与 `apps/web/components/shell/{ShellPrimitives,DashboardShell,WorkspaceShell,IdentityShell}.tsx`；上传入口复用 `/guide`，API 复用 `/developers`。联系说明/邮件草稿：`apps/web/app/contact/{page.tsx,contact.module.css,email/route.ts}`、`apps/web/components/contact/EmailDraftButton.tsx`，点击写邮件才读取收件地址；定向验证 `apps/web/test/{contact-email.test.ts,landing-page.test.tsx,e2e/navigation-refresh.spec.ts}`。
 

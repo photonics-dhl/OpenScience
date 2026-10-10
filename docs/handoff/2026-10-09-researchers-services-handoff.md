@@ -15,7 +15,7 @@
 - 定向日志在 `%TEMP%/token-smart-checks/`：最终 API `1791619285407-f758eea8-a34b-4948-9aaf-5bf6cd9f719b.log`，浏览器四条 `1791618986637-c67d2bfd-78d6-4087-8796-391be72d629d.log`；范围 lint 通过。截图在 `tmp/profile-20261010/academic-profile-{1440,390}.png`，均为明确测试数据。本机字体下载受限，沿用站点回退字体。
 - 新增两条回归最终通过 `1791619380082-72f78fd1-da0c-4076-b12f-9b95fd3a1545.log`；首跑 `1791619302752-098da7f4-204b-49e0-aafa-f61e9c497e5e.log` 失败来自一次性 503 fixture 被双挂载消耗、编辑态误用展示态断言，修正 fixture/选择器后原功能条件保留。
 - 本机 Docker 已安装但 daemon 无法启动，PostgreSQL 实测未完成；临时 `tmp/profile-20261010/preview-api.cjs` 在 localhost 使用实际路由/鉴权和内存数据库替身，仅验证接口到 UI 的连接，不代表数据库持久化。原件提取文本和结构图在同目录，原 Word 未修改。
-- 本轮代码保存于既有分支的本地提交（完整 HEAD 见 Git），未推送、未部署、未应用生产迁移。后续上线仍需在受控数据库验证新增迁移和实际持久化，再按既有发布流程合入；本轮临时验收服务与测试身份在收尾停止。
+- 总控10-10整合纠正：本功能已随04352895推送，既有journal CI在fresh PostgreSQL16成功应用迁移52（PR38045814954/job114195008095）。50f1正常合并保留本功能与已审Hermes改动；47376489为原CI补真实profile HTTP/JSONB/CAS/快照用例，已获独立High源码GO，待首次运行。尚未生产迁移或部署，不以旧内存替身证明落盘；统一发布状态见[Hermes CURRENT](2026-09-10-hermes-web-image-handoff.md)。
 
 ## 需求与范围
 
