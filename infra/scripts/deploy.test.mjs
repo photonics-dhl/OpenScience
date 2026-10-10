@@ -1161,7 +1161,7 @@ test('Native actual work-query code only reads queues and task markers and retur
       async $queryRawUnsafe(sql) {
         calls.push(sql); assert.match(sql, /^SELECT /u);
         if (sql.includes('clock_timestamp')) return [{ now: new Date('2026-10-09T08:00:00.000Z') }];
-        assert.ok(sql.includes("jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution')"));
+        assert.ok(sql.includes("jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution','nativeImageReview',result->'nativeImageReview')"));
         return [{ id: 't1', status: 'pending', kind, deleted_at: null, updated_at: new Date('2026-10-09T07:00:00.000Z'), error: null, result: bound ? { nativeAgentExecution: oldMarker } : null }];
       },
       journalJob: { async findMany() { calls.push('journal-read'); return []; } },
