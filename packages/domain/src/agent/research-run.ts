@@ -20,6 +20,7 @@ import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustratio
 import { readVisualNarrativeSource } from '../assets/illustration-source';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview, requireAcceptedSceneImageReview } from '../assets/scene-image';
+import { imageReviewHasNoSubmission } from '../assets/native-image-review';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
@@ -2248,8 +2249,9 @@ async function inspectGenerationRecovery(
     }
     if (native) {
       if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0
-        || !isDeepStrictEqual(task.result, { nativeImageReview: { mode: 'model-native', state: 'not_started' } })
-        || !inspectImageRecoveryState || await inspectImageRecoveryState(task.id).catch(() => 'unsafe') !== 'completed') return null;
+        || task.result === null || !inspectImageRecoveryState) return null;
+      try { if (!imageReviewHasNoSubmission(task.result)) return null; } catch { return null; }
+      if (await inspectImageRecoveryState(task.id).catch(() => 'unsafe') !== 'completed') return null;
       plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, expectedResult: task.result });
       continue;
     }

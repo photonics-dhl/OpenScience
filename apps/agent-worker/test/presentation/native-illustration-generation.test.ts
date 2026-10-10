@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { createAgentSession, submitAgentTask, markTaskProgress } from '../../../../packages/domain/src/agent/agent';
 import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../../../packages/domain/src/agent/research-run';
-import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution } from '@openscience/domain';
+import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
 import { createPresentationGenerationHandler } from '../../src/presentation/handler';
 import * as scenePlanning from '../../src/presentation/scene-image';
@@ -261,8 +261,9 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     expect(f.oldPlan).not.toHaveBeenCalled(); expect(f.oldReview).not.toHaveBeenCalled(); expect(f.generate).not.toHaveBeenCalled();
   });
 
-  it('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay', async () => {
+  it.each(['fresh paired', 'legacy'] as const)('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay: %s', async role => {
     const f = await failedNativeImage();
+    if (role === 'legacy') delete f.image.result.nativeAgentExecution;
     const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, result: structuredClone(f.image.result) };
     expect(await getHermesResearchRun(f.deps as never, f.input)).toMatchObject({ canRetryGeneration: true, chargeableAttempts: 0, generationRecovery: 'image-render' });
     await retryHermesGeneration(f.deps as never, f.input);
@@ -302,6 +303,51 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
     expect(f.generate).not.toHaveBeenCalled();
   });
+  it.each(['null', 'extra-result', 'extra-review', 'malformed-role', 'wrong-profile', 'checkpoint', 'provider-failed', 'provider-throws'] as const)(
+    'keeps completed native image recovery closed without writes for %s', async change => {
+    const f = await failedNativeImage();
+    if (change === 'null') f.image.result = null;
+    if (change === 'extra-result') f.image.result.unrelatedResult = true;
+    if (change === 'extra-review') f.image.result.nativeImageReview.unrelatedReview = true;
+    if (change === 'malformed-role') f.image.result.nativeAgentExecution.kind = 'foreign-agent';
+    if (change === 'wrong-profile') f.image.result.nativeAgentExecution.profile = 'paper-author';
+    if (change === 'checkpoint') f.image.result.nativeAgentExecution.checkpoint = { state: 'completed' };
+    if (change === 'provider-failed') Object.assign(f.deps, { inspectImageRecoveryState: async () => 'failed' });
+    if (change === 'provider-throws') Object.assign(f.deps, { inspectImageRecoveryState: async () => { throw new Error('Provider receipt unavailable'); } });
+    const before = { task: structuredClone(f.image), run: structuredClone(f.run),
+      tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, audit: f.db.auditLogs.length };
+    expect((await getHermesResearchRun(f.deps as never, f.input)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps as never, f.input)).rejects.toThrow();
+    expect(f.image).toEqual(before.task); expect(f.run).toEqual(before.run);
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.auditLogs).toHaveLength(before.audit); expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['prepared', 'started', 'completed', 'mismatched-pair'] as const)(
+    'retains the existing non-fresh native review state without render recovery: %s', async state => {
+    const f = await failedNativeImage();
+    const identity = { requestId: f.image.id, executionAttempt: 1, contentHash: 'a'.repeat(64),
+      sourceEvidenceIdentity: 'b'.repeat(64), parentIdentity: 'bound-parent', provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' };
+    if (state === 'prepared' || state === 'mismatched-pair') {
+      f.image.result.nativeImageReview = { ...identity, mode: 'agent-native', state: 'prepared',
+        preparedAt: 1000, deadlineAt: 301000, ...f.deps.nativeAgentRuntime,
+        reservationLedgerId: 'original-reservation', maxTurns: 4, maxOutputTokens: 32768,
+        maxTotalOutputTokens: 32768, maxInputBytes: 8_000_000 };
+      expect(readNativeAgentExecution(f.image.result)).toEqual(f.image.result.nativeAgentExecution);
+      if (state === 'mismatched-pair') f.image.result.nativeAgentExecution.runtimeId = 'foreign-runtime';
+    } else {
+      delete f.image.result.nativeAgentExecution;
+      f.image.result.nativeImageReview = { ...identity, mode: 'model-native', state, promptHash: 'c'.repeat(64),
+        ...(state === 'completed' ? { review: { ...identity, promptHash: 'c'.repeat(64), decision: 'accepted' } } : {}) };
+    }
+    expect(readNativeImageReviewCheckpoint(f.image.result)?.state).toBe(state === 'mismatched-pair' ? 'prepared' : state);
+    const before = { task: structuredClone(f.image), run: structuredClone(f.run),
+      tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, audit: f.db.auditLogs.length };
+    expect((await getHermesResearchRun(f.deps as never, f.input)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps as never, f.input)).rejects.toThrow();
+    expect(f.image).toEqual(before.task); expect(f.run).toEqual(before.run);
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.auditLogs).toHaveLength(before.audit); expect(f.generate).not.toHaveBeenCalled();
+  });
   it('sends the accepted native prompt unchanged without a second model planning request', async () => {
     const f = await fixture();
     const result = await f.handler(f.deps as never, f.task() as never);
@@ -337,7 +383,9 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     const images = f.db.agentTasks.filter(row => row.payload?.sceneImage);
     expect(images, JSON.stringify({ run, assets: f.db.presentationAssets.map(row => ({ id: row.id, status: row.status })) })).toHaveLength(1);
     expect(images[0].payload.sceneImage).toEqual({ storyboardAssetId: f.owner.id, sceneIndex: 0 });
-    expect(images[0].result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    const imageRole = { kind: 'hermes-agent', profile: 'image-review', ...f.deps.nativeAgentRuntime };
+    expect(images[0].result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' }, nativeAgentExecution: imageRole });
+    expect(readNativeAgentExecution(images[0].result)).toEqual(imageRole);
     expect(f.fetcher).toHaveBeenCalledTimes(5);
   });
   it('rechecks the original source after a serializable completion conflict without another paid call', async () => {
