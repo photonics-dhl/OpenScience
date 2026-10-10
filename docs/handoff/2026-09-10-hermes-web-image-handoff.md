@@ -15,8 +15,8 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 43d一次真实计划已自然failed/无asset，提交窗口关闭。现独占scientific-comparison及原test修通用科学记号误拒；19as/半λ等价最小输入已复现，保留错source/错数值/反向与额外因子拒收，原High增量审查；不重放paid任务 | 原illustration-chain-repair树 / codex/native-source-number-parser@87057；原269d与所有receipts保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | backend/installer已收。原High新定位两处P1：video.ts提交仍校验全片旁白，presentation-asset.ts仅fullvideo合格才投影帧。现独占两源文件+native-video-parents原test，分开单幕/整片资格并新增canGenerateAudioAudition；保存77目录候选报价，不选voice/不生成 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@87057；原8bec/操作包保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 播放器已收；c239真实短窗/64px闭合。独占原HermesPresentationAction/client/helper/copy及test接现video.create选幕试听，消费a50 nullable preset与新canGenerateAudioAudition；unknown同body/key锁住模式，配置变化hold；不重复播放器7例 | 原research-product-craft树 / codex/private-audio-consumer-20261010@c644+owned接线；生产0 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | backend/installer已收。原High核producer后撤回长旁幕/总长两个P1：合法Native计划生成/读取已限120/450，不能放宽parser造fixture。当前仅presentation-asset.ts与native-video-parents原test补独立canGenerateAudioAudition，验证合法native/完整帧与role/source/legacy拒绝；不改原提交长度规则 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@87057；原8bec/操作包/失败证据保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常选幕试听接线WIP；57unit/TC/scoped lint通过，两P2草稿污染/能力GET无重试已修、High复核及3严格正常入口e2e进行中。按合法native父计划+global video=false/audio preset可用替换非法长幕fixture；旧DTO缺flag禁用、unknown同body/key与scope锁保留 | 原research-product-craft树 / codex/private-audio-consumer-20261010@c644+owned接线；生产0 |
 - 本聊天三线生产操作由总控串行排程；43d已自然failed，生图唯一提交窗口关闭，目前三线均无production writer。后续发布须等精确CI/原High及fresh工作检查。个人主页发布已带入图入口/短窗口，旧b261/e5脚本未执行且不得再跑。UI完全访问与运行read-only/审批never冲突已于20:39解除，实际协调发送成功，不需重复业务授权。
 
 ## Git / CI / 运行事实
@@ -26,10 +26,10 @@
 - root原准备仅做19:41双库备份`/var/backups/openscience/db-set-20261010T114156Z-532121`：163700200/14257855B、checksum0、0700/0600、旧集合保留。20:18 verifier因active已从043变c239而verified=false，原回执保持；不是dump损坏，不重做备份或执行旧deploy-app-b261.cjs。独立profile发布已完成该新版本，本总控不重复发布。
 - 独立Synclip host最后19:39只读仍59a/config原样、adminfalse/audioabsent、timer inactive/disabled/readyabsent；已安装原7模块，受保护目录GET77音色已完成。目录访问不证明LTX生成权限、余额、声音或成片质量，新试听消费者尚未发布/启用。
 - 历史工程证据复用：8cc Linux broker/引用合组136/136零skip；59a dashboard32/workspace25；393 deploy/manifest/retention306零skip及Native实际SDK离线loop。它们不覆盖新2640/UI消费者或真实科学产物。原393/59/043部署、失败、回退和paid收据均保留，长记录见Git dd25ae57本页；旧next action不再执行。
-- 已观察首页→OSR-2026-000024/v2正文/认可首图、个人中心→研究入口/设置；17:43原账本显示管理员正常事务同oncekey自动adjust+1/consume−1，零平台余额不是该账户正常入口阻断。不是供应商资金授权；普通用户余额规则不变。c239普通生图入口/短窗口的真实点击及实际计划质量本轮继续验收。
-- 私有试听集成：25后端文件对owner afe69仅API app多保留原profile两行；Web对c644仅保留原ORCID returnTo两行。唯一API测试冲突解后与owner全文全等。fresh依赖build0、API131+profile5=136PASS、Web27PASS、CI grep实际选15例（新6+原恢复1+原8）；浏览器未在root重复执行。原High、7客户端用例/桌面手机PNG复用，真实解码/声音不冒称通过。既有media CI补Domain/UI命令及paths，原High GO；精确组合CI尚待运行。
+- 已观察首页→OSR-2026-000024/v2正文/认可首图、个人中心→研究入口/设置；17:43原账本显示管理员正常事务同oncekey自动adjust+1/consume−1，零平台余额不是该账户正常入口阻断，不是供应商资金授权。c239普通生图入口/短窗口实际点击已闭合；新计划科学质量失败见43d，不把入口可用等同图像合格。
+- 私有试听原集成：25后端文件对afe69仅保留API profile两行，Web对c644仅保留ORCID returnTo两行，API冲突解后全等；依赖build0/API136/Web27及05f8/87057实际CI保留。新入口3例原先未被grep消费，root仅在原五组追加normal narration audition action，High GO、YAML解析0、真实--list18（旧15+新3）；待UI最终commit一起运行，不把发现用例当浏览器通过。
 - 05f8五条CI全SUCCESS：video PR38054355547、journal PR38054355531/push38054352964、media PR38054355548/push38054353049；PR主job114219655457原日志核queue44、readiness8、Web audio27及所选browser15通过。37d7原4绿/2media失败由test-only6d59闭合，两回调动态/前提守卫原High GO；完整原失败/修复/05日志与final.json在root tmp，不能覆盖新a50/441。
-- 新capability a50复用现GET：audioAudition只在platform_admin+draft/write且合法finite policy时给provider/voice/speed，不泄露cap/key/path；同一规范化reader供readiness/capability/提交复用，提交从双取改一次，fullvideo/unknown replay保持。Domain108/API30/纵向1过、Domainbuild/API双TC0，原34lint诊断不变，原High GO。新发现父资产全片长度误挡单幕，视频/UI分开修资格及入口；installer已收但未上线，human voice/有限coins上限未选。
+- 新capability a50复用现GET：audioAudition只在platform_admin+draft/write且合法finite policy时给provider/voice/speed，不泄露cap/key/path；readiness/capability/提交共用规范化reader，提交仅取一次，fullvideo/unknown不变。Domain108/API30/纵向1过、build/TC0、原34lint不变，High GO。父资产长文两个P1已因producer不可达撤回，最小余项独立native试听资格/入口；原结论与修正保存在root audio-parent-eligibility-reassessment.md。installer未上线，human voice/有限coins未选。
 
 ## 当前交付与明确下一步
 - 图审a780/3a2→d9cc/f016及a6fa/paired query已收，原测试证据复用。17:06:19–27实际393 SDK0.10.0离线构造/run_conversation PASS：原source5 Mock控制保留，image2 Mock请求消费真实skill_view/paper_image_view、唯一fixture PNG与四身份及终答；stderr空/外部Provider0/Gateway往返false/产品任务与DB0，自有temp已删除。6e3f仅offline_native_loop.py+80，原High GO、root全文diff0收6562；真实科研PNG的模型判断与科学质量仍未验收，不重跑旧paid/unknown。
