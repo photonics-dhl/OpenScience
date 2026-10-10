@@ -29,6 +29,8 @@ on:
       - 'apps/agent-worker/test/native-video-planning.test.ts'
       - 'packages/domain/test/assets/native-video-storyboard.test.ts'
       - 'packages/domain/test/assets/native-video-parents.test.ts'
+      - 'packages/domain/src/assets/video.ts'
+      - 'packages/domain/test/assets/video.test.ts'
       - 'packages/domain/test/agent/native-video-research-run.test.ts'
       - 'packages/domain/test/agent/hermes-run-intent-query.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
@@ -146,6 +148,8 @@ on:
       - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
       - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
+      - 'apps/web/components/hermes/HermesAudioAuditionPlayer.tsx'
+      - 'apps/web/test/hermes-audio-audition.test.tsx'
       - 'apps/web/test/hermes-video-*.test.*'
       - 'apps/web/test/hermes-viewer-session.test.tsx'
       - 'apps/web/test/hermes-research-run-panel.test.tsx'
@@ -285,6 +289,8 @@ on:
       - 'apps/agent-worker/test/native-video-planning.test.ts'
       - 'packages/domain/test/assets/native-video-storyboard.test.ts'
       - 'packages/domain/test/assets/native-video-parents.test.ts'
+      - 'packages/domain/src/assets/video.ts'
+      - 'packages/domain/test/assets/video.test.ts'
       - 'packages/domain/test/agent/native-video-research-run.test.ts'
       - 'packages/domain/test/agent/hermes-run-intent-query.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
@@ -402,6 +408,8 @@ on:
       - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
       - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
+      - 'apps/web/components/hermes/HermesAudioAuditionPlayer.tsx'
+      - 'apps/web/test/hermes-audio-audition.test.tsx'
       - 'apps/web/test/hermes-video-*.test.*'
       - 'apps/web/test/hermes-viewer-session.test.tsx'
       - 'apps/web/test/hermes-research-run-panel.test.tsx'
@@ -565,7 +573,7 @@ jobs:
       - name: Video readiness before paid source and media work
         run: |
           npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-video-readiness.test.ts
-          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/video-readiness.test.ts
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/video-readiness.test.ts test/assets/video.test.ts
           npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t 'while (video is )?closed'
           npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/video-task-admission.test.ts test/native-video-readiness.test.ts
           node --test infra/compose/docker-compose.prod.test.mjs
@@ -621,7 +629,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/api-agent.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/hermes-audio-audition.test.tsx test/api-agent.test.ts
       - name: Hermes surface lifetime and dashboard behavior
         run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/research-guide-data.test.tsx test/auth-dashboard.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
@@ -640,7 +648,7 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chrome
           WEB_BASE_URL: http://127.0.0.1:3037
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only|rejected scene image remains" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only|rejected scene image remains|private narration result consumer|restores a scoped pending task" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/ingestion-review-polling.test.ts test/api-client-contract.test.ts
