@@ -143,7 +143,9 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     try {
       // An existing uncertain intent must replay its saved request and key,
       // even when new video work is no longer available.
-      if (!replayRequest && (effectiveAction === 'video.create' || ('output' in request && request.output === 'video'))) {
+      const firstVideoPlan = effectiveAction === 'storyboard.create' && action === 'video.create'
+        && 'output' in request && request.output === 'video' && 'narrative' in request && request.narrative === true;
+      if (!replayRequest && !firstVideoPlan && (effectiveAction === 'video.create' || ('output' in request && request.output === 'video'))) {
         try {
           const capability = await getHermesVideoCapability(ro, activeController.signal);
           if (activeController.signal.aborted || scopeRef.current !== requestScope) return;

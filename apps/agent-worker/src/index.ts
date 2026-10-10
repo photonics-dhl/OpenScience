@@ -962,7 +962,7 @@ export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => b
     if (task?.status === 'pending' && task.error === VIDEO_READINESS_HOLD) {
       const admission = await admitPendingVideoTask(deps, task);
       if (admission !== null) {
-        if (admission) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        if (admission === true) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
         continue;
       }
     }
@@ -1015,6 +1015,7 @@ export async function createPollOnce(
     let handlerCompleted = false;
     let processingEntryRequeued = false;
     let processingEntryDeferred = false;
+    let expectedPendingTask: Parameters<typeof claimAgentTask>[2];
     try {
       const task = await deps.prisma.agentTask.findUnique({
         where: { id: taskId },
@@ -1026,17 +1027,31 @@ export async function createPollOnce(
         // Keep the entry while intent/readiness and the pending CAS are unresolved.
         processingEntryDeferred = true;
         const admission = await admitPendingVideoTask(deps, task);
-        if (admission !== null) {
+        if (typeof admission === 'boolean') {
           processingEntryDeferred = !admission;
           return true;
         }
+        if (admission) expectedPendingTask = admission.expectedPendingTask;
         processingEntryDeferred = false;
       }
       if (stopping()) { processingEntryDeferred = true; return false; }
       // Once claim starts, drain this attempt even if a signal arrives while its
       // transaction awaits: deferring after claim would consume an unused attempt.
-      claimed = await claimAgentTask(deps, taskId);
-      if (!claimed) return true;
+      claimed = expectedPendingTask ? await claimAgentTask(deps, taskId, expectedPendingTask) : await claimAgentTask(deps, taskId);
+      if (!claimed) {
+        if (expectedPendingTask) {
+          processingEntryDeferred = true;
+          const current = await deps.prisma.agentTask.findUnique({ where: { id: taskId }, include: { session: { include: { researchObject: true } } } });
+          if (current?.status === 'pending' && !current.deletedAt && !current.session.deletedAt
+            && (current.session.researchObjectId === null || current.session.researchObject && !current.session.researchObject.deletedAt)) {
+            if (stopping()) return false;
+            await deps.redis.multi().lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).lpush(AGENT_TASK_QUEUE, taskId).exec();
+            processingEntryRequeued = true;
+          }
+          processingEntryDeferred = false;
+        }
+        return true;
+      }
       const executionClaim = claimed;
       if (task.kind === 'sdf.extract') {
         const allowed = await deps.prisma.$transaction(async tx => {

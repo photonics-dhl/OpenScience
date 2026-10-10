@@ -224,6 +224,20 @@ function unknownSubmission(action:'video.create' | 'storyboard.revise', actor='a
 }
 
 describe('native video controls', () => {
+  it('submits a first Native video plan through the normal confirmation with full Host closed', async () => {
+    api.listPresentationAssets.mockResolvedValue({ assets: [] });
+    api.getHermesVideoCapability.mockResolvedValue({ canGenerateVideo: false });
+    const records = new Map<string, SubmissionIntent>();
+    const host = mount({ action: 'video.create', instruction: 'Explain the paper' }, true, { submissionRecords: records });
+    await host.flush(); await host.confirm(); await host.flush();
+    expect(api.generatePresentationStoryboard).toHaveBeenCalledWith('paper', 'version', ['claim'], {
+      locale: 'en', style: 'auto', output: 'video', narrative: true, instruction: 'Explain the paper',
+    }, expect.any(String), expect.any(AbortSignal));
+    expect(api.generatePresentationStoryboard).toHaveBeenCalledTimes(1);
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();
+    expect(api.generatePresentationSceneImage).not.toHaveBeenCalled();
+    expect(host.props.onSubmitted).toHaveBeenCalledTimes(1);
+  });
   it('keeps an image scene intent eligible without treating it as a video revision scope', async () => {
     const host=mount({action:'scene.image',instruction:'',sceneIndex:1}); await host.flush();
     await find(host.tree(),element => element.type==='form').props.onSubmit!({preventDefault(){}});
@@ -258,7 +272,6 @@ describe('native video controls', () => {
 
   it.each([
     {name:'video',intent:{action:'video.create' as const,instruction:'',baseAssetId:'plan'},withoutPlan:false},
-    {name:'new video plan',intent:{action:'video.create' as const,instruction:'Explain the paper'},withoutPlan:true},
     {name:'video plan revision',intent:{action:'storyboard.revise' as const,instruction:'Fix this plan',baseAssetId:'plan'},withoutPlan:false},
   ])('rejects an unavailable fresh $name before allocating a key or posting', async ({intent,withoutPlan}) => {
     api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false});
@@ -291,12 +304,11 @@ describe('native video controls', () => {
     expect(host.confirmation()?.ready).toBe(true);
   });
 
-  it('waits for a fresh GET before planning and blocks duplicate confirmation during preflight', async () => {
+  it('waits for a fresh GET before actual rendering and blocks duplicate confirmation during preflight', async () => {
     const capability=deferred<{canGenerateVideo:boolean}>();
     api.getHermesVideoCapability.mockReturnValue(capability.promise);
-    api.listPresentationAssets.mockResolvedValue({assets:[]});
     const records=new Map<string,SubmissionIntent>();const key=vi.spyOn(crypto,'randomUUID');
-    const host=mount({action:'video.create',instruction:'Explain the paper'},true,{submissionRecords:records});await host.flush();
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true,{submissionRecords:records});await host.flush();
     const confirm=host.confirmation()!.confirm;
     const first=confirm();await confirm();await host.flush();
     expect(api.getHermesVideoCapability).toHaveBeenCalledTimes(1);
@@ -304,13 +316,13 @@ describe('native video controls', () => {
     expect(key).not.toHaveBeenCalled();expect(records.size).toBe(0);
     expect(api.generatePresentationStoryboard).not.toHaveBeenCalled();
     capability.resolve({canGenerateVideo:true});await first;await host.flush();
-    expect(api.generatePresentationStoryboard).toHaveBeenCalledTimes(1);
-    expect(api.generatePresentationStoryboard).toHaveBeenCalledWith('paper','version',['claim'],{
-      locale:'en',style:'auto',output:'video',narrative:true,instruction:'Explain the paper',
+    expect(api.generatePresentationVideo).toHaveBeenCalledTimes(1);
+    expect(api.generatePresentationVideo).toHaveBeenCalledWith('paper','version',['claim'],{
+      profile:'content-driven-v1',storyboardAssetId:'plan',sceneImageAssetIds:['f2','f1','f3'],
     },expect.any(String),api.getHermesVideoCapability.mock.calls[0][1]);
     expect(key).toHaveBeenCalledTimes(1);
     expect(api.getHermesVideoCapability.mock.invocationCallOrder[0]).toBeLessThan(key.mock.invocationCallOrder[0]);
-    expect(key.mock.invocationCallOrder[0]).toBeLessThan(api.generatePresentationStoryboard.mock.invocationCallOrder[0]);
+    expect(key.mock.invocationCallOrder[0]).toBeLessThan(api.generatePresentationVideo.mock.invocationCallOrder[0]);
     expect(host.props.onSubmitted).toHaveBeenCalledTimes(1);
   });
 

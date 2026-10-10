@@ -227,6 +227,7 @@ async function audioGrantFixture() {
   const payload = { schemaVersion: 1, kind: 'video', ...f.input,
     video: { ...f.input.video, purpose: 'audio-audition', sceneIndex: 1, locale: 'zh', audio } };
   const owner = { id: taskId, kind: 'presentation.generate', payload, status: 'pending', deletedAt: null,
+    interestContext: null, dispatchedAt: null, updatedAt: new Date(),
     sessionId: uuid(8), executionAttempt: 0, retryCount: 0, progress: 0, error: null, result: { previous: 'preserved' } as Record<string, unknown>,
     session: { id: uuid(8), status: 'active', userId: actorId, researchObjectId: roId, deletedAt: null,
       researchObject: { id: roId, workspaceId, deletedAt: null, workspace: { status: 'active' } } } };
@@ -234,6 +235,19 @@ async function audioGrantFixture() {
     policy: { audio, maxEstimatedCoins: 7 } as { audio: typeof audio; maxEstimatedCoins: number } | null,
     insideTransaction: false, beforeGrant: undefined as (() => void) | undefined, transactions: [] as unknown[] };
   const events: string[] = [];
+  function matches(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
+    return Object.entries(where).every(([key, condition]) => {
+      if (key === 'OR') return (condition as Record<string, unknown>[]).some(filter => matches(row, filter));
+      const actual = row[key];
+      if (condition instanceof Date) return actual instanceof Date && actual.getTime() === condition.getTime();
+      if (condition && typeof condition === 'object') {
+        if ('equals' in condition) return condition.equals === Prisma.AnyNull ? actual == null : isDeepStrictEqual(actual, condition.equals);
+        if ('in' in condition) return (condition.in as unknown[]).includes(actual);
+        return Boolean(actual && typeof actual === 'object' && matches(actual as Record<string, unknown>, condition as Record<string, unknown>));
+      }
+      return actual === condition;
+    });
+  }
   const lookup = f.prisma.agentTask.findUnique;
   const prisma = { ...f.prisma,
     $executeRaw: async () => 0,
@@ -251,15 +265,16 @@ async function audioGrantFixture() {
     agentTask: { findUnique: async ({ where }: { where: { id: string } }) => {
       if (where.id !== taskId) return lookup({ where });
       return structuredClone(owner);
-    }, updateMany: async ({ where, data }: { where: { id: string; status?: string; executionAttempt?: number; result?: { equals: unknown } };
+    }, updateMany: async ({ where, data }: { where: Record<string, unknown>;
       data: Record<string, unknown> & { executionAttempt?: number | { increment: number } } }) => {
-      if (where.result) { const hook = state.beforeGrant; state.beforeGrant = undefined; hook?.(); }
-      if (where.id !== taskId || (where.status && where.status !== owner.status)
-        || (where.executionAttempt !== undefined && where.executionAttempt !== owner.executionAttempt)
-        || (where.result && (state.rejectCas || !isDeepStrictEqual(where.result.equals, owner.result)))) return { count: 0 };
+      const existingGrant = owner.result !== null && typeof owner.result === 'object' && Object.hasOwn(owner.result, 'audioAuditionGrant');
+      const resultWrite = Object.hasOwn(data, 'result');
+      const grantWrite = resultWrite && data.result !== null && typeof data.result === 'object' && Object.hasOwn(data.result, 'audioAuditionGrant') && !existingGrant;
+      if (grantWrite) { const hook = state.beforeGrant; state.beforeGrant = undefined; hook?.(); }
+      if (!matches(owner, where) || (where.result && resultWrite && state.rejectCas)) return { count: 0 };
       const attempt = typeof data.executionAttempt === 'object' ? owner.executionAttempt + data.executionAttempt.increment : data.executionAttempt;
       Object.assign(owner, data, ...(attempt === undefined ? [] : [{ executionAttempt: attempt }]));
-      if (where.result) events.push('grant-cas');
+      if (grantWrite) events.push('grant-cas');
       return { count: 1 };
     } },
     async $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>, options?: unknown) {

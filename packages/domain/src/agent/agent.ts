@@ -954,13 +954,23 @@ async function waitForSerializableRetry(attempt: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 }
 
-export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
+type PendingTaskClaimSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'sessionId' | 'progress' | 'error'
+  | 'retryCount' | 'executionAttempt' | 'payload' | 'result' | 'interestContext' | 'dispatchedAt' | 'updatedAt'>;
+
+export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?: PendingTaskClaimSnapshot): Promise<AgentTaskView | null> {
+  if (expected && (expected.id !== taskId || expected.status !== 'pending')) return null;
   let task: AgentTask | null = null;
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
         const claimed = await tx.agentTask.updateMany({
-          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] } },
+          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+            ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,
+              retryCount: expected.retryCount, executionAttempt: expected.executionAttempt,
+              payload: { equals: expected.payload === null ? Prisma.AnyNull : expected.payload as Prisma.InputJsonValue },
+              result: { equals: expected.result === null ? Prisma.AnyNull : expected.result as Prisma.InputJsonValue },
+              interestContext: { equals: expected.interestContext === null ? Prisma.AnyNull : expected.interestContext as Prisma.InputJsonValue },
+              dispatchedAt: expected.dispatchedAt, updatedAt: expected.updatedAt } : {}) },
           data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
         });
         if (claimed.count !== 1) return null;

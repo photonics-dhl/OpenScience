@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/index';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
   recoverHeldVideoTasks, VIDEO_READINESS_HOLD } from '../src/video-task-admission';
-import { dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
+import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
+import { initialNativeAgentExecution } from '../../../packages/domain/src/agent/native-agent-execution';
 
 const execution = vi.hoisted(() => ({ claim: vi.fn(), progress: vi.fn() }));
 // The dispatcher, intent proof and admission mutations remain real. Only the
@@ -14,19 +17,21 @@ beforeEach(() => { execution.claim.mockReset(); execution.progress.mockReset(); 
 
 const queueKey = 'agent:queue'; const processingKey = 'agent:queue:processing';
 type QueueTask = {
-  id: string; kind: string; status: string; error: string | null; executionAttempt: number;
+  id: string; kind: string; status: string; error: string | null; executionAttempt: number; progress: number;
   sessionId: string; retryCount: number; result: Record<string, unknown> | null; interestContext: Record<string, unknown> | null;
-  updatedAt: Date; createdAt: Date; dispatchedAt: Date | null; deletedAt: null;
-  payload: Record<string, unknown>; session: { id: string; userId: string; researchObjectId: string; deletedAt: null;
-    researchObject: { id: string; workspaceId: string; deletedAt: null } };
+  updatedAt: Date; createdAt: Date; dispatchedAt: Date | null; deletedAt: Date | null;
+  payload: Record<string, unknown>; session: { id: string; userId: string; researchObjectId: string; deletedAt: Date | null;
+    researchObject: { id: string; workspaceId: string; deletedAt: Date | null } };
 };
 function matches(value: unknown, where: Record<string, unknown>): boolean {
   const row = value as Record<string, unknown>;
   return Object.entries(where).every(([key, condition]) => {
     if (key === 'OR') return (condition as Record<string, unknown>[]).some(filter => matches(row, filter));
     const actual = row[key];
+    if (condition === Prisma.AnyNull) return actual == null;
     if (condition instanceof Date) return actual instanceof Date && actual.getTime() === condition.getTime();
     if (condition && typeof condition === 'object') {
+      if ('equals' in condition) return condition.equals === Prisma.AnyNull ? actual == null : isDeepStrictEqual(actual, condition.equals);
       if ('in' in condition) return (condition.in as unknown[]).includes(actual);
       return Boolean(actual && matches(actual, condition as Record<string, unknown>));
     }
@@ -38,7 +43,7 @@ function queueFixture() {
   const savedAt = new Date(Date.now() + 60_000);
   const task: QueueTask = { id: 'video-task', kind: 'presentation.generate', status: 'pending', error: null,
     sessionId: 'session', retryCount: 0, result: null, interestContext: null,
-    executionAttempt: 0, updatedAt: savedAt, createdAt: savedAt, dispatchedAt: savedAt, deletedAt: null,
+    executionAttempt: 0, progress: 0, updatedAt: savedAt, createdAt: savedAt, dispatchedAt: savedAt, deletedAt: null,
     payload: { schemaVersion: 1, kind: 'video', researchObjectId: 'ro', versionId: 'version', sourceClaimIds: ['claim'], video: {} },
     session: { id: 'session', userId: 'actor', researchObjectId: 'ro', deletedAt: null,
       researchObject: { id: 'ro', workspaceId: 'workspace', deletedAt: null } } };
@@ -55,7 +60,10 @@ function queueFixture() {
       if (state.rejectUpdate) return { count: 0 };
       let count = 0;
       for (const row of tasks.values()) if (matches(row, where)) {
-        Object.assign(row, data, { updatedAt: data.updatedAt ?? new Date() }); count++;
+        const values = Object.fromEntries(Object.entries(data).map(([key, value]) => [key,
+          value && typeof value === 'object' && 'increment' in value
+            ? Number((row as unknown as Record<string, unknown>)[key]) + Number(value.increment) : value]));
+        Object.assign(row, values, { updatedAt: data.updatedAt ?? new Date() }); count++;
       }
       return { count };
     }),
@@ -85,7 +93,7 @@ function queueFixture() {
     }),
   };
   const prisma = { agentTask, hermesResearchRun: { findMany: vi.fn(async () => []) },
-    ingestionTask: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+    ingestionTask: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null), updateMany: vi.fn(async () => ({ count: 0 })) },
     auditLog: { findMany: vi.fn(async () => []) } };
   // Ordinary extraction now also enters the shared source-authorization transaction.
   Object.assign(prisma, { $transaction: vi.fn(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma)) });
@@ -102,6 +110,100 @@ function queueFixture() {
     poll: async () => (await createPollOnce({ 'presentation.generate': handler, 'sdf.extract': handler }, { runMaintenance: false }))(deps),
     dispatch: () => dispatchAgentTask(deps, task.id), outbox: () => recoverUndispatchedAgentTasks(deps) };
 }
+
+function firstNativePlanFixture() {
+  const f = queueFixture();
+  const uuid = (n: number) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000001`;
+  f.task.payload = { schemaVersion: 1, researchObjectId: uuid(1), versionId: uuid(2), kind: 'interactive_html', sourceClaimIds: [uuid(3)],
+    storyboard: { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain this finding' } };
+  f.task.session.researchObjectId = uuid(1); f.task.session.researchObject.id = uuid(1);
+  f.task.result = initialNativeAgentExecution({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' }, 'paper-illustration')!;
+  // Exercise the real pending CAS and attempt increment, not the fixture's old claim port.
+  execution.claim.mockImplementation((...args: unknown[]) =>
+    (realClaimAgentTask as (...input: unknown[]) => Promise<unknown>)(...args));
+  return f;
+}
+
+describe('first Native video plan admission', () => {
+  it('keeps video intent and dispatches fresh pending0 through the real claim as attempt1 with Host closed', async () => {
+    const f = firstNativePlanFixture();
+    expect(f.task.executionAttempt).toBe(0);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, error: null });
+    expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(f.handler).toHaveBeenCalledWith(f.deps, expect.objectContaining({ executionAttempt: 1, payload: f.task.payload }));
+  });
+
+  it.each(['hold', 'retry', 'attempt', 'legacy', 'base', 'run', 'scene-limit', 'extra-result', 'malformed-marker', 'checkpoint'] as const)('does not treat %s as a new first plan while closed', async kind => {
+      const f = firstNativePlanFixture();
+      const settings = f.task.payload.storyboard as Record<string, unknown>;
+      if (kind === 'hold') f.task.error = VIDEO_READINESS_HOLD;
+      if (kind === 'retry') f.task.retryCount = 1;
+      if (kind === 'attempt') f.task.executionAttempt = 1;
+      if (kind === 'legacy') delete settings.narrative;
+      if (kind === 'base') settings.baseAssetId = '00000004-0000-4000-8000-000000000001';
+      if (kind === 'scene-limit') settings.narrativeSceneLimit = 3;
+      if (kind === 'run') f.task.payload.hermesRunAuthority = { runId: 'run', stage: 'storyboard', ordinal: 0, profile: 'visual-narrative-v1' };
+      if (kind === 'extra-result') f.task.result!.untrusted = true;
+      if (kind === 'malformed-marker') f.task.result!.nativeAgentExecution = null;
+      // Deliberately malformed checkpoint: proves it cannot grant initial-task admission, not a paid CP fixture.
+      if (kind === 'checkpoint') (f.task.result!.nativeAgentExecution as Record<string, unknown>).checkpoint = null;
+      if (kind === 'run') f.deps.prisma.hermesResearchRun.findUnique = vi.fn(async () => ({ actorId: 'actor', researchObjectId: f.task.session.researchObjectId,
+        versionId: f.task.payload.versionId, profile: 'visual-narrative-v1', generationSettings: { output: 'video' }, sourceClaimIds: f.task.payload.sourceClaimIds,
+        steps: [{ agentTaskId: f.task.id, stage: 'storyboard', ordinal: 0 }] })) as never;
+      await f.poll();
+      expect(f.task.status).toBe('pending'); expect(f.task.error).toBe(VIDEO_READINESS_HOLD);
+      expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    });
+
+  it.each(['hold', 'payload', 'checkpoint', 'retry', 'attempt', 'progress', 'interest', 'dispatch', 'updated'] as const)('does not consume or lose a pending plan changed at claim by %s', async change => {
+      const f = firstNativePlanFixture(); f.state.ready = true;
+      f.state.beforeUpdate = () => {
+        if (change === 'hold') f.task.error = VIDEO_READINESS_HOLD;
+        if (change === 'payload') (f.task.payload.storyboard as Record<string, unknown>).instruction = 'Changed after admission';
+        if (change === 'checkpoint') (f.task.result!.nativeAgentExecution as Record<string, unknown>).checkpoint = null;
+        if (change === 'retry') f.task.retryCount = 1;
+        if (change === 'attempt') f.task.executionAttempt = 1;
+        if (change === 'progress') f.task.progress = 20;
+        if (change === 'interest') f.task.interestContext = { currentGoal: 'Changed after admission' };
+        if (change === 'dispatch') f.task.dispatchedAt = null;
+        if (change === 'updated') f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+      };
+      await f.poll();
+      expect(f.task.status).toBe('pending');
+      expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+      expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+      if (change === 'hold') expect(f.task.error).toBe(VIDEO_READINESS_HOLD);
+    });
+
+  it.each(['running', 'succeeded', 'failed', 'deleted', 'session-deleted', 'ro-deleted'] as const)('does not requeue a plan that becomes %s before claim', async change => {
+      const f = firstNativePlanFixture(); f.state.ready = true;
+      f.state.beforeUpdate = () => {
+        if (['running', 'succeeded', 'failed'].includes(change)) f.task.status = change;
+        if (change === 'deleted') f.task.deletedAt = new Date();
+        if (change === 'session-deleted') f.task.session.deletedAt = new Date();
+        if (change === 'ro-deleted') f.task.session.researchObject.deletedAt = new Date();
+      };
+      await f.poll();
+      expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+      expect(f.lists.get(queueKey)).toEqual([]); expect(f.lists.get(processingKey)).toEqual([]);
+    });
+
+  it('keeps the pending snapshot fenced when intent lookup sees a later non-video payload', async () => {
+    const f = firstNativePlanFixture();
+    const read = f.agentTask.findUnique.getMockImplementation()!;
+    let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      const snapshot = await read(args);
+      if (++reads === 2) (f.task.payload.storyboard as Record<string, unknown>).output = 'image';
+      return snapshot;
+    });
+    await f.poll();
+    expect(f.task.status).toBe('pending'); expect(f.task.executionAttempt).toBe(0);
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+    expect(f.lists.get(queueKey)).toEqual([f.task.id]); expect(f.lists.get(processingKey)).toEqual([]);
+  });
+});
 
 function ordinaryIngestionFixture(role = 'author') {
   const f = queueFixture(); f.task.kind = 'sdf.extract';

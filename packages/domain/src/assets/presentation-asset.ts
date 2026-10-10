@@ -352,6 +352,19 @@ async function hasHermesAssetReviewAuthority(
   return true;
 }
 
+/** Preparation only; this does not authorize any image, audio or video render. */
+export function isDirectNativeVideoStoryboard(payload: unknown): boolean {
+  try {
+    const parsed = parsePresentationGenerationPayload(payload);
+    const settings = parsed.storyboard;
+    return parsed.kind === 'interactive_html' && settings?.output === 'video' && settings.narrative === true
+      && settings.baseAssetId === undefined && parsed.hermesRunAuthority === undefined
+      && settings.narrativeSceneLimit === undefined && settings.revisionSceneIndex === undefined
+      && settings.revisionMode === undefined && settings.revisionTaskId === undefined
+      && settings.revisionImageAssetId === undefined && settings.artSceneIndex === undefined;
+  } catch { return false; }
+}
+
 export async function submitPresentationGeneration(deps: AgentDeps & HermesVideoReadinessDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
@@ -377,7 +390,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
-  if (videoIntent && !replay) {
+  if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload)) {
     const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
     if (audition) {
       const policy = await readHermesAudioAuditionPolicy(deps);
