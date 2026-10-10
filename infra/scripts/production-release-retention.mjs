@@ -7,7 +7,7 @@ import {
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { verifyProductionDeployLockOnHost } from './production-deploy-lock.mjs';
+import { validateNativeJournalState, verifyProductionDeployLockOnHost } from './production-deploy-lock.mjs';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_ID_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -197,13 +197,17 @@ async function readPending(paths, expectedActive, expectedRollback) {
 
 async function readJournalIdentity(paths) {
   const journal = JSON.parse(await trustedFile(paths.journal, { exactMode: 0o600 }));
+  const hasNative = Object.hasOwn(journal ?? {}, 'nativeRefresh');
   if (!journal || typeof journal !== 'object' || Array.isArray(journal)
-    || Object.keys(journal).sort().join(',') !== 'candidateSha,phase,rollbackSha,schemaVersion,updatedAt'
+    || Object.keys(journal).sort().join(',') !== (hasNative
+      ? 'candidateSha,nativeRefresh,phase,rollbackSha,schemaVersion,updatedAt'
+      : 'candidateSha,phase,rollbackSha,schemaVersion,updatedAt')
     || journal.schemaVersion !== 1 || !SHA_PATTERN.test(journal.candidateSha)
     || !SHA_PATTERN.test(journal.rollbackSha) || journal.phase !== 'published'
     || typeof journal.updatedAt !== 'string') {
     throw new Error('production deploy journal identity is invalid');
   }
+  if (hasNative) journal.nativeRefresh = validateNativeJournalState(journal.nativeRefresh, journal.candidateSha);
   return journal;
 }
 
