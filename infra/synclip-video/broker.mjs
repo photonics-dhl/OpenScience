@@ -227,7 +227,7 @@ async function noVideoSubmissions(directory) {
   if (await exists(join(directory, 'shots')) && (await readdir(join(directory, 'shots'))).length) return false;
   return true;
 }
-async function prepareAudio(cfg, directory, request, apiKey, deps) {
+async function prepareAudio(cfg, directory, request, apiKey, deps, auditionSceneIndex) {
   if (!request.audio) return undefined;
   const now = deps.now ?? Date.now, client = new SynclipAudioClient({ apiKey, timeoutMs: 15000, fetch: deps.audioFetch ?? deps.fetch });
   const audioDir = join(directory, 'audio'), receiptPath = join(directory, 'audio-receipts.json');
@@ -241,8 +241,20 @@ async function prepareAudio(cfg, directory, request, apiKey, deps) {
     if (!scene || !isDeepStrictEqual(item.request, { text: scene.narration, voice: request.audio.voice, speed: request.audio.speed })) fail('AUDIO_RECEIPT');
     validateSynclipAudioTaskId(item.taskId);
   }
+  // A selected scene must not incur another charge while any earlier audio POST is unknown.
+  if (auditionSceneIndex !== undefined) {
+    for (const scene of request.scenes) {
+      const path = join(directory, 'audio-' + scene.index + '.attempt.json');
+      if (!await exists(path)) continue;
+      const old = receipt.scenes.find(item => item.index === scene.index);
+      if (!old) fail('UNCERTAIN');
+      const attempt = await json(path);
+      if (attempt.id !== request.id || attempt.index !== scene.index || attempt.inputHash !== request.inputHash
+        || !isDeepStrictEqual(attempt.request, old.request)) fail('AUDIO_RECEIPT');
+    }
+  }
   let catalogLoaded = false; const measured = [];
-  for (const scene of request.scenes) {
+  for (const scene of request.scenes.filter(scene => auditionSceneIndex === undefined || scene.index === auditionSceneIndex)) {
     const parameters = validateSynclipAudioRequest({ text: scene.narration, voice: request.audio.voice, speed: request.audio.speed });
     const attemptPath = join(directory, 'audio-' + scene.index + '.attempt.json');
     let old = receipt.scenes.find(item => item.index === scene.index);
@@ -257,7 +269,10 @@ async function prepareAudio(cfg, directory, request, apiKey, deps) {
         catalogLoaded = true;
       }
       checkDeadline(request, now);
-      if (!await exclusive(attemptPath, JSON.stringify({ id: request.id, index: scene.index, inputHash: request.inputHash, request: parameters }))) fail('UNCERTAIN');
+      const claim = () => exclusive(attemptPath, JSON.stringify({ id: request.id, index: scene.index, inputHash: request.inputHash, request: parameters }));
+      const claimed = auditionSceneIndex === undefined ? await claim() : await deps.withSubmission({ taskId: request.id,
+        executionAttempt: request.executionAttempt, inputHash: request.inputHash, sceneIndex: scene.index, audio: request.audio }, claim);
+      if (!claimed) fail('UNCERTAIN');
       checkDeadline(request, now);
       try {
         const made = await client.create(parameters); old = { index: scene.index, taskId: made.task_id, request: parameters };
@@ -308,6 +323,29 @@ async function prepareAudio(cfg, directory, request, apiKey, deps) {
     throw error;
   }
   return measured;
+}
+// Internal stage only: a caller must use the existing submission authority and runner lock.
+// main() does not expose this as a CLI or reinterpret a video request as an audition.
+export async function prepareSynclipAudioAudition(cfg, scope, deps = {}) {
+  if (!scope || !UUID.test(scope.taskId) || !Number.isSafeInteger(scope.executionAttempt) || scope.executionAttempt < 1
+    || !/^[a-f0-9]{64}$/u.test(scope.inputHash) || !Number.isSafeInteger(scope.sceneIndex) || scope.sceneIndex < 0) fail('AUDIO_AUDITION_SCOPE');
+  if (typeof deps.withSubmission !== 'function') fail('AUDIO_AUDITION_AUTHORITY');
+  const directory = join(cfg.privateRoot, scope.taskId);
+  await dir(directory);
+  if (!await exists(join(directory, 'started')) || await exists(join(cfg.results, scope.taskId, 'result.json'))) fail('AUDIO_AUDITION_TASK');
+  await read(join(directory, 'started'), 4096);
+  const value = await request(directory, scope.taskId), scene = value.scenes[scope.sceneIndex];
+  if (!value.audio || !value.storyboard.narrative || value.executionAttempt !== scope.executionAttempt || value.inputHash !== scope.inputHash
+    || !scene || typeof scene.narration !== 'string' || scene.narration.length > 120) fail('AUDIO_AUDITION_SCOPE');
+  checkDeadline(value, deps.now ?? Date.now);
+  requireSupportedPlan(value, cfg);
+  if (!await noVideoSubmissions(directory)) fail('AUDIO_AUDITION_VIDEO_STARTED');
+  const apiKey = await (deps.readKey ?? key)(cfg.keyPath);
+  const [measured] = await prepareAudio(cfg, directory, value, apiKey, deps, scope.sceneIndex);
+  return { taskId: value.id, executionAttempt: value.executionAttempt, inputHash: value.inputHash,
+    sceneIndex: measured.sceneIndex, audioTaskId: measured.taskId, voice: value.audio.voice, speed: value.audio.speed,
+    filePath: join(directory, 'audio/scene-' + measured.sceneIndex + '.mp3'), contentHash: measured.contentHash,
+    size: measured.size, durationSeconds: measured.durationSeconds };
 }
 export async function muxSynclipNarration(cfg, privateDir, outDir, request, command = rendererCommand, probe = probeMedia) {
   await mkdir(outDir, { recursive: true, mode: 0o700 });
