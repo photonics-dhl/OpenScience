@@ -306,24 +306,132 @@ function HermesAssistantDrawerContent({
   const transcript = useRef<HTMLDivElement>(null);
   const followTranscript = useRef(true);
   const preparedTasks = useRef(new Set<string>());
+  const [shortPaneOwner, setShortPaneOwner] = useState<string | null>(null);
+  const shortPane = shortPaneOwner === currentOwner;
+  const conversationOpen = useRef(open);
+  const conversationOpener = useRef<{ owner: string; node: HTMLElement; expanded: boolean } | null>(null);
+  const conversationView = useRef<{
+    owner: string; scrollTop: number; follow: boolean; anchorIndex: number; anchorOffset: number;
+    textAnchor: { path: number[]; offset: number; top: number; text: string } | null;
+    selection: { start: number; end: number; direction: 'forward' | 'backward' | 'none' } | null;
+  } | null>(null);
+  const inlineConversation = docked && wide && !shortPane;
+  useClientLayoutEffect(() => {
+    conversationOpen.current = open;
+    if (conversationOpener.current?.owner !== currentOwner) conversationOpener.current = null;
+    if (!open || conversationOpener.current) return;
+    const node = document.activeElement;
+    if (node instanceof HTMLElement && node !== document.body && !node.closest('.hermes-conversation')) {
+      conversationOpener.current = { owner: currentOwner, node, expanded: false };
+    }
+  }, [currentOwner, open]);
   useEffect(() => {
-    if (!open || !docked || !wide) return;
-    const shell = transcript.current?.closest<HTMLElement>('.hermes-inline-assistant');
-    if (!shell) return;
+    if (open) return;
+    const opener = conversationOpener.current;
+    conversationOpener.current = null;
+    if (!opener?.expanded || opener.owner !== currentOwner) return;
+    // The existing modal restores its trigger in a passive effect; restore our original opener afterwards.
+    const frame = window.requestAnimationFrame(() => {
+      if (!conversationOpen.current && ownerRef.current === opener.owner && opener.node.isConnected) opener.node.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentOwner, open]);
+  useEffect(() => {
+    if (!open || !docked || !wide) {
+      if (!open) { setShortPaneOwner(null); conversationView.current = null; }
+      return;
+    }
+    // Once expanded, keep this conversation stable until it closes.
+    if (shortPane) return;
+    const pane = transcript.current;
+    const shell = pane?.closest<HTMLElement>('.hermes-inline-assistant');
+    if (!pane || !shell) return;
     let frame = 0;
     const resize = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        shell.style.setProperty('--hermes-available-height', `${Math.max(280, window.innerHeight - Math.max(16, shell.getBoundingClientRect().top) - 16)}px`);
+        const currentPane = transcript.current;
+        const currentShell = currentPane?.closest<HTMLElement>('.hermes-inline-assistant');
+        if (currentPane && currentShell) {
+          const slot = currentPane.querySelector<HTMLElement>('[data-hermes-conversation-companion="true"]');
+          if (!slot) return;
+          const paneStyle = getComputedStyle(currentPane), slotStyle = getComputedStyle(slot);
+          const minimumHeight = (currentPane.previousElementSibling?.getBoundingClientRect().height ?? 0)
+            + (composer.current?.getBoundingClientRect().height ?? 0)
+            + parseFloat(paneStyle.paddingTop) + parseFloat(paneStyle.paddingBottom)
+            + parseFloat(slotStyle.marginTop) + parseFloat(slotStyle.marginBottom) + parseFloat(slotStyle.minHeight);
+          const availableHeight = Math.max(280, window.innerHeight - Math.max(16, currentShell.getBoundingClientRect().top) - 16);
+          currentShell.style.setProperty('--hermes-available-height', `${availableHeight}px`);
+          if (availableHeight < minimumHeight) {
+            const bounds = currentPane.getBoundingClientRect(), top = bounds.top;
+            const anchorIndex = Array.from(currentPane.children).findIndex((child) => child.getBoundingClientRect().bottom > top);
+            const caretDocument = document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
+            const point = caretDocument.caretPositionFromPoint?.(bounds.left + parseFloat(paneStyle.paddingLeft) + 4, top + 8);
+            let range: Range | null = null;
+            if (point) { range = document.createRange(); range.setStart(point.offsetNode, point.offset); range.collapse(true); }
+            else range = document.caretRangeFromPoint?.(bounds.left + parseFloat(paneStyle.paddingLeft) + 4, top + 8) ?? null;
+            let textAnchor: { path: number[]; offset: number; top: number; text: string } | null = null;
+            if (range?.startContainer.nodeType === Node.TEXT_NODE && currentPane.contains(range.startContainer)) {
+              const path: number[] = [];
+              for (let node = range.startContainer; node !== currentPane && node.parentNode; node = node.parentNode) {
+                path.unshift(Array.from(node.parentNode.childNodes).indexOf(node as ChildNode));
+              }
+              textAnchor = { path, offset: range.startOffset, top: range.getBoundingClientRect().top - top, text: range.startContainer.textContent ?? '' };
+            }
+            const input = composer.current?.querySelector<HTMLTextAreaElement>('textarea');
+            conversationView.current = {
+              owner: currentOwner, scrollTop: currentPane.scrollTop, follow: followTranscript.current, anchorIndex,
+              anchorOffset: anchorIndex < 0 ? 0 : currentPane.children[anchorIndex].getBoundingClientRect().top - top,
+              textAnchor,
+              selection: input && document.activeElement === input
+                ? { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection } : null,
+            };
+            if (conversationOpener.current?.owner === currentOwner) conversationOpener.current.expanded = true;
+            setShortPaneOwner(currentOwner);
+          }
+        }
       });
     };
     resize();
     const observer = new ResizeObserver(resize);
     if (shell.parentElement) observer.observe(shell.parentElement);
+    observer.observe(pane);
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', resize, { passive: true });
     return () => { observer.disconnect(); window.cancelAnimationFrame(frame); window.removeEventListener('resize', resize); window.removeEventListener('scroll', resize); };
-  }, [open, docked, wide]);
+  }, [currentOwner, open, docked, wide, shortPane]);
+  useEffect(() => {
+    const saved = conversationView.current;
+    if (!open || saved?.owner !== currentOwner) { conversationView.current = null; return; }
+    if (!shortPane || !saved) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (ownerRef.current !== saved.owner) return;
+      const pane = transcript.current;
+      if (!pane) return;
+      const input = composer.current?.querySelector<HTMLTextAreaElement>('textarea');
+      if (saved.selection && input && !input.disabled) {
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(saved.selection.start, saved.selection.end, saved.selection.direction);
+      }
+      const anchor = pane.children[saved.anchorIndex];
+      let textOffset: number | null = null;
+      if (saved.textAnchor) {
+        const node = saved.textAnchor.path.reduce<Node | null>((parent, index) => parent?.childNodes.item(index) ?? null, pane);
+        if (node?.nodeType === Node.TEXT_NODE && node.textContent === saved.textAnchor.text && saved.textAnchor.offset <= (node.textContent?.length ?? 0)) {
+          const range = document.createRange(); range.setStart(node, saved.textAnchor.offset); range.collapse(true);
+          const bounds = range.getBoundingClientRect();
+          if (bounds.height > 0 && range.getClientRects().length > 0) textOffset = bounds.top - pane.getBoundingClientRect().top - saved.textAnchor.top;
+        }
+      }
+      pane.scrollTop = saved.follow && saved.scrollTop > 0 ? pane.scrollHeight
+        : textOffset !== null ? pane.scrollTop + textOffset
+          : anchor ? pane.scrollTop + anchor.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.anchorOffset
+          : saved.scrollTop;
+      followTranscript.current = saved.follow;
+      conversationView.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentOwner, open, shortPane]);
   const [literatureIntent, setLiteratureIntent] = useState<DrawerLiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask || preparing;
@@ -682,7 +790,7 @@ function HermesAssistantDrawerContent({
 
   const drawer = (
     <Drawer
-      inline={docked && wide}
+      inline={inlineConversation}
       className="hermes-assistant-shell hermes-conversation-shell research-product"
       hideCloseButton
       closeLabel={t('guide.close')}
@@ -770,5 +878,5 @@ function HermesAssistantDrawerContent({
       </section>
     </Drawer>
   );
-  return (docked && wide) || typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
+  return inlineConversation || typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
 }

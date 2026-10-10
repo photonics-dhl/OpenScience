@@ -616,6 +616,134 @@ test('Hermes opens an empty editor conversation with its full companion visible'
   }
 });
 
+test.describe('short desktop Hermes conversation', () => {
+  test.use({ viewport: { width: 1536, height: 681 }, deviceScaleFactor: 2.5 });
+  test('keeps the whole companion and composer visible after opening from the editor', async ({ page }) => {
+    await mockWorkspace(page);
+    await mockPublishedPreview(page);
+    await page.goto(baseUrl + '/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
+    await enterEditor(page);
+    const opener = label(page);
+    await opener.click();
+    await expect(guide(page)).toBeVisible();
+    const geometry = await guide(page).locator('.hermes-conversation-transcript').evaluate((pane) => {
+      const bounds = (node: Element) => {
+        const { top, bottom, left, right, width, height } = node.getBoundingClientRect();
+        return { top, bottom, left, right, width, height };
+      };
+      return {
+        viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
+        pane: bounds(pane),
+        slot: bounds(pane.querySelector('[data-hermes-conversation-companion="true"]')!),
+        stage: bounds(pane.querySelector('[data-hermes-workspace-stage="true"]')!),
+        composer: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-composer textarea')!),
+      };
+    });
+    await test.info().attach('short-conversation-geometry', { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
+    console.log('Short conversation geometry:', JSON.stringify(geometry));
+    await page.screenshot({ path: test.info().outputPath('short-conversation-1536x681.png'), fullPage: false });
+    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.pane.top);
+    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.pane.bottom);
+    expect(geometry.stage.left).toBeGreaterThanOrEqual(geometry.pane.left);
+    expect(geometry.stage.right).toBeLessThanOrEqual(geometry.pane.right);
+    expect(geometry.stage.width).toBeGreaterThanOrEqual(90);
+    expect(geometry.composer.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.composer.bottom).toBeLessThanOrEqual(geometry.viewport.height);
+    await expect(guide(page).locator('.hermes-conversation-composer textarea')).toBeEditable();
+    await closeTo(page, opener, false, 'document-flow');
+  });
+
+  test('returns focus to the publication preview opener after a short-window conversation', async ({ page }) => {
+    await mockWorkspace(page);
+    await mockPublishedPreview(page);
+    await page.setViewportSize({ width: 1536, height: 900 });
+    await page.goto(baseUrl + '/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
+    await enterEditor(page);
+    const opener = page.getByRole('button', { name: 'Preview publication update', exact: true });
+    await opener.click();
+    await assertConversation(page, 'complementary');
+    await guide(page).locator('.hermes-conversation-composer textarea').click();
+    await page.setViewportSize({ width: 1536, height: 681 });
+    await assertConversation(page, 'dialog');
+    await expect(guide(page).locator('.hermes-conversation-composer textarea')).toHaveValue('Preview publishing the current private draft as an update.');
+    await closeTo(page, opener, false, 'document-flow');
+  });
+
+  test('keeps input and reading continuity when a docked conversation needs more room', async ({ page }) => {
+    await mockWorkspace(page);
+    await mockPublishedPreview(page);
+    const restored: AgentTaskView = {
+      id: 'resize-task', sessionId: 'resize-session', researchObjectId: 'ro-hermes', kind: 'workspace.guide',
+      status: 'succeeded', progress: 100, retryCount: 0, canRetry: false,
+      result: { summary: Array.from({ length: 12 }, (_, index) => `Restored research result ${index + 1}: Continue developing the research in the existing workspace.`).join('\n\n'), nextSteps: [], needsMoreInformation: true },
+      error: null, createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z',
+    };
+    await page.addInitScript(() => sessionStorage.setItem('openscience.hermes-handoff:hermes-user:ro-hermes:resize-task', JSON.stringify({
+      viewerId: 'hermes-user', researchObjectId: 'ro-hermes', taskId: 'resize-task', expiresAt: Date.now() + 60_000,
+    })));
+    await mockGet(page, '/api/agent/tasks/resize-task', { task: restored });
+    await page.setViewportSize({ width: 1536, height: 900 });
+    await page.goto(baseUrl + roPath + '/edit?hermesTask=resize-task&hermes-motion=reduced', { waitUntil: 'networkidle' });
+    const opener = label(page);
+    await expect(guide(page).locator('[data-hermes-drawer-state="succeeded"]')).toBeVisible();
+    // The handoff opened automatically; the tested transition starts from the visible caption.
+    await guide(page).getByRole('button', { name: 'Close Hermes', exact: true }).click();
+    await assertAvatar(page, 'document-flow');
+    await opener.click();
+    await assertConversation(page, 'complementary');
+    await expect(guide(page).getByText(/Restored research result 12:/u)).toHaveCount(1);
+    const input = guide(page).locator('.hermes-conversation-composer textarea');
+    await input.fill('Refine this paragraph next.');
+    await input.press('Home');
+    await input.press('Shift+ArrowRight');
+    const selection = await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; });
+    const pane = guide(page).locator('.hermes-conversation-transcript');
+    await pane.hover();
+    await page.mouse.wheel(0, -500);
+    await expect.poll(() => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeGreaterThanOrEqual(64);
+    const reading = await pane.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const range = document.caretRangeFromPoint(bounds.left + 24, bounds.top + 8)!;
+      if (range.startContainer.nodeType !== Node.TEXT_NODE || !node.contains(range.startContainer)) throw new Error('A visible research text anchor is required');
+      return { text: range.startContainer.textContent!, character: range.startOffset, offset: range.getBoundingClientRect().top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight };
+    });
+    await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
+    await page.setViewportSize({ width: 1536, height: 681 });
+    await assertConversation(page, 'dialog');
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('Refine this paragraph next.');
+    expect(await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; })).toEqual(selection);
+    const textOffset = () => pane.evaluate((node, saved) => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let text: Node | null;
+      while ((text = walker.nextNode())) {
+        if (text.textContent !== saved.text) continue;
+        const range = document.createRange(); range.setStart(text, saved.character); range.collapse(true);
+        return range.getBoundingClientRect().top - node.getBoundingClientRect().top;
+      }
+      throw new Error('The same research text must remain in the conversation');
+    }, reading);
+    // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
+    await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
+    const after = await pane.evaluate((node) => ({ scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }));
+    const observations = { before: { ...reading, text: reading.text.slice(reading.character, reading.character + 64) }, after: { ...after, offset: await textOffset() }, selection };
+    await test.info().attach('resized-conversation-reading', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
+    console.log('Resized conversation reading:', JSON.stringify(observations));
+    await page.screenshot({ path: test.info().outputPath('conversation-after-resize.png'), fullPage: false });
+    const modal = await guide(page).elementHandle();
+    await page.setViewportSize({ width: 1536, height: 900 });
+    await expect(page.getByRole('dialog', { name: 'Hermes research guide', exact: true })).toBeVisible();
+    expect(await modal!.evaluate((node) => node.isConnected)).toBe(true);
+    await expect(input).toBeFocused();
+    await closeTo(page, opener, false, 'document-flow');
+    await opener.click();
+    await assertConversation(page, 'complementary');
+    await expect(input).toHaveValue('Refine this paragraph next.');
+    await closeTo(page, opener, false, 'document-flow');
+    await modal?.dispose();
+  });
+});
+
 for (const follow of [true, false]) {
   test(`Hermes ${follow ? 'follows restored messages' : 'keeps a reader who scrolled up'} in the editor`, async ({ page }) => {
     await mockWorkspace(page);
