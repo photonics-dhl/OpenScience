@@ -15,18 +15,20 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 正常单图入口3961→754c、API f2a及modal回归269d→1946已含于线上c239；旧发布依赖解除，20:40已派正常站内入口/来源绑定私有计划验收。仅沿原一次合法计划授权；旧unknown不重发，真实图像质量仍未过 | 原illustration-chain-repair树 / codex/research-continuation-surface@269d；原receipt与科学核对保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 后端消费者2640已交：持久grant/跨attempt/私有MP3/owner GET与真实producer到storage fixture已验。独立High仅P2：120字符错误作用于所有幕；20:40派selected-only和Unicode计数修复，定向回归后原High复核，尚未收取/CI/发布 | 原synclip-video-delivery树 / codex/synclip-audio-audition@2640+限定修复；生产0 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 9e pure player后续7文件接线已27unit/6浏览器通过；20:40已正式解锁原旧case的失效selector，改实际图片+精确asset URL且保留原guards，避免重复追加等价用例。原Godel只审差额，交付后与backend同批 | 原research-product-craft树 / codex/private-audio-consumer-20261010@9e859c8d+owned WIP；生产0 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2640→1389/afe69→5242已集入，原High关闭selected-only/Unicode唯一P2、组合GO。六新增回归/Worker TC0复用；下一独立产物是最小试听启用与正常发起路径操作包，核已有voice/locale/finite预算来源；无生产动作 | 原synclip-video-delivery树 / codex/synclip-audio-audition@afe69；原receipt保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 完整9e→ce5a/c644→244f已集入，27unit/7不同浏览器用例/原Godel最终GO；原恢复用例保留业务guards且用实图验证。下一项是已上线c239的短窗口/64px头像最小正常入口只读观察；真实MP3尚无 | 原research-product-craft树 / codex/private-audio-consumer-20261010@c644，源码clean；仅owned证据 |
 - 本聊天三线生产操作由总控串行排程，当前无writer；个人主页独立授权发布已带入本轮图入口/短窗口，旧b261/e5部署脚本均未执行且不得再跑。曾出现UI显示完全访问而运行read-only/消息审批never的冲突；20:39本轮环境已恢复danger-full-access，三条协调消息均实际成功，不需重复业务授权。
 
 ## Git / CI / 运行事实
-- canonical=`release/onchip-production-line`，本轮fast-forward到dd25ae57（c239后仅profile发布docs）；协作仍frontend/nanqing/[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)，不合main/强推。图入口754c/API f2a/短窗口323d/回归1946均已在c239祖先b261，不能再标待部署。
+- canonical=`release/onchip-production-line`，先保留dd25发布docs，再集入私有试听backend/完整Web至代码244f79a5；协作仍frontend/nanqing/[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)，不合main/强推。图入口754c/API f2a/短窗口323d/回归1946均已在c239祖先b261，不能再标待部署。
 - 20:28:26 CST root fresh只读：active=`c239c4ecbce98441dfeb05bcd048e38a3c3f484b`、rollback=`04352895148395465fbeaaa29e1cd6540331f36e`；API59c483e9/Webc9813aaa/Workercff55e32均healthy/restart0/source c239，无failed/journal/pending/FD9/Native实例。Native runtime/catalogue/unit仍393202f7、M3不变。原始`tmp/session-coordination-20261008/app-c239-postdeploy-readonly.json`；发布操作原receipt见服务对象CURRENT。
 - c239四条实际触发CI全SUCCESS：video PR38048564712、journal PR38048564709/push38048562474、media PR38048564707。其父b261五条全SUCCESS：video38048065913、journal38048065871/38048062891、media38048065897/38048062904；八browser-entry含research-continuation均通过，真实PG profile1及原mock5在日志闭合。root b261-ci-final.json及c239-ci-final.json保存，不以旧失败e5代当前。
 - root原准备仅做19:41双库备份`/var/backups/openscience/db-set-20261010T114156Z-532121`：163700200/14257855B、checksum0、0700/0600、旧集合保留。20:18 verifier因active已从043变c239而verified=false，原回执保持；不是dump损坏，不重做备份或执行旧deploy-app-b261.cjs。独立profile发布已完成该新版本，本总控不重复发布。
-- 独立Synclip host最后19:39只读仍59a/config原样、adminfalse/audioabsent、timer inactive/disabled/readyabsent；已安装原7模块，受保护目录GET77音色已完成。目录访问不证明LTX生成权限、余额、声音或成片质量，新2640消费者尚未发布/启用。
+- 独立Synclip host最后19:39只读仍59a/config原样、adminfalse/audioabsent、timer inactive/disabled/readyabsent；已安装原7模块，受保护目录GET77音色已完成。目录访问不证明LTX生成权限、余额、声音或成片质量，新试听消费者尚未发布/启用。
 - 历史工程证据复用：8cc Linux broker/引用合组136/136零skip；59a dashboard32/workspace25；393 deploy/manifest/retention306零skip及Native实际SDK离线loop。它们不覆盖新2640/UI消费者或真实科学产物。原393/59/043部署、失败、回退和paid收据均保留，长记录见Git dd25ae57本页；旧next action不再执行。
 - 已观察首页→OSR-2026-000024/v2正文/认可首图、个人中心→研究入口/设置；17:43原账本显示管理员正常事务同oncekey自动adjust+1/consume−1，零平台余额不是该账户正常入口阻断。不是供应商资金授权；普通用户余额规则不变。c239普通生图入口/短窗口的真实点击及实际计划质量本轮继续验收。
+- 私有试听集成：25后端文件对owner afe69仅API app多保留原profile两行；Web对c644仅保留原ORCID returnTo两行。唯一API测试冲突解后与owner全文全等。fresh依赖build0、API131+profile5=136PASS、Web27PASS、CI grep实际选15例（新6+原恢复1+原8）；浏览器未在root重复执行。原High、7客户端用例/桌面手机PNG复用，真实解码/声音不冒称通过。既有media CI补Domain/UI命令及paths，原High GO；精确组合CI尚待运行。
+
 ## 当前交付与明确下一步
 - 图审a780/3a2→d9cc/f016及a6fa/paired query已收，原测试证据复用。17:06:19–27实际393 SDK0.10.0离线构造/run_conversation PASS：原source5 Mock控制保留，image2 Mock请求消费真实skill_view/paper_image_view、唯一fixture PNG与四身份及终答；stderr空/外部Provider0/Gateway往返false/产品任务与DB0，自有temp已删除。6e3f仅offline_native_loop.py+80，原High GO、root全文diff0收6562；真实科研PNG的模型判断与科学质量仍未验收，不重跑旧paid/unknown。
 - UI5b009/6ebb/a917及Settings eaf→32b27随393上线，0a/af/f868随59a上线。真实reload→个人中心→RO9067编辑已观察正文单列/64px键盘开闭回焦，但1536×681线上展开角色裁切。候选217c→323d按实际pane不足切既有modal并保持至关闭，保留真正文字锚点/输入/外部入口；4例通过、3视口截图完整，独立High GO。已随c239上线；同一真实入口的短窗口观察仍待闭合，不能把fixture当线上观察。
@@ -34,7 +36,7 @@
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知。无新计划/图片，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待Native纠正，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
-- 视频安装器/完整host/77音色目录已完成；当前推进正常任务的私有试听消费者，有限预算/持久grant/跨attempt不重扣/owner-only MP3已成2640候选，仍需关闭High P2及组合CI；UI并行接正常任务结果。具体声音/语言/预算仍沿直接human证据，不代答偏好。目录无preview不能证明自然声音，也没有LTX实际生成鉴权被拒证据。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`未知不重发。
+- 视频安装器/完整host/77音色目录已完成；当前推进正常任务的私有试听消费者，有限预算/持久grant/跨attempt不重扣/owner-only MP3与Web结果播放器已审集入，组合CI待新推送。正常站内发起试听尚未接线，不能用隐藏API代替产品路径；配置授权/真实试听/后续整片复用亦未验收。具体声音/语言/预算仍沿直接human证据，不代答偏好。目录无preview不能证明自然声音，也没有LTX实际生成鉴权被拒证据。RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`未知不重发。
 - 编辑CSS3989→221b全等；PostCSS40/99规则parse0，六字段/保存/权限不变。Figma编辑2138:117及头像2138:34/2169:23为候选，root看过原桌面/局部，不能代证运行或审美。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png；原14journey/High、原文两尺寸/reading20复用，详细静态观察见Git05b本页。
 - Dashboard的d1a差额已由7e真实26/26闭合：Account tools、Retry可见入口、回焦attentive/离开idle、缺detail的route fallback；跨RO守卫保留。64px 1440/390框内draw与PNG已核；UI a0→503的手机间距修复随journal通过，21例workspace已过见上。原High/49unit/Web与scoped TS/lint0复用，不等于线上或整体审美认可。
 - 共享包络按fd已采关键帧/hover极值向外取整，bottom旧27保持；不为接近边界盲加余量，不称经验网格为全域证明。原数值/786差额/已过loading handler记录见Git f2a2677c本页，当前头像不重做旧巡游。
