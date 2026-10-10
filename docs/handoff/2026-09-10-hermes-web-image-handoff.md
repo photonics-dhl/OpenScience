@@ -15,7 +15,7 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368已全等集入root6ecb（测试4f→af6b），最终源码High GO；正准备实际Linux旧RED/新Green消费者 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 按原High条件GO实施Compose2.26兼容及真实顺序，实际CLI help已核；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 77dd三文件候选84PASS，但原High拦两P1，正定点修original状态与checkpoint-null oneoff；实际CLI help已核，791f另保留 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 5b009桌面与6ebb手机header组合已交；8个实际fixture路径闭合，继续局部dashboard留白/主CTA呈现，CI/docs仍root | `.worktrees/research-product-craft`；`codex/ui-current-header-integration`@6ebb保留，新polish仅dashboard范围 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
@@ -30,6 +30,7 @@
 - 独立High专用恢复08:47–08:48 exit0：同FD9/install.lock、精确journal/producer集合/现场备份→原子恢复四旧文件→restored_verified→原API/Web/publica6→原timer→原Worker。网站不可用约17分钟。08:57专用finalize inspect0→confirm0，两轮实际状态与依赖身份校验后沿原clear helper清journal，服务/任务写0；禁止重放本次或旧事故脚本。
 - 事故证据在root原tmp：`deploy-native-d8*`、`native-d8-{failure,restored}-readonly.json`、`native-d8-restore-metadata.json`、`recover-d8-*`、`native-d8-finalize-once-*.json`。服务器`/opt/openscience/tmp/native-recovery-d8-20261010T003533Z/`保原1120B事故journal、四candidate文件及1119B restored journal；新Native目录/旧备份/任务均保留。
 - 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
+- 77dd源码暂NO-GO、未集入：original启动须rollback_quiesced且仅not_attempted/not_started或installed/restored_verified；candidate回退即使checkpoint=null也必须纳入oneoff，查询超时遗留容器不能漏掉。video已接最小修复/负控，84旧目标证据及两个原RED保留，不改无关deadline或重读生产。
 - 下一步收video的Compose兼容最小修复，与已收installer组合，独立High增量审查，原Linux CI真实0775/0664及CLI顺序验证；root再安排发布。图审a6fa/paired-query与UI5b/header独立下一批，不能为消除idle盲重试生产。
 
 ## 当前交付与明确下一步
