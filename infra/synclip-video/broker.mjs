@@ -378,7 +378,7 @@ export async function prepareSynclipAudioAudition(cfg, scope, deps = {}) {
   await read(join(directory, 'started'), 4096);
   const value = await request(directory, scope.taskId), scene = value.scenes[scope.sceneIndex];
   if (!value.audio || !value.storyboard.narrative || value.executionAttempt !== scope.executionAttempt || value.inputHash !== scope.inputHash
-    || !scene || typeof scene.narration !== 'string' || scene.narration.length > 120) fail('AUDIO_AUDITION_SCOPE');
+    || !scene || typeof scene.narration !== 'string' || [...scene.narration].length > 120) fail('AUDIO_AUDITION_SCOPE');
   if (deps.audioRecoveryOnly !== true) checkDeadline(value, deps.now ?? Date.now);
   requireSupportedPlan(value, cfg);
   if (!await noVideoSubmissions(directory)) fail('AUDIO_AUDITION_VIDEO_STARTED');

@@ -85,6 +85,35 @@ describe('private audio audition transport', () => {
     expect(result.executionAttempt).toBe(1);
     await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
+  it('audition narration length only bounds the selected scene and retains an unselected long scene', async () => {
+    const f = await fixture(); let grant: Record<string, unknown>; let grants = 0;
+    const longNarration = 'Unselected source narration. '.repeat(5);
+    f.input.storyboard.scenes[0]!.narration = longNarration;
+    expect([...longNarration].length).toBeGreaterThan(120);
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        grants++; grant = { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        return grant as never;
+      }, sleep: async () => { await output(f, grant); } });
+    expect((await spool.audition(f.input)).sceneIndex).toBe(1);
+    expect(grants).toBe(1);
+    const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
+    const story = JSON.parse(await readFile(join(f.inboxDir, TASK, 'storyboard.json'), 'utf8'));
+    expect(request.scenes[0].narration).toBe(longNarration);
+    expect(story.scenes[0].narration).toBe(longNarration);
+    expect(request.scenes[1].narration).toBe(f.input.storyboard.scenes[1]!.narration);
+    expect(request.audioAuditionGrant.inputHash).toBe(request.inputHash);
+  });
+  it.each([['ASCII', 'a'.repeat(121)], ['non-BMP', '\u{20BB7}'.repeat(121)]])(
+    'audition narration length rejects a selected 121-codepoint %s scene before granting or publishing', async (_label, text) => {
+      const f = await fixture(); let grants = 0;
+      f.input.storyboard.scenes[1]!.narration = text!;
+      const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir,
+        authorizeAudioAudition: async () => { grants++; throw Error('overlong audition must not receive a grant'); } });
+      await expect(spool.audition(f.input)).rejects.toThrow('AUDIO_AUDITION_INPUT');
+      expect(grants).toBe(0);
+      await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
   it('never exposes a request when its dedicated authority is missing or denies the grant', async () => {
     const f = await fixture();
     const missing = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir });

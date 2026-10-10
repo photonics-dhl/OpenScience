@@ -66,7 +66,8 @@ export class SynclipVideoSpool {
     const scenes = input.storyboard.scenes.map((scene, index) => {
       const bytes = input.sceneImages[index]!;
       if (bytes.length < 33 || bytes.length > MAX_PNG || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a'
-        || ![5, 10, 15].includes(scene.durationSeconds!) || !scene.narration.trim() || [...scene.narration].length > 120) fail('AUDIO_AUDITION_INPUT');
+        || ![5, 10, 15].includes(scene.durationSeconds!) || !scene.narration.trim()
+        || (index === input.sceneIndex && [...scene.narration].length > 120)) fail('AUDIO_AUDITION_INPUT');
       return { index, title: scene.title, narration: scene.narration, sourceClaimIds: scene.sourceClaimIds,
         durationSeconds: scene.durationSeconds!, prompt: compileShotPrompt(input.storyboard, scene, input.locale),
         image: { name: 'scene-' + index + '.png', size: bytes.length,

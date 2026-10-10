@@ -136,10 +136,10 @@ async function fixture(t) {
       await writeFile(join(outDir, 'result.mp4'), mp4);
     },
   };
-  async function job(taskId = id, { privateJob = false, expired = false, prompts = [], audio = false } = {}) {
+  async function job(taskId = id, { privateJob = false, expired = false, prompts = [], audio = false, narrations = [] } = {}) {
     const d = join(privateJob ? cfg.privateRoot : cfg.inbox, taskId);
     await mkdir(d);
-    const scenes = [0, 1, 2].map(index => ({ index, durationSeconds: audio ? 10 : 5, ...(audio ? { narration: 'Source-bound spoken sentence ' + index + '.' } : {}),
+    const scenes = [0, 1, 2].map(index => ({ index, durationSeconds: audio ? 10 : 5, ...(audio ? { narration: narrations[index] ?? 'Source-bound spoken sentence ' + index + '.' } : {}),
       prompt: prompts[index] ?? 'Preserve the approved geometry and show slow motion.',
       image: { name: `scene-${index}.png`, size: png.length, sha256: hash(png), requestId: taskId } }));
     if (audio) cfg.audio = { ...narration };
@@ -171,8 +171,8 @@ async function auditionFixture(t) {
   return { ...f, job, scope, deps, claims, run: override => broker.prepareSynclipAudioAudition(f.cfg, { ...scope, ...override }, deps) };
 }
 
-async function authorizedAuditionJob(t, { workerCeiling = 200, hostCeiling = 200 } = {}) {
-  const f = await fixture(t), job = await f.job(id, { audio: true });
+async function authorizedAuditionJob(t, { workerCeiling = 200, hostCeiling = 200, narrations = [] } = {}) {
+  const f = await fixture(t), job = await f.job(id, { audio: true, narrations });
   f.cfg.adminModelsEnabled = false; f.cfg.audioAuditionEnabled = true; f.cfg.audioAuditionBudget = { maxEstimatedCoins: hostCeiling };
   const value = { ...job.request, purpose: 'audio-audition', sceneIndex: 1, locale: 'en', sourceClaimIds: [nextId], createdAt: f.deps.now() };
   value.inputHash = hash(JSON.stringify({ files: value.files, audio: value.audio, scenes: value.scenes,
@@ -186,6 +186,39 @@ async function authorizedAuditionJob(t, { workerCeiling = 200, hostCeiling = 200
   f.deps.render = async () => assert.fail('Audio audition must not render a video');
   return { ...f, job, value };
 }
+
+test('audition narration length permits a selected short scene and posts only its TTS with an unselected long scene', async t => {
+  const selected = 'The source-bound selected narration.';
+  const unselected = 'Unselected source narration. '.repeat(5);
+  const f = await authorizedAuditionJob(t, { narrations: [unselected, selected] });
+  assert.ok([...unselected].length > 120);
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  assert.deepEqual(f.audioCalls.filter(call => call.method === 'POST').map(call => call.body), [{ text: selected, voice: narration.voice, speed: narration.speed }]);
+  assert.deepEqual((await json(join(f.privateDir, 'audio-receipts.json'))).scenes.map(scene => scene.index), [1]);
+  assert.equal((await json(join(f.resultDir, 'result.json'))).audio.quote.characters, [...selected].length);
+  assert.equal(f.calls.length, 0);
+});
+
+test('audition narration length accepts 120 non-BMP codepoints and quotes the same character count', async t => {
+  const selected = '\u{20BB7}'.repeat(120);
+  const f = await authorizedAuditionJob(t, { narrations: [undefined, selected] });
+  assert.equal(selected.length, 240); assert.equal([...selected].length, 120);
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  const result = await json(join(f.resultDir, 'result.json'));
+  assert.equal(result.audio.quote.characters, 120); assert.equal(result.audio.quote.estimatedCoins, 120);
+  assert.deepEqual(f.audioCalls.filter(call => call.method === 'POST').map(call => call.body), [{ text: selected, voice: narration.voice, speed: narration.speed }]);
+  assert.equal(f.calls.length, 0);
+});
+
+test('audition narration length rejects 121 selected non-BMP codepoints before key or provider access', async t => {
+  const f = await authorizedAuditionJob(t, { narrations: [undefined, '\u{20BB7}'.repeat(121)] });
+  let keyReads = 0;
+  f.deps.readKey = async () => { keyReads++; return 'synthetic-test-key'; };
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).errorCode, 'AUDIO_AUDITION_SCOPE');
+  assert.equal(keyReads, 0); assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0);
+  assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), false);
+});
 
 test('authorized audio-purpose broker produces one private MP3 and quote with video admission closed', async t => {
   const f = await authorizedAuditionJob(t);
