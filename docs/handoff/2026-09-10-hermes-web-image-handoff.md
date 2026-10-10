@@ -17,7 +17,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | parser704已随ab79发布，455/离线1/HighGO/TC证据复用，原科学候选仍不合格。新Explore核对又stream失败（request02f03b4f），不反复唤醒；root已接手确认publicId倒序/最新版本日期不同义，UI仅改提示 | 原illustration-chain-repair树 / codex/native-source-number-parser@1ea；原CP/receipts与四次transport错误保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无自动新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 首计划c74→rootf313已随3245发布；本机正常入口1/1与CI所选presentation19/19、四browser-entry全过，Web/spec未变证据复用。附件/Explore提示同期上线。UI正从首页/个人中心/研究→Hermes与公开阅读做最小只读观察，停于guide/生成提交前；不得冒称新真实计划完成 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；原RED/Green和tmp/ui-art-20261008收据保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 首计划c74已随3245发布，CI presentation19/19与四browser-entry全过。本次正常首页DHL→个人中心/me初次RSC失败/ERR_TIMED_OUT，一次普通刷新后/me→可见Quantization→9067/edit→Hermes展开实际成功，0任务写；未进guide生成表单。失败时点19:02:53Z保留，根因未定，不增服务器探测；Explore排序提示已实见，附件提示仍按原范围观察 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；原RED/Green、此次单一观察收据归tmp/ui-art-20261008 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
 ## Git / CI / 运行事实
