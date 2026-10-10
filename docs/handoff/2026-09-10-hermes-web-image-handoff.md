@@ -14,8 +14,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368候选已交（4f967测试先行），design High GO/最终审查及真实Linux待收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 修Compose2.26 create/start兼容及真实顺序，已实读CLI help支持替代参数；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368已交且最终源码High GO（4f967测试先行），真实Linux旧RED/新Green待收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 按原High条件GO实施Compose2.26兼容及真实顺序，实际CLI help已核；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 内容优先桌面5b009已交；承接从5b组合原7b/68 header及真实手机验收，CI/docs仍root | `.worktrees/research-product-craft`；5b的`codex/ui-current-research-20261010`保留，新组合branch由owner回执确认 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
