@@ -17,7 +17,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | parser704已随ab79发布，455/离线1/HighGO/TC证据复用，原科学候选仍不合格。新Explore核对又stream失败（request02f03b4f），不反复唤醒；root已接手确认publicId倒序/最新版本日期不同义，UI仅改提示 | 原illustration-chain-repair树 / codex/native-source-number-parser@1ea；原CP/receipts与四次transport错误保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无自动新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 3245正常/me→9067/edit→Hermes、Explore新说明、23/v5内外折叠后附件提示均实见，0任务/模型/资产写。初次/me RSC超时在唯一普通刷新后恢复，原错误/定位deadline保留，未验首计划生成。root已收唯一app3245-normal-entry-readonly-20261011.json；下一独立项仅补human“小精灵”框内静置/指针互动的实际观察，尺寸和开关证据复用，无源码写权 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；产物沿tmp/ui-art-20261008，已有偏好不改、少量真实帧，不扫极值/重复CI |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 3245正常/me→9067/edit→Hermes及两个公开提示已实见，首份计划提交未验。后续“小精灵”动态观察唯一导航因ERR_TIMED_OUT停住：无页面/像素帧，眨眼/呼吸/指针反馈/reduced-motion均未确认。root已收两份观察回执并完成必要只读日志核对；待human普通浏览器可用性反馈/已有页面恢复，不重复导航、改动画或偏好 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；tmp/ui-art-20261008/app3245-normal-entry-readonly-20261011.json与hermes-avatar-motion-observation-20261011.json；0业务/模型写 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
 ## Git / CI / 运行事实
@@ -28,6 +28,7 @@
 - c239四条实际触发CI全SUCCESS：video PR38048564712、journal PR38048564709/push38048562474、media PR38048564707。其父b261五条全SUCCESS：video38048065913、journal38048065871/38048062891、media38048065897/38048062904；八browser-entry含research-continuation均通过，真实PG profile1及原mock5在日志闭合。root b261-ci-final.json及c239-ci-final.json保存，不以旧失败e5代当前。
 - 本次02:46双库备份`/var/backups/openscience/db-set-20261010T184631Z-1864840`已核：163747556/14257855B，manifest绑定备份前后ab79、checksum0、root/root及0700/0600；无轮转、23:31旧集合保留。root backup-before-app-3245-verified.json；旧备份/失败收据保留，不重跑旧部署包装。
 - 独立Synclip host02:56只读仍59a/config全等、adminfalse/audioabsent、timer inactive/disabled/readyabsent；新试听应用已发布，Host新版installer/broker尚未安装或启用。原受保护目录GET77只证明目录可读，不证明生成权限、余额、声音或成片质量。
+- 10-11 03:34浏览器唯一编辑页导航超时。root03:37只读Web/API原3245 healthy/restart0/无OOM、Nginx与Tunnel正常运行/4连接；03:42必要补核已识别应用错误0，对应目标无已完成access记录且当时无80/3000/3001 TCP连接。唯一Nginx条目是不同POST的response buffered。负证据不能排除所有请求或定位浏览器/网络/Cloudflare原因；原ui-navigation-timeout{,-followup}-20261011.json保留，0配置/重启/任务写，等待human日常浏览器加载事实。
 - 历史工程证据复用：8cc Linux broker/引用合组136/136零skip；59a dashboard32/workspace25；393 deploy/manifest/retention306零skip及Native实际SDK离线loop。它们不覆盖新2640/UI消费者或真实科学产物。原393/59/043部署、失败、回退和paid收据均保留，长记录见Git dd25ae57本页；旧next action不再执行。
 - 已观察首页→OSR-2026-000024/v2正文/认可首图、个人中心→研究入口/设置；17:43原账本显示管理员正常事务同oncekey自动adjust+1/consume−1，零平台余额不是该账户正常入口阻断，不是供应商资金授权。c239普通生图入口/短窗口实际点击已闭合；新计划科学质量失败见43d，不把入口可用等同图像合格。
 - 私有试听原集成：25后端文件对afe69仅保留API profile两行，Web对c644仅保留ORCID returnTo两行；原build/API136/Web27与High证据复用。新capability/独立资格/直接发起/结果播放器均在本次软件发布内，原CI五组仅追加normal narration audition action；ab79实际运行旧15+新3全部通过，不以发现用例代验收。
