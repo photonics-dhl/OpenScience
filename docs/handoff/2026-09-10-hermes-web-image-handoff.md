@@ -15,8 +15,8 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | dca5原图审+paired query已全等集入root7cd343；22源码/18保护文件全等、87原test保留、组合query24PASS。冻结候选，依赖root新CI及后续Linux Host/实际PNG，暂不凑额外检查 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-ready-batch`；5a/4f/a6fa/3a保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | compat/paired query已交；新独立接管create-illustrated-research.spec.ts四个入口失败，保持真实点击/单次请求/上传约束。音色目录与成片仍依赖新host，不探付费资格 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`；b579基线单spec分支，原compat/query/4bc保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 已收九文件组合；优先修b579 CI的原auth-dashboard/workspace-stage两spec四case，保持strict GET/写守卫。settings三文件已保护为ad175私有WIP，暂停且after图未亲看，不混本批 | `.worktrees/research-product-craft` / `codex/ui-b579-consumer-recovery`；settings/dashboard/header/polish保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 创建spec已交12f809→rootabca7bbe，全等单文件30+/18-；入口改按真实链接/精确href，补当前CSRF及精确GET/POST，四主体未改，仅静态通过。浏览器交UI既有runtime/正常CI，音色成片仍依赖host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/illustrated-research-fixture`；compat/query/4bc保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 原两spec最小差额High GO/TS/lint0，workspace三case真实PASS；auth桌面闭合但手机reload脚本SyntaxError/hydration未完成，保原trace作有界静态定位，未定prod根因/未松rig断言。先交两file再消费video创建spec四例 | `.worktrees/research-product-craft` / `codex/ui-b579-consumer-recovery`；settings ad175三file WIP暂停、after图未亲看 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
 ## Git / CI / 运行事实
@@ -33,6 +33,7 @@
 - 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
 - 77dd原NO-GO已由6cd闭合：original启动只允许rollback_quiesced且not_attempted/not_started或installed/restored_verified；candidate回退checkpoint=null也纳入oneoff并先于stop/query/restore拒绝。原High增量Scoped GO、实际新增RED→39/39 GREEN零skip；旧84/CLI证据复用，不重复本机/生产检查，正常Linux候选CI仍未完成。
 - Linux原artifact已收：exact b579 push及PR merge0503547da30a0105c830a00a33e281abec6ecacc均oldRED2精确权限ValueError、当前Green39/39零skip，deploy+manifest197/197零skip；ZIP在root `b579-native-restore-linux-{pr,push}.zip`。实际来源验证解决0775/0664事故，不代表新图审Host或SDK；UI负责原两spec四case，video负责创建单spec四case，root统一最小差额后推进新CI。所有strict GET、真实点击和POST约束保留；settings暂停。
+- 10:00后本地UI增量：未知GET/旧入口已闭合，workspace3PASS；auth手机reload出现FastRefresh后SyntaxError、无新auth/me且仍恢复页，确切脚本来源未确认，不能称flaky/Live2D或生产根因。保 `b579-consumer-recovery-20261010.log`/trace，复用三PASS；两file提交后由正常Linux production构建验收，不能拿源码GO或延长timeout代Green。创建单spec12f已收为`abca7bbee05efbfe424f30f809e09c4dd6aed747`，浏览器四例未跑。
 
 ## 当前交付与明确下一步
 - 图审已审a780/3a2→d9cc/f016及a6fa消费者、High GO的paired query ea9已由生图组合dca5，root全等收为`7cd343edeef140a26355fd05a016246c3f9d6750`，25文件diff0、尚未推送。22源码全等f016、18保护文件/87原test保留、workflow两组并存；原Domain40/Gateway27/Worker39/video26及组合query24PASS复用且不相加。LinuxHost6/installedSDK/实际PNG未验收；原paid/unknown拒绝保持，待本轮三个UI spec修复后统一CI。
