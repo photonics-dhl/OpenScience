@@ -10,6 +10,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import * as deployLock from './production-deploy-lock.mjs';
 
@@ -1174,6 +1175,148 @@ test('Native actual work-query code only reads queues and task markers and retur
   assert.equal(output.includes('t1'), false);
   assert.equal(output.includes(oldMarker.runtimeId), false);
   }
+});
+
+test('Native SQL work projection uses actual image readers and keeps malformed bindings closed', async t => {
+  const require = createRequire(import.meta.url), ts = require('typescript');
+  const load = (file, dependencies = {}, names) => {
+    let body = readFileSync(new URL(`../../packages/domain/src/${file}`, import.meta.url), 'utf8');
+    if (names) {
+      const parsed = ts.createSourceFile(file, body, ts.ScriptTarget.Latest, true);
+      const declared = node => ts.isFunctionDeclaration(node) ? [node.name?.text]
+        : ts.isVariableStatement(node) ? node.declarationList.declarations.map(item => item.name.getText(parsed)) : [];
+      const selected = parsed.statements.filter(node => declared(node).some(name => names.includes(name)));
+      assert.deepEqual(selected.flatMap(declared).sort(), [...names].sort());
+      body = `import {AgentError} from './errors';\nimport {readNativeImageAgentExecution} from '../assets/native-image-review';\n${selected.map(node => node.getText(parsed)).join('\n')}`;
+    }
+    const compiled = ts.transpileModule(body, { fileName: file, reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
+    assert.deepEqual(compiled.diagnostics.filter(item => item.category === ts.DiagnosticCategory.Error), []);
+    const module = { exports: {} };
+    runInNewContext(compiled.outputText, { module, exports: module.exports, structuredClone,
+      require(name) { assert.ok(Object.hasOwn(dependencies, name), `Unexpected reader dependency ${name}`); return dependencies[name]; },
+    }, { filename: file, timeout: 1_000 });
+    return module.exports;
+  };
+  const imageReader = load('assets/native-image-review.ts', {
+    'node:util': require('node:util'), './errors': load('assets/errors.ts'),
+  });
+  const { readNativeAgentExecution } = load('agent/native-agent-execution.ts', {
+    './errors': load('agent/errors.ts'), '../assets/native-image-review': imageReader,
+  }, ['record', 'hash', 'text', 'exact', 'blocked', 'nativeAgentMaxTurns', 'readNativeAgentExecution']);
+  const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
+  assert.ok(declaration);
+  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const id = 'image-query-task', dbTime = '2026-10-09T08:00:00.000Z';
+  const marker = { kind: 'hermes-agent', profile: 'image-review', runtimeId: 'installed-native-query-fixture',
+    skillCatalogueId: 'query-catalogue-fixture', model: 'MiniMax-M3' };
+  const fresh = () => ({ nativeAgentExecution: structuredClone(marker), nativeImageReview: { mode: 'model-native', state: 'not_started' },
+    privateUnrelatedResult: 'must-not-enter-projection-or-stdout' });
+  const prepared = (checkpoint = false) => {
+    const identity = { requestId: id, contentHash: 'a'.repeat(64), sourceEvidenceIdentity: 'b'.repeat(64), parentIdentity: 'storyboard-fixture-scene0' };
+    const envelope = { ...identity, mode: 'agent-native', state: 'prepared', preparedAt: 1_000, deadlineAt: 301_000,
+      executionAttempt: 2, runtimeId: marker.runtimeId, skillCatalogueId: marker.skillCatalogueId, provider: 'minimax-key-1-model-1',
+      model: marker.model, reservationLedgerId: 'image-query-original-ledger', maxTurns: 4, maxOutputTokens: 32768,
+      maxTotalOutputTokens: 32768, maxInputBytes: 8_000_000 };
+    const result = { ...fresh(), nativeImageReview: envelope };
+    if (checkpoint) result.nativeAgentExecution.checkpoint = {
+      taskId: id, sourceKind: 'illustration-image', imageIdentity: identity, serializedSha256: 'c'.repeat(64),
+      objectKey: `derived/native-agent/${'c'.repeat(64)}.json`, size: 500, executionAttempt: 2, turnCount: 2,
+      state: 'completed', target: { provider: envelope.provider, model: envelope.model, promptHash: 'd'.repeat(64) },
+      responseHash: 'e'.repeat(64), finishReason: 'stop', hasToolCalls: false,
+    };
+    return result;
+  };
+  const run = async (storedResult, kind = 'presentation.generate', error = null) => {
+    const before = structuredClone(storedResult), calls = [];
+    let output = '', projected, failure;
+    const context = {
+      process: { env: { DATABASE_URL: 'fixture-only', REDIS_URL: 'fixture-only' }, argv: ['node', 'none'],
+        stdout: { write(value) { output += value; } } },
+      AGENT_TASK_QUEUE: 'agent:queue', readNativeAgentExecution, classifyNativeWorkSnapshot: deployLock.classifyNativeWorkSnapshot,
+      createPrismaClient() { return {
+        async $queryRawUnsafe(sql) {
+          assert.match(sql, /^SELECT /u);
+          if (sql === 'SELECT clock_timestamp() AS now') { calls.push('clock'); return [{ now: new Date(dbTime) }]; }
+          calls.push('tasks');
+          const args = sql.match(/CASE WHEN result \? 'nativeAgentExecution' THEN jsonb_build_object\(([^)]*)\) ELSE NULL END AS result FROM agent_tasks/u)?.[1];
+          assert.ok(args, 'fixture executes the received bounded SQL projection, not a pre-projected result');
+          const pairs = [...args.matchAll(/'([a-zA-Z]+)',result->'([a-zA-Z]+)'/gu)];
+          assert.equal(pairs.map(pair => pair[0]).join(','), args.replace(/\s/gu, ''));
+          projected = storedResult && Object.hasOwn(storedResult, 'nativeAgentExecution')
+            ? Object.fromEntries(pairs.map(([, key, source]) => [key, structuredClone(storedResult[source] ?? null)])) : null;
+          return [{ id, status: 'pending', kind, deleted_at: null, updated_at: new Date('2026-10-09T07:00:00.000Z'), error, result: projected }];
+        },
+        journalJob: { async findMany() { calls.push('journals'); return []; } },
+        async $disconnect() { calls.push('db-close'); },
+      }; },
+      createRedisClient() { return {
+        async lrange(key) { calls.push(key); return key.endsWith(':processing') ? [] : [id]; },
+        async quit() { calls.push('redis-close'); },
+      }; },
+    };
+    try { await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context); }
+    catch (caught) { failure = caught; }
+    assert.deepEqual(storedResult, before, 'read-only query must leave stored evidence untouched');
+    assert.deepEqual(calls.slice(-2), ['db-close', 'redis-close']);
+    return { output, projected, failure, calls };
+  };
+  const accepted = (observed, expected = { safe: true, nativePending: true, nativeBoundPending: true }) => {
+    assert.ifError(observed.failure);
+    assert.deepEqual(JSON.parse(observed.output), { ...expected, dbTime });
+    for (const privateValue of ['nativeImageReview', 'nativeAgentExecution', id, marker.runtimeId, 'must-not-enter-projection-or-stdout'])
+      assert.equal(observed.output.includes(privateValue), false);
+  };
+  for (const [label, result] of [['fresh', fresh()], ['prepared', prepared()], ['completed checkpoint', prepared(true)]]) {
+    await t.test(`recognizes legitimate ${label} image pending while retaining the Native replacement hold`, async () => {
+      const observed = await run(result);
+      accepted(observed);
+      assert.deepEqual(Object.keys(observed.projected).sort(), ['nativeAgentExecution', 'nativeImageReview']);
+      assert.deepEqual(observed.projected.nativeImageReview, result.nativeImageReview);
+    });
+  }
+  const invalid = {
+    'missing envelope': result => { delete result.nativeImageReview; },
+    'null envelope': result => { result.nativeImageReview = null; },
+    'malformed envelope budget': result => { result.nativeImageReview.maxTurns = 5; },
+    'runtime binding': result => { result.nativeImageReview.runtimeId = 'foreign-native'; },
+    'catalogue binding': result => { result.nativeImageReview.skillCatalogueId = 'foreign-catalogue'; },
+    'executionAttempt binding': result => { result.nativeImageReview.executionAttempt += 1; },
+    'provider binding': result => { result.nativeImageReview.provider = 'minimax-key-2-model-1'; },
+    'model binding': result => { result.nativeImageReview.model = 'MiniMax-M3.1-Flash-Preview'; },
+    'target provider binding': result => { result.nativeAgentExecution.checkpoint.target.provider = 'minimax-key-2-model-1'; },
+    'target model binding': result => { result.nativeAgentExecution.checkpoint.target.model = 'MiniMax-M3.1-Flash-Preview'; },
+    'malformed target': result => { result.nativeAgentExecution.checkpoint.target.promptHash = 'invalid'; },
+    'requestId binding': result => { result.nativeImageReview.requestId = 'foreign-image-request'; },
+    'contentHash binding': result => { result.nativeImageReview.contentHash = 'f'.repeat(64); },
+    'sourceEvidenceIdentity binding': result => { result.nativeImageReview.sourceEvidenceIdentity = 'f'.repeat(64); },
+    'parentIdentity binding': result => { result.nativeImageReview.parentIdentity = 'foreign-parent'; },
+  };
+  for (const [label, change] of Object.entries(invalid)) {
+    await t.test(`rejects ${label} without downgrading to unbound`, async () => {
+      const result = prepared(true); change(result);
+      const observed = await run(result);
+      assert.equal(observed.failure?.name, 'PresentationAssetError');
+      assert.equal(observed.failure?.code, 'VALIDATION_ERROR');
+      assert.equal(observed.output, '');
+      assert.equal(observed.calls.includes('clock'), false);
+    });
+  }
+  await t.test('retains the original paper pending classification without an image envelope', async () => {
+    const observed = await run({ nativeAgentExecution: { ...marker, profile: 'paper-understanding' } }, 'sdf.extract');
+    accepted(observed);
+  });
+  await t.test('retains unbound presentation pending without a Native Agent marker', async () => {
+    const observed = await run({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    accepted(observed, { safe: true, nativePending: true, nativeBoundPending: false });
+    assert.equal(observed.projected, null);
+  });
+  await t.test('keeps queued started or unknown provider work unsafe', async () => {
+    const result = prepared(true), cp = result.nativeAgentExecution.checkpoint;
+    cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls;
+    accepted(await run(result), { safe: false, nativePending: true, nativeBoundPending: true });
+    accepted(await run(fresh(), 'presentation.generate', 'provider outcome unknown'), { safe: false, nativePending: true, nativeBoundPending: true });
+  });
 });
 
 test('Native actual pause defers candidate-schema reads until migration and install rejects old-bound pending before resource writes', async () => {
