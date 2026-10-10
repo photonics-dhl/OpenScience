@@ -122,6 +122,7 @@ export function CurrentResearchCard({ research, ownerId }: { research: Dashboard
       {summary ? <ScientificText as="p" className={styles.currentSummary} hideSourceMarkers>{summary}</ScientificText> : null}
       {current ? <p className={styles.currentMeta}>{current.version ? t(isPublic ? 'current.publicationVersion' : 'current.savedVersion', { version: isPublic ? current.version.publicationNo! : current.version.versionNo }) : t('continue.draftRevision')}</p> : null}
     </div>
+    <Link className={styles.currentContinue} href={`/research-objects/${encodeURIComponent(researchId)}/edit`}>{t('current.open')}<ArrowRight size={18} aria-hidden="true" /></Link>
     <div className={styles.currentMedia}>
       {failed || imageFailed ? <div className={styles.currentMediaState} role="status"><p>{t('current.mediaFailed')}</p><button type="button" onClick={() => setRetry(value => value + 1)}>{t('current.retry')}</button></div>
         : !current ? <div className={styles.currentMediaState} role="status" aria-busy="true"><span className={styles.currentMediaSkeleton} aria-hidden="true" /><p>{t('current.loading')}</p></div>
@@ -132,7 +133,6 @@ export function CurrentResearchCard({ research, ownerId }: { research: Dashboard
             </a>
           </figure> : <div className={styles.currentMediaState}><span className={styles.currentEmptyMark} aria-hidden="true">↗</span><p>{t('current.noImage')}</p></div>}
     </div>
-    <Link className={styles.currentContinue} href={`/research-objects/${encodeURIComponent(researchId)}/edit`}>{t('current.open')}<ArrowRight size={18} aria-hidden="true" /></Link>
   </article>;
 }
 

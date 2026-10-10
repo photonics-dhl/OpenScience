@@ -62,6 +62,7 @@ async function mockDashboard(page: Page, taskState?: string) {
 
 async function mockCurrentResearch(page: Page, published = false) {
   await mockDashboard(page);
+  let currentTitle = 'Photonic learning structures';
   const reads: string[] = [];
   const content = '/api/research-objects/ro-hermes/versions/current-commit/presentation-assets/selected-image/content';
   const publicContent = '/api/research/OSR-2026-000042/v/3/presentation-assets/selected-image';
@@ -73,11 +74,11 @@ async function mockCurrentResearch(page: Page, published = false) {
     if (path.startsWith('/api/research-objects/ro-hermes') || path.startsWith('/api/research/')) reads.push(path);
     if (path === '/api/research-objects' && url.searchParams.get('limit') === '20') return json(route, { researchObjects: Array.from({ length: 20 }, (_, index) => ({
       id: index === 0 ? 'ro-hermes' : `other-study-${index}`, publicId: index === 0 && published ? 'OSR-2026-000042' : null,
-      title: index === 0 ? 'Photonic learning structures' : `Earlier study ${index}`, version: 9, status: published ? 'published' : 'draft',
+      title: index === 0 ? currentTitle : `Earlier study ${index}`, version: 9, status: published ? 'published' : 'draft',
     })) });
     if (path === '/api/research-objects/ro-hermes') return json(route, { researchObject: {
       id: 'ro-hermes', workspaceId: 'workspace-hermes', publicId: published ? 'OSR-2026-000042' : null,
-      title: 'Photonic learning structures', version: 9, status: published ? 'published' : 'draft', visibility: published ? 'public' : 'private',
+      title: currentTitle, version: 9, status: published ? 'published' : 'draft', visibility: published ? 'public' : 'private',
       sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: 'Live text must not replace the selected version.', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
     } });
     if (path === '/api/research-objects/ro-hermes/versions') return json(route, { versions: [
@@ -85,7 +86,7 @@ async function mockCurrentResearch(page: Page, published = false) {
       { versionId: 'current-commit', versionNo: 7, status: published ? 'published' : 'draft', publicationNo: published ? 3 : null },
     ] });
     if (path === '/api/research-objects/ro-hermes/versions/current-commit/record') return json(route, { record: {
-      objectId: 'ro-hermes', versionId: 'current-commit', versionNo: 7, citation: { title: 'Photonic learning structures' },
+      objectId: 'ro-hermes', versionId: 'current-commit', versionNo: 7, citation: { title: currentTitle },
       sdf: { schemaVersion: '0.1.0', problem: '', insight: 'Explore a photonic learning structure through its complete research figure.', method: '', results: '', limitations: '', reproducibility: '' },
       claims: [], evidence: [], manifest: [],
       media: [{ id: 'selected-image', kind: 'image', reader: { order: 0, title: 'Controlled optical figure' } }],
@@ -105,13 +106,13 @@ async function mockCurrentResearch(page: Page, published = false) {
     if (path === content || path === publicContent) return route.fulfill({ contentType: 'image/png', headers: { 'cache-control': 'no-store' }, body: await readFile('public/research-journey/d2nn-artwork.png') });
     return route.fallback();
   });
-  return { reads, content, publicContent };
+  return { reads, content, publicContent, setTitle: (title: string) => { currentTitle = title; } };
 }
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test(`current research binds its complete figure to the actual private version at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    const { reads, content } = await mockCurrentResearch(page);
+    const { reads, content, setTitle } = await mockCurrentResearch(page);
     const otherReads: string[] = [];
     page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/research-objects/other-study-')) otherReads.push(request.url()); });
     await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
@@ -124,6 +125,15 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect.poll(() => figure.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
     await expect(figure).toHaveCSS('object-fit', 'contain');
     await expect(card.getByRole('link', { name: /View full-size figure/ })).toHaveAttribute('href', content);
+    const continueAction = card.getByRole('link', { name: 'Open research workspace', exact: true });
+    await continueAction.focus();
+    await page.keyboard.press('Tab');
+    await expect(card.getByRole('link', { name: /View full-size figure/ })).toBeFocused();
+    if (viewport.width === 390) {
+      const actionBox = (await continueAction.boundingBox())!;
+      const figureBox = (await figure.boundingBox())!;
+      expect(actionBox.y + actionBox.height).toBeLessThan(figureBox.y);
+    }
     await page.context().route(`${baseUrl}${content}*`, async route => {
       if (route.request().method() !== 'GET') return route.fallback();
       return route.fulfill({ contentType: 'image/png', body: await readFile('public/research-journey/d2nn-artwork.png') });
@@ -142,7 +152,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (viewport.width === 1440) expect((await figure.boundingBox())!.width).toBeGreaterThan(356);
     await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-stage-size', '64');
+    await card.getByRole('heading', { name: 'Photonic learning structures', exact: true }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
+    if (viewport.width === 390) await expect(continueAction).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: test.info().outputPath(`current-research-${viewport.width}.png`), fullPage: false });
     await card.screenshot({ path: test.info().outputPath(`current-research-card-${viewport.width}.png`) });
     if (viewport.width === 1440) {
@@ -164,6 +176,17 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await card.getByRole('link', { name: 'Open research workspace', exact: true }).click();
       await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/, { timeout: 20_000 });
       await expect(page.locator('.editor-workspace p').filter({ hasText: 'Live text must not replace the selected version.' }).first()).toBeVisible();
+    } else {
+      const longTitle = 'Photonic learning structures for coherent transport across coupled nanoscale fields and reproducible optical inference at the attosecond frontier';
+      setTitle(longTitle);
+      await page.reload({ waitUntil: 'networkidle' });
+      const heading = card.getByRole('heading', { name: longTitle, exact: true });
+      await expect(heading).toBeVisible();
+      expect(await heading.evaluate(node => node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(card.getByText('Saved version 7', { exact: true })).toBeVisible();
+      await expect(card.getByRole('img', { name: 'Controlled optical figure', exact: true })).toHaveAttribute('src', content);
+      await page.screenshot({ path: test.info().outputPath('current-research-long-title-390.png'), fullPage: true });
     }
   });
 }
