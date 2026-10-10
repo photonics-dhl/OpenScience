@@ -256,7 +256,8 @@ async function imageHost() {
     paper: { observedPassageIds: [], call: async () => receipt, images: imageRead,
       withAuthorizedToolCall: async run => { if (!allowed) throw new Error('[blocked] revoked'); return run(); } } });
   let initializationError: unknown;
-  void final.catch(error => { initializationError = error; });
+  let ended = false;
+  void final.then(() => { ended = true; }, error => { initializationError = error; ended = true; });
   const socketPath = resolve(root, `${taskId}-1/worker.sock`);
   try {
     let ready = false;
@@ -272,7 +273,18 @@ async function imageHost() {
     const view = await post(socketPath, '/task/tools/call', { name: 'paper_image_view', arguments: {} }); expect(view.status).toBe(200);
     const firstMessage = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
     return { ...f, final, socketPath, receipt, imageRead, firstMessage, revoke: () => { allowed = false; }, cleanup: () => rm(root, { recursive: true, force: true }) };
-  } catch (error) { await rm(root, { recursive: true, force: true }); throw initializationError ?? error; }
+  } catch (error) {
+    const originalError = initializationError ?? error;
+    let stopped = ended;
+    if (!stopped) {
+      try { stopped = (await post(socketPath, '/task/finish', { status: 'stopped' })).status === 200; } catch { /* Keep the original failure and live socket. */ }
+    }
+    if (stopped) {
+      await final.catch(() => undefined);
+      try { await rm(root, { recursive: true, force: true }); } catch { /* Preserve the original failure and remaining evidence. */ }
+    }
+    throw originalError;
+  }
 }
 
 it('reports the actual Host guard for the overlong CI socket path before any provider request', async () => {
