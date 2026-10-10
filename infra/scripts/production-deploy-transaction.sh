@@ -540,28 +540,16 @@ transaction_native_command() {
 transaction_pause_native_producers() { transaction_native_command native-pause-original; }
 transaction_install_native_resources() { transaction_native_command native-install; }
 transaction_start_native_application() {
-  local target="$1" root sha compose runtime service running
+  local target="$1" root sha compose runtime
   case "$target" in
     candidate) root="$RELEASE_ROOT"; sha="$RELEASE_SHA"; compose="$COMPOSE_FILE"; runtime="" ;;
     original) root="$PREVIOUS_RELEASE_ROOT"; sha="$PREVIOUS_RELEASE_SHA"; compose="$ROLLBACK_COMPOSE_FILE"; runtime="$PREVIOUS_RUNTIME_ENV" ;;
     *) return 64 ;;
   esac
-  run_remote "cd '$root' && env $runtime XGS_RELEASE_ROOT='$root' XGS_RELEASE_IMAGE_TAG='$sha' docker compose --project-directory '$root' --env-file '$PROD_ENV' -f '$compose' create --no-deps --force-recreate api web agent-worker" || return
+  run_remote "cd '$root' && env $runtime XGS_RELEASE_ROOT='$root' XGS_RELEASE_IMAGE_TAG='$sha' docker compose --project-directory '$root' --env-file '$PROD_ENV' -f '$compose' up --no-start --no-deps --force-recreate --no-build --pull never api web agent-worker" || return
   transaction_native_command native-verify-stopped --target "$target" || return
   if [ "$target" = candidate ]; then transaction_native_command native-before-start || return; fi
-  for service in api web; do
-    running="$(transaction_native_command native-original-running --service "$service")" || return
-    if [ "$running" = 1 ]; then
-      run_remote "cd '$root' && env $runtime XGS_RELEASE_ROOT='$root' XGS_RELEASE_IMAGE_TAG='$sha' docker compose --project-directory '$root' --env-file '$PROD_ENV' -f '$compose' start --wait --wait-timeout 300 '$service'" || return
-    fi
-  done
-  transaction_native_command native-api-web-ready --target "$target" || return
-  transaction_native_command native-restore-timer --target "$target" || return
-  running="$(transaction_native_command native-original-running --service agent-worker)" || return
-  if [ "$running" = 1 ]; then
-    run_remote "cd '$root' && env $runtime XGS_RELEASE_ROOT='$root' XGS_RELEASE_IMAGE_TAG='$sha' docker compose --project-directory '$root' --env-file '$PROD_ENV' -f '$compose' start --wait --wait-timeout 300 agent-worker" || return
-  fi
-  transaction_native_command native-worker-ready --target "$target"
+  transaction_native_command native-start-application --target "$target"
 }
 transaction_journal_start() { journal_start; }
 transaction_journal_update() { journal_update "$1"; }

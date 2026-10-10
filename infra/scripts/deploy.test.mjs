@@ -274,7 +274,7 @@ function nativeRecoverySequenceFixture({ webProducer = true } = {}) {
   const containers = Object.fromEntries(['api', 'web', 'agentWorker'].map(service => [service, {
     Id: before.containers[service],
     Config: { Image: service === 'agentWorker' ? `openscience-agent-worker:${journal.rollbackSha}` : 'node:22',
-      StopSignal: 'SIGTERM', Labels: { 'com.docker.compose.project': 'openscience-prod', 'com.docker.compose.service': service === 'agentWorker' ? 'agent-worker' : service,
+      StopSignal: 'SIGTERM', Labels: { 'com.docker.compose.project': 'openscience-prod', 'com.docker.compose.oneoff': 'False', 'com.docker.compose.service': service === 'agentWorker' ? 'agent-worker' : service,
         'com.docker.compose.project.working_dir': `/opt/openscience-releases/${journal.rollbackSha}` },
       Cmd: service === 'web' ? ['npm', 'run', 'start'] : ['node', 'dist/index.js'],
       WorkingDir: `/opt/openscience/apps/${service === 'agentWorker' ? 'agent-worker' : service}`,
@@ -341,7 +341,7 @@ function nativeRecoverySequenceFixture({ webProducer = true } = {}) {
   context.NATIVE_WORK_QUERY = runInNewContext(`${queryDeclaration}; NATIVE_WORK_QUERY`, {});
   const run = command => operation(command, options);
   return {
-    journal, containers, calls, answers, faults, run,
+    journal, containers, calls, answers, faults, run, context, options,
     async quiesce() {
       imageBuilt = true; calls.push('image-built');
       await run('native-pause-original');
@@ -588,10 +588,11 @@ test('Native binding rejects stale source, mount, runtime and unhealthy API befo
 });
 
 test('Native actual old-pair capture accepts enabled video flags and rejects cached environment and mounts before journal creation or producer stop', async t => {
+  const timeout = deployLockSource.match(/function nativeCommandTimeout\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const capture = deployLockSource.match(/async function captureNativeState\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const inventory = deployLockSource.match(/async function nativeContainers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const operation = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
-  assert.ok(capture && inventory && operation);
+  assert.ok(timeout && capture && inventory && operation);
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-old-pair-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const rollback = 'a'.repeat(40), candidate = 'b'.repeat(40), nativeSha = 'c'.repeat(40);
@@ -637,7 +638,7 @@ test('Native actual old-pair capture accepts enabled video flags and rejects cac
         throw new Error('unexpected mutation');
       },
     };
-    const run = runInNewContext(`${inventory}\n${capture}\n${operation}; nativeOperation`, context);
+    const run = runInNewContext(`${timeout}\n${inventory}\n${capture}\n${operation}; nativeOperation`, context);
     let captured, status = 0;
     const valid = ['matching', 'absent-worker', 'stopped-worker'].includes(mode);
     if (valid) captured = await run('native-capture', { candidateSha: candidate, rollbackSha: rollback });
@@ -661,37 +662,260 @@ test('Native actual old-pair capture accepts enabled video flags and rejects cac
   }
 });
 
-test('Native real startup adapter verifies stopped pair then API/Web, timer and Worker in order', async t => {
+test('Native Compose 2.26 startup adapter creates without starting before the pinned startup operation', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-start-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const [target, failure, worker] of [['candidate', '', '1'], ['original', '', '1'], ['candidate', 'native-verify-stopped', '1'], ['candidate', 'native-api-web-ready', '1'], ['candidate', 'native-restore-timer', '1'], ['candidate', '', '0']]) {
-    const trace = join(root, `${target}-${failure}-${worker}.log`).replaceAll('\\', '/');
+  for (const [target, failure] of [['candidate', ''], ['original', ''], ['candidate', 'native-verify-stopped'], ['candidate', 'native-before-start'], ['candidate', 'native-start-application']]) {
+    const trace = join(root, `${target}-${failure}.log`).replaceAll('\\', '/');
     const script = [
-      'set -eEuo pipefail', `TRACE='${trace}'; FAIL='${failure}'; WORKER='${worker}'`,
+      'set -eEuo pipefail', `TRACE='${trace}'; FAIL='${failure}'`,
       'RELEASE_ROOT=/candidate; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; COMPOSE_FILE=/candidate/compose; PROD_ENV=/private',
-      'PREVIOUS_RELEASE_ROOT=/original; PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; ROLLBACK_COMPOSE_FILE=/original/compose; PREVIOUS_RUNTIME_ENV=',
-      'run_remote(){ if [[ "$1" = *" create "* ]]; then printf "create\\n" >> "$TRACE"; elif [[ "$1" = *" agent-worker" ]]; then printf "worker\\n" >> "$TRACE"; else printf "api-web\\n" >> "$TRACE"; fi; }',
-      'transaction_native_command(){ printf "%s\\n" "$1" >> "$TRACE"; [ "$1" != "$FAIL" ] || return 65; if [ "$1" = native-original-running ]; then if [ "$3" = agent-worker ]; then printf "%s\\n" "$WORKER"; else printf "1\\n"; fi; fi; }',
+      'PREVIOUS_RELEASE_ROOT=/original; PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; ROLLBACK_COMPOSE_FILE=/original/compose; PREVIOUS_RUNTIME_ENV=HERMES_NATIVE_AGENT_ENABLED=true',
+      // Installed 2.26.1 help evidence is separate; this boundary must not accept its known-invalid flags.
+      'run_remote(){ if [[ "$1" = *" create --no-deps "* || "$1" = *" start --wait "* ]]; then printf "unknown flag\\n" >&2; return 16; fi; [[ "$1" = *" up --no-start --no-deps --force-recreate --no-build --pull never api web agent-worker" ]] || return 17; printf "create-only\\n" >> "$TRACE"; }',
+      'transaction_native_command(){ printf "%s\\n" "$1" >> "$TRACE"; [ "$1" != "$FAIL" ] || return 65; }',
       deploymentFunction('transaction_start_native_application'),
       `transaction_start_native_application ${target}`,
     ].join('\n');
     const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
-    const calls = (await readFile(trace, 'utf8')).trim().split('\n');
     assert.equal(result.status, failure ? 65 : 0, result.stderr);
-    assert.equal(calls[0], 'create'); assert.equal(calls[1], 'native-verify-stopped');
-    if (failure === 'native-verify-stopped') assert.deepEqual(calls, ['create', failure]);
-    else if (failure) {
-      assert.equal(calls.at(-1), failure);
-      assert.equal(calls.includes('worker'), false);
-      if (failure === 'native-api-web-ready') assert.equal(calls.includes('native-restore-timer'), false);
-    } else {
-      assert.equal(calls.includes('native-before-start'), target === 'candidate');
-      assert.ok(calls.indexOf('native-api-web-ready') < calls.indexOf('native-restore-timer'));
-      assert.equal(calls.includes('worker'), worker === '1');
-      if (worker === '1') assert.ok(calls.indexOf('native-restore-timer') < calls.indexOf('worker'));
-      assert.equal(calls.at(-1), 'native-worker-ready');
+    const calls = (await readFile(trace, 'utf8')).trim().split('\n');
+    const expected = ['create-only', 'native-verify-stopped', ...(target === 'candidate' ? ['native-before-start'] : []), 'native-start-application'];
+    assert.deepEqual(calls, failure ? expected.slice(0, expected.indexOf(failure) + 1) : expected);
+  }
+});
+
+async function nativeStartupFixture({ target = 'candidate', stopped = [] } = {}) {
+  const f = nativeRecoverySequenceFixture();
+  await f.quiesce(); await f.installed(); f.createCandidate();
+  if (target === 'candidate') await f.run('native-before-start');
+  else {
+    await f.run('native-prepare-rollback');
+    for (const [index, [key, container]] of Object.entries(f.containers).entries()) {
+      container.Id = String(index + 7).repeat(64);
+      container.Config.Image = key === 'agentWorker' ? `openscience-agent-worker:${f.options.rollbackSha}` : 'node:22';
+      container.Config.Labels['com.docker.compose.project.working_dir'] = `/opt/openscience-releases/${f.options.rollbackSha}`;
+      container.Config.Env = key === 'web' ? [] : ['HERMES_NATIVE_AGENT_ENABLED=true', `HERMES_NATIVE_RUNTIME_ID=${f.journal.nativeRefresh.before.runtimeId}`,
+        `HERMES_NATIVE_SKILL_CATALOGUE_ID=${f.journal.nativeRefresh.before.skillCatalogueId}`, 'HERMES_NATIVE_AGENT_MODEL=MiniMax-M3', 'HERMES_NATIVE_AGENT_INBOX=/native-agent/inbox'];
+      container.Mounts[0].Source = `/opt/openscience-releases/${f.options.rollbackSha}`;
     }
   }
+  for (const key of stopped) f.journal.nativeRefresh.before.producers[key] = false;
+  f.options.target = target;
+  const ctx = f.context, baseCommand = ctx.nativeCommand, extra = [], startup = [], reads = [], healthReads = {};
+  let clock = 0, enabled = 'disabled', active = 'inactive';
+  let host = target === 'candidate' ? f.journal.nativeRefresh.installation : f.journal.nativeRefresh.before;
+  const faults = { startFail: '', startTimeout: '', unhealthy: '', neverHealthy: '', timerFail: false, pending: false, inventoryCost: 0, hook() {} };
+  ctx.performance = { now: () => clock };
+  ctx.NATIVE_TIMER = 'openscience-hermes-broker.timer';
+  ctx.setTimeout = (callback, ms) => { clock += ms; callback(); };
+  ctx.verifyNativeBinding = async expected => {
+    assert.equal(expected.runtimeId, host.runtimeId); assert.equal(expected.skillCatalogueId, host.skillCatalogueId);
+  };
+  ctx.nativeCommand = async (command, args, options) => {
+    if (command === 'docker' && args[0] === 'ps') {
+      assert.ok(args.includes('label=com.docker.compose.project=openscience-prod'));
+      const service = args.find(value => value.startsWith('label=com.docker.compose.service='))?.split('=').at(-1);
+      assert.ok(service);
+      const key = service === 'agent-worker' ? 'agentWorker' : service;
+      assert.ok(options.timeout > 0 && options.timeout <= 30_000);
+      reads.push({ clock, timeout: options.timeout });
+      if (startup.length) clock += Math.min(faults.inventoryCost, options.timeout);
+      faults.hook('inventory', key);
+      const matches = [f.containers[key], ...extra.filter(value => value.Config.Labels['com.docker.compose.service'] === service)]
+        .filter(value => value && (!args.includes('label=com.docker.compose.oneoff=False') || value.Config.Labels['com.docker.compose.oneoff'] === 'False'));
+      return matches.map(value => value.Id).join('\n');
+    }
+    if (command === 'docker' && args[0] === 'inspect' && args[2] === '{{json .}}') {
+      assert.ok(options.timeout > 0 && options.timeout <= 30_000);
+      reads.push({ clock, timeout: options.timeout });
+      if (startup.length) clock += Math.min(faults.inventoryCost, options.timeout);
+      const entry = [...Object.values(f.containers), ...extra].find(value => value?.Id === args.at(-1));
+      assert.ok(entry);
+      const key = Object.entries(f.containers).find(([, value]) => value === entry)?.[0];
+      if (entry.State.Running && entry.State.Health?.Status === 'starting' && faults.neverHealthy !== key) {
+        healthReads[key] = (healthReads[key] ?? 0) + 1;
+        if (faults.unhealthy === key || healthReads[key] > 1) entry.State.Health.Status = faults.unhealthy === key ? 'unhealthy' : 'healthy';
+      }
+      return JSON.stringify(entry);
+    }
+    if (command === 'docker' && args[0] === 'start') {
+      assert.equal(args.length, 2);
+      const key = Object.keys(f.containers).find(role => f.containers[role]?.Id === args[1]);
+      assert.ok(key); assert.ok(options.timeout > 0 && options.timeout <= 30_000);
+      startup.push(key); f.calls.push(`start:${key}`);
+      if (faults.startFail === key) throw new Error('start failed');
+      Object.assign(f.containers[key].State, { Running: true, Status: 'running', StartedAt: '2026-10-09T08:00:00.000Z', Health: { Status: 'starting' } });
+      if (faults.startTimeout === key) throw new Error('start client timeout; daemon outcome unknown');
+      return args[1];
+    }
+    if (command === 'systemctl') {
+      if (args[0] === 'enable') { f.calls.push('timer-enable'); if (faults.timerFail) throw new Error('timer failed'); enabled = args.includes('--runtime') ? 'enabled-runtime' : 'enabled'; }
+      else if (args[0] === 'start') { f.calls.push('timer-start'); active = 'active'; }
+      else if (args[0] === 'is-enabled') return enabled;
+      else if (args[0] === 'is-active') return active;
+      else throw new Error(`unexpected systemctl ${args[0]}`);
+      faults.hook('timer', args[0]); return '';
+    }
+    const output = await baseCommand(command, args, options);
+    if (command === '/usr/bin/python3' && args.includes('--restore-previous')) host = f.journal.nativeRefresh.before;
+    if (command === 'docker' && args[0] === 'compose' && faults.pending) return JSON.stringify({ ...JSON.parse(output), nativePending: true });
+    return output;
+  };
+  const helpers = ['nativeCommandTimeout', 'nativeContainers', 'startNativeApplication'].map(name => {
+    const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
+    assert.ok(body, name); return body;
+  }).join('\n');
+  Object.assign(ctx, runInNewContext(`${helpers}; ({nativeCommandTimeout,nativeContainers,startNativeApplication})`, ctx));
+  return { ...f, extra, startup, reads, startupFaults: faults, now: () => clock,
+    start: () => f.run('native-start-application') };
+}
+
+test('Native exact-ID startup preserves producer order, original identities and stopped roles', async t => {
+  for (const [target, stopped] of [['candidate', []], ['original', []], ['candidate', ['api']], ['candidate', ['web']], ['candidate', ['agentWorker']]]) {
+    await t.test(`${target} / stopped ${stopped.join(',') || 'none'}`, async () => {
+      const f = await nativeStartupFixture({ target, stopped }), ids = Object.fromEntries(Object.entries(f.containers).map(([key, value]) => [key, value.Id]));
+      const startIndex = f.calls.length;
+      const unrelated = structuredClone(f.containers.api); unrelated.Id = 'f'.repeat(64);
+      unrelated.Config.Labels['com.docker.compose.service'] = 'embedding-worker'; f.extra.push(unrelated);
+      await f.start();
+      assert.deepEqual(f.startup, ['api', 'web', 'agentWorker'].filter(key => !stopped.includes(key)));
+      const calls = f.calls.slice(startIndex);
+      for (const key of ['api', 'web']) if (!stopped.includes(key)) assert.ok(calls.indexOf(`start:${key}`) < calls.indexOf('timer-enable'));
+      if (!stopped.includes('agentWorker')) assert.ok(calls.indexOf('timer-start') < calls.indexOf('start:agentWorker'));
+      assert.deepEqual(Object.fromEntries(Object.entries(f.containers).map(([key, value]) => [key, value.Id])), ids);
+      for (const key of stopped) assert.equal(f.containers[key].State.Running, false);
+      await assert.rejects(f.start(), /Native deployment state|held/u, 'reentry must not replay starts');
+      assert.equal(f.startup.length, 3 - stopped.length);
+    });
+  }
+});
+
+test('Native exact-ID startup rejects replacements, extra oneoffs, failed health and bounded timeouts', async t => {
+  const scenarios = {
+    'legacy missing saved IDs': f => { delete f.journal.nativeRefresh.candidateContainers; },
+    'missing checkpoint': f => { f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers; },
+    'foreign source': f => { f.containers.api.Config.Labels['com.docker.compose.project.working_dir'] = '/foreign'; },
+    'foreign worker image': f => { f.containers.agentWorker.Config.Image = 'foreign'; },
+    'foreign runtime': f => { f.containers.api.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign'; },
+    'foreign mount': f => { f.containers.web.Mounts[0].RW = true; },
+    'already started': f => { f.containers.api.State.Running = true; f.containers.api.State.Status = 'running'; },
+    'unhealthy API': f => { f.startupFaults.unhealthy = 'api'; },
+    'start failure API': f => { f.startupFaults.startFail = 'api'; },
+    'start timeout API': f => { f.startupFaults.startTimeout = 'api'; },
+    'health deadline API': f => { f.startupFaults.neverHealthy = 'api'; },
+    'inventory consumes deadline': f => { f.startupFaults.inventoryCost = 30_000; f.startupFaults.neverHealthy = 'api'; },
+    'timer failure': f => { f.startupFaults.timerFail = true; },
+    'pending work holds stopped timer': f => { f.journal.nativeRefresh.before.timerWasActive = false; f.startupFaults.pending = true; },
+  };
+  for (const key of ['api', 'web', 'agentWorker']) {
+    scenarios[`${key} replaced before start`] = f => { f.containers[key].Id = '9'.repeat(64); };
+    scenarios[`${key} missing before start`] = f => { f.containers[key] = null; };
+    scenarios[`${key} duplicate regular`] = f => { const entry = structuredClone(f.containers[key]); entry.Id = 'e'.repeat(64); f.extra.push(entry); };
+    scenarios[`${key} extra oneoff`] = f => { const entry = structuredClone(f.containers[key]); entry.Id = 'e'.repeat(64); entry.Config.Labels['com.docker.compose.oneoff'] = 'True'; f.extra.push(entry); };
+    scenarios[`${key} replaced during wait`] = f => { f.startupFaults.hook = phase => { if (phase === 'inventory' && f.startup.length) f.containers[key].Id = '9'.repeat(64); }; };
+    scenarios[`${key} replaced during timer`] = f => { f.startupFaults.hook = phase => { if (phase === 'timer') f.containers[key].Id = '9'.repeat(64); }; };
+  }
+  for (const [label, change] of Object.entries({
+    'missing health': entry => { delete entry.State.Health; },
+    'exited': entry => { entry.State.Running = false; entry.State.Status = 'exited'; },
+    'OOM': entry => { entry.State.OOMKilled = true; },
+    'engine error': entry => { entry.State.Error = 'failed'; },
+    'restart': entry => { entry.RestartCount = 1; },
+  })) scenarios[label] = f => { f.startupFaults.hook = phase => { if (phase === 'inventory' && f.startup.length) change(f.containers.api); }; };
+  for (const phase of ['inventory', 'timer']) scenarios[`extra oneoff during ${phase}`] = f => {
+    f.startupFaults.hook = current => {
+      if (current !== phase || !f.startup.length || f.extra.length) return;
+      const entry = structuredClone(f.containers.web); entry.Id = 'e'.repeat(64); entry.Config.Labels['com.docker.compose.oneoff'] = 'True'; f.extra.push(entry);
+    };
+  };
+  for (const [label, change] of Object.entries(scenarios)) await t.test(label, async () => {
+    const f = await nativeStartupFixture(); change(f);
+    await assert.rejects(f.start(), /held|Native deployment|start|timer/u);
+    assert.equal(f.startup.includes('agentWorker'), false);
+    if (!label.includes('timer')) assert.equal(f.calls.includes('timer-enable'), false);
+    if (label.includes('deadline')) { assert.equal(f.now(), 300_000); assert.ok(f.reads.some(read => read.timeout < 30_000)); }
+    assert.equal(f.calls.some(value => /kill|recreate/u.test(value)), false);
+  });
+});
+
+test('Native before-start capture rejects extra producer inventory without persisting a checkpoint', async t => {
+  for (const role of ['api', 'web', 'agentWorker']) for (const oneoff of ['False', 'True']) await t.test(`${role}/${oneoff}`, async () => {
+    const f = await nativeStartupFixture();
+    f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers;
+    const extra = structuredClone(f.containers[role]); extra.Id = 'e'.repeat(64); extra.Config.Labels['com.docker.compose.oneoff'] = oneoff; f.extra.push(extra);
+    if (oneoff === 'True') assert.equal((await f.context.nativeContainers())[role].Id, f.containers[role].Id, 'default inventory behavior remains unchanged');
+    await assert.rejects(f.run('native-before-start'), /held|Native deployment/u);
+    assert.equal(f.journal.nativeRefresh.candidateCheckpoint, null);
+    assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
+    assert.deepEqual(f.startup, []);
+  });
+});
+
+test('Native pinned startup CLI requires only exact target and existing transaction identity', () => {
+  const body = deployLockSource.match(/function parseNativeCli\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(body);
+  const parse = runInNewContext(`${body}; parseNativeCli`, { SHA_PATTERN: /^[a-f0-9]{40}$/u,
+    PRODUCTION_JOURNAL: '/journal', PRODUCTION_LOCK_DIRECTORY: '/lock', invalidNativeState() { throw Error('held'); } });
+  const base = ['--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--lock-fd', '9', '--target', 'candidate'];
+  assert.equal(parse(base, 'native-start-application').target, 'candidate');
+  assert.equal(parse([...base.slice(0, -1), 'original'], 'native-start-application').target, 'original');
+  for (const args of [base.slice(0, -2), [...base, '--service', 'api'], [...base, '--target', 'candidate'], [...base.slice(0, -1), 'foreign']])
+    assert.throws(() => parse(args, 'native-start-application'), /held/u);
+});
+
+test('Native partial startup rollback retains saved identities and never starts later producers', async t => {
+  for (const failure of ['startFail', 'startTimeout', 'unhealthy']) await t.test(failure, async () => {
+    const f = await nativeStartupFixture(), saved = structuredClone(f.journal.nativeRefresh.candidateContainers);
+    f.startupFaults[failure] = 'web';
+    await assert.rejects(f.start(), /start|Native deployment|held/u);
+    assert.deepEqual(f.startup, ['api', 'web']); assert.equal(f.calls.includes('timer-enable'), false);
+    f.answers.push(false);
+    await assert.rejects(f.run('native-prepare-rollback'), /held|Native deployment/u);
+    assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
+    assert.equal(f.journal.nativeRefresh.quiesceState, 'rollback_quiescing');
+    assert.deepEqual(f.startup, ['api', 'web']);
+    await f.run('native-prepare-rollback');
+    assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
+    assert.equal(f.journal.nativeRefresh.restoreState, 'restored_verified');
+    assert.deepEqual(f.startup, ['api', 'web']);
+  });
+});
+
+test('Native create-only failure hands full or mixed-created containers to checkpoint-null rollback without retry', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-native-create-fail-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const [status, services] of [[16, ['api', 'web', 'agentWorker']], [124, ['api', 'web', 'agentWorker']], [16, ['web']], [124, ['api', 'agentWorker']]]) await t.test(`${status}/${services.join(',')}`, async () => {
+    const trace = join(root, `${status}-${services.join('-')}.log`).replaceAll('\\', '/');
+    const script = ['set -eEuo pipefail', `TRACE='${trace}'`,
+      'RELEASE_ROOT=/candidate; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; COMPOSE_FILE=/candidate/compose; PROD_ENV=/private',
+      `run_remote(){ [[ "$1" = *" up --no-start --no-deps --force-recreate --no-build --pull never api web agent-worker" ]] || return 17; printf '%s\\n' '${services.join(',')}' >> "$TRACE"; return ${status}; }`,
+      'transaction_native_command(){ printf "unexpected-native-call\\n" >> "$TRACE"; return 65; }',
+      deploymentFunction('transaction_start_native_application'), 'transaction_start_native_application candidate'].join('\n');
+    const result = spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+    assert.equal(result.status, status, result.stderr);
+    const recorded = (await readFile(trace, 'utf8')).trim().split('\n');
+    assert.deepEqual(recorded, [services.join(',')], 'failed create is issued once and permits no startup/checkpoint operation');
+    const f = nativeRecoverySequenceFixture(); await f.quiesce(); await f.installed(); f.createCandidate(recorded[0].split(','));
+    await f.run('native-prepare-rollback');
+    assert.equal(f.journal.nativeRefresh.candidateCheckpoint, null);
+    assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
+    assert.equal(f.journal.nativeRefresh.restoreState, 'restored_verified');
+    assert.equal(f.calls.filter(value => value === 'stop').length, 1, 'never-started new containers are not running producers');
+  });
+});
+
+test('Native startup oneoff rejection remains held through candidate rollback before stop or restore', async () => {
+  const f = await nativeStartupFixture(), saved = structuredClone(f.journal.nativeRefresh.candidateContainers);
+  f.startupFaults.hook = phase => {
+    if (phase !== 'inventory' || !f.startup.length || f.extra.length) return;
+    const entry = structuredClone(f.containers.web); entry.Id = 'e'.repeat(64); entry.Config.Labels['com.docker.compose.oneoff'] = 'True'; f.extra.push(entry);
+  };
+  await assert.rejects(f.start(), /Native deployment|held/u);
+  const before = f.calls.length;
+  await assert.rejects(f.run('native-prepare-rollback'), /Native deployment|held/u);
+  assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
+  assert.equal(f.calls.slice(before).some(call => call === 'stop' || call === 'restore' || call.startsWith('query:')), false);
 });
 
 test('Native real rollback adapter checks feasibility before restore and never starts old pair on held recovery', async t => {

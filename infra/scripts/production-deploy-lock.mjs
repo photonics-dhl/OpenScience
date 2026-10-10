@@ -286,15 +286,23 @@ async function nativeBinding() {
   return { runtimeId: pick('HERMES_NATIVE_RUNTIME_ID'), skillCatalogueId: pick('HERMES_NATIVE_SKILL_CATALOGUE_ID') };
 }
 
-async function nativeContainers() {
+function nativeCommandTimeout(deadline) {
+  const timeout = deadline === undefined ? 30_000 : Math.min(30_000, Math.floor(deadline - performance.now()));
+  if (timeout < 1) invalidNativeState();
+  return timeout;
+}
+
+async function nativeContainers({ deadline, includeOneOff = false } = {}) {
   const result = {};
   for (const [key, service] of [['api', 'api'], ['web', 'web'], ['agentWorker', 'agent-worker']]) {
-    const ids = await nativeCommand('docker', ['ps', '-aq', '--no-trunc', '--filter', 'label=com.docker.compose.project=openscience-prod', '--filter', 'label=com.docker.compose.oneoff=False', '--filter', `label=com.docker.compose.service=${service}`]);
+    const ids = await nativeCommand('docker', ['ps', '-aq', '--no-trunc', '--filter', 'label=com.docker.compose.project=openscience-prod',
+      ...(includeOneOff ? [] : ['--filter', 'label=com.docker.compose.oneoff=False']), '--filter', `label=com.docker.compose.service=${service}`], { timeout: nativeCommandTimeout(deadline) });
     if (ids === '') { result[key] = null; continue; }
     if (!/^[a-f0-9]{64}$/u.test(ids)) invalidNativeState();
-    const metadata = JSON.parse(await nativeCommand('docker', ['inspect', '--format', '{{json .}}', ids]));
+    const metadata = JSON.parse(await nativeCommand('docker', ['inspect', '--format', '{{json .}}', ids], { timeout: nativeCommandTimeout(deadline) }));
     if (metadata.Id !== ids || metadata.Config?.Labels?.['com.docker.compose.service'] !== service
       || metadata.Config?.Labels?.['com.docker.compose.project'] !== 'openscience-prod'
+      || (includeOneOff && metadata.Config?.Labels?.['com.docker.compose.oneoff'] !== 'False')
       || metadata.HostConfig?.RestartPolicy?.Name !== 'unless-stopped'
       || !['', 'SIGTERM', '15', undefined].includes(metadata.Config?.StopSignal)
       || !['running', 'exited', 'created'].includes(metadata.State?.Status)) invalidNativeState();
@@ -334,7 +342,8 @@ function verifyNeverStartedCandidate(container, service, installation) {
 }
 
 async function pauseNativeProducers(state, original) {
-  const containers = await nativeContainers();
+  const inventory = { includeOneOff: !original && state.candidateCheckpoint !== null };
+  const containers = await nativeContainers(inventory);
   if (original && Object.keys(containers).some(key => (containers[key]?.Id ?? null) !== state.before.containers[key])) invalidNativeState();
   if (!original) {
     if (state.candidateCheckpoint !== null) {
@@ -367,7 +376,7 @@ async function pauseNativeProducers(state, original) {
       || (stopped.ExitCode !== 0 && !webNpmStopExit)) invalidNativeState();
     if (stopped.Running) invalidNativeState();
   }
-  const after = await nativeContainers();
+  const after = await nativeContainers(inventory);
   if (Object.keys(containers).some(key => (after[key]?.Id ?? null) !== (containers[key]?.Id ?? null)
     || after[key]?.State.Running)) invalidNativeState();
 }
@@ -413,10 +422,10 @@ async function verifyNativeBinding(expected) {
     || !broker.includes(`ExecStart=/usr/bin/python3 ${release}/adapter/host_broker.py\n`)) invalidNativeState();
 }
 
-export function verifyNativeContainerBinding(container, { service, releaseSha, runtimeId, skillCatalogueId, running }) {
+export function verifyNativeContainerBinding(container, { service, releaseSha, runtimeId, skillCatalogueId, running, requireHealthy = true }) {
   if (!container || container.Config?.Labels?.['com.docker.compose.service'] !== service
     || container.Config?.Labels?.['com.docker.compose.project.working_dir'] !== `/opt/openscience-releases/${releaseSha}`
-    || container.State?.Running !== running || (running && container.State?.Health?.Status !== 'healthy')
+    || container.State?.Running !== running || (running && requireHealthy && container.State?.Health?.Status !== 'healthy')
     || !container.Mounts?.some(mount => mount.Type === 'bind' && mount.Source === `/opt/openscience-releases/${releaseSha}`
       && mount.Destination === '/opt/openscience' && mount.RW === false)
     || (service === 'agent-worker' && container.Config.Image !== `openscience-agent-worker:${releaseSha}`)) invalidNativeState();
@@ -433,6 +442,56 @@ export function verifyNativeContainerBinding(container, { service, releaseSha, r
     || env.get('HERMES_NATIVE_AGENT_INBOX') !== '/native-agent/inbox') invalidNativeState();
   if (service === 'agent-worker' && !container.Mounts?.some(mount => mount.Type === 'bind'
     && mount.Source === `${NATIVE_ROOT}/inbox` && mount.Destination === '/native-agent/inbox' && mount.RW === true)) invalidNativeState();
+}
+
+async function startNativeApplication(state, options, verifyContainers, restoreTimer) {
+  const expected = options.target === 'original' ? state.before : state.installation;
+  const releaseSha = options.target === 'original' ? options.rollbackSha : options.candidateSha;
+  if (!expected || (options.target === 'candidate' && (state.installState !== 'installed'
+    || state.restoreState !== 'not_started' || state.quiesceState !== 'quiesced'
+    || state.candidateCheckpoint === null || !state.candidateContainers))) invalidNativeState();
+  const roles = [['api', 'api'], ['web', 'web'], ['agentWorker', 'agent-worker']];
+  const captured = await nativeContainers({ includeOneOff: true, deadline: performance.now() + 300_000 }), ids = {};
+  for (const [key, service] of roles) {
+    verifyNeverStartedCandidate(captured[key], service, { ...expected, releaseSha });
+    ids[key] = captured[key].Id;
+    if (options.target === 'candidate' && ids[key] !== state.candidateContainers[key]) invalidNativeState();
+  }
+  const started = new Set();
+  const check = async (deadline = performance.now() + 300_000, waiting) => {
+    await verifyNativeBinding(expected);
+    const containers = await nativeContainers({ includeOneOff: true, deadline });
+    nativeCommandTimeout(deadline);
+    for (const [key, service] of roles) {
+      const container = containers[key];
+      if (container?.Id !== ids[key]) invalidNativeState();
+      if (!started.has(key)) verifyNeverStartedCandidate(container, service, { ...expected, releaseSha });
+      else {
+        verifyNativeContainerBinding(container, { service, releaseSha, ...expected, running: true, requireHealthy: key !== waiting });
+        if (container.State.Status !== 'running' || container.State.ExitCode !== 0 || container.State.OOMKilled !== false
+          || container.State.Error !== '' || container.RestartCount !== 0
+          || !['starting', 'healthy'].includes(container.State.Health?.Status)) invalidNativeState();
+      }
+    }
+    return containers;
+  };
+  const start = async key => {
+    if (!state.before.producers[key]) return;
+    const deadline = performance.now() + 300_000;
+    await check(deadline);
+    await nativeCommand('docker', ['start', ids[key]], { timeout: nativeCommandTimeout(deadline) });
+    started.add(key);
+    for (;;) {
+      const containers = await check(deadline, key);
+      if (containers[key].State.Health.Status === 'healthy') return;
+      await new Promise(resolve => setTimeout(resolve, Math.min(1_000, nativeCommandTimeout(deadline))));
+    }
+  };
+  await start('api'); await start('web');
+  await check(); await verifyContainers(['api', 'web']);
+  await restoreTimer(() => check());
+  await check(); await start('agentWorker');
+  await check(); await verifyContainers(['agent-worker']);
 }
 
 const NATIVE_WORK_QUERY = `
@@ -473,7 +532,7 @@ function parseNativeCli(argv, command) {
     if (!argv[index + 1] || flags.has(argv[index])) invalidNativeState();
     flags.set(argv[index], argv[index + 1]);
   }
-  const targetCommands = ['native-verify-stopped', 'native-api-web-ready', 'native-worker-ready', 'native-restore-timer'];
+  const targetCommands = ['native-verify-stopped', 'native-api-web-ready', 'native-worker-ready', 'native-restore-timer', 'native-start-application'];
   const allowed = ['--candidate', '--rollback', '--lock-fd',
     ...(targetCommands.includes(command) ? ['--target'] : []), ...(command === 'native-original-running' ? ['--service'] : [])];
   if (flags.size !== allowed.length || [...flags.keys()].some(flag => !allowed.includes(flag))
@@ -513,6 +572,23 @@ async function nativeOperation(command, options) {
         ...expected, running: command === 'native-verify-stopped' ? false : state.before.producers[key] });
     }
   };
+  const restoreTimer = async checkIds => {
+    if (!expected) invalidNativeState();
+    await verifyContainers(['api', 'web']);
+    const work = await queryNativeWork(options.candidateSha, null);
+    if (state.before.producers.agentWorker && work.nativePending && !state.before.timerWasActive) invalidNativeState();
+    if (checkIds) await checkIds();
+    if (state.before.timerEnableState !== 'not-found') {
+      await holdNativeTimer();
+      if (checkIds) await checkIds();
+      if (state.before.timerEnableState === 'enabled') await nativeCommand('systemctl', ['enable', NATIVE_TIMER]);
+      else if (state.before.timerEnableState === 'enabled-runtime') await nativeCommand('systemctl', ['enable', '--runtime', NATIVE_TIMER]);
+      if (state.before.timerWasActive) await nativeCommand('systemctl', ['start', NATIVE_TIMER]);
+      if ((await nativeCommand('systemctl', ['is-enabled', NATIVE_TIMER], { allowFailure: true })) !== state.before.timerEnableState
+        || ((await nativeCommand('systemctl', ['is-active', NATIVE_TIMER], { allowFailure: true })) === 'active') !== state.before.timerWasActive) invalidNativeState();
+    }
+    if (checkIds) await checkIds();
+  };
   if (command === 'native-original-running') return state.before.producers[options.service === 'agent-worker' ? 'agentWorker' : options.service] ? '1' : '0';
   if (command === 'native-pause-original') {
     if (!['migrating', 'switching'].includes(journal.phase)) invalidNativeState();
@@ -545,7 +621,7 @@ async function nativeOperation(command, options) {
     if (state.installState !== 'installed' || state.candidateCheckpoint !== null || Object.hasOwn(state, 'candidateContainers')
       || state.restoreState !== 'not_started' || state.quiesceState !== 'quiesced') invalidNativeState();
     const work = await queryNativeWork(options.candidateSha, null);
-    const containers = await nativeContainers(), ids = {};
+    const containers = await nativeContainers({ includeOneOff: true }), ids = {};
     for (const [key, service] of [['api', 'api'], ['web', 'web'], ['agentWorker', 'agent-worker']]) {
       verifyNeverStartedCandidate(containers[key], service, state.installation);
       ids[key] = containers[key].Id;
@@ -575,20 +651,9 @@ async function nativeOperation(command, options) {
   } else if (command === 'native-verify-stopped') await verifyContainers(['api', 'web', 'agent-worker']);
   else if (command === 'native-api-web-ready') await verifyContainers(['api', 'web']);
   else if (command === 'native-worker-ready') await verifyContainers(['agent-worker']);
-  else if (command === 'native-restore-timer') {
-    if (!expected) invalidNativeState();
-    await verifyContainers(['api', 'web']);
-    const work = await queryNativeWork(options.candidateSha, null);
-    if (state.before.producers.agentWorker && work.nativePending && !state.before.timerWasActive) invalidNativeState();
-    if (state.before.timerEnableState !== 'not-found') {
-      await holdNativeTimer();
-      if (state.before.timerEnableState === 'enabled') await nativeCommand('systemctl', ['enable', NATIVE_TIMER]);
-      else if (state.before.timerEnableState === 'enabled-runtime') await nativeCommand('systemctl', ['enable', '--runtime', NATIVE_TIMER]);
-      if (state.before.timerWasActive) await nativeCommand('systemctl', ['start', NATIVE_TIMER]);
-      if ((await nativeCommand('systemctl', ['is-enabled', NATIVE_TIMER], { allowFailure: true })) !== state.before.timerEnableState
-        || ((await nativeCommand('systemctl', ['is-active', NATIVE_TIMER], { allowFailure: true })) === 'active') !== state.before.timerWasActive) invalidNativeState();
-    }
-  } else invalidNativeState();
+  else if (command === 'native-restore-timer') await restoreTimer();
+  else if (command === 'native-start-application') await startNativeApplication(state, options, verifyContainers, restoreTimer);
+  else invalidNativeState();
   return 'NATIVE_OPERATION_OK';
 }
 
@@ -829,7 +894,7 @@ function parseJournalCli(argv, command) {
 async function main() {
   const argv = process.argv.slice(2);
   if (['native-capture', 'native-pause-original', 'native-install', 'native-before-start', 'native-prepare-rollback',
-    'native-hold-producers', 'native-verify-stopped', 'native-api-web-ready', 'native-worker-ready', 'native-restore-timer', 'native-original-running'].includes(argv[0])) {
+    'native-hold-producers', 'native-verify-stopped', 'native-api-web-ready', 'native-worker-ready', 'native-restore-timer', 'native-original-running', 'native-start-application'].includes(argv[0])) {
     process.stdout.write(`${await nativeOperation(argv[0], parseNativeCli(argv.slice(1), argv[0]))}\n`);
   } else if (argv[0] === 'verify-state') {
     validateProductionSwitchState(parseSwitchCli(argv.slice(1)));
