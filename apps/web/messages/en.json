@@ -974,6 +974,7 @@
     "copyFailed": "Copy failed",
     "legalDisclaimerDefault": "This timestamp only proves that the platform received and recorded this version and its content hash; it does not guarantee priority, ownership, scientific correctness, or legal evidence.",
     "artifactProvenance": "Original text and attachments",
+    "artifactDownloadUnavailable": "This version does not provide a public download link.",
     "invalidVersion": "Invalid version",
     "aiReview": "AI review summary",
     "status": "Status",

@@ -974,6 +974,7 @@
     "copyFailed": "复制失败",
     "legalDisclaimerDefault": "此时间戳仅证明平台在相应时间接收并记录了该版本及其内容哈希，不构成专利优先权、著作权归属、科研正确性或司法存证保证。",
     "artifactProvenance": "原文与附件",
+    "artifactDownloadUnavailable": "此版本未提供公开下载链接",
     "invalidVersion": "无效版本号",
     "aiReview": "AI 审核摘要",
     "status": "状态",
