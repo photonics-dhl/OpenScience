@@ -84,6 +84,7 @@ on:
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
+      - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
       - 'infra/chatgpt-browser/runner.cjs'
@@ -339,6 +340,7 @@ on:
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
+      - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
       - 'infra/chatgpt-browser/review-broker.mjs'
       - 'infra/chatgpt-browser/runner.cjs'
@@ -580,7 +582,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts test/presentation-assets-routes.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts

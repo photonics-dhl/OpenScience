@@ -13,6 +13,8 @@ const RO = '30000000-0000-4000-8000-000000000001';
 const VERSION = '40000000-0000-4000-8000-000000000001';
 const CLAIM = '50000000-0000-4000-8000-000000000001';
 const ASSET = '60000000-0000-4000-8000-000000000001';
+const BRANCH = '70000000-0000-4000-8000-000000000001';
+const COMMIT = '80000000-0000-4000-8000-000000000001';
 
 function makeRedis() {
   const store = new Map<string, string>();
@@ -29,14 +31,16 @@ function makeRedis() {
   };
 }
 
-async function fixture(platformRole = 'user', storage?: StorageAdapter, sceneImageEnabled = false) {
+async function fixture(platformRole = 'user', storage?: StorageAdapter, sceneImageEnabled = false, videoEnabled = false) {
   const { prisma, db } = createFakePrisma();
   const redis = makeRedis();
   seedUser(db, { id: USER, platformRole });
   db.workspaces.push({ id: WORKSPACE, type: 'personal', ownerId: USER, name: 'Personal', status: 'active', createdAt: new Date(), updatedAt: new Date() });
   db.memberships.push({ id: 'membership', workspaceId: WORKSPACE, userId: USER, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
-  db.researchObjects.push({ id: RO, workspaceId: WORKSPACE, createdBy: USER, status: 'draft', visibility: 'private' });
-  db.versions.push({ id: VERSION, researchObjectId: RO, status: 'draft', versionNo: 1 });
+  db.researchObjects.push({ id: RO, workspaceId: WORKSPACE, createdBy: USER, title: 'Research fixture', status: 'draft', visibility: 'private', createdAt: new Date() });
+  db.branches.push({ id: BRANCH, researchObjectId: RO, name: 'main', isDefault: true });
+  db.commits.push({ id: COMMIT, researchObjectId: RO, branchId: BRANCH, authorId: USER });
+  db.versions.push({ id: VERSION, researchObjectId: RO, commitId: COMMIT, status: 'draft', versionNo: 1, publicVersionId: null, researchRecord: null, createdAt: new Date() });
   db.claimNodes.push({
     id: CLAIM, researchObjectId: RO, versionId: VERSION, kind: 'core', statement: 'Transfer completes in 43 fs.',
     assessment: 'supported', conditions: [], limitations: [], provenance: {}, extractionStatus: 'succeeded',
@@ -45,11 +49,11 @@ async function fixture(platformRole = 'user', storage?: StorageAdapter, sceneIma
   const token = await createSession(redis as never, { userId: USER, status: 'email_verified' });
   const app = await buildApp({
     prisma, redis: redis as never, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
-    security: { csrf: true }, rateLimitEnabled: false, storage, sceneImageEnabled,
+    security: { csrf: true }, rateLimitEnabled: false, storage, sceneImageEnabled, videoEnabled, readVideoReadiness: async () => videoEnabled,
   });
   const csrf = await app.inject({ method: 'GET', url: '/csrf-token' });
   return {
-    app, db, token, csrfToken: csrf.json().csrfToken as string,
+    app, db, prisma, token, csrfToken: csrf.json().csrfToken as string,
     csrfCookie: csrf.cookies.find((cookie) => cookie.name === '_csrf')!.value,
   };
 }
@@ -70,14 +74,13 @@ describe('Presentation asset routes', () => {
     return { ...ctx, url: `/research-objects/${RO}/versions/${VERSION}/presentation-tasks/${taskId}`, taskId };
   }
 
-  it.each(['pending', 'succeeded'])('reads the exact scoped %s presentation task without inventing DTO fields', async (status) => {
+  it.each(['pending', 'succeeded'])('reads the exact scoped %s presentation task without exposing its internal payload', async (status) => {
     const ctx = await taskFixture();
     ctx.db.agentTasks[0].status = status;
     ctx.db.workspaces[0].status = 'archived';
     const response = await ctx.app.inject({ method: 'GET', url: ctx.url, cookies: { openscience_session: ctx.token } });
     expect(response.statusCode).toBe(200);
-    expect(response.json().task).toMatchObject({ id: ctx.taskId, status, kind: 'presentation.generate' });
-    expect(response.json().task).not.toHaveProperty('researchObjectId');
+    expect(response.json().task).toMatchObject({ id: ctx.taskId, status, kind: 'presentation.generate', researchObjectId: RO });
     expect(response.json().task).not.toHaveProperty('payload');
     await ctx.app.close();
   });
@@ -345,8 +348,49 @@ describe('Presentation asset routes', () => {
   });
 });
 
+it.each([1, 6])('preserves narrative scene limit %s through submission and exact replay', async (narrativeSceneLimit) => {
+  const ctx = await fixture();
+  try {
+    const storyboard = { output: 'image', locale: 'zh', style: 'auto', instruction: 'Explain the core mechanism', narrative: true, narrativeSceneLimit };
+    const request = { method: 'POST' as const, url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,
+      ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken, `narrative-limit-${narrativeSceneLimit}`),
+      payload: { kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard } };
+    const created = await ctx.app.inject(request);
+    expect(created.statusCode, created.body).toBe(202);
+    const replay = await ctx.app.inject(request);
+    expect(replay.statusCode).toBe(202);
+    expect(replay.json().task.id).toBe(created.json().task.id);
+    expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.agentTasks[0].payload).toMatchObject({ researchObjectId: RO, versionId: VERSION, sourceClaimIds: [CLAIM], storyboard });
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  } finally { await ctx.app.close(); }
+});
+
+it.each([
+  { label: 'zero', narrativeSceneLimit: 0, narrative: true },
+  { label: 'above maximum', narrativeSceneLimit: 7, narrative: true },
+  { label: 'fractional', narrativeSceneLimit: 1.5, narrative: true },
+  { label: 'string', narrativeSceneLimit: '1', narrative: true },
+  { label: 'missing narrative', narrativeSceneLimit: 1 },
+])('rejects narrative scene limit $label before creating or charging a task', async ({ narrativeSceneLimit, narrative }) => {
+  const ctx = await fixture();
+  try {
+    const response = await ctx.app.inject({ method: 'POST', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,
+      ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken, 'invalid-narrative-limit'),
+      payload: { kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: { output: 'image', locale: 'zh', style: 'auto',
+        instruction: 'Explain the core mechanism', narrativeSceneLimit, ...(narrative ? { narrative } : {}) } } });
+    expect(response.statusCode).toBe(400);
+    expect(ctx.db.agentTasks).toHaveLength(0);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+  } finally { await ctx.app.close(); }
+});
+
 it('accepts charged storyboard settings and preserves the validated DTO on approval', async () => {
-    const ctx = await fixture();
+    const ctx = await fixture('user', undefined, false, true);
+    Object.assign(ctx.prisma.hermesResearchRun, { findFirst: vi.fn(async () => {
+      expect(ctx.db.hermesResearchRuns).toHaveLength(0);
+      return null;
+    }) });
     const settings = { locale: 'en', style: 'ink', instruction: 'Explain findings' };
     const response = await ctx.app.inject({ method: 'POST', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken, 'storyboard-api'), payload: { kind: 'interactive_html', sourceClaimIds: [CLAIM], storyboard: settings } });
     expect(response.statusCode).toBe(202);
@@ -357,7 +401,7 @@ it('accepts charged storyboard settings and preserves the validated DTO on appro
     ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
     const approved = await ctx.app.inject({ method: 'PATCH', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/${ASSET}`, ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken), payload: { status: 'approved', expectedUpdatedAt: updatedAt.toISOString() } });
     expect(approved.statusCode).toBe(200);
-    expect(approved.json().asset.storyboard).toEqual({ document, locale: 'en', style: 'ink' });
+    expect(approved.json().asset.storyboard).toEqual({ document, output: 'video', locale: 'en', style: 'ink' });
     expect(approved.json().asset.sourceClaimIds).toEqual([CLAIM]);
     expect(approved.body).not.toContain('secret');
     expect(approved.body).not.toContain('instruction');
@@ -366,16 +410,16 @@ it('accepts charged storyboard settings and preserves the validated DTO on appro
 
 
 it.each([false,true])('gates scene capability and charges one exact replay only when enabled=%s', async enabled => {
-  const ctx=await fixture('platform_admin',undefined,enabled);
+  const ctx=await fixture('platform_admin',undefined,enabled,true);
   const settings={locale:'en',style:'ink',instruction:'Explain'};
   const document={schemaVersion:1,title:'Plan',scenes:Array.from({length:3},()=>({title:'Scene',narration:'Finding',visualAction:'Wave',durationSeconds:8,sourceClaimIds:[CLAIM]}))};
-  ctx.db.presentationAssets.push({id:ASSET,researchObjectId:RO,versionId:VERSION,kind:'interactive_html',status:'approved',label:'presentation_not_evidence',provenance:{subtype:'sourced_storyboard',storyboardDocument:document,storyboardSettings:settings}});
+  ctx.db.presentationAssets.push({id:ASSET,researchObjectId:RO,versionId:VERSION,kind:'interactive_html',status:'approved',label:'presentation_not_evidence',provenance:{subtype:'sourced_storyboard',storyboardDocument:document,storyboardSettings:settings,sourceEvidenceIdentity:createHash('sha256').update('reviewed fixture source').digest('hex')}});
   ctx.db.presentationAssetClaims.push({presentationAssetId:ASSET,claimId:CLAIM});
   const response=await ctx.app.inject({method:'GET',url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets`,cookies:{openscience_session:ctx.token}});
   expect(response.json().assets[0].canGenerateSceneImage).toBe(enabled);
   const request={method:'POST' as const,url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,...writeAuth(ctx.token,ctx.csrfCookie,ctx.csrfToken,'scene-api'),payload:{kind:'image',sourceClaimIds:[CLAIM],sceneImage:{storyboardAssetId:ASSET,sceneIndex:0}}};
   const first=await ctx.app.inject(request);
-  expect(first.statusCode).toBe(enabled?202:400);
+  expect(first.statusCode, first.body).toBe(enabled?202:400);
   if(enabled){const replay=await ctx.app.inject(request);expect(replay.json().task.id).toBe(first.json().task.id);expect(ctx.db.agentTasks[0].payload.sceneImage).toEqual(request.payload.sceneImage);}
   expect(ctx.db.usageLedger.filter(row=>row.delta<0)).toHaveLength(enabled?1:0);
   await ctx.app.close();
