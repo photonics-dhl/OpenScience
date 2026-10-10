@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-10 10:24：完整候选六CI终态四成功/两media失败；八个browser-entry全部通过（含手机刷新），两main在原生图审恢复组625PASS/4FAIL。已定真实新paired任务与旧恢复判定衔接缺口，原High准最小复用现helper，生图拥有两file修复；UI只复验video已交的creator单行GET差额。生产/资产窗口仍关闭。
+- 2026-10-10：完整候选六CI终态四成功/两media失败；八个browser-entry全部通过（含手机刷新），两main在原生图审恢复组625PASS/4FAIL。原High准最小复用现helper，生图拥有两file修复。Creator单行GET差额另经实际4PASS54s闭合，原失败/warning保留；UI解除暂停继续settings after图像QA/scoped lint。生产/资产窗口仍关闭。
 - 2026-10-10 09:56：本批五CI终态为三成功/两media失败；Linux旧权限负控2/currentGreen39、发布与清单197全通过且原ZIP已保存。八个unique浏览器失败集中三spec：UI修原auth/workspace四例，video并行修创建入口四例，settings WIP保护暂停。生产窗口关闭、未重试；精确版本/run/原日志统一见CURRENT。
 - 前轮三个spec全等集入；local dev手机脚本错误仍保留未定因，由正常production CI闭合对应断言。创建四例本地曾同精确RO recovery GET缺失，单行补丁已收、仅四例复验中；不声称整套浏览器或实际产品全绿。
 - 2026-10-10 08:57：本轮发布故障已收尾。原应用三主服务与原Native配对恢复健康，专用finalize经独立High、inspect0→confirm0清journal；部分依赖保留新构建，精确身份/证据统一见CURRENT。此次网站不可用约17分钟，新候选功能未上线，发布窗口关闭。

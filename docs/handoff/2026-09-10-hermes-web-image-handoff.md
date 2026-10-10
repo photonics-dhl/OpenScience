@@ -15,8 +15,8 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | ed491真实Worker四失败定到research-run旧result严格比较遗漏fresh paired；原High最小设计GO，已授research-run.ts原helper/import+原native-illustration-generation.test.ts两file，复用imageReviewHasNoSubmission，不放松paid/unknown | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-flow-linux-fix`；dca5/原refs保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 创建spec12f→abca；UI实跑四例发现新增RO recovery GET遗漏，单行fdfdb→root364a17全等补完整query绑定ro.id。原四主体/CSRF/未知拒绝保持，交UI只复验四例；音色成片仍依赖host | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/illustrated-research-fixture`；compat/query/4bc保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 0b21→ff3419的原两spec已由ed491 PR/push生产构建全部browser-entry通过，含auth手机；local dev脚本错误单列未定因，停止扩诊断。现仅消费fdfdb差额复验creator四例，不混settings | `.worktrees/research-product-craft` / `codex/ui-b579-consumer-recovery`；settings ad175三file WIP暂停、after图未亲看 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 创建spec12f→abca、精确RO GET单行fdfdb→root364a17，UI消费后原四例真实4PASS54s，保四主体/CSRF/未知拒绝。本段交付闭合，实际音色目录/成片依赖完整host窗口，当前不探付费资格 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/illustrated-research-fixture`；compat/query/4bc保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 两spec经ed491八browser子job通过，creator fdf消费为794后4PASS；旧dev错误/proxywarning保留且不扩查。已解除settings暂停，回ad175三file完成既有after图像QA/scoped lint，复用原High/TS/1case证据 | `.worktrees/research-product-craft`；settings/page.tsx呈现、account-journal-craft仅settings CSS、原academic-identity-recovery.spec.ts |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
 ## Git / CI / 运行事实
@@ -34,7 +34,7 @@
 - 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
 - 77dd原NO-GO已由6cd闭合：original启动只允许rollback_quiesced且not_attempted/not_started或installed/restored_verified；candidate回退checkpoint=null也纳入oneoff并先于stop/query/restore拒绝。原High增量Scoped GO、实际新增RED→39/39 GREEN零skip；旧84/CLI证据复用，不重复本机/生产检查，正常Linux候选CI仍未完成。
 - Linux原artifact已收：exact b579 push及PR merge0503547da30a0105c830a00a33e281abec6ecacc均oldRED2精确权限ValueError、当前Green39/39零skip，deploy+manifest197/197零skip；ZIP在root `b579-native-restore-linux-{pr,push}.zip`。实际来源验证解决0775/0664事故，不代表新图审Host或SDK；UI负责原两spec四case，video负责创建单spec四case，root统一最小差额后推进新CI。所有strict GET、真实点击和POST约束保留；settings暂停。
-- 本地dev auth手机失败证据保留：HTML207906B/10inline静态parse0，4外部JS 200但trace缺正文，不能定根因；原rigready/30s保持且ed491 Linux已通过。creator本地4FAIL是新RO范围recovery精确GET未声明，fdfdb单行补`targetKind=research_object&researchObjectId=ro.id`，现仅复验这4，不与未执行的Linux主browser混称通过。
+- 本地dev auth手机失败证据保留：HTML207906B/10inline parse0，4外部JS trace缺正文，未定根因；原rigready/30s保持且ed491 Linux已通过。creator精确RO recovery GET单行fdf→UI794后原4case实际4PASS54s，原4FAIL/traces及local proxy ECONNREFUSED warning保在UI `b579-video-consumer{,-fixed}-20261010.log`；不与尚未执行的Linux主browser/真实模型混称通过。
 - Native恢复真实缺口：自动reconcile产生合法fresh paired marker，research-run.ts:2251旧deepEqual却只收legacy，导致canRetry=false并误走storyboard恢复SOURCE_NOT_READY。原High设计GO：native分支显式拒null，复用已有imageReviewHasNoSubmission且malformed捕获return null；旧exact/fresh无checkpoint可恢复，prepared/started/completed/extra/错配拒绝。保原task/完整result CAS/attempt1/retry0/供应商completed和全部来源绑定，零新预留/收费；Worker后续fresh→prepared原验证不改。两file实施/负控/最终差额审查待收，未改生产。
 
 ## 当前交付与明确下一步
