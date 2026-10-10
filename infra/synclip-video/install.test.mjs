@@ -34,7 +34,7 @@ const runtimeModules = ['synclip-video-api', 'synclip-audio-api', 'synclip-image
 // One invocation tests one source version even while the installer owner works.
 const installerSource = await readFile(join(repo, 'infra/synclip-video/install.sh'), 'utf8');
 
-async function fixture({ existing = true, version = 'v1', audio, admin, installerPath,
+async function fixture({ existing = true, version = 'v1', audio, admin, auditionConfig, installerPath,
   sourceArchiveModes = false, realManifest = false,
   active = existing ? 'active' : 'inactive', enabled = existing ? 'enabled' : 'not-found' } = {}) {
   await mkdir(fixtureRoot, { recursive: true });
@@ -53,7 +53,7 @@ async function fixture({ existing = true, version = 'v1', audio, admin, installe
     referenceMode: 'synclip-receipt', adminModelsEnabled: false, adapterRevision: 'synclip-video-v2',
   };
   const oldConfig = { ...defaultConfig, referenceMode: version === 'v1' ? 'inline' : 'synclip-receipt',
-    adapterRevision: `synclip-video-${version}`, adminModelsEnabled: admin ?? false, ...(audio ? { audio } : {}) };
+    adapterRevision: `synclip-video-${version}`, adminModelsEnabled: admin ?? false, ...(audio ? { audio } : {}), ...(auditionConfig ?? {}) };
   if (version === 'v1' && admin === undefined) delete oldConfig.adminModelsEnabled;
   const config = join(root, 'config.json'), ready = join(root, 'spool/results/.ready');
   const service = join(units, serviceName), timer = join(units, timerName);
@@ -488,6 +488,70 @@ test('explicit protected complete config supplies audio and admin without a cred
   successful(f.run({ candidate }));
   assert.deepEqual(JSON.parse(await readFile(f.config, 'utf8')), selected);
   assert.equal(await readFile(candidate, 'utf8'), original); await failClosed(f);
+});
+
+test('audio-audition config survives deferred install and rollback of configured v2 without starting the broker', async () => {
+  const audio = { provider: 'synclip', voice: 'selected-voice', speed: 1 };
+  const f = await fixture({ version: 'v2', audio,
+    auditionConfig: { audioAuditionEnabled: false, audioAuditionBudget: { maxEstimatedCoins: 40 } } });
+  const selected = { ...f.defaultConfig, audio, audioAuditionEnabled: true, audioAuditionBudget: { maxEstimatedCoins: 80 } };
+  const candidate = await candidateConfig(f, selected), input = await readFile(candidate, 'utf8');
+  successful(f.run({ candidate }));
+  assert.deepEqual(JSON.parse(await readFile(f.config, 'utf8')), selected);
+  assert.deepEqual(JSON.parse(await readFile(join(f.bundle, 'config.json'), 'utf8')), selected);
+  assert.equal(await readFile(join(f.bundle, 'previous/config.json'), 'utf8'), JSON.stringify(f.oldConfig) + '\n');
+  assert.equal(await readFile(candidate, 'utf8'), input);
+  await failClosed(f);
+  successful(f.run({ rollback: true }));
+  assert.equal(await readFile(f.config, 'utf8'), JSON.stringify(f.oldConfig) + '\n');
+  assert.equal(await readFile(f.service, 'utf8'), f.oldService); assert.equal(await readFile(f.timer, 'utf8'), f.oldTimer);
+  assert.ok((await lstat(join(f.root, 'releases', oldSha))).isDirectory());
+  await failClosed(f);
+});
+
+test('audio-audition optional config fields keep a fresh installation closed by default', async () => {
+  const f = await fixture({ existing: false }); successful(f.run());
+  const value = JSON.parse(await readFile(f.config, 'utf8'));
+  assert.deepEqual(value, f.defaultConfig);
+  assert.equal(Object.hasOwn(value, 'audioAuditionEnabled'), false);
+  assert.equal(Object.hasOwn(value, 'audioAuditionBudget'), false);
+  await failClosed(f);
+});
+
+for (const variant of ['flag-type', 'zero', 'negative', 'string', 'null', 'array', 'extra-budget-key', 'missing-budget', 'missing-audio', 'unknown-field'])
+  test('audio-audition invalid config ' + variant + ' is refused without live writes or private diagnostics', async () => {
+    const f = await fixture(), marker = privateMarker;
+    const value = { ...f.defaultConfig, audio: { provider: 'synclip', voice: 'selected-voice', speed: 1 },
+      audioAuditionEnabled: true, audioAuditionBudget: { maxEstimatedCoins: 80 } };
+    if (variant === 'flag-type') value.audioAuditionEnabled = marker;
+    if (variant === 'zero') value.audioAuditionBudget.maxEstimatedCoins = 0;
+    if (variant === 'negative') value.audioAuditionBudget.maxEstimatedCoins = -1;
+    if (variant === 'string') value.audioAuditionBudget.maxEstimatedCoins = marker;
+    if (variant === 'null') value.audioAuditionBudget.maxEstimatedCoins = null;
+    if (variant === 'array') value.audioAuditionBudget = [];
+    if (variant === 'extra-budget-key') value.audioAuditionBudget.secret = marker;
+    if (variant === 'missing-budget') delete value.audioAuditionBudget;
+    if (variant === 'missing-audio') delete value.audio;
+    if (variant === 'unknown-field') value.audioAuditionUnknown = marker;
+    const candidate = await candidateConfig(f, value);
+    privateFailure(f.run({ candidate }), marker); await unchanged(f);
+    assert.doesNotMatch(await f.calls(), /systemctl <(?:stop|disable|daemon-reload)>/u);
+  });
+
+test('audio-audition fields do not silently change legacy v1 migration', async () => {
+  for (const auditionConfig of [{ audioAuditionEnabled: false }, { audioAuditionBudget: { maxEstimatedCoins: 80 } }]) {
+    const f = await fixture({ auditionConfig }); privateFailure(f.run(), privateMarker); await unchanged(f);
+  }
+});
+
+test('audio-audition operator config still requires protected root ownership and 0600 mode', async () => {
+  for (const extra of [{ STAT_MODE: '644' }, { STAT_UID: '1000' }]) {
+    const f = await fixture(); const candidate = await candidateConfig(f, { ...f.defaultConfig,
+      audio: { provider: 'synclip', voice: 'selected-voice', speed: 1 }, audioAuditionEnabled: true,
+      audioAuditionBudget: { maxEstimatedCoins: 80 } });
+    const result = f.run({ candidate, extra: { STAT_PATH: posix(candidate), ...extra } });
+    assert.equal(result.status, 67); await unchanged(f);
+  }
 });
 
 test('explicit config outside private, with unsafe ownership or mode, or through a symlink is refused', async () => {

@@ -138,12 +138,18 @@ try {
     if (!bytes.length || bytes.length > 16384) throw Error();
     value = JSON.parse(bytes.toString('utf8'));
     if (!value || typeof value !== 'object' || Array.isArray(value)
-      || Object.keys(value).some(name => !Object.hasOwn(defaults, name) && name !== 'audio')
+      || Object.keys(value).some(name => !Object.hasOwn(defaults, name) && !['audio', 'audioAuditionEnabled', 'audioAuditionBudget'].includes(name))
       || ['inbox', 'results', 'privateRoot', 'keyPath', 'model', 'resolution'].some(name => value[name] !== defaults[name])
       || typeof value.rendererImage !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(value.rendererImage)) throw Error();
+    const budget = value.audioAuditionBudget;
+    if ((Object.hasOwn(value, 'audioAuditionEnabled') && typeof value.audioAuditionEnabled !== 'boolean')
+      || (Object.hasOwn(value, 'audioAuditionBudget') && (!budget || typeof budget !== 'object' || Array.isArray(budget)
+        || Object.keys(budget).join(',') !== 'maxEstimatedCoins' || !Number.isFinite(budget.maxEstimatedCoins) || budget.maxEstimatedCoins <= 0))
+      || (value.audioAuditionEnabled === true && (!value.audio || !budget))) throw Error();
     previousV1 = value.adapterRevision === 'synclip-video-v1';
     if (previousV1 && !['explicit', 'candidate'].includes(kind)) {
-      if (value.referenceMode !== 'inline' || Object.hasOwn(value, 'audio') || Object.hasOwn(value, 'adminModelsEnabled')) throw Error();
+      if (value.referenceMode !== 'inline' || Object.hasOwn(value, 'audio') || Object.hasOwn(value, 'adminModelsEnabled')
+        || Object.hasOwn(value, 'audioAuditionEnabled') || Object.hasOwn(value, 'audioAuditionBudget')) throw Error();
       value = { ...value, referenceMode: 'synclip-receipt', adminModelsEnabled: false, adapterRevision: 'synclip-video-v2' };
     }
     broker.validateSynclipVideoBrokerConfig(value);
