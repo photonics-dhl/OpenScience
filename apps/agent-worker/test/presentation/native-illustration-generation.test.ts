@@ -267,7 +267,8 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, result: structuredClone(f.image.result) };
     expect(await getHermesResearchRun(f.deps as never, f.input)).toMatchObject({ canRetryGeneration: true, chargeableAttempts: 0, generationRecovery: 'image-render' });
     await retryHermesGeneration(f.deps as never, f.input);
-    expect(f.image).toMatchObject({ status: 'pending', retryCount: 1, result: before.result });
+    expect(f.image).toMatchObject({ status: 'pending', retryCount: 1 });
+    expect(f.image.result).toEqual(before.result);
     expect(f.run).toMatchObject({ status: 'generating_scene_images', maxAgentTasks: 9 });
     await retryHermesGeneration(f.deps as never, f.input);
     expect(f.db.agentTasks).toHaveLength(before.tasks);
