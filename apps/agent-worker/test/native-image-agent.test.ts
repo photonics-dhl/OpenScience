@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, mkdir, access, rm } from 'node:fs/promises';
+import { mkdtemp, access, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiGateway, AnthropicCompatProvider, type ScienceReviewInput } from '@openscience/ai-gateway';
 import type { AgentNativeImageReviewPrepared, NativeAgentImageCheckpointReference } from '@openscience/domain';
@@ -243,8 +244,7 @@ function post(socketPath: string, path: string, value: unknown) {
 }
 async function imageHost() {
   const f = await fixture({ deferInitial: true });
-  const rootDir = resolve(__dirname, '../../../tmp/native-pixel-review'); await mkdir(rootDir, { recursive: true });
-  const root = await mkdtemp(resolve(rootDir, 'host-')); let allowed = true;
+  const root = await mkdtemp(resolve(tmpdir(), 'xgs-img-')); let allowed = true;
   const receipt = { status: 'image_view_ready', requestId: taskId, contentHash: f.envelope.contentHash,
     sourceEvidenceIdentity: f.envelope.sourceEvidenceIdentity, parentIdentity: f.envelope.parentIdentity };
   const content = [{ type: 'image_url' as const, image_url: { url: `data:image/png;base64,${pixels.toString('base64')}` } }];
@@ -255,18 +255,38 @@ async function imageHost() {
     authorize: async () => { if (!allowed) throw new Error('[blocked] revoked'); },
     paper: { observedPassageIds: [], call: async () => receipt, images: imageRead,
       withAuthorizedToolCall: async run => { if (!allowed) throw new Error('[blocked] revoked'); return run(); } } });
-  void final.catch(() => undefined);
+  let initializationError: unknown;
+  void final.catch(error => { initializationError = error; });
   const socketPath = resolve(root, `${taskId}-1/worker.sock`);
-  for (let i = 0; i < 100; i++) {
-    try { await access(resolve(root, `${taskId}-1/request.json`)); break; } catch { await new Promise(r => setTimeout(r, 10)); }
-  }
-  const first = await post(socketPath, '/v1/chat/completions', f.sdk); expect(first.status).toBe(200);
-  expect((await post(socketPath, '/task/tools/authorize', { name: 'skill_view', arguments: { name: 'openscience-source-review' } })).status).toBe(200);
-  expect((await post(socketPath, '/task/tools/authorize', { name: 'paper_image_view', arguments: {} })).status).toBe(200);
-  const view = await post(socketPath, '/task/tools/call', { name: 'paper_image_view', arguments: {} }); expect(view.status).toBe(200);
-  const firstMessage = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
-  return { ...f, final, socketPath, receipt, imageRead, firstMessage, revoke: () => { allowed = false; }, cleanup: () => rm(root, { recursive: true, force: true }) };
+  try {
+    let ready = false;
+    for (let i = 0; i < 100; i++) {
+      if (initializationError) throw initializationError;
+      try { await access(resolve(root, `${taskId}-1/request.json`)); ready = true; break; } catch { await new Promise(r => setTimeout(r, 10)); }
+    }
+    if (initializationError) throw initializationError;
+    if (!ready) throw new Error('Host fixture did not publish its request after listening');
+    const first = await post(socketPath, '/v1/chat/completions', f.sdk); expect(first.status).toBe(200);
+    expect((await post(socketPath, '/task/tools/authorize', { name: 'skill_view', arguments: { name: 'openscience-source-review' } })).status).toBe(200);
+    expect((await post(socketPath, '/task/tools/authorize', { name: 'paper_image_view', arguments: {} })).status).toBe(200);
+    const view = await post(socketPath, '/task/tools/call', { name: 'paper_image_view', arguments: {} }); expect(view.status).toBe(200);
+    const firstMessage = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
+    return { ...f, final, socketPath, receipt, imageRead, firstMessage, revoke: () => { allowed = false; }, cleanup: () => rm(root, { recursive: true, force: true }) };
+  } catch (error) { await rm(root, { recursive: true, force: true }); throw initializationError ?? error; }
 }
+
+it('reports the actual Host guard for the overlong CI socket path before any provider request', async () => {
+  const f = await fixture({ deferInitial: true });
+  const inboxRoot = '/home/runner/work/OpenScience/OpenScience/tmp/native-pixel-review/host-HR0A9b';
+  expect(Buffer.byteLength(`${inboxRoot}/${taskId}-1/worker.sock`, 'utf8')).toBe(128);
+  await expect(runHostedNativeTask({ inboxRoot, executionAttempt: 1,
+    config: { ...f.binding, goal: f.request.prompt, instructions: 'View this saved image.', sourceTools: NATIVE_IMAGE_REVIEW_TOOLS },
+    deadlineAt: f.envelope.deadlineAt, maxInputBytes: f.envelope.maxInputBytes, session: f.session, store: f.store,
+    authorize: f.authority, paper: { observedPassageIds: [], call: async () => ({}), images: async () => ({ content: [] }) },
+  })).rejects.toThrow('[blocked] Native Unix socket path exceeds the kernel limit');
+  expect(f.fetcher).not.toHaveBeenCalled();
+});
+
 describe.skipIf(process.platform === 'win32')('actual saved-image Host endpoint', () => {
   it('delivers bound pixels through paper_image_view and closes from the same actual SDK final', async () => {
     const f = await imageHost();
