@@ -539,6 +539,41 @@ test('creation opens the complete companion from its avatar without starting wor
   } finally { await identity.dispose(); }
 });
 
+test('editing presents the contribution and six fields from the existing research entry', async ({ page }) => {
+  await mockWorkspace(page);
+  await mockPublishedPreview(page);
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(baseUrl + '/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
+    await enterEditor(page);
+    const content = page.locator('[data-workbench-section="content"]');
+    await expect(content).toBeVisible();
+    await expect(content.locator('[data-sdf-node]')).toHaveCount(6);
+    await expect(page.locator('[data-workbench-section="media"]')).toBeVisible();
+    for (const name of ['Problem', 'Insight', 'Method', 'Results', 'Limitations', 'Reproducibility']) {
+      const button = content.getByRole('button', { name, exact: true });
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await content.getByRole('textbox', { name, exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath(`editing-initial-${viewport.width}.png`), fullPage: false });
+    await page.screenshot({ path: test.info().outputPath(`editing-full-${viewport.width}.png`), fullPage: true });
+    const field = content.getByRole('textbox', { name: 'Problem', exact: true });
+    await content.getByRole('button', { name: 'Problem', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue(reviewCore.problem);
+    const opener = label(page);
+    await opener.focus();
+    await page.keyboard.press('Enter');
+    await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+    await page.screenshot({ path: test.info().outputPath(`editing-hermes-open-${viewport.width}.png`), fullPage: false });
+    await closeTo(page, opener, viewport.width < 1024, 'document-flow');
+    await expect(field).toHaveValue(reviewCore.problem);
+  }
+});
+
 test('Hermes respects system motion and persists explicit preferences after conversation and travel', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
