@@ -14,20 +14,20 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 实际installed SDK有限只读消费已交付，未构造Agent/跑循环/看真实PNG。Fig2 fresh exact5全等、身份关联已核；现独占逐项Prisma对账，等UI一次动作结果才读取，不执行POST | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`@87045；原tmp/native-image-host-ci-fix、tmp/fig2-cleanup保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 独立Synclip仍42fe且无目录/audio client；正式source0775/0664被旧source_path误拒。已派仅install.sh/install.test.mjs修复与原High增量审，保私有文件/rollback守卫；host更新由root串行安排 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`；从canonical10f新codex分支，6e243和原tmp/synclip-host-readonly回执保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 编辑0a及空会话裁切af已审、全等集入348c/10f待下一批；Fig2五asset行与同ID task行已核。现唯一资产writer，仅首项d508一次普通UI软回收，后续须逐项对账后root放行 | `.worktrees/research-product-craft` / `codex/ui-hermes-initial-scroll`@af231a；原tmp/ui-art-20261008保图/日志，不改共享API/生产配置 |
-- root独占生产排程；393正式发布窗口已结束，现Fig2唯一UI writer逐项窗口，首次POST结果待报。其它发布/资产写冻结；生图只对账、视频只修本地安装器，禁止因idle扩生产范围。
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | installed SDK有限只读消费完成，真实循环/PNG未验。Fig2 d508唯一回收entry已确认、75b未回收；现按RO9067+06:23Z之后Trash/audit/媒体做一次异常提示只读对账，禁止写/重发 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`@87045；原tmp/native-image-host-ci-fix、tmp/fig2-cleanup保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 安装器281ee4的非root组写P1已由06bfe闭合；原High最终两file GO，全等合收029b769e。本地37/37与新增差额7/7复用不相加，下一步实际Linux CI；host仍42fe/未GET目录 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/synclip-source-manifest-compat`@06bfe491；原tmp/synclip-source-manifest-compat保RED/修正/原37日志 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 0a/af全等集入348c/10f待下一批；Fig2首项成功，第二项click超时后出现不同标题回收提示，已释放writer，仅保留DOM/动作证据。先定位异常，不能把目标rows=[]误称全回收 | `.worktrees/research-product-craft` / `codex/ui-hermes-initial-scroll`@af231a；原tmp/ui-art-20261008保图/日志，无其它写权 |
+- root独占生产排程；393发布已结束。Fig2第二项浏览器click报no_matches且出现Weyl非名单回收提示，现全资产/生产发布冻结、无writer；只读核实际RO变更与UI调用来源。正常本地集成/CI可继续，禁止未经对账的恢复或其它资产写。
 
 ## Git / CI / 运行事实
-- canonical=`release/onchip-production-line`；393正式已推`frontend/nanqing`并成功上线。其后UI0a→`348c127d7aa08e53dad86276b0e363907dbf67c2`、af→`10f135817c796529e5a7b79af78718c14c08230c`全等集入，四文件对owner af diff0；docs另提交，精确HEAD以Git为准。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。UI两commit尚未发布。
+- canonical=`release/onchip-production-line`；线上已推393。UI0a/af全等集入348c/10f；视频281ee4+06bfe两file组合全等集入`029b769e97d0fa4a9f9324561eba4a3d9243aee2`，P1已关闭/原High最终GO；docs另提交，精确HEAD及对应CI以Git为准。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，下一批仅正常推frontend/nanqing，不合main/强推，未发布。
 - 393五CI全SUCCESS：media PR38025073327/push38025070870、video38025073354、journals38025073326/push38025070875。Linux main114134084085/114134076089的deploy+manifest+retention合组306/306、0skip，新增retention87含Native prepare/abort/legacy/malformed/权限/FD9；主browser34/34、八entry job均过。原完整393-media-main-{pr,push}.log在root tmp。旧4acd Host37/图审54/Worker642未变证据复用，不叠加重叠数量。
 - 13:03:21–13:11:15 CST正式393部署exit0：Native/application配对、公开精确release验收、retention prepare、journal clear与complete全通过，迁移无pending。13:13:05只读active=`393202f7c863e9d87011049668594bcb0f8c1dfb`、rollback=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，Native runtime/catalogue/unit同393；API af63ece1/Web ef00cbc8/Worker459a5887均healthy/restart0/source393，无journal/failed/pending、Native实例或FD9 owner，M3保持。13:45 Fig2前后marker/Worker仍稳定。
 - 原审393 one-shot执行safe=true/nativePending=false/nativeBoundPending=false，执行标记保留不可重跑；新双库`/var/backups/openscience/db-set-20261010T050021Z-3432378`两dump163693443/14257855B、checksum0、0700/0600已核，旧集合保留。首次只读backup verifier因本机ISO转DateTime失败，未重做backup；Node保留ISO后成功，原错误/纠正保留。
-- 本轮原回执：root `tmp/session-coordination-20261008/deploy-native-393{.log,-command.json}`、`native-393-postdeploy-readonly.json`、`backup-before-native-393*`；video原tmp/synclip-host-readonly/prepublish-work-393记录one-shot。标准seed/注册随发布执行；模型/paid/科研资产写0，不把标准发布称全DB零写。
+- 本轮原回执：root `tmp/session-coordination-20261008/deploy-native-393{.log,-command.json}`、`native-393-postdeploy-readonly.json`、`backup-before-native-393*`；video原tmp/synclip-host-readonly/prepublish-work-393记录one-shot。标准seed/注册随发布执行；该发布期间模型/paid/科研资产写0；后续Fig2写入另见下方，不把标准发布称全DB零写。
 - Chrome真实首页→OSR-2026-000024/v/2已显示正文/六维/认可首图7eb1；个人中心→研究入口与网站设置沿可见导航可读，正常DHL会话、Preferences先于账户。余额实际显示剩余0 AI credit/月500，仅UI usage快照，不是供应商资格拒绝或完整计费对账，不扩预算。已部署与整体艺术/真实自动科研质量分别判断。
 - 生图13:23在实际393 venv导入hermes-agent0.10.0/AIAgent薄适配，核三工具注册/schema/selected方法/SkillScope并运行合成metadata handler；未实例化或跑run_conversation，无真实PNG/Provider。正式路径runNativeImageReviewTask→Host→broker/task unit→SDK；需合法新任务及原预算才可验收真实像素，旧unknown不得重放。
-- 视频13:20–13:22只读独立host仍`42fe1a974fb62e5a868d3a4f1da812065cb148b1`，adminModelsEnabled=false/audio absent、无list-voices/client；正式source0775/0664被install.sh 0022拒绝（源码推断exit66，未安装）。主应用开关true不能证明host更新或LTX可用；目录GET0/付费0，现本地修最小安装差额。
+- 视频13:20–13:22只读独立host仍42fe，adminModelsEnabled=false/audio absent、无list-voices/client；正式0775/0664 source被旧安装器拒绝，未试安装。最终新源码只容许root:root正式archive，先核原marker/manifest和broker metadata，private/dist/rollback不放宽。主应用开关true不证明host更新或LTX可用；目录GET0/付费0，待CI和串行更新。
 - 历史4acd在retention旧schema处失败，12:19正常自动回退结束；由990e6e85复用validateNativeJournalState及393原workflow五行补丁闭合，原High GO。更早d8 Compose/权限误用及专用恢复已结束。原事故/备份/paid证据保留，长记录见Git393本页及原tmp，禁止重跑旧恢复/reader。51e4 superseded media已cancelled、其余三CI成功，不作393证明。
 
 ## 当前交付与明确下一步
@@ -43,8 +43,10 @@
 - 共享包络按fd已采关键帧/hover极值向外取整，bottom旧27保持；不为接近边界盲加余量，不称经验网格为全域证明。原数值/786差额/已过loading handler记录见Git f2a2677c本页，当前头像不重做旧巡游。
 - 版本原文reader/CSS/两尺寸证据已收；bebe reading20/20，不把历史FastRefresh失踪/foreign loading泛化为生产根因。期刊375初始标题bottom810.953≤812、独立role slot无遮挡，仅该屏证据。Figma同页14frame（含2162:23 reader375）/实际PNG在UI原tmp，均为候选，不代表窄屏产品/整体审美认可。
 - Task4长表格57c→aa0、恢复f427→79050/CLI03b3→3a3faa保留High/CI及原预算/CAS/owner。10-08 21:29读：96b0dbe8-b5cc-4784-a9c2-0b62d12cb766/d357/v27为69 active/0 vector，来源6368当时满足；旧049c已非current，不apply。真实BGE未跑，授权与fresh状态另核，回执在生图`tmp/source-index-token-limit-recovery/`。
-- Fig2 exact5已获human及原High批准（成员旧URL恢复前404/初始30天）。393行标识已上线；UI管理内容每ID各有asset/task行，必须kind=asset+UUID。13:45:43–48 fresh资产/5HEAD/任务/refs/sealed全等原回执；原e77内部v8/OSR23-v2五项excluded，当前公开v5/internal11选65ff，私有draft6236/internal13，不能混为同版本。
-- Fig2沿原allowlist/顺序，保对象/任务/费用/Claims/sealed，禁purge/补源。正常Settings账号唯一关联原owner10baa；浏览器/api/auth/me被ERR_BLOCKED_BY_CLIENT已停止不绕过，High确认无需另取sessionGUID。UI丢弃POST body，原High条件GO允许明确标注数据库对账收据：每POST后唯一active entry、owner/parent/RO/asset.deletedAt及trashEntryId一致，保存原五字段；pending/未知/不一致停且不重发，正常Trash/search/member/匿名GET另验。部分恢复75b先于d508，77/929不扩；原tmp/fig2-cleanup保全回执。
+- Fig2 exact5原授权有效；d508于14:23:19成功，唯一entry=`d1b3a6d0-f1b5-47b5-99cf-505363edca83`，trashed/lastError=null/原owner/父null/RO/绑定正确，初始purgeAfter11-09T06:23:19.678Z。75b14:38一次click报selector deadline/no_matches，14:41只读live/0entry，其余3未点。所有writer已释放，不盲重发或自动restore。
+- Fig2 14:47部分完成raw：仅d508两标记+唯一entry，另4/任务/Claims/provenance/5HEAD/原sealed v8及当前publicv5选65ff/refs/runtime保持。原audit比较false已保留，addendum确认原10条不变、正常新增一条d508 trash.move，撤回此前audits全等/整体PASS。非目标证据仅原selected-media投影和65ff，不能泛称其它私有资产未变。
+
+- UI14:47异常提示“Weyl角谱：一个积分中的两类分量”已回收、图数1/7→1/4；管理modal已gone，早先rows=[]非成功证明。根因/实际非目标变更待RO限域Trash/audit只读对账与High源码分析，不猜操作者或恢复。正常账号唯一关联/逐项数据库收据High条件仍有效；浏览器身份API被阻断不绕过；77/929不扩原债务。原证据在各owner tmp/fig2-cleanup、tmp/ui-art-20261008。
 
 ## 真实论文交付
 | 论文 / Taskmaster | 保留的真实成果与反馈 | 尚未完成 |
