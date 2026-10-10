@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getCurrentUser, getHermesVideoCapability, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
-import { hasCurrentPresentationSources, isEligibleArtStoryboard, newestEligibleStoryboard, presentationSources, presentationVideoFrameIds, presentationStoryboardRequest, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
+import { hasCurrentPresentationSources, hasSingleReviewedPaperSource, isEligibleArtStoryboard, newestEligibleStoryboard, presentationSources, presentationVideoFrameIds, presentationStoryboardRequest, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
@@ -80,6 +80,9 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     : (action === 'scene.image' || action === 'video.create') && (updateBrief || Boolean(instruction.trim())) ? 'storyboard.revise' : action);
   const medium = action === 'video.create' || (action === 'storyboard.revise' && parent?.storyboard?.output === 'video') ? 'video' : 'image';
   const sourceIds = replayRequest?.sourceIds ?? presentationSources(effectiveAction, selectedClaimIds, parent, scene);
+  const singlePaperImage = replayRequest
+    ? 'narrativeSceneLimit' in replayRequest.payload && replayRequest.payload.narrativeSceneLimit === 1 && 'output' in replayRequest.payload && replayRequest.payload.output === 'image'
+    : effectiveAction === 'storyboard.create' && medium === 'image' && !figurePlan && hasSingleReviewedPaperSource(sourceIds, claims);
   const effectiveRevisionMode = replayRequest ? ('revisionMode' in replayRequest.payload ? replayRequest.payload.revisionMode : undefined) : revisionMode;
   const requestLocale = replayRequest && 'locale' in replayRequest.payload ? replayRequest.payload.locale : locale === 'zh' ? 'zh' : 'en';
   const sourceValidationError = !hasCurrentPresentationSources(sourceIds, claims) ? 'needsEligibleSources'
@@ -115,7 +118,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
       : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
       : presentationStoryboardRequest({ action: effectiveAction, locale: locale === 'zh' ? 'zh' : 'en', style,
         output: action === 'video.create' ? 'video' : 'image', instruction: instruction.trim(), parent,
-        figurePlan, revisionMode: effectiveRevisionMode, revisionSceneIndex }));
+        figurePlan, revisionMode: effectiveRevisionMode, revisionSceneIndex, singlePaperImage }));
     const activeController = new AbortController(); submissionController.current = activeController;
     setBusy(true); setError('');
     let record: SubmissionIntent | undefined;
@@ -192,6 +195,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   }, [onConfirmationChange, confirmationReady, requestScope, locked]);
   if (onConfirmationChange) return <div className="hermes-message hermes-message-assistant" data-hermes-presentation-action="true">
     <p>{tc('productionScope', { kind: t(medium), style: summaryStyle })}</p>
+    {singlePaperImage ? <p className="mt-2 text-sm">{t('planOneImageHint')}</p> : null}
     {figureSummary}
     {revisionSceneIndex !== undefined && parent?.storyboard?.output === 'video' && <p className="mt-2 text-sm">{t('videoRevision.scene', { number: revisionSceneIndex + 1 })}</p>}
     {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm">{parent.storyboard.document.title} · {t('scene')} {scene + 1}: {parent.storyboard.document.scenes[scene]?.title}</p>}
@@ -218,7 +222,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
       {videoRevisionControl}
       <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{t('advanced')}</summary>{parent ? <p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('usingApprovedPlan')}</p> : null}<p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('eligibleSources', { count: selectedClaimIds.length })}</p></details>
       </details>
-    </fieldset>{!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}{(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}{effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}{ready && sourceValidationError ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t(sourceValidationError)}</p> : null}{effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsApprovedScenes')}</p> : null}{error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}<p className="text-xs leading-5 text-os-muted-paper">{t('charge')}</p><button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
+    </fieldset>{!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}{(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}{effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}{ready && sourceValidationError ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t(sourceValidationError)}</p> : null}{effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsApprovedScenes')}</p> : null}{error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}<p className="text-xs leading-5 text-os-muted-paper">{t('charge')}</p><button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? singlePaperImage ? 'planOneImage' : 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
     <button className="mt-3 min-h-11 px-2 text-sm underline" disabled={locked} onClick={onBack} type="button">{t('back')}</button>
   </section>;
 }

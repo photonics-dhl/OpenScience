@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { visibleStoryboardAction } from '@openscience/domain/storyboard-visible-action';
 import type { PresentationClaim, StoryboardRequest, StoryboardView, SceneImageRequest } from '@/lib/api';
+import { hasCurrentPresentationSources, hasSingleReviewedPaperSource } from '@/lib/hermes/presentation-action';
 
 interface Props {
   storyboard?: StoryboardView;
@@ -27,12 +28,15 @@ export function buildStoryboardRequest(input: {
   baseAssetId?: string;
   artOnly: boolean;
   storyboard?: Pick<StoryboardView, 'narrative'>;
+  singlePaperImage?: boolean;
 }): StoryboardRequest {
   return {
     locale: input.locale,
     style: input.style,
     output: input.output,
     instruction: input.instruction.trim(),
+    ...(input.singlePaperImage && !input.baseAssetId && input.output === 'image'
+      ? { narrative: true as const, narrativeSceneLimit: 1 } : {}),
     ...(input.baseAssetId ? {
       baseAssetId: input.baseAssetId,
       ...(input.artOnly ? { revisionMode: 'art' as const, artSceneIndex: 0,
@@ -51,6 +55,9 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
   const output: StoryboardRequest['output'] = storyboard?.output ?? 'image';
   const [instruction, setInstruction] = useState(baseAssetId ? '' : tw('coreImageInstruction'));
   const names = new Map(claims.map((claim) => [claim.id, claim.statement]));
+  const sourcesCurrent = hasCurrentPresentationSources(selectedClaimIds, claims);
+  const singlePaperImage = !storyboard && !baseAssetId && output === 'image'
+    && hasSingleReviewedPaperSource(selectedClaimIds, claims);
   function sceneContent(scene: StoryboardView['document']['scenes'][number] | undefined) {
     return scene ? <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">
       <h4 className="m-0 font-semibold">{scene.title}</h4>
@@ -79,7 +86,8 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     {canGenerate && onGenerate ? <form className="mt-5 space-y-4 border-t border-os-rule-paper pt-5" onSubmit={(event) => {
       event.preventDefault();
       if (!selectedClaimIds.length || !instruction.trim()) return;
-      onGenerate(selectedClaimIds, buildStoryboardRequest({ locale, style, output, instruction, baseAssetId, artOnly, storyboard }));
+      if (!sourcesCurrent) return;
+      onGenerate(selectedClaimIds, buildStoryboardRequest({ locale, style, output, instruction, baseAssetId, artOnly, storyboard, singlePaperImage }));
     }}>
       <p className="m-0 text-sm font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
       <fieldset className="border-0 p-0">
@@ -95,8 +103,9 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
       </details>
       {baseAssetId ? <label className="flex items-start gap-3 rounded-control border border-os-rule-paper bg-os-paper px-3 py-3 text-sm"><input className="mt-1 size-4 accent-os-vermilion-ink" type="checkbox" checked={artOnly} onChange={(event) => setArtOnly(event.target.checked)} /><span><span className="block font-semibold">{t('artOnly')}</span><span className="mt-1 block text-xs leading-5 text-os-muted-paper">{t('artOnlyHint')}</span></span></label> : null}
       <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('charge')}</p>
+      {!sourcesCurrent ? <p className="m-0 text-sm leading-6 text-os-muted-paper" role="status">{t('needsSources')}</p> : null}
       {baseAssetId ? <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('retained')}</p> : null}
-      <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!selectedClaimIds.length || !instruction.trim()}>{t(baseAssetId ? 'revise' : 'generate')}</button>
+      <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!sourcesCurrent || !instruction.trim()}>{t(baseAssetId ? 'revise' : singlePaperImage ? 'planOneImage' : 'generate')}</button>
     </form> : null}
   </section>;
 }

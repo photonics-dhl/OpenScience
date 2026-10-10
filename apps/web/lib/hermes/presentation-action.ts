@@ -14,6 +14,18 @@ export function validPresentationInstruction(value: string): boolean { return va
 export function hasCurrentPresentationSources(ids: string[], claims: PresentationClaim[]): boolean {
   return ids.length > 0 && ids.every(id => claims.some(c => c.id === id && c.extractionStatus === 'succeeded'));
 }
+/** UI routing only; the server still validates the exact paper, version and reviewed source. */
+export function hasSingleReviewedPaperSource(ids: string[], claims: PresentationClaim[]): boolean {
+  if (!hasCurrentPresentationSources(ids, claims)) return false;
+  const lineages = ids.map(id => {
+    const provenance = claims.find(claim => claim.id === id)?.provenance;
+    if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) return undefined;
+    const source = provenance as { source?: unknown; sourceTaskLineage?: unknown; sourceTaskId?: unknown };
+    const lineage = source.sourceTaskLineage ?? (source.source === 'reviewed_ingestion' ? source.sourceTaskId : undefined);
+    return typeof lineage === 'string' && lineage.trim() ? lineage : undefined;
+  });
+  return lineages.every(lineage => lineage !== undefined) && new Set(lineages).size === 1;
+}
 const SDF_FIELDS = new Set(['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']);
 function provenanceKey(claim: PresentationClaim): string {
   const provenance = claim.provenance;
@@ -64,10 +76,13 @@ export function presentationStoryboardRequest(input: {
   locale: StoryboardRequest['locale']; style: string; instruction: string;
   parent?: PresentationAsset; figurePlan?: StoryboardRequest['figurePlan'];
   revisionMode?: StoryboardRequest['revisionMode']; revisionSceneIndex?: number;
+  singlePaperImage?: boolean;
 }): StoryboardRequest {
   const base = input.action === 'storyboard.revise' ? input.parent : undefined;
   const output = base?.storyboard?.output ?? input.output;
   return { locale: input.locale, style: input.style, output, instruction: input.instruction,
+    ...(input.singlePaperImage && input.action === 'storyboard.create' && output === 'image' && !input.figurePlan
+      ? { narrative: true as const, narrativeSceneLimit: 1 } : {}),
     ...(input.figurePlan ? { figurePlan: input.figurePlan } : {}),
     ...(base ? { baseAssetId: base.id, ...(input.revisionMode ? { revisionMode: input.revisionMode } : {}) } : {}),
     ...(output === 'video' ? { narrative: true as const,
