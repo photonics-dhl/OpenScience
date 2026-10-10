@@ -14,8 +14,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | b572+87045已全等收为61598e21+1cad42a7；原High闭合，4acd两套实际Linux Host37/37含六Unix、图审54/54。代码已交付，实际installedSDK/PNG依赖root完整发布，当前不重复测试或付费调用 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`@87045；原refs/证据保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 一次fresh classifier已成功交付。已立即分派本次真实发布根因：retention的旧五键拒绝合法nativeRefresh，仅原retention.mjs/test.mjs；复用现有validator，真实prepare/abort/legacy及拒绝无副作用回归，root原High增量审 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS`，从4acd新独立codex分支；原fdf/compat/query/4bc及回执保留，无生产写权 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | b572+87045全等集入且4acd实际Linux Host37/37含六Unix、图审54/54。现承接独立只读映射：固定4acd枚举同journal的正式消费者/已有测试，排查另一旧五键漏接；只交精确短receipt，不改源码/新测试/生产。installedSDK与PNG仍依赖完整发布 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`@87045；原refs/证据保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 一次fresh classifier已成功交付。已立即分派本次真实发布根因：retention的旧五键拒绝合法nativeRefresh，仅原retention.mjs/test.mjs；复用现有validator，真实prepare/abort/legacy及拒绝无副作用回归，root原High增量审 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/retention-native-journal`基于4acd；原fdf/compat/query/4bc及回执保留，无生产写权 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | settings eaf已全等收为32b27，最终1PASS14.6s/两file lint0、root已看1440/390/error原图；已分派编辑页主任务与正文密度，从32b27沿原Figma2138:117与实际fixture作最小差额，保业务和已有消费者断言 | `.worktrees/research-product-craft`；edit/page.tsx仅JSX呈现、原workbench.module.css、原hermes-workspace-stage.spec.ts必要编辑呈现用例；eaf/ad/consumer refs保留 |
 - root独占生产；12:19自动回退完整结束后发布/资产窗口关闭。各owner只写上表范围、不回退他人；UI与科研资产/paid unknown交付目标不因发布返工取消，Fig2仍0写/无writer。
 
