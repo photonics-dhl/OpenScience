@@ -4,6 +4,8 @@ No supplier, browser, product task or database is used. Run in an isolated test
 directory using the installed Hermes venv; stdout contains only the receipt.
 """
 import contextlib
+import base64
+import hashlib
 import io
 import json
 import os
@@ -99,6 +101,7 @@ def main():
                         save_trajectories=False, persist_session=False, skip_context_files=True, session_id="offline-native-loop")
             assert agent.valid_tool_names == allowed
             # Native construction finishes lazy builtin discovery before wrapping its actual handlers.
+            skill_handlers = {name: registry.get_entry(name).handler for name in ("skills_list", "skill_view")}
             guard_registered_tools(registry, allowed, lambda name, args: invoked.append({"name": name, "args": args}), SkillScope(task_home / "skills"))
             result = agent.run_conversation("Understand the paper and check the threshold locations.",
                                             system_message="Use the available native skills and source tools, then explain the source relation.",
@@ -181,12 +184,89 @@ def main():
             assert stopped and len(denied_requests) == 1 and len(invoked) == 7 and len(denied_checks) == 2, "Native loop continued after tool authority was revoked"
             denied_agent.client.close()
 
+            # Exercise the saved-image profile through the real SDK, rather than
+            # only testing append_bound_page_images with a stand-in native class.
+            # The PNG and model response are fixtures: this proves transport and
+            # tool execution, never a scientific or aesthetic judgement.
+            for name, original in skill_handlers.items():
+                entry = registry.get_entry(name)
+                registry.register(name=entry.name, toolset=entry.toolset, schema=entry.schema, handler=original,
+                    check_fn=entry.check_fn, requires_env=entry.requires_env, is_async=entry.is_async)
+            png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=")
+            image_identity = {"requestId": "offline-image-review", "contentHash": hashlib.sha256(png).hexdigest(),
+                "sourceEvidenceIdentity": "1" * 64, "parentIdentity": "2" * 64}
+            image_receipt = {"status": "image_view_ready", **image_identity}
+            image_schema = {"name": "paper_image_view",
+                "description": "View the actual saved image for THIS review task, with its exact image, approved parent and source identity. No other image is available.",
+                "parameters": {"type": "object", "additionalProperties": False, "properties": {}, "required": []}}
+            def image_view(args, **_kwargs):
+                assert args == {}
+                return json.dumps(image_receipt, separators=(",", ":"))
+            registry.register(name=image_schema["name"], toolset="openscience-sources", schema=image_schema, handler=image_view)
+            image_allowed = {"skills_list", "skill_view", "paper_image_view"}
+            create_custom_toolset("openscience-image-task", "Saved image and native skills", tools=sorted(image_allowed))
+            image_requests = []
+            image_authorizations = []
+            image_releases = []
+            image_decision = json.dumps({"decision": "blocked", "summary": "Offline transport fixture only.", "repairInstruction": None})
+            image_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+            def saved_pixels(call_id, args, result):
+                assert call_id == "saved-image-view" and args == {} and result == image_receipt
+                image_releases.append(call_id)
+                return [{"type": "text", "text": "Actual saved image; it is not a style reference. " + json.dumps(image_identity)},
+                    {"type": "image_url", "image_url": {"url": image_url}}]
+            def image_handler(request):
+                body = json.loads(request.content)
+                image_requests.append(body)
+                assert request.url.host == "openscience-worker"
+                assert body["model"] == "MiniMax-M3.1"
+                assert {tool["function"]["name"] for tool in body["tools"]} == image_allowed
+                first = len(image_requests) == 1
+                assert len(image_requests) <= 2, "Saved-image SDK loop made an unexpected extra request"
+                message = {"role": "assistant", "content": None if first else image_decision}
+                if first:
+                    message["tool_calls"] = [
+                        {"id": "image-method-read", "type": "function", "function": {
+                            "name": "skill_view", "arguments": json.dumps({"name": "paper-method"})}},
+                        {"id": "saved-image-view", "type": "function", "function": {
+                            "name": "paper_image_view", "arguments": "{}"}},
+                    ]
+                else:
+                    receipts = [m for m in body["messages"] if m.get("role") == "tool"]
+                    assert {m["tool_call_id"] for m in receipts} == {"image-method-read", "saved-image-view"}
+                    saved = next(m for m in receipts if m["tool_call_id"] == "saved-image-view")
+                    assert json.loads(saved["content"]) == image_receipt
+                    parts = [part for m in body["messages"] if isinstance(m.get("content"), list) for part in m["content"]]
+                    pixels = [part for part in parts if part.get("type") == "image_url"]
+                    assert len(pixels) == 1 and pixels[0]["image_url"]["url"] == image_url
+                    assert any(part.get("type") == "text" and json.dumps(image_identity) in part.get("text", "") for part in parts)
+                return httpx.Response(200, json={"id": "offline-image", "object": "chat.completion", "created": 0,
+                    "model": "MiniMax-M3.1", "choices": [{"index": 0, "message": message,
+                        "finish_reason": "tool_calls" if first else "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+            image_cls = create_task_agent_class(AIAgent, lambda: httpx.MockTransport(image_handler), image_allowed, page_images=saved_pixels)
+            image_agent = image_cls(base_url="http://openscience-worker/v1", api_key="openscience-task-transport", provider="openai",
+                api_mode="chat_completions", model="MiniMax-M3.1", max_iterations=4, max_tokens=4096,
+                enabled_toolsets=["openscience-image-task"], quiet_mode=True, verbose_logging=False,
+                save_trajectories=False, persist_session=False, skip_memory=True, skip_context_files=True, session_id="offline-image-loop")
+            assert image_agent.valid_tool_names == image_allowed
+            guard_registered_tools(registry, image_allowed, lambda name, args: image_authorizations.append(name), SkillScope(task_home / "skills"))
+            image_result = image_agent.run_conversation("Inspect the saved-image transport fixture.",
+                system_message="Read the method and view the saved image, then return the fixture decision.", task_id="offline-image-loop")
+            assert image_result.get("final_response") == image_decision
+            assert len(image_requests) == 2 and image_releases == ["saved-image-view"]
+            assert image_authorizations == ["skill_view", "paper_image_view"]
+            image_agent.client.close()
+
         print(json.dumps({"runtime": "actual installed run_agent.AIAgent", "version": "0.10.0", "modelRequests": len(captured),
                           "externalProviderCalls": 0, "nativeToolCalls": [entry["name"] for entry in primary_invoked],
                           "fullReferenceRead": True, "sourceRead": True, "continuationPreserved": True, "clientRebuild": True,
                           "gatewayRoundTrip": bool(gateway_script),
                           "revokedToolStopsLoop": True,
                           "duplicateReadonlyIdsPreserved": True, "duplicateSecondAuthorizationStopsLoop": True,
+                          "savedImageSdkLoop": True, "savedImageModelRequests": len(image_requests),
+                          "savedImageToolCalls": image_authorizations, "fixturePngInModelRequest": True,
+                          "savedImageIdentityPreserved": True,
                           "scientificQualityValidated": False}))
 
 

@@ -161,6 +161,152 @@ async function fixture(t) {
     privateDir: join(cfg.privateRoot, id), resultDir: join(cfg.results, id) };
 }
 
+async function auditionFixture(t) {
+  const f = await fixture(t), job = await f.job(id, { audio: true, privateJob: true });
+  await writeFile(join(job.d, 'started'), 'claimed-original-task');
+  f.cfg.adminModelsEnabled = false;
+  const claims = [];
+  const scope = { taskId: id, executionAttempt: 1, inputHash: job.request.inputHash, sceneIndex: 1 };
+  const deps = { ...f.deps, withSubmission: async (owner, publish) => { claims.push(owner); return publish(); } };
+  return { ...f, job, scope, deps, claims, run: override => broker.prepareSynclipAudioAudition(f.cfg, { ...scope, ...override }, deps) };
+}
+
+test('private audio audition uses the selected original scene once and never calls video or publishes film success', async t => {
+  const f = await auditionFixture(t);
+  assert.equal(typeof broker.prepareSynclipAudioAudition, 'function');
+  await writeFile(join(f.cfg.results, '.ready'), 'unchanged closed admission');
+  f.deps.resolveReference = async () => assert.fail('Audition must not resolve video references');
+  f.deps.render = async () => assert.fail('Audition must not render a video');
+  const output = await f.run();
+  assert.equal(output.sceneIndex, 1); assert.equal(output.durationSeconds, 2.5);
+  assert.equal(output.taskId, id); assert.equal(output.inputHash, f.scope.inputHash);
+  assert.equal(output.filePath, join(f.job.d, 'audio/scene-1.mp3'));
+  assert.equal(output.contentHash, hash(mp3)); assert.equal(output.size, mp3.length);
+  assert.equal(output.voice, narration.voice); assert.equal(output.speed, 1);
+  assert.deepEqual(f.audioCalls.filter(call => call.method === 'POST').map(call => call.body), [{
+    text: f.job.request.scenes[1].narration, voice: narration.voice, speed: 1,
+  }]);
+  assert.equal(f.claims.length, 1); assert.equal(f.claims[0].taskId, id);
+  assert.deepEqual(f.calls, []);
+  assert.equal(await exists(join(f.resultDir, 'result.json')), false);
+  assert.equal(await readFile(join(f.cfg.results, '.ready'), 'utf8'), 'unchanged closed admission');
+  const before = f.audioCalls.length;
+  assert.deepEqual(await f.run(), output);
+  assert.equal(f.audioCalls.length, before); assert.equal(f.claims.length, 1);
+  assert.deepEqual((await json(join(f.job.d, 'audio-receipts.json'))).scenes.map(scene => scene.index), [1]);
+});
+
+for (const [field, changed] of [['executionAttempt', 2], ['inputHash', 'b'.repeat(64)], ['sceneIndex', -1]])
+  test('private audio audition rejects changed ' + field + ' before reading a key or making requests', async t => {
+    const f = await auditionFixture(t); let keyReads = 0;
+    f.deps.readKey = async () => { keyReads++; return 'synthetic-test-key'; };
+    await assert.rejects(f.run({ [field]: changed }), /AUDIO_AUDITION_SCOPE/u);
+    assert.equal(keyReads, 0); assert.equal(f.audioCalls.length, 0); assert.equal(f.claims.length, 0);
+  });
+
+test('private audio audition requires the existing submission authority and preserves denial before charging', async t => {
+  const f = await auditionFixture(t);
+  delete f.deps.withSubmission;
+  await assert.rejects(f.run(), /AUDIO_AUDITION_AUTHORITY/u);
+  f.deps.withSubmission = async () => { throw Error('Existing task authority changed'); };
+  await assert.rejects(f.run(), /Existing task authority changed/u);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(await exists(join(f.job.d, 'audio-1.attempt.json')), false);
+});
+
+test('private audio audition rejects legacy unbound narration before reading a key', async t => {
+  const f = await fixture(t), job = await f.job(id, { privateJob: true }); let keyReads = 0;
+  job.request.scenes.forEach(scene => { scene.narration = 'Legacy text outside the bound audio contract.'; });
+  await writeFile(join(job.d, 'request.json'), JSON.stringify(job.request));
+  await writeFile(join(job.d, 'started'), 'claimed-original-task');
+  await assert.rejects(broker.prepareSynclipAudioAudition(f.cfg, { taskId: id, executionAttempt: 1,
+    inputHash: job.request.inputHash, sceneIndex: 0 }, { ...f.deps,
+    withSubmission: async (_owner, publish) => publish(), readKey: async () => { keyReads++; return 'synthetic-test-key'; } }), /AUDIO_AUDITION_SCOPE/u);
+  assert.equal(keyReads, 0); assert.equal(f.audioCalls.length, 0);
+});
+
+for (const state of ['unclaimed', 'expired', 'voice-changed']) test('private audio audition rejects ' + state + ' before a provider request', async t => {
+  const f = await auditionFixture(t);
+  if (state === 'unclaimed') await rm(join(f.job.d, 'started'));
+  if (state === 'expired') f.advance(600_001);
+  if (state === 'voice-changed') f.cfg.audio = { ...narration, voice: 'different-voice' };
+  await assert.rejects(f.run(), /AUDIO_AUDITION_TASK|DEADLINE_EXCEEDED|AUDIO_CONFIG_CHANGED/u);
+  assert.equal(f.audioCalls.length, 0); assert.equal(f.claims.length, 0); assert.equal(f.calls.length, 0);
+});
+
+test('private audio audition concurrent calls submit audio at most once', async t => {
+  const f = await auditionFixture(t);
+  const outcomes = await Promise.allSettled([f.run(), f.run()]);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1);
+  assert.ok(outcomes.some(outcome => outcome.status === 'fulfilled'));
+  for (const outcome of outcomes) if (outcome.status === 'rejected') assert.match(outcome.reason.message, /^UNCERTAIN$/u);
+  assert.equal(f.calls.length, 0); assert.equal(await exists(join(f.resultDir, 'result.json')), false);
+});
+
+for (const mode of ['missing-voice', 'wrong-language']) test('private audio audition validates ' + mode + ' before charging', async t => {
+  const f = await auditionFixture(t);
+  f.deps.audioFetch = async (url, options) => {
+    f.audioCalls.push({ url, method: options.method });
+    return Response.json({ success: true, data: mode === 'missing-voice' ? [] : [{ id: narration.voice,
+      name: 'Chinese-only fixture', gender: 'Female', languages: ['zh-CN'], is_premium: false, coins_per_char: 1 }] });
+  };
+  await assert.rejects(f.run(), mode === 'missing-voice' ? /AUDIO_VOICE_NOT_AVAILABLE/u : /AUDIO_VOICE_LANGUAGE_UNAVAILABLE/u);
+  assert.equal(f.claims.length, 0); assert.equal(await exists(join(f.job.d, 'audio-1.attempt.json')), false);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0); assert.equal(f.calls.length, 0);
+});
+
+test('private audio audition keeps an unknown audio POST and never repeats it', async t => {
+  const f = await auditionFixture(t), original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    if (options.method !== 'POST') return original(url, options);
+    f.audioCalls.push({ url, method: 'POST' }); throw Error('Lost charged response');
+  };
+  await assert.rejects(f.run(), /UNCERTAIN/u);
+  const attempt = await readFile(join(f.job.d, 'audio-1.attempt.json'), 'utf8');
+  await assert.rejects(f.run(), /UNCERTAIN/u);
+  assert.equal(await readFile(join(f.job.d, 'audio-1.attempt.json'), 'utf8'), attempt);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(f.calls.length, 0); assert.equal(await exists(join(f.resultDir, 'result.json')), false);
+});
+
+test('private audio audition resumes its exact durable audio task instead of creating another', async t => {
+  const f = await auditionFixture(t), parameters = { text: f.job.request.scenes[1].narration, voice: narration.voice, speed: 1 };
+  await writeFile(join(f.job.d, 'audio-receipts.json'), JSON.stringify({ id, inputHash: f.scope.inputHash,
+    voice: narration.voice, speed: 1, scenes: [{ index: 1, taskId: 'known-audition', request: parameters }] }));
+  await writeFile(join(f.job.d, 'audio-1.attempt.json'), JSON.stringify({ id, inputHash: f.scope.inputHash, index: 1, request: parameters }));
+  const output = await f.run();
+  assert.equal(output.audioTaskId, 'known-audition');
+  assert.ok(f.audioCalls.some(call => call.url.endsWith('/tasks/known-audition')));
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(f.claims.length, 0); assert.equal(await exists(join(f.job.d, 'audio-1.attempt.json')), false);
+});
+
+for (const prior of ['unknown-audio', 'unknown-video', 'paid-video', 'terminal'])
+  test('private audio audition refuses ' + prior + ' before any new provider request', async t => {
+    const f = await auditionFixture(t);
+    if (prior === 'unknown-audio') await writeFile(join(f.job.d, 'audio-0.attempt.json'), '{}');
+    if (prior === 'unknown-video') await writeFile(join(f.job.d, 'shot-0.attempt.json'), JSON.stringify({ id, inputHash: f.scope.inputHash, index: 0 }));
+    if (prior === 'paid-video') await writeFile(join(f.job.d, 'synclip-receipts.json'), JSON.stringify({ id, inputHash: f.scope.inputHash,
+      shots: [{ index: 0, taskId: 'paid-shot' }] }));
+    if (prior === 'terminal') { await mkdir(f.resultDir); await writeFile(join(f.resultDir, 'result.json'), '{"status":"uncertain"}'); }
+    await assert.rejects(f.run(), /UNCERTAIN|AUDIO_RECEIPT|AUDIO_AUDITION_VIDEO_STARTED|AUDIO_AUDITION_TASK/u);
+    assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0); assert.equal(f.claims.length, 0);
+  });
+
+test('private audio audition reuses decoded timing and refuses speech longer than its approved shot', async t => {
+  const f = await auditionFixture(t);
+  f.deps.decodeAudio = async () => 10.2;
+  await assert.rejects(f.run(), error => {
+    assert.equal(error.message, 'AUDIO_TIMING_REVISION_REQUIRED');
+    assert.equal(error.audioTiming.noVideoSubmissions, true);
+    assert.deepEqual(error.audioTiming.scenes.map(scene => scene.sceneIndex), [1]);
+    return true;
+  });
+  assert.equal((await json(join(f.job.d, 'audio-receipts.json'))).scenes.length, 1);
+  assert.equal(await exists(join(f.job.d, 'audio/scene-1.mp3')), true);
+  assert.equal(f.calls.length, 0);
+});
+
 test('existing ffmpeg decodes, aligns and muxes real synthetic media through the narrated broker path', async t => {
   try { await executeFile('ffmpeg', ['-version']); await executeFile('ffprobe', ['-version']); }
   catch (error) {
