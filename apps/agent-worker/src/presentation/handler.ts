@@ -11,6 +11,8 @@ import { generateStoryboard, renderStoryboard } from './storyboard';
 import { findPaperOriginalAssets, requirePaperOriginalsForReuse } from '@openscience/domain';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { constants } from 'node:fs';
+import { lstat, open } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { readNativeImageReviewCheckpoint, completeNativeImageReview, prepareAgentNativeImageReview, type NativeAgentRuntimeConfig } from '@openscience/domain';
 import { NATIVE_IMAGE_REQUEST_MAX_BYTES } from '@openscience/ai-gateway';
@@ -21,7 +23,9 @@ import { hasStandaloneScienceDiagnostics, readStandaloneScienceRecovery } from '
 import { generateClaimChartSvg, canonicalPresentationClaims, type PresentationClaim } from './chart-generator';
 import { generateClaimInteractiveHtml } from './interactive-html';
 import { requirePresentationMediaGenerator, type PresentationMediaGenerator } from './minimax-admin';
-import { type PresentationVideoSpool } from './host-video-spool';
+import { type PresentationVideoSpool, type AudioAuditionGrant, type AudioAuditionResult } from './host-video-spool';
+import { SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES, validateSynclipAudioBytes, validateSynclipAudioTaskId } from '@openscience/ai-gateway';
+import { lockTrashReferences } from '@openscience/domain';
 import { SynclipVideoTimingError } from './synclip-video-spool';
 import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
@@ -565,6 +569,36 @@ async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler
   return result;
 }
 
+async function readAudioAuditionOutput(result: AudioAuditionResult): Promise<Buffer> {
+  if (result.contentType !== 'audio/mpeg' || !Number.isSafeInteger(result.size) || result.size <= 0
+    || result.size > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES || !/^[0-9a-f]{64}$/u.test(result.contentHash)
+    || !Number.isFinite(result.durationSeconds) || result.durationSeconds <= 0
+    || !['decoded', 'requires_revision'].includes(result.timingStatus))
+    throw new Error('[blocked] Audio audition output metadata is invalid');
+  validateSynclipAudioTaskId(result.audioTaskId);
+  const before = await lstat(result.filePath);
+  if (!before.isFile() || before.isSymbolicLink() || before.size !== result.size)
+    throw new Error('[blocked] Audio audition output file is invalid');
+  const file = await open(result.filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  let bytes: Buffer;
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile() || stat.ino !== before.ino || stat.dev !== before.dev || stat.size !== result.size)
+      throw new Error('[blocked] Audio audition output file changed');
+    // Read exactly the authorized size; a concurrently enlarged file cannot allocate an unbounded buffer.
+    bytes = Buffer.alloc(result.size); let offset = 0;
+    while (offset < bytes.length) {
+      const read = await file.read(bytes, offset, bytes.length - offset, offset);
+      if (!read.bytesRead) throw new Error('[blocked] Audio audition output was truncated');
+      offset += read.bytesRead;
+    }
+    if ((await file.stat()).size !== result.size || createHash('sha256').update(bytes).digest('hex') !== result.contentHash)
+      throw new Error('[blocked] Audio audition output content identity changed');
+  } finally { await file.close(); }
+  validateSynclipAudioBytes(bytes);
+  return bytes;
+}
+
 async function resolveStoryboardOriginals(deps: Parameters<TaskHandler>[0], payload: PresentationGenerationPayload) {
   if (!payload.storyboard || !deps.storage) throw new Error('[blocked] Storyboard source scope is unavailable');
   let originalSelection = payload.storyboard.figurePlan;
@@ -604,6 +638,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
+    const audioAudition = payload.video?.purpose === 'audio-audition';
     const owner = await deps.prisma.agentTask.findUnique({
       where: { id: task.id },
       include: { session: { include: { researchObject: { include: { workspace: true } } } } },
@@ -647,6 +682,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         throw new Error('[blocked] Narrative technical recovery changed');
     };
     const actualImageReview = needsGeneratedImageReview(payload);
+    if (audioAudition && existing) throw new Error('[blocked] Audio audition cannot adopt a presentation asset');
     if (existing && !actualImageReview) return { ...privateStoryboardResult(owner.result), assetId: existing.id, kind: existing.kind,
       status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
     const preProviderAuthorityRearm = !existing && payload.sceneImage && payload.hermesRunAuthority
@@ -673,7 +709,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }, data: { result: native ? { nativeImageReview: native } as Prisma.InputJsonObject : Prisma.DbNull } });
       if (consumed.count !== 1) throw new Error('[blocked] Hermes authority retry marker is invalid');
     }
-    if (payload.video && task.executionAttempt > 1) throw new Error('[blocked] Previous video attempt has no saved result; explicit new generation is required');
+    if (payload.video && !audioAudition && task.executionAttempt > 1) throw new Error('[blocked] Previous video attempt has no saved result; explicit new generation is required');
     const claimRows = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
     const returnedClaimIds = new Set(claimRows.map((claim) => claim.id));
     if (claimRows.length !== payload.sourceClaimIds.length || payload.sourceClaimIds.some((id) => !returnedClaimIds.has(id))
@@ -1030,6 +1066,84 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         throw new Error('[blocked] approved video inputs changed before rendering');
       }
       await requireUnchangedEvidence(deps.prisma);
+      if (payload.video.purpose === 'audio-audition') {
+        if (options.videoSpool.provider !== 'synclip' || !options.videoSpool.audition || !videoParents.nativeParent)
+          throw new Error('[blocked] Audio audition requires the configured Synclip audition executor');
+        const result = await options.videoSpool.audition({
+          purpose: 'audio-audition', taskId: task.id, executionAttempt: task.executionAttempt, profile: payload.video.profile,
+          actorId: scope.userId, workspaceId: researchObject.workspaceId, researchObjectId: payload.researchObjectId,
+          versionId: payload.versionId, parentIdentity: videoParents.identity,
+          sourceClaimIds: payload.sourceClaimIds, storyboard: videoParents.storyboardView.document, sceneImages,
+          sceneImageTaskIds: videoParents.orderedImages.map(asset => String((asset.provenance as Record<string, unknown>)?.taskId ?? '')),
+          sceneIndex: payload.video.sceneIndex, locale: payload.video.locale, audio: payload.video.audio,
+          style: videoParents.storyboardView.style, videoPrompts: videoParents.nativeParent.prompts.map(item => item.videoPrompt),
+        });
+        const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
+        const originalGrant = (current?.result as Record<string, unknown> | null)?.audioAuditionGrant as unknown as AudioAuditionGrant | undefined;
+        if (!originalGrant || originalGrant.schemaVersion !== 1 || originalGrant.purpose !== 'audio-audition'
+          || originalGrant.taskId !== task.id || originalGrant.actorId !== scope.userId
+          || originalGrant.workspaceId !== researchObject.workspaceId || originalGrant.researchObjectId !== payload.researchObjectId
+          || originalGrant.versionId !== payload.versionId || originalGrant.parentIdentity !== videoParents.identity
+          || !isDeepStrictEqual(originalGrant.sourceClaimIds, payload.sourceClaimIds)
+          || originalGrant.sceneIndex !== payload.video.sceneIndex || originalGrant.locale !== payload.video.locale
+          || !isDeepStrictEqual(originalGrant.audio, payload.video.audio)
+          || !Number.isSafeInteger(originalGrant.executionAttempt) || originalGrant.executionAttempt < 1
+          || originalGrant.executionAttempt > task.executionAttempt || !/^[0-9a-f]{64}$/u.test(originalGrant.inputHash)
+          || result.purpose !== 'audio-audition' || result.taskId !== task.id || result.executionAttempt !== originalGrant.executionAttempt
+          || result.inputHash !== originalGrant.inputHash || result.sceneIndex !== originalGrant.sceneIndex
+          || result.locale !== originalGrant.locale || result.voice !== originalGrant.audio.voice || result.speed !== originalGrant.audio.speed)
+          throw new Error('[blocked] Audio audition result lacks its original committed grant');
+        const quote = result.quote;
+        const narration = videoParents.storyboardView.document.scenes[payload.video.sceneIndex]!.narration;
+        if (!quote || !Number.isFinite(quote.coinsPerCharacter) || quote.coinsPerCharacter < 0
+          || quote.characters !== [...narration].length || !Number.isFinite(quote.estimatedCoins) || quote.estimatedCoins < 0
+          || quote.estimatedCoins !== quote.coinsPerCharacter * quote.characters
+          || !Number.isFinite(originalGrant.workerMaxEstimatedCoins) || originalGrant.workerMaxEstimatedCoins <= 0
+          || !Number.isFinite(originalGrant.hostMaxEstimatedCoins) || originalGrant.hostMaxEstimatedCoins <= 0
+          || !Number.isFinite(quote.workerCeiling) || quote.workerCeiling <= 0 || quote.workerCeiling > originalGrant.workerMaxEstimatedCoins
+          || !Number.isFinite(quote.hostCeiling)
+          || quote.hostCeiling <= 0 || quote.hostCeiling > originalGrant.hostMaxEstimatedCoins
+          || quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)
+          || (result.coinsUsed !== undefined && (!Number.isFinite(result.coinsUsed) || result.coinsUsed < 0)))
+          throw new Error('[blocked] Audio audition quote does not match its protected grant');
+        const audioBytes = await readAudioAuditionOutput(result);
+        const objectKey = `presentation/${payload.researchObjectId}/${payload.versionId}/audio-audition/${task.id}/${originalGrant.inputHash}.mp3`;
+        const audioResult = { taskId: task.id, executionAttempt: originalGrant.executionAttempt, inputHash: originalGrant.inputHash,
+          sceneIndex: result.sceneIndex, voice: result.voice, speed: result.speed, locale: result.locale, audioTaskId: result.audioTaskId,
+          objectKey, contentHash: result.contentHash, size: result.size, contentType: 'audio/mpeg' as const,
+          durationSeconds: result.durationSeconds, timingStatus: result.timingStatus, quote,
+          ...(result.coinsUsed === undefined ? {} : { coinsUsed: result.coinsUsed }) };
+        return deps.prisma.$transaction(async tx => {
+          await lockTrashReferences(tx); await requirePresentationWriteScope(tx, scope);
+          const live = await tx.agentTask.findUnique({ where: { id: task.id }, include: { session: { include: { researchObject: true } } } });
+          const liveUser = await tx.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
+          const liveClaims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+            researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+          if (!live || live.kind !== 'presentation.generate' || live.deletedAt || live.status !== 'running'
+            || live.executionAttempt !== task.executionAttempt || live.session.deletedAt || live.session.status !== 'active'
+            || live.session.userId !== scope.userId || live.session.researchObjectId !== payload.researchObjectId
+            || !live.session.researchObject || live.session.researchObject.deletedAt
+            || live.session.researchObject.workspaceId !== researchObject.workspaceId || liveUser?.platformRole !== 'platform_admin'
+            || !isDeepStrictEqual(live.payload, owner.payload)
+            || !isDeepStrictEqual((live.result as Record<string, unknown> | null)?.audioAuditionGrant, originalGrant)
+            || liveClaims.length !== payload.sourceClaimIds.length || liveClaims.some(claim => claim.extractionStatus !== 'succeeded')
+            || presentationClaimContent(liveClaims as PresentationClaim[]) !== presentationClaimContent(claims)
+            || (await requireVideoGenerationParents(tx, payload))?.identity !== videoParents.identity
+            || await tx.trashEntry.findFirst({ where: { kind: 'asset', resourceId: task.id,
+              state: { in: ['trashed', 'purge_pending', 'purged'] } }, select: { id: true } }))
+            throw new Error('[blocked] Audio audition authority changed before private completion');
+          await requireUnchangedEvidence(tx);
+          const merged = { ...(live.result as Record<string, unknown>), purpose: 'audio-audition',
+            audioAudition: audioResult, audioAuditionGrant: originalGrant };
+          await tx.trashObjectCleanup.updateMany({ where: { objectKey }, data: { state: 'retained', lastError: null } });
+          await deps.storage!.putObject(objectKey, audioBytes, { contentType: 'audio/mpeg', sha256: result.contentHash });
+          const changed = await tx.agentTask.updateMany({ where: { id: task.id, kind: live.kind, status: 'running', deletedAt: null,
+            executionAttempt: task.executionAttempt, result: { equals: live.result ?? Prisma.AnyNull } },
+          data: { result: merged as unknown as Prisma.InputJsonObject } });
+          if (changed.count !== 1) throw new Error('[blocked] Audio audition private result lost its current task result CAS');
+          return merged;
+        }, { isolationLevel: 'Serializable', timeout: 30_000 });
+      }
       const videoPlan = videoParents.storyboardView.narrative
         ? await readVerifiedVideoPlan(videoParents.storyboard.id) : undefined;
       let result: Awaited<ReturnType<PresentationVideoSpool['generate']>>;

@@ -121,6 +121,36 @@ function ordinaryIngestionFixture(role = 'author') {
   return { ...f, journalArticle };
 }
 
+describe('audio-only pending and held admission', () => {
+  const policy = { audio: { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 }, maxEstimatedCoins: 200 };
+  function audition() {
+    const f = queueFixture();
+    f.task.payload.video = { purpose: 'audio-audition', sceneIndex: 1 };
+    f.deps.readAudioAuditionReadiness = vi.fn(async () => policy);
+    return f;
+  }
+  it('claims an explicit audition through speech readiness while full-video readiness is false', async () => {
+    const f = audition();
+    expect(await f.poll()).toBe(true);
+    expect(f.handler).toHaveBeenCalledTimes(1); expect(f.task.status).toBe('succeeded');
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('releases only the held speech task through the same speech readiness', async () => {
+    const f = audition(); f.task.error = VIDEO_READINESS_HOLD;
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1);
+    expect(f.task.error).toBeNull(); expect(f.task.dispatchedAt).toBeNull();
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('lets a re-claimed original grant reach its read-only recovery handler when admission has closed', async () => {
+    const f = audition(); f.deps.readAudioAuditionReadiness = vi.fn(async () => null);
+    f.task.executionAttempt = 1;
+    f.task.result = { audioAuditionGrant: { schemaVersion: 1, purpose: 'audio-audition', taskId: f.task.id,
+      executionAttempt: 1, inputHash: 'a'.repeat(64) } };
+    expect(await f.poll()).toBe(true); expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(f.task.executionAttempt).toBe(2);
+  });
+});
+
 function barrier() {
   let resolve!: () => void; const promise = new Promise<void>(complete => { resolve = complete; });
   return { promise, resolve };

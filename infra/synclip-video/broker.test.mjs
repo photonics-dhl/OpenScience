@@ -171,6 +171,145 @@ async function auditionFixture(t) {
   return { ...f, job, scope, deps, claims, run: override => broker.prepareSynclipAudioAudition(f.cfg, { ...scope, ...override }, deps) };
 }
 
+async function authorizedAuditionJob(t, { workerCeiling = 200, hostCeiling = 200 } = {}) {
+  const f = await fixture(t), job = await f.job(id, { audio: true });
+  f.cfg.adminModelsEnabled = false; f.cfg.audioAuditionEnabled = true; f.cfg.audioAuditionBudget = { maxEstimatedCoins: hostCeiling };
+  const value = { ...job.request, purpose: 'audio-audition', sceneIndex: 1, locale: 'en', sourceClaimIds: [nextId], createdAt: f.deps.now() };
+  value.inputHash = hash(JSON.stringify({ files: value.files, audio: value.audio, scenes: value.scenes,
+    purpose: value.purpose, sceneIndex: value.sceneIndex, voice: value.audio.voice, locale: value.locale }));
+  value.audioAuditionGrant = { schemaVersion: 1, purpose: value.purpose, taskId: id, executionAttempt: 1, inputHash: value.inputHash,
+    actorId: 'actor', workspaceId: 'workspace', researchObjectId: 'ro', versionId: 'version', sourceClaimIds: value.sourceClaimIds,
+    parentIdentity: 'accepted-source-parent', sceneIndex: 1, locale: 'en', audio: value.audio,
+    workerMaxEstimatedCoins: workerCeiling, hostMaxEstimatedCoins: hostCeiling, createdAt: value.createdAt, deadlineAt: value.deadlineAt };
+  await writeFile(join(job.d, 'request.json'), JSON.stringify(value));
+  f.deps.resolveReference = async () => assert.fail('Audio audition must not refresh a video frame');
+  f.deps.render = async () => assert.fail('Audio audition must not render a video');
+  return { ...f, job, value };
+}
+
+test('authorized audio-purpose broker produces one private MP3 and quote with video admission closed', async t => {
+  const f = await authorizedAuditionJob(t);
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  const result = await json(join(f.resultDir, 'result.json'));
+  assert.equal(result.purpose, 'audio-audition'); assert.equal(result.executionAttempt, 1);
+  assert.equal(result.audio.sceneIndex, 1); assert.equal(result.audio.contentType, 'audio/mpeg');
+  assert.equal(result.audio.quote.estimatedCoins, f.value.scenes[1].narration.length);
+  assert.equal(result.audio.quote.coinsPerCharacter, 1);
+  assert.equal(Object.hasOwn(result.audio, 'coinsUsed'), false);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(f.calls.length, 0); assert.equal(await exists(join(f.resultDir, 'result.mp4')), false);
+  assert.deepEqual(await readFile(join(f.resultDir, 'audition.mp3')), mp3);
+  const ready = await json(join(f.cfg.results, '.ready'));
+  assert.equal(ready.accepting, false); assert.equal(ready.audioAccepting, true);
+  const receipt = await json(join(f.privateDir, 'audio-receipts.json'));
+  assert.equal(receipt.scenes.length, 1); assert.equal(receipt.scenes[0].quote.estimatedCoins, result.audio.quote.estimatedCoins);
+});
+
+for (const caps of [{ workerCeiling: 1, hostCeiling: 200 }, { workerCeiling: 200, hostCeiling: 1 }])
+  test('authorized audio-purpose quote respects the stricter worker/host ceiling ' + JSON.stringify(caps), async t => {
+    const f = await authorizedAuditionJob(t, caps);
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+    assert.equal((await json(join(f.resultDir, 'result.json'))).errorCode, 'AUDIO_AUDITION_BUDGET_EXCEEDED');
+    assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+    assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), false); assert.equal(f.calls.length, 0);
+    assert.equal((await json(join(f.cfg.results, '.ready'))).audioAccepting, true);
+  });
+
+test('authorized audio-purpose preserves an unknown POST and never resubmits it on another broker tick', async t => {
+  const f = await authorizedAuditionJob(t), original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    if (options.method !== 'POST') return original(url, options);
+    f.audioCalls.push({ url, method: 'POST' }); throw Error('Lost accepted audio response');
+  };
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'uncertain' });
+  assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), true);
+  const attempt = await json(join(f.privateDir, 'audio-1.attempt.json'));
+  assert.equal(attempt.quote.estimatedCoins, f.value.scenes[1].narration.length);
+  assert.equal(await runSynclipVideoBrokerOnce(f.cfg, f.deps), null);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1); assert.equal(f.calls.length, 0);
+});
+
+test('authorized audio-purpose timing revision retains playable MP3 without reporting a video result', async t => {
+  const f = await authorizedAuditionJob(t); f.deps.decodeAudio = async () => 10.2;
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  const result = await json(join(f.resultDir, 'result.json'));
+  assert.equal(result.audio.timingStatus, 'requires_revision'); assert.equal(result.audio.durationSeconds, 10.2);
+  assert.equal(await exists(join(f.resultDir, 'audition.mp3')), true); assert.equal(f.calls.length, 0);
+});
+
+for (const change of ['missing', 'attempt', 'scene', 'budget', 'locale'])
+  test('authorized audio-purpose rejects changed grant ' + change + ' before provider work', async t => {
+    const f = await authorizedAuditionJob(t);
+    if (change === 'missing') delete f.value.audioAuditionGrant;
+    if (change === 'attempt') f.value.audioAuditionGrant.executionAttempt = 2;
+    if (change === 'scene') f.value.audioAuditionGrant.sceneIndex = 0;
+    if (change === 'budget') f.value.audioAuditionGrant.workerMaxEstimatedCoins = 0;
+    if (change === 'locale') f.value.audioAuditionGrant.locale = 'zh';
+    await writeFile(join(f.job.d, 'request.json'), JSON.stringify(f.value));
+    await assert.rejects(runSynclipVideoBrokerOnce(f.cfg, f.deps), /AUDIO_AUDITION_GRANT/u);
+    assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0);
+  });
+
+test('authorized audio-purpose rejects a grant stripped of its purpose before legacy video routing', async t => {
+  const f = await authorizedAuditionJob(t);
+  delete f.value.purpose;
+  f.value.inputHash = hash(JSON.stringify({ files: f.value.files, audio: f.value.audio, scenes: f.value.scenes }));
+  await writeFile(join(f.job.d, 'request.json'), JSON.stringify(f.value));
+  await assert.rejects(runSynclipVideoBrokerOnce(f.cfg, f.deps), /VIDEO_REQUEST/u);
+  assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0);
+});
+
+test('authorized audio-purpose missing Host budget refuses only the request without a default quote or charge', async t => {
+  const f = await authorizedAuditionJob(t); delete f.cfg.audioAuditionBudget;
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).errorCode, 'AUDIO_AUDITION_BUDGET_UNAVAILABLE');
+  assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0);
+  assert.equal((await json(join(f.cfg.results, '.ready'))).audioAccepting, false);
+});
+
+test('authorized audio-purpose retains actual returned coins only when present on a known result', async t => {
+  const f = await authorizedAuditionJob(t), original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    const response = await original(url, options);
+    if (options.method === 'GET' && !url.endsWith('/voices')) {
+      const body = await response.json(); body.data.coins_used = 23; return Response.json(body);
+    }
+    return response;
+  };
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).audio.coinsUsed, 23);
+});
+
+test('authorized audio-purpose rechecks the protected Host ceiling at claim before writing an attempt', async t => {
+  const f = await authorizedAuditionJob(t);
+  f.deps.readAudioAuditionConfig = async () => ({ ...f.cfg, audioAuditionBudget: { maxEstimatedCoins: 1 } });
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).errorCode, 'AUDIO_AUDITION_BUDGET_EXCEEDED');
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), false);
+});
+
+test('authorized audio-purpose adopts known cached paid speech after its fixed POST deadline without new POST', async t => {
+  const f = await authorizedAuditionJob(t);
+  await mkdir(join(f.cfg.privateRoot, id));
+  // Move the original fixture inputs using the same claim as production, then emulate a crash after measured speech.
+  const directory = join(f.cfg.privateRoot, id);
+  for (const name of ['request.json', 'storyboard.json', 'scene-0.png', 'scene-1.png', 'scene-2.png'])
+    await writeFile(join(directory, name), await readFile(join(f.job.d, name)));
+  await writeFile(join(directory, 'started'), 'original-attempt'); await mkdir(join(directory, 'audio'));
+  const scene = f.value.scenes[1], parameters = { text: scene.narration, voice: narration.voice, speed: 1 };
+  const quote = { coinsPerCharacter: 1, characters: scene.narration.length, estimatedCoins: scene.narration.length, workerCeiling: 200, hostCeiling: 200 };
+  await writeFile(join(directory, 'audio-receipts.json'), JSON.stringify({ id, inputHash: f.value.inputHash, voice: narration.voice, speed: 1,
+    scenes: [{ index: 1, taskId: 'known-paid-tts', request: parameters, quote }] }));
+  await writeFile(join(directory, 'audio/scene-1.mp3'), mp3);
+  await writeFile(join(directory, 'audio/scene-1.json'), JSON.stringify({ sceneIndex: 1, narration: scene.narration,
+    plannedDurationSeconds: scene.durationSeconds, taskId: 'known-paid-tts', contentHash: hash(mp3), size: mp3.length, durationSeconds: 2.5, request: parameters }));
+  f.advance(600_001); f.cfg.audioAuditionEnabled = false;
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).audio.audioTaskId, 'known-paid-tts');
+  assert.equal(f.audioCalls.length, 0); assert.equal(f.calls.length, 0);
+});
+
 test('private audio audition uses the selected original scene once and never calls video or publishes film success', async t => {
   const f = await auditionFixture(t);
   assert.equal(typeof broker.prepareSynclipAudioAudition, 'function');

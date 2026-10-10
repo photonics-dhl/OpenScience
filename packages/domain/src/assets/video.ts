@@ -20,14 +20,24 @@ export const ONCHIP_SCENE_ROLES = [
 ] as const;
 
 export type VideoGenerationRequest = {
+  purpose?: never;
   storyboardAssetId: string;
   sceneImageAssetIds: [string, string, string, string, string];
   profile: typeof ONCHIP_FIELD_SAMPLING_PROFILE;
   sceneRoles: typeof ONCHIP_SCENE_ROLES;
 } | {
+  purpose?: never;
   storyboardAssetId: string;
   sceneImageAssetIds: string[];
   profile: typeof CONTENT_DRIVEN_PROFILE;
+} | {
+  purpose: 'audio-audition';
+  storyboardAssetId: string;
+  sceneImageAssetIds: string[];
+  profile: typeof CONTENT_DRIVEN_PROFILE;
+  sceneIndex: number;
+  audio: { provider: 'synclip'; voice: string; speed: number };
+  locale: 'zh' | 'en';
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,12 +45,27 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export function parseVideoGenerationRequest(value: unknown): VideoGenerationRequest {
   const input = value as Record<string, unknown> | null;
   if (input?.profile === CONTENT_DRIVEN_PROFILE) {
-    if (Array.isArray(input) || Object.keys(input).sort().join(',') !== 'profile,sceneImageAssetIds,storyboardAssetId'
+    const audition = Object.hasOwn(input, 'purpose');
+    if (Array.isArray(input) || Object.keys(input).sort().join(',') !== (audition
+      ? 'audio,locale,profile,purpose,sceneImageAssetIds,sceneIndex,storyboardAssetId' : 'profile,sceneImageAssetIds,storyboardAssetId')
       || typeof input.storyboardAssetId !== 'string' || !UUID.test(input.storyboardAssetId)
       || !Array.isArray(input.sceneImageAssetIds) || input.sceneImageAssetIds.length < 3 || input.sceneImageAssetIds.length > 6
       || input.sceneImageAssetIds.some(id => typeof id !== 'string' || !UUID.test(id))
       || new Set(input.sceneImageAssetIds).size !== input.sceneImageAssetIds.length) {
       throw new PresentationAssetError('VALIDATION_ERROR', 'Content-driven video request is invalid');
+    }
+    if (audition) {
+      const audio = input.audio as Record<string, unknown> | null;
+      if (input.purpose !== 'audio-audition' || !Number.isSafeInteger(input.sceneIndex) || Number(input.sceneIndex) < 0
+        || Number(input.sceneIndex) >= input.sceneImageAssetIds.length || !['zh', 'en'].includes(String(input.locale))
+        || !audio || typeof audio !== 'object' || Array.isArray(audio) || Object.keys(audio).sort().join(',') !== 'provider,speed,voice'
+        || audio.provider !== 'synclip' || typeof audio.voice !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(audio.voice)
+        || typeof audio.speed !== 'number' || !Number.isFinite(audio.speed) || audio.speed <= 0) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Source-bound audio audition request is invalid');
+      }
+      return { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: input.storyboardAssetId,
+        sceneImageAssetIds: input.sceneImageAssetIds as string[], purpose: 'audio-audition', sceneIndex: Number(input.sceneIndex),
+        audio: { provider: 'synclip', voice: audio.voice, speed: audio.speed }, locale: input.locale as 'zh' | 'en' };
     }
     return { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: input.storyboardAssetId, sceneImageAssetIds: input.sceneImageAssetIds as string[] };
   }
@@ -67,7 +92,8 @@ export function presentationVideoView(asset: { kind: string; provenance: unknown
     const provenance = asset.provenance as Record<string, unknown> | null;
     if (asset.kind !== 'video' || provenance?.subtype !== 'approved_storyboard_video'
       || typeof provenance.parentIdentity !== 'string' || !provenance.parentIdentity) return undefined;
-    return parseVideoGenerationRequest(provenance.video);
+    const parsed = parseVideoGenerationRequest(provenance.video);
+    return parsed.purpose === 'audio-audition' ? undefined : parsed;
   } catch { return undefined; }
 }
 
@@ -279,6 +305,9 @@ export async function requireVideoGenerationParents(prisma: VideoParentDb, paylo
     throw new PresentationAssetError('VALIDATION_ERROR', 'Video requires an approved source-bound storyboard and matching scene images in the exact version');
   }
   const nativeParent = nativeNarrativeVideo ? await requireNativeVideoStoryboard(prisma, storyboard, payload) : undefined;
+  if (settings.purpose === 'audio-audition' && (!nativeParent || settings.locale !== storyboardView.locale)) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition requires the original native plan language and reviewed narration');
+  }
   const images = await prisma.presentationAsset.findMany({
     where: { id: { in: settings.sceneImageAssetIds } }, include: { sourceClaims: { select: { claimId: true } } },
   });

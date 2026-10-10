@@ -10,6 +10,19 @@ type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma'> & HermesVideoReadinessDe
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt'>;
 type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
 
+function audioAdmission(task: Pick<AgentTask, 'id' | 'kind' | 'payload' | 'result' | 'executionAttempt'>) {
+  const payload = task.payload as Record<string, unknown> | null;
+  const video = payload?.video as Record<string, unknown> | null;
+  const purpose = task.kind === 'presentation.generate' && payload?.kind === 'video' && video?.purpose === 'audio-audition'
+    ? 'audio-audition' as const : undefined;
+  const grant = (task.result as Record<string, unknown> | null)?.audioAuditionGrant as Record<string, unknown> | null;
+  // Routing only: the handler still rechecks current authority and can only adopt the original operation.
+  const recovery = purpose && grant?.schemaVersion === 1 && grant.purpose === purpose && grant.taskId === task.id
+    && Number.isSafeInteger(grant.executionAttempt) && Number(grant.executionAttempt) > 0
+    && Number(grant.executionAttempt) <= task.executionAttempt && typeof grant.inputHash === 'string' && /^[a-f0-9]{64}$/u.test(grant.inputHash);
+  return { purpose, recovery };
+}
+
 function nextUpdatedAt(task: VideoTaskSnapshot): Date {
   return new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
 }
@@ -37,7 +50,8 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
 export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean | null> {
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)
     || !await isHermesVideoTask(deps.prisma, task.id)) return null;
-  try { await requireHermesVideoReady(deps); }
+  const audio = audioAdmission(task);
+  try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
   catch (error) {
     if (!(error instanceof HermesVideoUnavailableError)) throw error;
     if (await parkPendingVideoTask(deps, task)) return true;
@@ -63,7 +77,8 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
   let released = 0;
   for (const task of tasks) {
     if (!await isHermesVideoTask(deps.prisma, task.id)) continue;
-    try { await requireHermesVideoReady(deps); }
+    const audio = audioAdmission(task);
+    try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
     catch (error) { if (error instanceof HermesVideoUnavailableError) continue; throw error; }
     if (await releasePendingVideoTask(deps, task)) released++;
   }

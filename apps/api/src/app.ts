@@ -58,6 +58,7 @@ export interface BuildAppOptions extends AuthRouteDeps {
   nativeSceneImageEnabled?: HermesResearchRunDeps['nativeSceneImageEnabled'];
   videoEnabled?: boolean;
   readVideoReadiness?: HermesResearchRunDeps['readVideoReadiness'];
+  readAudioAuditionReadiness?: import('@openscience/domain').HermesVideoReadinessDeps['readAudioAuditionReadiness'];
   canResumeImageBeforeSubmission?: HermesResearchRunDeps['canResumeImageBeforeSubmission'];
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'];
   canResumeImageReviewFromCompletedResult?: HermesResearchRunDeps['canResumeImageReviewFromCompletedResult'];

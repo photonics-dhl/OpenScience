@@ -124,6 +124,9 @@ async function main(): Promise<void> {
       readVideoReadiness: createNativeVideoReadinessReader(process.env, {
         nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled,
       }),
+      readAudioAuditionReadiness: createNativeVideoReadinessReader(process.env, {
+        nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled,
+      }, 'audio-audition'),
       ...(inspectPooledImageRecoveryState && payerImageProvider ? {
         canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
           ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,

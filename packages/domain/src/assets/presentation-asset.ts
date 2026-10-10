@@ -99,6 +99,7 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   if ((payload.kind === 'video') !== Boolean(video) || (video && (storyboard || sceneImage))) throw new PresentationAssetError('VALIDATION_ERROR', 'Video kind requires exact video settings');
   let hermesRunAuthority: HermesPresentationAuthority | undefined;
   if ('hermesRunAuthority' in payload) {
+    if (video?.purpose === 'audio-audition') throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition cannot complete a managed video step');
     const authority = payload.hermesRunAuthority as Record<string, unknown> | null;
     if (!authority || typeof authority !== 'object' || Array.isArray(authority)
       || Object.keys(authority).sort().join(',') !== 'ordinal,profile,runId,stage'
@@ -375,7 +376,16 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
-  if (videoIntent && !replay) await requireHermesVideoReady(deps);
+  if (videoIntent && !replay) {
+    const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
+    await requireHermesVideoReady(deps, audition?.purpose);
+    if (audition) {
+      const policy = await deps.readAudioAuditionReadiness?.();
+      if (!policy || !isDeepStrictEqual(policy.audio, audition.audio)) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition voice must match the explicitly configured server voice');
+      }
+    }
+  }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')

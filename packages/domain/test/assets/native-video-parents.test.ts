@@ -107,6 +107,19 @@ async function fixture() {
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+describe('native original narration audition parent scope', () => {
+  it('reuses the accepted native source/frames and original language for a selected narration', async () => {
+    const f = await fixture();
+    const input = { ...f.input, video: { ...f.input.video, purpose: 'audio-audition' as const,
+      sceneIndex: 1, audio: { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 }, locale: 'zh' as const } };
+    const parents = await requireVideoGenerationParents(f.prisma as never, input);
+    expect(parents?.nativeParent).toBeDefined();
+    expect(parents?.storyboardView.document.scenes[1].narration).toBe(f.parent.provenance.storyboardDocument.scenes[1].narration);
+    await expect(requireVideoGenerationParents(f.prisma as never, { ...input, video: { ...input.video, locale: 'en' } }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
 type ChainEntry = { asset: Fixture['parent']; task: Fixture['parentTask'] };
 function refreshChain(f: Fixture, chain: ChainEntry[]) {
   for (const { asset, task } of chain) {

@@ -1413,8 +1413,21 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
 /** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
   if (!isJsonRecord(rawResult)) return null;
+  if (kind === 'presentation.generate' && rawResult.purpose === 'audio-audition') {
+    const audio = rawResult.audioAudition;
+    return { purpose: 'audio-audition', ...(isJsonRecord(audio) && typeof audio.taskId === 'string'
+      && Number.isSafeInteger(audio.sceneIndex) && Number(audio.sceneIndex) >= 0 && Number(audio.sceneIndex) <= 5
+      && audio.contentType === 'audio/mpeg' && typeof audio.durationSeconds === 'number'
+      && Number.isFinite(audio.durationSeconds) && audio.durationSeconds > 0 && audio.durationSeconds <= 600
+      && ['decoded', 'requires_revision'].includes(String(audio.timingStatus)) ? { audioAudition: {
+        taskId: audio.taskId, sceneIndex: audio.sceneIndex, contentType: 'audio/mpeg',
+        durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus,
+      } } : {}) };
+  }
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  delete publicResult.audioAuditionGrant;
+  delete publicResult.audioAudition;
   if (isJsonRecord(rawResult.scientificReview)) {
     const scientificReview = { ...rawResult.scientificReview };
     delete scientificReview.rejectedCandidates;

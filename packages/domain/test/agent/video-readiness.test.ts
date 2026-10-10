@@ -57,6 +57,23 @@ describe('Hermes video readiness', () => {
   });
 });
 
+describe('independent narration audition admission', () => {
+  const policy = { audio: { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 }, maxEstimatedCoins: 200 };
+  it('admits explicit speech readiness while leaving full-video admission closed', async () => {
+    const deps = { videoEnabled: true, readVideoReadiness: async () => false,
+      readAudioAuditionReadiness: async () => policy };
+    expect(await isHermesVideoReady(deps, 'audio-audition')).toBe(true);
+    expect(await isHermesVideoReady(deps)).toBe(false);
+  });
+  it.each([null, undefined, { ...policy, maxEstimatedCoins: 0 }, { ...policy, maxEstimatedCoins: Infinity },
+    { ...policy, audio: { ...policy.audio, voice: '' } }])('refuses missing or invalid server speech budget %j', async value => {
+    expect(await isHermesVideoReady({ videoEnabled: true, readAudioAuditionReadiness: async () => value } as never, 'audio-audition')).toBe(false);
+  });
+  it('does not turn a legacy full-video true into speech permission', async () => {
+    expect(await isHermesVideoReady({ videoEnabled: true, readVideoReadiness: async () => true }, 'audio-audition')).toBe(false);
+  });
+});
+
 function sourceTaskFixture() {
   const f = capabilityFixture();
   const { prisma } = f.deps;

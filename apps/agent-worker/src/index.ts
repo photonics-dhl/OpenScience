@@ -47,6 +47,8 @@ import {
   requireJournalExternalOcrAuthority,
   journalSourceProcessingAllowed,
   journalDigest,
+  requirePresentationWriteScope, parsePresentationGenerationPayload, requireVideoGenerationParents,
+  type HermesVideoReadinessDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -80,7 +82,7 @@ import { createTextExtractor, type TextStageAdapter } from './parsers/text-extra
 import type { ParserInput } from './parsers/types';
 import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
-import { HostVideoSpool, type PresentationVideoSpool } from './presentation/host-video-spool';
+import { HostVideoSpool, type PresentationVideoSpool, type AudioAuditionProposal, type AudioAuditionGrant } from './presentation/host-video-spool';
 import { SynclipVideoSpool } from './presentation/synclip-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
@@ -156,6 +158,101 @@ export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.ex
   };
 }
 
+/** A committed task grant authorizes one original host attempt; recovery never creates another grant. */
+export function createAudioAuditionAuthorization(deps: Pick<WorkerDeps, 'prisma' | 'videoEnabled' | 'readAudioAuditionReadiness'>) {
+  return async (proposal: AudioAuditionProposal): Promise<AudioAuditionGrant> => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== proposal.taskId || execution.executionAttempt !== proposal.executionAttempt)
+      throw new Error('[blocked] Audio audition lacks its claimed worker execution');
+    return deps.prisma.$transaction(async tx => {
+      await lockTrashReferences(tx);
+      const task = await tx.agentTask.findUnique({ where: { id: execution.taskId },
+        include: { session: { include: { researchObject: true } } } });
+      const ro = task?.session.researchObject;
+      if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'running'
+        || task.executionAttempt !== execution.executionAttempt || task.session.deletedAt || task.session.status !== 'active'
+        || !ro || ro.deletedAt || task.session.researchObjectId !== ro.id || task.session.userId !== proposal.actorId || ro.id !== proposal.researchObjectId
+        || ro.workspaceId !== proposal.workspaceId)
+        throw new Error('[blocked] Audio audition task authority changed');
+      if (await tx.trashEntry.findFirst({ where: { kind: 'asset', resourceId: task.id,
+        state: { in: ['trashed', 'purge_pending', 'purged'] } }, select: { id: true } }))
+        throw new Error('[blocked] Audio audition task was deleted');
+      const rawPayload = task.payload as Record<string, unknown>;
+      if (Object.hasOwn(rawPayload, 'audioAuditionGrant') || Object.hasOwn(rawPayload, 'audioAudition'))
+        throw new Error('[blocked] Audio audition authority cannot come from task payload');
+      const payload = parsePresentationGenerationPayload(task.payload);
+      const video = payload.video;
+      if (payload.kind !== 'video' || video?.purpose !== 'audio-audition' || payload.hermesRunAuthority
+        || payload.researchObjectId !== ro.id || payload.versionId !== proposal.versionId)
+        throw new Error('[blocked] Audio audition payload authority changed');
+      const version = await requirePresentationWriteScope(tx, { userId: task.session.userId,
+        researchObjectId: payload.researchObjectId, versionId: payload.versionId });
+      const user = await tx.user.findUnique({ where: { id: task.session.userId }, select: { platformRole: true } });
+      if (version.researchObject?.workspaceId !== ro.workspaceId || user?.platformRole !== 'platform_admin')
+        throw new Error('[blocked] Audio audition requires the current platform administrator and write scope');
+      const booking = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${task.id}` } });
+      const bookingMetadata = booking?.metadata as Record<string, unknown> | null;
+      if (!booking || booking.userId !== task.session.userId || booking.resource !== 'ai_credit'
+        || booking.kind !== 'consume' || Number(booking.delta) !== -1 || bookingMetadata?.taskId !== task.id
+        || bookingMetadata.kind !== task.kind || bookingMetadata.policy !== 'charged-on-submit')
+        throw new Error('[blocked] Audio audition lacks the original task AI credit booking');
+      const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+        researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+      if (claims.length !== payload.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')
+        || payload.sourceClaimIds.some(id => !claims.some(claim => claim.id === id)))
+        throw new Error('[blocked] Audio audition source Claims changed');
+      const parents = await requireVideoGenerationParents(tx, payload);
+      const scene = parents?.storyboardView.document.scenes[video.sceneIndex];
+      if (!parents?.nativeParent || !scene?.narration.trim() || parents.identity !== proposal.parentIdentity
+        || !isDeepStrictEqual(payload.sourceClaimIds, proposal.sourceClaimIds) || video.profile !== proposal.profile
+        || video.sceneIndex !== proposal.sceneIndex || video.locale !== proposal.locale
+        || parents.storyboardView.locale !== proposal.locale || parents.storyboardView.style !== proposal.style
+        || !isDeepStrictEqual(video.audio, proposal.audio)
+        || !isDeepStrictEqual(parents.orderedImages.map(asset => (asset.provenance as Record<string, unknown>)?.taskId), proposal.sceneImageTaskIds)
+        || !/^[0-9a-f]{64}$/u.test(proposal.inputHash))
+        throw new Error('[blocked] Audio audition approved source identity changed');
+      const saved = task.result && typeof task.result === 'object' && !Array.isArray(task.result) ? task.result : {};
+      const identity = { schemaVersion: 1 as const, purpose: 'audio-audition' as const, taskId: task.id,
+        inputHash: proposal.inputHash, actorId: task.session.userId, workspaceId: ro.workspaceId,
+        researchObjectId: ro.id, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
+        parentIdentity: parents.identity, sceneIndex: video.sceneIndex, locale: video.locale, audio: video.audio };
+      if (Object.hasOwn(saved, 'audioAuditionGrant')) {
+        const original = saved.audioAuditionGrant as unknown as AudioAuditionGrant;
+        if (!original || typeof original !== 'object' || Array.isArray(original)
+          || !Number.isSafeInteger(original.executionAttempt) || original.executionAttempt < 1
+          || original.executionAttempt > execution.executionAttempt
+          || !Number.isFinite(original.workerMaxEstimatedCoins) || original.workerMaxEstimatedCoins <= 0
+          || !Number.isFinite(original.hostMaxEstimatedCoins) || original.hostMaxEstimatedCoins <= 0
+          || !Number.isSafeInteger(original.createdAt) || original.createdAt <= 0
+          || !Number.isSafeInteger(original.deadlineAt) || original.deadlineAt <= original.createdAt
+          || original.deadlineAt - original.createdAt > 30 * 60_000
+          || !isDeepStrictEqual(original, { ...identity, executionAttempt: original.executionAttempt,
+            workerMaxEstimatedCoins: original.workerMaxEstimatedCoins, hostMaxEstimatedCoins: original.hostMaxEstimatedCoins,
+            createdAt: original.createdAt, deadlineAt: original.deadlineAt }))
+          throw new Error('[blocked] Original audio audition grant identity changed');
+        return original;
+      }
+      if (execution.executionAttempt !== 1)
+        throw new Error('[blocked] Audio audition recovery has no original durable grant');
+      const policy = deps.videoEnabled === true ? await deps.readAudioAuditionReadiness?.() : null;
+      if (!policy || !isDeepStrictEqual(policy.audio, video.audio)
+        || !Number.isFinite(policy.maxEstimatedCoins) || policy.maxEstimatedCoins <= 0
+        || !Number.isSafeInteger(proposal.createdAt) || proposal.createdAt <= 0 || proposal.createdAt > Date.now() + 1_000
+        || !Number.isSafeInteger(proposal.deadlineAt) || proposal.deadlineAt <= Date.now()
+        || proposal.deadlineAt <= proposal.createdAt || proposal.deadlineAt - proposal.createdAt > 30 * 60_000)
+        throw new Error('[blocked] Audio audition configured voice or finite protected budget is unavailable');
+      const grant: AudioAuditionGrant = { ...identity, executionAttempt: execution.executionAttempt,
+        workerMaxEstimatedCoins: policy.maxEstimatedCoins, hostMaxEstimatedCoins: policy.maxEstimatedCoins,
+        createdAt: proposal.createdAt, deadlineAt: proposal.deadlineAt };
+      const changed = await tx.agentTask.updateMany({ where: { id: task.id, kind: task.kind, status: 'running', deletedAt: null,
+        executionAttempt: execution.executionAttempt, result: { equals: task.result ?? Prisma.AnyNull } },
+      data: { result: { ...saved, audioAuditionGrant: grant } as unknown as Prisma.InputJsonObject } });
+      if (changed.count !== 1) throw new Error('[blocked] Audio audition grant lost its current task result CAS');
+      return grant;
+    }, { isolationLevel: 'Serializable', timeout: 30_000 });
+  };
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const INGESTION_EXTERNAL_PROCESSING_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -197,7 +294,7 @@ export type ParserCascadeRunner = ((
 };
 
 /** Video-only admission dependencies; generic AgentDeps remain unchanged. */
-export interface WorkerVideoReadinessDeps {
+export interface WorkerVideoReadinessDeps extends HermesVideoReadinessDeps {
   videoEnabled?: boolean;
   readVideoReadiness?: NativeVideoReadinessReader;
 }
@@ -1059,6 +1156,7 @@ export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 's
     nativeAgentRuntime, nativeSceneImageEnabled,
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
     readVideoReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }),
+    readAudioAuditionReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }, 'audio-audition'),
     malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
@@ -1153,7 +1251,8 @@ async function main(): Promise<void> {
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
       ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
         && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
-          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission }),
+          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
+            authorizeAudioAudition: createAudioAuditionAuthorization(deps) }),
         } : process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'local'
           && process.env.HOST_VIDEO_INBOX_DIR?.trim() && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
             videoSpool: new HostVideoSpool({ inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(), withSubmission: imageSubmission }),

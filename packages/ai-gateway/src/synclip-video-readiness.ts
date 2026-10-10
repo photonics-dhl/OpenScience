@@ -11,10 +11,13 @@ export interface SynclipVideoNarrationConfig { provider: 'synclip'; voice: strin
 export interface SynclipVideoReady {
   schemaVersion: 1; provider: 'synclip'; model: 'ltx23'; adapterRevision?: string;
   accepting: boolean; updatedAt: number; narration?: SynclipVideoNarrationConfig;
+  audioAccepting?: boolean; audioAuditionBudget?: { maxEstimatedCoins: number };
 }
 export interface SynclipVideoReadyConfig { resultsDir: string; now?: () => number }
 export interface NativeVideoPrerequisites { nativeAgentConfigured: boolean; nativeSceneImageEnabled: boolean }
 export type NativeVideoReadinessReader = () => Promise<boolean>;
+type NativeAudioAuditionPolicy = { audio: SynclipVideoNarrationConfig; maxEstimatedCoins: number };
+type NativeAudioAuditionReadinessReader = () => Promise<NativeAudioAuditionPolicy | null>;
 
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -45,6 +48,11 @@ function narration(value: unknown): SynclipVideoNarrationConfig | null {
     return { provider: 'synclip', voice: checked.voice, speed: value.speed };
   } catch (error) { if (error instanceof SynclipAudioError) return null; throw error; }
 }
+function auditionBudget(value: unknown): { maxEstimatedCoins: number } | null {
+  if (!record(value) || typeof value.maxEstimatedCoins !== 'number'
+    || !Number.isFinite(value.maxEstimatedCoins) || value.maxEstimatedCoins <= 0) return null;
+  return { maxEstimatedCoins: value.maxEstimatedCoins };
+}
 
 /** Read a single root-owned heartbeat snapshot. This never reads credentials or submits work. */
 export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Promise<SynclipVideoReady | null> {
@@ -67,10 +75,14 @@ export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Pr
         || (value.adapterRevision !== undefined && (typeof value.adapterRevision !== 'string'
           || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(value.adapterRevision)))) return null;
       const audio = value.narration === undefined ? undefined : narration(value.narration);
-      if (audio === null) return null;
+      const budget = value.audioAuditionBudget === undefined ? undefined : auditionBudget(value.audioAuditionBudget);
+      if (audio === null || budget === null || (value.audioAccepting !== undefined && typeof value.audioAccepting !== 'boolean')
+        || (value.audioAccepting === true && (!audio || !budget))) return null;
       return { schemaVersion: 1, provider: 'synclip', model: 'ltx23', accepting: value.accepting, updatedAt: value.updatedAt,
         ...(value.adapterRevision === undefined ? {} : { adapterRevision: value.adapterRevision as string }),
-        ...(audio ? { narration: audio } : {}) };
+        ...(audio ? { narration: audio } : {}),
+        ...(value.audioAccepting === undefined ? {} : { audioAccepting: value.audioAccepting as boolean }),
+        ...(budget ? { audioAuditionBudget: budget } : {}) };
     } finally { await file.close(); }
   } catch (error) {
     if (error instanceof SyntaxError || ['ENOENT', 'ENOTDIR', 'ELOOP', 'EACCES', 'EPERM'].includes((error as NodeJS.ErrnoException)?.code ?? '')) return null;
@@ -80,15 +92,23 @@ export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Pr
 
 /** Configuration is server-owned; readiness is sampled afresh on every invocation. */
 export function createNativeVideoReadinessReader(env: Readonly<Record<string, string | undefined>>,
-  prerequisites: NativeVideoPrerequisites): NativeVideoReadinessReader {
+  prerequisites: NativeVideoPrerequisites): NativeVideoReadinessReader;
+export function createNativeVideoReadinessReader(env: Readonly<Record<string, string | undefined>>,
+  prerequisites: NativeVideoPrerequisites, purpose: 'audio-audition'): NativeAudioAuditionReadinessReader;
+export function createNativeVideoReadinessReader(env: Readonly<Record<string, string | undefined>>,
+  prerequisites: NativeVideoPrerequisites, purpose?: 'audio-audition'): () => Promise<boolean | NativeAudioAuditionPolicy | null> {
   return async () => {
     const inbox = env.SYNCLIP_VIDEO_INBOX_DIR?.trim(); const results = env.SYNCLIP_VIDEO_RESULTS_DIR?.trim();
     if (!prerequisites.nativeAgentConfigured || !prerequisites.nativeSceneImageEnabled
       || env.AI_ENABLED !== 'true' || env.HERMES_NATIVE_AGENT_ENABLED !== 'true' || env.HERMES_VIDEO_ENABLED !== 'true'
       || env.HERMES_VIDEO_PROVIDER?.trim() !== 'synclip' || env.SYNCLIP_VIDEO_ENABLED !== 'true'
       || !inbox || !results || !isAbsolute(inbox) || !isAbsolute(results) || resolve(inbox) === resolve(results)
-      || (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip')) return false;
+      || (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip')) return purpose === 'audio-audition' ? null : false;
     const ready = await readSynclipVideoReady({ resultsDir: results });
+    if (purpose === 'audio-audition') {
+      if (!ready || ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true || !ready.narration || !ready.audioAuditionBudget) return null;
+      return { audio: ready.narration, maxEstimatedCoins: ready.audioAuditionBudget.maxEstimatedCoins };
+    }
     return Boolean(ready?.accepting && ready.adapterRevision === 'synclip-video-v2' && ready.narration);
   };
 }

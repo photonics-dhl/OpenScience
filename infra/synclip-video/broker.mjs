@@ -78,6 +78,23 @@ function audioConfig(value) {
   const checked = validateSynclipAudioRequest({ text: 'catalog validation', voice: value.voice, speed: value.speed });
   return { provider: 'synclip', voice: checked.voice, speed: checked.speed };
 }
+function auditionBudget(cfg) {
+  const maximum = cfg.audioAuditionBudget?.maxEstimatedCoins;
+  return cfg.audioAuditionEnabled === true && cfg.audio && Number.isFinite(maximum) && maximum > 0 ? maximum : null;
+}
+function requireAuditionGrant(value) {
+  const grant = value.audioAuditionGrant;
+  if (!grant || grant.schemaVersion !== 1 || grant.purpose !== 'audio-audition' || grant.taskId !== value.id
+    || grant.executionAttempt !== value.executionAttempt || grant.inputHash !== value.inputHash
+    || grant.sceneIndex !== value.sceneIndex || grant.locale !== value.locale || !isDeepStrictEqual(grant.audio, value.audio)
+    || !isDeepStrictEqual(grant.sourceClaimIds, value.sourceClaimIds)
+    || ['actorId', 'workspaceId', 'researchObjectId', 'versionId', 'parentIdentity'].some(field => typeof grant[field] !== 'string' || !grant[field])
+    || !Number.isFinite(grant.workerMaxEstimatedCoins) || grant.workerMaxEstimatedCoins <= 0
+    || !Number.isFinite(grant.hostMaxEstimatedCoins) || grant.hostMaxEstimatedCoins <= 0
+    || grant.createdAt !== value.createdAt || grant.deadlineAt !== value.deadlineAt || !Number.isSafeInteger(grant.createdAt)
+    || grant.deadlineAt <= grant.createdAt || grant.deadlineAt - grant.createdAt > 30 * 60_000) fail('AUDIO_AUDITION_GRANT');
+  return grant;
+}
 async function request(directory, id) {
   const value = await json(join(directory, 'request.json'));
   if (value.schemaVersion !== 1 || value.id !== id || value.taskId !== id || value.profile !== 'content-driven-v1'
@@ -94,7 +111,15 @@ async function request(directory, id) {
       || spec?.size !== bytes.length || spec.sha256 !== hash(bytes) || scene.image?.sha256 !== spec.sha256) fail('VIDEO_REQUEST');
   }
   if (value.audio !== undefined) audioConfig(value.audio);
-  if (hash(Buffer.from(JSON.stringify(value.audio ? { files: value.files, audio: value.audio, scenes: value.scenes } : value.files))) !== value.inputHash) fail('VIDEO_REQUEST');
+  const audition = value.purpose === 'audio-audition';
+  if ((value.purpose !== undefined && !audition) || (!audition && value.audioAuditionGrant !== undefined)) fail('VIDEO_REQUEST');
+  if (audition && (!value.audio || !Number.isSafeInteger(value.sceneIndex) || value.sceneIndex < 0 || value.sceneIndex >= value.scenes.length
+    || !['zh', 'en'].includes(value.locale))) fail('AUDIO_AUDITION_SCOPE');
+  const identity = audition ? { files: value.files, audio: value.audio, scenes: value.scenes,
+    purpose: value.purpose, sceneIndex: value.sceneIndex, voice: value.audio.voice, locale: value.locale }
+    : value.audio ? { files: value.files, audio: value.audio, scenes: value.scenes } : value.files;
+  if (hash(Buffer.from(JSON.stringify(identity))) !== value.inputHash) fail('VIDEO_REQUEST');
+  if (audition) requireAuditionGrant(value);
   return { ...value, storyboard: JSON.parse(story.toString('utf8')) };
 }
 function requireSupportedPlan(request, cfg) {
@@ -253,12 +278,18 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
         || !isDeepStrictEqual(attempt.request, old.request)) fail('AUDIO_RECEIPT');
     }
   }
-  let catalogLoaded = false; const measured = [];
+  const recoveryDeadline = now() + 120_000;
+  const checkAudioDeadline = () => {
+    if (deps.audioRecoveryOnly === true) { if (now() >= recoveryDeadline) fail('DEADLINE_EXCEEDED'); }
+    else checkDeadline(request, now);
+  };
+  let catalogLoaded = false, quote; const measured = [];
   for (const scene of request.scenes.filter(scene => auditionSceneIndex === undefined || scene.index === auditionSceneIndex)) {
     const parameters = validateSynclipAudioRequest({ text: scene.narration, voice: request.audio.voice, speed: request.audio.speed });
     const attemptPath = join(directory, 'audio-' + scene.index + '.attempt.json');
     let old = receipt.scenes.find(item => item.index === scene.index);
     if (!old) {
+      if (deps.audioRecoveryOnly === true) fail('UNCERTAIN');
       if (await exists(attemptPath)) fail('UNCERTAIN');
       if (!catalogLoaded) {
         checkDeadline(request, now); const voices = await client.listVoices();
@@ -266,16 +297,27 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
         if (!selected) fail('AUDIO_VOICE_NOT_AVAILABLE');
         if (!selected.languages.some(language => language.toLowerCase() === request.storyboard.locale
           || language.toLowerCase().startsWith(request.storyboard.locale + '-'))) fail('AUDIO_VOICE_LANGUAGE_UNAVAILABLE');
+        if (request.purpose === 'audio-audition') {
+          const grant = requireAuditionGrant(request), maximum = auditionBudget(cfg);
+          const characters = [...parameters.text].length, estimatedCoins = characters * selected.coins_per_char;
+          if (maximum === null || !Number.isFinite(estimatedCoins) || estimatedCoins < 0) fail('AUDIO_AUDITION_BUDGET_UNAVAILABLE');
+          quote = { coinsPerCharacter: selected.coins_per_char, characters, estimatedCoins,
+            workerCeiling: grant.workerMaxEstimatedCoins, hostCeiling: Math.min(maximum, grant.hostMaxEstimatedCoins) };
+          if (estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)) fail('AUDIO_AUDITION_BUDGET_EXCEEDED');
+        }
         catalogLoaded = true;
       }
       checkDeadline(request, now);
-      const claim = () => exclusive(attemptPath, JSON.stringify({ id: request.id, index: scene.index, inputHash: request.inputHash, request: parameters }));
+      const claim = () => exclusive(attemptPath, JSON.stringify({ id: request.id, index: scene.index, inputHash: request.inputHash, request: parameters,
+        ...(quote ? { quote } : {}) }));
       const claimed = auditionSceneIndex === undefined ? await claim() : await deps.withSubmission({ taskId: request.id,
-        executionAttempt: request.executionAttempt, inputHash: request.inputHash, sceneIndex: scene.index, audio: request.audio }, claim);
+        executionAttempt: request.executionAttempt, inputHash: request.inputHash, sceneIndex: scene.index, audio: request.audio,
+        ...(quote ? { quote } : {}) }, claim);
       if (!claimed) fail('UNCERTAIN');
       checkDeadline(request, now);
       try {
-        const made = await client.create(parameters); old = { index: scene.index, taskId: made.task_id, request: parameters };
+        const made = await client.create(parameters); old = { index: scene.index, taskId: made.task_id, request: parameters,
+          ...(quote ? { quote } : {}) };
         receipt = { ...receipt, scenes: [...receipt.scenes, old] }; await write(receiptPath, JSON.stringify(receipt));
       } catch { fail('UNCERTAIN'); }
       await unlink(attemptPath);
@@ -288,7 +330,7 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
     const relativePath = 'audio/scene-' + scene.index + '.mp3', path = join(directory, relativePath);
     if (!await exists(path)) {
       for (;;) {
-        checkDeadline(request, now);
+        checkAudioDeadline();
         const status = validateSynclipAudioTask(await client.query(old.taskId), old.taskId);
         await write(join(audioDir, 'scene-' + scene.index + '.status.json'), JSON.stringify(status));
         if (status.status === 'failed') fail('AUDIO_PROVIDER_FAILED');
@@ -296,7 +338,7 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
           const output = await (deps.downloadAudio ?? downloadSynclipAudio)(status, { timeoutMs: 90000, now });
           await write(path, validateSynclipAudioBytes(output.bytes).bytes); break;
         }
-        await (deps.sleep ?? sleep)(Math.min(3000, Math.max(0, request.deadlineAt - now())));
+        await (deps.sleep ?? sleep)(Math.min(3000, Math.max(0, (deps.audioRecoveryOnly ? recoveryDeadline : request.deadlineAt) - now())));
       }
     }
     const bytes = validateSynclipAudioBytes(await read(path, MAX_AUDIO)).bytes;
@@ -308,7 +350,7 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
       const { durationSeconds, ...saved } = metadata;
       if (!isDeepStrictEqual(saved, { ...binding, request: parameters }) || !Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 600) fail('AUDIO_RECEIPT');
     }
-    checkDeadline(request, now);
+    checkAudioDeadline();
     const decodedDuration = await (deps.decodeAudio ?? decodeSynclipAudio)(cfg, directory, relativePath);
     if (!Number.isFinite(decodedDuration) || decodedDuration <= 0 || decodedDuration >= 600) fail('AUDIO_DECODE_INVALID');
     metadata = { ...binding, durationSeconds: decodedDuration, request: parameters };
@@ -337,7 +379,7 @@ export async function prepareSynclipAudioAudition(cfg, scope, deps = {}) {
   const value = await request(directory, scope.taskId), scene = value.scenes[scope.sceneIndex];
   if (!value.audio || !value.storyboard.narrative || value.executionAttempt !== scope.executionAttempt || value.inputHash !== scope.inputHash
     || !scene || typeof scene.narration !== 'string' || scene.narration.length > 120) fail('AUDIO_AUDITION_SCOPE');
-  checkDeadline(value, deps.now ?? Date.now);
+  if (deps.audioRecoveryOnly !== true) checkDeadline(value, deps.now ?? Date.now);
   requireSupportedPlan(value, cfg);
   if (!await noVideoSubmissions(directory)) fail('AUDIO_AUDITION_VIDEO_STARTED');
   const apiKey = await (deps.readKey ?? key)(cfg.keyPath);
@@ -391,10 +433,11 @@ async function publish(cfg, request, status, error, output, diagnostics) {
   await chmod(directory, 0o2750);
   const result = { schemaVersion: 1, id: request.id, inputHash: request.inputHash, executionAttempt: request.executionAttempt,
     provider: 'synclip', model: 'ltx23', adapterRevision: REV, status,
+    ...(request.purpose === 'audio-audition' ? { purpose: request.purpose } : {}),
     ...(error ? { errorCode: error } : {}), ...(output ? output.result : {}), ...(diagnostics ?? {}) };
   if (output) {
-    await write(join(directory, 'result.mp4'), output.bytes, 0o640);
-    await write(join(directory, 'metrics.json'), JSON.stringify(output.metrics), 0o640);
+    await write(join(directory, request.purpose === 'audio-audition' ? 'audition.mp3' : 'result.mp4'), output.bytes, 0o640);
+    if (request.purpose !== 'audio-audition') await write(join(directory, 'metrics.json'), JSON.stringify(output.metrics), 0o640);
   }
   await write(join(directory, 'result.json'), JSON.stringify(result), 0o640);
 }
@@ -465,6 +508,64 @@ async function execute(cfg, directory, request, client, prepared, deps, audioTim
       ...(request.audio ? { audioTiming, durationSeconds: measuredOutput.durationSeconds, narration } : {}) },
     result: { contentType: 'video/mp4', outputSha256: hash(bytes), outputSize: bytes.length, ...(narration ? { narration } : {}) } });
 }
+async function runAudioAudition(cfg, directory, value, hasStarted, deps) {
+  const grant = requireAuditionGrant(value), now = deps.now ?? Date.now;
+  try {
+    if (!await noVideoSubmissions(directory)) fail('AUDIO_AUDITION_VIDEO_STARTED');
+    const receipts = await exists(join(directory, 'audio-receipts.json')) ? await json(join(directory, 'audio-receipts.json')) : null;
+    const known = receipts?.scenes?.find(item => item.index === value.sceneIndex);
+    const recovery = Boolean(hasStarted && known);
+    if (!recovery) {
+      checkDeadline(value, now);
+      if (auditionBudget(cfg) === null) fail('AUDIO_AUDITION_BUDGET_UNAVAILABLE');
+    }
+    requireSupportedPlan(value, recovery ? { ...cfg, audio: value.audio } : cfg);
+    if (value.locale !== value.storyboard.locale) fail('AUDIO_AUDITION_SCOPE');
+    if (!hasStarted && !await exclusive(join(directory, 'started'), String(now()))) fail('UNCERTAIN');
+    const scope = { taskId: value.id, executionAttempt: value.executionAttempt, inputHash: value.inputHash, sceneIndex: value.sceneIndex };
+    const stageDeps = { ...deps, audioRecoveryOnly: recovery, withSubmission: async (owner, claim) => {
+      // The Worker committed this exact protected grant before publication; recheck it and the current Host ceiling at claim.
+      if (owner.taskId !== grant.taskId || owner.executionAttempt !== grant.executionAttempt || owner.inputHash !== grant.inputHash
+        || owner.sceneIndex !== grant.sceneIndex || !isDeepStrictEqual(owner.audio, grant.audio) || !owner.quote) fail('AUDIO_AUDITION_GRANT');
+      const active = deps.readAudioAuditionConfig ? await deps.readAudioAuditionConfig() : cfg;
+      const maximum = auditionBudget(active);
+      if (maximum === null || !isDeepStrictEqual(active.audio, grant.audio)) fail('AUDIO_AUDITION_BUDGET_UNAVAILABLE');
+      owner.quote.hostCeiling = Math.min(owner.quote.hostCeiling, maximum);
+      if (owner.quote.estimatedCoins > Math.min(grant.workerMaxEstimatedCoins, owner.quote.hostCeiling)) fail('AUDIO_AUDITION_BUDGET_EXCEEDED');
+      checkDeadline(value, now);
+      return claim();
+    } };
+    let timingStatus = 'decoded';
+    try { await prepareSynclipAudioAudition(recovery ? { ...cfg, audio: value.audio } : cfg, scope, stageDeps); }
+    catch (error) {
+      if (error?.message !== 'AUDIO_TIMING_REVISION_REQUIRED' || !error.audioTiming?.noVideoSubmissions) throw error;
+      timingStatus = 'requires_revision';
+    }
+    const receipt = await json(join(directory, 'audio-receipts.json')), item = receipt.scenes.find(entry => entry.index === value.sceneIndex);
+    const quote = item?.quote, scene = value.scenes[value.sceneIndex];
+    if (!quote || quote.characters !== [...scene.narration].length || !Number.isFinite(quote.coinsPerCharacter) || quote.coinsPerCharacter < 0
+      || quote.estimatedCoins !== quote.characters * quote.coinsPerCharacter || !Number.isFinite(quote.estimatedCoins)
+      || !Number.isFinite(quote.workerCeiling) || quote.workerCeiling <= 0 || quote.workerCeiling > grant.workerMaxEstimatedCoins
+      || !Number.isFinite(quote.hostCeiling) || quote.hostCeiling <= 0 || quote.hostCeiling > grant.hostMaxEstimatedCoins
+      || quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)) fail('AUDIO_AUDITION_QUOTE');
+    const metadata = await json(join(directory, 'audio/scene-' + value.sceneIndex + '.json'));
+    const bytes = validateSynclipAudioBytes(await read(join(directory, 'audio/scene-' + value.sceneIndex + '.mp3'), 16 * 1024 * 1024)).bytes;
+    const statusPath = join(directory, 'audio/scene-' + value.sceneIndex + '.status.json');
+    const providerStatus = await exists(statusPath) ? validateSynclipAudioTask(await json(statusPath), item.taskId) : undefined;
+    const audio = { sceneIndex: value.sceneIndex, locale: value.locale, voice: value.audio.voice, speed: value.audio.speed,
+      audioTaskId: item.taskId, contentType: 'audio/mpeg', outputSha256: hash(bytes), outputSize: bytes.length,
+      durationSeconds: metadata.durationSeconds, timingStatus, quote,
+      ...(providerStatus?.coins_used === undefined ? {} : { coinsUsed: providerStatus.coins_used }) };
+    await publish(cfg, value, 'succeeded', undefined, { bytes, result: { audio } });
+    return { id: value.id, status: 'succeeded' };
+  } catch (error) {
+    const uncertain = error?.message === 'UNCERTAIN' || error instanceof SynclipAudioError && error.outcome === 'uncertain';
+    const code = uncertain ? 'UNCERTAIN' : /^AUDIO_[A-Z0-9_]{1,80}$/u.test(error?.message) ? error.message
+      : error?.message === 'DEADLINE_EXCEEDED' ? 'AUDIO_AUDITION_DEADLINE' : 'AUDIO_AUDITION_EXECUTION_FAILED';
+    const status = uncertain ? 'uncertain' : 'failed';
+    await publish(cfg, value, status, code); return { id: value.id, status };
+  }
+}
 async function runPending(cfg, deps) {
   const now = deps.now ?? Date.now;
   const ids = [...(await readdir(cfg.inbox)).filter(id => UUID.test(id)), ...(await readdir(cfg.privateRoot)).filter(id => UUID.test(id))];
@@ -475,6 +576,7 @@ async function runPending(cfg, deps) {
     if (!await exists(directory)) await rename(source, directory);
     const value = await request(directory, id);
     const started = join(directory, 'started'), hasStarted = await exists(started);
+    if (value.purpose === 'audio-audition') return runAudioAudition(cfg, directory, value, hasStarted, deps);
     if (hasStarted && !value.audio && !await exists(join(directory, 'synclip-receipts.json'))) {
       await publish(cfg, value, 'uncertain', 'UNCERTAIN');
       return { id, status: 'uncertain' };
@@ -511,6 +613,8 @@ export async function runSynclipVideoBrokerOnce(cfg, deps = {}) {
   const beat = async accepting => {
     await write(ready, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23', adapterRevision: REV,
       updatedAt: (deps.now ?? Date.now)(), accepting: accepting && cfg.adminModelsEnabled === true,
+      audioAccepting: accepting && auditionBudget(cfg) !== null,
+      ...(auditionBudget(cfg) === null ? {} : { audioAuditionBudget: { maxEstimatedCoins: auditionBudget(cfg) } }),
       ...(cfg.audio ? { narration: audioConfig(cfg.audio) } : {}) }), 0o640);
     await chown(ready, parent.uid, parent.gid);
   };
@@ -546,20 +650,24 @@ export function synclipAudioCatalogFailure(error) {
     ...(known && Number.isInteger(error.httpStatus) && error.httpStatus >= 400 && error.httpStatus <= 599
       ? { httpStatus: error.httpStatus } : {}) };
 }
+async function readProtectedConfig(path) {
+  const info = await lstat(path);
+  if (resolve(path) !== ROOT + '/config.json' || !info.isFile() || info.isSymbolicLink() || info.uid !== 0
+    || (info.mode & 0o777) !== 0o600) fail('VIDEO_CONFIG_PERMISSIONS');
+  return config(JSON.parse((await read(path, 16384)).toString()));
+}
 async function main() {
   const catalogMode = process.argv[2] === '--list-voices';
   const args = process.argv.slice(catalogMode ? 3 : 2);
   if (process.getuid?.() !== 0 || process.getgid?.() !== 1000 || args.length !== 2
     || args[0] !== '--config' || resolve(args[1]) !== ROOT + '/config.json') fail('VIDEO_CONFIG_REQUIRED');
-  const path = resolve(args[1]), info = await lstat(path);
-  if (!info.isFile() || info.isSymbolicLink() || info.uid !== 0 || (info.mode & 0o777) !== 0o600) fail('VIDEO_CONFIG_PERMISSIONS');
-  const cfg = config(JSON.parse((await read(path, 16384)).toString()));
+  const path = resolve(args[1]), cfg = await readProtectedConfig(path);
   if (catalogMode) {
     console.log(JSON.stringify(await listSynclipAudioCatalog(cfg)));
     return;
   }
   await key(cfg.keyPath);
-  const result = await runSynclipVideoBrokerOnce(cfg);
+  const result = await runSynclipVideoBrokerOnce(cfg, { readAudioAuditionConfig: () => readProtectedConfig(path) });
   if (result) console.log(JSON.stringify(result));
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
