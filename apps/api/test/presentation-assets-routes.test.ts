@@ -10,6 +10,15 @@ import { buildApp } from '../src/app';
 import { sendPresentationAssetContent } from '../src/routes/presentation-asset-content';
 import { httpStatusForError } from '../src/error-map';
 
+// Domain tests cover the Native source, permission and complete frame proof.
+// Override only its returned DTO to exercise the real HTTP readiness mask.
+const projection = vi.hoisted(() => ({ assets: null as unknown }));
+vi.mock('@openscience/domain', async importOriginal => {
+  const actual = await importOriginal<typeof import('@openscience/domain')>();
+  return { ...actual, listPresentationAssets: async (...args: Parameters<typeof actual.listPresentationAssets>) =>
+    projection.assets === null ? actual.listPresentationAssets(...args) : projection.assets };
+});
+
 const USER = '10000000-0000-4000-8000-000000000001';
 const WORKSPACE = '20000000-0000-4000-8000-000000000001';
 const RO = '30000000-0000-4000-8000-000000000001';
@@ -67,6 +76,33 @@ function writeAuth(token: string, csrfCookie: string, csrfToken: string, idempot
     headers: { 'x-csrf-token': csrfToken, ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}) },
   };
 }
+
+describe('HTTP audio eligibility projection', () => {
+  for (const videoEnabled of [false, true]) {
+    it.each(['native', 'legacy', 'missing'] as const)('preserves %s audio eligibility with global video ' + videoEnabled, async source => {
+      const ctx = await fixture('platform_admin', undefined, false, videoEnabled);
+      const asset = { id: ASSET, kind: 'interactive_html', canGenerateSceneImage: false, canGenerateVideo: true,
+        ...(source === 'missing' ? {} : { canGenerateAudioAudition: source === 'native' }) };
+      const original = structuredClone(asset), ledgerBefore = structuredClone(ctx.db.usageLedger);
+      projection.assets = [asset];
+      try {
+        const response = await ctx.app.inject({ method: 'GET', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets`,
+          cookies: { openscience_session: ctx.token } });
+        expect(response.statusCode, response.body).toBe(200);
+        const view = response.json().assets[0];
+        expect(view.canGenerateVideo).toBe(videoEnabled);
+        if (source === 'missing') expect(view).not.toHaveProperty('canGenerateAudioAudition');
+        else expect(view.canGenerateAudioAudition).toBe(source === 'native');
+        expect(asset).toEqual(original);
+        expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.agentSessions).toHaveLength(0);
+        expect(ctx.db.usageLedger).toEqual(ledgerBefore);
+      } finally {
+        projection.assets = null;
+        await ctx.app.close();
+      }
+    });
+  }
+});
 
 describe('Presentation asset routes', () => {
   async function taskFixture() {
