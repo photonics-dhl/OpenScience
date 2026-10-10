@@ -36,7 +36,7 @@ import { ResearchGuide } from '../components/guide/ResearchGuide';
 
 const suggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' };
 
-beforeEach(() => { navigation.push.mockClear(); handlers.items.clear(); handlers.invoke = null; });
+beforeEach(() => { vi.stubGlobal('React', React); navigation.push.mockClear(); handlers.items.clear(); handlers.invoke = null; });
 
 describe('global companion SSR ownership', () => {
   it.each(['return', 'create'] as const)('keeps the %s identity invitation with only the floating companion', (intent) => {
@@ -50,11 +50,12 @@ describe('global companion SSR ownership', () => {
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
 
-  it('keeps the actual guide invitation with only the floating companion', () => {
+  it('keeps the actual guide composer with a single compact companion', () => {
     navigation.pathname = '/guide';
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><ResearchGuide /></HermesWorkspaceStageProvider>);
     expect(markup).toContain('href="/dashboard"');
-    expect(markup).toContain('role="tablist"');
+    expect(markup).toContain('id="guide-research-idea"');
+    expect(markup).not.toContain('role="tablist"');
     expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
@@ -81,7 +82,7 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('Current research object');
     expect(markup).not.toContain('data-hermes-presence-control');
     expect(markup).toContain('data-hermes-size-mode="automatic"');
-    const isWorkspace = pathname === '/dashboard' || pathname === '/research-objects/object/edit';
+    const isWorkspace = pathname === '/guide' || pathname === '/dashboard' || pathname === '/research-objects/object/edit';
     expect(markup).toContain(`data-hermes-stage-size="${isWorkspace ? 64 : 120}"`);
     if (isWorkspace) expect(markup).toContain('data-hermes-avatar="true"');
   });

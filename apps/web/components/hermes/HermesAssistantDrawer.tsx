@@ -102,6 +102,8 @@ export interface HermesAssistantDrawerProps {
   /** Wait until the editor has loaded the draft base before applying a restored result. */
   taskRestoreReady?: boolean;
   docked?: boolean;
+  /** Keep this conversation in the page flow at every viewport width. */
+  embedded?: boolean;
   /** The page toolbar owns the companion entry instead of an extra editor seat. */
   pageOwnedAnchor?: boolean;
   /** Source choice, recoverable analysis and explicit adoption stay in this conversation. */
@@ -241,7 +243,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, onPrepareVersion, sourceReview, onSourceCommand,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, onPrepareVersion, sourceReview, onSourceCommand,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -315,7 +317,7 @@ function HermesAssistantDrawerContent({
     textAnchor: { path: number[]; offset: number; top: number; text: string } | null;
     selection: { start: number; end: number; direction: 'forward' | 'backward' | 'none' } | null;
   } | null>(null);
-  const inlineConversation = docked && wide && !shortPane;
+  const inlineConversation = embedded || (docked && wide && !shortPane);
   useClientLayoutEffect(() => {
     conversationOpen.current = open;
     if (conversationOpener.current?.owner !== currentOwner) conversationOpener.current = null;
@@ -337,7 +339,7 @@ function HermesAssistantDrawerContent({
     return () => window.cancelAnimationFrame(frame);
   }, [currentOwner, open]);
   useEffect(() => {
-    if (!open || !docked || !wide) {
+    if (embedded || !open || !docked || !wide) {
       if (!open) { setShortPaneOwner(null); conversationView.current = null; }
       return;
     }
@@ -399,7 +401,7 @@ function HermesAssistantDrawerContent({
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', resize, { passive: true });
     return () => { observer.disconnect(); window.cancelAnimationFrame(frame); window.removeEventListener('resize', resize); window.removeEventListener('scroll', resize); };
-  }, [currentOwner, open, docked, wide, shortPane]);
+  }, [currentOwner, open, docked, wide, shortPane, embedded]);
   useEffect(() => {
     const saved = conversationView.current;
     if (!open || saved?.owner !== currentOwner) { conversationView.current = null; return; }
@@ -791,7 +793,7 @@ function HermesAssistantDrawerContent({
   const drawer = (
     <Drawer
       inline={inlineConversation}
-      className="hermes-assistant-shell hermes-conversation-shell research-product"
+      className={`hermes-assistant-shell hermes-conversation-shell research-product${embedded ? ' guide-embedded-conversation' : ''}`}
       hideCloseButton
       closeLabel={t('guide.close')}
       label={t('guide.dialogLabel')}

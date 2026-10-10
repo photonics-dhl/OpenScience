@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10 Guide已替换为本页创建/上传/手填/任务对话与研究修订界面；定向交互和独立High检查通过，本地候选尚未推送部署，真实模型质量未重跑，线上主页发布保持。需求与状态见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-10 主页版式修正已按用户认可推送并上线：保留5eeb48ce，正常合并远端test-only/docs后发布c239；四CI成功、独立High GO、备份及精确公网版本/健康核验通过，main未改。旧版退出当前展示，仅留一个回滚版本；实际站内入口及登录返回已观察。精确身份和证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)，下方待发布状态为历史。
 - 2026-10-10 个人学术主页按用户反馈完成版式返工：空卡始终保留并灰字提示，恢复示例左右比例，移除返回个人资料。10项浏览器测试及类型/lint通过，root已看桌面/手机空账户；当前仅本地候选与预览，线上仍为下方043版本。证据与待办见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-10 个人学术主页已按用户授权推至既有 nanqing 并部署：精确候选三项 CI 全通过、双库备份校验完成、新表迁移成功、服务健康、实际站内入口及登录返回已观察。真实账户保存/发布与外部 ORCID 未操作；精确版本、证据与存储边界见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。下方原应用发布与当时待推状态为历史。

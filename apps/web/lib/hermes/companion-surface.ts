@@ -16,7 +16,7 @@ const productRoots = new Set([
 export function resolveHermesCompanionSurface(pathname: string): HermesCompanionSurface | null {
   if (pathname === '/') return null;
   const root = pathname.split('/')[1];
-  if (root === 'dashboard' || root === 'research-objects') return 'workspace';
+  if (root === 'dashboard' || root === 'research-objects' || root === 'guide') return 'workspace';
   return productRoots.has(root) ? 'navigation' : null;
 }
 
