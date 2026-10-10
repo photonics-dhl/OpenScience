@@ -5,16 +5,20 @@ import { resolve } from 'node:path';
 const ids = { ro: '10000000-0000-4000-8000-000000000001', version: '20000000-0000-4000-8000-000000000001',
   plan: '30000000-0000-4000-8000-000000000001', first: '40000000-0000-4000-8000-000000000001',
   image: '40000000-0000-4000-8000-000000000003', parent: '50000000-0000-4000-8000-000000000001',
-  child: '50000000-0000-4000-8000-000000000002', claim: '60000000-0000-4000-8000-000000000001' };
+  child: '50000000-0000-4000-8000-000000000002', claim: '60000000-0000-4000-8000-000000000001',
+  secondClaim: '60000000-0000-4000-8000-000000000002' };
 const targetStyle = 'infographic:technical-schematic';
+const paperInstruction = "Explain the author's core scientific relationship in one research image.";
 
 async function setup(page: Page, loseResponse = false, staleVersion = false, options: {
   platformRole?: 'user' | 'platform_admin'; role?: 'author' | 'viewer';
   capability?: 'null' | 'error'; waitForCapability?: Promise<void>;
+  paper?: { sourceStatus?: 'succeeded' | 'failed'; claimVersionId?: string };
 } = {}) {
   let actor = 'ordinary-author';
   let runReads = 0;
   let discoveredAfterLoss = false;
+  const authReads: string[] = [];
   const capabilityQueries: string[] = [];
   const writes: Array<{ path: string; method: string; key: string; body: Record<string, unknown> }> = [];
   const choices = [{ styleId: 'article:watercolor', name: 'Watercolor', reason: 'Current sourced relation.' },
@@ -35,19 +39,40 @@ async function setup(page: Page, loseResponse = false, staleVersion = false, opt
     steps: [{ id: 'plan-step', stage: 'storyboard', ordinal: 0, status: 'running', agentTaskId: 'plan-task', error: null },
       { id: 'image-step', stage: 'scene_image', ordinal: 2, status: 'waiting', agentTaskId: null, error: null }] };
   const version = { versionId: ids.version, versionNo: 1, status: 'draft', commitId: 'commit', createdAt: shared.createdAt };
+  const paperClaims = [ids.claim, ids.secondClaim].map((id, index) => ({ id, researchObjectId: ids.ro,
+    versionId: options.paper?.claimVersionId ?? ids.version, kind: 'core', statement: `Reviewed paper relation ${index + 1}`,
+    extractionStatus: options.paper?.sourceStatus ?? 'succeeded', updatedAt: shared.updatedAt,
+    provenance: { source: 'reviewed_ingestion', sourceTaskId: 'reviewed-paper-task', sourceTaskLineage: 'reviewed-paper-task' } }));
+  const guideTask = { id: 'paper-guide-task', kind: 'workspace.guide', sessionId: 'paper-guide-session',
+    researchObjectId: ids.ro, status: 'succeeded', progress: 100, createdAt: shared.createdAt, result: {
+      summary: 'Prepare a single research illustration.', nextSteps: [], needsMoreInformation: false,
+      presentationDraft: { researchObjectId: ids.ro, versionId: ids.version, action: 'storyboard.create',
+        style: 'auto', instruction: paperInstruction },
+    } };
+  const imagePlanTask = { id: 'paper-image-plan-task', kind: 'presentation.storyboard', researchObjectId: ids.ro,
+    versionId: ids.version, status: 'running', progress: 5, createdAt: shared.createdAt };
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (path === '/api/auth/me') return json({ userId: actor, email: 'author@example.invalid', displayName: 'Researcher', platformRole: options.platformRole ?? 'user', status: 'email_verified', level: 'free' });
+    if (path === '/api/auth/me') {
+      authReads.push(actor);
+      return json({ userId: actor, email: 'author@example.invalid', displayName: 'Researcher', platformRole: options.platformRole ?? 'user', status: 'email_verified', level: 'free' });
+    }
     if (path === '/api/csrf-token') return json({ csrfToken: 'csrf' });
     if (path === '/api/workspaces') return json({ workspaces: [{ id: 'workspace', name: 'Research', type: 'team', role: options.role ?? 'author', status: 'active', createdAt: shared.createdAt }] });
     if (path === `/api/research-objects/${ids.ro}`) return json({ researchObject: { id: ids.ro, workspaceId: 'workspace',
       title: 'Ordinary author research', version: 1, status: 'draft', visibility: 'private', sdf: { core: {}, nodes: [] } } });
     if (path.endsWith('/versions')) return json({ versions: [version] });
-    if (path.endsWith('/claims')) return json({ claims: [] });
+    if (path.endsWith('/claims')) return json({ claims: options.paper ? paperClaims : [] });
     if (path.endsWith('/ingestion')) return json({ tasks: [], version });
-    if (path.endsWith('/presentation-assets')) return json({ assets: [plan, ...images] });
+    if (path.endsWith('/presentation-assets')) return json({ assets: options.paper ? [] : [plan, ...images] });
+    if (options.paper && request.method() === 'GET') {
+      if (path === '/api/agent/tasks') return json({ tasks: [] });
+      if (path === '/api/agent/sessions') return json({ sessions: [] });
+      if (path === '/api/agent/tasks/paper-guide-task') return json({ task: guideTask });
+      if (path.endsWith('/presentation-tasks/paper-image-plan-task')) return json({ task: imagePlanTask });
+    }
     if (path.endsWith('/hermes-art-style-capability')) {
       expect(url.searchParams.get('versionId')).toBe(ids.version);
       const displayed = url.searchParams.get('imageAssetId');
@@ -69,6 +94,15 @@ async function setup(page: Page, loseResponse = false, staleVersion = false, opt
     }
     if (!['GET', 'HEAD'].includes(request.method())) {
       writes.push({ path, method: request.method(), key: request.headers()['idempotency-key'], body: request.postDataJSON() });
+      if (options.paper) {
+        expect(request.method()).toBe('POST');
+        if (path === '/api/agent/sessions') return json({ session: { id: 'paper-guide-session' } }, 201);
+        if (path === '/api/agent/tasks') return json({ task: guideTask }, 201);
+        expect(path).toBe(`/api/research-objects/${ids.ro}/versions/${ids.version}/presentation-assets/generations`);
+        const generations = writes.filter(write => write.path.endsWith('/presentation-assets/generations'));
+        if (loseResponse && generations.length === 1) return json({ error: { code: 'TEMPORARY_FAILURE', message: 'Unknown submission outcome' } }, 503);
+        return json({ task: imagePlanTask }, 202);
+      }
       expect(path).toBe(`/api/research-objects/${ids.ro}/hermes-runs/${ids.parent}/art-style-continuations`);
       expect(request.method()).toBe('POST');
       const persisted = await page.evaluate(() => Object.entries(sessionStorage)
@@ -84,8 +118,92 @@ async function setup(page: Page, loseResponse = false, staleVersion = false, opt
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><rect width="120" height="60" fill="white"/></svg>' });
     return json({});
   });
-  return { writes, capabilityQueries, runReads: () => runReads, discoveredAfterLoss: () => discoveredAfterLoss,
+  return { writes, authReads, capabilityQueries, runReads: () => runReads, discoveredAfterLoss: () => discoveredAfterLoss,
     changeActor: () => { actor = 'other-user'; } };
+}
+
+async function openPaperAction(page: Page) {
+  await page.goto(`/research-objects/${ids.ro}/presentation?version=${ids.version}`);
+  await page.locator('[data-presentation-workbench]').getByRole('button', { name: 'Ask Hermes to create', exact: true }).click();
+  const composer = page.locator('#hermes-guide-goal');
+  await composer.fill('Generate an image');
+  await composer.press('Enter');
+  const action = page.locator('[data-hermes-presentation-action="true"]');
+  await expect(action).toBeVisible();
+  return { action, composer };
+}
+
+test('ordinary author plans one paper image through the visible storyboard action with exact settings and claims', async ({ page }) => {
+  const state = await setup(page, false, false, { paper: {} });
+  await page.goto(`/research-objects/${ids.ro}/presentation?version=${ids.version}`);
+  const sourceTools = page.locator('[data-source-tools="true"]');
+  await sourceTools.locator(':scope > summary').click();
+  const panel = sourceTools.locator('[data-storyboard-panel="true"]');
+  const submit = panel.getByRole('button', { name: 'Plan one research image · 1 AI credit', exact: true });
+  await expect(submit).toBeEnabled();
+  await panel.getByText('Watercolor', { exact: true }).click();
+  await panel.locator('details').getByText('Detailed instructions and narration', { exact: true }).click();
+  await panel.getByLabel('Narration language').selectOption('zh');
+  await panel.getByLabel('What should the explanation emphasize?').fill(paperInstruction);
+  await submit.click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0]).toMatchObject({ method: 'POST',
+    path: `/api/research-objects/${ids.ro}/versions/${ids.version}/presentation-assets/generations`,
+    body: { kind: 'interactive_html', sourceClaimIds: [ids.claim, ids.secondClaim], storyboard: {
+      locale: 'zh', style: 'watercolor', output: 'image', instruction: paperInstruction,
+      narrative: true, narrativeSceneLimit: 1,
+    } } });
+  expect(state.writes[0].key).toBeTruthy();
+  await expect(page.locator('[data-presentation-task="running"]')).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+});
+
+test('ordinary author confirms a single paper image in Hermes and resumes an unknown response with the same exact request', async ({ page }) => {
+  const state = await setup(page, true, false, { paper: {} });
+  const { action, composer } = await openPaperAction(page);
+  await expect(action).toContainText("Hermes will plan one research image explaining the paper's core relationship or conclusion.");
+  await expect(action).toContainText('Reply “confirm production”');
+  const generations = () => state.writes.filter(write => write.path.endsWith('/presentation-assets/generations'));
+  expect(generations()).toHaveLength(0);
+  await composer.fill('confirm production');
+  await composer.press('Enter');
+  await expect(action.getByRole('alert')).toContainText('Submission outcome is unknown');
+  expect(generations()).toHaveLength(1);
+  expect(generations()[0].body).toEqual({ kind: 'interactive_html', sourceClaimIds: [ids.claim, ids.secondClaim],
+    storyboard: { locale: 'en', style: 'auto', output: 'image', instruction: paperInstruction,
+      narrative: true, narrativeSceneLimit: 1 } });
+  expect(generations()[0].key).toBeTruthy();
+  await action.locator('details').getByText('Adjust style and detailed instructions', { exact: true }).click();
+  await expect(action.getByLabel('Storyboard instructions')).toBeDisabled();
+  await composer.fill('confirm production');
+  await composer.press('Enter');
+  await expect.poll(() => generations().length).toBe(2);
+  expect(generations()[1]).toEqual(generations()[0]);
+});
+
+test('a fresh actor mismatch stops a new paper image before its generation request', async ({ page }) => {
+  const state = await setup(page, false, false, { paper: {} });
+  const { action, composer } = await openPaperAction(page);
+  await expect(action).toContainText('Reply “confirm production”');
+  const readsBefore = state.authReads.length;
+  state.changeActor();
+  await composer.fill('confirm production');
+  await composer.press('Enter');
+  await expect.poll(() => state.authReads.slice(readsBefore)).toContain('other-user');
+  // The shared session owner clears the previous account's confirmation before its request can run.
+  await expect(composer).toHaveValue('Generate an image');
+  expect(state.writes.filter(write => write.path.endsWith('/presentation-assets/generations'))).toHaveLength(0);
+});
+
+for (const paper of [{ sourceStatus: 'failed' as const }, { claimVersionId: 'another-version' }]) {
+  test(`Hermes does not submit a paper image from failed or foreign-version claims (${Object.keys(paper)[0]})`, async ({ page }) => {
+    const state = await setup(page, false, false, { paper });
+    const { action, composer } = await openPaperAction(page);
+    await expect(action).toContainText('Confirm the extracted research content');
+    await composer.fill('confirm production');
+    await composer.press('Enter');
+    expect(state.writes.filter(write => write.path.endsWith('/presentation-assets/generations'))).toHaveLength(0);
+  });
 }
 
 async function openChoices(page: Page) {

@@ -33,7 +33,9 @@ const generationBody = z.object({
   kind: z.enum(['chart', 'interactive_html', 'image', 'video']),
   storyboard: z.object({ output: z.enum(['image', 'video']).default('video'), locale: z.enum(['zh', 'en']), style: z.string().min(1).max(100), instruction: z.string().max(1000).trim().min(1), narrative: z.literal(true).optional(), baseAssetId: z.string().uuid().optional(), revisionTaskId: z.string().uuid().optional(), revisionMode: z.literal('art').optional(), artSceneIndex: z.number().int().min(0).max(5).optional(),
     figurePlan: z.object({ figures: z.array(z.object({ id: z.string().min(1).max(200), decision: z.enum(['reuse', 're-render', 'abstract', 'skip']), styleId: z.string().min(1).max(100).optional(), caption: z.string().max(200).optional() }).strict()).max(12) }).strict().optional() }).strict()
-    .extend({ revisionSceneIndex: z.number().int().min(0).max(5).optional() })
+    .extend({ revisionSceneIndex: z.number().int().min(0).max(5).optional(), narrativeSceneLimit: z.number().int().min(1).max(6).optional() })
+    .refine(value => value.narrativeSceneLimit === undefined || value.narrative === true,
+      { message: 'Scene limit requires a narrative storyboard', path: ['narrativeSceneLimit'] })
     .refine(value => value.revisionSceneIndex === undefined || (value.output === 'video' && value.narrative === true && Boolean(value.baseAssetId)),
       { message: 'Video scene revision requires a narrative video base', path: ['revisionSceneIndex'] })
     .refine(value => !value.revisionTaskId || (value.output === 'image' && !value.baseAssetId), { message: 'Storyboard revision requires image output and no base asset', path: ['revisionTaskId'] })

@@ -1,7 +1,34 @@
 import { expect, it } from 'vitest';
-import { selectPresentationVersion, presentationSources, SubmissionIntent, validPresentationInstruction, hasCurrentPresentationSources, newestEligibleStoryboard, presentationVideoFrameIds, presentationStoryboardRequest } from '../lib/hermes/presentation-action';
+import { selectPresentationVersion, presentationSources, SubmissionIntent, validPresentationInstruction, hasCurrentPresentationSources, newestEligibleStoryboard, presentationVideoFrameIds, presentationStoryboardRequest, hasSingleReviewedPaperSource } from '../lib/hermes/presentation-action';
 import type { VersionSummary, PresentationAsset, PresentationClaim } from '../lib/api';
 const versions = [{versionId:'published',status:'published'},{versionId:'draft',status:'draft'}] as VersionSummary[];
+
+it('recognizes only the selected successful claims from one reviewed paper', () => {
+  const claims = [{ id: 'a', extractionStatus: 'succeeded', provenance: { source: 'reviewed_ingestion', sourceTaskId: 'source-a' } },
+    { id: 'b', extractionStatus: 'succeeded', provenance: { sourceTaskLineage: 'source-a' } },
+    { id: 'c', extractionStatus: 'succeeded', provenance: { sourceTaskLineage: 'source-b' } }] as PresentationClaim[];
+  expect(hasSingleReviewedPaperSource(['a', 'b'], claims)).toBe(true);
+  expect(hasSingleReviewedPaperSource(['a', 'c'], claims)).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a', 'missing'], claims)).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a'], [{ ...claims[0]!, extractionStatus: 'failed' }])).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a'], [{ ...claims[0]!, provenance: { source: 'human' } }])).toBe(false);
+  expect(hasSingleReviewedPaperSource([], claims)).toBe(false);
+});
+
+it('uses one native paper scene only for a new focused image and preserves all other requests', () => {
+  const input = { action: 'storyboard.create' as const, output: 'image' as const, locale: 'zh' as const,
+    style: 'auto', instruction: 'Explain the author intent', singlePaperImage: true };
+  expect(presentationStoryboardRequest(input)).toEqual({ locale: 'zh', style: 'auto', output: 'image',
+    instruction: 'Explain the author intent', narrative: true, narrativeSceneLimit: 1 });
+  const figurePlan = { figures: [{ id: 'Fig. 1', decision: 'abstract' as const }] };
+  expect(presentationStoryboardRequest({ ...input, figurePlan })).toMatchObject({ figurePlan });
+  expect(presentationStoryboardRequest({ ...input, figurePlan })).not.toHaveProperty('narrativeSceneLimit');
+  const parent = { id: 'base', storyboard: { output: 'image', narrative: true } } as PresentationAsset;
+  const revised = presentationStoryboardRequest({ ...input, action: 'storyboard.revise', parent, revisionMode: 'art' });
+  expect(revised).toMatchObject({ baseAssetId: 'base', revisionMode: 'art' });
+  expect(revised).not.toHaveProperty('narrativeSceneLimit');
+  expect(presentationStoryboardRequest({ ...input, singlePaperImage: false })).not.toHaveProperty('narrative');
+});
 it('never substitutes an explicit version and defaults only to a draft',()=>{
  expect(selectPresentationVersion(versions,'missing')).toBeNull();
  expect(selectPresentationVersion(versions,'published')?.status).toBe('published');

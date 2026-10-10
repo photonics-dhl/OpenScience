@@ -53,7 +53,7 @@ jobs:
       - name: Verify source, tenancy, concurrency and immutable publication
         run: pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000 --no-file-parallelism
       - name: Verify HTTP boundary and public data contracts
-        run: pnpm --filter @openscience/api exec vitest run journal test/research-routes.test.ts --testTimeout=20000 --no-file-parallelism
+        run: pnpm --filter @openscience/api exec vitest run journal test/research-routes.test.ts test/academic-profile-routes.test.ts test/academic-profile-database.test.ts --testTimeout=20000 --no-file-parallelism
       - name: Verify worker validation and retries
         run: pnpm --filter @openscience/agent-worker exec vitest run test/journal-worker.test.ts
       - name: Build web

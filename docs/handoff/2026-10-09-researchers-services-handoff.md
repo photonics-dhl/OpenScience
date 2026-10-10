@@ -2,7 +2,7 @@
 
 ## 2026-10-10 个人学术主页开发
 
-- 用户已明确授权推送及部署；现有 `frontend/nanqing` 合入远端 `8cc8eff7` 后，以干净提交 `04352895148395465fbeaaa29e1cd6540331f36e` 正常推送并部署成功。active/公网版本同该 SHA，rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；没有新建分支、强推或修改 main。后续仅文档收据提交，应用仍为该发布 SHA。
+- 用户已明确授权推送及部署；现有 `frontend/nanqing` 合入远端 `8cc8eff7` 后，以干净提交 `04352895148395465fbeaaa29e1cd6540331f36e` 正常推送并部署成功。active/公网版本同该 SHA，rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；没有新建分支、强推或修改 main。应用仍为该发布 SHA；收尾合并保留其他会话后续候选，并未自动部署这些新改动。
 - 精确候选 GitHub CI 全成功：media `38045814883`（含四个独立 browser-entry）、video `38045814902`、journals `38045814954`；期刊 CI 的隔离 PostgreSQL 已应用全部源码迁移。原个人主页 API 5/5、浏览器 7/7、类型/lint 与独立 High 证据复用，发布增量 High GO。
 - 发布前双库备份 `/var/backups/openscience/db-set-20261010T104238Z-340790` 校验和及 0700/0600 权限通过；正式任务只读 safe=true、nativePending/nativeBoundPending=false，无并发部署。正常迁移、全量构建/启动、精确公网版本、retention 与 journal 清除成功；未刷新 Native，未变化的能力镜像按守卫复用。
 - 实际核心库账本 53 条（源码 52 条全部存在，额外历史 `20260809010000_ro_create_idempotency` 已见 deployment runbook），搜索库 2/2；新表六列已核对。首次核验误用源码数量作账本预期而失败，逐项核对后通过；未改账本。服务全部 healthy、无 failed/journal，主页相关两页 HTTP 200、匿名本人接口 401。
@@ -22,6 +22,7 @@
 - 新增两条回归最终通过 `1791619380082-72f78fd1-da0c-4076-b12f-9b95fd3a1545.log`；首跑 `1791619302752-098da7f4-204b-49e0-aafa-f61e9c497e5e.log` 失败来自一次性 503 fixture 被双挂载消耗、编辑态误用展示态断言，修正 fixture/选择器后原功能条件保留。
 - 本机 Docker 已安装但 daemon 无法启动，PostgreSQL 实测未完成；临时 `tmp/profile-20261010/preview-api.cjs` 在 localhost 使用实际路由/鉴权和内存数据库替身，仅验证接口到 UI 的连接，不代表数据库持久化。原件提取文本和结构图在同目录，原 Word 未修改。
 - 首版开发时仅保存在本地、未迁移；现已完成上述 CI 隔离库及生产迁移核对。本机内存替身的保存证据不替代生产真实账户持久化验收，临时预览仍为明确的虚构演示。
+- 总控10-10整合纠正：本功能已随04352895推送，既有journal CI在fresh PostgreSQL16成功应用迁移52（PR38045814954/job114195008095）。50f1正常合并保留本功能与已审Hermes改动；47376489为原CI补真实profile HTTP/JSONB/CAS/快照用例，已获独立High源码GO，待首次运行。本次043已完成上方生产部署；新测试与Hermes候选未随该发布上线，CI结果以GitHub为准；不以旧内存替身证明生产账户落盘。
 
 ## 需求与范围
 

@@ -67,3 +67,18 @@ it('carries the existing narrative scope into an art-only revision payload', () 
   const legacy = buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: 'restyle', baseAssetId: 'base', artOnly: true });
   expect(legacy).not.toHaveProperty('narrative');
 });
+
+it('sends a hard one-scene paper scope for the focused new research image', () => {
+  expect(buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: ' Explain the core mechanism ',
+    artOnly: false, singlePaperImage: true })).toEqual({ locale: 'zh', style: 'auto', output: 'image',
+      instruction: 'Explain the core mechanism', narrative: true, narrativeSceneLimit: 1 });
+});
+
+it('does not replace existing revisions or video scope with the new image scene limit', () => {
+  const revision = buildStoryboardRequest({ locale: 'en', style: 'ink', output: 'image', instruction: 'Keep the same science',
+    baseAssetId: 'base', artOnly: true, storyboard: { narrative: true }, singlePaperImage: true });
+  expect(revision).toMatchObject({ baseAssetId: 'base', revisionMode: 'art', narrative: true });
+  expect(revision).not.toHaveProperty('narrativeSceneLimit');
+  expect(buildStoryboardRequest({ locale: 'en', style: 'auto', output: 'video', instruction: 'Plan this video',
+    artOnly: false, singlePaperImage: true })).not.toHaveProperty('narrativeSceneLimit');
+});

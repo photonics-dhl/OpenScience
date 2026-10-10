@@ -2,7 +2,7 @@
 
 `docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录本对话功能向既有 `frontend/nanqing` 的整合、实际发布/回滚和后续范围。
 
-个人学术主页设计与示例边界：`docs/specs/2026-10-10-academic-profile-design.md`；本人 `/me/profile`、访客 `/researchers/[userId]`，`apps/web/components/profile/AcademicProfileView.tsx` 与编辑页消费 `apps/api/src/routes/academic-profile.ts`，数据模型在 `infra/schema.prisma` 与 `infra/migrations/20261010010000_academic_profiles/`。草稿、公开快照、外链存储和实际验收只见 [服务对象 CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)。
+个人学术主页设计与示例边界：`docs/specs/2026-10-10-academic-profile-design.md`；本人 `/me/profile`、访客 `/researchers/[userId]`，`apps/web/components/profile/AcademicProfileView.tsx` 与编辑页消费 `apps/api/src/routes/academic-profile.ts`，模型/迁移在 `infra/schema.prisma` 与 `infra/migrations/20261010010000_academic_profiles/`。`apps/api/test/academic-profile-database.test.ts`由既有journal PostgreSQL job验证实际草稿/快照/CAS；原mock边界测试保留。存储/产品证据见 [服务对象 CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)，统一发布见Hermes CURRENT。
 
 统一导航：`apps/web/components/navigation/{NavigationMenu,ProductHeaderActions,ProductRouteNavigation,ServiceAudienceMenu,AccountLink}.tsx`、`apps/web/components/landing/SiteHeader.tsx`、`apps/web/lib/product-navigation.ts` 与 `apps/web/components/shell/{ShellPrimitives,DashboardShell,WorkspaceShell,IdentityShell}.tsx`；上传入口复用 `/guide`，API 复用 `/developers`。联系说明/邮件草稿：`apps/web/app/contact/{page.tsx,contact.module.css,email/route.ts}`、`apps/web/components/contact/EmailDraftButton.tsx`，点击写邮件才读取收件地址；定向验证 `apps/web/test/{contact-email.test.ts,landing-page.test.tsx,e2e/navigation-refresh.spec.ts}`。
 
@@ -27,6 +27,8 @@
 视频执行资格：Gateway `synclip-video-readiness.ts`读取已有host heartbeat；Domain `agent/video-readiness.ts`识别受授权视频意图并在新收费前检查；Worker `video-task-admission.ts`复用任务与outbox暂停/恢复。API `research-runs.ts`的`hermes-video-capability`供Web在来源准备前消费，原重分析的`output`只限制、不扩权；相关同名单测及原media CI覆盖边界，实际交付状态只见CURRENT。
 
 精确内容管理：`ResearchContentManager.tsx`与`TrashActionButton.tsx`将原DTO的resourceId/kind绑定到行、按钮和确认框，避免同名媒体被误选；权限/API/回收语义不变，已授权五项操作的排程与结果只见CURRENT。
+
+普通分镜表单由`apps/web/components/presentation/StoryboardPanel.tsx`和`apps/web/components/hermes/HermesPresentationAction.tsx`承接，请求构造在`apps/web/lib/hermes/presentation-action.ts`；HTTP strict合同与真实路由测试在`apps/api/src/routes/presentation-assets.ts`/`apps/api/test/presentation-assets-routes.test.ts`，由原media workflow消费。Native选路核`packages/domain/src/agent/native-agent-execution.ts`，单幕上限解析在`packages/domain/src/assets/storyboard.ts`；候选/上线/科学质量见CURRENT。
 
 Synclip图像与视频接入：图像沿`packages/ai-gateway/src/synclip-image-api.ts`与`infra/synclip-image/`；视频沿Gateway `synclip-video-api.ts`/`synclip-audio-api.ts`、Worker `presentation/synclip-video-spool.ts`和`infra/synclip-video/`，复用Hermes分镜/Claims/Evidence及私有媒体流。当前实现采用LTX逐镜提交、receipt恢复、首帧引用与独立旁白测时/拼接，不把实现选择当作API固有限制。`infra/synclip-video/install.sh`及相邻`install.test.mjs`定位延迟激活、更新/回退；原`broker.mjs --list-voices`使用受保护配置只读服务器Key声音目录，不启动队列；`prepareSynclipAudioAudition`复用原`prepareAudio`处理单个已绑定分镜，原broker测试覆盖未知提交/回执/并发，尚待正常任务purpose及私有MP3消费者接线；guide输出与同源任务意图查询见`workspace-guide.ts`、Domain `agent/research-run.ts`及`hermes-run-intent-query.test.ts`，Web消费者归UI。总指南见[openscience-synclip-capabilities](.agents/skills/openscience-synclip-capabilities/SKILL.md)，规划/审查见[openscience-research-video](.agents/skills/openscience-research-video/SKILL.md)；部署、权限、实际API效果和用户质量反馈只见[CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
 
