@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createFakePrisma } from '../helpers/fakes';
+import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { claimAgentTask, markTaskProgress } from '../../src/agent/agent';
 import { retryIngestionTaskInTransaction } from '../../src/ingestion/ingestion-service';
 import { getHermesVideoCapability, type HermesResearchRunDeps } from '../../src/agent/research-run';
@@ -321,12 +321,14 @@ describe('persisted video task intent', () => {
 
 function capabilityFixture() {
   const { prisma, db } = createFakePrisma();
+  seedUser(db, { id: 'actor', platformRole: 'user' });
   db.workspaces.push({ id: 'workspace', status: 'active' });
   db.researchObjects.push({ id: 'ro', workspaceId: 'workspace', status: 'draft', deletedAt: null });
   db.memberships.push({ workspaceId: 'workspace', userId: 'actor', role: 'author' });
   const readVideoReadiness = vi.fn(async () => true);
-  const deps = { prisma, videoEnabled: true, readVideoReadiness } as HermesResearchRunDeps;
-  return { db, deps, readVideoReadiness };
+  const readAudioAuditionReadiness = vi.fn(async () => ({ audio: { provider: 'synclip' as const, voice: 'configured-voice', speed: 1 }, maxEstimatedCoins: 0.25 }));
+  const deps = { prisma, videoEnabled: true, readVideoReadiness, readAudioAuditionReadiness } as HermesResearchRunDeps;
+  return { db, deps, readVideoReadiness, readAudioAuditionReadiness };
 }
 
 describe('Hermes video capability', () => {
@@ -334,24 +336,27 @@ describe('Hermes video capability', () => {
   it('returns only the scoped dynamic capability and does not mutate any row', async () => {
     const f = capabilityFixture();
     const before = structuredClone(f.db);
-    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: true });
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: true, audioAudition: null });
     f.readVideoReadiness.mockResolvedValue(false);
-    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false });
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(f.readAudioAuditionReadiness).not.toHaveBeenCalled();
     expect(f.db).toEqual(before);
   });
 
   it.each(['viewer', 'reviewer'])('returns false for the read-only %s role', async role => {
     const f = capabilityFixture();
     f.db.memberships[0].role = role;
-    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false });
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false, audioAudition: null });
     expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    expect(f.readAudioAuditionReadiness).not.toHaveBeenCalled();
   });
 
   it('returns false for an immutable research object', async () => {
     const f = capabilityFixture();
     f.db.researchObjects[0].status = 'published';
-    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false });
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false, audioAudition: null });
     expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    expect(f.readAudioAuditionReadiness).not.toHaveBeenCalled();
   });
 
   it.each(['missing', 'deleted', 'nonmember', 'archived'])('masks an inaccessible %s research object', async reason => {
@@ -362,5 +367,36 @@ describe('Hermes video capability', () => {
     if (reason === 'archived') f.db.workspaces[0].status = 'archived';
     await expect(getHermesVideoCapability(f.deps, input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    expect(f.readAudioAuditionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('returns only the configured audio preset while complete video remains closed', async () => {
+    const f = capabilityFixture();
+    f.db.users[0].platformRole = 'platform_admin'; f.readVideoReadiness.mockResolvedValue(false);
+    const internal = { audio: { provider: 'synclip' as const, voice: 'configured-voice', speed: 1, keyPath: '/private/key' },
+      maxEstimatedCoins: 0.25, hostPath: '/private/host' };
+    f.readAudioAuditionReadiness.mockResolvedValue(internal);
+    const before = structuredClone(f.db);
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false,
+      audioAudition: { audio: { provider: 'synclip', voice: 'configured-voice', speed: 1 } } });
+    expect(f.readAudioAuditionReadiness).toHaveBeenCalledTimes(1); expect(f.db).toEqual(before);
+    f.db.users[0].platformRole = 'user';
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(f.readAudioAuditionReadiness).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['viewer', 'reviewer', 'published'])('does not sample the audio host for a platform admin with %s scope', async scope => {
+    const f = capabilityFixture(); f.db.users[0].platformRole = 'platform_admin';
+    if (scope === 'published') f.db.researchObjects[0].status = 'published'; else f.db.memberships[0].role = scope;
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(f.readAudioAuditionReadiness).not.toHaveBeenCalled();
+  });
+
+  it('keeps audio capability closed for invalid or unavailable policy without changing complete-video readiness', async () => {
+    const f = capabilityFixture(); f.db.users[0].platformRole = 'platform_admin';
+    f.readAudioAuditionReadiness.mockResolvedValue({ audio: { provider: 'synclip', voice: 'configured-voice', speed: 1 }, maxEstimatedCoins: 0 });
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: true, audioAudition: null });
+    f.readAudioAuditionReadiness.mockRejectedValue(new Error('private host unavailable'));
+    expect(await getHermesVideoCapability(f.deps, input)).toEqual({ canGenerateVideo: true, audioAudition: null });
   });
 });

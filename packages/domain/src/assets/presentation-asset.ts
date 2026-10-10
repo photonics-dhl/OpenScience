@@ -13,7 +13,7 @@ import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
-import { requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
+import { HermesVideoUnavailableError, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
@@ -378,13 +378,13 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
   if (videoIntent && !replay) {
     const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
-    await requireHermesVideoReady(deps, audition?.purpose);
     if (audition) {
-      const policy = await deps.readAudioAuditionReadiness?.();
-      if (!policy || !isDeepStrictEqual(policy.audio, audition.audio)) {
+      const policy = await readHermesAudioAuditionPolicy(deps);
+      if (!policy) throw new HermesVideoUnavailableError();
+      if (!isDeepStrictEqual(policy.audio, audition.audio)) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition voice must match the explicitly configured server voice');
       }
-    }
+    } else await requireHermesVideoReady(deps);
   }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };

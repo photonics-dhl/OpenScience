@@ -647,10 +647,10 @@ describe('private audition handler and current-attempt recovery', () => {
         render: async () => { throw Error('audio audition rendered a video'); } };
       // Initial heartbeat comes from the actual broker; no hand-authored result JSON is used.
       expect(await runSynclipVideoBrokerOnce(cfg, brokerDeps)).toBeNull();
-      const readPolicy = async () => {
+      const readPolicy = vi.fn(async () => {
         const ready = JSON.parse(await readFile(join(cfg.results, '.ready'), 'utf8'));
         return ready.audioAccepting ? { audio: ready.narration, maxEstimatedCoins: ready.audioAuditionBudget.maxEstimatedCoins } : null;
-      };
+      });
       const deps = { prisma, redis: redis as unknown as WorkerDeps['redis'], storage, mailer: createFakeMailer(), videoEnabled: true,
         readVideoReadiness: async () => false, readAudioAuditionReadiness: readPolicy };
       const token = await createSession(deps.redis, { userId: actorId, status: 'email_verified' });
@@ -658,11 +658,13 @@ describe('private audition handler and current-attempt recovery', () => {
         security: { csrf: true }, rateLimitEnabled: false });
       const csrf = await app.inject({ method: 'GET', url: '/csrf-token' });
       const cookies = { openscience_session: token, _csrf: csrf.cookies.find(cookie => cookie.name === '_csrf')!.value };
+      expect(readPolicy).not.toHaveBeenCalled();
       const response = await app.inject({ method: 'POST',
         url: `/research-objects/${roId}/versions/${versionId}/presentation-assets/generations`, cookies,
         headers: { 'x-csrf-token': csrf.json().csrfToken, 'idempotency-key': 'one-real-broker-audition' },
         payload: { kind: 'video', sourceClaimIds: [claimId], video: f.owner.payload.video } });
       expect(response.statusCode, response.body).toBe(202);
+      expect(readPolicy).toHaveBeenCalledTimes(1);
       const taskId = response.json().task.id as string;
       expect(queued).toEqual([taskId]);
       expect(db.usageLedger.filter(row => row.metadata?.taskId === taskId).map(row => row.delta)).toEqual([1n, -1n]);

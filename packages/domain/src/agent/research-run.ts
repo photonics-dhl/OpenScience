@@ -13,7 +13,7 @@ import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, in
   NATIVE_REVIEW_INITIALIZATION_ERROR, NATIVE_REVIEW_INITIALIZATION_RECOVERY, inspectNativeSourceReviewPreflightRecovery,
   NATIVE_REVIEW_PREFLIGHT_ERROR, NATIVE_REVIEW_PREFLIGHT_RECOVERY, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
-import { HermesVideoUnavailableError, isHermesVideoReady, requireHermesVideoReady, isHermesVideoRun, type HermesVideoReadinessDeps } from './video-readiness';
+import { HermesVideoUnavailableError, isHermesVideoReady, readHermesAudioAuditionPolicy, requireHermesVideoReady, isHermesVideoRun, type HermesVideoReadinessDeps, type HermesAudioAuditionPolicy } from './video-readiness';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents } from '../assets/video';
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustrationSourceSupport } from '../assets/illustration-brief';
@@ -269,12 +269,15 @@ async function requireReusableNarrativeUnderstanding(tx: Prisma.TransactionClien
 export async function getHermesVideoCapability(
   deps: HermesResearchRunDeps,
   input: { actorId: string; researchObjectId: string },
-): Promise<{ canGenerateVideo: boolean }> {
+): Promise<{ canGenerateVideo: boolean; audioAudition: { audio: HermesAudioAuditionPolicy['audio'] } | null }> {
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
   if (!ro || ro.deletedAt) throw new HermesResearchRunError('NOT_FOUND', 'Research object not found');
   const { membership } = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch(() => { throw new HermesResearchRunError('NOT_FOUND', 'Research object not found'); });
-  return { canGenerateVideo: ro.status === 'draft' && WRITE_ROLES.has(membership.role) && await isHermesVideoReady(deps) };
+  const writable = ro.status === 'draft' && WRITE_ROLES.has(membership.role);
+  const user = writable ? await deps.prisma.user.findUnique({ where: { id: input.actorId }, select: { platformRole: true } }) : null;
+  const policy = user?.platformRole === 'platform_admin' ? await readHermesAudioAuditionPolicy(deps) : null;
+  return { canGenerateVideo: writable && await isHermesVideoReady(deps), audioAudition: policy ? { audio: policy.audio } : null };
 }
 
 export async function createHermesResearchRun(
