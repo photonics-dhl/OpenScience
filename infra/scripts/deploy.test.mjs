@@ -685,9 +685,11 @@ test('Native Compose 2.26 startup adapter creates without starting before the pi
   }
 });
 
-async function nativeStartupFixture({ target = 'candidate', stopped = [] } = {}) {
+async function nativeStartupFixture({ target = 'candidate', stopped = [], notAttempted = false } = {}) {
   const f = nativeRecoverySequenceFixture();
-  await f.quiesce(); await f.installed(); f.createCandidate();
+  await f.quiesce();
+  if (notAttempted) await f.failBeforeInstall();
+  else { await f.installed(); f.createCandidate(); }
   if (target === 'candidate') await f.run('native-before-start');
   else {
     await f.run('native-prepare-rollback');
@@ -698,6 +700,8 @@ async function nativeStartupFixture({ target = 'candidate', stopped = [] } = {})
       container.Config.Env = key === 'web' ? [] : ['HERMES_NATIVE_AGENT_ENABLED=true', `HERMES_NATIVE_RUNTIME_ID=${f.journal.nativeRefresh.before.runtimeId}`,
         `HERMES_NATIVE_SKILL_CATALOGUE_ID=${f.journal.nativeRefresh.before.skillCatalogueId}`, 'HERMES_NATIVE_AGENT_MODEL=MiniMax-M3', 'HERMES_NATIVE_AGENT_INBOX=/native-agent/inbox'];
       container.Mounts[0].Source = `/opt/openscience-releases/${f.options.rollbackSha}`;
+      container.State = { Running: false, Status: 'created', ExitCode: 0, OOMKilled: false, Error: '',
+        StartedAt: '0001-01-01T00:00:00Z', FinishedAt: '0001-01-01T00:00:00Z' };
     }
   }
   for (const key of stopped) f.journal.nativeRefresh.before.producers[key] = false;
@@ -916,6 +920,52 @@ test('Native startup oneoff rejection remains held through candidate rollback be
   await assert.rejects(f.run('native-prepare-rollback'), /Native deployment|held/u);
   assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
   assert.equal(f.calls.slice(before).some(call => call === 'stop' || call === 'restore' || call.startsWith('query:')), false);
+});
+
+test('Native original startup holds wrong recovery stages before any producer or timer write', async t => {
+  const stages = [
+    ['not_started', 'not_attempted', 'not_started'], ['quiescing', 'not_attempted', 'not_started'],
+    ['quiesced', 'not_attempted', 'not_started'], ['rollback_quiescing', 'not_attempted', 'not_started'],
+    ['rollback_quiesced', 'install_attempting', 'not_started'], ['quiesced', 'install_attempting', 'not_started'],
+    ['quiesced', 'installed', 'restored_verified'], ['rollback_quiescing', 'installed', 'restored_verified'],
+    ['rollback_quiesced', 'installed', 'restore_attempting'], ['rollback_quiesced', 'installed', 'not_started'],
+  ];
+  for (const [quiesceState, installState, restoreState] of stages) await t.test(`${quiesceState}/${installState}/${restoreState}`, async () => {
+    const f = await nativeStartupFixture({ target: 'original' }), state = f.journal.nativeRefresh;
+    Object.assign(state, { quiesceState, installState, restoreState });
+    if (installState !== 'installed') delete state.installation;
+    const before = f.calls.length;
+    await assert.rejects(f.start(), /Native deployment|held/u);
+    assert.deepEqual(f.startup, []);
+    assert.equal(f.calls.slice(before).some(call => call.startsWith('start:') || call.startsWith('timer-') || call.startsWith('query:')), false);
+  });
+});
+
+test('Native original startup accepts rollback-quiesced after a held work gate with no install attempt', async () => {
+  const f = await nativeStartupFixture({ target: 'original', notAttempted: true });
+  assert.equal(f.journal.nativeRefresh.quiesceState, 'rollback_quiesced');
+  assert.equal(f.journal.nativeRefresh.installState, 'not_attempted');
+  assert.equal(f.journal.nativeRefresh.restoreState, 'not_started');
+  await f.start();
+  assert.deepEqual(f.startup, ['api', 'web', 'agentWorker']);
+  assert.equal(f.calls.includes('resource-write'), false);
+});
+
+test('Native checkpoint-null candidate rollback rejects running oneoffs before stop, query or restore', async t => {
+  for (const role of ['api', 'web', 'agentWorker']) await t.test(role, async () => {
+    const f = await nativeStartupFixture();
+    f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers;
+    const extra = structuredClone(f.containers[role]); extra.Id = 'e'.repeat(64);
+    extra.Config.Labels['com.docker.compose.oneoff'] = 'True';
+    Object.assign(extra.State, { Running: true, Status: 'running', StartedAt: '2026-10-09T08:00:00.000Z', Health: { Status: 'healthy' } });
+    f.extra.push(extra);
+    const before = f.calls.length;
+    await assert.rejects(f.run('native-prepare-rollback'), /Native deployment|held/u);
+    assert.equal(f.calls.slice(before).some(call => call === 'stop' || call === 'restore' || call.startsWith('query:')), false);
+    assert.equal(f.journal.nativeRefresh.candidateCheckpoint, null);
+    assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
+    assert.deepEqual(f.startup, []);
+  });
 });
 
 test('Native real rollback adapter checks feasibility before restore and never starts old pair on held recovery', async t => {

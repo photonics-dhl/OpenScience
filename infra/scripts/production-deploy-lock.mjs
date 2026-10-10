@@ -342,7 +342,7 @@ function verifyNeverStartedCandidate(container, service, installation) {
 }
 
 async function pauseNativeProducers(state, original) {
-  const inventory = { includeOneOff: !original && state.candidateCheckpoint !== null };
+  const inventory = { includeOneOff: !original };
   const containers = await nativeContainers(inventory);
   if (original && Object.keys(containers).some(key => (containers[key]?.Id ?? null) !== state.before.containers[key])) invalidNativeState();
   if (!original) {
@@ -449,7 +449,10 @@ async function startNativeApplication(state, options, verifyContainers, restoreT
   const releaseSha = options.target === 'original' ? options.rollbackSha : options.candidateSha;
   if (!expected || (options.target === 'candidate' && (state.installState !== 'installed'
     || state.restoreState !== 'not_started' || state.quiesceState !== 'quiesced'
-    || state.candidateCheckpoint === null || !state.candidateContainers))) invalidNativeState();
+    || state.candidateCheckpoint === null || !state.candidateContainers))
+    || (options.target === 'original' && (state.quiesceState !== 'rollback_quiesced'
+      || !((state.installState === 'not_attempted' && state.restoreState === 'not_started')
+        || (state.installState === 'installed' && state.restoreState === 'restored_verified'))))) invalidNativeState();
   const roles = [['api', 'api'], ['web', 'web'], ['agentWorker', 'agent-worker']];
   const captured = await nativeContainers({ includeOneOff: true, deadline: performance.now() + 300_000 }), ids = {};
   for (const [key, service] of roles) {
