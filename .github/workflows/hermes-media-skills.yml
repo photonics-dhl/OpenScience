@@ -93,6 +93,8 @@ on:
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
       - 'infra/scripts/deploy.test.mjs'
+      - 'infra/scripts/production-release-retention.mjs'
+      - 'infra/scripts/production-release-retention.test.mjs'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
       - 'packages/ai-gateway/src/native-tool-protocol.ts'
@@ -346,6 +348,8 @@ on:
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
       - 'infra/scripts/deploy.test.mjs'
+      - 'infra/scripts/production-release-retention.mjs'
+      - 'infra/scripts/production-release-retention.test.mjs'
       - 'packages/ai-gateway/src/codex-sol-review*.ts'
       - 'packages/ai-gateway/src/gateway.ts'
       - 'packages/ai-gateway/src/native-tool-protocol.ts'
@@ -552,7 +556,7 @@ jobs:
             --output "$GITHUB_WORKSPACE/tmp/native-restore-source-identity/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
-      - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs
+      - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
