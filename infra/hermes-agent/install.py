@@ -198,8 +198,7 @@ def restore_previous(candidate_sha):
     if not isinstance(candidate_sha, str) or not re.fullmatch('[a-f0-9]{40}', candidate_sha):
         raise ValueError('Native restoration requires an exact candidate SHA')
     release = ROOT/'releases'/candidate_sha; backup = release/'previous'; source = RELEASES/candidate_sha
-    for path in (ROOT, ROOT/'releases', release, backup, RELEASES, source,
-                 source/'infra', source/'infra/hermes-agent', SYSTEMD_UNITS):
+    for path in (ROOT, ROOT/'releases', release, backup, RELEASES, source, SYSTEMD_UNITS):
         _protected_directory(path)
     _protected_bytes(ROOT/'install.lock')
     with open(ROOT/'install.lock', 'r') as lock:
@@ -226,9 +225,11 @@ def restore_previous(candidate_sha):
             if not previous[name] and old[name] is not None:
                 raise ValueError('Native recorded absence conflicts with its backup')
         old_ids = _previous_identity(old['runtime.env']) if previous['runtime.env'] else (None, None)
+        # Source archive modes are bound by the release manifest, not the private backup contract.
+        command(['node', str(source/'scripts/release-input-manifest.mjs'), 'verify',
+                 '--root', str(source), '--sha', candidate_sha], timeout=900)
         candidate = {'runtime.env': _runtime_configuration(expected_runtime, expected_catalogue).encode('utf-8')}
         for name in UNIT_NAMES:
-            _protected_bytes(source/'infra/hermes-agent'/name)
             candidate[name] = _unit_text(source, release, name).encode('utf-8')
         paths = {**{name: SYSTEMD_UNITS/name for name in UNIT_NAMES}, 'runtime.env': ROOT/'runtime.env'}
         # Validate the entire fixed set before any service or file mutation.

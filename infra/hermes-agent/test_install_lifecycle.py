@@ -317,13 +317,16 @@ class InstallLifecycleTests(unittest.TestCase):
         unit = self.source/'infra/hermes-agent'/install.UNIT_NAMES[0]
         manifest = self.source/'.release-inputs.sha256'
         original_unit = unit.read_bytes(); original_manifest = manifest.read_bytes()
-        for changed in ('content', 'mode', 'owner', 'path', 'metadata', 'missing-manifest'):
+        for changed in ('content', 'mode', 'owner', 'path', 'symlink', 'metadata', 'missing-manifest'):
             with self.subTest(changed=changed):
                 self.events.clear()
                 if changed == 'content': unit.write_bytes(original_unit+b' altered')
                 elif changed == 'mode': unit.chmod(0o644)
                 elif changed == 'owner': os.chown(unit, 1, 1)
                 elif changed == 'path': unit.rename(unit.with_name('renamed-unit'))
+                elif changed == 'symlink':
+                    unit.rename(unit.with_name('symlink-target'))
+                    unit.symlink_to(unit.with_name('symlink-target'))
                 elif changed == 'metadata':
                     value = json.loads(original_manifest); value['sourceSha'] = 'b'*40
                     manifest.write_text(json.dumps(value))
@@ -335,6 +338,8 @@ class InstallLifecycleTests(unittest.TestCase):
                     self.assertFalse(any(event[0] == 'systemctl' for event in self.events))
                     self.assert_no_producer_start()
                 finally:
+                    if unit.is_symlink():
+                        unit.unlink(); unit.with_name('symlink-target').rename(unit)
                     if not unit.exists(): unit.with_name('renamed-unit').rename(unit)
                     os.chown(unit, 0, 0); unit.chmod(0o664); unit.write_bytes(original_unit)
                     manifest.write_bytes(original_manifest); manifest.chmod(0o444)
@@ -498,7 +503,8 @@ class InstallLifecycleTests(unittest.TestCase):
         expected = {path: path.read_bytes() for path in self.candidate_contents}
         with self.assertRaises(ValueError): install.restore_previous(self.source.name)
         for path, value in expected.items(): self.assertEqual(path.read_bytes(), value)
-        self.assertEqual(self.events, [])
+        self.assertEqual(self.events, [('node', str(self.source/'scripts/release-input-manifest.mjs'),
+                                       'verify', '--root', str(self.source), '--sha', self.source.name)])
 
     def test_late_restore_rejects_missing_recorded_backup_before_any_write(self):
         self.prepare_late_restore()
@@ -517,7 +523,9 @@ class InstallLifecycleTests(unittest.TestCase):
         env = self.root/'runtime.env'; target = self.root/'unrelated.env'
         target.write_bytes(env.read_bytes()); env.unlink(); env.symlink_to(target)
         with self.assertRaises(ValueError): install.restore_previous(self.source.name)
-        self.assertTrue(env.is_symlink()); self.assertEqual(self.events, [])
+        self.assertTrue(env.is_symlink())
+        self.assertEqual(self.events, [('node', str(self.source/'scripts/release-input-manifest.mjs'),
+                                       'verify', '--root', str(self.source), '--sha', self.source.name)])
 
     def test_late_restore_rejects_missing_or_duplicate_identity_keys(self):
         self.prepare_late_restore()
