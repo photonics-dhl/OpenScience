@@ -8,13 +8,13 @@ import { downloadPresentationTaskAudio, presentationTaskAudioUrl } from '@/lib/a
 
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : React.useLayoutEffect;
 
-type Props = { ownerId: string; researchObjectId: string; versionId: string; taskId: string };
+type Props = { ownerId: string; researchObjectId: string; versionId: string; taskId: string; caption?: string };
 
 export function HermesAudioAuditionPlayer(props: Props) {
   return <AudioPlayer key={JSON.stringify([props.ownerId, props.researchObjectId, props.versionId, props.taskId])} {...props} />;
 }
 
-function AudioPlayer({ researchObjectId, versionId, taskId }: Props) {
+function AudioPlayer({ researchObjectId, versionId, taskId, caption }: Props) {
   const t = useTranslations('hermesAudioAudition');
   const audio = useRef<HTMLAudioElement>(null);
   const active = useRef(true);
@@ -65,14 +65,17 @@ function AudioPlayer({ researchObjectId, versionId, taskId }: Props) {
 
   return <section className="border-t border-os-rule-paper py-4" aria-label={t('title')} data-hermes-audio-audition="true">
     <div className="flex items-center justify-between gap-3">
-      <h3 className="m-0 text-base font-medium text-os-ink">{t('title')}</h3>
+      <div><h3 className="m-0 text-base font-medium text-os-ink">{t('title')}</h3>{caption && <p className="m-0 mt-1 text-sm text-os-muted-paper">{caption}</p>}</div>
       <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm text-os-ink transition-colors hover:bg-os-paper-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink disabled:opacity-50" disabled={downloading} onClick={() => void download()}>
         <Download className="size-4" aria-hidden="true" />{t(downloading ? 'downloading' : 'download')}
       </button>
     </div>
     <audio ref={audio} className="mt-2 w-full" controls preload="none" aria-label={t('title')}
       src={source}
-      onLoadStart={() => { setLoading(true); setPlaybackFailed(false); }}
+      onLoadStart={() => { if (audio.current && !audio.current.paused) setLoading(true); setPlaybackFailed(false); }}
+      onPlay={() => { if (audio.current && audio.current.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) setLoading(true); }}
+      onWaiting={() => setLoading(true)}
+      onPlaying={() => setLoading(false)}
       onCanPlay={() => { setLoading(false); setPlaybackFailed(false); }}
       onError={() => { setLoading(false); setPlaybackFailed(true); }} />
     {loading && <p className="mt-2 text-sm text-os-muted-paper" role="status">{t('loading')}</p>}

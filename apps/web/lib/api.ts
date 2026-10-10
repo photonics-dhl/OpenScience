@@ -1161,6 +1161,29 @@ export function presentationTaskAudioUrl(roId: string, versionId: string, taskId
   return `${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}/audio`;
 }
 
+export interface PresentationAudioAudition {
+  taskId: string;
+  sceneIndex: number;
+  contentType: 'audio/mpeg';
+  durationSeconds: number;
+  timingStatus: 'decoded' | 'requires_revision';
+}
+
+export function readPresentationAudioAudition(task: AgentTaskView): PresentationAudioAudition | null {
+  if (task.kind !== 'presentation.generate' || task.status !== 'succeeded' || task.result?.purpose !== 'audio-audition') return null;
+  const value = task.result.audioAudition;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const audio = value as Record<string, unknown>;
+  const fields = ['taskId', 'sceneIndex', 'contentType', 'durationSeconds', 'timingStatus'];
+  if (Object.keys(audio).length !== fields.length || !fields.every(field => Object.hasOwn(audio, field))
+    || audio.taskId !== task.id || typeof audio.taskId !== 'string' || !audio.taskId
+    || !Number.isInteger(audio.sceneIndex) || Number(audio.sceneIndex) < 0 || Number(audio.sceneIndex) > 5
+    || audio.contentType !== 'audio/mpeg' || typeof audio.durationSeconds !== 'number'
+    || !Number.isFinite(audio.durationSeconds) || audio.durationSeconds <= 0 || audio.durationSeconds > 600
+    || (audio.timingStatus !== 'decoded' && audio.timingStatus !== 'requires_revision')) return null;
+  return { taskId: audio.taskId, sceneIndex: Number(audio.sceneIndex), contentType: 'audio/mpeg', durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus };
+}
+
 export async function downloadPresentationTaskAudio(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<Blob> {
   const revision = sessionRevision;
   const response = await fetch(presentationTaskAudioUrl(roId, versionId, taskId), {

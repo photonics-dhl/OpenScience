@@ -1,6 +1,8 @@
 {
   "hermesAudioAudition": {
     "title": "旁白试听",
+    "scene": "第 {number} 幕 · {seconds} 秒",
+    "resultUnavailable": "暂时无法加载这段旁白试听。",
     "download": "下载 MP3",
     "downloading": "正在准备下载…",
     "loading": "正在加载音频…",

@@ -1,6 +1,8 @@
 {
   "hermesAudioAudition": {
     "title": "Narration preview",
+    "scene": "Scene {number} · {seconds}s",
+    "resultUnavailable": "This narration preview could not be loaded.",
     "download": "Download MP3",
     "downloading": "Preparing download…",
     "loading": "Loading audio…",

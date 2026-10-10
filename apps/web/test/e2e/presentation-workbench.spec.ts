@@ -460,13 +460,17 @@ test('restores a scoped pending task from the URL and reports foreign tasks with
   await expect(page.getByRole('button', { name: /Resume checking/i })).toBeVisible();
   await page.getByRole('button', { name: /Resume checking/i }).click();
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', /\d+/);
-  await expect(page.locator('[data-presentation-asset="asset-chart"]')).toBeVisible({ timeout: 10_000 });
+  const image = page.getByRole('img', { name: 'Claim evidence map', exact: true });
+  await expect(image).toBeVisible({ timeout: 10_000 });
+  await expect(image).toHaveAttribute('src', `/api/research-objects/${ro.id}/versions/version-2/presentation-assets/asset-chart/content`);
+  await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0)).toBe(true);
   await expect(page).toHaveURL(/version=version-2$/);
   await page.unroute('**/api/**');
   await fixtures(page, { foreignTask: true });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`);
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Presentation task not found');
   await expect(page.locator('[data-presentation-asset]')).toHaveCount(0);
+  await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
 });
 
 test('keeps writes and task polling blocked until a failed whole-scope load is retried successfully', async ({ page }) => {
@@ -807,4 +811,160 @@ test('rejected scene image remains in collapsed history after refresh', async ({
   await expect(latest.getByRole('button', { name: 'Reject draft', exact: true })).toHaveCount(0);
   expect(writes).toHaveLength(1);
   expect(existing.generationBodies).toHaveLength(0);
+});
+
+test.describe('private narration result consumer', () => {
+  const scope = `/api/research-objects/${ro.id}/versions/version-2`;
+  const taskPath = `${scope}/presentation-tasks/presentation-task`;
+  const audioPath = `${taskPath}/audio`;
+  const observed = new WeakMap<Page, { writes: string[]; unexpected: string[]; errors: string[]; audioReads: number; allowed: Set<string> }>();
+  const savedAudio = () => ({ ...task('succeeded', 100), result: { purpose: 'audio-audition', audioAudition: {
+    taskId: 'presentation-task', sceneIndex: 0, contentType: 'audio/mpeg', durationSeconds: 4.5, timingStatus: 'requires_revision',
+  } } });
+  const openSavedTask = async (page: Page) => page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`, { waitUntil: 'networkidle' });
+  const player = (page: Page) => page.locator('[data-hermes-audio-audition="true"]');
+  async function allowRead(page: Page, route: Route): Promise<boolean> {
+    const request = route.request(), url = new URL(request.url());
+    if (request.method() !== 'GET' || !observed.get(page)!.allowed.has(url.pathname + url.search)) {
+      await route.abort('blockedbyclient'); return false;
+    }
+    return true;
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: String(test.info().project.use.baseURL) }]);
+    await fixtures(page);
+    const allowed = new Set(['/api/auth/me', '/api/workspaces', `/api/research-objects/${ro.id}`, `/api/research-objects/${ro.id}/versions`,
+      `${scope}/claims`, `${scope}/presentation-assets`, `/api/research-objects/${ro.id}/versions/version-1/claims`,
+      `/api/research-objects/${ro.id}/versions/version-1/presentation-assets`, taskPath, audioPath]);
+    const reads = { writes: [] as string[], unexpected: [] as string[], errors: [] as string[], audioReads: 0, allowed };
+    observed.set(page, reads);
+    page.on('request', request => {
+      const url = new URL(request.url()), path = url.pathname + url.search;
+      if (!path.startsWith('/api/')) return;
+      if (request.method() !== 'GET') reads.writes.push(request.method() + ' ' + path);
+      if (!allowed.has(path)) reads.unexpected.push(path);
+      if (path === audioPath) reads.audioReads += 1;
+    });
+    page.on('pageerror', error => reads.errors.push(error.message));
+    // This later handler rejects before falling through to the untouched legacy fixture.
+    await page.route('**/api/**', async route => { if (await allowRead(page, route)) await route.fallback(); });
+    await page.route(url => url.pathname + url.search === taskPath, async route => { if (await allowRead(page, route)) await json(route, { task: savedAudio() }); });
+  });
+
+  test.afterEach(async ({ page }) => {
+    expect(observed.get(page)!.writes, 'Listening, loading and downloading must not generate work').toEqual([]);
+    expect(observed.get(page)!.unexpected, 'Only scoped, declared reads are allowed').toEqual([]);
+    expect(observed.get(page)!.errors, 'Client runtime errors must remain visible to the test').toEqual([]);
+  });
+
+  test('restores a saved sample lazily on desktop and mobile and retains its task link after refresh', async ({ page }) => {
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      await openSavedTask(page);
+      await expect(player(page)).toBeVisible();
+      const audio = player(page).locator('audio');
+      await expect(audio).toHaveAttribute('preload', 'none');
+      await expect(audio).not.toHaveAttribute('autoplay', '');
+      await expect(audio).toHaveAttribute('src', audioPath);
+      await expect(player(page)).toContainText('Scene 1 · 4.5s');
+      expect(observed.get(page)!.audioReads).toBe(0);
+      await expect(player(page).getByRole('status')).toHaveCount(0);
+      await expect(page).toHaveURL(/version=version-2&task=presentation-task$/u);
+      await page.screenshot({ path: test.info().outputPath(`private-audio-${viewport.width}.png`), fullPage: false });
+    }
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(player(page)).toBeVisible();
+    expect(observed.get(page)!.audioReads).toBe(0);
+  });
+
+  test('shows playback and download failures and retries only the original private file', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    let unavailable = true;
+    await page.route(url => url.pathname + url.search === audioPath, async route => {
+      if (!await allowRead(page, route)) return;
+      if (unavailable) await json(route, { error: { code: 'SOURCE_UNAVAILABLE' } }, 503);
+      else await route.fulfill({ status: 200, contentType: 'audio/mpeg', body: 'ID3-protocol-fixture-not-a-voice-sample' });
+    });
+    await openSavedTask(page);
+    await expect(player(page)).toBeVisible();
+    const audio = player(page).locator('audio');
+    await audio.focus(); await audio.press('Space');
+    await expect.poll(() => observed.get(page)!.audioReads).toBeGreaterThan(0);
+    await expect(player(page).getByRole('alert')).toContainText('Audio could not be loaded.');
+    const beforeReload = observed.get(page)!.audioReads;
+    await player(page).getByRole('button', { name: 'Reload audio', exact: true }).click();
+    await expect.poll(() => observed.get(page)!.audioReads).toBeGreaterThan(beforeReload);
+    await expect(player(page).getByRole('alert')).toContainText('Audio could not be loaded.');
+    await player(page).getByRole('button', { name: 'Download MP3', exact: true }).click();
+    await expect(player(page).getByRole('alert').filter({ hasText: 'Download failed. Please try again.' })).toBeVisible();
+    unavailable = false;
+    const downloadReady = page.waitForEvent('download');
+    await player(page).getByRole('button', { name: 'Download MP3', exact: true }).click();
+    const download = await downloadReady;
+    expect(download.suggestedFilename()).toBe('hermes-narration.mp3');
+    await expect(player(page).getByRole('status')).toContainText('Download started.');
+  });
+
+  test('stops the old player and aborts its pending download when the version changes', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    let release!: () => void;
+    const response = new Promise<void>(resolve => { release = resolve; });
+    await page.route(url => url.pathname + url.search === audioPath, async route => {
+      if (!await allowRead(page, route)) return;
+      await response;
+      try { await route.fulfill({ status: 200, contentType: 'audio/mpeg', body: 'ID3-protocol-fixture' }); }
+      catch { /* The scope change is expected to abort this read. */ }
+    });
+    const aborted: string[] = [];
+    page.on('requestfailed', request => { if (new URL(request.url()).pathname === audioPath) aborted.push(audioPath); });
+    try {
+      await openSavedTask(page);
+      const oldAudio = await player(page).locator('audio').elementHandle();
+      await player(page).getByRole('button', { name: 'Download MP3', exact: true }).click();
+      await expect.poll(() => observed.get(page)!.audioReads).toBe(1);
+      await page.getByRole('combobox', { name: 'Version', exact: true }).selectOption('version-1');
+      await expect(player(page)).toHaveCount(0);
+      await expect.poll(() => aborted.length).toBe(1);
+      expect(await oldAudio!.evaluate(node => ({ source: node.getAttribute('src'), paused: (node as HTMLAudioElement).paused }))).toEqual({ source: null, paused: true });
+      await oldAudio?.dispose();
+    } finally { release(); }
+  });
+
+  test('removes private playback when the current session is invalidated', async ({ page }) => {
+    await openSavedTask(page);
+    await expect(player(page)).toBeVisible();
+    const oldAudio = await player(page).locator('audio').elementHandle();
+    // Exercise the existing SessionProvider boundary used by successful sign-out.
+    await page.evaluate(() => window.dispatchEvent(new Event('openscience-session-invalidated')));
+    await expect(player(page)).toHaveCount(0);
+    expect(await oldAudio!.evaluate(node => ({ source: node.getAttribute('src'), paused: (node as HTMLAudioElement).paused }))).toEqual({ source: null, paused: true });
+    expect(observed.get(page)!.audioReads).toBe(0);
+    await oldAudio?.dispose();
+  });
+
+  test('does not display failed or malformed private audio results', async ({ page }) => {
+    let result = { ...savedAudio(), status: 'failed', error: 'Audition could not be completed.' };
+    await page.route(url => url.pathname + url.search === taskPath, async route => { if (await allowRead(page, route)) await json(route, { task: result }); });
+    await openSavedTask(page);
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Audition could not be completed.');
+    await expect(player(page)).toHaveCount(0);
+    result = { ...savedAudio(), result: { purpose: 'audio-audition', audioAudition: { ...savedAudio().result.audioAudition, objectKey: 'not-a-public-field' } } } as typeof result;
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('This narration preview could not be loaded.');
+    await expect(player(page)).toHaveCount(0);
+    expect(observed.get(page)!.audioReads).toBe(0);
+    await expect(page.getByText('not-a-public-field', { exact: true })).toHaveCount(0);
+  });
+
+  test('does not expose playback when the owner-bound task read is denied', async ({ page }) => {
+    await page.route(url => url.pathname + url.search === taskPath, async route => {
+      if (await allowRead(page, route)) await json(route, { error: { code: 'NOT_FOUND', message: 'Presentation task not found' } }, 404);
+    });
+    await openSavedTask(page);
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Presentation task not found');
+    await expect(player(page)).toHaveCount(0);
+    expect(observed.get(page)!.audioReads).toBe(0);
+  });
+
 });

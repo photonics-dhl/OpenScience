@@ -8,6 +8,34 @@ vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('private audio audition reads', () => {
+  const auditionTask: api.AgentTaskView = {
+    id: 'audio-task', sessionId: 'session', kind: 'presentation.generate', status: 'succeeded', progress: 100,
+    retryCount: 0, canRetry: false, error: null, createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-10T00:00:00Z',
+    result: { purpose: 'audio-audition', audioAudition: { taskId: 'audio-task', sceneIndex: 0, contentType: 'audio/mpeg', durationSeconds: 4.5, timingStatus: 'decoded' } },
+  };
+
+  it.each(['decoded', 'requires_revision'])('reads only a successful private sample with %s timing', (timingStatus) => {
+    const metadata = { ...auditionTask.result!.audioAudition as object, timingStatus };
+    expect(api.readPresentationAudioAudition({ ...auditionTask, result: { purpose: 'audio-audition', audioAudition: metadata } })).toEqual(metadata);
+  });
+
+  it.each([
+    { taskId: 'different-task' }, { sceneIndex: -1 }, { sceneIndex: 6 }, { sceneIndex: 0.5 },
+    { contentType: 'video/mp4' }, { durationSeconds: 0 }, { durationSeconds: Infinity }, { durationSeconds: 601 },
+    { timingStatus: 'unknown' }, { objectKey: 'private/internal/file' }, { providerUrl: 'https://other.invalid/audio' },
+  ])('rejects mismatched, unplayable or private metadata: %j', (change) => {
+    expect(api.readPresentationAudioAudition({ ...auditionTask, result: { purpose: 'audio-audition', audioAudition: { ...auditionTask.result!.audioAudition as object, ...change } } })).toBeNull();
+  });
+
+  it.each(['pending', 'running', 'failed'] as const)('never turns a %s task into a playable result', (status) => {
+    expect(api.readPresentationAudioAudition({ ...auditionTask, status })).toBeNull();
+  });
+
+  it('does not reinterpret a guide or a whole-film task as audio', () => {
+    expect(api.readPresentationAudioAudition({ ...auditionTask, kind: 'workspace.guide' })).toBeNull();
+    expect(api.readPresentationAudioAudition({ ...auditionTask, result: { ...auditionTask.result, purpose: 'full-film' } })).toBeNull();
+  });
+
   it('constructs only a same-origin, encoded task-scoped path', () => {
     expect(api.presentationTaskAudioUrl('ro/1', 'v?2', 't#3')).toBe('/api/research-objects/ro%2F1/versions/v%3F2/presentation-tasks/t%233/audio');
     expect(api.presentationTaskAudioUrl('https://other.invalid', 'v', 't')).toMatch(/^\/api\/research-objects\/https%3A%2F%2Fother.invalid\//u);
