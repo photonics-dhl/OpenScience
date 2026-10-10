@@ -14,7 +14,7 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 43d一次真实计划已自然failed/无asset，提交窗口关闭。现独占scientific-comparison及原test修通用科学记号误拒；19as/半λ等价最小输入已复现，保留错source/错数值/反向与额外因子拒收，原High增量审查；不重放paid任务 | 原illustration-chain-repair树 / codex/native-source-number-parser@87057；原269d与所有receipts保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 两文件通用记号修复已报455相关回归通过，5真实最小例accepted/错20as拒绝；完整候选仍拒绝，原task不重发。开发会话stream断线后root已重启同一任务，从本树日志收尾TC/独立commit；复用root原High审最终SHA，另只读分类encoding/labels3剩余绑定 | 原illustration-chain-repair树 / codex/native-source-number-parser@87057+owned2文件；原269d/CP/receipts保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | backend/installer已收。原High核producer后撤回长旁幕/总长两个P1：合法Native计划生成/读取已限120/450，不能放宽parser造fixture。当前仅presentation-asset.ts与native-video-parents原test补独立canGenerateAudioAudition，验证合法native/完整帧与role/source/legacy拒绝；不改原提交长度规则 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@87057；原8bec/操作包/失败证据保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常选幕试听接线WIP；57unit/TC/scoped lint通过，两P2草稿污染/能力GET无重试已修、High复核及3严格正常入口e2e进行中。按合法native父计划+global video=false/audio preset可用替换非法长幕fixture；旧DTO缺flag禁用、unknown同body/key与scope锁保留 | 原research-product-craft树 / codex/private-audio-consumer-20261010@c644+owned接线；生产0 |
 - 本聊天三线生产操作由总控串行排程；43d已自然failed，生图唯一提交窗口关闭，目前三线均无production writer。后续发布须等精确CI/原High及fresh工作检查。个人主页发布已带入图入口/短窗口，旧b261/e5脚本未执行且不得再跑。UI完全访问与运行read-only/审批never冲突已于20:39解除，实际协调发送成功，不需重复业务授权。
