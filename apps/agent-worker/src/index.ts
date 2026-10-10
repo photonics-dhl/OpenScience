@@ -932,16 +932,16 @@ async function requeueCurrentPendingTask(
   if (stopping()) return 'deferred';
   if (current?.status !== 'pending' || current.deletedAt || current.session.deletedAt
     || current.session.researchObjectId !== null && (!current.session.researchObject || current.session.researchObject.deletedAt)) return 'discard';
-  // MULTI does not roll back a successful LREM when LPUSH fails with WRONGTYPE.
-  // Check both key types in the same atomic operation before moving this one ID.
+  // Neither MULTI nor Lua rolls back LREM if a later LPUSH fails (e.g. OOM).
+  // Publish only when needed, before removing the original processing entry.
   const moved = await deps.redis.eval(`
     for _, key in ipairs(KEYS) do
       local kind = redis.call('TYPE', key).ok
       if kind ~= 'none' and kind ~= 'list' then return redis.error_reply('WRONGTYPE queue') end
     end
-    local removed = redis.call('LREM', KEYS[2], 1, ARGV[1])
-    if removed > 0 then redis.call('LPUSH', KEYS[1], ARGV[1]) end
-    return removed
+    if not redis.call('LPOS', KEYS[2], ARGV[1]) then return 0 end
+    if not redis.call('LPOS', KEYS[1], ARGV[1]) then redis.call('LPUSH', KEYS[1], ARGV[1]) end
+    return redis.call('LREM', KEYS[2], 1, ARGV[1])
   `, 2, AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, taskId);
   return moved === 1 ? 'requeued' : 'discard';
 }

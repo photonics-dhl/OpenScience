@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { createRedisClient, type Redis } from '@openscience/database';
 import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/index';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
   recoverHeldVideoTasks, VIDEO_READINESS_HOLD } from '../src/video-task-admission';
@@ -82,12 +84,13 @@ function queueFixture() {
       expect(count).toBe(1); const entries = lists.get(key)!; const index = entries.indexOf(id);
       if (index < 0) return 0; entries.splice(index, 1); return 1;
     }),
-    eval: vi.fn(async (_script: string, keys: number, queue: string, processing: string, id: string) => {
+    eval: vi.fn(async (_script: string, keys: number, queue: string, processing: string, id: string): Promise<number> => {
       expect(keys).toBe(2);
       if (state.queueWrongType) throw new Error('WRONGTYPE queue');
       const index = lists.get(processing)!.indexOf(id);
       if (index < 0) return 0;
-      lists.get(processing)!.splice(index, 1); lists.get(queue)!.unshift(id); return 1;
+      if (!lists.get(queue)!.includes(id)) await redis.lpush(queue, id);
+      return redis.lrem(processing, 1, id);
     }),
     multi: vi.fn(() => {
       const operations: Array<() => Promise<unknown>> = [];
@@ -130,6 +133,71 @@ function firstNativePlanFixture() {
     (realClaimAgentTask as (...input: unknown[]) => Promise<unknown>)(...args));
   return f;
 }
+
+/** Execute the poller's actual script with isolated keys on the CI-only Redis. */
+async function withRealRedisMove(
+  check: (redis: Redis, move: () => Promise<unknown>, queue: string, processing: string, id: string) => Promise<void>,
+) {
+  const input = process.env.XGS_WORKER_TEST_REDIS_URL;
+  let url: URL;
+  try { url = new URL(input ?? ''); }
+  catch { throw new Error('XGS_WORKER_TEST_REDIS_URL must target redis://127.0.0.1:16379'); }
+  if (url.protocol !== 'redis:' || url.hostname !== '127.0.0.1' || url.port !== '16379'
+    || url.username || url.password || url.search || url.hash || !['', '/'].includes(url.pathname))
+    throw new Error('XGS_WORKER_TEST_REDIS_URL must target redis://127.0.0.1:16379');
+  const f = firstNativePlanFixture();
+  f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+  await f.poll();
+  expect(f.redis.eval).toHaveBeenCalledTimes(1);
+  const [script, numberOfKeys, originalQueue, originalProcessing, id] = f.redis.eval.mock.calls[0]!;
+  expect([numberOfKeys, originalQueue, originalProcessing, id]).toEqual([2, queueKey, processingKey, f.task.id]);
+  const prefix = `xgs:worker-test:${randomUUID()}`;
+  const queue = `${prefix}:queue`, processing = `${prefix}:processing`;
+  // Explicit validated input prevents createRedisClient's production/default fallback.
+  const redis = createRedisClient(url.href);
+  try {
+    await redis.ping();
+    await check(redis, () => redis.eval(script, numberOfKeys, queue, processing, id), queue, processing, id);
+  } finally {
+    try { await redis.del(queue, processing); }
+    finally { redis.disconnect(); }
+  }
+}
+
+describe.skipIf(process.env.XGS_WORKER_TEST_REDIS_URL === undefined)('real Redis pending admission move', () => {
+  it('moves the current ID while removing only one processing occurrence', async () => {
+    await withRealRedisMove(async (redis, move, queue, processing, id) => {
+      await redis.rpush(processing, 'older', id, 'later', id);
+      expect(await move()).toBe(1);
+      expect(await redis.lrange(queue, 0, -1)).toEqual([id]);
+      expect(await redis.lrange(processing, 0, -1)).toEqual(['older', 'later', id]);
+    });
+  });
+  it('preserves processing and the wrong-type target when publication cannot proceed', async () => {
+    await withRealRedisMove(async (redis, move, queue, processing, id) => {
+      await redis.set(queue, 'not-a-list'); await redis.rpush(processing, id, 'other');
+      await expect(move()).rejects.toThrow('WRONGTYPE');
+      expect(await redis.get(queue)).toBe('not-a-list');
+      expect(await redis.lrange(processing, 0, -1)).toEqual([id, 'other']);
+    });
+  });
+  it('returns numeric zero for a missing processing ID without changing either list', async () => {
+    await withRealRedisMove(async (redis, move, queue, processing) => {
+      await redis.rpush(queue, 'queued-other'); await redis.rpush(processing, 'processing-other');
+      expect(await move()).toBe(0);
+      expect(await redis.lrange(queue, 0, -1)).toEqual(['queued-other']);
+      expect(await redis.lrange(processing, 0, -1)).toEqual(['processing-other']);
+    });
+  });
+  it('removes processing without duplicating an ID already at queue position zero', async () => {
+    await withRealRedisMove(async (redis, move, queue, processing, id) => {
+      await redis.rpush(queue, id, 'other'); await redis.rpush(processing, id);
+      expect(await move()).toBe(1);
+      expect(await redis.lrange(queue, 0, -1)).toEqual([id, 'other']);
+      expect(await redis.lrange(processing, 0, -1)).toEqual([]);
+    });
+  });
+});
 
 describe('first Native video plan admission', () => {
   it('keeps video intent and dispatches fresh pending0 through the real claim as attempt1 with Host closed', async () => {
@@ -290,6 +358,43 @@ describe('first Native video plan admission', () => {
     else expect(await poll(f.deps)).toBe(false);
     expect(f.lists.get(processingKey)).toEqual([f.task.id]); expect(f.lists.get(queueKey)).toEqual([]);
     expect(f.handler).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+  });
+  it('retains processing when publishing the pending ID fails with OOM', async () => {
+    const f = firstNativePlanFixture();
+    f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+    f.redis.lpush.mockRejectedValueOnce(new Error('OOM command not allowed when used memory > maxmemory'));
+    await expect(f.poll()).rejects.toThrow('OOM');
+    expect(f.lists.get(processingKey)).toEqual([f.task.id]); expect(f.lists.get(queueKey)).toEqual([]);
+    expect(f.task).toMatchObject({ status: 'pending', error: null, executionAttempt: 0 });
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+  });
+  it('does not publish a duplicate when the pending ID is already queued', async () => {
+    const f = firstNativePlanFixture(); f.lists.set(queueKey, [f.task.id, f.task.id]);
+    f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+    expect(await f.poll()).toBe(true);
+    expect(f.lists.get(queueKey)).toEqual([f.task.id]); expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.redis.lpush).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    expect(f.task).toMatchObject({ status: 'pending', error: null, executionAttempt: 0 });
+  });
+  it('does not enqueue a missing processing ID or consume an attempt', async () => {
+    const f = firstNativePlanFixture();
+    f.state.beforeUpdate = () => {
+      f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+      f.lists.set(processingKey, []);
+    };
+    expect(await f.poll()).toBe(true);
+    expect(f.lists.get(queueKey)).toEqual([]); expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.redis.lpush).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    expect(f.task).toMatchObject({ status: 'pending', error: null, executionAttempt: 0 });
+  });
+  it('leaves the ID queued when Redis response becomes unknown after the move', async () => {
+    const f = firstNativePlanFixture();
+    f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+    const move = f.redis.eval.getMockImplementation()!;
+    f.redis.eval.mockImplementationOnce(async (...args) => { await move(...args); throw new Error('connection lost after EVAL'); });
+    await expect(f.poll()).rejects.toThrow('connection lost after EVAL');
+    expect(f.lists.get(queueKey)).toEqual([f.task.id]); expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
   });
   it.each(['reread', 'claim'] as const)('preserves the pending ID on Redis failure after %s mismatch', async phase => {
     const f = firstNativePlanFixture(); f.state.queueWrongType = true;
