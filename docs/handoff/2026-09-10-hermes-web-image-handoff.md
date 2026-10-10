@@ -1,5 +1,5 @@
 # Hermes / 论文视觉叙事 CURRENT
-> 唯一交付树 `.worktrees/onchip-video-release`，分支 `release/onchip-production-line`；根 main 只导航。Git、CI、真实运行和用户最新决定优先。
+> 原总控交付树 `.worktrees/onchip-video-release` 为历史定位；10-10 用户授权个人主页从既有 `.worktrees/researchers-services` / `frontend/nanqing` 集成发布，精确生产记录见 [服务对象 CURRENT](2026-10-09-researchers-services-handoff.md)。main 未修改，其他原任务目标保留。
 > 导航/服务对象先前已独立发布，见 [服务对象 CURRENT](2026-10-09-researchers-services-handoff.md)；本页总控维护后续生图、视频与UI统一交付，按下方精确CI和串行流程排程。历史导航会话的仅分支整合状态不改变未完成目标。
 
 ## 目标与边界
@@ -20,6 +20,7 @@
 - root独占生产排程；human直接确认1961/ead6/2ef0三项非target回收与1614采用属于其手动操作，原样保留、无restore。Fig2五项、59a应用发布及之后单独host升级均已完成，生产写窗口全关；生图仅获准一次已审SDK离线运输验证，UI修短窗口，视频不开放生成。
 
 ## Git / CI / 运行事实
+- 10-10 后续个人主页发布已完成，包含下列 59a、SDK 6562 和内部试听 10560 历史；生产版本与新表迁移、精确三项绿色 CI 统一见服务对象 CURRENT。仅应用发布，Native 与独立视频执行器未刷新，未开启生成；下方 59a active、未推状态为当时记录。
 - canonical=`release/onchip-production-line`；已推已发布`59a23906cec85092a6100a7a281a24079136cf4d`。UI348c/10f、installer029b、focus f868及workspace spec dbc7全等集入，原High GO；本地SDK回归`6562cf99db485fa8f25e04db581a7a80c1d4dabb`及内部试听`10560cf0b39ac7267191197e375a1976e047fa1d`已审未推/未发，待UI两P2闭合同批CI；原审查在root audio-audition-d1f5-high.md。正常推frontend/nanqing，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
 - 59a精确五CI全SUCCESS：media PR38034914193/push38034911405、video PR38034914188、journals PR38034914218/push38034911402；原dashboard32/32、workspace25/25，原focus/同canvas/scroll/disabled→editable断言保留。root原59a-ci-final.json与两browser日志保留，未重复未变测试。
 - 16:16:20–16:22:47 CST普通应用发布exit0，无refresh-native；公开精确release、retention prepare/complete及journal clear成功。16:23:02 fresh active59a/rollback393，API a192ab23/Web e40b3510/Worker2ca49952 healthy/restart0/source59a，无journal/failed/pending/FD9；Native runtime/catalogue/unit仍393、timer enabled/active、无实例，主M3保持。应用构建/运行成功不代替实际科学质量。

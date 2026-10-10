@@ -2,20 +2,26 @@
 
 ## 2026-10-10 个人学术主页开发
 
+- 用户已明确授权推送及部署；现有 `frontend/nanqing` 合入远端 `8cc8eff7` 后，以干净提交 `04352895148395465fbeaaa29e1cd6540331f36e` 正常推送并部署成功。active/公网版本同该 SHA，rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；没有新建分支、强推或修改 main。后续仅文档收据提交，应用仍为该发布 SHA。
+- 精确候选 GitHub CI 全成功：media `38045814883`（含四个独立 browser-entry）、video `38045814902`、journals `38045814954`；期刊 CI 的隔离 PostgreSQL 已应用全部源码迁移。原个人主页 API 5/5、浏览器 7/7、类型/lint 与独立 High 证据复用，发布增量 High GO。
+- 发布前双库备份 `/var/backups/openscience/db-set-20261010T104238Z-340790` 校验和及 0700/0600 权限通过；正式任务只读 safe=true、nativePending/nativeBoundPending=false，无并发部署。正常迁移、全量构建/启动、精确公网版本、retention 与 journal 清除成功；未刷新 Native，未变化的能力镜像按守卫复用。
+- 实际核心库账本 53 条（源码 52 条全部存在，额外历史 `20260809010000_ro_create_idempotency` 已见 deployment runbook），搜索库 2/2；新表六列已核对。首次核验误用源码数量作账本预期而失败，逐项核对后通过；未改账本。服务全部 healthy、无 failed/journal，主页相关两页 HTTP 200、匿名本人接口 401。
+- 线上实际从首页服务对象→Researchers→管理我的学术主页进入登录，返回目标 `/me/profile` 保留；当前浏览器未登录，不冒称生产真实账户保存/发布或外部 ORCID 授权已验收。未写入虚构主页、未发邮件/模型任务。`--no-tests` 跳过无关 Parser/ScanSci/embedding 深层功能验收，服务健康不代替这些能力质量。
+- 发布日志 `tmp/profile-20261010/deploy-logs/1791629473792-0ec1ccd4-1b6d-41db-9987-4009fdbc5482.log`，备份/最终核验 `predeploy-readonly.log`、`postdeploy-readonly-final.log` 同目录。首次本机 PS 文件调用被执行策略阻止、未触及生产；改直接调用既有 Bash 发布脚本完成，未修改系统策略。本工作树保留为用户预览与本次发布证据，下次发布且预览不再需要时清理。
 - 用户要求按外部 Word 开发，沿用全站配色字体，自行区分虚构资料，并解释存储。需求与示例边界见 [个人主页设计](../specs/2026-10-10-academic-profile-design.md)；早期公开成果需求继续保留。
 - 最新确认已实现：复用 ORCID 连接与自定义个人链接、简化学术生态 banner、核心工作加入成果／本人贡献／能力与经验、可开关的招生求职合作意向，补充入口为团队／求学经历／**新闻/报道/会议...**；三入口打开详情列表和原站链接。基于首版 `a6bbbbd621d479afabd50c8ad4775cdff80fce8f`，保持既有分支；本次仅扩展 JSON，无新增 SQL 迁移。
 - 用户要求恢复可交互网页预览：已启动本机 Web 3010（会话 26575）与隔离 API 3101（会话 23868），入口 `http://localhost:3010/api/test/profile-preview`；浏览器已显示并保留本人主页。演示 JSON 在 ignored `tmp/profile-20261010/demo-profile.json`，明确标注虚构；仅当 `PROFILE_PREVIEW_DEMO=1` 加载到内存，重启恢复示例，不向真实数据库写入。本轮为用户保留预览服务，审阅后再停止。
 - 本次 Sol/medium 实现、Sol/high 增量 GO：认证信息绑定本人响应，访客仅取得与公开网址匹配的有效 ORCID 认证布尔值；未保存网址不继承旧标识，旧单网址迁入列表后清除隐藏字段，删除后不会继续出现在公开 JSON。能力标签为建议 3–5 项，允许少于三项。
 - 本次 Web/API 类型检查、范围 lint、API 5/5、浏览器 7/7 通过；root 已看 1440/390 截图。日志位于 `%TEMP%/token-smart-checks/`，API `1791623931434-346818f6-00db-4302-825e-951f2b87245d.log`，浏览器 `1791624087181-e3b58fb1-36a6-4b08-8fd7-b65e996dfbfc.log`；截图 `tmp/profile-20261010/academic-ecosystem-{1440,390}.png`，均为测试资料。原 OAuth 提供方未实际授权，数据库实测边界不变。
 - 本次本机实际接口/UI 已从 Researchers 入口走过填写工作／单项能力／新闻链接、保存、重新打开和明确发布；使用原路由、鉴权和临时内存数据库替身，不代表真实 PostgreSQL 落盘。首次在源码编辑期间导航被开发热更新重载打断，冻结后站内路径正常。以下首版证据仍保留为历史。
-- 本轮在既有 `frontend/nanqing` / `.worktrees/researchers-services`，先快进至 `59a23906cec85092a6100a7a281a24079136cf4d`；无新分支、不改 main。昨日误建分支已删除。本节以下部署身份是前轮历史，本轮未部署也未读取新的生产身份。
+- 开发阶段基于既有 `frontend/nanqing` / `.worktrees/researchers-services`，先快进至 `59a23906`；无新分支、不改 main。以下首版开发和前轮发布身份为历史，当前发布以上方记录为准。
 - 已实现：`/me/profile` 本人管理、`/researchers/[userId]` 访客展示、三卡布局及详情/经历/分享；新增 PostgreSQL `academic_profiles` 草稿/公开快照，按版本防覆盖。示例人物与材料不写入账户；联系方式自愿公开，外链留在原站。原 `/me` 保留账户与私有研究管理。
 - Sol/medium 为唯一源码实施者；Sol/high 对公开版本、期刊访问限制、CAS、账户切换与迁移的最终增量审查 GO。root 检查 1440/390 截图，并从实际站内入口走过本地保存、发布和公开查看；使用临时验收账户，无真实用户资料写入。
 - 已通过 Web/API TypeScript、API 定向 3/3、浏览器 6/6（本人入口与发布、两种宽度弹窗/分享、原手机功能导航、同页账号切换和加载重试）。Landing 13 项首跑通过，首项动态导入超时的原断言不变重跑通过；失败证据保留。
 - 定向日志在 `%TEMP%/token-smart-checks/`：最终 API `1791619285407-f758eea8-a34b-4948-9aaf-5bf6cd9f719b.log`，浏览器四条 `1791618986637-c67d2bfd-78d6-4087-8796-391be72d629d.log`；范围 lint 通过。截图在 `tmp/profile-20261010/academic-profile-{1440,390}.png`，均为明确测试数据。本机字体下载受限，沿用站点回退字体。
 - 新增两条回归最终通过 `1791619380082-72f78fd1-da0c-4076-b12f-9b95fd3a1545.log`；首跑 `1791619302752-098da7f4-204b-49e0-aafa-f61e9c497e5e.log` 失败来自一次性 503 fixture 被双挂载消耗、编辑态误用展示态断言，修正 fixture/选择器后原功能条件保留。
 - 本机 Docker 已安装但 daemon 无法启动，PostgreSQL 实测未完成；临时 `tmp/profile-20261010/preview-api.cjs` 在 localhost 使用实际路由/鉴权和内存数据库替身，仅验证接口到 UI 的连接，不代表数据库持久化。原件提取文本和结构图在同目录，原 Word 未修改。
-- 本轮代码保存于既有分支的本地提交（完整 HEAD 见 Git），未推送、未部署、未应用生产迁移。后续上线仍需在受控数据库验证新增迁移和实际持久化，再按既有发布流程合入；本轮临时验收服务与测试身份在收尾停止。
+- 首版开发时仅保存在本地、未迁移；现已完成上述 CI 隔离库及生产迁移核对。本机内存替身的保存证据不替代生产真实账户持久化验收，临时预览仍为明确的虚构演示。
 
 ## 需求与范围
 
