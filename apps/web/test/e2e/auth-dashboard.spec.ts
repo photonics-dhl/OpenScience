@@ -1,4 +1,5 @@
 import { expect, test, type Page } from 'playwright/test';
+import type { ResearchObjectSummary, SdfCore } from '../../lib/api';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 
@@ -251,6 +252,20 @@ test('dashboard keeps the real task reachable in history without duplicating the
     researchObjects: [{ id: 'ro-1', publicId: 'OSR-2026-000123', title: task.researchTitle, version: 3, status: 'draft' }],
     tasks: [task],
   });
+  const researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } = {
+    id: 'ro-1', workspaceId: 'workspace-1', publicId: 'OSR-2026-000123', title: task.researchTitle,
+    status: 'draft', visibility: 'private', version: 3, createdAt: '2026-10-10T00:00:00Z',
+    sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+  };
+  for (const [path, body] of [
+    ['/api/research-objects/ro-1', { researchObject }],
+    ['/api/research-objects/ro-1/versions', { versions: [] }],
+  ] as const) {
+    await page.route(url => url.pathname + url.search === path, route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({ json: body });
+    });
+  }
 
   await page.goto(`${baseUrl}/dashboard`);
   const href = `/research-objects/${task.researchObjectId}/edit?ingestionTask=${task.id}`;

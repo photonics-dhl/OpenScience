@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page, type Route } from 'playwright/test';
-import type { AgentTaskView, HermesResearchRun, IngestionTaskDetail, ResearchIngestion, SdfCore } from '../../lib/api';
+import type { AgentTaskView, HermesResearchRun, IngestionTaskDetail, PublicResearchVersion, ResearchIngestion, SdfCore } from '../../lib/api';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const stageSelector = '[data-hermes-workspace-stage="true"]';
@@ -109,6 +109,14 @@ async function mockPublishedPreview(page: Page) {
     versionId: 'version-review', versionNo: 3, version: 2, publicationNo: 1, status: 'published',
     createdAt: '2026-10-08T00:00:00.000Z', publishedAt: '2026-10-08T00:00:00.000Z',
   }] });
+  const publication: PublicResearchVersion = {
+    publicId: 'OSR-2026-000042', title: researchTitle, url: '/research/OSR-2026-000042/v/1', visibility: 'public',
+    recordUrl: '/api/research-objects/ro-hermes/versions/version-review/record',
+    version: { versionNo: 1, publicVersionId: 'publication-review', status: 'published', publishedAt: '2026-10-08T00:00:00.000Z', contentSha256: null, legalDisclaimer: null, core: { ...reviewCore } },
+    authors: [], contributions: [], licenses: {}, aiReview: null, citation: researchTitle,
+    artifactPaths: [], claims: [], evidence: [], presentationAssets: [], history: [],
+  };
+  await mockGet(page, '/api/research/OSR-2026-000042/v/1', { research: publication });
   await mockGet(page, '/api/versions/version-review', { version: { versionId: 'version-review', snapshot: { core: reviewCore, artifacts: [] } } });
   await mockGet(page, '/api/research-objects/ro-hermes/versions/version-review/record', { record: {
     objectId: 'ro-hermes', versionId: 'version-review', recordState: 'recorded', sdf: reviewCore, manifest: [], claims: [], evidence: [],
@@ -518,7 +526,9 @@ test('creation opens the complete companion from its avatar without starting wor
   await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'networkidle' });
   const identity = await captureRenderer(page);
   try {
-    await page.getByRole('link', { name: 'Start a research object', exact: true }).click();
+    const creation = page.getByRole('link', { name: 'New research', exact: true });
+    await expect(creation).toHaveAttribute('href', '/research-objects/new?mode=import');
+    await creation.click();
     await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/u);
     await assertAvatar(page);
     await graphic(page).click();
