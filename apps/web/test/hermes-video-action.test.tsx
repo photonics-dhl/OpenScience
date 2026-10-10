@@ -84,7 +84,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 const auditionPreset={provider:'synclip' as const,voice:'approved-voice',speed:1};
-function auditionSources(narration='光在孔边局域。',fullVideo=true,otherNarration='空间约束转为时间约束。',qualified=true) {
+function auditionSources(narration='光在孔边局域。',fullVideo=false,otherNarration='空间约束转为时间约束。',qualified=true) {
   api.listPresentationAssets.mockResolvedValue({assets:[{id:'plan',researchObjectId:'paper',versionId:'version',kind:'interactive_html',status:'approved',updatedAt:'2026-10-08',sourceClaimIds:['claim'],
     canGenerateVideo:fullVideo,canGenerateAudioAudition:qualified,canGenerateSceneImage:true,videoFrameAssetIds:['f2','f1','f3'],
     storyboard:{output:'video',narrative:true,locale:'zh',document:{scenes:[{title:'First',narration},{title:'Second',narration:otherNarration},{title:'Third',narration:'场在孔边局域。'}]}}}]});

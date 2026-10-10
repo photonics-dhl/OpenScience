@@ -974,7 +974,7 @@ test.describe('normal narration audition action', () => {
   const generationPath = `${scope}/presentation-assets/generations`;
   const capabilityPath = `/api/research-objects/${ro.id}/hermes-video-capability`;
   const preset = { provider: 'synclip', voice: 'approved-voice', speed: 1 };
-  const approvedPlan = { ...asset, id: 'audition-plan', kind: 'interactive_html', status: 'approved', canGenerateVideo: true,
+  const approvedPlan = { ...asset, id: 'audition-plan', kind: 'interactive_html', status: 'approved', canGenerateVideo: false,
     canGenerateAudioAudition: true, videoFrameAssetIds: ['frame-third', 'frame-first', 'frame-second'],
     storyboard: { locale: 'zh', output: 'video', style: 'technical', narrative: true, document: { schemaVersion: 1, title: 'Approved narration',
       scenes: [{ title: 'Confinement', narration: '孔边近场局域。', visualAction: 'Show the source.', durationSeconds: 8, sourceClaimIds: [initialClaim.id] },
