@@ -13,8 +13,9 @@ vi.mock('react', async original => ({...await original<typeof React>(),useState:
 import { HermesPresentationAction } from '../components/hermes/HermesPresentationAction';
 import type { HermesConversationAction } from '../lib/hermes/conversation-action';
 import { SubmissionIntent } from '../lib/hermes/presentation-action';
+import { saveHermesPresentationDraft } from '../lib/hermes/draft-state';
 
-type EventProps = { children?:React.ReactNode; disabled?:boolean; role?:string; type?:string; onChange?:(event:{target:{value:string}}) => void; onClick?:() => void; onSubmit?:(event:{preventDefault():void}) => Promise<void> };
+type EventProps = { children?:React.ReactNode; disabled?:boolean; role?:string; type?:string; 'aria-label'?:string; 'aria-pressed'?:boolean; onChange?:(event:{target:{value:string}}) => void; onClick?:() => void; onSubmit?:(event:{preventDefault():void}) => Promise<void> };
 function find(node:React.ReactNode, match:(element:React.ReactElement<EventProps>) => boolean):React.ReactElement<EventProps> {
   if (React.isValidElement<EventProps>(node)) {
     if (match(node)) return node;
@@ -82,6 +83,125 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+const auditionPreset={provider:'synclip' as const,voice:'approved-voice',speed:1};
+function auditionSources(narration='光在孔边局域。',fullVideo=true,otherNarration='空间约束转为时间约束。',qualified=true) {
+  api.listPresentationAssets.mockResolvedValue({assets:[{id:'plan',researchObjectId:'paper',versionId:'version',kind:'interactive_html',status:'approved',updatedAt:'2026-10-08',sourceClaimIds:['claim'],
+    canGenerateVideo:fullVideo,canGenerateAudioAudition:qualified,canGenerateSceneImage:true,videoFrameAssetIds:['f2','f1','f3'],
+    storyboard:{output:'video',narrative:true,locale:'zh',document:{scenes:[{title:'First',narration},{title:'Second',narration:otherNarration},{title:'Third',narration:'场在孔边局域。'}]}}}]});
+}
+async function chooseAudition(host:ReturnType<typeof mount>) {
+  find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.mode').props.onClick!();
+  await host.flush();
+}
+
+describe('selected-scene narration audition in the existing video action', () => {
+  it('starts audition from the visible scene button using the same guarded submission', async () => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.submit').props.onClick!();
+    await host.flush();expect(api.generatePresentationVideo).toHaveBeenCalledTimes(1);
+    expect(api.generatePresentationVideo.mock.calls[0]?.[3]).toMatchObject({purpose:'audio-audition',audio:auditionPreset});
+  });
+  it('does not reinterpret legacy video eligibility as speech eligibility or lose its full-video mode', async () => {
+    auditionSources('Short narration.',true,'Another scene.',false);
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();
+    const audio=find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.mode');
+    expect(audio.props.disabled).toBe(true);audio.props.onClick!();await host.flush();
+    expect(find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.fullVideo').props['aria-pressed']).toBe(true);
+    expect(api.getHermesVideoCapability).not.toHaveBeenCalled();expect(api.generatePresentationVideo).not.toHaveBeenCalled();
+  });
+  it('keeps the audition scene ephemeral instead of writing it into the saved production draft', async () => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    vi.mocked(saveHermesPresentationDraft).mockClear();
+    find(host.tree(),element => element.type==='select' && element.props['aria-label']==='audioAudition.scene').props.onChange!({target:{value:'2'}});await host.flush();
+    expect(vi.mocked(saveHermesPresentationDraft).mock.calls.every(call => call[2].scene===0)).toBe(true);
+    await host.confirm();expect(api.generatePresentationVideo.mock.calls[0]?.[3]).toMatchObject({purpose:'audio-audition',sceneIndex:2});
+  });
+  it('retries availability directly after a failed snapshot read without a key or POST', async () => {
+    auditionSources();api.getHermesVideoCapability.mockRejectedValueOnce(new Error('Snapshot GET disconnected'))
+      .mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    expect(host.confirmation()?.ready).toBe(false);
+    find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.retryAvailability').props.onClick!();await host.flush();
+    expect(host.confirmation()?.ready).toBe(true);expect(api.getHermesVideoCapability).toHaveBeenCalledTimes(2);
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();
+  });
+  it('accepts the full 120-codepoint approved narration with the full-video service closed', async () => {
+    auditionSources('光'.repeat(120));api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);await host.confirm();
+    expect(api.generatePresentationVideo).toHaveBeenCalledWith('paper','version',['claim'],{
+      profile:'content-driven-v1',storyboardAssetId:'plan',sceneImageAssetIds:['f2','f1','f3'],purpose:'audio-audition',sceneIndex:0,audio:auditionPreset,locale:'zh',
+    },expect.any(String),expect.any(AbortSignal));
+  });
+  it('uses the approved narration, parent locale and original ordered frames even with full-video closed', async () => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();expect(api.getHermesVideoCapability).not.toHaveBeenCalled();
+    await chooseAudition(host);
+    find(host.tree(),element => element.type==='select' && element.props['aria-label']==='audioAudition.scene').props.onChange!({target:{value:'1'}});await host.flush();
+    expect(find(host.tree(),element => element.type==='blockquote').props.children).toBe('空间约束转为时间约束。');
+    await host.confirm();
+    expect(api.generatePresentationVideo).toHaveBeenCalledWith('paper','version',['claim'],{
+      profile:'content-driven-v1',storyboardAssetId:'plan',sceneImageAssetIds:['f2','f1','f3'],purpose:'audio-audition',sceneIndex:1,audio:auditionPreset,locale:'zh',
+    },expect.any(String),expect.any(AbortSignal));
+    expect(host.props.onSubmitted).toHaveBeenCalledWith('/research-objects/paper/edit?stage=media&version=version&task=task');
+  });
+  it.each([null,undefined])('keeps a missing speech preset unavailable without allocating a paid key: %s', async audioAudition => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:true,audioAudition});
+    const records=new Map<string,SubmissionIntent>();const key=vi.spyOn(crypto,'randomUUID');
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true,{submissionRecords:records});await host.flush();await chooseAudition(host);
+    expect(host.confirmation()?.ready).toBe(false);await host.confirmation()!.confirm();
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();expect(key).not.toHaveBeenCalled();expect(records.size).toBe(0);
+    expect(find(host.tree(),element => element.props.role==='status').props.children).toBe('audioAudition.unavailable');
+  });
+  it.each([{...auditionPreset,voice:'new-approved-voice'},{...auditionPreset,speed:1.1}])('holds a changed preset for a new confirmation: %s', async changed => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValueOnce({canGenerateVideo:false,audioAudition:{audio:auditionPreset}})
+      .mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:changed}});
+    const records=new Map<string,SubmissionIntent>();const key=vi.spyOn(crypto,'randomUUID');
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true,{submissionRecords:records});await host.flush();await chooseAudition(host);
+    await host.confirm();await host.flush();expect(api.generatePresentationVideo).not.toHaveBeenCalled();expect(key).not.toHaveBeenCalled();expect(records.size).toBe(0);
+    expect(find(host.tree(),element => element.props.role==='alert').props.children).toBe('audioAudition.settingsChanged');
+    await host.confirm();expect(api.generatePresentationVideo.mock.calls[0]?.[3]).toMatchObject({audio:changed,purpose:'audio-audition'});
+  });
+  it.each(['audio-audition','full-video'])('renders and replays the saved %s purpose without checking new capability or bypassing the shared lock', async purpose => {
+    const saved=unknownSubmission('video.create','actor-a',purpose==='audio-audition');
+    const payload=saved.record.request!.payload;const key=vi.spyOn(crypto,'randomUUID');
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true,{submissionRecords:saved.records});await host.flush();
+    const audioMode=find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.mode');
+    const videoMode=find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.fullVideo');
+    expect(audioMode.props.disabled).toBe(true);expect(videoMode.props.disabled).toBe(true);
+    expect(audioMode.props['aria-pressed']).toBe(purpose==='audio-audition');
+    audioMode.props.onClick!();videoMode.props.onClick!();await host.flush();await host.confirm();
+    expect(api.getHermesVideoCapability).not.toHaveBeenCalled();expect(key).not.toHaveBeenCalled();
+    expect(api.generatePresentationVideo).toHaveBeenCalledWith('paper','version',saved.sourceIds,payload,saved.key,expect.any(AbortSignal));
+  });
+  it('aborts a pending audition preflight and clears the unsubmitted selection on actor change', async () => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValueOnce({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const capability=deferred<{canGenerateVideo:boolean;audioAudition:{audio:typeof auditionPreset}}>();
+    api.getHermesVideoCapability.mockReturnValueOnce(capability.promise);
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    const pending=host.confirm();await host.flush();const signal=api.getHermesVideoCapability.mock.calls[1][1] as AbortSignal;
+    host.update({userId:'actor-b'});await host.flush();expect(signal.aborted).toBe(true);
+    capability.resolve({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});await pending;await host.flush();
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();
+    expect(find(host.tree(),element => element.type==='button' && element.props.children==='audioAudition.fullVideo').props['aria-pressed']).toBe(true);
+  });
+  it('checks fresh identity for audition and preserves zero POST when the still-old actor prop is stale', async () => {
+    auditionSources();api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    api.getCurrentUser.mockResolvedValue({userId:'actor-b'});await host.confirm();await host.flush();
+    expect(api.generatePresentationVideo).not.toHaveBeenCalled();expect(host.confirmation()?.ready).toBe(false);
+    expect(find(host.tree(),element => element.props.role==='alert').props.children).toBe('identityChanged');
+  });
+  it('keeps oversized approved narration read-only and prevents submission instead of trimming it', async () => {
+    auditionSources('😀'.repeat(121));api.getHermesVideoCapability.mockResolvedValue({canGenerateVideo:false,audioAudition:{audio:auditionPreset}});
+    const host=mount({action:'video.create',instruction:'',baseAssetId:'plan'},true);await host.flush();await chooseAudition(host);
+    expect(find(host.tree(),element => element.type==='blockquote').props.children).toBe('😀'.repeat(121));
+    expect(host.confirmation()?.ready).toBe(false);await host.confirmation()!.confirm();expect(api.generatePresentationVideo).not.toHaveBeenCalled();
+  });
+});
+
 function deferred<T>() {
   let resolve!:(value:T) => void;
   let reject!:(cause:unknown) => void;
@@ -89,10 +209,11 @@ function deferred<T>() {
   return {promise,resolve,reject};
 }
 
-function unknownSubmission(action:'video.create' | 'storyboard.revise', actor='actor-a') {
+function unknownSubmission(action:'video.create' | 'storyboard.revise', actor='actor-a', audition=false) {
   const record=new SubmissionIntent();
+  const video={profile:'content-driven-v1' as const,storyboardAssetId:'original-plan',sceneImageAssetIds:['original-c','original-a','original-b']};
   const payload=action==='video.create'
-    ? {profile:'content-driven-v1' as const,storyboardAssetId:'original-plan',sceneImageAssetIds:['original-c','original-a','original-b']}
+    ? audition ? {...video,purpose:'audio-audition' as const,sceneIndex:2,audio:auditionPreset,locale:'zh' as const} : video
     : {locale:'en' as const,style:'ink',output:'video' as const,narrative:true as const,instruction:'Original revision',baseAssetId:'original-plan',revisionSceneIndex:2};
   const sourceIds=['claim-2','claim'];
   const key=record.begin(JSON.stringify(['paper','version',action,sourceIds,payload]));

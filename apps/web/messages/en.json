@@ -3035,6 +3035,24 @@
     "kind_counter": "Counterclaim"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "What to produce",
+      "mode": "Audition narration",
+      "summary": "Hear the selected scene's narration before making the video.",
+      "fullVideo": "Complete video",
+      "scene": "Scene to audition",
+      "narration": "Approved narration",
+      "preset": "Voice: {voice} · Speed: {speed}×",
+      "hint": "Hear one scene first. The sample stays with this research.",
+      "loading": "Checking narration audition availability…",
+      "unavailable": "Narration audition is temporarily unavailable.",
+      "availabilityError": "Could not check narration audition availability. Try again.",
+      "retryAvailability": "Check audition availability again",
+      "needsNarration": "Choose an approved scene with 1–120 characters of narration and its complete video frames.",
+      "settingsChanged": "The voice or speed changed. Review the updated settings, then confirm again.",
+      "submit": "Audition selected scene",
+      "ready": "Ready to audition"
+    },
     "prepareVideoPlan": "Prepare video brief",
     "planWillBePrepared": "Hermes will first prepare the illustration brief.",
     "eligibleSources": "{count} eligible research claims selected.",

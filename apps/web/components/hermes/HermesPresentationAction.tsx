@@ -2,8 +2,8 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getCurrentUser, getHermesVideoCapability, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type PresentationAsset, type PresentationClaim, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
-import { hasCurrentPresentationSources, hasSingleReviewedPaperSource, isEligibleArtStoryboard, newestEligibleStoryboard, presentationSources, presentationVideoFrameIds, presentationStoryboardRequest, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
+import { ApiClientError, generatePresentationSceneImage, generatePresentationStoryboard, generatePresentationVideo, getCurrentUser, getHermesVideoCapability, getResearchObject, listMyWorkspaces, listPresentationAssets, listVersionClaims, listVersions, type HermesAudioAuditionPreset, type PresentationAsset, type PresentationClaim, type PresentationVideoRequest, type StoryboardRequest, type VersionSummary, type WorkspaceApi } from '@/lib/api';
+import { hasCurrentPresentationSources, hasSingleReviewedPaperSource, isEligibleArtStoryboard, newestEligibleStoryboard, presentationAudioAuditionRequest, presentationSources, presentationVideoFrameIds, presentationStoryboardRequest, selectEligiblePresentationClaims, selectPresentationVersion, SubmissionIntent, type PresentationAction } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, loadHermesPresentationDraft, saveHermesPresentationDraft, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
@@ -25,6 +25,10 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const [revisionMode, setRevisionMode] = useState<StoryboardRequest['revisionMode']>(intent.revisionMode);
   const [revisionSceneIndex, setRevisionSceneIndex] = useState<number | undefined>(intent.revisionSceneIndex);
   const [figurePlan, setFigurePlan] = useState(intent.figurePlan);
+  const [audioMode, setAudioMode] = useState(false);
+  const [auditionScene, setAuditionScene] = useState(intent.sceneIndex ?? 0);
+  const [audioReadRevision, setAudioReadRevision] = useState(0);
+  const [audioPreset, setAudioPreset] = useState<{ scope: string; audio: HermesAudioAuditionPreset | null; failed?: boolean }>();
   const intentFigurePlanJson = JSON.stringify(intent.figurePlan);
   const [readyScope, setReadyScope] = useState(''); const [busy, setBusy] = useState(false); const [uncertain, setUncertain] = useState(false); const [error, setError] = useState('');
   const localRecords = useRef(new Map<string, SubmissionIntent>()); const records = submissionRecords ?? localRecords.current;
@@ -69,13 +73,15 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const replayRequest = uncertainRecord?.request;
   const uncertainDraft = uncertainRecord?.draft;
   const selectedClaimIds = uncertainDraft?.selected ?? eligibleClaimIds;
-  const newestParent = newestEligibleStoryboard(assets, action);
+  const replayVideo = replayRequest?.action === 'video.create' ? replayRequest.payload as PresentationVideoRequest : undefined;
+  const selectingAudition = replayVideo ? replayVideo.purpose === 'audio-audition' : action === 'video.create' && audioMode;
+  const newestParent = newestEligibleStoryboard(assets, action, selectingAudition);
   const requiredParentId = uncertainDraft?.parentId ?? intent.baseAssetId ?? parentId;
   const selectedParent = assets.find((asset) => asset.id === requiredParentId);
   // A bound art base must never fall back to whichever plan becomes newest before confirmation.
   const baseIsBound = Boolean(intent.baseAssetId || revisionMode === 'art' || uncertainDraft?.revisionMode === 'art'
     || (revisionSceneIndex !== undefined && (action === 'storyboard.revise' || action === 'video.create')));
-  const parent = selectedParent && newestEligibleStoryboard([selectedParent], action) ? selectedParent : baseIsBound ? undefined : newestParent;
+  const parent = selectedParent && newestEligibleStoryboard([selectedParent], action, selectingAudition) ? selectedParent : baseIsBound ? undefined : newestParent;
   const effectiveAction = replayRequest?.action ?? ((action === 'scene.image' || action === 'video.create') && !parent ? 'storyboard.create'
     : (action === 'scene.image' || action === 'video.create') && (updateBrief || Boolean(instruction.trim())) ? 'storyboard.revise' : action);
   const medium = action === 'video.create' || (action === 'storyboard.revise' && parent?.storyboard?.output === 'video') ? 'video' : 'image';
@@ -84,17 +90,29 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     ? 'narrativeSceneLimit' in replayRequest.payload && replayRequest.payload.narrativeSceneLimit === 1 && 'output' in replayRequest.payload && replayRequest.payload.output === 'image'
     : effectiveAction === 'storyboard.create' && medium === 'image' && !figurePlan && hasSingleReviewedPaperSource(sourceIds, claims);
   const effectiveRevisionMode = replayRequest ? ('revisionMode' in replayRequest.payload ? replayRequest.payload.revisionMode : undefined) : revisionMode;
-  const requestLocale = replayRequest && 'locale' in replayRequest.payload ? replayRequest.payload.locale : locale === 'zh' ? 'zh' : 'en';
+  const requestLocale = replayRequest && 'locale' in replayRequest.payload && (replayRequest.payload.locale === 'zh' || replayRequest.payload.locale === 'en') ? replayRequest.payload.locale : locale === 'zh' ? 'zh' : 'en';
   const sourceValidationError = !hasCurrentPresentationSources(sourceIds, claims) ? 'needsEligibleSources'
     : effectiveRevisionMode === 'art' && !(effectiveAction === 'storyboard.revise' && Boolean(requiredParentId) && isEligibleArtStoryboard(parent, requestLocale))
       ? parent?.storyboard?.document.scenes.some(item => item.paperOriginal) ? 'artOriginalNeedsRerender' : 'artRequiresCompatiblePlan'
       : null;
   const sourcesValid = sourceValidationError === null;
   const videoImageIds = presentationVideoFrameIds(parent, assets);
-  const videoReady = Boolean(replayRequest) || effectiveAction !== 'video.create' || Boolean(parent?.canGenerateVideo && videoImageIds.length >= 3 && videoImageIds.every(Boolean));
+  const audition = replayVideo ? replayVideo.purpose === 'audio-audition' : effectiveAction === 'video.create' && audioMode;
+  const currentAudioPreset = audioPreset?.scope === sourceScope ? audioPreset : undefined;
+  const auditionRequest = presentationAudioAuditionRequest(parent, auditionScene, currentAudioPreset?.audio ?? null);
+  const videoReady = Boolean(replayRequest) || effectiveAction !== 'video.create' || (audition ? Boolean(auditionRequest) : Boolean(parent?.canGenerateVideo && videoImageIds.length >= 3 && videoImageIds.every(Boolean)));
   const needsInstruction = effectiveAction === 'storyboard.create' || effectiveAction === 'storyboard.revise'; const locked = busy || uncertain || Boolean(uncertainRecord);
   const requestScope = uncertainEntry?.[0] ?? `${sourceScope}:${effectiveAction}`; const scopeRef = useRef(requestScope); scopeRef.current = requestScope;
   const canReplay = Boolean(uncertainDraft && replayRequest && sourcesValid);
+  useEffect(() => { setAudioMode(false); setAudioPreset(undefined); setAuditionScene(intent.sceneIndex ?? 0); setAudioReadRevision(0); }, [sourceScope, intent.sceneIndex]);
+  useEffect(() => {
+    if (!audioMode || replayRequest || effectiveAction !== 'video.create' || !ready || !canWrite) return;
+    const abort = new AbortController(); setAudioPreset(undefined);
+    void getHermesVideoCapability(ro, abort.signal).then(capability => {
+      if (!abort.signal.aborted) setAudioPreset({ scope: sourceScope, audio: capability.audioAudition?.audio ?? null });
+    }).catch(() => !abort.signal.aborted && setAudioPreset({ scope: sourceScope, audio: null, failed: true }));
+    return () => abort.abort();
+  }, [audioMode, replayRequest, effectiveAction, ready, canWrite, ro, sourceScope, audioReadRevision]);
   useEffect(() => { if (!uncertainDraft && !parentId && !intent.baseAssetId && newestParent) setParentId(newestParent.id); }, [newestParent, parentId, intent.baseAssetId, uncertainDraft]);
   useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   useEffect(() => {
@@ -115,7 +133,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     event?.preventDefault();
     if (busy || submissionController.current || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)) return;
     const request = replayRequest?.payload ?? (effectiveAction === 'scene.image' ? { storyboardAssetId: parent!.id, sceneIndex: scene }
-      : effectiveAction === 'video.create' ? { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
+      : effectiveAction === 'video.create' ? audition ? auditionRequest! : { profile: 'content-driven-v1' as const, storyboardAssetId: parent!.id, sceneImageAssetIds: videoImageIds }
       : presentationStoryboardRequest({ action: effectiveAction, locale: locale === 'zh' ? 'zh' : 'en', style,
         output: action === 'video.create' ? 'video' : 'image', instruction: instruction.trim(), parent,
         figurePlan, revisionMode: effectiveRevisionMode, revisionSceneIndex, singlePaperImage }));
@@ -129,9 +147,16 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
         try {
           const capability = await getHermesVideoCapability(ro, activeController.signal);
           if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
-          if (!capability.canGenerateVideo) { setError('videoUnavailable'); return; }
+          if (audition) {
+            const fresh = capability.audioAudition?.audio;
+            if (!fresh) { setAudioPreset({ scope: sourceScope, audio: null }); setError('audioAudition.unavailable'); return; }
+            const confirmed = currentAudioPreset?.audio;
+            if (!confirmed || fresh.provider !== confirmed.provider || fresh.voice !== confirmed.voice || fresh.speed !== confirmed.speed) {
+              setAudioPreset({ scope: sourceScope, audio: fresh }); setError('audioAudition.settingsChanged'); return;
+            }
+          } else if (!capability.canGenerateVideo) { setError('videoUnavailable'); return; }
         } catch {
-          if (!activeController.signal.aborted && scopeRef.current === requestScope) setError('videoAvailabilityError');
+          if (!activeController.signal.aborted && scopeRef.current === requestScope) setError(audition ? 'audioAudition.availabilityError' : 'videoAvailabilityError');
           return;
         }
       }
@@ -152,7 +177,7 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
         record.request = { action: effectiveAction, sourceIds: [...sourceIds], payload: request };
       }
       const result = effectiveAction === 'scene.image' ? await generatePresentationSceneImage(ro, versionId, sourceIds, request as { storyboardAssetId: string; sceneIndex: number }, key, activeController?.signal)
-        : effectiveAction === 'video.create' ? await generatePresentationVideo(ro, versionId, sourceIds, request as { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] }, key, activeController?.signal)
+        : effectiveAction === 'video.create' ? await generatePresentationVideo(ro, versionId, sourceIds, request as PresentationVideoRequest, key, activeController?.signal)
           : await generatePresentationStoryboard(ro, versionId, sourceIds, request as StoryboardRequest, key, activeController?.signal);
       if (activeController.signal.aborted || scopeRef.current !== requestScope) return;
       record.complete(); records.delete(requestScope); setUncertain(false); onSubmitted(`/research-objects/${encodeURIComponent(ro)}/edit?${new URLSearchParams({ stage: 'media', version: versionId, task: result.task.id })}`);
@@ -173,7 +198,32 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
   const submittedFigurePlan = replayRequest
     ? ('figurePlan' in replayRequest.payload ? replayRequest.payload.figurePlan : undefined)
     : needsInstruction ? figurePlan : undefined;
-  const submittedSceneIndex = replayRequest && 'sceneIndex' in replayRequest.payload ? replayRequest.payload.sceneIndex : scene;
+  const submittedSceneIndex = replayRequest && 'sceneIndex' in replayRequest.payload && typeof replayRequest.payload.sceneIndex === 'number' ? replayRequest.payload.sceneIndex : audition ? auditionScene : scene;
+  const auditionStatus = !currentAudioPreset ? 'audioAudition.loading' : currentAudioPreset.failed ? 'audioAudition.availabilityError'
+    : !currentAudioPreset.audio ? 'audioAudition.unavailable' : !auditionRequest ? 'audioAudition.needsNarration' : null;
+  const submittedAudio = replayVideo?.purpose === 'audio-audition' ? replayVideo.audio : currentAudioPreset?.audio;
+  const canChooseAudition = action === 'video.create' && !instruction.trim() && !updateBrief
+    && Boolean(newestEligibleStoryboard(assets, action, true));
+  const audioControl = effectiveAction === 'video.create' || canChooseAudition ? <div className="space-y-3">
+    <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('audioAudition.action')}>
+      {([false, true] as const).map(value => <button key={String(value)} type="button" aria-pressed={audition === value} disabled={locked || value && !canChooseAudition}
+        className={`min-h-11 rounded border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink ${audition === value ? 'border-os-ink bg-os-ink text-white' : 'border-os-rule-paper bg-os-paper'}`}
+        onClick={() => { if (!locked && (!value || canChooseAudition)) { setAudioMode(value); setError(''); } }}>{t(value ? 'audioAudition.mode' : 'audioAudition.fullVideo')}</button>)}
+    </div>
+    {audition ? <div className="grid gap-3 rounded border border-os-rule-paper p-3">
+      {parent?.storyboard ? <label className="grid gap-2 text-sm">{t('audioAudition.scene')}
+        <select className={control} aria-label={t('audioAudition.scene')} value={submittedSceneIndex} disabled={locked} onChange={event => setAuditionScene(Number(event.target.value))}>
+          {parent.storyboard.document.scenes.map((item, index) => <option key={index} value={index}>{index + 1}. {item.title}</option>)}
+        </select>
+      </label> : null}
+      <div><p className="mb-2 text-xs font-semibold text-os-muted-paper">{t('audioAudition.narration')}</p>
+        <blockquote className="m-0 border-l-2 border-os-rule-paper pl-3 text-sm leading-6" aria-label={t('audioAudition.narration')}>{parent?.storyboard?.document.scenes[submittedSceneIndex]?.narration}</blockquote>
+      </div>
+      {submittedAudio ? <p className="m-0 break-words text-xs leading-5 text-os-muted-paper">{t('audioAudition.preset', { voice: submittedAudio.voice, speed: submittedAudio.speed })}</p> : null}
+      {!replayRequest && currentAudioPreset?.failed ? <button className="min-h-11 rounded border border-os-rule-paper px-3 py-2 text-sm" type="button" disabled={locked}
+        onClick={() => { if (!locked) { setError(''); setAudioReadRevision(value => value + 1); } }}>{t('audioAudition.retryAvailability')}</button> : null}
+    </div> : null}
+  </div> : null;
   const parentFigures = parent?.storyboard?.figurePlan?.figures ?? [];
   // Match the stored planner order: reused originals precede generated figures.
   const parentSceneFigure = [...parentFigures.filter(figure => figure.decision === 'reuse'),
@@ -194,35 +244,47 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
     return () => onConfirmationChange?.(null);
   }, [onConfirmationChange, confirmationReady, requestScope, locked]);
   if (onConfirmationChange) return <div className="hermes-message hermes-message-assistant" data-hermes-presentation-action="true">
-    <p>{tc('productionScope', { kind: t(medium), style: summaryStyle })}</p>
+    <p>{audition ? t('audioAudition.summary') : tc('productionScope', { kind: t(medium), style: summaryStyle })}</p>
+    {audioControl}
+    {audition ? <button className="mt-3 min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" type="button" disabled={!confirmationReady}
+      onClick={() => void submit()}>{t(busy ? 'submitting' : uncertain ? 'retry' : 'audioAudition.submit')}</button> : null}
     {singlePaperImage ? <p className="mt-2 text-sm">{t('planOneImageHint')}</p> : null}
     {figureSummary}
     {revisionSceneIndex !== undefined && parent?.storyboard?.output === 'video' && <p className="mt-2 text-sm">{t('videoRevision.scene', { number: revisionSceneIndex + 1 })}</p>}
     {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm">{parent.storyboard.document.title} · {t('scene')} {scene + 1}: {parent.storyboard.document.scenes[scene]?.title}</p>}
-    <p className="mt-2 text-sm">{t('charge')}</p>
-    <p className="mt-2 text-sm" role="status">{busy ? t('submitting') : !ready ? t('loading') : !canWrite ? t('readOnly') : sourceValidationError ? t(sourceValidationError) : !videoReady ? t('needsApprovedScenes') : needsInstruction && !instruction.trim() ? tc('needsProductionInstruction') : tc(uncertain ? 'retryProductionInChat' : 'confirmProductionInChat')}</p>
+    <p className="mt-2 text-sm">{t(audition ? 'audioAudition.hint' : 'charge')}</p>
+    <p className="mt-2 text-sm" role="status">{busy ? t('submitting') : !ready ? t('loading') : !canWrite ? t('readOnly') : sourceValidationError ? t(sourceValidationError) : audition && !replayRequest && auditionStatus ? t(auditionStatus) : !videoReady ? t('needsApprovedScenes') : needsInstruction && !instruction.trim() ? tc('needsProductionInstruction') : audition ? t(uncertain ? 'retry' : 'audioAudition.ready') : tc(uncertain ? 'retryProductionInChat' : 'confirmProductionInChat')}</p>
     {error && <p role="alert" className="mt-2 text-sm text-state-danger">{t(error)}</p>}
-    <details className="hermes-production-settings mt-3"><summary>{tc('adjustProduction')}</summary>
+    {!audition ? <details className="hermes-production-settings mt-3"><summary>{tc('adjustProduction')}</summary>
       {mediaControl}
       <textarea aria-label={t('instruction')} className={`${control} mt-2 min-h-28`} value={instruction} maxLength={1000} disabled={locked} onChange={(event) => { setInstruction(event.target.value); setRevisionMode(undefined); if (parent) setUpdateBrief(true); }} />
       {videoRevisionControl}
-    </details>
+    </details> : null}
   </div>;
   return <section className="min-w-0 rounded-xl bg-os-paper p-4 text-os-ink" data-hermes-presentation-action="true">
     <p className="m-0 text-sm font-semibold">{data?.title ?? t('loading')}</p><p className="mt-1 text-xs text-os-muted-paper">{version ? versionLabels.label(version) : t('chooseVersion')}</p>
-    <p className="hermes-production-summary">{t(medium)} · {summaryStyle}</p>
+    <p className="hermes-production-summary">{audition ? t('audioAudition.mode') : `${t(medium)} · ${summaryStyle}`}</p>
     {figureSummary}
+    {audioControl}
     {effectiveAction === 'scene.image' && parent?.storyboard && <p className="mt-2 text-sm leading-6">{t('scene')}: {scene + 1}. {parent.storyboard.document.scenes[scene]?.title}</p>}
     <form className="mt-5 space-y-4" onSubmit={submit}><fieldset className="m-0 min-w-0 space-y-4 border-0 p-0" disabled={locked}>
-      <details className="hermes-production-settings"><summary>{tc('adjustProduction')}</summary>
+      {!audition ? <details className="hermes-production-settings"><summary>{tc('adjustProduction')}</summary>
       {mediaControl}
       <label className="grid gap-2 text-sm">{t('style')}<select className={control} value={style} onChange={(event) => { const nextStyle = event.target.value; setStyle(nextStyle); setRevisionSceneIndex(undefined); setFigurePlan(plan => plan ? { figures: plan.figures.map(figure => figure.decision === 're-render' || figure.decision === 'abstract' ? { ...figure, styleId: nextStyle } : figure) } : undefined); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }}>{[...new Set(['auto', 'technical', 'editorial', 'watercolor', 'ink', style])].map((value) => <option key={value} value={value}>{styleLabel(value)}</option>)}</select></label>
       <label className="grid gap-2 text-sm">{t('instruction')}<textarea className={`${control} min-h-28`} maxLength={1000} value={instruction} onChange={(event) => { setInstruction(event.target.value); setRevisionMode(undefined); if ((action === 'scene.image' || action === 'video.create') && parent) setUpdateBrief(true); }} /></label>
       {effectiveAction === 'scene.image' && parent?.storyboard ? <label className="grid gap-2 text-sm">{t('scene')}<select className={control} value={scene} onChange={(event) => setScene(Number(event.target.value))}>{parent.storyboard.document.scenes.map((item, index) => <option key={index} value={index}>{index + 1}. {item.title}</option>)}</select></label> : null}
       {videoRevisionControl}
       <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{t('advanced')}</summary>{parent ? <p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('usingApprovedPlan')}</p> : null}<p className="mt-3 text-xs leading-5 text-os-muted-paper">{t('eligibleSources', { count: selectedClaimIds.length })}</p></details>
-      </details>
-    </fieldset>{!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}{(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}{effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}{ready && sourceValidationError ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t(sourceValidationError)}</p> : null}{effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t('needsApprovedScenes')}</p> : null}{error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}<p className="text-xs leading-5 text-os-muted-paper">{t('charge')}</p><button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={busy || !canWrite || !ready || !sourcesValid || !videoReady || (needsInstruction && !instruction.trim()) || (uncertain && !canReplay)} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? singlePaperImage ? 'planOneImage' : 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
+      </details> : null}
+    </fieldset>
+    {!canWrite && data ? <p role="status" className="text-sm">{t('readOnly')}</p> : null}
+    {(action === 'scene.image' || action === 'video.create') && !parent ? <p className="text-sm leading-6 text-os-muted-paper">{t('planWillBePrepared')}</p> : null}
+    {effectiveAction === 'storyboard.revise' ? <p className="text-sm leading-6 text-os-muted-paper">{t('briefWillUpdate')}</p> : null}
+    {ready && sourceValidationError ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t(sourceValidationError)}</p> : null}
+    {effectiveAction === 'video.create' && !videoReady ? <p role="status" className="text-sm leading-6 text-os-muted-paper">{t(audition && auditionStatus ? auditionStatus : 'needsApprovedScenes')}</p> : null}
+    {error ? <p role="alert" className="text-sm text-os-vermilion">{t(error)}</p> : null}
+    <p className="text-xs leading-5 text-os-muted-paper">{t(audition ? 'audioAudition.hint' : 'charge')}</p>
+    <button className="min-h-11 w-full rounded bg-os-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" disabled={!confirmationReady} type="submit">{t(busy ? 'submitting' : uncertain ? 'retry' : audition ? 'audioAudition.submit' : effectiveAction === 'storyboard.create' && action === 'video.create' ? 'prepareVideoPlan' : effectiveAction === 'storyboard.create' ? singlePaperImage ? 'planOneImage' : 'preparePlan' : effectiveAction === 'storyboard.revise' ? 'updateBrief' : 'confirm')}</button></form>
     <button className="mt-3 min-h-11 px-2 text-sm underline" disabled={locked} onClick={onBack} type="button">{t('back')}</button>
   </section>;
 }

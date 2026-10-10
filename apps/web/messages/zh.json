@@ -3035,6 +3035,24 @@
     "kind_counter": "反向主张"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "制作内容",
+      "mode": "试听旁白",
+      "summary": "先听这一幕的旁白，再继续制作视频。",
+      "fullVideo": "完整视频",
+      "scene": "试听场景",
+      "narration": "已批准的旁白",
+      "preset": "声音：{voice} · 语速：{speed}×",
+      "hint": "先听一幕旁白，试听结果会保存在这篇研究中。",
+      "loading": "正在检查旁白试听是否可用…",
+      "unavailable": "旁白试听暂不可用。",
+      "availabilityError": "暂时无法检查旁白试听，请重试。",
+      "retryAvailability": "重新检查试听",
+      "needsNarration": "请选择含 1–120 字旁白、且视频画面已齐备的批准场景。",
+      "settingsChanged": "声音或语速已变化，请查看新设置后再次确认。",
+      "submit": "试听选中幕",
+      "ready": "旁白试听已就绪"
+    },
     "prepareVideoPlan": "整理视频制作指令",
     "planWillBePrepared": "Hermes 会先整理这张图的制作指令。",
     "eligibleSources": "已选用 {count} 项可用研究主张。",

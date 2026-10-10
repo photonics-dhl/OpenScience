@@ -539,8 +539,11 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
-export function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<{ canGenerateVideo: boolean }> {
-  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+export interface HermesAudioAuditionPreset { provider: 'synclip'; voice: string; speed: number }
+export interface HermesVideoCapability { canGenerateVideo: boolean; audioAudition: { audio: HermesAudioAuditionPreset } | null }
+export async function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<HermesVideoCapability> {
+  const capability = await request<HermesVideoCapability>(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+  return { ...capability, audioAudition: capability.audioAudition ?? null };
 }
 
 export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
@@ -992,6 +995,7 @@ export interface PresentationAsset {
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
   canGenerateVideo?: boolean;
+  canGenerateAudioAudition?: boolean;
   videoFrameAssetIds?: string[];
   canTransition?: boolean;
   canApprove?: boolean;
@@ -1134,11 +1138,13 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   });
 }
 
-export interface PresentationVideoRequest {
+export type PresentationVideoRequest = {
   profile: 'content-driven-v1';
   storyboardAssetId: string;
   sceneImageAssetIds: string[];
-}
+} & ({ purpose?: undefined; sceneIndex?: never; audio?: never; locale?: never } | {
+  purpose: 'audio-audition'; sceneIndex: number; audio: HermesAudioAuditionPreset; locale: 'zh' | 'en';
+});
 export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,

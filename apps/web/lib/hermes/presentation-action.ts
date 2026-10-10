@@ -1,4 +1,4 @@
-import type { PresentationAsset, PresentationClaim, StoryboardRequest, VersionSummary } from '../api';
+import type { HermesAudioAuditionPreset, PresentationAsset, PresentationClaim, PresentationVideoRequest, StoryboardRequest, VersionSummary } from '../api';
 export type PresentationAction = 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
 export function selectPresentationVersion(versions: VersionSummary[], requested?: string) {
   return (requested ? versions.find(v => v.versionId === requested) : versions.find(v => v.status === 'draft')) ?? null;
@@ -52,11 +52,11 @@ export function selectEligiblePresentationClaims(claims: PresentationClaim[]): s
     .slice(0, 12)
     .map((claim) => claim.id);
 }
-export function newestEligibleStoryboard(assets: PresentationAsset[], action: PresentationAction): PresentationAsset | undefined {
+export function newestEligibleStoryboard(assets: PresentationAsset[], action: PresentationAction, audition = false): PresentationAsset | undefined {
   return assets
     .filter((asset) => Boolean(asset.storyboard) && (asset.status === 'approved' || (action !== 'storyboard.create' && asset.status === 'draft'))
       && (action !== 'scene.image' || asset.canGenerateSceneImage === true)
-      && (action !== 'video.create' || asset.canGenerateVideo === true))
+      && (action !== 'video.create' || (audition ? asset.canGenerateAudioAudition === true : asset.canGenerateVideo === true)))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 }
 
@@ -69,6 +69,19 @@ export function presentationVideoFrameIds(parent: PresentationAsset | undefined,
   return parent.storyboard?.document.scenes.map((_, index) => assets.find(asset => asset.kind === 'image'
     && asset.status === 'approved' && asset.sceneImage?.storyboardAssetId === parent.id
     && asset.sceneImage.sceneIndex === index)?.id ?? '') ?? [];
+}
+
+export function presentationAudioAuditionRequest(parent: PresentationAsset | undefined, sceneIndex: number, audio: HermesAudioAuditionPreset | null): PresentationVideoRequest | null {
+  const storyboard = parent?.storyboard;
+  const scene = storyboard?.document.scenes[sceneIndex];
+  const frames = parent?.canGenerateAudioAudition === true ? [...(parent.videoFrameAssetIds ?? [])] : [];
+  if (parent?.status !== 'approved' || storyboard?.output !== 'video' || storyboard.narrative !== true
+    || (storyboard.locale !== 'zh' && storyboard.locale !== 'en') || !Number.isInteger(sceneIndex) || sceneIndex < 0
+    || !scene || typeof scene.narration !== 'string' || !scene.narration.trim() || Array.from(scene.narration).length > 120
+    || frames.length < 3 || frames.length > 6 || frames.length !== storyboard.document.scenes.length || !frames.every(Boolean)
+    || !audio || audio.provider !== 'synclip' || !audio.voice.trim() || !Number.isFinite(audio.speed) || audio.speed <= 0) return null;
+  return { profile: 'content-driven-v1', storyboardAssetId: parent.id, sceneImageAssetIds: frames,
+    purpose: 'audio-audition', sceneIndex, audio: { ...audio }, locale: storyboard.locale };
 }
 
 export function presentationStoryboardRequest(input: {
@@ -98,7 +111,7 @@ export function isEligibleArtStoryboard(asset: PresentationAsset | undefined, lo
 export class SubmissionIntent {
   private signature = ''; private key = ''; private busy = false; private uncertain = false;
   draft?: { action: PresentationAction; instruction: string; style: string; language?: 'zh' | 'en'; selected: string[]; parentId: string; scene: number; updateBrief?: boolean; revisionMode?: 'art'; revisionSceneIndex?: number; figurePlan?: StoryboardRequest['figurePlan'] };
-  request?: { action: PresentationAction; sourceIds: string[]; payload: StoryboardRequest | { storyboardAssetId: string; sceneIndex: number } | { profile: 'content-driven-v1'; storyboardAssetId: string; sceneImageAssetIds: string[] } };
+  request?: { action: PresentationAction; sourceIds: string[]; payload: StoryboardRequest | { storyboardAssetId: string; sceneIndex: number } | PresentationVideoRequest };
   get isUncertain() { return this.uncertain; }
   get isBusy() { return this.busy; }
   begin(signature: string): string | null {
