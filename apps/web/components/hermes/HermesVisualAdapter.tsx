@@ -558,7 +558,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   }, [pathname, navigationOnly]);
 
   useEffect(() => {
-    if (assistantOpen) engageArticulation({ x: .42, y: -.12 });
+    if (assistantOpen || inConversation) engageArticulation({ x: .42, y: -.12 });
     else if (!inConversation) {
       const visual = linkRef.current;
       if (!visual?.matches(':hover') && !visual?.contains(document.activeElement)) {
@@ -644,7 +644,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   };
 
   const resetGaze = () => {
-    if (assistantOpen) {
+    if (assistantOpen || inConversation) {
       engageArticulation({ x: .42, y: -.12 });
       return;
     }
