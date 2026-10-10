@@ -539,7 +539,16 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts
       - run: python3 -m unittest discover -s infra/hermes-agent -p "test_*.py"
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_host_broker.py
-      - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_install_lifecycle.py
+      - name: Verify archived-source restoration against the old and current installers
+        run: |
+          baseline=d8a02e26a2ca5225c7977370584a7181fbc9a0b6
+          if ! git cat-file -e "${baseline}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$baseline"
+          fi
+          sudo "$(command -v python3)" -B infra/hermes-agent/verify_restore_regression.py \
+            --repo "$GITHUB_WORKSPACE" --candidate "$GITHUB_SHA" \
+            --output "$GITHUB_WORKSPACE/tmp/native-restore-source-identity/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
       - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
@@ -642,7 +651,7 @@ jobs:
             tmp/presentation-retry-browser/
           if-no-files-found: ignore
           retention-days: 7
-      - name: Preserve synthetic page screenshots
+      - name: Preserve page screenshots and Native restore evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -650,6 +659,7 @@ jobs:
           path: |
             apps/web/test/visual/out/**/*.png
             apps/web/test/visual/out/**/*.json
+            tmp/native-restore-source-identity/ci-*/
           if-no-files-found: ignore
           retention-days: 7
 

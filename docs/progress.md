@@ -3,7 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
-- 2026-10-10 09:30：Compose兼容的两P1已原High闭合，77dd/6cd三文件全等集入；installer及UI桌面/header/手机主CTA九文件组合也已收。生图补当前SHA的严格Linux负控消费者，root准备原CI；视频立即续paired-image query、UI续独立settings呈现。新批次未推/未跑CI，生产窗口关闭。
+- 2026-10-10 09:30：Compose兼容的两P1已原High闭合，三文件全等集入；installer及UI桌面/header/手机主CTA九文件组合已收。当前SHA的严格Linux负控消费者已High GO并接原step，root准备推送CI，实际Linux仍未运行。video的paired query已交ea9/26PASS待增量审查，UI续独立settings；生产窗口关闭。
 - 2026-10-10 08:57：本轮发布故障已收尾。原应用三主服务与原Native配对恢复健康，专用finalize经独立High、inspect0→confirm0清journal；部分依赖保留新构建，精确身份/证据统一见CURRENT。此次网站不可用约17分钟，新候选功能未上线，发布窗口关闭。
 - 故障根因分别是实际Compose不支持create/start参数，以及installer把正式源码目录0775/模板0664误当私有权限异常；自动restore未写fixed files。专用恢复保留现场与旧备份、不重放任务、不改immutable；长期修复已分派视频与生图两个独立owner。
 - 2026-10-10：修复前代码候选五条CI全绿，Linux发布组117/0skip、浏览器主组34/34闭合前次提交计数失败；这些证据没有覆盖上述真实发布缺口，不能宣称稳定交付。

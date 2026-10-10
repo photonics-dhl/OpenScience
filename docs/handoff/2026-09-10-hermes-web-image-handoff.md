@@ -14,8 +14,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | restore两文件已全等集入6ecb、源码High GO；原Linux消费者严格复现d8两处权限错误，正补当前候选SHA/完整当前suite，避免固定旧Green冒称新候选 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 77dd+6cd的两P1已原High闭合、全等集入29992/5be17；原84与增量39PASS复用。立即恢复791f上的paired-image query独立最小实现 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-image-work-query`；compat/4bc保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | restore两文件已全等集入6ecb、源码High GO；已交当前SHA/完整suite的Linux消费者，原High GO、5个判定测试通过，正由root接原CI；暂依赖实际Linux结果，不重复旧检查 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 77dd+6cd的两P1已原High闭合、全等集入29992/5be17；原84与增量39PASS复用。791f上的paired query已交ea9，26PASS零skip，独立High增量审查中 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-image-work-query`；compat/4bc保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 5b/6ebb/a917九文件全等集入172120；原High/双尺寸真实fixture复用。独立settings呈现：page markup、account-journal-craft仅settings选择器、原academic-identity-recovery.spec.ts | `.worktrees/research-product-craft` / `codex/ui-settings-craft`；dashboard/header/polish三branch保留 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
@@ -31,7 +31,7 @@
 - 事故证据在root原tmp：`deploy-native-d8*`、`native-d8-{failure,restored}-readonly.json`、`native-d8-restore-metadata.json`、`recover-d8-*`、`native-d8-finalize-once-*.json`。服务器`/opt/openscience/tmp/native-recovery-d8-20261010T003533Z/`保原1120B事故journal、四candidate文件及1119B restored journal；新Native目录/旧备份/任务均保留。
 - 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
 - 77dd原NO-GO已由6cd闭合：original启动只允许rollback_quiesced且not_attempted/not_started或installed/restored_verified；candidate回退checkpoint=null也纳入oneoff并先于stop/query/restore拒绝。原High增量Scoped GO、实际新增RED→39/39 GREEN零skip；旧84/CLI证据复用，不重复本机/生产检查，正常Linux候选CI仍未完成。
-- 下一步将已审Compose+installer与已交UI组合送原CI；原Linux消费者必须验证当前候选完整lifecycle，并严格证明旧0775/0664失败，不能用导入错误/跳过/固定旧提交算成功。root收真实CI后再安排发布；图审a6fa/paired-query与settings保持独立下一批，不为消除idle盲重试生产。
+- 已接原Linux step：真实d8 installer负控只替换该文件、精确两异常与root0775/0664，随后从GITHUB_SHA读取19个最小输入并运行当前完整lifecycle module；禁止固定39/旧候选或任意exit1冒充通过。原High Scoped GO、本机判定5PASS/AST2/YAML0，不是实际LinuxRED/Green；always artifact留完整日志/收据。root将本批送CI、收结果后排发布；图审a6fa/paired-query及settings仍独立下一批。
 
 ## 当前交付与明确下一步
 - 已审图审a780/3a2在d8独立移植为d9cc/f016，a6fa仅补workflow4+/2-；22源码对原3a2 diff0。Domain40/Gateway27/Worker39原证据复用，LinuxHost6/installedSDK/实际PNG未验收；paired-query须同时保nativeImageReview与nativeAgentExecution，缺失错绑仍拒绝，791f仅有效RED不是修复。
