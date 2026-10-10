@@ -126,7 +126,7 @@
 .craft-account .project-actions { margin-top: 16px; }
 .craft-account .settings-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 24px 48px; }
 .craft-account .settings-grid > section { padding: 28px; border: 1px solid var(--craft-rule, #dce5e5); border-radius: 3px; background: #fff; }
-.craft-account .settings-grid > section:first-child { grid-column: 1; grid-row: 1; }
+.craft-account .settings-grid .settings-preferences { grid-column: 1; grid-row: 1; }
 .craft-account .settings-companion-column { grid-column: 2; grid-row: 1 / span 2; }
 .craft-account .settings-companion-column .hermes-dock-anchor { min-height: 140px; width: 120px; margin: 12px 0 0 auto; }
 .craft-account .settings-grid [data-usage-balance] { padding: 28px 0; background: transparent; border-top: 2px solid #173f43; border-radius: 0; }
@@ -134,11 +134,13 @@
 .craft-account .settings-grid [data-usage-balance] dd { font: 400 40px/1.25 var(--font-reading-serif); }
 .craft-account .settings-grid [data-usage-balance] dd span { display: block; font: 400 12px/1.8 var(--font-ui); color: var(--craft-muted, #51666c); }
 .craft-account .settings-grid [data-usage-balance] p { font-size: 13px; line-height: 1.85; }
-.craft-account .settings-grid > section:last-child { grid-column: 1; }
+.craft-account .settings-grid .settings-account { grid-column: 1; grid-row: 2; }
 .craft-account .settings-grid h2 { font-size: 17px; font-weight: 500; }
-.craft-account .settings-grid > section:first-child dl > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: baseline; }
-.craft-account .settings-grid > section:first-child dd { margin-top: 0; overflow-wrap: anywhere; }
-.craft-account .settings-grid > section:first-child dl { margin-block: 20px 8px; }
+.craft-account .settings-grid .settings-preferences h2 { font-size: 20px; font-weight: 600; }
+.craft-account .settings-grid .settings-preferences .account-preference-row { margin-top: 24px; padding-block: 0; border-block: 0; }
+.craft-account .settings-grid .settings-account dl > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: baseline; }
+.craft-account .settings-grid .settings-account dd { margin-top: 0; overflow-wrap: anywhere; }
+.craft-account .settings-grid .settings-account dl { margin-block: 20px 8px; }
 .craft-account [data-academic-identity] > ol { gap: 8px 16px; }
 .craft-account [data-academic-identity] > ol svg { flex-shrink: 0; }
 .craft-account [data-academic-identity] h3 { font-size: 1rem; font-weight: 600; }
@@ -408,7 +410,7 @@
   .craft-account .account-research, .craft-account .settings-grid > section { padding: 20px; }
   .craft-account .account-projects { padding: 20px; }
   .craft-account .project-row span { font-size: 18px; }
-  .craft-account .settings-grid > section:first-child dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .craft-account .settings-grid .settings-account dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .craft-editorial .editorial-layout > form { padding: 20px; }
   .craft-editorial .editorial-queue-entry { grid-template-columns: minmax(0, 1fr); }
   .craft-editorial .editorial-queue-entry > div:last-child { grid-column: 1; }

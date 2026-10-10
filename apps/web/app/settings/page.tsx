@@ -45,28 +45,28 @@ export default function SettingsPage() {
         <p data-reading-role="body" className="mt-3 text-os-muted-paper">{meT('settingsBody')}</p>
       </header>
       <div className="settings-grid">
-        <section className="surface-folio-sheet px-5 py-6">
+        <section className="surface-folio-sheet settings-preferences px-5 py-6">
+          <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
+          <div className="account-preference-row mt-5 border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>
+          <MotionPreferenceControl />
+        </section>
+        <section className="surface-folio-sheet settings-account px-5 py-6">
           <div className="flex items-center gap-3"><UserRound className="h-5 w-5 text-os-vermilion-ink" /><h2 className="text-lg font-semibold text-os-ink">{meT('accountTitle')}</h2></div>
           <dl className="mt-6 divide-y divide-os-rule-paper text-base">
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.name')}</dt><dd className="mt-1 text-os-ink">{user.displayName}</dd></div>
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.email')}</dt><dd className="mt-1 text-os-ink">{user.email}</dd></div>
           </dl>
           <Link href="/me#identity" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('continueIdentity')}</Link>
-        </section>
-        <aside className="settings-companion-column">
-          <UsageBalance />
-          <HermesShellDockAnchor inline />
-        </aside>
-        <section className="surface-folio-sheet px-5 py-6">
-          <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
-          <div className="account-preference-row mt-5 border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>
-          <MotionPreferenceControl />
           <div className="account-form-actions mt-6" aria-busy={busy}>
             <button type="button" data-reading-role="control" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink disabled:opacity-40" disabled={busy} onClick={signOut}><LogOut className="h-4 w-4" />{busy ? actionT('working') : t('settings.signOut')}</button>
             {busy ? <span role="status">{actionT('working')}</span> : null}
           </div>
           {error ? <p role="alert" className="account-form-error mt-3">{error.message}</p> : null}
         </section>
+        <aside className="settings-companion-column">
+          <UsageBalance />
+          <HermesShellDockAnchor inline />
+        </aside>
       </div>
     </DashboardShell>
   );

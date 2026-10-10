@@ -111,6 +111,54 @@ test('legacy research profile link opens its corresponding profile section', asy
   await expect(page.locator('#research-profile')).toBeVisible();
 });
 
+test('settings keeps preferences, balance and storage failure feedback readable on desktop and phone', async ({ page }) => {
+  await prepare(page);
+  const writes: string[] = [];
+  const reads = new Map<string, unknown>([
+    ['/api/auth/me', { userId: 'identity-test', email: 'test@example.invalid', displayName: 'Identity Test', status: 'email_verified', level: 'free' }],
+    ['/api/usage', { user: [{ resource: 'ai_credit', scope: null, limit: 1000, used: 250, remaining: 750, allowed: true }], workspaces: [] }],
+  ]);
+  await page.route('**/api/**', route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== 'GET') {
+      writes.push(request.method() + ' ' + url.pathname);
+      return route.abort('blockedbyclient');
+    }
+    const key = url.pathname + url.search;
+    if (!reads.has(key)) throw new Error('Undeclared settings GET: ' + key);
+    return route.fulfill({ json: reads.get(key) });
+  });
+  await page.goto('/settings', { waitUntil: 'networkidle' });
+  const motion = page.getByRole('combobox', { name: 'Hermes motion preference', exact: true });
+  await expect(motion).toBeVisible();
+  await expect(page.locator('[data-usage-balance]')).toContainText('750');
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await expect(motion).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('main').getByRole('combobox', { name: 'Language', exact: true })).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`settings-${viewport.width}.png`), fullPage: true });
+  }
+  await motion.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('main').getByRole('combobox', { name: 'Language', exact: true })).toBeFocused();
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key === 'openscience.hermes.motion') throw new DOMException('Controlled preference storage failure', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await motion.selectOption('reduced');
+  await expect(motion).toHaveValue('system');
+  await expect(page.locator('main').getByRole('alert')).toContainText('The change was not saved.');
+  await expect(motion).toBeEnabled();
+  await page.screenshot({ path: test.info().outputPath('settings-storage-failure-390.png'), fullPage: true });
+  expect(writes).toEqual([]);
+});
+
 test('legacy ORCID return opens profile without claiming verification', async ({ page }) => {
   await prepare(page);
   await page.goto('/settings?identity=orcid-connected');
