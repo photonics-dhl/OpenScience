@@ -14,7 +14,7 @@ const admissionFields = ['id', 'kind', 'status', 'sessionId', 'progress', 'error
   'payload', 'result', 'interestContext', 'dispatchedAt', 'updatedAt'] as const;
 
 function firstNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
-  if (task.status !== 'pending' || task.error !== null || task.executionAttempt !== 0 || task.retryCount !== 0
+  if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.error !== null || task.executionAttempt !== 0 || task.retryCount !== 0
     || !isDirectNativeVideoStoryboard(task.payload) || !task.result || Array.isArray(task.result)
     || typeof task.result !== 'object' || Object.keys(task.result).length !== 1) return false;
   try {
@@ -59,7 +59,7 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
   return released.count === 1;
 }
 
-/** null means normal claim may proceed; false preserves the caller's processing entry. */
+/** null allows a normal claim; false requires current-state recovery before removing processing. */
 export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean | PendingVideoAdmission | null> {
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });

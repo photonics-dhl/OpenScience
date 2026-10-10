@@ -921,6 +921,31 @@ export async function sleep(ms: number): Promise<void> {
 
 const AGENT_TASK_PROCESSING_QUEUE = `${AGENT_TASK_QUEUE}:processing`;
 
+/** Reclassify the current row on the next poll; never execute the stale payload. */
+async function requeueCurrentPendingTask(
+  deps: WorkerDeps, taskId: string, stopping: () => boolean,
+): Promise<'requeued' | 'discard' | 'deferred'> {
+  if (stopping()) return 'deferred';
+  const current = await deps.prisma.agentTask.findUnique({
+    where: { id: taskId }, include: { session: { include: { researchObject: true } } },
+  });
+  if (stopping()) return 'deferred';
+  if (current?.status !== 'pending' || current.deletedAt || current.session.deletedAt
+    || current.session.researchObjectId !== null && (!current.session.researchObject || current.session.researchObject.deletedAt)) return 'discard';
+  // MULTI does not roll back a successful LREM when LPUSH fails with WRONGTYPE.
+  // Check both key types in the same atomic operation before moving this one ID.
+  const moved = await deps.redis.eval(`
+    for _, key in ipairs(KEYS) do
+      local kind = redis.call('TYPE', key).ok
+      if kind ~= 'none' and kind ~= 'list' then return redis.error_reply('WRONGTYPE queue') end
+    end
+    local removed = redis.call('LREM', KEYS[2], 1, ARGV[1])
+    if removed > 0 then redis.call('LPUSH', KEYS[1], ARGV[1]) end
+    return removed
+  `, 2, AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, taskId);
+  return moved === 1 ? 'requeued' : 'discard';
+}
+
 export async function reconcileResearchRunsTick(
   deps: WorkerDeps,
   reconcile: typeof reconcileHermesResearchRuns = reconcileHermesResearchRuns,
@@ -962,7 +987,12 @@ export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => b
     if (task?.status === 'pending' && task.error === VIDEO_READINESS_HOLD) {
       const admission = await admitPendingVideoTask(deps, task);
       if (admission !== null) {
-        if (admission === true) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        if (admission !== true) {
+          const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+          if (outcome === 'deferred') break;
+          if (outcome === 'requeued') recovered += 1;
+          else await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        } else if (admission === true) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
         continue;
       }
     }
@@ -1028,7 +1058,12 @@ export async function createPollOnce(
         processingEntryDeferred = true;
         const admission = await admitPendingVideoTask(deps, task);
         if (typeof admission === 'boolean') {
-          processingEntryDeferred = !admission;
+          if (!admission) {
+            const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+            processingEntryRequeued = outcome === 'requeued';
+            processingEntryDeferred = outcome === 'deferred';
+            if (processingEntryDeferred) return false;
+          } else processingEntryDeferred = false;
           return true;
         }
         if (admission) expectedPendingTask = admission.expectedPendingTask;
@@ -1041,14 +1076,10 @@ export async function createPollOnce(
       if (!claimed) {
         if (expectedPendingTask) {
           processingEntryDeferred = true;
-          const current = await deps.prisma.agentTask.findUnique({ where: { id: taskId }, include: { session: { include: { researchObject: true } } } });
-          if (current?.status === 'pending' && !current.deletedAt && !current.session.deletedAt
-            && (current.session.researchObjectId === null || current.session.researchObject && !current.session.researchObject.deletedAt)) {
-            if (stopping()) return false;
-            await deps.redis.multi().lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).lpush(AGENT_TASK_QUEUE, taskId).exec();
-            processingEntryRequeued = true;
-          }
-          processingEntryDeferred = false;
+          const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+          processingEntryRequeued = outcome === 'requeued';
+          processingEntryDeferred = outcome === 'deferred';
+          if (processingEntryDeferred) return false;
         }
         return true;
       }

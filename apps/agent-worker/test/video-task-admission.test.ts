@@ -50,7 +50,7 @@ function queueFixture() {
   const tasks = new Map<string, QueueTask>([[task.id, task]]);
   const lists = new Map<string, string[]>([[queueKey, [task.id]], [processingKey, []]]);
   const state = { ready: false, rejectUpdate: false, beforeUpdate: undefined as (() => void | Promise<void>) | undefined,
-    afterPush: undefined as (() => Promise<void>) | undefined };
+    afterPush: undefined as (() => Promise<void>) | undefined, queueWrongType: false };
   const agentTask = {
     findUnique: vi.fn(async ({ where }: { where: { id: string } }) => structuredClone(tasks.get(where.id) ?? null)),
     findMany: vi.fn(async ({ where, take }: { where: Record<string, unknown>; take?: number }) =>
@@ -81,6 +81,13 @@ function queueFixture() {
     lrem: vi.fn(async (key: string, count: number, id: string) => {
       expect(count).toBe(1); const entries = lists.get(key)!; const index = entries.indexOf(id);
       if (index < 0) return 0; entries.splice(index, 1); return 1;
+    }),
+    eval: vi.fn(async (_script: string, keys: number, queue: string, processing: string, id: string) => {
+      expect(keys).toBe(2);
+      if (state.queueWrongType) throw new Error('WRONGTYPE queue');
+      const index = lists.get(processing)!.indexOf(id);
+      if (index < 0) return 0;
+      lists.get(processing)!.splice(index, 1); lists.get(queue)!.unshift(id); return 1;
     }),
     multi: vi.fn(() => {
       const operations: Array<() => Promise<unknown>> = [];
@@ -203,6 +210,103 @@ describe('first Native video plan admission', () => {
     expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
     expect(f.lists.get(queueKey)).toEqual([f.task.id]); expect(f.lists.get(processingKey)).toEqual([]);
   });
+
+  it.each(['updatedAt', 'payload'] as const)('recovers a live pending %s change between poller and admission without restart', async change => {
+    const f = firstNativePlanFixture();
+    const read = f.agentTask.findUnique.getMockImplementation()!;
+    let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      const snapshot = await read(args);
+      if (++reads === 1) {
+        if (change === 'updatedAt') f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+        if (change === 'payload') (f.task.payload.storyboard as Record<string, unknown>).instruction = 'Current instruction';
+      }
+      return snapshot;
+    });
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'pending', error: null, executionAttempt: 0 });
+    expect(f.task.dispatchedAt).not.toBeNull(); expect(f.handler).not.toHaveBeenCalled();
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1 });
+    expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(f.handler).toHaveBeenCalledWith(f.deps, expect.objectContaining({ payload: f.task.payload }));
+  });
+
+  it.each(['result', 'error'] as const)('reclassifies a changed %s on the next poll without clearing it or executing the old plan', async change => {
+    const f = firstNativePlanFixture();
+    const read = f.agentTask.findUnique.getMockImplementation()!; let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      const snapshot = await read(args);
+      if (++reads === 1) {
+        if (change === 'result') f.task.result!.untrusted = true;
+        else f.task.error = VIDEO_READINESS_HOLD;
+      }
+      return snapshot;
+    });
+    await f.poll();
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+    expect(f.task.executionAttempt).toBe(0); const result = structuredClone(f.task.result);
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(f.task.result).toEqual(result); expect(f.handler).not.toHaveBeenCalled();
+    expect(f.lists.get(queueKey)).toEqual([]); expect(f.lists.get(processingKey)).toEqual([]);
+  });
+
+  it.each(['missing', 'running', 'succeeded', 'failed', 'deleted', 'session-deleted', 'ro-deleted'] as const)('clears only the stale processing entry when admission reread finds %s', async change => {
+    const f = firstNativePlanFixture();
+    const read = f.agentTask.findUnique.getMockImplementation()!; let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      const snapshot = await read(args);
+      if (++reads === 1) {
+        if (change === 'missing') f.tasks.delete(f.task.id);
+        if (['running', 'succeeded', 'failed'].includes(change)) f.task.status = change;
+        if (change === 'deleted') f.task.deletedAt = new Date();
+        if (change === 'session-deleted') f.task.session.deletedAt = new Date();
+        if (change === 'ro-deleted') f.task.session.researchObject.deletedAt = new Date();
+        f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+      }
+      return snapshot;
+    });
+    await f.poll();
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([]);
+    expect(execution.claim).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+    expect(f.handler).not.toHaveBeenCalled(); expect(await f.poll()).toBe(false);
+  });
+
+  it.each(['stopping', 'read-failure'] as const)('preserves processing on %s while resolving admission reread mismatch', async failure => {
+    const f = firstNativePlanFixture(); let stopping = false;
+    const read = f.agentTask.findUnique.getMockImplementation()!; let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      if (++reads === 3 && failure === 'read-failure') throw new Error('database unavailable');
+      const snapshot = await read(args);
+      if (reads === 1) f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+      if (reads === 2 && failure === 'stopping') stopping = true;
+      return snapshot;
+    });
+    const poll = await createPollOnce({ 'presentation.generate': f.handler }, { runMaintenance: false, stopping: () => stopping });
+    if (failure === 'read-failure') await expect(poll(f.deps)).rejects.toThrow('database unavailable');
+    else expect(await poll(f.deps)).toBe(false);
+    expect(f.lists.get(processingKey)).toEqual([f.task.id]); expect(f.lists.get(queueKey)).toEqual([]);
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+  });
+  it.each(['reread', 'claim'] as const)('preserves the pending ID on Redis failure after %s mismatch', async phase => {
+    const f = firstNativePlanFixture(); f.state.queueWrongType = true;
+    if (phase === 'claim') f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+    else {
+      const read = f.agentTask.findUnique.getMockImplementation()!; let reads = 0;
+      f.agentTask.findUnique.mockImplementation(async args => {
+        const snapshot = await read(args);
+        if (++reads === 1) f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+        return snapshot;
+      });
+    }
+    await expect(f.poll()).rejects.toThrow('WRONGTYPE queue');
+    expect(f.lists.get(processingKey)).toEqual([f.task.id]); expect(f.lists.get(queueKey)).toEqual([]);
+    expect(f.task).toMatchObject({ status: 'pending', error: null, executionAttempt: 0 });
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
+  });
 });
 
 function ordinaryIngestionFixture(role = 'author') {
@@ -322,7 +426,8 @@ describe('dispatcher wins the first pending park CAS', () => {
         if (changed === 'unknown') f.task.error = 'UNCERTAIN';
         f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); afterChange = structuredClone(f.task);
       };
-      await f.poll(); expect(f.task).toEqual(afterChange); expect(f.lists.get(processingKey)).toEqual([f.task.id]);
+      await f.poll(); expect(f.task).toEqual(afterChange); expect(f.lists.get(processingKey)).toEqual([]);
+      expect(f.lists.get(queueKey)).toEqual(changed === 'running' ? [] : [f.task.id]);
       expect(f.agentTask.updateMany).toHaveBeenCalledTimes(1); expect(execution.claim).not.toHaveBeenCalled();
       expect(execution.progress).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
     });
@@ -338,9 +443,10 @@ describe('Worker native video pending admission', () => {
     expect(f.lists.get(processingKey)).toEqual([]); expect(execution.claim).not.toHaveBeenCalled();
     expect(execution.progress).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
   });
-  it('keeps processing when the pending park CAS loses instead of claiming or marking failure', async () => {
+  it('requeues the same pending ID when the park CAS loses without claiming or marking failure', async () => {
     const f = queueFixture(); f.state.rejectUpdate = true;
-    expect(await f.poll()).toBe(true); expect(f.lists.get(processingKey)).toEqual([f.task.id]);
+    expect(await f.poll()).toBe(true); expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.lists.get(queueKey)).toEqual([f.task.id]);
     expect(f.task).toMatchObject({ status: 'pending', executionAttempt: 0, error: null });
     expect(f.agentTask.updateMany).toHaveBeenCalledTimes(2);
     expect(execution.claim).not.toHaveBeenCalled(); expect(execution.progress).not.toHaveBeenCalled();
@@ -371,6 +477,20 @@ describe('Worker native video pending admission', () => {
     expect(execution.progress).toHaveBeenCalledWith(f.deps, expect.objectContaining({ status: 'succeeded' }));
     expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
     expect(f.task.error).toBeNull(); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('keeps sdf.extract with storyboard hints and a Native marker on its existing authorized-video hold path', async () => {
+    const f = ordinaryIngestionFixture();
+    Object.assign(f.task.payload, { kind: 'interactive_html', storyboard: { output: 'video', narrative: true } });
+    f.task.result = initialNativeAgentExecution({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' }, 'paper-illustration')!;
+    f.deps.prisma.hermesResearchRun.findMany = vi.fn(async () => [{ actorId: 'actor', researchObjectId: 'ro',
+      profile: 'visual-narrative-v1', generationSettings: { output: 'video' }, steps: [
+        { agentTaskId: f.task.id, stage: 'source_composition', ingestionTaskId: 'ingestion', artifactId: 'artifact' },
+        { stage: 'source_ingestion', ingestionTaskId: 'ingestion', artifactId: 'artifact' },
+      ] }]) as never;
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(f.deps.readVideoReadiness).toHaveBeenCalledTimes(1);
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
   });
   it('executes an authorized ordinary ingestion while video readiness is closed', async () => {
     const f = ordinaryIngestionFixture();
@@ -476,21 +596,51 @@ describe('single snapshot startup recovery with pending video holds', () => {
     expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
     expect(f.task.dispatchedAt).not.toBeNull(); expect(execution.claim).not.toHaveBeenCalled();
   });
-  it('keeps a losing held CAS in place without blocking or accidentally moving the next task', async () => {
+  it('requeues a losing held CAS and the next task from the same startup snapshot', async () => {
     const f = queueFixture(); f.task.error = VIDEO_READINESS_HOLD; f.state.rejectUpdate = true;
     const ordinary = { ...structuredClone(f.task), id: 'ordinary', kind: 'demo.echo', error: null };
     f.tasks.set(ordinary.id, ordinary); f.lists.set(queueKey, []); f.lists.set(processingKey, [ordinary.id, f.task.id]);
-    expect(await recoverProcessingQueue(f.deps)).toBe(1);
-    expect(f.lists.get(processingKey)).toEqual([f.task.id]); expect(f.lists.get(queueKey)).toEqual([ordinary.id]);
-    expect(f.redis.lrange).toHaveBeenCalledTimes(1); expect(f.redis.rpoplpush).not.toHaveBeenCalled();
+    expect(await recoverProcessingQueue(f.deps)).toBe(2);
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([ordinary.id, f.task.id]);
+    expect(f.redis.lrange).toHaveBeenCalledTimes(1);
   });
-  it('preserves both processing IDs if ordinary requeue fails behind a parked tail', async () => {
+  it('preserves both processing IDs if requeue fails at the losing held tail', async () => {
     const f = queueFixture(); f.task.error = VIDEO_READINESS_HOLD; f.state.rejectUpdate = true;
     const ordinary = { ...structuredClone(f.task), id: 'ordinary', kind: 'demo.echo', error: null };
     f.tasks.set(ordinary.id, ordinary); f.lists.set(queueKey, []); f.lists.set(processingKey, [ordinary.id, f.task.id]);
-    f.redis.lpush.mockRejectedValueOnce(new Error('WRONGTYPE queue'));
+    f.state.queueWrongType = true;
     await expect(recoverProcessingQueue(f.deps)).rejects.toThrow('WRONGTYPE queue');
     expect(f.lists.get(processingKey)).toEqual([ordinary.id, f.task.id]); expect(f.redis.lrem).not.toHaveBeenCalled();
+  });
+  it('requeues a held startup snapshot changed before admission and lets the next poll classify the current row', async () => {
+    const f = firstNativePlanFixture(); f.task.error = VIDEO_READINESS_HOLD;
+    f.lists.set(queueKey, []); f.lists.set(processingKey, [f.task.id]);
+    const read = f.agentTask.findUnique.getMockImplementation()!; let reads = 0;
+    f.agentTask.findUnique.mockImplementation(async args => {
+      const snapshot = await read(args);
+      if (++reads === 1) f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1);
+      return snapshot;
+    });
+    expect(await recoverProcessingQueue(f.deps)).toBe(1);
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+    await f.poll();
+    expect(f.task.error).toBe(VIDEO_READINESS_HOLD); expect(f.lists.get(queueKey)).toEqual([]);
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.handler).not.toHaveBeenCalled();
+  });
+  it('requeues a held startup row whose current non-video intent returns an allowed snapshot', async () => {
+    const f = firstNativePlanFixture(); f.task.error = VIDEO_READINESS_HOLD;
+    (f.task.payload.storyboard as Record<string, unknown>).output = 'image';
+    f.lists.set(queueKey, []); f.lists.set(processingKey, [f.task.id]);
+    expect(await recoverProcessingQueue(f.deps)).toBe(1);
+    expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(f.handler).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1 });
+    expect(f.handler).toHaveBeenCalledWith(f.deps, expect.objectContaining({ payload: f.task.payload }));
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it('releases a ready held entry into the outbox and only clears its old processing occurrence', async () => {
     const f = queueFixture(); f.task.error = VIDEO_READINESS_HOLD; f.state.ready = true;
