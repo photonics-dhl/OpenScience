@@ -20,6 +20,7 @@
 - 本聊天三线生产操作由总控串行排程；human变化/Fig2结果保持。e5两media主job/其它entry通过，仅同2例research-continuation失败，test-only269d→1946已High GO。另一会话已完成043应用发布，本总控按实际metadata更新基线；新候选未上线，所有旧e5准备脚本未执行/不再使用。video/UI独立试听与生图真实质量目标继续，无本聊天生产writer。
 
 ## Git / CI / 运行事实
+> 下列19:19及以前的043/59运行和待发记录为历史；最新c239已上线，未完成的生图质量、视频消费者及Guide任务不变，精确发布事实只见上方服务对象CURRENT。
 - canonical=`release/onchip-production-line`；已审本地test-only1946c839待同合并记录推送/新CI；e5五CI终态3绿2media失败及2例已审修复见root e5-ci-final.json/research-continuation-surface-high.md。远端后续ce26只记录043应用发布，已正常合并保留，不把它当e5源码已上线。协作frontend/nanqing/[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)，不合main/强推。
 - 19:19:27–29CST本总控fresh只读确认active=`04352895148395465fbeaaa29e1cd6540331f36e`/rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；三主容器healthy/restart0/source043，Native runtime/catalogue/unit仍393、M3不变，无journal/failed/pending/FD9/Native实例。完整元数据app-after-profile-043-readonly.json；该次发布/备份/迁移52原收据见[服务对象CURRENT](2026-10-09-researchers-services-handoff.md)。本聊天此前active59的读数已历史化，所有以59为active/rollback的e5准备命令弃用，后续需以fresh043和新候选重排。
 - 8cc六CI全SUCCESS：video PR38043126879/push38043124096、journals PR38043126843/push38043124067、media PR38043126894/push38043124068；root 8cc-ci-final.json保留。Linux PRjob114187188970原日志8cc-video-pr.log核136/136/0skip，原ffmpeg真实解码/对齐/mux及POSIX权限两skip已闭合；不覆盖新consumer WIP。此前59a精确五CI全SUCCESS：media PR38034914193/push38034911405、video PR38034914188、journals PR38034914218/push38034911402；原dashboard32/32、workspace25/25，原focus/同canvas/scroll/disabled→editable断言保留。root原59a-ci-final.json与两browser日志保留，未重复未变测试。
