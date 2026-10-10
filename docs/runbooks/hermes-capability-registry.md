@@ -4,7 +4,7 @@
 
 Industry / Investors 技术发现入口复用已有 `/literature/acquisitions` 与精确 `source.retrieve` 任务：`apps/web/lib/technology-discovery/` 负责元数据适配、幂等恢复、账号/受众草稿及咨询资料，`components/technology-discovery/` 消费。新增能力为前端检索、来源比较/导出与用户自发邮件草稿；自然语言需求拆解、全文技术分析、技术成熟度判断和自动跟踪尚未接入，不将固定状态文案称作 Hermes 模型回答。实际验证/部署边界见 [服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)，架构见 [技术发现设计](../specs/2026-10-09-technology-discovery-design.md)。
 
-单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
+单机运维前置复用原生产 Compose、备份脚本及发布事务：`infra/scripts/backup-objects.mjs` 使用运行中 API 的既有 Minio SDK 做上传对象只读逻辑导出/离线校验；原 `backup.sh` 负责调度和锁，稳定主机清理复用 `production-release-retention.mjs`。 当前真实断点为该模块的 `readJournalIdentity` 仍仅收旧五键，拒绝正式 Native 发布日志的 `nativeRefresh` 并触发回退；修复应消费原 `validateNativeJournalState`，保留权限、FD9、引用保护和旧日志行为，具体执行状态见 CURRENT。同机测试、外部备份与告警的边界见原运维手册；候选、实际运行与未完成验收只见 [CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，不新增 Hermes 模型阶段或另一套任务库。
 
 ## 原生Agent当前入口与消费断点
 - 期刊共用论文理解（2026-10-08 重做候选，尚未发布）：`journal/shared-workspace.ts` 将正文与附件接入共用 Artifact、私有 working RO 版本和 ingestion；Native paper-author 的六字段、Claims 与来源证据经校验后直接投影为编辑稿，人工确认与公开审批分离。期刊额度赞助共用任务，保留原并发限制，不重复扣个人额度；每次外发重新核验期刊/材料/权限绑定。旧公开 RO、冻结版本、旧 JournalJob 及付费结果保留，新正文不再启动第二次 journal-text 生成。处理完成、部署及真实科学质量分开记录，具体剩余验证见[期刊 CURRENT](../handoff/2026-10-08-journal-workbench-handoff.md)。
