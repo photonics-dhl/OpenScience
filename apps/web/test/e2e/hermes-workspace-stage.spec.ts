@@ -220,7 +220,7 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(stage.locator('[data-hermes-performance-bubble="true"]:visible')).toHaveCount(0);
 }
 
-async function assertConversation(page: Page, role: 'dialog' | 'complementary' = 'dialog') {
+async function assertConversation(page: Page, role: 'dialog' | 'complementary' = 'dialog', inputState: 'editable' | 'disabled' = 'editable') {
   const conversation = page.getByRole(role, { name: 'Hermes research guide', exact: true });
   await expect(guide(page)).toHaveCount(1);
   await expect(conversation).toBeVisible();
@@ -245,7 +245,9 @@ async function assertConversation(page: Page, role: 'dialog' | 'complementary' =
     const box = current?.getBoundingClientRect();
     return size > 0 && Number(current?.dataset.hermesStageSize) === size && box?.width === size && box.height === size;
   })).toBe(true);
-  await expect(conversation.locator('.hermes-conversation-composer textarea')).toBeEditable();
+  const input = conversation.locator('.hermes-conversation-composer textarea');
+  if (inputState === 'disabled') await expect(input).toBeDisabled();
+  else await expect(input).toBeEditable();
   await expect(conversation.getByRole('button', { name: 'Close Hermes', exact: true })).toBeEnabled();
 }
 
@@ -634,10 +636,13 @@ for (const follow of [true, false]) {
       let release!: () => void;
       const completion = new Promise<void>((resolve) => { release = resolve; });
       let reads = 0;
+      let holdCompletion = false;
       const taskUrl = (url: URL) => url.pathname + url.search === '/api/agent/tasks/scroll-task';
       const taskRoute = async (route: Route) => {
         if (route.request().method() !== 'GET') return route.fallback();
-        if (++reads === 1) return json(route, { task: running });
+        reads += 1;
+        // Initial restoration can reread before adopting its task; later polls await release.
+        if (!holdCompletion) return json(route, { task: running });
         await completion;
         return json(route, { task: completed });
       };
@@ -645,12 +650,14 @@ for (const follow of [true, false]) {
       try {
         await page.setViewportSize(viewport);
         await page.goto(baseUrl + roPath + '/edit?hermesTask=scroll-task', { waitUntil: 'domcontentloaded' });
-        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+        await expect(guide(page).locator('[data-hermes-drawer-state="working"]')).toBeVisible();
+        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog', 'disabled');
+        holdCompletion = true;
         await guide(page).getByRole('button', { name: 'Close Hermes', exact: true }).click();
         await assertAvatar(page, 'document-flow');
         const opener = label(page);
         await opener.click();
-        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
+        await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog', 'disabled');
         const pane = guide(page).locator('.hermes-conversation-transcript');
         const distance = () => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
         await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
@@ -665,6 +672,7 @@ for (const follow of [true, false]) {
         }
         release();
         await expect(guide(page).locator('[data-hermes-drawer-state="succeeded"]')).toBeVisible();
+        await expect(guide(page).locator('.hermes-conversation-composer textarea')).toBeEditable();
         await expect(pane.getByText(/Restored research result 12:/u)).toHaveCount(1);
         if (follow) await expect.poll(distance).toBeLessThanOrEqual(1);
         else await expect.poll(() => pane.evaluate((node) => node.scrollTop)).toBe(0);
