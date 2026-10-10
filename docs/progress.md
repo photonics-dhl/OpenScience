@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10：本次收尾日志兼容修复已全等集入，复用原Native校验器，真实消费者RED→相关模块87/87零skip、原独立High源码GO，准备对应精确CI。生图只读映射确认没有第三个同类消费者，任务闭合；UI编辑块已审暂留独立批次，立即承接实际桌面Hermes初开裁切的共享Drawer修复。生产窗口保持关闭。
 - 2026-10-10 12:19：本轮候选五条CI全绿，Linux Host六业务/图审/恢复/浏览器均已闭合；正式发布在公开精确版本验收后的retention旧schema处失败，已沿正常自动回退完整恢复原应用和Native，网站首页实际可读。新功能仍未上线，视频owner立即承接原retention两文件修复，原High增量审；UI继续独立编辑页，生图实际图片验收仍依赖发布。精确版本、回执和边界只见CURRENT。
 - 2026-10-10 09:56：本批五CI终态为三成功/两media失败；Linux旧权限负控2/currentGreen39、发布与清单197全通过且原ZIP已保存。八个unique浏览器失败集中三spec：UI修原auth/workspace四例，video并行修创建入口四例，settings WIP保护暂停。生产窗口关闭、未重试；精确版本/run/原日志统一见CURRENT。
 - 前轮三个spec全等集入；local dev手机脚本错误仍保留未定因，后续正常CI已闭合原断言。创建四例精确RO recovery GET补丁已收，本轮Linux主browser亦已通过；原失败保留，实际产品与模型质量仍独立验收。
