@@ -14,13 +14,13 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | cb完整context50,204字/25来源含s24、6Skill/page3已实际消费，无截断证据；科学错绑未修，不猜叠提示。offline_native_loop.py新增80行真实SDK离线图片工具loop候选及原393venv隔离producer等待窄High，尚未执行/付费 | 原illustration-chain-repair树 / `codex/native-illustration-source-repair`@59a；原2cd/870/SDK/Fig2/CP证据全保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 独立host59a已实际安装并保持接单关闭；唯一真实目录GET成功77音色/8语言/16中文。已交owner消费目录及原human声音偏好、明确合法下一任务/预算缺口；不默认选声/改audio/admin/timer或发新模型 | 原synclip-video-delivery树；host-59a操作包与root实际安装/目录回执全保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 59a实际编辑布局/64px/焦点及开闭已观察，但1536×681空会话slot约11.69而stage90导致只露帽沿。立即授Stage/Drawer/companion.css及原workspace spec最小修复写权，原Controller/Portal/API/资产不动；先同尺寸RED | `.worktrees/research-product-craft`，从59a另分支修复；原af/生产截图/精确geometry保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | cb来源完整、6Skill已实际消费，科学错绑仍未修。SDK离线一次PASS已审，80行6e3f→6562全等集入；现只读准备ROc896当前合法正常任务/来源/原额度与扣费语义，不重放cb或新找认证材料 | 原illustration-chain-repair树 / `codex/native-illustration-source-repair`@6e3f222c；原2cd/870/SDK/Fig2/CP证据保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | host59a/77音色真实目录完成、接单保持关闭。已派broker/原test复用prepareAudio做私有短试听消费者，必须在video POST前终止，保留原任务/授权/预算/unknown回执；跨进程合同先报精确符号/原High，不将音频冒充MP4成功、不开放裸CLI | 原synclip-video-delivery树；host/目录/voice-catalogue-analysis原记录保留，无paid或配置改动 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 1536×681/DPR2.5已复现裁切RED；现3file候选统一slot/stage最小高度，空间不足沿既有fullheight，原observer/focus/mode由原Godel增量审。newshort与原1440/390检查进行中，不改Stage/Controller/Portal/API/资产，不提前称Green | `.worktrees/research-product-craft` / `codex/ui-short-pane-companion`@59a；原af/生产JPG/geometry/RED保留 |
 - root独占生产排程；human直接确认1961/ead6/2ef0三项非target回收与1614采用属于其手动操作，原样保留、无restore。Fig2五项、59a应用发布及之后单独host升级均已完成，生产写窗口全关；生图仅获准一次已审SDK离线运输验证，UI修短窗口，视频不开放生成。
 
 ## Git / CI / 运行事实
-- canonical=`release/onchip-production-line`；已推已发布`59a23906cec85092a6100a7a281a24079136cf4d`。UI348c/10f、installer029b、focus f868及workspace spec dbc7全等集入，原High GO；后续docs提交不冒称运行版。正常推frontend/nanqing，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
+- canonical=`release/onchip-production-line`；已推已发布`59a23906cec85092a6100a7a281a24079136cf4d`。UI348c/10f、installer029b、focus f868及workspace spec dbc7全等集入，原High GO；本地后续docs及SDK回归`6562cf99db485fa8f25e04db581a7a80c1d4dabb`未新发，待UI候选同批CI。正常推frontend/nanqing，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开，不合main/强推。
 - 59a精确五CI全SUCCESS：media PR38034914193/push38034911405、video PR38034914188、journals PR38034914218/push38034911402；原dashboard32/32、workspace25/25，原focus/同canvas/scroll/disabled→editable断言保留。root原59a-ci-final.json与两browser日志保留，未重复未变测试。
 - 16:16:20–16:22:47 CST普通应用发布exit0，无refresh-native；公开精确release、retention prepare/complete及journal clear成功。16:23:02 fresh active59a/rollback393，API a192ab23/Web e40b3510/Worker2ca49952 healthy/restart0/source59a，无journal/failed/pending/FD9；Native runtime/catalogue/unit仍393、timer enabled/active、无实例，主M3保持。应用构建/运行成功不代替实际科学质量。
 - 发布前16:14 formal work只读safe=true/nativePending=false/nativeBoundPending=false，pending/running/queue/processing/journal非终态/lease全0，历史3unknown hold原样保留。五项回收之后新双库`/var/backups/openscience/db-set-20261010T081534Z-4063098`已核163698832/14257855B、checksum0、0700/0600、旧集合保留；root原app-59a-readiness/deploy-app-59a/backup-before-app-59a收据保留。下列393及更早发布/CI均为历史证据。
@@ -37,7 +37,7 @@
 - 4f4d3cf六CI终态四SUCCESS/两mediaFAIL：video38032804874/38032802974、journal38032804864/38032802991成功；media PR38032804955/push38032803015的main均成功，dashboard各focus一败、workspace各running两败。PR实际installer40/40零skip含gid负控；原完整4f4d日志在root tmp。对应新两file已由原High GO，workspace同路径2/2、focus仅scoped lint/语法0（非WebTC/browser）；原焦点/同canvas/scroll/timeout断言全保，最终组合依实际CI。
 
 ## 当前交付与明确下一步
-- 图审a780/3a2→d9cc/f016及a6fa消费者、High paired query ea9组合dca5已全等收为7cd343；原Domain40/Gateway27/Worker39/video26/query24不相加。Linux Host六例与393 installed-SDK有限消费已核；实际Agent构造/循环、真实PNG和通用质量仍未验收，原paid/unknown拒绝保持。
+- 图审a780/3a2→d9cc/f016及a6fa/paired query已收，原测试证据复用。17:06:19–27实际393 SDK0.10.0离线构造/run_conversation PASS：原source5 Mock控制保留，image2 Mock请求消费真实skill_view/paper_image_view、唯一fixture PNG与四身份及终答；stderr空/外部Provider0/Gateway往返false/产品任务与DB0，自有temp已删除。6e3f仅offline_native_loop.py+80，原High GO、root全文diff0收6562；真实科研PNG的模型判断与科学质量仍未验收，不重跑旧paid/unknown。
 - UI5b009/6ebb/a917及Settings eaf→32b27随393上线，正常设置入口已观察；0a/af/f868随59a发布。实际reload→个人中心→RO9067编辑，正文1000px/单列无空侧栏，64px/键盘focus→Enter开→close回焦/输入可达；1536×681真实短窗口角色被裁切，root已看原JPG，明确FAIL并派最小修复。独立hover工具不支持，未冒称通过；原32/25 CI及双尺寸fixture复用，不能覆盖这处新视觉缺口。
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知。无新计划/图片，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待Native纠正，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
