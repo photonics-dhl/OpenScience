@@ -16,6 +16,7 @@ const draft = (name = 'Author') => ({ avatar: '', name, englishName: '', title: 
 async function fixture() {
   const rows = new Map<string, any>();
   const user = { id: userId, email: 'private@login.test', displayName: 'Account', status: 'email_verified', level: 'free' };
+  const credentials = new Map<string, any>();
   const prisma: any = {
     user: { findUnique: async ({ where }: any) => where.id === userId ? user : where.id === otherId ? { ...user, id: otherId, displayName: 'Other account' } : null },
     academicProfile: {
@@ -25,6 +26,7 @@ async function fixture() {
     },
     publication: { findMany: async () => [{ publicVersionId: 'OSR-2026-000001-v1', publishedAt: new Date('2026-10-01'), versionId, version: { researchObjectId: roId, researchRecord: { publicationMetadata: { schemaVersion: 1, title: 'Frozen public title' } }, researchObject: { publicId: 'OSR-2026-000001' } } }] },
     journalArticle: { findUnique: async () => null },
+    identityCredential: { findFirst: async ({ where }: any) => { const row = credentials.get(where.userId); return row && row.type === where.type && row.status === where.status && row.source === where.source && row.revokedAt === where.revokedAt ? { externalId: row.externalId } : null; } },
   };
   const store = new Map<string,string>();
   const redis: any = { set: async (k:string,v:string) => { store.set(k,v); }, get: async (k:string) => store.get(k) ?? null, expire: async () => 1, del: async (k:string) => { store.delete(k); } };
@@ -36,7 +38,7 @@ async function fixture() {
   await app.register(async instance => registerAcademicProfileRoutes(instance, { prisma, redis } as any));
   const cookies = { openscience_session: token };
   const otherCookies = { openscience_session: otherToken };
-  return { app, cookies, otherCookies, rows, prisma };
+  return { app, cookies, otherCookies, rows, prisma, credentials };
 }
 
 describe('academic profile', () => {
@@ -86,5 +88,50 @@ describe('academic profile', () => {
     const read = await app.inject({ method: 'GET', url: `/academic-profile/${userId}` });
     expect(read.statusCode).toBe(200);
     expect(read.json().publications).toEqual([]);
+  });
+  it('upgrades old JSON snapshots without publishing new draft fields or closed intents', async () => {
+    const { app, cookies, rows } = await fixture();
+    rows.set(userId, { userId, version: 1, draft: { ...draft(), labUrl: 'https://lab.example.org', education: [{ title: 'Doctorate', details: 'Training', url: 'https://mentor.example.org' }] }, published: draft('Old public name') });
+    const owner = (await app.inject({ method: 'GET', url: '/academic-profile/me', cookies })).json();
+    expect(owner.profile.teamLinks).toEqual([{ label: '课题组主页', url: 'https://lab.example.org' }]);
+    expect(owner.profile.education[0].links[0].url).toBe('https://mentor.example.org');
+    expect(owner.profile.labUrl).toBe('');
+    expect(owner.profile.education[0].url).toBe('');
+    const updated = { ...owner.profile, name: 'New private name', teamLinks: [{ label: 'New team', url: 'https://team.example.org' }], interests: [{ title: 'Open collaboration', body: 'Talk to me', kind: 'collaboration', contact: 'Use profile email', active: true }, { title: 'Closed hiring', body: 'No longer hiring', kind: 'hiring', contact: '', active: false }], works: [{ category: '', period: '', shortTitle: 'Concrete work', summary: 'My part', fullTitle: '', problem: '', contribution: '', process: '', outcome: 'Team outcome', capabilities: ['Field methods', 'Analysis', 'Writing'], links: [] }] };
+    expect((await app.inject({ method: 'PUT', url: '/academic-profile/me', cookies, payload: { ownerId: userId, expectedVersion: 1, profile: updated } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/academic-profile/${userId}` })).json().profile.name).toBe('Old public name');
+    expect((await app.inject({ method: 'POST', url: '/academic-profile/me/publish', cookies, payload: { ownerId: userId, expectedVersion: 2 } })).statusCode).toBe(200);
+    const published = (await app.inject({ method: 'GET', url: `/academic-profile/${userId}` })).json().profile;
+    expect(published.teamLinks).toEqual([{ label: 'New team', url: 'https://team.example.org' }]);
+    expect(published.works[0].capabilities).toHaveLength(3);
+    expect(published.interests.map((item: any) => item.title)).toEqual(['Open collaboration']);
+    expect((await app.inject({ method: 'GET', url: '/academic-profile/me', cookies })).json().profile.interests).toHaveLength(2);
+    const removed = { ...updated, teamLinks: [], education: [{ ...updated.education[0], links: [] }] };
+    expect((await app.inject({ method: 'PUT', url: '/academic-profile/me', cookies, payload: { ownerId: userId, expectedVersion: 3, profile: removed } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/academic-profile/me/publish', cookies, payload: { ownerId: userId, expectedVersion: 4 } })).statusCode).toBe(200);
+    const publicJson = (await app.inject({ method: 'GET', url: `/academic-profile/${userId}` })).json().profile;
+    expect(publicJson.teamLinks).toEqual([]);
+    expect(publicJson.education[0].links).toEqual([]);
+    expect(JSON.stringify(publicJson)).not.toContain('https://lab.example.org');
+    expect(JSON.stringify(publicJson)).not.toContain('https://mentor.example.org');
+  });
+  it('derives ORCID proof from the current owner credential and never exposes credential details publicly', async () => {
+    const { app, cookies, otherCookies, credentials } = await fixture();
+    const id = '0000-0002-1825-0097';
+    credentials.set(userId, { type: 'orcid', status: 'verified', source: 'orcid_oauth', revokedAt: null, externalId: id });
+    const profile = { ...draft(), orcid: `https://orcid.org/${id}` };
+    const saved = await app.inject({ method: 'PUT', url: '/academic-profile/me', cookies, payload: { ownerId: userId, expectedVersion: 0, profile } });
+    expect(saved.json()).toMatchObject({ userId, connectedOrcid: id, orcidVerified: true });
+    await app.inject({ method: 'POST', url: '/academic-profile/me/publish', cookies, payload: { ownerId: userId, expectedVersion: 1 } });
+    const read = await app.inject({ method: 'GET', url: `/academic-profile/${userId}` });
+    expect(read.json().orcidVerified).toBe(true);
+    expect(read.json()).not.toHaveProperty('connectedOrcid');
+    expect(read.json()).not.toHaveProperty('credentials');
+    expect((await app.inject({ method: 'GET', url: '/academic-profile/me', cookies: otherCookies })).json().connectedOrcid).toBeNull();
+    credentials.get(userId).revokedAt = new Date();
+    expect((await app.inject({ method: 'GET', url: `/academic-profile/${userId}` })).json().orcidVerified).toBe(false);
+    credentials.get(userId).revokedAt = null;
+    credentials.get(userId).externalId = '0000-0002-1694-233X';
+    expect((await app.inject({ method: 'GET', url: `/academic-profile/${userId}` })).json().orcidVerified).toBe(false);
   });
 });

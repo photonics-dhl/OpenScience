@@ -1,6 +1,6 @@
 # Hermes Capability Registry
 
-个人学术主页由 `apps/api/src/routes/academic-profile.ts` 与 `apps/web/components/profile/` 提供手工资料整理、私有草稿、公开快照、工作详情和原始链接；数据库表 `academic_profiles`，不复用私有 AI 兴趣档案，不新增 Hermes 推断或模型调用。原有公开论文只可通过公开版本及当前访问规则读取。实现、迁移与实际验证见 [服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)，产品与存储边界见 [个人主页设计](../specs/2026-10-10-academic-profile-design.md)。
+个人学术主页由 `apps/api/src/routes/academic-profile.ts` 与 `apps/web/components/profile/` 提供手工资料整理、私有草稿、公开快照、工作／本人贡献／能力标签、交流意向及补充链接；数据库表 `academic_profiles`，不复用私有 AI 兴趣档案，不新增 Hermes 推断或模型调用。ORCID 连接复用 `/auth/academic-identity` 与 `/auth/orcid/start`，公开认证标识只由当前有效 OAuth 记录与公开网址匹配产生；原有公开论文只可通过公开版本及当前访问规则读取。实现、迁移与实际验证见 [服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)，产品与存储边界见 [个人主页设计](../specs/2026-10-10-academic-profile-design.md)。
 
 公共导航的 About 联系、问题反馈、情报分析演示申请由 `apps/web/app/contact/` 提供主题说明；共用 `components/contact/EmailDraftButton.tsx`，点击才由 `POST /contact/email` 返回服务端配置的收件地址，正文仅在浏览器组装，不提供发信服务，也不保证阻止主动抓取。API 链接既有开发者文档，上传／创建研究复用原 `ResearchGuide`，没有新增 Hermes 模型能力。验证及候选见 [导航与服务对象 CURRENT](../handoff/2026-10-09-researchers-services-handoff.md)。
 
