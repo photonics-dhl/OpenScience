@@ -985,15 +985,16 @@ test.describe('normal narration audition action', () => {
     expect(observed.get(page)!.unexpected, 'No undeclared request may reach an API').toEqual([]);
     expect(observed.get(page)!.errors, 'Client runtime errors stay visible').toEqual([]);
   });
-  async function setup(page: Page, options: { unknown?: boolean; unavailable?: boolean; snapshotError?: boolean } = {}) {
+  const firstVideoInstruction = 'Explain the current research as a sourced video storyboard.';
+  async function setup(page: Page, options: { unknown?: boolean; unavailable?: boolean; snapshotError?: boolean; firstVideoPlan?: boolean } = {}) {
     const evidence = { unexpected: [] as string[], errors: [] as string[] }; observed.set(page, evidence);
     page.on('pageerror', error => evidence.errors.push(error.message));
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: String(test.info().project.use.baseURL) }]);
     let actor = 'user-presentation'; let audio = { ...preset }; let capabilityReads = 0; let audioReads = 0; const authReads: string[] = [];
     const writes: Array<{ path: string; body: unknown; key: string }> = [];
     const guideTask = { ...task('succeeded', 100), id: 'audition-guide-task', kind: 'workspace.guide', sessionId: 'audition-guide-session',
-      result: { summary: 'Use the approved video storyboard.', nextSteps: [], needsMoreInformation: false,
-        presentationDraft: { researchObjectId: ro.id, versionId: 'version-2', action: 'video.create', instruction: '' } } };
+      result: { summary: options.firstVideoPlan ? 'Prepare the first sourced video storyboard.' : 'Use the approved video storyboard.', nextSteps: [], needsMoreInformation: false,
+        presentationDraft: { researchObjectId: ro.id, versionId: 'version-2', action: 'video.create', instruction: options.firstVideoPlan ? firstVideoInstruction : '' } } };
     const reads = new Map<string, unknown>([
       ['/api/workspaces', { workspaces: [{ id: ro.workspaceId, name: 'Personal', type: 'personal', role: 'author', status: 'active' }] }],
       [`/api/research-objects/${ro.id}`, { researchObject: { ...ro, sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] } } }],
@@ -1003,7 +1004,7 @@ test.describe('normal narration audition action', () => {
         core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, artifacts: [] } } }],
       [`${scope}/record`, { record: { objectId: ro.id, versionId: 'version-2', recordState: 'recorded',
         sdf: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, manifest: [], claims: [initialClaim], evidence: [] } }],
-      [`${scope}/claims`, { claims: [initialClaim] }], [`${scope}/presentation-assets`, { assets: [approvedPlan] }],
+      [`${scope}/claims`, { claims: [initialClaim] }], [`${scope}/presentation-assets`, { assets: options.firstVideoPlan ? [] : [approvedPlan] }],
       [`/api/research-objects/${ro.id}/ingestion`, { tasks: [], version: versions[0] }],
       ['/api/agent/tasks?actionable=false&kind=workspace.guide', { tasks: [] }],
       [`/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${ro.id}`, { tasks: [] }],
@@ -1018,7 +1019,7 @@ test.describe('normal narration audition action', () => {
         if (path === capabilityPath) {
           capabilityReads += 1;
           if (options.snapshotError && capabilityReads === 1) return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Snapshot read failed' } }, 503);
-          return json(route, { canGenerateVideo: false, audioAudition: options.unavailable ? null : { audio } });
+          return json(route, { canGenerateVideo: false, audioAudition: options.unavailable || options.firstVideoPlan ? null : { audio } });
         }
         if (reads.has(path)) return json(route, reads.get(path));
       }
@@ -1039,14 +1040,15 @@ test.describe('normal narration audition action', () => {
     return { writes, authReads, capabilityReads: () => capabilityReads, audioReads: () => audioReads,
       changePreset: () => { audio = { ...preset, voice: 'new-approved-voice', speed: 1.1 }; }, changeActor: () => { actor = 'other-actor'; } };
   }
-  async function openAction(page: Page) {
+  async function openAction(page: Page, firstVideoPlan = false) {
     await page.goto(`/research-objects/${ro.id}/edit?stage=media&version=version-2`);
     await page.locator('[data-hermes-input-owner="true"]').click();
     const input = page.locator('.hermes-conversation-composer textarea');
-    await input.fill('Make a video from the approved storyboard');
+    await input.fill(firstVideoPlan ? 'Prepare a video storyboard for this research' : 'Make a video from the approved storyboard');
     await page.locator('.hermes-conversation-composer button[type="submit"]').click();
     const action = page.locator('[data-hermes-presentation-action="true"]');
-    await expect(action.getByRole('button', { name: 'Audition narration', exact: true })).toBeVisible();
+    await expect(action).toBeVisible();
+    if (!firstVideoPlan) await expect(action.getByRole('button', { name: 'Audition narration', exact: true })).toBeVisible();
     return action;
   }
   async function confirm(page: Page) {
@@ -1054,6 +1056,24 @@ test.describe('normal narration audition action', () => {
     await action.getByRole('button', { name: 'Audition selected scene', exact: true })
       .or(action.getByRole('button', { name: 'Retry the same submission', exact: true })).click();
   }
+  test('prepares the first native video storyboard through the normal conversation while rendering is closed', async ({ page }) => {
+    const state = await setup(page, { firstVideoPlan: true });
+    const action = await openAction(page, true);
+    expect(state.writes.map(write => write.path)).toEqual(['/api/agent/sessions', '/api/agent/tasks']);
+    expect(state.audioReads()).toBe(0);
+    await expect(action.getByRole('button', { name: 'Audition narration', exact: true })).toHaveCount(0);
+    const input = page.locator('.hermes-conversation-composer textarea');
+    await input.fill('confirm production');
+    await page.locator('.hermes-conversation-composer button[type="submit"]').click();
+    await expect(page).toHaveURL(/edit\?stage=media&version=version-2&task=presentation-task/);
+    expect(state.writes.map(write => write.path)).toEqual(['/api/agent/sessions', '/api/agent/tasks', generationPath]);
+    const generated = state.writes.find(write => write.path === generationPath)!;
+    expect(generated.key).toBeTruthy();
+    expect(generated.body).toEqual({ kind: 'interactive_html', sourceClaimIds: [initialClaim.id], storyboard: {
+      locale: 'en', style: 'auto', output: 'video', narrative: true, instruction: firstVideoInstruction,
+    } });
+    expect(state.audioReads()).toBe(0);
+  });
   test('uses the real conversation action, keeps lazy reads and retries the exact audition across desktop and narrow views', async ({ page }) => {
     const state = await setup(page, { unknown: true });
     const action = await openAction(page);
