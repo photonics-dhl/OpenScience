@@ -4,7 +4,7 @@
 
 ## 最近检查点
 - 2026-10-10 09:56：本批五CI终态为三成功/两media失败；Linux旧权限负控2/currentGreen39、发布与清单197全通过且原ZIP已保存。八个unique浏览器失败集中三spec：UI修原auth/workspace四例，video并行修创建入口四例，settings WIP保护暂停。生产窗口关闭、未重试；精确版本/run/原日志统一见CURRENT。
-- 后续定点修复：视频创建spec已全等收取，静态通过、浏览器待验；UI两spec High GO且workspace三例真实通过，auth手机reload脚本错误来源未定，保原trace/断言并交正常Linux production构建验证。没有本地全绿或新生产结果声明。
+- 后续定点修复：三个spec均已全等集入完整图审候选，root送正常Linux production CI。UI两spec High GO/workspace三例真实通过；auth手机dev reload外部JS缺trace正文，来源未定，原断言保留；创建四例本地尚无结果。没有本地全绿或新生产结果声明。
 - 2026-10-10 08:57：本轮发布故障已收尾。原应用三主服务与原Native配对恢复健康，专用finalize经独立High、inspect0→confirm0清journal；部分依赖保留新构建，精确身份/证据统一见CURRENT。此次网站不可用约17分钟，新候选功能未上线，发布窗口关闭。
 - 故障根因分别是实际Compose不支持create/start参数，以及installer把正式源码目录0775/模板0664误当私有权限异常；自动restore未写fixed files。专用恢复保留现场与旧备份、不重放任务、不改immutable；长期修复已分派视频与生图两个独立owner。
 - 2026-10-10：修复前代码候选五条CI全绿，Linux发布组117/0skip、浏览器主组34/34闭合前次提交计数失败；这些证据没有覆盖上述真实发布缺口，不能宣称稳定交付。
