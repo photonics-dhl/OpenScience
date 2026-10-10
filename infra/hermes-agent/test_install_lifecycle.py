@@ -53,6 +53,7 @@ class InstallLifecycleTests(unittest.TestCase):
         for item in self.patches: item.start()
         self.command_patch = patch.object(install, 'command', self.command); self.command_patch.start()
         self.verification_seconds = 0
+        self.real_source_verification = False
 
     def tearDown(self):
         self.command_patch.stop()
@@ -73,6 +74,8 @@ class InstallLifecycleTests(unittest.TestCase):
         if argv[0] == 'node':
             if any(action in argv for action in ('verify', 'runtime-verify')) and self.verification_seconds > timeout:
                 raise subprocess.TimeoutExpired(argv, timeout)
+            if self.real_source_verification and 'verify' in argv:
+                return subprocess.run(argv, check=check, capture_output=True, text=True, timeout=timeout)
             if '-e' in argv:
                 output = json.dumps({'instructions':'fixture scientific method','sourceReviewInstructions':'fixture after-draft review',
                     'nativeEvidenceAlignmentInstructions':'Bind retained measurements to their objects, definitions, comparison and scope.', 'version':5})
@@ -259,6 +262,99 @@ class InstallLifecycleTests(unittest.TestCase):
     def assert_no_producer_start(self):
         self.assertFalse(self.active); self.assertEqual(self.layers, set())
         self.assertFalse(any(event[1] in ('enable', 'start') for event in self.events if event[0] == 'systemctl'))
+
+    def prepare_manifest_late_restore(self, directory_mode=0o775):
+        scripts = self.source/'scripts'; scripts.mkdir()
+        install.shutil.copy2(Path(__file__).resolve().parents[2]/'scripts/release-input-manifest.mjs',
+                             scripts/'release-input-manifest.mjs')
+        (self.source/'.release-source').write_text(self.source.name+'\n')
+        for path in (self.source/'infra', self.source/'infra/hermes-agent'):
+            os.chown(path, 0, 0)
+            path.chmod(directory_mode)
+            self.assertEqual(path.stat().st_uid, 0)
+            self.assertEqual(path.stat().st_gid, 0)
+            self.assertEqual(path.stat().st_mode & 0o777, directory_mode)
+        for name in install.UNIT_NAMES:
+            path = self.source/'infra/hermes-agent'/name
+            os.chown(path, 0, 0); path.chmod(0o664)
+            self.assertEqual(path.stat().st_uid, 0)
+            self.assertEqual(path.stat().st_gid, 0)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o664)
+        subprocess.run(['node', str(scripts/'release-input-manifest.mjs'), 'create',
+                        '--root', str(self.source), '--sha', self.source.name],
+                       check=True, capture_output=True, text=True, timeout=120)
+        self.real_source_verification = True
+        self.prepare_late_restore()
+
+    def assert_manifest_restore(self):
+        source_paths = [self.source/'infra', self.source/'infra/hermes-agent',
+                        *(self.source/'infra/hermes-agent'/name for name in install.UNIT_NAMES)]
+        source_identity = {path: (path.stat().st_mode, path.stat().st_uid, path.stat().st_gid,
+                                 path.read_bytes() if path.is_file() else None) for path in source_paths}
+        result = install.restore_previous(self.source.name)
+        self.assertTrue(result['restored'])
+        self.assertEqual(result['previousRuntimeId'], 'installed-native-previous-observed')
+        self.assertEqual(result['previousSkillCatalogueId'], 'project-catalogue-previous-observed')
+        for path, value in self.previous_contents.items():
+            self.assertEqual(path.read_bytes(), value)
+            self.assertEqual(path.stat().st_mode & 0o777, self.previous_modes[path])
+        for path, identity in source_identity.items():
+            self.assertEqual((path.stat().st_mode, path.stat().st_uid, path.stat().st_gid,
+                              path.read_bytes() if path.is_file() else None), identity)
+        self.assertEqual(sum(event[0] == 'node' and 'verify' in event for event in self.events), 1)
+        self.assert_no_producer_start()
+
+    def test_late_restore_manifest_accepts_archived_directory_and_unit_modes(self):
+        self.prepare_manifest_late_restore()
+        self.assert_manifest_restore()
+
+    def test_late_restore_manifest_accepts_archived_unit_modes_with_private_directories(self):
+        self.prepare_manifest_late_restore(directory_mode=0o755)
+        self.assert_manifest_restore()
+
+    def test_late_restore_manifest_rejects_changed_source_identity_before_service_or_file_writes(self):
+        self.prepare_manifest_late_restore()
+        unit = self.source/'infra/hermes-agent'/install.UNIT_NAMES[0]
+        manifest = self.source/'.release-inputs.sha256'
+        original_unit = unit.read_bytes(); original_manifest = manifest.read_bytes()
+        for changed in ('content', 'mode', 'owner', 'path', 'metadata', 'missing-manifest'):
+            with self.subTest(changed=changed):
+                self.events.clear()
+                if changed == 'content': unit.write_bytes(original_unit+b' altered')
+                elif changed == 'mode': unit.chmod(0o644)
+                elif changed == 'owner': os.chown(unit, 1, 1)
+                elif changed == 'path': unit.rename(unit.with_name('renamed-unit'))
+                elif changed == 'metadata':
+                    value = json.loads(original_manifest); value['sourceSha'] = 'b'*40
+                    manifest.write_text(json.dumps(value))
+                else: manifest.unlink()
+                try:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        install.restore_previous(self.source.name)
+                    self.assert_candidate_unchanged()
+                    self.assertFalse(any(event[0] == 'systemctl' for event in self.events))
+                    self.assert_no_producer_start()
+                finally:
+                    if not unit.exists(): unit.with_name('renamed-unit').rename(unit)
+                    os.chown(unit, 0, 0); unit.chmod(0o664); unit.write_bytes(original_unit)
+                    manifest.write_bytes(original_manifest); manifest.chmod(0o444)
+
+    def test_late_restore_manifest_keeps_private_backup_mode_checks(self):
+        self.prepare_manifest_late_restore()
+        (self.install_release/'previous'/install.UNIT_NAMES[0]).chmod(0o664)
+        with self.assertRaisesRegex(ValueError, 'recovery file is not protected'):
+            install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged(); self.assertEqual(self.events, [])
+        self.assert_no_producer_start()
+
+    def test_late_restore_manifest_keeps_live_file_mode_checks(self):
+        self.prepare_manifest_late_restore()
+        (self.units/install.UNIT_NAMES[0]).chmod(0o664)
+        with self.assertRaisesRegex(ValueError, 'recovery file is not protected'):
+            install.restore_previous(self.source.name)
+        self.assert_candidate_unchanged()
+        self.assertFalse(any(event[0] == 'systemctl' for event in self.events))
+        self.assert_no_producer_start()
 
     def test_late_restore_recovers_exact_files_modes_and_observed_ids_without_start(self):
         self.prepare_late_restore()
