@@ -4,7 +4,7 @@ export const PRODUCT_PRIMARY_ROUTES: ReadonlyArray<{ href: string; id: PrimaryPr
 ];
 
 export const PRODUCT_FEATURE_ROUTES = [
-  { href: '/me', id: 'featureProfile' },
+  { href: '/me/profile', id: 'featureProfile' },
   { href: '/research-objects/new?type=published', id: 'featurePublished' },
   { href: '/research-objects/new?type=preprint', id: 'featurePreprint' },
 ] as const;

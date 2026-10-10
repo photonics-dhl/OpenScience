@@ -134,7 +134,7 @@ test('mobile Features preserves creation mode and upload entry opens the complet
   const features = page.getByRole('button', { name: '功能', exact: true });
   await expect(features).toBeFocused();
   await features.click();
-  await expect(page.getByRole('link', { name: '管理我的学术主页', exact: true })).toHaveAttribute('href', '/me');
+  await expect(page.getByRole('link', { name: '管理我的学术主页', exact: true })).toHaveAttribute('href', '/me/profile');
   await expect(page.getByRole('link', { name: '解析已发表论文', exact: true })).toHaveAttribute('href', '/research-objects/new?type=published');
   await page.getByRole('link', { name: '发布预出版成果', exact: true }).click();
   await expect(page).toHaveURL(/\/auth\/login\?returnTo=/, { timeout: 20_000 });
