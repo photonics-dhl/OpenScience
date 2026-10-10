@@ -47,6 +47,7 @@ export interface PresentationAssetView {
   paperOriginal?: { figureId: string; caption?: string };
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
+  canGenerateAudioAudition: boolean;
   videoFrameAssetIds?: string[];
   canTransition: boolean;
   canApprove: boolean;
@@ -506,12 +507,14 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
       && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
         && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
+    const canGenerateAudioAudition = nativeVideo && canGenerateVideo;
     const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
     canGenerateSceneImage: mayGenerate && (nativeVideo ? !!nativeProof : asset.status === 'approved' && !!storyboardForVideo),
     canGenerateVideo,
+    canGenerateAudioAudition,
     ...(videoFrameAssetIds ? { videoFrameAssetIds } : {}),
     storyboard: storyboardForVideo,
     canTransition,
