@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10 21:34：05f8五CI全部成功；线上64px头像与短窗口开闭已实看闭合。后续最小capability与installer修复均原High GO、本地已收，UI继续正常试听发起。真实单图计划已进入Native工具循环，但科学绑定反复被拒，正在读原候选定位，未生图；不以CI成功冒称科学质量通过。详见CURRENT。
 - 2026-10-10 21:12：正常站内按钮首次创建本轮唯一私有单幕计划43d78520；同账号/版本/6Claims/source已核、一次POST202和原oncekey回执保留，页面10%。仅创建任务，不代表原生科学方案通过；生图只读跟同task、旧unknown不重放，其他owner无并行生产写。精确身份见CURRENT。
 - 2026-10-10 21:03：组合六CI四成功，两media仅旧readiness装配测试失败，八独立browser-entry均通过。已原样复现并以test-only增量闭合，8/8与原High GO，准备新精确CI；未部署试听。新发现installer配置兼容与普通试听发起缺口已分工，声音ID/费用上限不擅选。
 - 2026-10-10 20:54：私有试听后端及完整结果播放器已通过原High并集入，原计数P2和旧恢复selector已闭合。root合并后API136/前端27通过，正常profile/ORCID改动保留；对应CI已补真实测试消费，待组合推送。正常发起试听、实际供应商音频和最终影片仍有缺口，不称端到端完成；各owner继续独立下一项，详见CURRENT。
