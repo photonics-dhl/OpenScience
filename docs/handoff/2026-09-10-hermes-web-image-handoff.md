@@ -15,7 +15,7 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | parser704已随ab79发布，455/离线1/HighGO/TC证据复用，原科学候选仍不合格。新Explore核对又stream失败（request02f03b4f），不反复唤醒；root已接手确认publicId倒序/最新版本日期不同义，UI仅改提示 | 原illustration-chain-repair树 / codex/native-source-number-parser@1ea；原CP/receipts与四次transport错误保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | ac1资格及HTTP投影已随ab79发布。23:32纠正只读完成三RO：86/19/69个live父扫描完整，均0 Native video header/合法组合；原null临时投影失败保留，不是服务器拒绝。正核仅规划阶段被full-video readiness阻断的最小方案，先现有High再授权实施，不新任务/预算/host激活 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@8cbd；原操作包补source-audit/操作路径，voice/cap未选 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | ac1资格及HTTP投影已随ab79发布。23:32纠正只读完成三RO：86/19/69个live父扫描完整，均0 Native video header/合法组合；原null临时投影失败保留，不是服务器拒绝。规划耦合已证实；原设计High以attempt判断/分类绕过两P1拒绝，并补claim原子CAS与队列保留。root已派修正版五源文件+原测试写权，先RED，代码须同一High审后集入；不新任务/预算/host激活 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@8cbd；原操作包补source-audit/操作路径，voice/cap未选 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常试听软件随ab79上线，三篇真实读者路径/最短用法已保存。非链接附件提示a6f→root0d5a044c已审收，11/11/类型lint0、双语原字典保留，仅候选；另346a→root6a760012两key已收澄清Explore顺序；均候选。正从正常站内入口只读观察ab79缺源/未启用状态，不创建guide/task | 原research-product-craft树 / codex/public-attachment-status-20261010；原46e/所有证据保留 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
@@ -41,7 +41,7 @@
 - 历史原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待新合法计划独立核查，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。
 - 视频收费守卫b705→b328、Web helper/phase及期刊shared Native管线已收，原ACK/legacy/unknown封闭保护不变。100fab→a8只给原broker加受保护--list-voices GET目录，无队列/心跳/生成/重试；High及3新例/42过2条件跳过复用。be4418→f89单次取时修fixture，确定性1ms RED→1PASS、bebe Linux视频通过；原失败未保存时间，不能补造唯一归因。
-- 视频软件已发布，仍无真实试听或完整影片。23:32同c239 Worker稳定的只读事务确认三RO均无可用Native narrative output=video父与3–6完整帧，不能把image/manual/legacy计划或旧unknown当输入；原source-audit/correction-observation.json及操作包在video树。现有正常规划入口被full-video ready守卫挡住，视频owner只读核最小规划差额，待独立High。声音ID/有限coins尚未选，Host不启用；RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`未知不重发。
+- 视频软件已发布，仍无真实试听或完整影片。23:32同c239 Worker稳定的只读事务确认三RO均无可用Native narrative output=video父与3–6完整帧，不能把image/manual/legacy计划或旧unknown当输入；原source-audit/correction-observation.json及操作包在video树。正常规划被full-video ready守卫挡住；修正版只放全新Native首计划，使用expected pending snapshot原子claim及原重排，旧held/CP/replay/真实渲染保持，代码实现与独立High复核尚待。声音ID/有限coins尚未选，Host不启用；RO9067第四幕`28ab61b0-7931-41d3-8200-2d63c1f986ad`未知不重发。
 - 编辑CSS3989→221b全等；PostCSS40/99规则parse0，六字段/保存/权限不变。Figma编辑2138:117及头像2138:34/2169:23为候选，root看过原桌面/局部，不能代证运行或审美。两PNG在UI原tmp/ui-art-20261008/figma-hermes-avatar-{desk,entry}-centered-20261009.png；原14journey/High、原文两尺寸/reading20复用，详细静态观察见Git05b本页。
 - Dashboard的d1a差额已由7e真实26/26闭合：Account tools、Retry可见入口、回焦attentive/离开idle、缺detail的route fallback；跨RO守卫保留。64px 1440/390框内draw与PNG已核；UI a0→503的手机间距修复随journal通过，21例workspace已过见上。原High/49unit/Web与scoped TS/lint0复用，不等于线上或整体审美认可。
 - 共享包络按fd已采关键帧/hover极值向外取整，bottom旧27保持；不为接近边界盲加余量，不称经验网格为全域证明。原数值/786差额/已过loading handler记录见Git f2a2677c本页，当前头像不重做旧巡游。
