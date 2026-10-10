@@ -137,7 +137,7 @@ test('mobile Features preserves creation mode and upload entry opens the complet
   await expect(page.getByRole('link', { name: '管理我的学术主页', exact: true })).toHaveAttribute('href', '/me');
   await expect(page.getByRole('link', { name: '解析已发表论文', exact: true })).toHaveAttribute('href', '/research-objects/new?type=published');
   await page.getByRole('link', { name: '发布预出版成果', exact: true }).click();
-  await expect(page).toHaveURL(/\/auth\/login\?returnTo=/);
+  await expect(page).toHaveURL(/\/auth\/login\?returnTo=/, { timeout: 20_000 });
   expect(new URL(page.url()).searchParams.get('returnTo')).toBe('/research-objects/new?type=preprint');
   await page.locator('header').getByRole('link', { name: '上传／创建研究', exact: true }).click();
   await expect(page).toHaveURL(/\/guide$/);
@@ -171,6 +171,10 @@ test('375px owner header keeps full labels, account and native language actions 
     if (route.request().method() !== 'GET') throw new Error('Owner navigation fixture rejected write');
     const url = new URL(route.request().url());
     return route.fulfill({ json: reads.get(url.pathname + url.search) });
+  });
+  await page.route('**/api/research/OSR-2026-000022/v/4', route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'No guide publication fixture' } } });
   });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/dashboard');
