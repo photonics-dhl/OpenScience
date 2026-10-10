@@ -1279,10 +1279,22 @@
   "dashboard": {
     "eyebrow": "个人工作区",
     "title": "研究桌面",
-    "welcome": "{name}，继续一项研究，或带来一篇新论文。",
+    "welcome": "把上次停下的想法，继续向前推。",
     "processingHistory": "处理历史",
     "researchTools": "资料与管理工具",
     "loading": "正在恢复研究上下文…",
+    "current": {
+      "create": "创建研究",
+      "open": "打开研究工作区",
+      "savedVersion": "保存版本 {version}",
+      "publicationVersion": "公开版本 {version}",
+      "imageTitle": "研究图解",
+      "openImage": "查看完整图解",
+      "loading": "正在加载这项研究…",
+      "noImage": "这项研究还没有图解。",
+      "mediaFailed": "暂时无法加载研究预览。",
+      "retry": "重新加载预览"
+    },
     "context": {
       "navigation": "工作台工具",
       "skip": "跳到研究工作区",

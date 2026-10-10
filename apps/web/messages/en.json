@@ -1279,10 +1279,22 @@
   "dashboard": {
     "eyebrow": "Personal workspace",
     "title": "Research desk",
-    "welcome": "{name}, pick up a study or bring a new paper.",
+    "welcome": "Pick up where your ideas left off.",
     "processingHistory": "Processing history",
     "researchTools": "Materials and management",
     "loading": "Restoring your research context…",
+    "current": {
+      "create": "New research",
+      "open": "Open research workspace",
+      "savedVersion": "Saved version {version}",
+      "publicationVersion": "Publication {version}",
+      "imageTitle": "Research figure",
+      "openImage": "View full-size figure",
+      "loading": "Loading this research…",
+      "noImage": "This study has no figure yet.",
+      "mediaFailed": "The research preview could not be loaded.",
+      "retry": "Reload preview"
+    },
     "context": {
       "navigation": "Dashboard utilities",
       "skip": "Skip to research workspace",

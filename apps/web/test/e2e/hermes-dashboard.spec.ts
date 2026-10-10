@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { expect, test, type Page, type Request, type Route } from 'playwright/test';
 
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
@@ -33,6 +33,10 @@ async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+function getJson(route: Route, body: unknown, status = 200) {
+  return route.request().method() === 'GET' ? json(route, body, status) : route.fallback();
+}
+
 async function mockDashboard(page: Page, taskState?: string) {
   await page.route('**/api/**', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -43,6 +47,11 @@ async function mockDashboard(page: Page, taskState?: string) {
     if (url.pathname === '/api/research-objects' && url.searchParams.get('limit') === '20') return json(route, { researchObjects: [{
       id: 'ro-hermes', publicId: 'OSR-2026-000042', title: 'Coherent transport at the attosecond frontier', version: 2, status: 'draft',
     }] });
+    if (url.pathname === '/api/research-objects/ro-hermes') return json(route, { researchObject: {
+      id: 'ro-hermes', workspaceId: 'workspace-hermes', publicId: null, title: 'Coherent transport at the attosecond frontier',
+      status: 'draft', visibility: 'private', version: 2, sdf: { core: {}, nodes: [] },
+    } });
+    if (url.pathname === '/api/research-objects/ro-hermes/versions') return json(route, { versions: [] });
     if (url.pathname === '/api/ingestion' && url.searchParams.get('actionable') === 'true') return json(route, { tasks: taskState ? [{
       id: 'task-hermes', researchObjectId: 'ro-hermes', researchTitle: 'Coherent transport at the attosecond frontier',
       logicalPath: 'manuscript.pdf', state: taskState, retryCount: 0, error: taskState.startsWith('failed_') ? 'Parser interrupted' : null,
@@ -50,6 +59,238 @@ async function mockDashboard(page: Page, taskState?: string) {
     return route.fallback();
   });
 }
+
+async function mockCurrentResearch(page: Page, published = false) {
+  await mockDashboard(page);
+  const reads: string[] = [];
+  const content = '/api/research-objects/ro-hermes/versions/current-commit/presentation-assets/selected-image/content';
+  const publicContent = '/api/research/OSR-2026-000042/v/3/presentation-assets/selected-image';
+  const assetDefaults = { contentHash: 'fixture-content', generator: 'Controlled fixture renderer', generatorVersion: '1', sourceClaimIds: [], createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-10T00:00:00Z' };
+  await page.route('**/api/**', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    if (path.startsWith('/api/research-objects/ro-hermes') || path.startsWith('/api/research/')) reads.push(path);
+    if (path === '/api/research-objects' && url.searchParams.get('limit') === '20') return json(route, { researchObjects: Array.from({ length: 20 }, (_, index) => ({
+      id: index === 0 ? 'ro-hermes' : `other-study-${index}`, publicId: index === 0 && published ? 'OSR-2026-000042' : null,
+      title: index === 0 ? 'Photonic learning structures' : `Earlier study ${index}`, version: 9, status: published ? 'published' : 'draft',
+    })) });
+    if (path === '/api/research-objects/ro-hermes') return json(route, { researchObject: {
+      id: 'ro-hermes', workspaceId: 'workspace-hermes', publicId: published ? 'OSR-2026-000042' : null,
+      title: 'Photonic learning structures', version: 9, status: published ? 'published' : 'draft', visibility: published ? 'public' : 'private',
+      sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: 'Live text must not replace the selected version.', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+    } });
+    if (path === '/api/research-objects/ro-hermes/versions') return json(route, { versions: [
+      { versionId: 'old-commit', versionNo: 2, status: 'published', publicationNo: 1 },
+      { versionId: 'current-commit', versionNo: 7, status: published ? 'published' : 'draft', publicationNo: published ? 3 : null },
+    ] });
+    if (path === '/api/research-objects/ro-hermes/versions/current-commit/record') return json(route, { record: {
+      objectId: 'ro-hermes', versionId: 'current-commit', versionNo: 7, citation: { title: 'Photonic learning structures' },
+      sdf: { schemaVersion: '0.1.0', problem: '', insight: 'Explore a photonic learning structure through its complete research figure.', method: '', results: '', limitations: '', reproducibility: '' },
+      claims: [], evidence: [], manifest: [],
+      media: [{ id: 'selected-image', kind: 'image', reader: { order: 0, title: 'Controlled optical figure' } }],
+    } });
+    if (path === '/api/research-objects/ro-hermes/versions/current-commit/presentation-assets') return json(route, { assets: [
+      { ...assetDefaults, id: 'unselected-approved', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Unselected' },
+      { ...assetDefaults, id: 'selected-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', contentHash: 'selected-content', label: 'presentation_not_evidence' },
+      { ...assetDefaults, id: 'draft-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'draft', label: 'Draft' },
+      { ...assetDefaults, id: 'foreign-image', researchObjectId: 'other', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Foreign' },
+      { ...assetDefaults, id: 'old-image', researchObjectId: 'ro-hermes', versionId: 'old-commit', kind: 'image', status: 'approved', label: 'Old' },
+    ] });
+    if (path === '/api/research/OSR-2026-000042/v/3') return json(route, { research: {
+      publicId: 'OSR-2026-000042', recordUrl: '/api/research-objects/ro-hermes/versions/current-commit/record',
+      title: 'Selected publication title', version: { versionNo: 3, status: 'published', core: { insight: 'The selected publication keeps its complete figure.' } },
+      presentationAssets: [{ id: 'selected-image', kind: 'image', contentHash: 'selected-content', reader: { order: 0, title: 'Controlled optical figure' }, url: publicContent }],
+    } });
+    if (path === content || path === publicContent) return route.fulfill({ contentType: 'image/png', headers: { 'cache-control': 'no-store' }, body: await readFile('public/research-journey/d2nn-artwork.png') });
+    return route.fallback();
+  });
+  return { reads, content, publicContent };
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`current research binds its complete figure to the actual private version at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const { reads, content } = await mockCurrentResearch(page);
+    const otherReads: string[] = [];
+    page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/research-objects/other-study-')) otherReads.push(request.url()); });
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+    const card = page.locator('[data-current-research="ro-hermes"]');
+    await expect(card.getByRole('heading', { name: 'Photonic learning structures', exact: true })).toBeVisible();
+    await expect(card.getByText('Saved version 7', { exact: true })).toBeVisible();
+    await expect(card.getByText('Live text must not replace the selected version.', { exact: true })).toHaveCount(0);
+    const figure = card.getByRole('img', { name: 'Controlled optical figure', exact: true });
+    await expect(figure).toHaveAttribute('src', content);
+    await expect.poll(() => figure.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await expect(figure).toHaveCSS('object-fit', 'contain');
+    await expect(card.getByRole('link', { name: /View full-size figure/ })).toHaveAttribute('href', content);
+    await page.context().route(`${baseUrl}${content}*`, async route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({ contentType: 'image/png', body: await readFile('public/research-journey/d2nn-artwork.png') });
+    });
+    const openedImage = page.waitForEvent('popup');
+    await card.getByRole('link', { name: /View full-size figure/ }).click();
+    const imageTab = await openedImage;
+    await expect(imageTab).toHaveURL(`${baseUrl}${content}`);
+    await expect.poll(() => imageTab.locator('img').evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await imageTab.close();
+    await expect(card.getByRole('link', { name: 'Open research workspace', exact: true })).toHaveAttribute('href', '/research-objects/ro-hermes/edit');
+    expect(reads.filter(path => path === '/api/research-objects/ro-hermes/versions')).toHaveLength(1);
+    expect(reads.filter(path => path.endsWith('/presentation-assets'))).toHaveLength(1);
+    expect(reads.some(path => path.includes('/versions/9/') || path.includes('/old-commit/'))).toBe(false);
+    expect(otherReads).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (viewport.width === 1440) expect((await figure.boundingBox())!.width).toBeGreaterThan(356);
+    await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-stage-size', '64');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath(`current-research-${viewport.width}.png`), fullPage: false });
+    await card.screenshot({ path: test.info().outputPath(`current-research-card-${viewport.width}.png`) });
+    if (viewport.width === 1440) {
+      // The real versions endpoint is descending; retain that contract for the existing editor.
+      await page.route('**/api/research-objects/ro-hermes/versions', route => getJson(route, { versions: [
+        { versionId: 'current-commit', versionNo: 7, status: 'draft', publicationNo: null },
+        { versionId: 'old-commit', versionNo: 2, status: 'published', publicationNo: 1 },
+      ] }));
+      await page.route('**/api/versions/current-commit', route => getJson(route, { version: { versionId: 'current-commit', snapshot: { artifacts: [] } } }));
+      await page.route('**/api/research-objects/ro-hermes/authors', route => getJson(route, { authors: [] }));
+      await page.route('**/api/research-objects/ro-hermes/ingestion', route => getJson(route, { researchObjectId: 'ro-hermes', version: 9, tasks: [], latestConfirmation: null }));
+      await page.route('**/api/research-objects/ro-hermes/versions/current-commit/claims', route => getJson(route, { claims: [] }));
+      // The editor consumes the real, scoped asset list rather than the adversarial hero-filter fixture.
+      await page.route('**/api/research-objects/ro-hermes/versions/current-commit/presentation-assets', route => getJson(route, { assets: [{
+        id: 'selected-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Controlled optical figure',
+        contentHash: 'selected-content', generator: 'Controlled fixture renderer', generatorVersion: '1', sourceClaimIds: [],
+        createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-10T00:00:00Z',
+      }] }));
+      await card.getByRole('link', { name: 'Open research workspace', exact: true }).click();
+      await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/, { timeout: 20_000 });
+      await expect(page.locator('.editor-workspace p').filter({ hasText: 'Live text must not replace the selected version.' }).first()).toBeVisible();
+    }
+  });
+}
+
+test('current research uses only the selected public edition and its frozen media', async ({ page }) => {
+  const { reads, publicContent } = await mockCurrentResearch(page, true);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card.getByRole('heading', { name: 'Selected publication title', exact: true })).toBeVisible();
+  await expect(card.getByText('Publication 3', { exact: true })).toBeVisible();
+  await expect(card.getByRole('img', { name: 'Controlled optical figure', exact: true })).toHaveAttribute('src', publicContent);
+  expect(reads.filter(path => path === '/api/research/OSR-2026-000042/v/3')).toHaveLength(1);
+  expect(reads.some(path => path.endsWith('/record') || path.endsWith('/presentation-assets') || path.includes('/v/7'))).toBe(false);
+  await page.route('**/api/research/OSR-2026-000042/v/3', route => getJson(route, { research: {
+    publicId: 'OSR-2026-000042', recordUrl: '/api/research-objects/ro-hermes/versions/current-commit/record', title: 'Selected publication title',
+    version: { versionNo: 3, status: 'withdrawn', core: {} }, presentationAssets: [],
+  } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+  await page.route('**/api/research/OSR-2026-000042/v/3', route => getJson(route, { error: { code: 'NOT_FOUND' } }, 404));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+  expect(reads.some(path => path.includes('/v/1') || path.includes('/old-commit/'))).toBe(false);
+  await page.route('**/api/research-objects/ro-hermes/versions', route => getJson(route, { versions: [{ versionId: 'current-commit', versionNo: 7, status: 'draft', publicationNo: null }] }));
+  await page.route('**/api/research-objects/ro-hermes/versions/current-commit/record', route => getJson(route, { record: {
+    objectId: 'ro-hermes', versionId: 'current-commit', publicationNo: 3, citation: { title: 'Published during the read' }, sdf: {},
+  } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+});
+
+test('current research keeps the actual Hermes opener focusable after the conversation shrinks to mobile', async ({ page }) => {
+  await mockCurrentResearch(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const opener = page.locator('[data-hermes-avatar-entry] .hermes-avatar-entry-label');
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(dialog).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dialog.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeVisible();
+  await expect(opener).toBeFocused();
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-stage-size', '64');
+});
+
+test('current research distinguishes an empty captured set from a binary failure and retries the exact image', async ({ page }) => {
+  const { reads, content } = await mockCurrentResearch(page);
+  const recordPattern = '**/api/research-objects/ro-hermes/versions/current-commit/record';
+  const emptyRecord = (route: Route) => getJson(route, { record: { objectId: 'ro-hermes', versionId: 'current-commit', citation: { title: 'Photonic learning structures' }, sdf: {}, media: [] } });
+  await page.route(recordPattern, emptyRecord);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card).toHaveAttribute('data-media-state', 'empty');
+  await expect(card.getByText('This study has no figure yet.', { exact: true })).toBeVisible();
+  expect(reads.filter(path => path === content)).toHaveLength(0);
+  await page.unroute(recordPattern, emptyRecord);
+  let binaryFailed = true;
+  let binaryReads = 0;
+  await page.route(`${baseUrl}${content}*`, async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    binaryReads += 1;
+    if (binaryFailed) return route.fulfill({ status: 503, body: 'Unavailable' });
+    return route.fulfill({ contentType: 'image/png', headers: { 'cache-control': 'no-store' }, body: await readFile('public/research-journey/d2nn-artwork.png') });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.getByText('The research preview could not be loaded.', { exact: true })).toBeVisible();
+  await expect(card.locator('img')).toHaveCount(0);
+  binaryFailed = false;
+  await card.getByRole('button', { name: 'Reload preview', exact: true }).click();
+  await expect(card).toHaveAttribute('data-media-state', 'ready');
+  const image = card.getByRole('img', { name: 'Controlled optical figure', exact: true });
+  await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(image).toHaveAttribute('src', `${content}?attempt=1`);
+  expect(binaryReads).toBe(2);
+});
+
+test('current research ignores a late old-account response and task-only refresh does not reload its metadata', async ({ page }) => {
+  const { reads } = await mockCurrentResearch(page);
+  let taskVisible = false;
+  await page.route('**/api/ingestion?*', route => getJson(route, { tasks: taskVisible && !new URL(route.request().url()).searchParams.has('researchObjectId')
+    ? [{ id: 'new-task', researchObjectId: 'other-study-1', researchTitle: 'Earlier study 1', state: 'queued', logicalPath: 'source.pdf', retryCount: 0 }] : [] }));
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card).toHaveAttribute('data-media-state', 'ready');
+  taskVisible = true;
+  const refreshResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/ingestion' && url.searchParams.get('actionable') === 'true' && !url.searchParams.has('researchObjectId');
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await refreshResponse;
+  await expect(page.locator('details > summary').filter({ hasText: 'Processing history' })).toBeVisible();
+  expect(reads.filter(path => path === '/api/research-objects/ro-hermes/versions')).toHaveLength(1);
+  expect(reads.filter(path => path.endsWith('/presentation-assets'))).toHaveLength(1);
+
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let entered = false;
+  await page.route('**/api/research-objects/ro-hermes/versions/current-commit/record', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    entered = true;
+    await pending;
+    if (route.request().failure()) return;
+    await json(route, { record: { objectId: 'ro-hermes', versionId: 'current-commit', citation: { title: 'Old account private title' }, sdf: {}, media: [] } });
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => entered).toBe(true);
+    await page.route('**/api/auth/me', route => getJson(route, { userId: 'other-owner', email: 'other@example.invalid', displayName: 'Other owner', status: 'email_verified' }));
+    await page.route('**/api/research-objects?limit=20', route => getJson(route, { researchObjects: [{ id: 'other-current', publicId: null, title: 'New account research', version: 1, status: 'draft' }] }));
+    await page.route('**/api/research-objects/other-current', route => getJson(route, { researchObject: { id: 'other-current', title: 'New account research', version: 1, status: 'draft', visibility: 'private', sdf: { core: {} } } }));
+    await page.route('**/api/research-objects/other-current/versions', route => getJson(route, { versions: [] }));
+    await page.evaluate(() => { const channel = new BroadcastChannel('openscience-session'); channel.postMessage('changed'); channel.close(); });
+    const next = page.locator('[data-current-research="other-current"]');
+    await expect(next.getByRole('heading', { name: 'New account research', exact: true })).toBeVisible();
+    release();
+    await expect(next).toHaveAttribute('data-media-state', 'empty');
+    await expect(card).toHaveCount(0);
+    await expect(page.getByText('Old account private title', { exact: true })).toHaveCount(0);
+  } finally { release(); }
+});
 
 async function expectDashboardProtectedRegions(page: Page, empty = false) {
   const regions = [

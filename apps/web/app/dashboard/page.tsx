@@ -12,7 +12,8 @@ import { AccountLink } from '@/components/navigation/AccountLink';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
-import { ResearchList } from '@/components/dashboard/ResearchList';
+import { CurrentResearchCard, ResearchList } from '@/components/dashboard/ResearchList';
+import { useSession } from '@/components/auth/SessionProvider';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
@@ -29,6 +30,8 @@ export default function DashboardPage() {
   const trashT = useTranslations('trash');
   const locale = useLocale() as Locale;
   const router = useRouter();
+  const session = useSession();
+  const sessionOwner = session.status === 'authenticated' ? session.user?.userId : undefined;
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
   const [tasks, setTasks] = useState<HermesRailTask[]>([]);
@@ -43,6 +46,19 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
+    if (!sessionOwner) {
+      if (session.status === 'anonymous') router.replace('/auth/login?returnTo=%2Fdashboard');
+      if (session.status === 'unavailable') setError(t('errors.load'));
+      return;
+    }
+    setUser(null);
+    setResearchObjects([]);
+    setTasks([]);
+    setError('');
+    setGuideTask(null);
+    setLiteratureTask(null);
+    setLiteratureRecovered(false);
+    setTaskLoadState('loading');
     let active = true;
     let stopTaskRefresh: (() => void) | undefined;
     void Promise.all([
@@ -51,6 +67,7 @@ export default function DashboardPage() {
     ])
       .then(([currentUser, researchOverview]) => {
         if (!active) return;
+        if (currentUser.userId !== sessionOwner) throw new Error(t('errors.load'));
         let currentResearch = researchOverview.researchObjects;
         let latestId = currentResearch[0]?.id;
         let globalTasks: HermesRailTask[] = [];
@@ -173,9 +190,10 @@ export default function DashboardPage() {
       active = false;
       stopTaskRefresh?.();
     };
-  }, [router, t]);
+  }, [router, t, sessionOwner, session.status]);
 
-  if (!user && !error) {
+  const ownsLoadedResearch = Boolean(user && user.userId === sessionOwner);
+  if (!ownsLoadedResearch && !error) {
     return (
       <DashboardShell
         activeRoute="dashboard"
@@ -240,7 +258,7 @@ export default function DashboardPage() {
             <div className={styles.headingTitleRow}>
               <h1 className={styles.title}>{t('title')}</h1>
               <div className={styles.headingActions}>
-                {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="primary" href="/research-objects/new?mode=import">{t('import.title')}</Link> : null}
+                {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="secondary" href="/research-objects/new?mode=import">{t('current.create')}</Link> : null}
                 <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={deriveHermesCompositeVisualState(tasks, guideWorking)} suggestion={suggestion} />
               </div>
             </div>
@@ -252,6 +270,7 @@ export default function DashboardPage() {
 
         <div className={styles.workSurface}>
           <div className={styles.researchStack}>
+            {researchObjects[0] && user && ownsLoadedResearch ? <CurrentResearchCard key={`${user.userId}:${researchObjects[0].id}`} research={researchObjects[0]} ownerId={user.userId} /> : null}
             {researchObjects.length > 0 ? <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} /> : <ImportStage />}
             {tasks.length > 0 || taskLoadState !== 'ready' ? (
               <details className={styles.processHistory}>
