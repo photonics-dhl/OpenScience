@@ -11,31 +11,30 @@
 - 保留原PDF/SourceMap、认可图片、公开标识、sealed记录、原失败/费用/receipt/oncekey。日常结果私有，公开沿原确认流程；主Gateway/Native M3不全局切换，未知paid/started CP不重放，不因idle扩预算/安装/重启。
 
 ## 总控与并行分工
-- 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；心跳openscience ACTIVE。只派真实未完成的授权工作，状态不变不通知；全部交付完成才停，用户暂停立即遵循。
-| Session / ID | 当前责任与依赖 | 活动工作树 / branch |
+- 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
+| Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 6f35纯模块诊断已交：Node22根目录缺database/Worker可解析；停止扩探，3a2待集成/LinuxHost6/SDK/PNG | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-pixel-review`（base7e，77f保留） |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 最终4bc→root fbcee535全等/原High GO；恢复与loader已过Linux发布组117，整批被UI单例阻断，保留host音色交付 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-install-sequence`（f833/RED及0f/d754/4cf保留） |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 单spec391d经原Godel High GO→root8cfd1b47全等；交原Linux CI验证，header7b/68e独立下一批 | `.worktrees/research-product-craft` / `codex/ui-submit-ci-recovery-20261010`（base783，header与旧证据保留） |
-- 各owner仅写已授范围、不回退他人修改；root持集成/CI/docs，发布/资产窗口关闭。image诊断已收、停止扩探；video4bc与UI391d均冻结交付，root接对应CI。image3a/header68e仍独立待后批消费者，复用未变证据。
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368候选已交（4f967测试先行），design High GO/最终审查及真实Linux待收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 修Compose2.26 create/start兼容及真实顺序，已实读CLI help支持替代参数；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 内容优先桌面5b009已交；承接从5b组合原7b/68 header及真实手机验收，CI/docs仍root | `.worktrees/research-product-craft`；5b的`codex/ui-current-research-20261010`保留，新组合branch由owner回执确认 |
+- root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
 ## Git / CI / 运行事实
-- 交付branch仍`release/onchip-production-line`，4bc源码全等收为fbcee535，UI单spec391d全等收为`8cfd1b4730315d83cdb37634e272ebc25147fd27`；完整文档HEAD/推送与对应CI见Git及root原receipt，783为前次失败候选。[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)打开、目标frontend/nanqing，不合main/强推。头像64px/框内互动、原文reader、管理行ID和Native配对仍未上线；image3a2/UI header独立未混入。
-- 783精确CI：media PR37997148486/push37997143598的main均在第72步researcher-services.spec.ts:122计数0≠1失败（各33/34）；其余8个browser-entry、video37997148355和双journal37997148345/37997143398成功。PR main Node22/Linux部署+manifest117PASS/0skip，原High恢复差额闭合；不是全CI绿。完整log、push failed log及唯一error-context在root `tmp/session-coordination-20261008/media-main-783-*`；无PNG/trace，UI已接修。
-- UI391d仅spec23+/11-：修实际`/api/csrf-token` mock，POST-only/GET fallback、10s有界handler见证后核真实token/focus/Enter；保留mode/exact1、精确editURL/最终count及覆盖全部操作的finally释放。root直读原Godel最终High Scoped GO、单文件diff0，复用targetTC0/lint0/list7。旧disabled只证pending、错mock不追认唯一历史因果；本机缺Chromium1234（仅1223）未进入页面、不算RED，不安装/换runtime。修复后原Linux运行尚未验收。
-- 6f35精确原CI全过：media PR37986078268/push37986071550各5job、video37986078242、journal37986078243/37986071694。root `tmp/session-coordination-20261008/media-main-6f35.log`保Linux producer pause新回归及deploy+manifest105/105、0skip。旧21b/c4e/cd81有效CI/RED/High均保留，不代证生产顺序。
-- 10-10 04:45 CST最终只读：active/public=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`；原API/Web/Worker同ID/image、healthy/restart0，新startedAt20:40:26/42Z；Native runtime.env/unit/catalogue仍784、主M3不变，timer active/enabled、broker inactive。公网root200；journal无、原859B备份root600保留；`6f35-recovery-final-readonly.json`存读数。
-- 旧capture误拒视频env、Docker24停止参数已修；cd81/c4e断线、孤儿build与pre-stop journal历史见Git6f35本页/原tmp，均不重放。
-- 21b历史停机约9分钟、未迁移/安装，原a6恢复及850B journal收尾见Git6f35本页/原`recover-21b-*`与`native-21b-finalize-*`；首confirm70未追认唯一根因。该事故已结束，不能重放旧恢复脚本。
-- 6f35在04:34:51–55正常停三服务后，迁移51成功、search无pending、原quota seed8项完成；04:35:05 journal switching/rollback_quiescing/install not_attempted/restore not_started/checkpoint null。Native安装前首故障未定因，自动恢复二次pause已停Web1被拒已确认；candidate Worker镜像实际存在，排除“尚未构建”假设。不盲重发。
-- 04:40:52独立High/同FD9专用恢复成功：start原API/Web→healthy/publica6→恢复原timer→原Workerhealthy；约6分钟不可用，迁移51保留，无Native安装/DB回滚/任务重派。`recover-6f35-original-services{.log,-command.json}`及859B备份`/opt/openscience/tmp/native-recovery-6f35-stopped-20261009T203505Z.json`保留；04:44:19专用finalize先inspect后confirm成功，`native-6f35-finalize-once-confirmed.json`可核，禁止重放。
-- 旧Web兼容0f7→2c9仅原lock/test，原High/29场景与6f35 Linux回归均过；其单次pause验收没有覆盖失败后的完整恢复顺序，video继续补此缺口。当前保持旧a6可用，关闭写窗口，源码修复/High/对应CI和实际故障定位齐备前不再发版。
-- 05:19:58 CST受控module-only：exact6f/d6a7镜像、Node22.23.2/sourceMarker/cwd匹配；root ESM数据库包ERR_MODULE_NOT_FOUND/CJS亦失败，Worker CJS两包resolve+exists，确认当前loader缺口。`native-6f35-module-resolution-corrected-receipt.json`保结果；无业务import/DB/Redis/model，probe清空NODE_OPTIONS，不能追认20:35唯一因果。首probe被新增且Compose2.26不支持的--pull never阻16，原receipt/executed/help保留；High纠正后同FD9/精确本地镜像完成一次观测。无后续snapshot探针。
-- queryNativeWork按原High改Worker cwd/helper import，保留真实查询/classifier/四字段JSON及权限预算，不增依赖/loader/fallback；完整Node query与只读mock/旧root负控由video补。f833仅lock/test的5PASS保留，但候选fixture误用旧ID；真实候选unsafe→safe重入会卡死，原High已判P1 NO-GO，未集入，ESLint ignored亦非完整lint通过。
-- 最终4bc（parent6f35）仅原lock/test→root fbcee535两文件diff0，原High源码Scoped GO；旧f833 P1已闭合。journal可选candidateContainers与checkpoint在before-start核对后原子保存、三ID不可变；非空checkpoint恢复须同候选，legacy不可补造；空checkpoint保全旧ID与精确从未启动created的全量/部分create回退。owner原identity-final-green为Node24/Windows16PASS、0skip（12根+4子例），真实Node loader/身份RED及783 Linux117均保留；整体CI仍被Web单例阻断，不构成生产GO。
-- 本轮新双库`db-set-20261009T202746Z-1790443`在`/var/backups/openscience`，双dump/checksum/0700-0600已核，旧181428Z仍保留；`backup-before-native-6f35-verified.json`存证。main/Native M3与video host admin=false/audio absent未改；无新增模型/供应商任务，Fig2仍0写；paid/started CP/Native-bound pending/lease保护保持。
+- 交付branch=`release/onchip-production-line`；代码候选`d8a02e26a2ca5225c7977370584a7181fbc9a0b6`已推frontend/nanqing，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)仍打开。后续文档HEAD以Git为准，不代表新发布；不合main/强推。头像64px、原文reader、管理行ID及Native新配对均未成功交付线上。
+- d8五条精确CI全部SUCCESS：media PR37999492344/push37999487954、video37999492355、journals37999492383/37999487926。原Linux发布+manifest117PASS/0skip，原四browser spec34/34；另8个browser-entry均绿。完整PR main在root `tmp/session-coordination-20261008/media-main-d8-pr-complete.log`。UI391d→8cfd1b47单spec全等且原Godel High GO，闭合783双main各33/34失败；不把静态或CI代作生产GO。
+- 运行active=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`，Native=`784c6b25342c29bdc5c2db193258d34dfafd4e64`。08:48 fresh原API/Web/Worker同ID/image healthy/restart0、Native env/unit/catalogue784、timer enabled/active；08:57 finalize再次核public200/精确a6与上述身份并清journal，无failed/pending。
+- 依赖实际保留d8：Parser83e2/image11124e、ScanSci4426/image991cdc、embedding-worker923a/image6cf2均healthy/restart0，model-init fc3 exited0；paper-analysis2c781维持既有5c来源。BGE/ScanSci输入复用已核，不声称所有依赖回滚，也不删除仍被引用的d8目录。
+- 07:15新只读work classifier真实成功：manifest/source/image匹配，safe=true/nativePending=false/nativeBoundPending=false、前后临时容器clear。原reader错误拒绝正式0664，首次exit70在查询前；修正版复用manifest、High后仅执行一次，两个回执分别保留于`fresh-work-reader-d8{,-corrected}/`，不是模型验收。
+- 08:27新双库`/var/backups/openscience/db-set-20261010T002723Z-2554004`的两dump/checksum/0700-0600/旧集合保留已核；08:28–08:35原d8发布exit70。08:31三主服务停止后Native安装完成，但`production-deploy-transaction.sh:549`的`create --no-deps`被Compose2.26拒绝；另两处`start --wait --wait-timeout`同样不受支持。迁移无pending，第51项保留。
+- 自动restore失败独立定因：`install.py:201`将source/infra正式root:root0775当作私有目录拒绝，早于install.lock/任何fixed-file写；三unit正式0664同类问题。08:38四live文件仍全candidate、旧784备份完整。不得chmod immutable或重放restore_attempting；源码与私有backup/live的权限合同须分开，复用既有manifest。
+- 独立High专用恢复08:47–08:48 exit0：同FD9/install.lock、精确journal/producer集合/现场备份→原子恢复四旧文件→restored_verified→原API/Web/publica6→原timer→原Worker。网站不可用约17分钟。08:57专用finalize inspect0→confirm0，两轮实际状态与依赖身份校验后沿原clear helper清journal，服务/任务写0；禁止重放本次或旧事故脚本。
+- 事故证据在root原tmp：`deploy-native-d8*`、`native-d8-{failure,restored}-readonly.json`、`native-d8-restore-metadata.json`、`recover-d8-*`、`native-d8-finalize-once-*.json`。服务器`/opt/openscience/tmp/native-recovery-d8-20261010T003533Z/`保原1120B事故journal、四candidate文件及1119B restored journal；新Native目录/旧备份/任务均保留。
+- 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
+- 下一步先收image的installer两文件和video的Compose兼容最小修复，独立High增量审查，原Linux CI真实0775/0664及CLI顺序验证；root再安排发布。图审a6fa/paired-query与UI5b/header独立下一批，不能为消除idle盲重试生产。
 
 ## 当前交付与明确下一步
+- 已审图审a780/3a2在d8独立移植为d9cc/f016，a6fa仅补workflow4+/2-；22源码对原3a2 diff0。Domain40/Gateway27/Worker39原证据复用，LinuxHost6/installedSDK/实际PNG未验收；paired-query须同时保nativeImageReview与nativeAgentExecution，缺失错绑仍拒绝，791f仅有效RED不是修复。
+- UI5b009父d8仅六文件，原Godel设计/差额Scoped GO；32例基线、5新例及最后主CTA1例有效通过组合，精确日志见UI原tmp/ui-art-20261008。1440/390实际图已交但旧手机header使844首屏无法容纳全卡，正独立组合7b/68验证；科学素材是fixture，未当生产/审美认可。
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知。无新计划/图片，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待Native纠正，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。

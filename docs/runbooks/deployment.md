@@ -6,10 +6,12 @@
 
 ### Native目录与关闭中的视频执行器
 
-> 原`deploy.sh --refresh-native-resources`沿同FD9事务，安装器使用`--restore-previous <candidate_sha>`；源码与新增候选身份/恢复顺序修复已独立Scoped GO，精确CI、运行锚点和串行窗口统一见CURRENT，源码审查不代替生产GO。该flag默认关闭；正常无flag路径保持原行为，不另建写门禁、锁或状态库。
+> 原`deploy.sh --refresh-native-resources`沿同FD9事务，安装器使用`--restore-previous <candidate_sha>`；候选身份/恢复顺序的Scoped GO不覆盖未验证的实际Compose参数与源码权限合同，已知阻点、精确CI、运行锚点和串行窗口统一见CURRENT。该flag默认关闭；正常无flag路径保持原行为，不另建写门禁、锁或状态库。
 
 - 前置：沿原精确CI/High、备份和单FD9流程；journal创建/暂停前先核旧API/Web/Worker实际env、mount、image与旧Native绑定，再保存原timer层/活动及容器状态。Refresh正常stop采用Docker24的`docker stop --time -1`（无限daemon超时），客户端等待600秒，不发KILL。API/Worker须exit0且非OOM；Web须service/label、Cmd精确`npm run start`、WorkingDir精确`/opt/openscience/apps/web`，停止后exited/nonRunning/nonOOM且Error为空，才可接受原先running的exit1。重复恢复的已停Web另须rollback_quiescing、非install/restore attempting、原producer为true及持久化旧/候选ID全等；其余已停非零、137/143、身份变化及超时拒绝。这只证明停止，不证明HTTP请求排空。正式工作分类在迁移后的native-install前执行，query从Worker包目录加载，避免根包解析缺口及新Prisma读旧schema。已有旧Native marker的pending任务必须hold；未绑定合法pending队列/outbox、无lease journal及明确paid-unknown hold原样保留。running、无法解释processing、lease、Native实例/inbox阻替换，不消费清空。SDK相同不代表资源不变。
 - 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。复用已装SDK，不改旧目录或手拼配对；stage必须在live写前让timer inactive+disabled。原journal先存install_attempting，严格核原四字段receipt后才存installed；无receipt中断保持停机/journal，不能猜成功。静态核candidate env/挂载/receipt，启动API/Web核binding/health，再恢复原timer层和活动，最后启动Worker；若原timer inactive且有待执行Native任务，停在Worker启动前。不能先让Worker写inbox等待已停timer。
+- 恢复源码身份：git archive的源码目录0775/文件0664须由既有release manifest校验，不将其套入私有backup/live的非group-write检查，也不chmod不可变source。restore_attempting仅是已持久化意图，不能猜测完成或直接重调installer；先核固定文件/备份与实际权限，独立审查精确恢复。恢复后保留事故与restored journal，再沿原clear helper收尾；不得清任务来放行。
+
 - 视频：Native配对不以应用video开关为前提；视频受理沿原host readiness与收费前检查。仅上线不可用提示和新收费前检查时，可保留现有关闭的host；新reader对缺旁白声明/关闭/过期返回不可用，无需为此升级host。实际启用新配音请求前才另做完整bundle升级与配置验收；配置开关不证明Key权限，不自动选音色或调用供应商。模型接单关闭与systemd timer关闭是不同事实。
 - 回滚：先执行旧app纯只读preflight（reader/迁移兼容、active身份、旧source/images），通过后才正常停candidate并分类工作、恢复Native。candidate启动前核三容器均精确配对且从未启动，将DB checkpoint与三ID原子写入原journal；之后恢复只认同一批ID，legacy无ID不可从live补造。checkpoint为空时逐项接受原ID或精确配对、从未启动的created候选，以支持完整/部分create失败；运行过或异常的新ID拒绝。rollback_quiescing可重入，但仍须工作分类通过；checkpoint之后新增/更新的未完成Native/outbox/paidunknown阻自动旧app恢复，保留candidate配对/journal。Native restore先核全部fixed files为candidate/backup/原缺失，再用原previous恢复并核旧IDs；无receipt/restore_attempting中断不猜，失败禁enable/start。旧API/Web健康配对后恢复原timer层/活动，再启原本running的旧Worker，最后health/CAS；保留新增迁移数据。旧app SHA不代替实际旧Native SHA，不删旧目录、CP或paid证据。
 - 验证：只读核应用、API/Worker、broker/task unit的实际身份与资源挂载，确认新版Skill引用和科学正文进入目录；保持视频不可用时观察原站内入口、既有任务及capability，不新增付费任务。该核对不证明模型实际消费了Skill或科研质量合格。
