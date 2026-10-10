@@ -14,7 +14,7 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 前两file已交且Linux Worker642PASS；新六Host失败已定CI路径128B触发既有107B守卫，fixture吞原错误后连接不存在socket。唯一写权test/native-image-agent.test.ts，复用原Host短tmp及透传初始化异常/自有清理，保六业务/平台条件，Linux实测待CI | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`@342；7ae/dca5/原refs保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | b572单test修复128B路径超107B守卫，短tmp/原异常透传已交未收；原High指出ready后失败须先真实stop→final结束再清tmp，owner正补P2。Windows实际guard1PASS/六Unix未执行，保六业务/平台条件，最终差额审查和LinuxCI待完成 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-image-host-ci-fix`，base342；7ae/dca5/原refs保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 创建spec12f→abca、精确RO GET单行fdfdb→root364a17，UI消费后原四例真实4PASS54s，保四主体/CSRF/未知拒绝。本段交付闭合，实际音色目录/成片依赖完整host窗口，当前不探付费资格 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/illustrated-research-fixture`；compat/query/4bc保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | settings eaf已全等收为32b27，最终1PASS14.6s/两file lint0、root已看1440/390/error原图；已分派编辑页主任务与正文密度，从32b27沿原Figma2138:117与实际fixture作最小差额，保业务和已有消费者断言 | `.worktrees/research-product-craft`；edit/page.tsx仅JSX呈现、原workbench.module.css、原hermes-workspace-stage.spec.ts必要编辑呈现用例；eaf/ad/consumer refs保留 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
