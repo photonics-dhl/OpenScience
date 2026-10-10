@@ -529,6 +529,16 @@ jobs:
   skill-path:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - '127.0.0.1:16379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     env:
       PLAYWRIGHT_WEB_MODE: production
       API_ORIGIN: http://127.0.0.1:3101
@@ -571,6 +581,8 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
       - name: Video readiness before paid source and media work
+        env:
+          XGS_WORKER_TEST_REDIS_URL: redis://127.0.0.1:16379
         run: |
           npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-video-readiness.test.ts
           npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/video-readiness.test.ts test/assets/video.test.ts
