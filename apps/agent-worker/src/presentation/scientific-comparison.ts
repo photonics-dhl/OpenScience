@@ -7,6 +7,9 @@ const normalizeIdentifier = (value: string) => value.toLowerCase().replaceAll('_
 const proseBoundary = /^[.,;:!?。；，、：！？“”‘’"'—–\u4e00-\u9fff]$/u;
 const mathSyntax = (token: Token | undefined) => token?.kind === 'other' && !proseBoundary.test(token.text);
 const scientificUnit = /^(?:da|[qryzafpnμumcdhkMGTPEZYRQ])?(?:Hz|eV|mol|rad|sr|Pa|s|m|g|C|J|W|V|A|K|N|T|L)$/u;
+// Same-width Unicode variants have the same direction. Apply only to fresh
+// comparison copies; preserve original source text and historical parsing.
+const sourceComparisonSigns = (value: string) => value.replaceAll('⩾', '≥').replaceAll('⩽', '≤');
 function tokenize(value: string): Token[] {
   return [...value.matchAll(/[A-Za-z\u0370-\u03ff][A-Za-z\d_\u0370-\u03ff]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\S/gu)]
     .map((match, index, matches) => ({ text: match[0], start: match.index!, end: match.index! + match[0].length,
@@ -83,6 +86,7 @@ const representation = (value: Expression): ScientificRepresentation => ({ kind:
 export function normalizeScientificSourceNotation(input: string): {
   text: string; unsupported: Array<{ start: number; end: number; key: string; unsupported: true }>;
 } {
+  input = sourceComparisonSigns(input);
   const unsupported: Array<{ start: number; end: number; key: string; unsupported: true }> = [];
   // An unclosed wrapper owns the rest of its line; never recover a valid prefix
   // from its interior. No source text or persisted tool arguments are rewritten.
@@ -302,17 +306,37 @@ export function scientificComparisonBinding(input: string, numberStart: number, 
 
 /** Whole symbolic references with constants (e.g. λ0/2), never bare constants. */
 export function scientificExpressionReferences(input: string, sourceNotation = false): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
-  const tokens = tokenize(input), result: Array<{ key: string; start: number; end: number; unsupported?: boolean }> = [];
+  const tokens = tokenize(sourceNotation ? sourceComparisonSigns(input) : input), result: Array<{ key: string; start: number; end: number; unsupported?: boolean }> = [];
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (tokens[index - 1]?.kind === 'number') continue;
     if (!referenceBoundary(tokens, index, sourceNotation)) continue;
     const local = tokens.slice(index, index + 80);
     const value = mathParser(local)(0);
+    // The existing local noun-phrase binding identifies a prose copula, not
+    // a variable in "is -2.5 mV". Explicit mathematical symbols stay intact.
+    const proseStart = Math.max(0, token.end - 160);
+    const phrase = sourceNotation && value?.numeric && /^(?:is|of)$/iu.test(token.text)
+      ? proseQuantity(input.slice(proseStart, token.end), proseStart) : undefined;
+    if (phrase && 'prose' in phrase && phrase.prose) continue;
     // A failed compound product may start with a symbolic-only fraction and
     // have its constant in a later group. Do not silently lose that group or
     // recover a shorter, valid interior expression in fresh native notation.
     if (sourceNotation && !value && token.text === '(') {
+      // A complete scalar + SI unit annotation is not a failed math group.
+      // Do not let a later expression in ordinary prose swallow its quantity.
+      // Attached symbols, functions, units and operator tails remain math.
+      const numberIndex = ['+', '-'].includes(local[1]?.text ?? '') ? 2 : 1;
+      const unit = local[numberIndex + 1], close = local[numberIndex + 2];
+      const next = local[numberIndex + 3], afterNext = local[numberIndex + 4];
+      const proseAfter = !next || proseBoundary.test(next.text)
+        || next.horizontalSpaceBefore && /^[A-Za-z]{2,}$/u.test(next.text)
+          && !scientificUnit.test(next.text) && !/^(?:sin|cos|tan)$/u.test(next.text) && !mathSyntax(afterNext);
+      if (local[numberIndex]?.kind === 'number' && unit?.kind === 'identifier' && scientificUnit.test(unit.text)
+        && close?.text === ')' && close.end - token.start <= 160 && proseAfter) {
+        index += numberIndex + 2;
+        continue;
+      }
       // A complete standalone comparison is prose grouping, not a failed
       // arithmetic product. Scan its operands normally without dropping a
       // denominator or allowing a factor outside the closing parenthesis.
