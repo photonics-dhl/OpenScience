@@ -1,4 +1,14 @@
 {
+  "hermesAudioAudition": {
+    "title": "旁白试听",
+    "download": "下载 MP3",
+    "downloading": "正在准备下载…",
+    "loading": "正在加载音频…",
+    "playbackFailed": "音频加载失败。",
+    "reload": "重新加载",
+    "downloadFailed": "下载失败，请重试。",
+    "downloadStarted": "已开始下载。"
+  },
   "technologyDiscovery": {
     "eyebrow": "技术发现",
     "queryLabel": "描述技术需求，或输入论文标题、DOI、arXiv 编号",

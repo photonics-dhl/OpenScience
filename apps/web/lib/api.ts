@@ -1157,6 +1157,25 @@ export async function getPresentationTask(roId: string, versionId: string, taskI
   return request(`${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}`, { signal });
 }
 
+export function presentationTaskAudioUrl(roId: string, versionId: string, taskId: string): string {
+  return `${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}/audio`;
+}
+
+export async function downloadPresentationTaskAudio(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<Blob> {
+  const revision = sessionRevision;
+  const response = await fetch(presentationTaskAudioUrl(roId, versionId, taskId), {
+    method: 'GET', credentials: 'include', cache: 'no-store', redirect: 'error', signal,
+  });
+  if (revision !== sessionRevision) throw sessionChangedError();
+  if (!response.ok) throw new ApiClientError('DOWNLOAD_FAILED', 'Audio download could not be completed', response.status);
+  if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'audio/mpeg') {
+    throw new ApiClientError('AUDIO_UNAVAILABLE', 'Audio is not available', response.status);
+  }
+  const blob = await response.blob();
+  if (revision !== sessionRevision) throw sessionChangedError();
+  return blob;
+}
+
 export async function reviewExistingPresentationImage(roId: string, versionId: string, assetId: string, idempotencyKey: string): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/${encodeURIComponent(assetId)}/review`, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },

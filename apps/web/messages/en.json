@@ -1,4 +1,14 @@
 {
+  "hermesAudioAudition": {
+    "title": "Narration preview",
+    "download": "Download MP3",
+    "downloading": "Preparing download…",
+    "loading": "Loading audio…",
+    "playbackFailed": "Audio could not be loaded.",
+    "reload": "Reload audio",
+    "downloadFailed": "Download failed. Please try again.",
+    "downloadStarted": "Download started."
+  },
   "technologyDiscovery": {
     "eyebrow": "Technology discovery",
     "queryLabel": "Describe a technology need or enter a paper title, DOI or arXiv ID",
