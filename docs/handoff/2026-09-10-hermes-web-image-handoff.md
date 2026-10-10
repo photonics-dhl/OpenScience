@@ -15,8 +15,8 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | parser704已随ab79发布，455/离线1/HighGO/TC证据复用，原科学候选仍不合格。新Explore核对又stream失败（request02f03b4f），不反复唤醒；root已接手确认publicId倒序/最新版本日期不同义，UI仅改提示 | 原illustration-chain-repair树 / codex/native-source-number-parser@1ea；原CP/receipts与四次transport错误保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | ac1资格及HTTP投影已随ab79发布。23:32纠正只读完成三RO：86/19/69个live父扫描完整，均0 Native video header/合法组合；原null临时投影失败保留，不是服务器拒绝。规划耦合已证实；原设计High以attempt判断/分类绕过两P1拒绝，并补claim原子CAS与队列保留。root已派修正版五源文件+原测试写权，先RED，代码须同一High审后集入；不新任务/预算/host激活 | 原synclip-video-delivery树 / codex/audio-parent-eligibility@8cbd；原操作包补source-audit/操作路径，voice/cap未选 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常试听软件随ab79上线，三篇真实读者路径/最短用法已保存。非链接附件提示a6f→root0d5a044c已审收，11/11/类型lint0、双语原字典保留，仅候选；另346a→root6a760012两key已收澄清Explore顺序；均候选。23:57正常首页→个人中心→RO9067编辑可读、视频未完成/0试听按钮，未进action panel；现仅原presentation-workbench.spec新增闭Host首计划正常入口RED，源由视频owner改 | 原research-product-craft树 / codex/public-attachment-status-20261010；原46e/所有证据保留 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | ac1资格及HTTP投影随ab79发布；三RO完整扫描仍无合法Native视频父/完整帧，原只读证据复用。修正版五源文件已授权本地实现：首次pending0、保留视频分类、expected snapshot原子claim与CAS miss队列保留。owner已报告有效RED→Domain/Web及Worker59 Green，兼容夹具与类型检查收尾；待独立提交及同一High代码复核后集入，不新任务/预算/host激活 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@f8基线；8cbd旧分支/操作包保留，voice/cap未选 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常试听随ab79上线；附件0d5a044c/Explore6a760012已集入f8、五CI全绿未部署。23:57正常导航到RO9067编辑可读/0试听按钮证据复用。原presentation-workbench.spec唯一首计划用例已从真实composer确认复现RED：面板显示Video creation is temporarily unavailable，HermesPresentationAction.submit148–157把分镜output=video也挡在full-video能力前；无隐藏POST/模型。spec类型/lint0，等视频SHA仅跑该1例Green并同批审查 | 原research-product-craft树 / codex/first-video-storyboard-browser@f8基线；原346a/46e及first-video-plan-red.log/checkpoint保留 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
 ## Git / CI / 运行事实
