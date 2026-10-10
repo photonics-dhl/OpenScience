@@ -14,13 +14,13 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368已交且最终源码High GO（4f967测试先行），真实Linux旧RED/新Green待收 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368已全等集入root6ecb（测试4f→af6b），最终源码High GO；正准备实际Linux旧RED/新Green消费者 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 按原High条件GO实施Compose2.26兼容及真实顺序，实际CLI help已核；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 内容优先桌面5b009已交；承接从5b组合原7b/68 header及真实手机验收，CI/docs仍root | `.worktrees/research-product-craft`；5b的`codex/ui-current-research-20261010`保留，新组合branch由owner回执确认 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
 ## Git / CI / 运行事实
-- 交付branch=`release/onchip-production-line`；代码候选`d8a02e26a2ca5225c7977370584a7181fbc9a0b6`已推frontend/nanqing，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)仍打开。后续文档HEAD以Git为准，不代表新发布；不合main/强推。头像64px、原文reader、管理行ID及Native新配对均未成功交付线上。
+- 交付branch=`release/onchip-production-line`；root已全等集入installer两文件为`6ecb2a6418ab641d64450cebaac2ef8ba80ca477`（未推/未跑新CI）；远端frontend/nanqing仍为失败发布候选`d8a02e26a2ca5225c7977370584a7181fbc9a0b6`，[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)仍打开。后续文档HEAD以Git为准，不代表新发布；不合main/强推。头像64px、原文reader、管理行ID及Native新配对均未成功交付线上。
 - d8五条精确CI全部SUCCESS：media PR37999492344/push37999487954、video37999492355、journals37999492383/37999487926。原Linux发布+manifest117PASS/0skip，原四browser spec34/34；另8个browser-entry均绿。完整PR main在root `tmp/session-coordination-20261008/media-main-d8-pr-complete.log`。UI391d→8cfd1b47单spec全等且原Godel High GO，闭合783双main各33/34失败；不把静态或CI代作生产GO。
 - 运行active=`a6f068a5ebefdab3427e8f01d110ca440fa9f97d`，rollback=`45a577a3a8f6bca78a063e7478fba131c5efb375`，Native=`784c6b25342c29bdc5c2db193258d34dfafd4e64`。08:48 fresh原API/Web/Worker同ID/image healthy/restart0、Native env/unit/catalogue784、timer enabled/active；08:57 finalize再次核public200/精确a6与上述身份并清journal，无failed/pending。
 - 依赖实际保留d8：Parser83e2/image11124e、ScanSci4426/image991cdc、embedding-worker923a/image6cf2均healthy/restart0，model-init fc3 exited0；paper-analysis2c781维持既有5c来源。BGE/ScanSci输入复用已核，不声称所有依赖回滚，也不删除仍被引用的d8目录。
@@ -30,7 +30,7 @@
 - 独立High专用恢复08:47–08:48 exit0：同FD9/install.lock、精确journal/producer集合/现场备份→原子恢复四旧文件→restored_verified→原API/Web/publica6→原timer→原Worker。网站不可用约17分钟。08:57专用finalize inspect0→confirm0，两轮实际状态与依赖身份校验后沿原clear helper清journal，服务/任务写0；禁止重放本次或旧事故脚本。
 - 事故证据在root原tmp：`deploy-native-d8*`、`native-d8-{failure,restored}-readonly.json`、`native-d8-restore-metadata.json`、`recover-d8-*`、`native-d8-finalize-once-*.json`。服务器`/opt/openscience/tmp/native-recovery-d8-20261010T003533Z/`保原1120B事故journal、四candidate文件及1119B restored journal；新Native目录/旧备份/任务均保留。
 - 原4bc→fbcee535的Worker cwd/query与candidate ID恢复修复保持源码Scoped GO及Linux117证据；本次进一步暴露CLI/installer真实合同缺口，整体发布不能称稳定。21b约9分钟、6f35约6分钟事故已结束，原receipt与细节保留在Git d8本页及原tmp，不重放旧恢复脚本。
-- 下一步先收image的installer两文件和video的Compose兼容最小修复，独立High增量审查，原Linux CI真实0775/0664及CLI顺序验证；root再安排发布。图审a6fa/paired-query与UI5b/header独立下一批，不能为消除idle盲重试生产。
+- 下一步收video的Compose兼容最小修复，与已收installer组合，独立High增量审查，原Linux CI真实0775/0664及CLI顺序验证；root再安排发布。图审a6fa/paired-query与UI5b/header独立下一批，不能为消除idle盲重试生产。
 
 ## 当前交付与明确下一步
 - 已审图审a780/3a2在d8独立移植为d9cc/f016，a6fa仅补workflow4+/2-；22源码对原3a2 diff0。Domain40/Gateway27/Worker39原证据复用，LinuxHost6/installedSDK/实际PNG未验收；paired-query须同时保nativeImageReview与nativeAgentExecution，缺失错绑仍拒绝，791f仅有效RED不是修复。

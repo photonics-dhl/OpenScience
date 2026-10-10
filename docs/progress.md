@@ -3,6 +3,7 @@
 动态任务、分工、版本和剩余交付统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)，本页只留最近检查点。
 
 ## 最近检查点
+- 2026-10-10 09:06续作：installer两文件已全等集入主交付分支，复用原源码High GO；生图继续准备有界真实旧实现负控回放，视频实施Compose兼容、UI验证手机header组合。新候选尚未推送/运行CI，未重试发布。
 - 2026-10-10 08:57：本轮发布故障已收尾。原应用三主服务与原Native配对恢复健康，专用finalize经独立High、inspect0→confirm0清journal；部分依赖保留新构建，精确身份/证据统一见CURRENT。此次网站不可用约17分钟，新候选功能未上线，发布窗口关闭。
 - 故障根因分别是实际Compose不支持create/start参数，以及installer把正式源码目录0775/模板0664误当私有权限异常；自动restore未写fixed files。专用恢复保留现场与旧备份、不重放任务、不改immutable；长期修复已分派视频与生图两个独立owner。
 - 2026-10-10：修复前代码候选五条CI全绿，Linux发布组117/0skip、浏览器主组34/34闭合前次提交计数失败；这些证据没有覆盖上述真实发布缺口，不能宣称稳定交付。
