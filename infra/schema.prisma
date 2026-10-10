@@ -63,6 +63,7 @@ model User {
   appealsModerated         Appeal[]                    @relation("Moderator")
   selectedEditorialEntries EditorialSelection[]        @relation("EditorialSelector")
   researchIdentityProfile  ResearchIdentityProfile?
+  academicProfile          AcademicProfile?
   readingPreference        ReadingPreference?
   verifiedEvidenceRecords  EvidenceRecord[]            @relation("EvidenceVerifier")
   requestedExternalSources ExternalSource[]            @relation("ExternalSourceRequester")
@@ -1488,6 +1489,20 @@ model ResearchIdentityProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("research_identity_profiles")
+}
+
+/// Author-controlled academic page. Draft edits never change the public snapshot.
+model AcademicProfile {
+  userId      String   @id @map("user_id") @db.Uuid
+  draft       Json
+  published   Json?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("academic_profiles")
 }
 
 // Hermes server-owned research orchestration: durable metadata only. Source bytes remain in object storage.

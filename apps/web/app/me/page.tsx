@@ -2,7 +2,8 @@
 
 import { UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { academicProfileCopy } from '@/lib/academic-profile-copy';
 import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
@@ -25,6 +26,7 @@ import { HermesShellDockAnchor } from '@/components/hermes/HermesShellDockAnchor
 
 export default function MyProfilePage() {
   const t = useTranslations('productSurfaces');
+  const locale = useLocale();
   const meT = useTranslations('myAccount');
   const identityT = useTranslations('researchIdentity');
   const router = useRouter();
@@ -143,7 +145,7 @@ export default function MyProfilePage() {
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{t('settings.name')}</dt><dd className="mt-1 text-os-ink">{user.displayName}</dd></div>
             <div className="py-3"><dt className="text-sm text-os-muted-paper">{meT('fields')}</dt><dd className="mt-1 break-words text-os-ink">{profileReady ? profile.disciplines.join(' · ') || meT('notProvided') : meT('fieldsPending')}</dd></div>
           </dl>
-          <div className="account-shortcuts"><Link href="#research-profile">{meT('editProfile')}</Link><Link href="#identity">{meT('verifyIdentity')}</Link></div>
+          <div className="account-shortcuts"><Link href="/me/profile">{academicProfileCopy[locale === 'en' ? 'en' : 'zh'].manage}</Link><Link href="#research-profile">{meT('editProfile')}</Link><Link href="#identity">{meT('verifyIdentity')}</Link></div>
           <Link href="/settings" className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring">{meT('settingsTitle')}</Link>
           <HermesShellDockAnchor inline />
         </section>
