@@ -5,6 +5,7 @@
 ## 目标与边界
 - 依据[开发规格](../OpenScience_Kimi_Development_Spec.md)：真实 NousResearch Hermes Agent 理解全文、提炼六维/Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不做额外同行评议，不以 Codex 手稿替代自动科学能力。
 - 10-09用户明确纠正过度复杂化并同意继续：复用已有理解→按需回读关键原文/图页→简洁分镜、风格与提示词→出图→核对实际图片。只修涉及画面含义/定义和工具阻力，不再把UI收尾算作生图进度。
+- 10-11视频会话human明确要求先摸清商用API可控制项，避免冗余/无用设计。先区分官方字段、当前代码消费、prompt软引导和未核能力，再判断TTS/后期合成是否必要；不把现有替换声轨路径当唯一方案，试听原样复用于成片尚未验收。真实短片比较需原费用授权，问答不新增调用。
 - UI human已选“默认头像，点击展开”（原回复`01a11f96-9a15-7fb0-a144-e771eb3859e0`已核）；10-09在总控追加“头像稍微大一点、像框里的小精灵保持互动”。root先按56→64px落实，框内复用Live2D眨眼/呼吸/轻微动作及指针反馈，遵循原reduced-motion，不降为静态图；点击开对话，全身仅在助手区，Landing无角色。旧360常驻/宽屏常开已替代；原patrol证据保留，验收随新路径更新，不再堆旧呈现诊断或容差。
 - 2–3篇真实论文的凝练、用户确认、配图与公开展示仍是目标；三篇整体验收、普通用户旅程、完整视频、整站审美均未完成。单图认可、单测、CI或部署不代替质量认可，不批量冷启动。
 - 图片已验证gpt-image-2；新图片/视频按既有Synclip授权、视频目标LTX。旧gpt-image-2.5无receipt那次仍UNCERTAIN，不盲重试/自动换供应商。原生独立像素核验未通用验收，现Worker→Gateway单次vision不冒称Nous审阅loop。
@@ -15,7 +16,7 @@
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | parser704已随ab79发布，455/离线1/HighGO/TC证据复用，原科学候选仍不合格。新Explore核对又stream失败（request02f03b4f），不反复唤醒；root已接手确认publicId倒序/最新版本日期不同义，UI仅改提示 | 原illustration-chain-repair树 / codex/native-source-number-parser@1ea；原CP/receipts与四次transport错误保留 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 已交2af2a9c8(parent f8)，11文件/372测试，build/type通过；lint34原债/新增0，非全lint绿。前次三意见闭合后，root另发现admission重读变化会遗留processing至重启；同High确认P1，2af现NO-GO待follow-up：复用当前live pending原子重排覆盖poller/startup，并显式限定presentation.generate kind。原owner正在原Worker/test范围修，不重跑未变Domain/Web；root410098e2仅CI选择，均未push | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@2af；原8cbd/操作包保留，voice/cap未选；无生产/模型 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 已交2af2a9c8(parent f8)，11文件/372测试，build/type通过；lint34原债/新增0。admission重读变化会遗留processing至重启，同High确认P1，2af现NO-GO：待原Worker/test follow-up覆盖poller/startup重排并限定presentation.generate kind。期间收到human新提问，正核商业API字段/代码消费/合成必要性，原操作包产短矩阵供root同步；此纠正不取消可靠性修复，不重跑未变Domain/Web，CI选择410098e2未push | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@2af；原8cbd/操作包保留，voice/cap未选；无生产/模型 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 正常试听随ab79上线；附件/Explore候选f8五CI绿未部署。首计划c74→rootf313已收；消费2af为ffad3226仅跑指定browser，1/1(15.6s)实际Green：正常头像/composer/确认→任务URL，精确1生成POST，0额外请求/真实模型。root核原log/JSON及11源文件、spec全文全等。Web/spec不变即可复用，不为Worker follow-up重跑；下一依赖为修复、High、总控CI和发布 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；first-video-plan-green-20261011.json/log及原RED保留，不重复收合成分支 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
