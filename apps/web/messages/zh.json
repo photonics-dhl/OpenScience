@@ -2062,7 +2062,7 @@
     },
     "searchAction": "搜索",
     "refineSearch": "细化搜索范围",
-    "recentFirst": "新公开的研究在前 · 展示各研究的最新公开版本",
+    "recentFirst": "公开号由新到旧 · 展示各研究的最新公开版本",
     "imageFor": "《{title}》的核心概念图",
     "readResearch": "阅读研究",
     "recentTitle": "最新公开研究",
