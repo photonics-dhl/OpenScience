@@ -17,7 +17,7 @@
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 正常单图入口3961→754c、API f2a及modal回归269d→1946已含于线上c239；旧发布依赖解除，20:40已派正常站内入口/来源绑定私有计划验收。仅沿原一次合法计划授权；旧unknown不重发，真实图像质量仍未过 | 原illustration-chain-repair树 / codex/research-continuation-surface@269d；原receipt与科学核对保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2640→1389/afe69→5242已集入，原High关闭selected-only/Unicode唯一P2、组合GO。六新增回归/Worker TC0复用；下一独立产物是最小试听启用与正常发起路径操作包，核已有voice/locale/finite预算来源；无生产动作 | 原synclip-video-delivery树 / codex/synclip-audio-audition@afe69；原receipt保留 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 完整9e→ce5a/c644→244f已集入，27unit/7不同浏览器用例/原Godel最终GO；原恢复用例保留业务guards且用实图验证。下一项是已上线c239的短窗口/64px头像最小正常入口只读观察；真实MP3尚无 | 原research-product-craft树 / codex/private-audio-consumer-20261010@c644，源码clean；仅owned证据 |
-- 本聊天三线生产操作由总控串行排程，当前无writer；个人主页独立授权发布已带入本轮图入口/短窗口，旧b261/e5部署脚本均未执行且不得再跑。曾出现UI显示完全访问而运行read-only/消息审批never的冲突；20:39本轮环境已恢复danger-full-access，三条协调消息均实际成功，不需重复业务授权。
+- 本聊天三线生产操作由总控串行排程；生图owner持有原一次合法私有计划窗口，UI仅只读、root不并行发布/资产写。个人主页发布已带入图入口/短窗口，旧b261/e5脚本未执行且不得再跑。曾出现UI完全访问与运行read-only/消息审批never冲突；20:39环境恢复、协调消息实际成功，不需重复业务授权。
 
 ## Git / CI / 运行事实
 - canonical=`release/onchip-production-line`，先保留dd25发布docs，再集入私有试听backend/完整Web至代码244f79a5；协作仍frontend/nanqing/[PR113](https://github.com/photonics-dhl/OpenScience/pull/113)，不合main/强推。图入口754c/API f2a/短窗口323d/回归1946均已在c239祖先b261，不能再标待部署。
@@ -28,6 +28,8 @@
 - 历史工程证据复用：8cc Linux broker/引用合组136/136零skip；59a dashboard32/workspace25；393 deploy/manifest/retention306零skip及Native实际SDK离线loop。它们不覆盖新2640/UI消费者或真实科学产物。原393/59/043部署、失败、回退和paid收据均保留，长记录见Git dd25ae57本页；旧next action不再执行。
 - 已观察首页→OSR-2026-000024/v2正文/认可首图、个人中心→研究入口/设置；17:43原账本显示管理员正常事务同oncekey自动adjust+1/consume−1，零平台余额不是该账户正常入口阻断。不是供应商资金授权；普通用户余额规则不变。c239普通生图入口/短窗口的真实点击及实际计划质量本轮继续验收。
 - 私有试听集成：25后端文件对owner afe69仅API app多保留原profile两行；Web对c644仅保留原ORCID returnTo两行。唯一API测试冲突解后与owner全文全等。fresh依赖build0、API131+profile5=136PASS、Web27PASS、CI grep实际选15例（新6+原恢复1+原8）；浏览器未在root重复执行。原High、7客户端用例/桌面手机PNG复用，真实解码/声音不冒称通过。既有media CI补Domain/UI命令及paths，原High GO；精确组合CI尚待运行。
+- 21:03组合37d7六CI终态：video/journal PR与push四SUCCESS、两media FAIL，八browser-entry均SUCCESS。仅主job旧native-video-readiness装配用例仍期望1回调，新实现为video/audio独立2回调；root同8例RED1/7→Green8、lint0、原High GO，test-only6d59a4ca修复保留两者动态和全部前提守卫，生产源码0改。后续精确修复CI仍须闭合，原37日志与收据保留。
+- 新启用断点：installer只允许原defaults+audio，video owner已获install.sh/install.test.mjs独占本地修复；不改生产cfg/开关。站内试听发起尚缺，已有human要求自然科研旁白/历史中文H3，不等于选定Synclip voice或有限coins上限；待具体操作包，不代答偏好或扩预算。
 
 ## 当前交付与明确下一步
 - 图审a780/3a2→d9cc/f016及a6fa/paired query已收，原测试证据复用。17:06:19–27实际393 SDK0.10.0离线构造/run_conversation PASS：原source5 Mock控制保留，image2 Mock请求消费真实skill_view/paper_image_view、唯一fixture PNG与四身份及终答；stderr空/外部Provider0/Gateway往返false/产品任务与DB0，自有temp已删除。6e3f仅offline_native_loop.py+80，原High GO、root全文diff0收6562；真实科研PNG的模型判断与科学质量仍未验收，不重跑旧paid/unknown。
