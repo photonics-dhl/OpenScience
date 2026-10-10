@@ -16,7 +16,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 图审集成a6fa已交；现独立修Native restore源码权限合同，仅install.py/test_install_lifecycle.py，5a368已全等集入root6ecb（测试4f→af6b），最终源码High GO；正准备实际Linux旧RED/新Green消费者 | `C:/Users/Mac/.codex/worktrees/illustration-chain-repair/XGS` / `codex/native-restore-source-identity`；a6fa/3a保留 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 按原High条件GO实施Compose2.26兼容及真实顺序，实际CLI help已核；图审paired-query RED791f另保留，不混提交 | `C:/Users/Mac/.codex/worktrees/synclip-video-delivery/XGS` / `codex/native-compose-compat`；4bc/791f保留 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 内容优先桌面5b009已交；承接从5b组合原7b/68 header及真实手机验收，CI/docs仍root | `.worktrees/research-product-craft`；5b的`codex/ui-current-research-20261010`保留，新组合branch由owner回执确认 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 5b009桌面与6ebb手机header组合已交；8个实际fixture路径闭合，继续局部dashboard留白/主CTA呈现，CI/docs仍root | `.worktrees/research-product-craft`；`codex/ui-current-header-integration`@6ebb保留，新polish仅dashboard范围 |
 - root独占生产，08:57故障收尾后发布/资产窗口关闭。各owner只写上述范围，不回退他人；UI/Gateway/科研资产与原paid/unknown证据不因发布返工取消。
 
 ## Git / CI / 运行事实
@@ -34,7 +34,7 @@
 
 ## 当前交付与明确下一步
 - 已审图审a780/3a2在d8独立移植为d9cc/f016，a6fa仅补workflow4+/2-；22源码对原3a2 diff0。Domain40/Gateway27/Worker39原证据复用，LinuxHost6/installedSDK/实际PNG未验收；paired-query须同时保nativeImageReview与nativeAgentExecution，缺失错绑仍拒绝，791f仅有效RED不是修复。
-- UI5b009父d8仅六文件，原Godel设计/差额Scoped GO；32例基线、5新例及最后主CTA1例有效通过组合，精确日志见UI原tmp/ui-art-20261008。1440/390实际图已交但旧手机header使844首屏无法容纳全卡，正独立组合7b/68验证；科学素材是fixture，未当生产/审美认可。
+- UI5b009父d8仅六文件，原Godel设计/差额Scoped GO；32例基线、5新例及最后主CTA1例有效通过组合，精确日志见UI原tmp/ui-art-20261008。6ebb叠加原7b/68三文件，新增test-only5+/1-保留精确登录/GET边界；6PASS+受影响2PASS闭合8unique。root实看1440/390，header214→143px、完整图与原图入口可见，主CTA仍折下，正独立压缩局部留白/提前主操作；不裁长文/图，不当生产/审美认可。
 - 生图f992/da9→bffbe1f8/2c37f0ae：scientific-comparison仅9行fresh完整有界括号比较，复用原parser，legacy/paid/未知函数/尾随因子/真source拒收不变。High Scoped GO；原2文件252PASS、补充负控7PASS有重叠不加总；cb原输入离线回放1PASS仍拒绝20nm/0.94c错绑。旧dist/Prisma TC失败保留，canonical依赖build后完整WorkerTC0。
 - 唯一原生计划`cb063919-3cf7-40ad-aeab-7d802410975f`于10-08T04:02:45.662Z failed/transport stopped；CP started/turn6、11对象保留，M3 provider_timeout600365ms/usage=null，上游终态/计费未知。无新计划/图片，不重发/新key/扩预算。ROc896/version2047/同6Claims/PDF、父36727536和第二幕保留；代表参数实际在s24，s7/s8/s15错绑及tau时间箭头与空间约束冲突待Native纠正，Codex不手补。原回执在生图`tmp/first-scene-native-*`。
 - 原PNG隔离ea135→9ab、校准54c77→c302与Skill资源候选均保留原High/验证；格式/skill20/paid兼容曾在42fe是历史，45/784未带新目录。正式图审核曾漏方向/FWHM测量轴等真实错误，代码修复不能追认旧稿；新资源、真实Agent执行与实际图片分别验收。
