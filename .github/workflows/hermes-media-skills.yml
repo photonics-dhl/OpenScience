@@ -607,7 +607,7 @@ jobs:
         run: |
           node --test scripts/index-confirmed-research-sources.test.cjs
           npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/indexing-storage.test.ts
-          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t 'source-index|snapshot dispatch|retries one failed task|uses one authority|creates R1 first Native video tasks'
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t 'source-index|snapshot dispatch|retries one failed task|uses one authority|R2|unmarked R1 first video'
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
