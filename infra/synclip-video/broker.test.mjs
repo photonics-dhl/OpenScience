@@ -136,16 +136,16 @@ async function fixture(t) {
       await writeFile(join(outDir, 'result.mp4'), mp4);
     },
   };
-  async function job(taskId = id, { privateJob = false, expired = false, prompts = [], audio = false, narrations = [] } = {}) {
+  async function job(taskId = id, { privateJob = false, expired = false, prompts = [], audio = false, providerOutput = false, narrations = [] } = {}) {
     const d = join(privateJob ? cfg.privateRoot : cfg.inbox, taskId);
     await mkdir(d);
-    const scenes = [0, 1, 2].map(index => ({ index, durationSeconds: audio ? 10 : 5, ...(audio ? { narration: narrations[index] ?? 'Source-bound spoken sentence ' + index + '.' } : {}),
+    const scenes = [0, 1, 2].map(index => ({ index, durationSeconds: audio || providerOutput ? 10 : 5, ...(audio || providerOutput ? { narration: narrations[index] ?? 'Source-bound spoken sentence ' + index + '.' } : {}),
       prompt: prompts[index] ?? 'Preserve the approved geometry and show slow motion.',
       image: { name: `scene-${index}.png`, size: png.length, sha256: hash(png), requestId: taskId } }));
     if (audio) cfg.audio = { ...narration };
-    const document = audio ? { locale: 'en', narrative: { mainMessage: 'A supported connection', audience: 'New readers' },
-      videoProduction: { audioPolicy: 'external-narration' }, scenes: scenes.map(scene => ({ narration: scene.narration, durationSeconds: scene.durationSeconds,
-        videoDirection: { reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration', subtitleMode: 'none' } })) } : { approved: true };
+    const document = audio || providerOutput ? { locale: 'en', narrative: { mainMessage: 'A supported connection', audience: 'New readers' },
+      videoProduction: { audioPolicy: audio ? 'external-narration' : 'native-first' }, scenes: scenes.map(scene => ({ narration: scene.narration, durationSeconds: scene.durationSeconds,
+        videoDirection: { reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: audio ? 'external-narration' : 'native', subtitleMode: 'none' } })) } : { approved: true };
     const story = Buffer.from(JSON.stringify(document));
     const files = { storyboard: { name: 'storyboard.json', size: story.length, sha256: hash(story) },
       scenes: scenes.map(s => s.image) };
@@ -160,6 +160,16 @@ async function fixture(t) {
   return { cfg, deps, calls, audioCalls, order, job, advance: ms => { now += ms; },
     privateDir: join(cfg.privateRoot, id), resultDir: join(cfg.results, id) };
 }
+
+test('a Native provider-output sequence can run without requiring or posting optional TTS', async t => {
+  const f = await fixture(t); await f.job(id, { providerOutput: true });
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  assert.equal(f.audioCalls.length, 0);
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 3);
+  const result = await json(join(f.resultDir, 'result.json'));
+  assert.equal(result.narration, undefined);
+  assert.equal((await json(join(f.resultDir, 'metrics.json'))).audioMode, 'provider-output-unverified');
+});
 
 async function auditionFixture(t) {
   const f = await fixture(t), job = await f.job(id, { audio: true, privateJob: true });

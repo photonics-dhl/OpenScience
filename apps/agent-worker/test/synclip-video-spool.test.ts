@@ -40,6 +40,22 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
   return { input, spool, inboxDir, resultsDir, readyPath, now };
 }
 
+describe('Native provider output without optional TTS', () => {
+  it('uses the explicit Native audio strategy and publishes no TTS request or voice when none was selected', async () => {
+    const f = await nativeFixture();
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    expect(f.input.videoPrompts[0]).not.toContain('Spoken narration is external');
+    await writeFile(f.readyPath, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23',
+      adapterRevision: 'synclip-video-v2', accepting: true, updatedAt: f.now }));
+    const result = await f.spool.generate(f.input);
+    const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
+    expect(request.audio).toBeUndefined();
+    expect(result.narration.timingStatus).toBe('not_available');
+  });
+});
+
 describe('private audio audition transport', () => {
   const mp3Frame = Buffer.concat([Buffer.from([255, 251, 144, 0]), Buffer.alloc(413)]);
   const audioBytes = Buffer.concat([mp3Frame, mp3Frame]);
