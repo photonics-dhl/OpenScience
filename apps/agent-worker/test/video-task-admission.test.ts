@@ -7,10 +7,11 @@ import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
   recoverHeldVideoTasks, VIDEO_READINESS_HOLD } from '../src/video-task-admission';
 import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
-import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from '../../../packages/domain/src/agent/native-agent-execution';
+import { initialNativeAgentExecution, readNativeAgentExecution, type NativeAgentCheckpointReference } from '../../../packages/domain/src/agent/native-agent-execution';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../../packages/domain/src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../../packages/domain/src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../../packages/domain/src/assets/storyboard';
+import { parsePresentationGenerationPayload, requireSceneImageParent } from '../../../packages/domain/src/assets/presentation-asset';
 import { CONTENT_DRIVEN_PROFILE } from '../../../packages/domain/src/assets/video';
 
 const execution = vi.hoisted(() => ({ claim: vi.fn(), progress: vi.fn() }));
@@ -492,6 +493,49 @@ function ordinaryIngestionFixture(role = 'author') {
   return { ...f, journalArticle };
 }
 
+describe('optional video contract hold scope', () => {
+  function malformedNonvideo(kind: 'presentation.generate' | 'sdf.extract', ownContract = false) {
+    const f = kind === 'sdf.extract' ? ordinaryIngestionFixture() : queueFixture();
+    if (kind === 'presentation.generate') f.task.payload = { ...f.task.payload, kind: 'interactive_html', storyboard: { output: 'image', narrative: true } };
+    f.task.result = initialNativeAgentExecution({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' }, 'paper-illustration')!;
+    Object.assign(f.task.result.nativeAgentExecution!, { runtimeId: '' });
+    if (ownContract) Object.assign(f.task.result.nativeAgentExecution!, { planningContract: 'unknown-contract' });
+    f.handler.mockImplementation(async () => { readNativeAgentExecution(f.task.result); return { completed: true }; });
+    return f;
+  }
+  it.each(['presentation.generate', 'sdf.extract'] as const)('lets malformed unmarked %s reach its existing fail-closed handler on admission and retry', async kind => {
+    const f = malformedNonvideo(kind), result = structuredClone(f.task.result);
+    const snapshot = structuredClone(f.task);
+    expect(await admitPendingVideoTask(f.deps, snapshot as never)).toEqual({ expectedPendingTask: snapshot });
+    expect(f.task).toEqual(snapshot); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'failed', executionAttempt: 1, result });
+    expect(f.task.error).not.toBe(VIDEO_READINESS_HOLD);
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+    Object.assign(f.task, { status: 'pending', error: null, retryCount: 1 });
+    f.lists.set(queueKey, [f.task.id]);
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'failed', executionAttempt: 2, retryCount: 1, result });
+    expect(f.task.error).not.toBe(VIDEO_READINESS_HOLD);
+    expect(execution.claim).toHaveBeenCalledTimes(2); expect(f.handler).toHaveBeenCalledTimes(2);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(f.lists.get(processingKey)).toEqual([]);
+  });
+  it.each(['presentation.generate', 'sdf.extract'] as const)('never invents a video hold for a malformed marked nonvideo %s', async kind => {
+    const f = malformedNonvideo(kind, true), snapshot = structuredClone(f.task);
+    expect(await admitPendingVideoTask(f.deps, snapshot as never)).toEqual({ expectedPendingTask: snapshot });
+    expect(f.task).toEqual(snapshot); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it.each(['presentation.generate', 'sdf.extract'] as const)('preserves generic held recovery and original explicit release for malformed unmarked %s', async kind => {
+    const f = malformedNonvideo(kind); f.task.error = VIDEO_READINESS_HOLD;
+    const held = structuredClone(f.task);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(f.task).toEqual(held); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    expect(await releasePendingVideoTask(f.deps, held as never)).toBe(true);
+    expect(await releasePendingVideoTask(f.deps, held as never)).toBe(false);
+    expect(f.task).toEqual({ ...held, error: null, dispatchedAt: null, updatedAt: new Date(held.updatedAt.getTime() + 1) });
+  });
+});
+
 describe('audio-only pending and held admission', () => {
   const policy = { audio: { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 }, maxEstimatedCoins: 200 };
   function audition() {
@@ -870,7 +914,7 @@ async function persistedNativeAdmissionFixture() {
     const review = { stage: 'final-brief', decision: 'accepted', requestId: parentId, candidateHash: hash(storyboardDocument), sourceEvidenceIdentity,
       summary: 'Supported by the saved paper.', ...cp.target, responseHash: cp.responseHash };
     const context = { payload: structuredClone(payload), sourceEvidenceIdentity, claimContent: presentationClaimContent(claims), baseIdentity: null, narrativeSourceIdentity: '' };
-    const result = { ...initialNativeAgentExecution({ runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' }, 'paper-illustration')!,
+    const result = { ...initialNativeAgentExecution({ runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' }, 'paper-illustration', 'video-optional-audio-v1')!,
       sourceMapRef: structuredClone(sourceMapRef), assetId: parentId, contentHash: '1'.repeat(64), nativeIllustrationContext: context,
       storyboardCheckpoint: { ...structuredClone(context), executionAttempt: 1, planned: { document: structuredClone(storyboardDocument), promptHash: review.promptHash, reviewFormat: 2,
         designSkills: [{ id: 'scientific', version: '20', resources: ['SKILL.md#Execution'] }] as RenderResources } }, storyboardReview: structuredClone(review),
@@ -990,13 +1034,22 @@ describe('persisted Native audio admission', () => {
     expect(vi.mocked(f.deps.readVideoReadiness).mock.calls.every(call => call.length === 0)).toBe(true);
   });
 
-  it.each(['video', 'scene-image'] as const)('keeps mixed %s held even with both host purposes ready', async kind => {
+  it.each(['video', 'scene-image'] as const)('blocks mixed %s before any provider readiness or rendering', async kind => {
     const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'external-narration', 'native']);
-    if (kind === 'scene-image') f.asSceneImage();
+    if (kind === 'scene-image') {
+      f.asSceneImage();
+      f.handler.mockImplementation(async () => {
+        await requireSceneImageParent(f.deps.prisma, parsePresentationGenerationPayload(f.task.payload));
+        return { completed: true };
+      });
+    }
     f.deps.readVideoReadiness = vi.fn(async () => true);
     expect(await f.poll()).toBe(true);
-    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
-    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+    expect(f.task).toMatchObject(kind === 'video'
+      ? { status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 }
+      : { status: 'failed', executionAttempt: 1 });
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    expect(execution.claim).toHaveBeenCalledTimes(kind === 'video' ? 0 : 1);
   });
 
   it('releases only the native held task through native readiness and never posts or changes an attempt', async () => {

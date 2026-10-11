@@ -25,7 +25,13 @@ function firstNativePlan(task: VideoTaskAdmissionSnapshot, error: string | null 
 }
 
 /** NULL-CP future contracts have no saved tools to replay. Host readiness cannot supply those tools. */
-function planningContractHold(task: Pick<AgentTask, 'result'>): boolean {
+function planningContractHold(task: Pick<AgentTask, 'kind' | 'payload' | 'result'>): boolean {
+  if (task.kind !== 'presentation.generate' || !isDirectNativeVideoStoryboard(task.payload)
+    || !task.result || typeof task.result !== 'object' || Array.isArray(task.result)
+    || !Object.hasOwn(task.result, 'nativeAgentExecution')) return false;
+  const rawMarker = (task.result as Record<string, unknown>).nativeAgentExecution;
+  if (!rawMarker || typeof rawMarker !== 'object' || Array.isArray(rawMarker)
+    || !Object.hasOwn(rawMarker, 'planningContract')) return false;
   try {
     const marker = readNativeAgentExecution(task.result);
     return marker?.planningContract !== undefined && (!marker.checkpoint || marker.checkpoint.state === 'started');

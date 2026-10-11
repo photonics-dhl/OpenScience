@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { AgentTask, PresentationAsset, Prisma } from '@prisma/client';
 import { PresentationAssetError } from './errors';
 import { presentationSceneImageView, requireAcceptedSceneImageReview, sceneImageReviewTaskResult } from './scene-image';
-import { parseStoryboardRequest, presentationStoryboardView, type StoryboardDocument, type StoryboardRequest } from './storyboard';
+import { classifyNativeVideoAudio, parseStoryboardRequest, presentationStoryboardView, type StoryboardDocument, type StoryboardRequest } from './storyboard';
 import { requireAnimationSourceSupport } from './animation';
 import { readNativeImageReviewCheckpoint } from './native-image-review';
 import { nativeAgentTerminalResult, readNativeAgentExecution, requireNativeIllustrationTerminalSource } from '../agent/native-agent-execution';
@@ -162,6 +162,10 @@ export async function requireNativeVideoStoryboard(prisma: VideoParentDb, asset:
   const checkpoint = record(result.storyboardCheckpoint), planned = record(checkpoint.planned), native = record(result.nativeIllustration);
   let execution: ReturnType<typeof readNativeAgentExecution>;
   try { execution = readNativeAgentExecution(task.result); } catch (error) { nativeVideoProofFailure(error); }
+  const audioMode = classifyNativeVideoAudio(view.document);
+  if (!audioMode || audioMode === 'native-first' && execution?.planningContract !== 'video-optional-audio-v1') {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Native video storyboard audio does not match its saved planning contract');
+  }
   const cp = execution?.checkpoint;
   if (parentPayload.kind !== 'interactive_html' || parentPayload.researchObjectId !== payload.researchObjectId || parentPayload.versionId !== payload.versionId
     || !isDeepStrictEqual(parentPayload.sourceClaimIds, ids) || !isDeepStrictEqual(parentPayload.storyboard, settings)
