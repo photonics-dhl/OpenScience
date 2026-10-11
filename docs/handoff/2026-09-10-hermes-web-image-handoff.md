@@ -15,9 +15,9 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 10-11 human“继续”后已恢复：原43d证据确认subject0→s15实质错绑须保留；半λ描述歧义的反馈只报下游字段，遗漏关联subject.description。已授planner及native-illustration-task.test两文件最小定位修复，既有flags/拒收/旧回执不变；待定向RED/GREEN与原High增量审 | 原illustration-chain-repair树，新codex分支基于b856；原1ea/parser704已发布证据、CP和transport错误保留，0新模型/生产写 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 90739→a7102ca0仅planner与原native-task测试已全等集入；关联subject.description补入原错误fields，旧拒收/来源/flags不变。有效RED→9/9（另184未选）、最终WorkerTC0、原High Scoped GO，5条旧regex lint对base全等复现；待本组合CI。s15实质错绑与原43d失败不追认 | 原illustration-chain-repair树 / codex/native-subject-feedback@90739；原1ea与全部证据保留，0模型/生产写 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无自动新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 3245正常入口与两个公开提示已实见，首份计划提交未验。10-11 human“继续”后已恢复一次正常浏览器入口尝试，仅补框内闲置/指针动态；若再次超时立停，不刷新/换client/改偏好。原超时与源站负证据保留，真实动态仍待观察 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；原tmp/ui-art-20261008收据增量记录；代码/业务/模型写0 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | human继续后的正常入口已恢复，框内姿态/指针响应已实见，root已看必要帧；眨眼/呼吸未确认。关闭观察纠正为弹窗仍开，正在核原selector是否准确命中及真实状态，不据延迟或误点擅改源码；原超时原因未定 | 原research-product-craft树 / codex/first-video-storyboard-browser@ffad；原tmp/ui-art-20261008恢复帧与待收据，代码/业务/模型写0 |
 - 本聊天三线生产操作由总控串行排程；本次app-only发布已完成并关闭writer，UI仅只读。43d提交窗口仍关闭，旧b261/e5/ce968部署包装未执行且不再跑。当前权限正常，协调与生产受控命令实际成功，不再把历史read-only/审批never冲突当现状。后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
 ## Git / CI / 运行事实
