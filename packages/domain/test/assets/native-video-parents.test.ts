@@ -346,7 +346,7 @@ describe('native video audio pre-charge selection', () => {
     setAudio(f, 'native-first', ['native', 'external-narration', 'native']);
     readVideoReadiness.mockClear().mockResolvedValue(false);
     const paid = structuredClone(ctx.db);
-    await expect(submitPresentationGeneration(deps as never, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect((await submitPresentationGeneration(deps as never, input)).id).toBe(first.id);
     expect(ctx.db.agentTasks[0]!.id).toBe(first.id);
     expect(ctx.db).toEqual(paid); expect(readVideoReadiness).not.toHaveBeenCalled();
   });
