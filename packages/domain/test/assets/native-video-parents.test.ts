@@ -4,7 +4,7 @@ import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
-import { listPresentationAssets, submitPresentationGeneration } from '../../src/assets/presentation-asset';
+import { listPresentationAssets, submitPresentationGeneration, transitionPresentationAsset } from '../../src/assets/presentation-asset';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, requireNativeVideoSceneImage, requireNativeVideoStoryboard, requireVideoGenerationParents } from '../../src/assets/video';
 
@@ -416,6 +416,78 @@ describe('native video parent audio contract authority', () => {
     expect(ctx.db.agentTasks).toHaveLength(3);
     expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(3);
     expect(ctx.reads()).toEqual({ audioPolicyReads: 1, videoPolicyReads: 2 });
+  });
+});
+
+describe('native video storyboard approval authority', () => {
+  function transitionFixture(f: ListFixture) {
+    Object.assign(f.version, { createdAt: now, versionNo: 1 });
+    const ctx = submissionFixture(f), parent = structuredClone(f.parent);
+    ctx.db.presentationAssets.push(parent);
+    ctx.db.presentationAssetClaims.push({ presentationAssetId: parentId, claimId });
+    ctx.deps.prisma.presentationAsset.findUnique = (async ({ where }: { where: { id: string } }) =>
+      ctx.db.presentationAssets.find(asset => asset.id === where.id) ?? f.prisma.presentationAsset.findUnique({ where })) as typeof ctx.deps.prisma.presentationAsset.findUnique;
+    ctx.deps.prisma.hermesResearchRun.findFirst = vi.fn(async () => null) as typeof ctx.deps.prisma.hermesResearchRun.findFirst;
+    const audit = { record: vi.fn(async (event: unknown, tx: { auditLog: { create: (input: { data: unknown }) => Promise<unknown> } }) => {
+      await tx.auditLog.create({ data: event });
+    }) };
+    return { ...ctx, deps: { ...ctx.deps, audit }, parent, input: { ...f.input, assetId: parentId, status: 'approved' as const, expectedUpdatedAt: parent.updatedAt } };
+  }
+  function syncDocument(f: ListFixture) {
+    const document = f.parent.provenance.storyboardDocument;
+    f.parentTask.result.storyboardCheckpoint.planned.document = structuredClone(document);
+    f.parentTask.result.storyboardReview.candidateHash = hash(document);
+    f.parent.provenance.illustrationReview = structuredClone(f.parentTask.result.storyboardReview);
+  }
+  it.each(['unmarked-native', 'unknown-contract', 'null-contract', 'mixed', 'silent', 'hybrid', 'missing-mode'] as const)(
+    'rejects %s through the actual approval transaction with no asset/audit/database changes', async change => {
+      const f = await listFixture(), document = f.parent.provenance.storyboardDocument;
+      document.videoProduction!.audioPolicy = 'native-first';
+      document.scenes.forEach(scene => { scene.videoDirection!.audioMode = 'native'; });
+      if (change !== 'unmarked-native') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'video-optional-audio-v1' });
+      if (change === 'unknown-contract') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'unknown' });
+      if (change === 'null-contract') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: null });
+      if (change === 'mixed') document.scenes[1]!.videoDirection!.audioMode = 'external-narration';
+      if (change === 'silent' || change === 'hybrid') document.scenes[1]!.videoDirection!.audioMode = change;
+      if (change === 'missing-mode') delete record(document.scenes[1]!.videoDirection).audioMode;
+      syncDocument(f);
+      const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+      expect.soft(view).toMatchObject({ canTransition: false, canApprove: false });
+      const ctx = transitionFixture(f), before = structuredClone(ctx.db), saved = structuredClone(f.parentTask.result);
+      await expect(transitionPresentationAsset(ctx.deps as never, ctx.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(ctx.db).toEqual(before); expect(ctx.parent.status).toBe('draft'); expect(ctx.db.auditLogs).toHaveLength(0);
+      expect(f.parentTask.result).toEqual(saved); expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
+    });
+  it.each([
+    ['historical-external', 'platform_admin'], ['marked-external', 'platform_admin'], ['marked-native', 'platform_admin'],
+    ['historical-external', 'user'], ['marked-external', 'user'], ['marked-native', 'user'],
+  ] as const)('retains real %s approval by %s', async (mode, role) => {
+    const f = await listFixture(); f.user.platformRole = role;
+    if (mode !== 'historical-external') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'video-optional-audio-v1' });
+    if (mode === 'marked-native') {
+      f.parent.provenance.storyboardDocument.videoProduction!.audioPolicy = 'native-first';
+      f.parent.provenance.storyboardDocument.scenes.forEach(scene => { scene.videoDirection!.audioMode = 'native'; });
+      syncDocument(f);
+    }
+    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canTransition: true, canApprove: true });
+    if (role === 'user') expect(view).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false });
+    const ctx = transitionFixture(f), saved = structuredClone(f.parentTask.result);
+    await expect(transitionPresentationAsset(ctx.deps as never, ctx.input)).resolves.toMatchObject({ id: parentId, status: 'approved' });
+    expect(ctx.parent.status).toBe('approved');
+    expect(ctx.db.auditLogs).toHaveLength(1); expect(ctx.db.auditLogs[0]).toMatchObject({ action: 'presentation_asset.approved', targetId: parentId });
+    expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
+    expect(f.parentTask.result).toEqual(saved); expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
+  });
+  it('retains rejection of an already-approved unmarked native-first historical record without rewriting it', async () => {
+    const f = await listFixture(); f.parent.status = 'approved';
+    f.parent.provenance.storyboardDocument.videoProduction!.audioPolicy = 'native-first';
+    f.parent.provenance.storyboardDocument.scenes.forEach(scene => { scene.videoDirection!.audioMode = 'native'; });
+    syncDocument(f);
+    const ctx = transitionFixture(f), provenance = structuredClone(ctx.parent.provenance), saved = structuredClone(f.parentTask.result);
+    await expect(transitionPresentationAsset(ctx.deps as never, { ...ctx.input, status: 'rejected' })).resolves.toMatchObject({ status: 'rejected' });
+    expect(ctx.parent.provenance).toEqual(provenance); expect(f.parentTask.result).toEqual(saved);
+    expect(ctx.db.auditLogs).toHaveLength(1); expect(ctx.db.auditLogs[0]).toMatchObject({ action: 'presentation_asset.rejected' });
   });
 });
 

@@ -509,9 +509,13 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     const mayGenerate = claimsValid && canWrite && user?.platformRole === 'platform_admin';
     let nativeProof: Awaited<ReturnType<typeof requireNativeVideoStoryboard>> | undefined;
     let videoFrameAssetIds: string[] | undefined;
-    if (nativeVideo && mayGenerate) {
+    if (nativeVideo && claimsValid && canWrite) {
       try {
         nativeProof = await requireNativeVideoStoryboard(deps.prisma, asset, { ...input, sourceClaimIds: ids });
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
+    }
+    if (nativeVideo && mayGenerate && nativeProof) {
+      try {
         const selected: string[] = [];
         for (let sceneIndex = 0; sceneIndex < storyboardForVideo.document.scenes.length; sceneIndex++) {
           const candidates = [...(sceneImagesByIndex.get(sceneIndex) ?? [])].sort((left, right) =>
@@ -549,7 +553,7 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
         && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
     const canGenerateAudioAudition = nativeVideo && canGenerateVideo;
-    const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
+    const canTransition = sceneValid && videoValid && (!nativeVideo || !!nativeProof) && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
@@ -703,6 +707,11 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       }
       const storyboard = presentationStoryboardView(asset, links.map(link => link.claimId));
       if (storyboard) {
+        if (storyboard.output === 'video' && storyboard.narrative === true) {
+          await requireNativeVideoStoryboard(tx, { ...asset, sourceClaims: links }, {
+            researchObjectId: input.researchObjectId, versionId: input.versionId, sourceClaimIds: links.map(link => link.claimId).sort(),
+          });
+        }
         const boundRun = await tx.hermesResearchRun.findFirst({ where: {
           researchObjectId: input.researchObjectId, versionId: input.versionId, profile: CONTENT_DRIVEN_PROFILE,
           status: 'awaiting_storyboard_review', steps: { some: { stage: 'storyboard',
