@@ -115,33 +115,41 @@ async function request(directory, id) {
   if ((value.purpose !== undefined && !audition) || (!audition && value.audioAuditionGrant !== undefined)) fail('VIDEO_REQUEST');
   if (audition && (!value.audio || !Number.isSafeInteger(value.sceneIndex) || value.sceneIndex < 0 || value.sceneIndex >= value.scenes.length
     || !['zh', 'en'].includes(value.locale))) fail('AUDIO_AUDITION_SCOPE');
+  const storyboard = JSON.parse(story.toString('utf8'));
   const identity = audition ? { files: value.files, audio: value.audio, scenes: value.scenes,
     purpose: value.purpose, sceneIndex: value.sceneIndex, voice: value.audio.voice, locale: value.locale }
-    : value.audio ? { files: value.files, audio: value.audio, scenes: value.scenes } : value.files;
+    : value.audio ? { files: value.files, audio: value.audio, scenes: value.scenes }
+      : storyboard.narrative ? { files: value.files, scenes: value.scenes } : value.files;
   if (hash(Buffer.from(JSON.stringify(identity))) !== value.inputHash) fail('VIDEO_REQUEST');
   if (audition) requireAuditionGrant(value);
-  return { ...value, storyboard: JSON.parse(story.toString('utf8')) };
+  return { ...value, storyboard };
 }
 function requireSupportedPlan(request, cfg) {
   if (!request.audio && !request.storyboard.narrative) return; // Preserve existing paid/recovery jobs.
-  if (!request.audio || !isDeepStrictEqual(audioConfig(cfg.audio), request.audio)) fail('AUDIO_CONFIG_CHANGED');
   if (!request.storyboard.narrative || !Array.isArray(request.storyboard.scenes)
     || !['zh', 'en'].includes(request.storyboard.locale)
-    || request.storyboard.scenes.length !== request.scenes.length
-    || request.storyboard.videoProduction?.audioPolicy !== 'external-narration') fail('VIDEO_PLAN_UNSUPPORTED');
+    || request.storyboard.scenes.length !== request.scenes.length) fail('VIDEO_PLAN_UNSUPPORTED');
+  const policy = request.storyboard.videoProduction?.audioPolicy;
+  const external = policy === 'external-narration'
+    && request.storyboard.scenes.every(scene => scene.videoDirection?.audioMode === 'external-narration');
+  const native = policy === 'native-first'
+    && request.storyboard.scenes.every(scene => scene.videoDirection?.audioMode === 'native');
+  if (!external && !native || native && request.audio) fail('VIDEO_PLAN_UNSUPPORTED');
+  if (external && (!request.audio || !isDeepStrictEqual(audioConfig(cfg.audio), request.audio))) fail('AUDIO_CONFIG_CHANGED');
   for (const [index, scene] of request.scenes.entries()) {
     const original = request.storyboard.scenes[index], direction = original?.videoDirection;
-    if (!original || original.narration !== scene.narration || original.durationSeconds !== scene.durationSeconds
+    if (!original || typeof scene.narration !== 'string' || !scene.narration.trim() || native && [...scene.narration].length > 120
+      || original.narration !== scene.narration || original.durationSeconds !== scene.durationSeconds
       || direction?.reference !== 'scene-artwork' || direction.frameStrategy !== 'start-reference'
-      || direction.audioMode !== 'external-narration' || direction.subtitleMode !== 'none') fail('VIDEO_PLAN_UNSUPPORTED');
-    validateSynclipAudioRequest({ text: scene.narration, voice: request.audio.voice, speed: request.audio.speed });
+      || direction.subtitleMode !== 'none') fail('VIDEO_PLAN_UNSUPPORTED');
+    if (external) validateSynclipAudioRequest({ text: scene.narration, voice: request.audio.voice, speed: request.audio.speed });
   }
 }
 function checkDeadline(request, now) {
   if (now() >= request.deadlineAt) fail('DEADLINE_EXCEEDED');
 }
 async function requireKnownVideoOutcome(directory, request) {
-  if (!request.audio) return;
+  if (!request.audio && !request.storyboard.narrative) return;
   const path = join(directory, 'synclip-receipts.json'), receipt = await exists(path) ? await json(path) : null;
   if (receipt && (receipt.id !== request.id || receipt.inputHash !== request.inputHash || !Array.isArray(receipt.shots)
     || new Set(receipt.shots.map(shot => shot.index)).size !== receipt.shots.length
@@ -160,7 +168,7 @@ async function requireKnownVideoOutcome(directory, request) {
     const matched = /^shot-([0-5])\.mp4$/u.exec(name);
     return !matched || !receipt?.shots.some(shot => shot.index === Number(matched[1]));
   })) fail('UNCERTAIN');
-  if (receipt?.shots.length || shotFiles.length) {
+  if (request.audio && (receipt?.shots.length || shotFiles.length)) {
     const audio = await json(join(directory, 'audio-receipts.json'));
     if (audio.id !== request.id || audio.inputHash !== request.inputHash || audio.voice !== request.audio.voice || audio.speed !== request.audio.speed
       || !Array.isArray(audio.scenes) || audio.scenes.length !== request.scenes.length) fail('AUDIO_RECEIPT');
@@ -224,7 +232,7 @@ export async function decodeSynclipAudio(cfg, directory, relativePath, command =
 export async function probeMedia(cfg, directory, relativePath, command = rendererCommand) {
   const value = JSON.parse(await command(cfg, directory, null, '/usr/bin/ffprobe', [
     '-v', 'error', '-show_streams', '-show_format', '-show_frames', '-show_entries',
-    'stream=index,codec_type,codec_name,width,height,channels,sample_rate,avg_frame_rate:format=duration:frame=media_type,stream_index,best_effort_timestamp_time,duration_time,pkt_duration_time,nb_samples',
+    'stream=index,codec_type,codec_name,width,height,channels,channel_layout,sample_rate,avg_frame_rate:format=duration:frame=media_type,stream_index,best_effort_timestamp_time,duration_time,pkt_duration_time,nb_samples',
     '-of', 'json', '/input/' + relativePath], { maxBytes: 2 * 1024 * 1024 }));
   const durationSeconds = Number(value.format?.duration);
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 600 || !Array.isArray(value.streams) || !value.streams.length || value.streams.length > 8
@@ -241,6 +249,7 @@ export async function probeMedia(cfg, directory, relativePath, command = rendere
     let end = frames[0].start;
     for (const frame of frames) { if (frame.start > end + 0.1) fail('VIDEO_MEDIA_TIMELINE_GAP'); end = Math.max(end, frame.start + frame.duration); }
     return { type: stream.codec_type, codec: stream.codec_name, width: stream.width, height: stream.height, channels: stream.channels,
+      ...(stream.codec_type === 'audio' ? { sampleRate: Number(stream.sample_rate), channelLayout: stream.channel_layout } : {}),
       startTimeSeconds: frames[0].start, durationSeconds: end - frames[0].start, endTimeSeconds: end };
   });
   return { durationSeconds, streams };
@@ -409,6 +418,53 @@ export async function muxSynclipNarration(cfg, privateDir, outDir, request, comm
   await command(cfg, privateDir, outDir, '/usr/bin/ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'concat', '-safe', '0', '-i', '/input/output/concat.txt', '-c', 'copy', '-movflags', '+faststart', '/output/result.mp4']);
 }
+function providerAudioLayout(stream) {
+  if (typeof stream.codec !== 'string' || !/^[a-z0-9_]{1,64}$/iu.test(stream.codec)
+    || ![1, 2].includes(stream.channels) || ![8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000].includes(stream.sampleRate))
+    fail('VIDEO_PROVIDER_AUDIO_LAYOUT_INVALID');
+  const layout = stream.channels === 1 ? 'mono' : 'stereo';
+  if (stream.channelLayout !== undefined && stream.channelLayout !== layout) fail('VIDEO_PROVIDER_AUDIO_LAYOUT_INVALID');
+  return { codec: stream.codec, channels: stream.channels, sampleRate: stream.sampleRate, channelLayout: layout };
+}
+function requireProviderTimeline(media, duration, code) {
+  if (!Number.isFinite(media.durationSeconds) || Math.abs(media.durationSeconds - duration) > 0.5
+    || !Array.isArray(media.streams) || media.streams.some(stream => !['video', 'audio'].includes(stream.type)
+      || !Number.isFinite(stream.startTimeSeconds) || Math.abs(stream.startTimeSeconds) > 0.1
+      || !Number.isFinite(stream.durationSeconds) || Math.abs(stream.durationSeconds - duration) > 0.5)) fail(code);
+}
+/** Preserve every provider-originated track; this neither creates nor mixes narration. */
+export async function concatSynclipProviderOutput(cfg, privateDir, outDir, request, command = rendererCommand, probe = probeMedia) {
+  let layout, videoLayout;
+  for (const scene of request.scenes) {
+    const media = await probe(cfg, privateDir, 'shots/shot-' + scene.index + '.mp4');
+    requireProviderTimeline(media, scene.durationSeconds, 'VIDEO_PROVIDER_SHOT_INVALID');
+    const videos = media.streams.filter(stream => stream.type === 'video');
+    if (videos.length !== 1 || typeof videos[0].codec !== 'string'
+      || !Number.isFinite(videos[0].width) || !Number.isFinite(videos[0].height)
+      || videos[0].width < 1280 || videos[0].height < 720) fail('VIDEO_PROVIDER_SHOT_INVALID');
+    const currentVideo = { codec: videos[0].codec, width: videos[0].width, height: videos[0].height };
+    const current = media.streams.filter(stream => stream.type === 'audio').map(providerAudioLayout);
+    if (layout && (!isDeepStrictEqual(layout, current) || !isDeepStrictEqual(videoLayout, currentVideo)))
+      fail('VIDEO_PROVIDER_AUDIO_LAYOUT_CHANGED');
+    layout = current; videoLayout = currentVideo;
+  }
+  if (!layout) fail('VIDEO_PROVIDER_SHOT_INVALID');
+  await mkdir(outDir, { recursive: true, mode: 0o700 });
+  await command(cfg, privateDir, outDir, '/usr/bin/ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'concat', '-safe', '0', '-i', '/input/concat.txt', '-map', '0:v:0',
+    ...layout.flatMap((_, index) => ['-map', '0:a:' + index]),
+    '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=24,setsar=1',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
+    ...(layout.length ? ['-c:a', 'aac', '-b:a', '192k'] : []), '-movflags', '+faststart', '/output/result.mp4']);
+  const durationSeconds = request.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0);
+  const final = await probe(cfg, privateDir, 'output/result.mp4');
+  requireProviderTimeline(final, durationSeconds, 'VIDEO_PROVIDER_OUTPUT_INVALID');
+  const videos = final.streams.filter(stream => stream.type === 'video'), audio = final.streams.filter(stream => stream.type === 'audio');
+  if (videos.length !== 1 || videos[0].codec !== 'h264' || videos[0].width !== 1280 || videos[0].height !== 720
+    || audio.length !== layout.length || audio.some((stream, index) => stream.codec !== 'aac'
+      || !isDeepStrictEqual(providerAudioLayout(stream), { ...layout[index], codec: 'aac' }))) fail('VIDEO_PROVIDER_OUTPUT_INVALID');
+  return { durationSeconds: final.durationSeconds, audioStreamCount: audio.length };
+}
 async function ffmpeg(cfg, privateDir, outDir, request) {
   await mkdir(outDir, { recursive: true, mode: 0o700 });
   if (request?.audio) return muxSynclipNarration(cfg, privateDir, outDir, request);
@@ -445,7 +501,7 @@ async function execute(cfg, directory, request, client, prepared, deps, audioTim
   const now = deps.now ?? Date.now;
   const shots = join(directory, 'shots'), receiptPath = join(directory, 'synclip-receipts.json');
   await mkdir(shots, { recursive: true, mode: 0o700 });
-  let receipt = { id: request.id, ...(request.audio ? { inputHash: request.inputHash } : {}), shots: [] };
+  let receipt = { id: request.id, ...(request.audio || request.storyboard.narrative ? { inputHash: request.inputHash } : {}), shots: [] };
   try { receipt = await json(receiptPath); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   for (const scene of request.scenes) {
@@ -487,7 +543,9 @@ async function execute(cfg, directory, request, client, prepared, deps, audioTim
   checkDeadline(request, now);
   await write(join(directory, 'concat.txt'), request.scenes.map(scene => "file '/input/shots/shot-" + scene.index + ".mp4'").join('\n') + '\n');
   const outDir = join(directory, 'output');
-  await (deps.render ?? ffmpeg)(cfg, directory, outDir, request);
+  const providerOutput = !request.audio && request.storyboard.narrative
+    ? await concatSynclipProviderOutput(cfg, directory, outDir, request, deps.command ?? rendererCommand, deps.probe ?? probeMedia)
+    : await (deps.render ?? ffmpeg)(cfg, directory, outDir, request);
   const bytes = await read(join(outDir, 'result.mp4'), MAX_MP4);
   if (!bytes.subarray(4, 12).includes(Buffer.from('ftyp'))) fail('VIDEO_MP4');
   let narration, measuredOutput;
@@ -505,6 +563,7 @@ async function execute(cfg, directory, request, client, prepared, deps, audioTim
   await publish(cfg, request, 'succeeded', undefined, { bytes,
     metrics: { provider: 'synclip', model: 'ltx23', shotCount: request.scenes.length,
       audioMode: request.audio ? 'external-narration' : 'provider-output-unverified',
+      ...(!request.audio && request.storyboard.narrative ? providerOutput : {}),
       ...(request.audio ? { audioTiming, durationSeconds: measuredOutput.durationSeconds, narration } : {}) },
     result: { contentType: 'video/mp4', outputSha256: hash(bytes), outputSize: bytes.length, ...(narration ? { narration } : {}) } });
 }

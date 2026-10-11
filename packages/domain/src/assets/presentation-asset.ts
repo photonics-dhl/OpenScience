@@ -8,7 +8,7 @@ import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
 import { isWorkingDraftVersion } from '../commit/version-history';
 import { recordValue, refreshWorkingResearchRecord } from '../commit/research-record-snapshot';
 import { isVersionHistoryCopy, requireValidVersionHistoryCopy } from './version-history-copy';
-import { parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
+import { classifyNativeVideoAudio, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
@@ -372,6 +372,16 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}), ...(input.video !== undefined ? { video: input.video } : {}) });
   const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } });
   let videoIntent = payload.kind === 'video' || payload.storyboard?.output === 'video';
+  let videoReadinessPurpose: 'native-first' | undefined;
+  let nativeAudioParent: { identity: string; mode: 'external-narration' | 'native-first';
+    read: () => Promise<{ identity: string; document: unknown } | undefined> } | undefined;
+  const selectNativeAudio = (document: unknown, identity: string,
+    read: NonNullable<typeof nativeAudioParent>['read']) => {
+    const mode = classifyNativeVideoAudio(document);
+    if (!mode) throw new PresentationAssetError('VALIDATION_ERROR', 'Native video requires consistent external narration or native audio in every scene');
+    videoReadinessPurpose = mode === 'native-first' ? mode : undefined;
+    nativeAudioParent = { identity, mode, read };
+  };
   await requireStoryboardRevisionTask(deps.prisma, payload, input.userId);
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
@@ -384,12 +394,25 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
     videoIntent ||= sceneParent?.view.output === 'video';
+    if (!replay && sceneParent?.view.output === 'video' && sceneParent.view.narrative === true)
+      selectNativeAudio(sceneParent.view.document, sceneParent.identity, async () => {
+        const current = await requireSceneImageParent(deps.prisma, payload);
+        return current?.view.output === 'video' && current.view.narrative === true
+          ? { identity: current.identity, document: current.view.document } : undefined;
+      });
     if (generatedSceneImageRequiresPixelReview(payload) && !/^[a-f0-9]{64}$/u.test(sceneParent?.sourceEvidenceIdentity ?? ''))
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Reviewed scene image requires a source-bound storyboard; revise the plan before generating');
     if (sceneParent && !replay) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
-  if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
+  if (payload.video) {
+    const parents = await requireVideoGenerationParents(deps.prisma, payload);
+    if (!replay && payload.video.purpose !== 'audio-audition' && parents?.nativeParent)
+      selectNativeAudio(parents.storyboardView.document, parents.identity, async () => {
+        const current = await requireVideoGenerationParents(deps.prisma, payload);
+        return current?.nativeParent ? { identity: current.identity, document: current.storyboardView.document } : undefined;
+      });
+  }
   if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload)) {
     const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
     if (audition) {
@@ -398,7 +421,12 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       if (!isDeepStrictEqual(policy.audio, audition.audio)) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition voice must match the explicitly configured server voice');
       }
-    } else await requireHermesVideoReady(deps);
+    } else await requireHermesVideoReady(deps, videoReadinessPurpose);
+  }
+  if (nativeAudioParent) {
+    const current = await nativeAudioParent.read();
+    if (!current || current.identity !== nativeAudioParent.identity || classifyNativeVideoAudio(current.document) !== nativeAudioParent.mode)
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Native video parent changed before task booking');
   }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };

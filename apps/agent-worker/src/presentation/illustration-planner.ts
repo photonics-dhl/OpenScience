@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { parseStructuredJson, type AiGateway } from '@openscience/ai-gateway';
-import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, parseIllustrationStyleRecommendations, requireIllustrationSourceSupport, storyboardSceneStyles, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView, type PaperOriginalRef } from '@openscience/domain';
+import { ILLUSTRATION_BRIEF_MAX_CHARACTERS, classifyNativeVideoAudio, describeIllustrationBrief, parseIllustrationBrief, parseStoryboardDocument, parseIllustrationStyleRecommendations, requireIllustrationSourceSupport, storyboardSceneStyles, type IllustrationBrief, type StoryboardDocument, type StoryboardRequest, type StoryboardView, type PaperOriginalRef } from '@openscience/domain';
 import type { PresentationClaim } from './chart-generator';
 import { automaticStyleTreatment, installedIllustrationStyle, loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { compileIllustrationImagePrompt } from './scene-image';
@@ -591,6 +591,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   if (nativeVideo) {
+    if (!classifyNativeVideoAudio({ videoProduction: root.videoProduction, scenes })) throw new Error('native_video_audio_mode_unsupported');
     const candidate = parseStoryboardDocument({ schemaVersion: 1, title: root.title, narrative, videoProduction: root.videoProduction,
       scenes: scenes.map(scene => ({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) })) }, claimIds, 'video', { nativeNarrativeVideo: true });
     requireBoundNumericalResults([['videoProduction.visualContinuity', candidate.videoProduction!.visualContinuity]],

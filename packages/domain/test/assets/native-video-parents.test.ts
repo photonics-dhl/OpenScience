@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
@@ -252,6 +252,102 @@ function submissionFixture(f: ListFixture) {
     readVideoReadiness: async () => { videoPolicyReads++; return true; } };
   return { deps, db, reads: () => ({ audioPolicyReads, videoPolicyReads }) };
 }
+
+describe('native video audio pre-charge selection', () => {
+  function setAudio(f: ListFixture, policy: string, modes: string[]) {
+    const document = f.parent.provenance.storyboardDocument;
+    document.videoProduction!.audioPolicy = policy as never;
+    document.scenes.forEach((scene, index) => { scene.videoDirection!.audioMode = modes[index] as never; });
+    refreshChain(f, [{ asset: f.parent, task: f.parentTask }]);
+  }
+  const videoRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'video' as const, sourceClaimIds: [claimId],
+    video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parentId, sceneImageAssetIds: f.frames.map(frame => frame.id) }, idempotencyKey: key });
+  const sceneRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'image' as const, sourceClaimIds: [claimId],
+    sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 }, idempotencyKey: key });
+
+  it.each(['video', 'scene-image'] as const)('rejects external %s without a preset before all task/ledger/audit writes', async kind => {
+    const f = await listFixture(), ctx = submissionFixture(f);
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const before = structuredClone(ctx.db);
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never,
+      kind === 'video' ? videoRequest(f, 'external-video') : sceneRequest(f, 'external-scene')))
+      .rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(ctx.db).toEqual(before);
+    expect(readVideoReadiness.mock.calls).toEqual([[]]);
+  });
+
+  it.each(['video', 'scene-image'] as const)('charges exactly once for native-first %s using the persisted parent purpose', async kind => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    const ctx = submissionFixture(f), readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const deps = { ...ctx.deps, readVideoReadiness };
+    const input = kind === 'video' ? videoRequest(f, 'native-video') : sceneRequest(f, 'native-scene');
+    const first = await submitPresentationGeneration(deps as never, input);
+    expect(first.status).toBe('pending'); expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    expect(ctx.db.usageLedger.find(row => row.kind === 'consume')).toMatchObject({ resource: 'ai_credit', delta: -1n,
+      metadata: { taskId: first.id, policy: 'charged-on-submit' } });
+    expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+    readVideoReadiness.mockClear().mockResolvedValue(false);
+    const paid = structuredClone(ctx.db);
+    expect((await submitPresentationGeneration(deps as never, input)).id).toBe(first.id);
+    expect(ctx.db).toEqual(paid); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it.each(['mixed', 'compare', 'silent', 'hybrid', 'changed-source'] as const)('rejects %s before readiness or a new debit', async change => {
+    const f = await listFixture();
+    if (change === 'mixed') setAudio(f, 'native-first', ['native', 'external-narration', 'native']);
+    if (change === 'compare') setAudio(f, 'compare-before-publish', ['native', 'native', 'native']);
+    if (change === 'silent') setAudio(f, 'native-first', ['native', 'silent', 'native']);
+    if (change === 'hybrid') setAudio(f, 'native-first', ['native', 'hybrid', 'native']);
+    if (change === 'changed-source') f.claims[0]!.statement = 'Different unreviewed source.';
+    const ctx = submissionFixture(f), readVideoReadiness = vi.fn(async () => true), before = structuredClone(ctx.db);
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never, videoRequest(f, 'invalid-' + change))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it('rejects a mixed scene-image parent before task booking', async () => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'external-narration', 'native']);
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db), readVideoReadiness = vi.fn(async () => true);
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never, sceneRequest(f, 'mixed-scene'))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it.each(['video', 'scene-image'] as const)('rejects a %s parent mode changed during readiness before all booking writes', async kind => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db);
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => {
+      setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+      return purpose === 'native-first';
+    });
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never,
+      kind === 'video' ? videoRequest(f, 'mode-race-video') : sceneRequest(f, 'mode-race-scene'))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+  });
+
+  it.each(['video', 'scene-image'] as const)('rejects a %s parent identity changed with the same native mode before booking', async kind => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db);
+    const readVideoReadiness = vi.fn(async () => {
+      f.parent.contentHash = '9'.repeat(64); f.parentTask.result.contentHash = f.parent.contentHash;
+      refreshChain(f, [{ asset: f.parent, task: f.parentTask }]);
+      return true;
+    });
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never,
+      kind === 'video' ? videoRequest(f, 'identity-race-video') : sceneRequest(f, 'identity-race-scene'))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+  });
+
+  it('retains an old paid external replay when the saved plan mode changes', async () => {
+    const f = await listFixture(), ctx = submissionFixture(f), input = videoRequest(f, 'paid-external');
+    const readVideoReadiness = vi.fn(async () => true), deps = { ...ctx.deps, readVideoReadiness };
+    const first = await submitPresentationGeneration(deps as never, input);
+    setAudio(f, 'native-first', ['native', 'external-narration', 'native']);
+    readVideoReadiness.mockClear().mockResolvedValue(false);
+    const paid = structuredClone(ctx.db);
+    expect((await submitPresentationGeneration(deps as never, input)).id).toBe(first.id);
+    expect(ctx.db).toEqual(paid); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+});
 
 describe('audio parent eligibility projection and submission', () => {
   it('submits an original already-eligible graph through the real task and ledger path', async () => {

@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createRedisClient, type Redis } from '@openscience/database';
 import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/index';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
   recoverHeldVideoTasks, VIDEO_READINESS_HOLD } from '../src/video-task-admission';
 import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
-import { initialNativeAgentExecution } from '../../../packages/domain/src/agent/native-agent-execution';
+import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from '../../../packages/domain/src/agent/native-agent-execution';
+import { describeIllustrationBrief, type IllustrationBrief } from '../../../packages/domain/src/assets/illustration-brief';
+import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../../packages/domain/src/assets/illustration-source';
+import { parseStoryboardDocument } from '../../../packages/domain/src/assets/storyboard';
+import { CONTENT_DRIVEN_PROFILE } from '../../../packages/domain/src/assets/video';
 
 const execution = vi.hoisted(() => ({ claim: vi.fn(), progress: vi.fn() }));
 // The dispatcher, intent proof and admission mutations remain real. Only the
@@ -755,5 +759,244 @@ describe('single snapshot startup recovery with pending video holds', () => {
     expect(f.lists.get(processingKey)).toEqual([]); expect(f.lists.get(queueKey)).toEqual([]);
     expect(f.redis.rpoplpush).not.toHaveBeenCalled(); expect(f.redis.lpush).not.toHaveBeenCalled();
     expect(await f.outbox()).toBe(1); expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+  });
+});
+
+
+// Reconstruct the same completed source/Native/pixel graph used by the Domain parent contract.
+// All authority readers remain real; only the database and queue are in-memory.
+async function persistedNativeAdmissionFixture() {
+  const uuid = (n: number) => `${n.toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`;
+  const roId = uuid(1), versionId = uuid(2), claimId = uuid(3), parentId = uuid(4), artifactId = uuid(5), ingestionId = uuid(6);
+  const now = new Date('2026-10-08T00:00:00Z');
+  const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const parentIdentity = (asset: { contentHash: string; provenance: unknown }) => JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids: [claimId] });
+  type RenderResources = Array<{ id: string; version?: string; upstreamCommit?: string; resources: string[] }>;
+
+  function document(sceneCount = 3) {
+    const illustration: IllustrationBrief = { schemaVersion: 2, message: 'The source transfers energy to the receiver.', domain: 'real-space',
+      encoding: 'The supported transfer runs left to right.', subjects: [{ description: 'A source left of a receiver',
+        basis: { claimId, evidenceId: uuid(7), quote: 'The source transfers energy to the receiver.' } }],
+      composition: 'Both objects remain visible.', treatment: 'Scientific linework.', labels: ['Source', 'Receiver'], constraints: ['No invented apparatus.'] };
+    return { schemaVersion: 1, title: 'Energy transfer', narrative: { mainMessage: 'Explain the supported transfer.', audience: 'Researchers' },
+      videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway', visualContinuity: 'Keep the same source and receiver.', audioPolicy: 'external-narration', modelPolicy: 'commercial-primary' },
+      scenes: Array.from({ length: sceneCount }, () => ({ title: 'Transfer', narration: 'The source transfers energy to the receiver.',
+        visualAction: describeIllustrationBrief(illustration), illustration: structuredClone(illustration), durationSeconds: 10, sourceClaimIds: [claimId],
+        videoDirection: { shotType: 'mechanism', purpose: 'Explain the transfer.', subjectLock: 'Source stays left of receiver.', generatedElements: 'One transfer trace.',
+          motion: 'Trace advances left to right.', camera: 'Fixed view.', reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration',
+          subtitleMode: 'sidecar', negativeConstraints: ['No invented apparatus.'], modelPolicy: 'commercial-primary' } })) };
+  }
+
+  async function fixture() {
+    const claims = [{ id: claimId, researchObjectId: roId, versionId, parentClaimId: null, kind: 'finding', statement: 'The source transfers energy to the receiver.',
+      assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded', updatedAt: now,
+      provenance: { source: 'reviewed_ingestion', sourceTaskId: ingestionId } }];
+    const evidence = [{ id: uuid(7), claimId, researchObjectId: roId, versionId, artifactId, contentHash: 'a'.repeat(64), exactQuote: claims[0]!.statement,
+      relation: 'supports', locator: { page: 1 }, extractionStatus: 'succeeded', updatedAt: now, provenance: { source: 'reviewed_ingestion', sourceTaskId: ingestionId } }];
+    const sourceMapRef = { schemaVersion: 1, parserStatus: 'succeeded', artifactId, contentHash: 'a'.repeat(64),
+      objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100 };
+    const session = { id: uuid(8), userId: uuid(9), researchObjectId: roId, deletedAt: null as Date | null, status: 'active' };
+    const ro = { id: roId, workspaceId: uuid(10), deletedAt: null as Date | null };
+    const version = { id: versionId, researchObjectId: roId, manifest: { id: uuid(11), coreJson: {}, entries: [{ artifactId, blobSha256: sourceMapRef.contentHash }] } };
+    const ingestion = { id: ingestionId, artifactId, state: 'confirmed', batch: { userId: session.userId, researchObjectId: roId },
+      artifact: { workspaceId: ro.workspaceId, blobSha256: sourceMapRef.contentHash, deletedAt: null as Date | null, bytesPurgedAt: null },
+      agentTask: { id: uuid(12), kind: 'sdf.extract', status: 'succeeded', deletedAt: null as Date | null, updatedAt: now, session,
+        result: { sourceMapRef, scientificReview: { status: 'review_received', contractVersion: 4, responseHash: 'c'.repeat(64) },
+          core: { problem: 'Problem', insight: 'Insight', method: 'Method', results: 'Results', limitations: 'Limitations', reproducibility: 'Reproducibility' } } } };
+    const payload = { schemaVersion: 1, researchObjectId: roId, versionId, kind: 'interactive_html', sourceClaimIds: [claimId],
+      storyboard: { locale: 'zh', style: 'scientific', instruction: 'Explain the supported transfer.', output: 'video', narrative: true } };
+    const cp: NativeAgentCheckpointReference = { taskId: parentId, objectKey: `derived/native-agent/${'d'.repeat(64)}.json`, serializedSha256: 'd'.repeat(64),
+      size: 100, artifactId, documentSha256: sourceMapRef.contentHash, sourceMapHash: sourceMapRef.serializedSha256,
+      executionAttempt: 1, turnCount: 4, state: 'completed', target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'e'.repeat(64) },
+      responseHash: 'f'.repeat(64), finishReason: 'stop', hasToolCalls: false };
+    const storyboardDocument = parseStoryboardDocument(document(), [claimId], 'video', { nativeNarrativeVideo: true });
+    const sourceEvidenceIdentity = presentationEvidenceIdentity(evidence as never);
+    const review = { stage: 'final-brief', decision: 'accepted', requestId: parentId, candidateHash: hash(storyboardDocument), sourceEvidenceIdentity,
+      summary: 'Supported by the saved paper.', ...cp.target, responseHash: cp.responseHash };
+    const context = { payload: structuredClone(payload), sourceEvidenceIdentity, claimContent: presentationClaimContent(claims), baseIdentity: null, narrativeSourceIdentity: '' };
+    const result = { ...initialNativeAgentExecution({ runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' }, 'paper-illustration')!,
+      sourceMapRef: structuredClone(sourceMapRef), assetId: parentId, contentHash: '1'.repeat(64), nativeIllustrationContext: context,
+      storyboardCheckpoint: { ...structuredClone(context), executionAttempt: 1, planned: { document: structuredClone(storyboardDocument), promptHash: review.promptHash, reviewFormat: 2,
+        designSkills: [{ id: 'scientific', version: '20', resources: ['SKILL.md#Execution'] }] as RenderResources } }, storyboardReview: structuredClone(review),
+      nativeIllustration: { runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', planToolCallId: 'actual-art', reviewToolCallId: 'actual-review' },
+      illustrationPrompts: storyboardDocument.scenes.map((_, sceneIndex) => ({ sceneIndex, prompt: `Verified frame ${sceneIndex}`, videoPrompt: `Verified motion ${sceneIndex}` })) };
+    result.nativeAgentExecution.checkpoint = cp;
+    const parent = { id: parentId, researchObjectId: roId, versionId, kind: 'interactive_html', status: 'draft', deletedAt: null as Date | null,
+      contentHash: result.contentHash, sourceClaims: [{ claimId }], provenance: { source: 'verified_claims', subtype: 'sourced_storyboard', taskId: parentId,
+        sourceEvidenceIdentity, storyboardSettings: structuredClone(payload.storyboard), storyboardDocument, illustrationReview: structuredClone(review) } };
+    Object.assign(parent.provenance, { designSkills: structuredClone(result.storyboardCheckpoint.planned.designSkills) });
+    const parentTask = { id: parentId, sessionId: session.id, session, kind: 'presentation.generate', status: 'succeeded', deletedAt: null as Date | null,
+      error: null as string | null, executionAttempt: 1, payload, result };
+    const frames = Array.from({ length: 3 }, (_, sceneIndex) => {
+      const id = uuid(20 + sceneIndex), contentHash = String(sceneIndex + 2).repeat(64);
+      const imageReview = { stage: 'generated-image', requestId: id, decision: 'accepted', summary: 'Saved pixels preserve the source.', repairInstruction: null,
+        contentHash, sourceEvidenceIdentity, parentIdentity: parentIdentity(parent), promptHash: '4'.repeat(64), responseHash: '5'.repeat(64),
+        provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' };
+      return { id, researchObjectId: roId, versionId, kind: 'image', status: 'draft', deletedAt: null as Date | null, contentHash, sourceClaims: [{ claimId }],
+        provenance: { source: 'approved_storyboard_scene', taskId: id, subtype: 'storyboard_scene_image', sceneImage: { storyboardAssetId: parentId, sceneIndex },
+          sourceEvidenceIdentity, parentIdentity: parentIdentity(parent), imageReview } };
+    });
+    const frameTasks = frames.map(frame => ({ id: frame.id, kind: 'presentation.generate', status: 'succeeded', deletedAt: null as Date | null,
+      result: { assetId: frame.id, contentHash: frame.contentHash, imageReview: structuredClone(frame.provenance.imageReview),
+        nativeImageReview: { mode: 'model-native', state: 'completed', executionAttempt: 1, requestId: frame.id, contentHash: frame.contentHash,
+          sourceEvidenceIdentity, parentIdentity: frame.provenance.parentIdentity, promptHash: '4'.repeat(64), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
+          review: structuredClone(frame.provenance.imageReview) } } }));
+    const ancestors: Array<typeof parent> = [], ancestorTasks: Array<typeof parentTask> = [];
+    type Where = { id?: { in: string[] }; claimId?: { in: string[] }; researchObjectId?: string; versionId?: string; extractionStatus?: string; contentHash?: string; exactQuote?: unknown };
+    const prisma = {
+      presentationAsset: { findUnique: async ({ where }: { where: { id: string } }) => [parent, ...ancestors, ...frames].find(asset => asset.id === where.id) ?? null,
+        findMany: async ({ where }: { where: { id: { in: string[] } } }) => frames.filter(frame => where.id.in.includes(frame.id)) },
+      agentTask: { findUnique: async ({ where }: { where: { id: string } }) => [parentTask, ...ancestorTasks, ...frameTasks].find(task => task.id === where.id) ?? null },
+      agentSession: { findUnique: async () => session }, researchObject: { findUnique: async () => ro },
+      claimNode: { findMany: async ({ where }: { where: Where }) => claims.filter(claim => (!where.id || where.id.in.includes(claim.id))
+        && (!where.researchObjectId || claim.researchObjectId === where.researchObjectId) && (!where.versionId || claim.versionId === where.versionId)
+        && (!where.extractionStatus || claim.extractionStatus === where.extractionStatus)) },
+      evidenceRecord: { findMany: async ({ where }: { where: Where }) => evidence.filter(row => (!where.claimId || where.claimId.in.includes(row.claimId))
+        && (!where.researchObjectId || row.researchObjectId === where.researchObjectId) && (!where.versionId || row.versionId === where.versionId)
+        && (!where.extractionStatus || row.extractionStatus === where.extractionStatus) && (!where.contentHash || row.contentHash === where.contentHash)) },
+      version: { findFirst: async () => version }, ingestionTask: { findUnique: async () => ingestion },
+    };
+    const source = await readVisualNarrativeSource(prisma as never, { userId: session.userId, workspaceId: ro.workspaceId, researchObjectId: roId, versionId, sourceClaimIds: [claimId] });
+    context.narrativeSourceIdentity = source.identity;
+    result.storyboardCheckpoint.narrativeSourceIdentity = source.identity;
+    const input = { researchObjectId: roId, versionId, sourceClaimIds: [claimId],
+      video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parentId, sceneImageAssetIds: frames.map(frame => frame.id) } };
+    return { prisma, input, parent, parentTask, frames, frameTasks, ancestors, ancestorTasks, claims, evidence, ingestion, version, context, cp, sourceEvidenceIdentity };
+  }
+  const native = await fixture(), f = queueFixture();
+  f.task.payload = { schemaVersion: 1, kind: 'video', ...native.input };
+  f.task.sessionId = native.parentTask.sessionId;
+  Object.assign(f.task.session, native.parentTask.session, { researchObject: await native.prisma.researchObject.findUnique() });
+  const findTask = f.agentTask.findUnique.getMockImplementation()!;
+  f.agentTask.findUnique.mockImplementation(async args => await findTask(args)
+    ?? structuredClone(await native.prisma.agentTask.findUnique(args)));
+  const { agentTask: _parentTasks, ...readers } = native.prisma;
+  void _parentTasks; // Preserve the poller's own task reader while reusing the authoritative parent readers.
+  const ingestionUpdate = f.deps.prisma.ingestionTask.updateMany;
+  Object.assign(f.deps.prisma, readers);
+  f.deps.prisma.ingestionTask.updateMany = ingestionUpdate;
+  execution.claim.mockImplementation((...args: unknown[]) =>
+    (realClaimAgentTask as (...input: unknown[]) => Promise<unknown>)(...args));
+  const setAudio = (policy: string, modes: string[]) => {
+    const doc = native.parent.provenance.storyboardDocument;
+    doc.videoProduction!.audioPolicy = policy as never;
+    doc.scenes.forEach((scene, index) => { scene.videoDirection!.audioMode = modes[index] as never; });
+    native.parentTask.result.storyboardCheckpoint.planned.document = structuredClone(doc);
+    native.parentTask.result.storyboardReview.candidateHash = hash(doc);
+    native.parent.provenance.illustrationReview = structuredClone(native.parentTask.result.storyboardReview);
+    native.frames.forEach((frame, index) => {
+      frame.provenance.parentIdentity = parentIdentity(native.parent);
+      frame.provenance.imageReview.parentIdentity = frame.provenance.parentIdentity;
+      const result = native.frameTasks[index]!.result;
+      result.imageReview = structuredClone(frame.provenance.imageReview);
+      result.nativeImageReview.parentIdentity = frame.provenance.parentIdentity;
+      result.nativeImageReview.review = structuredClone(frame.provenance.imageReview);
+    });
+  };
+  const asSceneImage = () => {
+    f.task.payload = { schemaVersion: 1, kind: 'image', researchObjectId: roId, versionId, sourceClaimIds: [claimId],
+      sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 } };
+  };
+  return { ...f, native, setAudio, asSceneImage };
+}
+
+describe('persisted Native audio admission', () => {
+  it.each(['video', 'scene-image'] as const)('holds external %s without a preset through the default zero-argument readiness', async kind => {
+    const f = await persistedNativeAdmissionFixture();
+    if (kind === 'scene-image') f.asSceneImage();
+    f.deps.readVideoReadiness = vi.fn(async purpose => purpose === 'native-first');
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[]]);
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+  });
+
+  it.each(['video', 'scene-image'] as const)('claims native-first %s from its actual saved parent through the original CAS', async kind => {
+    const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'native', 'native']);
+    if (kind === 'scene-image') f.asSceneImage();
+    f.deps.readVideoReadiness = vi.fn(async purpose => purpose === 'native-first');
+    const parent = structuredClone(f.native.parent), receipt = structuredClone(f.native.parentTask.result);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1 }); expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([['native-first']]);
+    expect(f.native.parent).toEqual(parent); expect(f.native.parentTask.result).toEqual(receipt);
+  });
+
+  it.each(['video', 'scene-image'] as const)('holds external %s with no narration preset despite client native hints', async kind => {
+    const f = await persistedNativeAdmissionFixture();
+    if (kind === 'scene-image') f.asSceneImage();
+    Object.assign(f.task.payload, { audioPolicy: 'native-first', audioMode: 'native' });
+    f.deps.readVideoReadiness = vi.fn(async purpose => purpose === 'native-first');
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    // Strict payload validation may block the untrusted hints before host sampling.
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls.every(call => call.length === 0)).toBe(true);
+  });
+
+  it.each(['video', 'scene-image'] as const)('keeps mixed %s held even with both host purposes ready', async kind => {
+    const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'external-narration', 'native']);
+    if (kind === 'scene-image') f.asSceneImage();
+    f.deps.readVideoReadiness = vi.fn(async () => true);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+  });
+
+  it('releases only the native held task through native readiness and never posts or changes an attempt', async () => {
+    const f = await persistedNativeAdmissionFixture(); f.task.error = VIDEO_READINESS_HOLD;
+    f.deps.readVideoReadiness = vi.fn(async purpose => purpose === 'native-first');
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[]]);
+    f.setAudio('native-first', ['native', 'native', 'native']);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1);
+    expect(f.task).toMatchObject({ status: 'pending', error: null, dispatchedAt: null, executionAttempt: 0 });
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[], ['native-first']]);
+    expect(f.redis.lpush).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+  });
+
+  it.each(['mode', 'mixed', 'source', 'pixel-owner'] as const)('cannot claim a parent changed during readiness by %s', async change => {
+    const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'native', 'native']);
+    f.deps.readVideoReadiness = vi.fn(async () => {
+      if (change === 'mode') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
+      if (change === 'mixed') f.setAudio('native-first', ['native', 'hybrid', 'native']);
+      if (change === 'source') f.native.claims[0]!.statement = 'Different scientific source.';
+      if (change === 'pixel-owner') f.native.frameTasks[0]!.status = 'failed';
+      return true;
+    });
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+  });
+
+  it('keeps a held mode change during readiness parked', async () => {
+    const f = await persistedNativeAdmissionFixture(); f.task.error = VIDEO_READINESS_HOLD;
+    f.setAudio('native-first', ['native', 'native', 'native']);
+    f.deps.readVideoReadiness = vi.fn(async () => {
+      f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']); return true;
+    });
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+  });
+
+  it('retains the payload snapshot CAS after a valid native parent read', async () => {
+    const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'native', 'native']);
+    f.deps.readVideoReadiness = vi.fn(async () => true);
+    const admitted = await admitPendingVideoTask(f.deps, structuredClone(f.task) as never);
+    expect(admitted).toHaveProperty('expectedPendingTask');
+    if (!admitted || typeof admitted !== 'object') throw new Error('Expected a pending admission snapshot');
+    f.task.payload = { ...f.task.payload, versionId: 'changed-version' };
+    expect(await realClaimAgentTask(f.deps, f.task.id, admitted.expectedPendingTask)).toBeNull();
+    expect(f.task.executionAttempt).toBe(0); expect(f.handler).not.toHaveBeenCalled();
+  });
+
+  it.each(['running', 'succeeded', 'failed'] as const)('does not admit or release %s old work', async status => {
+    const f = await persistedNativeAdmissionFixture(); f.setAudio('native-first', ['native', 'native', 'native']);
+    Object.assign(f.task, { status, executionAttempt: 1, error: VIDEO_READINESS_HOLD, result: { providerOutcome: 'unknown' } });
+    const before = structuredClone(f.task);
+    f.deps.readVideoReadiness = vi.fn(async () => true);
+    expect(await admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).toBeNull();
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(f.task).toEqual(before); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
 });

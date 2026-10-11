@@ -1,7 +1,26 @@
 import { expect, it } from 'vitest';
-import { parseStoryboardDocument, parseStoryboardRequest } from '../../src/assets/storyboard';
+import { classifyNativeVideoAudio, parseStoryboardDocument, parseStoryboardRequest } from '../../src/assets/storyboard';
 const id = '50000000-0000-4000-8000-000000000001';
 const doc = () => ({ schemaVersion: 1, title: 'Study', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Qualified finding', visualAction: 'Draw wave', durationSeconds: 8, sourceClaimIds: [id] })) });
+it('classifies only strict whole-document native video audio combinations', () => {
+    const plan = (audioPolicy: string, modes: string[]) => ({ videoProduction: { audioPolicy },
+        scenes: modes.map(audioMode => ({ videoDirection: { audioMode } })) });
+    for (const [policy, mode] of [['external-narration', 'external-narration'], ['native-first', 'native']]) {
+        const document = plan(policy, [mode, mode]);
+        const before = structuredClone(document);
+        expect(classifyNativeVideoAudio(document)).toBe(policy);
+        expect(document).toEqual(before);
+    }
+    for (const value of [null, undefined, [], {}, doc(), plan('native-first', []),
+        plan('native-first', ['native', 'external-narration']), plan('external-narration', ['native']),
+        plan('compare-before-publish', ['native']), plan('native-first', ['silent']), plan('native-first', ['hybrid']),
+        plan('unknown', ['native']), { videoProduction: { audioPolicy: 'native-first' }, scenes: [null] },
+        { videoProduction: { audioPolicy: 'native-first' }, scenes: [{}] },
+        { videoProduction: { audioPolicy: 'native-first' }, scenes: [{ videoDirection: [] }] },
+        { videoProduction: [], scenes: [{ videoDirection: { audioMode: 'native' } }] },
+        { videoProduction: { audioPolicy: 'native-first' }, scenes: new Array(2) }])
+        expect(classifyNativeVideoAudio(value)).toBeNull();
+});
 it('validates bounded sourced documents and strict settings', () => {
     expect(parseStoryboardRequest({ locale: 'en', style: 'ink', instruction: 'Explain' })).toEqual({ locale: 'en', style: 'ink', instruction: 'Explain', output: 'video' });
     expect(parseStoryboardDocument(doc(), [id])).toEqual(doc());

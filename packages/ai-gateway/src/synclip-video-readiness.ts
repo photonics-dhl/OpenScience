@@ -15,7 +15,7 @@ export interface SynclipVideoReady {
 }
 export interface SynclipVideoReadyConfig { resultsDir: string; now?: () => number }
 export interface NativeVideoPrerequisites { nativeAgentConfigured: boolean; nativeSceneImageEnabled: boolean }
-export type NativeVideoReadinessReader = () => Promise<boolean>;
+export type NativeVideoReadinessReader = (purpose?: 'native-first') => Promise<boolean>;
 type NativeAudioAuditionPolicy = { audio: SynclipVideoNarrationConfig; maxEstimatedCoins: number };
 type NativeAudioAuditionReadinessReader = () => Promise<NativeAudioAuditionPolicy | null>;
 
@@ -96,8 +96,8 @@ export function createNativeVideoReadinessReader(env: Readonly<Record<string, st
 export function createNativeVideoReadinessReader(env: Readonly<Record<string, string | undefined>>,
   prerequisites: NativeVideoPrerequisites, purpose: 'audio-audition'): NativeAudioAuditionReadinessReader;
 export function createNativeVideoReadinessReader(env: Readonly<Record<string, string | undefined>>,
-  prerequisites: NativeVideoPrerequisites, purpose?: 'audio-audition'): () => Promise<boolean | NativeAudioAuditionPolicy | null> {
-  return async () => {
+  prerequisites: NativeVideoPrerequisites, purpose?: 'audio-audition'): (requestedPurpose?: 'native-first') => Promise<boolean | NativeAudioAuditionPolicy | null> {
+  return async (requestedPurpose) => {
     const inbox = env.SYNCLIP_VIDEO_INBOX_DIR?.trim(); const results = env.SYNCLIP_VIDEO_RESULTS_DIR?.trim();
     if (!prerequisites.nativeAgentConfigured || !prerequisites.nativeSceneImageEnabled
       || env.AI_ENABLED !== 'true' || env.HERMES_NATIVE_AGENT_ENABLED !== 'true' || env.HERMES_VIDEO_ENABLED !== 'true'
@@ -109,6 +109,7 @@ export function createNativeVideoReadinessReader(env: Readonly<Record<string, st
       if (!ready || ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true || !ready.narration || !ready.audioAuditionBudget) return null;
       return { audio: ready.narration, maxEstimatedCoins: ready.audioAuditionBudget.maxEstimatedCoins };
     }
-    return Boolean(ready?.accepting && ready.adapterRevision === 'synclip-video-v2' && ready.narration);
+    return Boolean(ready?.accepting && ready.adapterRevision === 'synclip-video-v2'
+      && (requestedPurpose === 'native-first' || ready.narration));
   };
 }

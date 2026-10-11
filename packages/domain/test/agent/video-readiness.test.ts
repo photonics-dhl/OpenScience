@@ -26,6 +26,18 @@ describe('Hermes video run intent', () => {
 });
 
 describe('Hermes video readiness', () => {
+  it('forwards only explicit native-first and preserves omitted-purpose external call arity', async () => {
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const deps = { videoEnabled: true, readVideoReadiness };
+    expect(await isHermesVideoReady(deps)).toBe(false);
+    expect(readVideoReadiness.mock.calls).toEqual([[]]);
+    await expect(requireHermesVideoReady(deps, 'native-first')).resolves.toBeUndefined();
+    expect(readVideoReadiness.mock.calls).toEqual([[], ['native-first']]);
+    deps.videoEnabled = false;
+    expect(await isHermesVideoReady(deps, 'native-first')).toBe(false);
+    expect(readVideoReadiness).toHaveBeenCalledTimes(2);
+  });
+
   it.each([undefined, false, 1, 'true'])('fails closed for server flag %s without reading the host', async flag => {
     const readVideoReadiness = vi.fn(async () => true);
     expect(await isHermesVideoReady({ videoEnabled: flag, readVideoReadiness } as HermesVideoReadinessDeps)).toBe(false);

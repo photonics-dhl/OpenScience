@@ -8,7 +8,7 @@ export interface HermesAudioAuditionPolicy {
 
 export interface HermesVideoReadinessDeps {
   videoEnabled?: boolean;
-  readVideoReadiness?: () => Promise<boolean>;
+  readVideoReadiness?: (purpose?: 'native-first') => Promise<boolean>;
   readAudioAuditionReadiness?: () => Promise<HermesAudioAuditionPolicy | null>;
 }
 
@@ -33,13 +33,13 @@ export async function readHermesAudioAuditionPolicy(deps: HermesVideoReadinessDe
   } catch { return null; }
 }
 
-export async function isHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition'): Promise<boolean> {
+export async function isHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition' | 'native-first'): Promise<boolean> {
   if (purpose === 'audio-audition') return await readHermesAudioAuditionPolicy(deps) !== null;
   if (deps.videoEnabled !== true || typeof deps.readVideoReadiness !== 'function') return false;
-  try { return await deps.readVideoReadiness() === true; } catch { return false; }
+  try { return await (purpose === 'native-first' ? deps.readVideoReadiness(purpose) : deps.readVideoReadiness()) === true; } catch { return false; }
 }
 
-export async function requireHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition'): Promise<void> {
+export async function requireHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition' | 'native-first'): Promise<void> {
   if (!await isHermesVideoReady(deps, purpose)) throw new HermesVideoUnavailableError();
 }
 

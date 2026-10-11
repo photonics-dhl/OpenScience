@@ -1,7 +1,8 @@
 import type { AgentTask } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import {
-  HermesVideoUnavailableError, isHermesVideoTask, isDirectNativeVideoStoryboard, readNativeAgentExecution, requireHermesVideoReady,
+  HermesVideoUnavailableError, PresentationAssetError, classifyNativeVideoAudio, isHermesVideoTask, isDirectNativeVideoStoryboard,
+  parsePresentationGenerationPayload, readNativeAgentExecution, requireHermesVideoReady, requireSceneImageParent, requireVideoGenerationParents,
   type AgentDeps, type HermesVideoReadinessDeps,
 } from '@openscience/domain';
 
@@ -36,6 +37,45 @@ function audioAdmission(task: Pick<AgentTask, 'id' | 'kind' | 'payload' | 'resul
   return { purpose, recovery };
 }
 
+async function persistedVideoAudio(deps: VideoTaskAdmissionDeps, task: Pick<AgentTask, 'kind' | 'payload'>) {
+  const payload = task.payload as Record<string, unknown> | null;
+  if (task.kind !== 'presentation.generate' || !payload) return undefined;
+  const video = payload.video as Record<string, unknown> | null;
+  const scene = payload.sceneImage as Record<string, unknown> | null;
+  // Historical/unbound tasks keep their external readiness path. Client audio hints never grant a purpose.
+  if (payload.kind !== 'video' && payload.kind !== 'image'
+    || typeof (payload.kind === 'video' ? video : scene)?.storyboardAssetId !== 'string') return undefined;
+  try {
+    const parsed = parsePresentationGenerationPayload(payload);
+    let document: unknown, identity: string | undefined;
+    if (parsed.video) {
+      const parents = await requireVideoGenerationParents(deps.prisma, parsed);
+      if (parents?.nativeParent) { document = parents.storyboardView.document; identity = parents.identity; }
+    } else if (parsed.sceneImage) {
+      const parent = await requireSceneImageParent(deps.prisma, parsed);
+      if (parent?.view.output === 'video' && parent.view.narrative === true) { document = parent.view.document; identity = parent.identity; }
+    }
+    if (identity === undefined) return undefined;
+    const mode = classifyNativeVideoAudio(document);
+    if (!mode) throw new HermesVideoUnavailableError();
+    return { identity, mode, purpose: mode === 'native-first' ? mode : undefined };
+  } catch (error) {
+    if (error instanceof PresentationAssetError) throw new HermesVideoUnavailableError();
+    throw error;
+  }
+}
+
+async function requirePersistedVideoReady(deps: VideoTaskAdmissionDeps,
+  task: Pick<AgentTask, 'id' | 'kind' | 'payload' | 'result' | 'executionAttempt'>): Promise<void> {
+  const audio = audioAdmission(task);
+  if (audio.recovery) return;
+  if (audio.purpose) { await requireHermesVideoReady(deps, audio.purpose); return; }
+  const parent = await persistedVideoAudio(deps, task);
+  await requireHermesVideoReady(deps, parent?.purpose);
+  // The host read awaits external state. Recheck the same authoritative parent before releasing or returning a claim snapshot.
+  if (!isDeepStrictEqual(parent, await persistedVideoAudio(deps, task))) throw new HermesVideoUnavailableError();
+}
+
 function nextUpdatedAt(task: VideoTaskSnapshot): Date {
   return new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
 }
@@ -68,8 +108,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   // unfenced claim of the poller's earlier payload.
   if (!await isHermesVideoTask(deps.prisma, task.id)) return { expectedPendingTask: current };
   if (firstNativePlan(current)) return { expectedPendingTask: current };
-  const audio = audioAdmission(current);
-  try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
+  try { await requirePersistedVideoReady(deps, current); }
   catch (error) {
     if (!(error instanceof HermesVideoUnavailableError)) throw error;
     if (await parkPendingVideoTask(deps, task)) return true;
@@ -95,8 +134,7 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
   let released = 0;
   for (const task of tasks) {
     if (!await isHermesVideoTask(deps.prisma, task.id)) continue;
-    const audio = audioAdmission(task);
-    try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
+    try { await requirePersistedVideoReady(deps, task); }
     catch (error) { if (error instanceof HermesVideoUnavailableError) continue; throw error; }
     if (await releasePendingVideoTask(deps, task)) released++;
   }

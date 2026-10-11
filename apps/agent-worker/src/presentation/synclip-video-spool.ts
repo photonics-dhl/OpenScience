@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import type { StoryboardDocument, StoryboardView, VideoSceneDirection } from '@openscience/domain';
+import { classifyNativeVideoAudio } from '@openscience/domain';
 import type { HostVideoInput, AudioAuditionInput, AudioAuditionProposal, AudioAuditionGrant, AudioAuditionResult } from './host-video-spool';
 
 const MAX_JSON = 512 * 1024; const MAX_PNG = 10 * 1024 * 1024; const MAX_MP4 = 256 * 1024 * 1024;
@@ -12,6 +13,7 @@ export interface SynclipVideoSpoolConfig { inboxDir: string; resultsDir: string;
 }
 export interface SynclipVideoInput { taskId: string; executionAttempt: number; profile: 'content-driven-v1'; sourceClaimIds: string[]; storyboard: StoryboardDocument; locale?: StoryboardView['locale']; style?: StoryboardView['style']; sceneImages: Buffer[]; sceneImageTaskIds?: string[]; videoPrompts?: string[]; }
 type SynclipNarration = { provider: 'synclip'; speaker: string; speed: number; timingStatus: 'measured_aligned' }
+  | { provider: 'synclip-provider-output'; speaker: 'unverified'; timingStatus: 'not_available' }
   | { provider: 'synclip-audio-pending'; speaker: 'none'; timingStatus: 'not_available' };
 export interface SynclipVideoResult { filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: 'Synclip commercial video'; generatorVersion: 'ltx23'; inputHash: string; narration: SynclipNarration; metrics: Record<string, unknown>; runtime: { provider: 'synclip'; model: 'ltx23'; adapterRevision: string }; }
 export interface VideoAudioTimingDiagnostic {
@@ -47,7 +49,19 @@ function timingDiagnostic(value: unknown, inputHash: string, audio: ReturnType<t
       durationSeconds: scene.durationSeconds, taskId: scene.taskId, contentHash: scene.contentHash, size: scene.size })) };
 }
 function directionText(direction: VideoSceneDirection | undefined): string { if (!direction) throw new Error('VIDEO_DIRECTION_REQUIRED'); const exclusions = direction.negativeConstraints.length ? ' Do not: ' + direction.negativeConstraints.join('; ') + '.' : ''; return 'Shot type: ' + direction.shotType + '. Purpose: ' + direction.purpose + '. Locked subject: ' + direction.subjectLock + '. Generated elements: ' + direction.generatedElements + '. Motion: ' + direction.motion + '. Camera: ' + direction.camera + '.' + exclusions; }
-export function compileShotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string): string { if (!storyboard.videoProduction || storyboard.videoProduction.modelPolicy !== 'commercial-primary') throw new Error('COMMERCIAL_VIDEO_PLAN_REQUIRED'); return ['Scientific explainer shot. Preserve approved subject identity, geometry, direction, and causal relationship exactly.', 'Locale: ' + locale + '. Global continuity bible: ' + storyboard.videoProduction.visualContinuity, 'Scene: ' + scene.title + '. Reader-facing narration context: ' + scene.narration, 'Approved visual action: ' + scene.visualAction, directionText(scene.videoDirection), 'Use smooth physically plausible motion, restrained cinematic lighting, and clean scientific composition. Do not render subtitles, formulas, logos, watermarks, or invented labels. Do not change scientific meaning. Spoken narration is external; use only subtle non-verbal ambience if supplied.'].join('\n'); }
+export function compileShotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string): string {
+  if (!storyboard.videoProduction || storyboard.videoProduction.modelPolicy !== 'commercial-primary') throw new Error('COMMERCIAL_VIDEO_PLAN_REQUIRED');
+  const mode = classifyNativeVideoAudio(storyboard);
+  if (!mode) throw new Error('VIDEO_PLAN_UNSUPPORTED');
+  const sound = mode === 'external-narration'
+    ? 'Spoken narration is external; use only subtle non-verbal ambience if supplied.'
+    : 'Use provider-native audio grounded only in the approved narration above; do not invent dialogue, claims, numbers, or speakers. Exact words, voice, timing, and audio quality remain unverified.';
+  return ['Scientific explainer shot. Preserve approved subject identity, geometry, direction, and causal relationship exactly.',
+    'Locale: ' + locale + '. Global continuity bible: ' + storyboard.videoProduction.visualContinuity,
+    'Scene: ' + scene.title + '. Reader-facing narration context: ' + scene.narration,
+    'Approved visual action: ' + scene.visualAction, directionText(scene.videoDirection),
+    'Use smooth physically plausible motion, restrained cinematic lighting, and clean scientific composition. Do not render subtitles, formulas, logos, watermarks, or invented labels. Do not change scientific meaning. ' + sound].join('\n');
+}
 export class SynclipVideoSpool {
   readonly provider = 'synclip' as const;
   private readonly now: () => number; private readonly sleep: (milliseconds: number) => Promise<void>; private readonly timeout: number;
@@ -173,7 +187,9 @@ export class SynclipVideoSpool {
     const locale = input.locale ?? 'zh'; const style = input.style ?? 'scientific';
     const nativeVideo = Boolean(input.storyboard.narrative);
     if (nativeVideo && (!input.videoPrompts || input.videoPrompts.length !== input.storyboard.scenes.length)) fail('NATIVE_VIDEO_PROMPTS_REQUIRED');
-    const audio = nativeVideo ? narrationConfig(ready.narration) : undefined;
+    const mode = nativeVideo ? classifyNativeVideoAudio(input.storyboard) : undefined;
+    if (nativeVideo && !mode) fail('VIDEO_PLAN_UNSUPPORTED');
+    const audio = mode === 'external-narration' ? narrationConfig(ready.narration) : undefined;
     const scenes = input.storyboard.scenes.map((scene, index) => {
       const prompt = compileShotPrompt(input.storyboard, scene, locale);
       if (nativeVideo && (input.videoPrompts![index] !== prompt || ![5, 10, 15].includes(scene.durationSeconds!))) fail('NATIVE_VIDEO_PLAN_CHANGED');
@@ -183,7 +199,7 @@ export class SynclipVideoSpool {
           sha256: createHash('sha256').update(input.sceneImages[index]!).digest('hex'), requestId: input.sceneImageTaskIds![index]! } };
     });
     const storyboardBytes = Buffer.from(JSON.stringify({ ...input.storyboard, locale, style })); if (storyboardBytes.length > MAX_JSON) fail('INVALID_VIDEO_INPUT');
-    const files = { storyboard: { name: 'storyboard.json', size: storyboardBytes.length, sha256: createHash('sha256').update(storyboardBytes).digest('hex') }, scenes: scenes.map(scene => scene.image) }; const inputHash = createHash('sha256').update(JSON.stringify(audio ? { files, audio, scenes } : files)).digest('hex');
+    const files = { storyboard: { name: 'storyboard.json', size: storyboardBytes.length, sha256: createHash('sha256').update(storyboardBytes).digest('hex') }, scenes: scenes.map(scene => scene.image) }; const inputHash = createHash('sha256').update(JSON.stringify(audio ? { files, audio, scenes } : nativeVideo ? { files, scenes } : files)).digest('hex');
     const request = { schemaVersion: 1, id: input.taskId, taskId: input.taskId, executionAttempt: input.executionAttempt, profile: input.profile, sourceClaimIds: input.sourceClaimIds, inputHash, createdAt: this.now(), deadlineAt: this.now() + this.timeout, provider: 'synclip', model: 'ltx23', resolution: '720p', files, scenes, ...(audio ? { audio } : {}) };
     const stage = join(this.config.inboxDir, '.' + input.taskId + '.' + Math.random().toString(36).slice(2) + '.tmp'); const target = join(this.config.inboxDir, input.taskId);
     const submit = async () => { await mkdir(stage, { mode: 0o700 }); try { await exclusiveWrite(join(stage, 'storyboard.json'), storyboardBytes); for (const [index, bytes] of input.sceneImages.entries()) await exclusiveWrite(join(stage, 'scene-' + index + '.png'), bytes); await exclusiveWrite(join(stage, 'request.json'), Buffer.from(JSON.stringify(request))); try { await rename(stage, target); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST' && (error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error; const existing = JSON.parse((await boundedRead(join(target, 'request.json'), MAX_JSON)).toString()) as Record<string, unknown>; if (existing.inputHash !== inputHash || existing.taskId !== input.taskId || existing.executionAttempt !== input.executionAttempt) fail('UNCERTAIN'); } } finally { await rm(stage, { recursive: true, force: true }).catch(() => undefined); } };
@@ -207,6 +223,10 @@ export class SynclipVideoSpool {
         const hash = createHash('sha256').update(bytes).digest('hex');
         if (hash !== result.outputSha256 || bytes.length !== result.outputSize || !bytes.subarray(4, 12).includes(Buffer.from('ftyp'))) fail();
         let narration: SynclipNarration = { provider: 'synclip-audio-pending', speaker: 'none', timingStatus: 'not_available' };
+        if (mode === 'native-first') {
+          if (result.narration !== undefined) fail('SYNCLIP_PROVIDER_OUTPUT_INVALID');
+          narration = { provider: 'synclip-provider-output', speaker: 'unverified', timingStatus: 'not_available' };
+        }
         if (audio) {
           const saved = result.narration as Record<string, unknown> | null;
           if (!saved || saved.provider !== 'synclip' || saved.speaker !== audio.voice || saved.speed !== audio.speed
@@ -214,6 +234,10 @@ export class SynclipVideoSpool {
           narration = { provider: 'synclip', speaker: audio.voice, speed: audio.speed, timingStatus: 'measured_aligned' };
         }
         const metrics = JSON.parse((await boundedRead(join(resultDir, 'metrics.json'), MAX_JSON)).toString()) as Record<string, unknown>;
+        if (mode === 'native-first' && (metrics.audioMode !== 'provider-output-unverified'
+          || !Number.isInteger(metrics.audioStreamCount) || Number(metrics.audioStreamCount) < 0 || Number(metrics.audioStreamCount) > 7
+          || typeof metrics.durationSeconds !== 'number' || !Number.isFinite(metrics.durationSeconds)
+          || Math.abs(metrics.durationSeconds - scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)) > 0.5)) fail('SYNCLIP_PROVIDER_OUTPUT_INVALID');
         return { filePath, size: bytes.length, contentHash: hash, contentType: 'video/mp4', generator: 'Synclip commercial video',
           generatorVersion: 'ltx23', inputHash, narration, metrics,
           runtime: { provider: 'synclip', model: 'ltx23', adapterRevision: String(result.adapterRevision ?? 'synclip-video-v1') } };

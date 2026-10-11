@@ -7,6 +7,24 @@ export const STORYBOARD_IMAGE_VISUAL_ACTION_MAX = ILLUSTRATION_BRIEF_MAX_CHARACT
 export const STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX = 100;
 export const STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX = 1000;
 
+/** Audio routing only; callers must first validate the persisted Native parent and its sources. */
+export function classifyNativeVideoAudio(document: unknown): 'external-narration' | 'native-first' | null {
+    if (!document || typeof document !== 'object' || Array.isArray(document)) return null;
+    const { videoProduction, scenes } = document as Record<string, unknown>;
+    if (!videoProduction || typeof videoProduction !== 'object' || Array.isArray(videoProduction)
+        || !Array.isArray(scenes) || scenes.length === 0) return null;
+    const policy = (videoProduction as Record<string, unknown>).audioPolicy;
+    if (policy !== 'external-narration' && policy !== 'native-first') return null;
+    const mode = policy === 'native-first' ? 'native' : 'external-narration';
+    for (const scene of scenes) {
+        if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return null;
+        const direction = (scene as Record<string, unknown>).videoDirection;
+        if (!direction || typeof direction !== 'object' || Array.isArray(direction)
+            || (direction as Record<string, unknown>).audioMode !== mode) return null;
+    }
+    return policy;
+}
+
 /**
  * Legacy style id aliases. Both the agent-worker loader and the domain-side
  * revision comparison must reduce these to a single canonical form before

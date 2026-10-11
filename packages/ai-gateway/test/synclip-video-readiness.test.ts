@@ -147,11 +147,13 @@ describe('Synclip provider video availability independent of optional speech', (
   it('admits the configured accepting video executor without inventing a narration preset', async () => {
     const f = await fixture(); await f.write({ narration: undefined });
     expect(await f.read()).toMatchObject({ accepting: true, adapterRevision: 'synclip-video-v2' });
-    expect(await f.capable()).toBe(true); expect(await f.audition()).toBeNull();
+    expect(await createNativeVideoReadinessReader(f.env, f.prerequisites)('native-first')).toBe(true);
+    expect(await f.capable()).toBe(false); expect(await f.audition()).toBeNull();
   });
   it('does not infer video or speech admission while the host is closed', async () => {
     const f = await fixture(); await f.write({ accepting: false, narration: undefined });
     expect(await f.capable()).toBe(false); expect(await f.audition()).toBeNull();
+    expect(await createNativeVideoReadinessReader(f.env, f.prerequisites)('native-first')).toBe(false);
   });
 });
 

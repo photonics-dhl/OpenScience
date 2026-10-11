@@ -101,7 +101,7 @@ async function fixture(t) {
   const cfg = { inbox: join(base, 'inbox'), results: join(base, 'results'), privateRoot: join(base, 'private'),
     keyPath: join(base, 'unused-key'), rendererImage: `sha256:${'a'.repeat(64)}`, adminModelsEnabled: true };
   for (const path of [cfg.inbox, cfg.results, cfg.privateRoot]) await mkdir(path);
-  const calls = [], audioCalls = [], order = [];
+  const calls = [], audioCalls = [], order = [], renderCalls = [];
   let now = Date.now();
   const deps = {
     readKey: async () => 'synthetic-test-key', now: () => now,
@@ -129,8 +129,12 @@ async function fixture(t) {
     decodeAudio: async () => 2.5,
     probe: async (_cfg, _directory, path) => path.startsWith('audio/')
       ? { durationSeconds: 2.5, streams: [{ type: 'audio', codec: 'mp3' }] }
-      : { durationSeconds: 30, streams: [{ type: 'video', codec: 'h264', width: 1280, height: 720, startTimeSeconds: 0, durationSeconds: 30 },
-        { type: 'audio', codec: 'aac', channels: 2, startTimeSeconds: 0, durationSeconds: 30 }] },
+      : { durationSeconds: path.startsWith('shots/') ? 10 : 30, streams: [{ type: 'video', codec: 'h264', width: 1280, height: 720, startTimeSeconds: 0, durationSeconds: path.startsWith('shots/') ? 10 : 30 },
+        { type: 'audio', codec: 'aac', channels: 2, sampleRate: 48000, channelLayout: 'stereo', startTimeSeconds: 0, durationSeconds: path.startsWith('shots/') ? 10 : 30 }] },
+    command: async (_cfg, _privateDir, outDir, entrypoint, args) => {
+      renderCalls.push({ entrypoint, args }); await mkdir(outDir, { recursive: true });
+      await writeFile(join(outDir, 'result.mp4'), mp4);
+    },
     render: async (_cfg, _privateDir, outDir) => {
       await mkdir(outDir, { recursive: true });
       await writeFile(join(outDir, 'result.mp4'), mp4);
@@ -151,13 +155,13 @@ async function fixture(t) {
       scenes: scenes.map(s => s.image) };
     const request = { schemaVersion: 1, id: taskId, taskId, executionAttempt: 1, profile: 'content-driven-v1',
       provider: 'synclip', model: 'ltx23', resolution: '720p', deadlineAt: now + (expired ? -1 : 600_000),
-      scenes, files, ...(audio ? { audio: narration } : {}), inputHash: hash(JSON.stringify(audio ? { files, audio: narration, scenes } : files)) };
+      scenes, files, ...(audio ? { audio: narration } : {}), inputHash: hash(JSON.stringify(audio ? { files, audio: narration, scenes } : providerOutput ? { files, scenes } : files)) };
     await writeFile(join(d, 'request.json'), JSON.stringify(request));
     await writeFile(join(d, 'storyboard.json'), story);
     for (const s of scenes) await writeFile(join(d, `scene-${s.index}.png`), png);
     return { d, request, resultDir: join(cfg.results, taskId) };
   }
-  return { cfg, deps, calls, audioCalls, order, job, advance: ms => { now += ms; },
+  return { cfg, deps, calls, audioCalls, order, renderCalls, job, advance: ms => { now += ms; },
     privateDir: join(cfg.privateRoot, id), resultDir: join(cfg.results, id) };
 }
 
@@ -170,6 +174,131 @@ test('a Native provider-output sequence can run without requiring or posting opt
   assert.equal(result.narration, undefined);
   assert.equal((await json(join(f.resultDir, 'metrics.json'))).audioMode, 'provider-output-unverified');
 });
+
+for (const change of ['files-only', 'mixed', 'tts-on-native', 'native-on-external'])
+  test('Native provider-output rejects ' + change + ' without any paid request', async t => {
+    const f = await fixture(t), job = await f.job(id, { providerOutput: true });
+    const document = await json(join(job.d, 'storyboard.json'));
+    if (change === 'mixed') document.scenes[1].videoDirection.audioMode = 'external-narration';
+    if (change === 'native-on-external') document.videoProduction.audioPolicy = 'external-narration';
+    const story = Buffer.from(JSON.stringify(document));
+    await writeFile(join(job.d, 'storyboard.json'), story);
+    job.request.files.storyboard = { ...job.request.files.storyboard, size: story.length, sha256: hash(story) };
+    if (change === 'tts-on-native') job.request.audio = narration;
+    job.request.inputHash = hash(JSON.stringify(change === 'files-only' ? job.request.files
+      : job.request.audio ? { files: job.request.files, audio: narration, scenes: job.request.scenes }
+        : { files: job.request.files, scenes: job.request.scenes }));
+    await writeFile(join(job.d, 'request.json'), JSON.stringify(job.request));
+    if (change === 'files-only') await assert.rejects(runSynclipVideoBrokerOnce(f.cfg, f.deps), /VIDEO_REQUEST/u);
+    else assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+    assert.equal(f.calls.length, 0); assert.equal(f.audioCalls.length, 0);
+  });
+
+for (const prior of ['matching', 'cross-mode', 'unknown'])
+  test('Native provider-output ' + prior + ' recovery never posts an already charged shot', async t => {
+    const f = await fixture(t), job = await f.job(id, { providerOutput: true, privateJob: true });
+    await writeFile(join(job.d, 'started'), 'original-attempt');
+    if (prior !== 'unknown') await writeFile(join(job.d, 'synclip-receipts.json'), JSON.stringify({ id,
+      inputHash: prior === 'matching' ? job.request.inputHash : '0'.repeat(64),
+      shots: [0, 1, 2].map(index => ({ index, taskId: 'known-provider-' + index })) }));
+    else await writeFile(join(job.d, 'shot-0.attempt.json'), JSON.stringify({ id, index: 0, inputHash: job.request.inputHash }));
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id,
+      status: prior === 'matching' ? 'succeeded' : prior === 'unknown' ? 'uncertain' : 'failed' });
+    assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+    assert.equal(f.audioCalls.length, 0);
+    if (prior === 'matching') assert.equal(f.calls.filter(call => call.method === 'GET').length, 3);
+  });
+
+for (const mismatch of ['silent-mix', 'count', 'sample-rate', 'layout', 'channels', 'timeline'])
+  test('Native provider-output keeps paid shots on ' + mismatch + ' and never synthesizes speech', async t => {
+    const f = await fixture(t); await f.job(id, { providerOutput: true });
+    const originalProbe = f.deps.probe;
+    f.deps.probe = async (...args) => {
+      const proof = await originalProbe(...args);
+      if (args[2] === 'shots/shot-1.mp4') {
+        if (mismatch === 'silent-mix') proof.streams.pop();
+        if (mismatch === 'count') proof.streams.push({ ...proof.streams[1] });
+        if (mismatch === 'sample-rate') proof.streams[1].sampleRate = 44100;
+        if (mismatch === 'layout') proof.streams[1].channelLayout = 'unsupported';
+        if (mismatch === 'channels') proof.streams[1].channels = 1;
+        if (mismatch === 'timeline') proof.streams[1].startTimeSeconds = 2;
+      }
+      return proof;
+    };
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+    assert.equal(f.audioCalls.length, 0); assert.equal(f.renderCalls.length, 0);
+    assert.equal((await json(join(f.privateDir, 'synclip-receipts.json'))).shots.length, 3);
+    assert.equal((await readdir(join(f.privateDir, 'shots'))).length, 3);
+    const posts = f.calls.filter(call => call.method === 'POST').length;
+    assert.equal(await runSynclipVideoBrokerOnce(f.cfg, f.deps), null);
+    assert.equal(f.calls.filter(call => call.method === 'POST').length, posts);
+  });
+
+for (const tracks of [0, 1, 2])
+  test('Native provider-output maps all ' + tracks + ' original tracks without mixing or TTS', async t => {
+    const f = await fixture(t); await f.job(id, { providerOutput: true });
+    const originalProbe = f.deps.probe;
+    f.deps.probe = async (...args) => {
+      const proof = await originalProbe(...args);
+      proof.streams = [proof.streams[0], ...Array.from({ length: tracks }, () => ({ ...proof.streams[1] }))];
+      return proof;
+    };
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+    const args = f.renderCalls[0].args;
+    assert.deepEqual(args.flatMap((arg, index) => arg === '-map' ? [args[index + 1]] : []),
+      ['0:v:0', ...Array.from({ length: tracks }, (_, index) => '0:a:' + index)]);
+    assert.equal(args.includes('-af'), false); assert.equal(f.audioCalls.length, 0);
+    assert.equal((await json(join(f.resultDir, 'metrics.json'))).audioStreamCount, tracks);
+  });
+
+for (const tracks of [0, 1, 2])
+  test('actual codec Native provider-output preserves ' + tracks + ' distinct audio tracks throughout concatenation', async t => {
+    try { await executeFile('ffmpeg', ['-version']); await executeFile('ffprobe', ['-version']); }
+    catch (error) {
+      if (process.env.CI === 'true') throw new Error('Provider-output CI requires existing ffmpeg/ffprobe', { cause: error });
+      t.skip('Existing codec tools unavailable; no installation performed'); return;
+    }
+    const f = await fixture(t); await f.job(id, { providerOutput: true });
+    const source = join(f.cfg.inbox, 'provider-fixture.mp4');
+    await executeFile('ffmpeg', ['-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'color=c=0x233c55:s=1280x720:r=24',
+      ...Array.from({ length: tracks }, (_, index) => ['-f', 'lavfi', '-i', 'sine=frequency=' + (440 * (index + 1)) + ':sample_rate=48000']).flat(),
+      '-map', '0:v:0', ...Array.from({ length: tracks }, (_, index) => ['-map', String(index + 1) + ':a:0']).flat(),
+      '-t', '10', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      ...(tracks ? ['-c:a', 'aac', '-ac', '2', '-ar', '48000'] : []), source], { timeout: 60_000, maxBuffer: 128 * 1024 });
+    const command = async (_cfg, privateDir, outDir, entrypoint, args, output = {}) => {
+      const mapped = args.map(arg => arg.startsWith('/input/') ? join(privateDir, arg.slice(7))
+        : arg.startsWith('/output/') ? join(outDir, arg.slice(8)) : arg);
+      if (args.includes('concat')) {
+        const inputIndex = mapped.indexOf('-i') + 1, local = join(outDir, 'provider-concat.txt');
+        await writeFile(local, (await readFile(mapped[inputIndex], 'utf8')).replaceAll('/input/', privateDir.replaceAll('\\', '/') + '/'));
+        mapped[inputIndex] = local;
+      }
+      const result = await executeFile(entrypoint.endsWith('ffprobe') ? 'ffprobe' : 'ffmpeg', mapped,
+        { timeout: 60_000, maxBuffer: output.maxBytes ?? 128 * 1024 });
+      return result.stdout;
+    };
+    f.deps.command = command;
+    f.deps.probe = (cfg, directory, path) => probeMedia(cfg, directory, path, command);
+    f.deps.download = async () => readFile(source);
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+    assert.equal(f.audioCalls.length, 0);
+    const final = await f.deps.probe(f.cfg, f.privateDir, 'output/result.mp4');
+    assert.equal(final.streams.filter(stream => stream.type === 'audio').length, tracks);
+    assert.ok(Math.abs(final.durationSeconds - 30) < 0.5);
+    for (let track = 0; track < tracks; track++) for (const second of [0.2, 10.2, 20.2]) {
+      const { stdout } = await executeFile('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-ss', String(second),
+        '-i', join(f.privateDir, 'output/result.mp4'), '-map', '0:a:' + track, '-t', '1',
+        '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'],
+      { timeout: 30_000, maxBuffer: 1024 * 1024, encoding: 'buffer' });
+      let crossings = 0;
+      for (let index = 2; index < stdout.length; index += 2)
+        if (stdout.readInt16LE(index - 2) < 0 && stdout.readInt16LE(index) >= 0) crossings++;
+      const frequency = crossings / (stdout.length / 2 / 48000);
+      assert.ok(Math.abs(frequency - 440 * (track + 1)) < 20, 'each original tone survives every joined shot');
+    }
+    // Distinct tones prove media preservation, never speaker/narration/scientific quality.
+  });
 
 async function auditionFixture(t) {
   const f = await fixture(t), job = await f.job(id, { audio: true, privateJob: true });

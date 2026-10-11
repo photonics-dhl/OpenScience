@@ -13,6 +13,7 @@ const png = () => { const value = Buffer.alloc(33); Buffer.from('89504e470d0a1a0
 const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
 const direction = (index: number) => ({ shotType: index === 0 ? 'hook' : 'mechanism' as const, purpose: 'purpose ' + index, subjectLock: 'same approved subject', generatedElements: 'only the approved field and electron', motion: 'motion beat ' + index, camera: 'slow controlled push-in', reference: 'scene-artwork' as const, frameStrategy: 'start-reference' as const, audioMode: 'external-narration' as const, subtitleMode: 'sidecar' as const, negativeConstraints: ['no invented labels'], modelPolicy: 'commercial-primary' as const });
 type Submitted = { id: string; inputHash: string; executionAttempt: number; audio: { provider: 'synclip'; voice: string; speed: number };
+  files: Record<string, unknown>;
   scenes: Array<{ narration: string; durationSeconds: number }> };
 async function nativeFixture(reply: (request: Submitted) => Record<string, unknown> = () => ({})) {
   const fixtures = resolve('../../tmp'); await mkdir(fixtures, { recursive: true });
@@ -29,30 +30,67 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
   const input = { taskId: TASK, executionAttempt: 1, profile: 'content-driven-v1' as const, sourceClaimIds: [CLAIM], storyboard,
     sceneImages: Array.from({ length: 3 }, png), sceneImageTaskIds: [TASK, TASK, TASK],
     videoPrompts: storyboard.scenes.map(scene => compileShotPrompt(storyboard, scene, 'zh')) };
-  const spool = new SynclipVideoSpool({ inboxDir, resultsDir, now: () => now, sleep: async () => {
+  const complete = async () => {
     const request = JSON.parse(await readFile(join(inboxDir, TASK, 'request.json'), 'utf8')) as Submitted;
     const resultDir = join(resultsDir, TASK); await mkdir(resultDir);
     await writeFile(join(resultDir, 'result.mp4'), mp4); await writeFile(join(resultDir, 'metrics.json'), '{}');
     await writeFile(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, inputHash: request.inputHash,
       executionAttempt: 1, status: 'succeeded', contentType: 'video/mp4', outputSha256: createHash('sha256').update(mp4).digest('hex'),
       outputSize: mp4.length, narration: { provider: 'synclip', speaker: audio.voice, speed: audio.speed, timingStatus: 'measured_aligned' }, ...reply(request) }));
-  } });
-  return { input, spool, inboxDir, resultsDir, readyPath, now };
+  };
+  const spool = new SynclipVideoSpool({ inboxDir, resultsDir, now: () => now, sleep: complete });
+  return { input, spool, inboxDir, resultsDir, readyPath, now, complete };
 }
 
 describe('Native provider output without optional TTS', () => {
   it('uses the explicit Native audio strategy and publishes no TTS request or voice when none was selected', async () => {
-    const f = await nativeFixture();
+    const f = await nativeFixture(() => ({ narration: undefined }));
     Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
     for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
     f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
     expect(f.input.videoPrompts[0]).not.toContain('Spoken narration is external');
     await writeFile(f.readyPath, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23',
       adapterRevision: 'synclip-video-v2', accepting: true, updatedAt: f.now }));
-    const result = await f.spool.generate(f.input);
+    const resultDir = join(f.resultsDir, TASK);
+    // The producer result uses the provider-output metrics, never a selected TTS speaker.
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now, sleep: async () => {
+      await f.complete();
+      await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ audioMode: 'provider-output-unverified', audioStreamCount: 1, durationSeconds: 30 }));
+    } });
+    const result = await spool.generate(f.input);
     const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
     expect(request.audio).toBeUndefined();
+    expect(request.inputHash).toBe(createHash('sha256').update(JSON.stringify({ files: request.files, scenes: request.scenes })).digest('hex'));
+    expect(request.inputHash).not.toBe(createHash('sha256').update(JSON.stringify(request.files)).digest('hex'));
     expect(result.narration.timingStatus).toBe('not_available');
+    expect(result.narration.provider).toBe('synclip-provider-output');
+  });
+  it('keeps a saved old external prompt frozen instead of silently adopting it for native-first', async () => {
+    const f = await nativeFixture();
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    await expect(f.spool.generate(f.input)).rejects.toThrow('NATIVE_VIDEO_PLAN_CHANGED');
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it.each(['foreign-hash', 'selected-voice'])('does not adopt a native-first result with %s', async defect => {
+    const f = await nativeFixture(request => ({ narration: defect === 'selected-voice'
+      ? { provider: 'synclip', speaker: 'not-selected', speed: 1, timingStatus: 'measured_aligned' } : undefined,
+      ...(defect === 'foreign-hash' ? { inputHash: createHash('sha256').update(JSON.stringify(request.files)).digest('hex') } : {}) }));
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    await expect(f.spool.generate(f.input)).rejects.toThrow(defect === 'foreign-hash' ? 'UNCERTAIN' : 'SYNCLIP_PROVIDER_OUTPUT_INVALID');
+  });
+  it('keeps the complete existing external prompt byte-for-byte', async () => {
+    const f = await nativeFixture();
+    expect(f.input.videoPrompts[0]).toBe([
+      'Scientific explainer shot. Preserve approved subject identity, geometry, direction, and causal relationship exactly.',
+      'Locale: zh. Global continuity bible: stable field identity',
+      'Scene: Scene 0. Reader-facing narration context: Narration 0',
+      'Approved visual action: Action 0',
+      'Shot type: hook. Purpose: purpose 0. Locked subject: same approved subject. Generated elements: only the approved field and electron. Motion: motion beat 0. Camera: slow controlled push-in. Do not: no invented labels.',
+      'Use smooth physically plausible motion, restrained cinematic lighting, and clean scientific composition. Do not render subtitles, formulas, logos, watermarks, or invented labels. Do not change scientific meaning. Spoken narration is external; use only subtle non-verbal ambience if supplied.',
+    ].join('\n'));
   });
 });
 
