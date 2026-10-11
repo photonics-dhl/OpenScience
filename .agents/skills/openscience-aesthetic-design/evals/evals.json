@@ -1,8 +1,41 @@
 {
   "skill_name": "openscience-aesthetic-design",
   "evals": [
-    {"id":1,"prompt":"OpenScience 指南页像文字堆砌，要求艺术感、清晰叙事和不掠夺阅读焦点的动效。先研究成熟产品官方页面，再实现可在真实浏览器验收的方向。","expected_output":"页面 brief、参考原则转译、视觉锚点、桌面/窄屏验收与 Hermes/reduced-motion 说明。","files":[]},
-    {"id":2,"prompt":"OpenScience 全站入口和 Hermes 尺寸不一致。请审查公开页、研究桌面、工作区和账户页，提出统一但不模板化的页面系统。","expected_output":"页面家族构图规则、Hermes 一致性、真实导航路径和视口验收，不把页面改成同一张卡片网格。","files":[]},
-    {"id":3,"prompt":"用户说当前 UI 是 toy，要求用 Figma、已有 skills 和成熟网页研究打磨所有页面。工具受限时要如实标记并给出质量台账。","expected_output":"工具证据、Figma 状态、成熟产品研究、能力台账，以及候选/部署/浏览器观察/用户接受的区别。","files":[]}
+    {
+      "id": 1,
+      "prompt": "OpenScience 指南页像文字堆砌，要求艺术感、清晰叙事和不掠夺阅读焦点的动效。先研究成熟产品官方页面，再实现可在真实浏览器验收的方向。",
+      "expected_output": "页面 brief、参考原则转译、视觉锚点、桌面/窄屏验收与 Hermes/reduced-motion 说明。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "OpenScience 全站入口和 Hermes 尺寸不一致。请审查公开页、研究桌面、工作区和账户页，提出统一但不模板化的页面系统。",
+      "expected_output": "页面家族构图规则、Hermes 一致性、真实导航路径和视口验收，不把页面改成同一张卡片网格。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用户说当前 UI 是 toy，要求用 Figma、已有 skills 和成熟网页研究打磨所有页面。工具受限时要如实标记并给出质量台账。",
+      "expected_output": "工具证据、Figma 状态、成熟产品研究、能力台账，以及候选/部署/浏览器观察/用户接受的区别。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用户正在审核84页图文稿，要求暂不更改UI，只整理网页能力。能否顺便把指南布局和Hermes改好？",
+      "expected_output": "只做能力台账/Skill文档及必要只读核验；不改UI、页面文案/交互、Figma稿、审阅图或部署。保留已有稿供用户审核。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用户已选P07效果图并要求实现，旧skill还写桌面360px、其他页120px Hermes；如何开始？",
+      "expected_output": "使用选定P07及原组件，不重复要求整站批准；采用后续64px默认头像、点击展开、无空侧栏/幽灵，不将助手当作者；补齐响应式/状态并实际观察。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "find-skills和GSAP已安装，Figma whoami成功，44张图生成了，是否可以说整站审美和交互已通过验收？",
+      "expected_output": "区分安装、认证、代码调用、实际浏览器行为与用户审美认可。Guide方向认可不代表其他页面获认可；静态图不能证明交互或科学质量。按具体缺口选工具，不再堆装。",
+      "files": []
+    }
   ]
 }

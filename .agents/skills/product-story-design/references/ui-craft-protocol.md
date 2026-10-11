@@ -2,6 +2,10 @@
 
 Use this protocol for any refinement that touches more than one page or changes a shared shell. It keeps the guide-page standard repeatable without inventing a second product brief.
 
+## 0. Start from the reviewed page
+
+During an explicit page-review freeze, organize skills and evidence only. Once a page is selected, take its P-number, chosen image/Figma frame, task, entry/exit, factual assets and feedback from the existing manuscript. Resolve concrete gaps from that material rather than reopening the whole design. Use the [capability ledger](../../openscience-aesthetic-design/references/aesthetic-capability-ledger.md) for tools and the approved-page implementation sequence.
+
 ## 1. Read the page as a research task
 
 Before touching CSS or JSX, name the visitor's immediate purpose, the evidence that makes the purpose believable, and the one next action. Build the first viewport in this order:
@@ -21,17 +25,17 @@ Keep factual scientific content, labels and permissions unchanged. Explanations 
 - Creation leads with the material handoff: paper or idea, input, start action and local file guidance.
 - Workspaces lead with the contribution and editable result; evidence, versions and tools recede until requested.
 - Account, journals and developer pages lead with identity or task context, then grouped controls and feedback.
-- Guide pages lead with an invitation into a real first action, then one concrete demonstration and expandable answers.
+- Guide pages lead with an invitation, a real published example and selectable explanations/FAQ. The action leads to the research desk; upload and creation do not move into Guide.
 
 Use one dominant heading and one dominant surface per viewport. A section may be visually quiet without being boxed. Use real media and localized text when tuning line length, whitespace and breakpoints.
 
 ## 3. Keep Hermes one visual object
 
-Every non-Landing surface uses the shared Hermes stage. The desktop research desk keeps a 360px companion seat. Other contexts and narrow screens start with a consistent compact 120px Live2D entry, as approved by the user on 2026-10-08. Opening the assistant moves the same renderer into its reserved conversation area, up to 360px; closing returns it to its page-owned entry. Do not add page-local portraits, resize controls, static copies or a full-width bottom banner.
+Hermes uses the later human-selected opaque Live2D face-and-hat avatar, currently 64px, including on the research desk. Click opens the existing contextual assistant in its own area; closing restores the entry and focus. Expanded size follows available space and the selected page, not a permanent 360px seat or a 120px default. No bottom banner, static duplicate, ghost over content, or use of Hermes as the researcher identity. Landing has no added companion. Speech stays within the assistant area and uses the shared short hat/face anchor.
 
 The stage must reserve its footprint before the actor or speech appears. The actor, carrier, WebGL fallback, menu and speech contour share that footprint. Speech uses the hat upper-left origin and a short tail; its box may move to avoid content, but its origin rule stays shared. Prefer a meaningful place in the page header, supporting copy or work margin over an empty row. Internal attempts and technical checks recede into history; final results and in-context feedback lead. Idle, loading and reduced-motion states must not change the page's layout geometry. Route-scoped anchor measurements must never position the next page's companion.
 
-Where the generic shell has no contextual seat, use one compact corner launcher with the same Live2D entry and end-of-content safe space; do not create a separate caption, empty heading row or second launcher. Its accessible name describes opening Hermes, while actual navigation stays in navigation links.
+Place the entry in a meaningful toolbar or page-owned margin; if no useful assistant task exists, omit it. Do not force a corner overlay or empty seat onto every page. Its accessible name describes opening Hermes; navigation remains in navigation links.
 
 ## 4. Author motion with restraint
 

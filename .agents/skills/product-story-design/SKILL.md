@@ -11,6 +11,8 @@ Treat every surface as a visitor task. Public exploration invites reading; a res
 
 For a full-page refinement, read [the UI craft protocol](references/ui-craft-protocol.md) before editing. It is the executable version of the earlier guide-page process: establish the page job, set the first-viewport reading order, reserve the Hermes footprint, then verify the actual route at desktop and narrow widths. Treat Landing as a preserved surface unless the user explicitly changes that scope.
 
+For capability preparation during a user review freeze, use the [existing capability ledger](../openscience-aesthetic-design/references/aesthetic-capability-ledger.md) and update guidance only. Do not use this skill as authorization to revise frozen pages or the submitted atlas. Once the user selects a page, preserve its chosen story and composition while refining responsive and interaction details.
+
 ## Narrative decisions
 
 - Start with the researcher's materials, question or discovery. Put the particular benefit beside an actual research artifact or an existing product action. “Continue”, “explore” and “understand” need an object in context.

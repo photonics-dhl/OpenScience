@@ -18,6 +18,12 @@ The product moves through `encounter → understand → shape → publish → re
 
 Keep cold paper, ink, teal, restrained vermilion, editorial typography, real research media, measured rules, and intentional asymmetry. Landing keeps its approved optical hero and copy; its navigation may be reconciled with the product shell.
 
+## Review and implementation scope
+
+When the user is reviewing the product atlas and has frozen pages, work only on capability documentation and relevant read-only checks. Do not change page code, copy, interactions, design frames or the submitted atlas, generate replacement screens, or deploy. Resume implementation for the pages the user explicitly selects; reuse that authorization without a second design interview. The 44-screen visual atlas supplies review candidates, not blanket acceptance. Guide invitation/examples/navigation are separate from creation, which belongs to the research desk.
+
+Use the [existing capability ledger](references/aesthetic-capability-ledger.md) to choose the smallest suitable skill/tool set and distinguish installed, callable, observed and accepted.
+
 ## Workflow
 
 ### 1. Write the page brief before styling
@@ -46,7 +52,7 @@ Do not dedicate an empty full-height rail to Hermes. Reserve its shared footprin
 
 Reuse OpenScience tokens, shell, type, Hermes, media, and route semantics. Add a token/component when a pattern appears on two or more pages; keep page-specific composition in page overrides. Every changed interaction needs visible focus, hover, active, loading, success, error, empty, and disabled states where relevant. Reserve media space, keep touch targets at least 44px, and honor `prefers-reduced-motion`.
 
-Hermes follows the user-approved contextual presence policy: the desktop research desk owns a full 360px companion seat; reading, guide, identity, account and other work surfaces start with the same compact 120px Live2D entry. Narrow screens also start compact. Opening the companion moves the same live renderer into the conversation's reserved area, up to 360px within the available space; closing returns it to its page-owned entry. Consistency means the same entry language and expansion behavior, not a large model on every page. No floating banner, static duplicate or translucent actor over the composer. Speech must emerge from the hat/face anchor without covering titles or controls. Landing does not receive the stage.
+Hermes uses the later human-selected opaque Live2D face-and-hat avatar, currently 64px, including on the research desk. Click opens the existing contextual assistant in its own area; closing restores the entry and focus. Expanded size follows available space and the selected page, not a permanent 360px seat or a 120px default. No bottom banner, static duplicate, ghost over content, or use of Hermes as the researcher identity. Landing has no added companion. Speech stays within the assistant area and uses the shared short hat/face anchor.
 
 Keep internal attempts and technical checks in processing history. Lead with the research and final result, then invite feedback or adoption in context. Do not create a second review inbox. Reuse the domain's actual technical qualification and adoption states; hiding controls is not proof of automation, and user adoption does not authorize paid generation or publication. Clean up only identified test records through the existing recoverable archive flow; names, duplicates and missing DOI do not prove that a record is disposable.
 
