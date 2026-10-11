@@ -26,12 +26,23 @@ function firstNativePlan(task: VideoTaskAdmissionSnapshot, error: string | null 
 
 /** NULL-CP future contracts have no saved tools to replay. Host readiness cannot supply those tools. */
 function planningContractHold(task: Pick<AgentTask, 'kind' | 'payload' | 'result'>): boolean {
-  if (task.kind !== 'presentation.generate' || !isDirectNativeVideoStoryboard(task.payload)
-    || !task.result || typeof task.result !== 'object' || Array.isArray(task.result)
+  if (task.kind !== 'presentation.generate' || !task.result || typeof task.result !== 'object' || Array.isArray(task.result)
     || !Object.hasOwn(task.result, 'nativeAgentExecution')) return false;
   const rawMarker = (task.result as Record<string, unknown>).nativeAgentExecution;
   if (!rawMarker || typeof rawMarker !== 'object' || Array.isArray(rawMarker)
     || !Object.hasOwn(rawMarker, 'planningContract')) return false;
+  let compatibleShape = isDirectNativeVideoStoryboard(task.payload);
+  if (!compatibleShape) {
+    try {
+      const payload = parsePresentationGenerationPayload(task.payload), settings = payload.storyboard;
+      compatibleShape = payload.kind === 'interactive_html' && settings?.output === 'video' && settings.narrative === true
+        && settings.baseAssetId !== undefined && settings.revisionSceneIndex !== undefined
+        && payload.hermesRunAuthority === undefined && settings.narrativeSceneLimit === undefined
+        && settings.revisionMode === undefined && settings.revisionTaskId === undefined
+        && settings.revisionImageAssetId === undefined && settings.artSceneIndex === undefined;
+    } catch { return false; }
+  }
+  if (!compatibleShape) return false;
   try {
     const marker = readNativeAgentExecution(task.result);
     return marker?.planningContract !== undefined && (!marker.checkpoint || marker.checkpoint.state === 'started');

@@ -204,6 +204,70 @@ describe.skipIf(process.env.XGS_WORKER_TEST_REDIS_URL === undefined)('real Redis
   });
 });
 
+describe('ordinary local Native video planning compatibility floor', () => {
+  function localRevision() {
+    const f = firstNativePlanFixture(); f.state.ready = true;
+    Object.assign(f.task.payload.storyboard!, { baseAssetId: '10000000-0000-4000-8000-000000000001', revisionSceneIndex: 0 });
+    Object.assign(f.task.result!.nativeAgentExecution!, { planningContract: 'video-optional-audio-v1' });
+    Object.assign(f.task, { idempotencyKey: 'original-local-video-once' });
+    return f;
+  }
+  it.each(['first-scene', 'later-scene', 'started', 'paid-unknown'] as const)(
+    'parks owned marked %s local revision before Host or claim and never releases it', async state => {
+      const f = localRevision();
+      if (state === 'later-scene') (f.task.payload.storyboard as Record<string, unknown>).revisionSceneIndex = 2;
+      if (state === 'started') {
+        const checkpoint: NativeAgentCheckpointReference = { taskId: f.task.id, objectKey: `derived/native-agent/${'d'.repeat(64)}.json`,
+          serializedSha256: 'd'.repeat(64), size: 100, artifactId: 'paper-artifact', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
+          executionAttempt: 1, turnCount: 1, state: 'started', target: { provider: 'provider-v1', model: 'MiniMax-M3', promptHash: 'c'.repeat(64) } };
+        Object.assign(f.task.result!.nativeAgentExecution!, { checkpoint }); f.task.executionAttempt = 1;
+        expect(readNativeAgentExecution(f.task.result)?.checkpoint?.state).toBe('started');
+      }
+      if (state === 'paid-unknown') f.task.result!.providerOutcome = 'unknown';
+      const ledger = [{ id: 'existing-local-debit', taskId: f.task.id, delta: -1 }];
+      Object.assign(f.deps.prisma, { usageLedger: { findMany: vi.fn(async () => ledger), create: vi.fn() } });
+      const before = structuredClone(f.task), paid = structuredClone(ledger);
+      expect(await f.poll()).toBe(true);
+      expect(f.task).toEqual({ ...before, error: VIDEO_READINESS_HOLD, updatedAt: new Date(before.updatedAt.getTime() + 1) });
+      expect(f.task.executionAttempt).toBe(before.executionAttempt); expect(ledger).toEqual(paid);
+      expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+      expect(f.lists.get(processingKey)).toEqual([]);
+      const held = structuredClone(f.task);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+      expect(await releasePendingVideoTask(f.deps, held as never)).toBe(false);
+      expect(await releasePendingVideoTask(f.deps, held as never, 'video-optional-audio-v1')).toBe(false);
+      expect(await f.outbox()).toBe(0); expect(f.task).toEqual(held); expect(ledger).toEqual(paid);
+    });
+  it.each([null, undefined, 'unknown-contract', {}])('parks a malformed owned local contract %j without reopening history', async planningContract => {
+    const f = localRevision(); Object.assign(f.task.result!.nativeAgentExecution!, { planningContract });
+    const before = structuredClone(f.task); await f.poll();
+    expect(f.task).toEqual({ ...before, error: VIDEO_READINESS_HOLD, updatedAt: new Date(before.updatedAt.getTime() + 1) });
+    const held = structuredClone(f.task);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(await releasePendingVideoTask(f.deps, held as never)).toBe(false);
+    expect(f.task).toEqual(held); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+  });
+  it.each(['unmarked', 'unmarked-malformed', 'base-only', 'run', 'scene-limit', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex', 'image', 'sdf'] as const)(
+    'retains the original %s admission without inventing a local contract hold', async change => {
+      const f = localRevision(), storyboard = f.task.payload.storyboard as Record<string, unknown>;
+      if (change === 'unmarked' || change === 'unmarked-malformed') delete (f.task.result!.nativeAgentExecution as Record<string, unknown>).planningContract;
+      if (change === 'unmarked-malformed') (f.task.result!.nativeAgentExecution as Record<string, unknown>).runtimeId = '';
+      if (change === 'base-only') delete storyboard.revisionSceneIndex;
+      if (change === 'run') {
+        f.task.payload.hermesRunAuthority = { runId: '10000000-0000-4000-8000-000000000003', profile: 'content-driven-v1', stage: 'storyboard', ordinal: 0 };
+        f.deps.prisma.hermesResearchRun.findUnique = vi.fn(async () => null) as never;
+      }
+      if (change === 'scene-limit') storyboard.narrativeSceneLimit = 3;
+      if (change === 'revisionMode') storyboard.revisionMode = 'art';
+      if (change === 'revisionTaskId' || change === 'revisionImageAssetId') storyboard[change] = '10000000-0000-4000-8000-000000000003';
+      if (change === 'artSceneIndex') storyboard.artSceneIndex = 0;
+      if (change === 'image') storyboard.output = 'image';
+      if (change === 'sdf') f.task.kind = 'sdf.extract';
+      const before = structuredClone(f.task);
+      expect(await admitPendingVideoTask(f.deps, before as never)).toEqual({ expectedPendingTask: before });
+      expect(f.task).toEqual(before); expect(f.task.error).toBeNull(); expect(execution.claim).not.toHaveBeenCalled();
+    });
+});
+
 describe('first Native video plan admission', () => {
   it.each(['external-narration', 'native-first'])('parks marked NULL-CP %s before claim even with Host ready, preserving its credit and once key', async intent => {
     const f = firstNativePlanFixture(); f.state.ready = true;
