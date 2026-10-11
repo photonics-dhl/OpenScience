@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-11 后端续作：Task4原96b/d357的69分块/69向量恢复已完成且不再apply；两条有据全文查询已交UI，正常站内只读验收进行中。生图对43d原23候选区分了论据条件错配与cos(θ)误拒；4文件候选328项定向通过；更正为直接Domain build/Worker TC均实际0，原递归依赖失败保留。完整terminal已过语法却仍_description invalid，原smoke成功断言过早；saved profile重建可blocked，兼容未过，不据局部修复放行。视频a0f2五精确CI全过、实际codec零skip，新增操作High却发现普通自动回滚可能把新optional-profile计划交旧Worker，当前发布NO-GO；原High进一步发现已记账NULL-CP任务没有新旧合同标识的P1，已安排修正R1实施：在既有任务结果识别但不生产optional标识，复用preclaim hold/outbox，保留所有原receipt；跨版本证明和新High完成前不发布。生图新parser独立，不混R1/R2；root负责集成与后续串行发布。线上ad993、Native393/M3和关闭的Host59未动。UI稿件/页面继续冻结待用户审阅；代码通过与真实科学计划/完整影片质量分别判断，详见Hermes CURRENT。
+- 2026-10-11 后端续作：生图4文件daba8375已冻结交原High，328定向/直接Domain build/Worker TC通过，保存compact成功和真实错误回放另有定向证据；原完整末稿仍描述绑定无效，保存错误回执与旧reader兼容未过，隔离候选不集入视频R1/R2。视频R1已报告actual ad99/a0f2跨版本回放通过，继续补原发布失败窗口与task-store绑定回归，待冻结审查。Task4原96b的69分块/向量恢复不再apply；UI首条真实查询目标第1/3，却是lexical_only/embedding_unavailable，语义召回尚未恢复，第二条仍执行；生图已接API→BGE本地只读定位。UI稿件冻结待审，本轮无生产/模型/付费操作，详情见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
