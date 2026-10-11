@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-11 后端续作：生图接线已核、科学质量未验；Task4单次恢复已按High执行，唯一apply重排同96b；只读核同任务running/retry1/execution2、同generation running/attempt2，仍待69向量终态及源/账本差额，禁止第二次apply。视频RED方案High有条件GO，Domain扣费前分类/admission/Native producer最小扩展已授权实施；必要统一分类函数导出一并纳入，不改API/Worker index或UI。UI页面冻结，6份既有Skill/能力文档已全等集入9c2017f7并完成格式/引用/场景核验，等用户逐页审阅；真实科学计划/完整影片未验收，精确证据与边界见Hermes CURRENT。
+- 2026-10-11 后端续作：生图接线已核、科学质量未验；Task4单次恢复已完成，同96b/d357原69分块全部获得69向量，来源/确认/权限/模型/账本不变，root核原回执后关闭writer且不再apply；继续原任务的两条源有据查询准备与正常私有全文搜索读取，未宣称语义或生图质量通过。视频RED方案High有条件GO，Domain扣费前分类/admission/Native producer最小扩展已授权实施；必要统一分类函数导出一并纳入，不改API/Worker index或UI。UI页面冻结，6份既有Skill/能力文档已全等集入9c2017f7并完成格式/引用/场景核验，等用户逐页审阅；真实科学计划/完整影片未验收，精确证据与边界见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 

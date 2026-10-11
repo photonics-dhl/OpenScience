@@ -190,7 +190,7 @@ Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed hist
 
 2026-09-29科学分镜可诊断性：ea44被拒候选仅留数值摘要，非标准变量归为other，无法离线分辨量名误判与科学错误。已部署实现复用私有AgentTask.result留存有界拒收全文和一次来源映射；对外投影剔除、不作为checkpoint/恢复授权，保存失败停止后续模型提交。数值守卫保持严格；同值同单位来源无显式符号时，反馈要求恢复原文量名，不能推断符号别名。受控retry兼容、验证与部署只见CURRENT；不据此宣称最终图片质量通过。
 
-长表dense恢复：09-28第14页表格3051字/607词法token、v14的69 active及查询10段均为历史；原HTTP/精确BGE计数未保留。10-08只读已证旧049c/be071非current、active0，当前v27的96b/d357为69 active/0 vector，来源/确认/manifest/模型/双预算条件另已核实，时点及原回执只见CURRENT。候选chunker/search-indexer对明确token超限表格划同源完整行窗口，先原分区后临时预算，校验逐向量后mean-normalize；失败保lexical、源/定位/权限/fence不变，29/25已CI通过。Domain内部恢复沿原retry与producer，CLI显式UUID后查询scope current take2、唯一后严格owner，不采用不同owner，默认只列计划；旧049c不可恢复，参数/源/模型/双预算回归与High已过。候选尚未生产BGE或重索引，部署后操作前须freshread，不以只读快照保证恢复或宣称dense召回通过。
+长表dense恢复：09-28第14页表格3051字/607词法token、v14的69 active及查询10段为历史；旧049c/be071已非current，不得恢复。已部署chunker/search-indexer对明确token超限表格划同源完整行窗口，校验逐向量后mean-normalize；失败保lexical、源/定位/权限/fence，原29/25与High证据保留。Domain内部恢复沿原retry/producer，动态CLI显式UUID查询scope current take2，唯一后严格owner且默认plan。10-11原96b/d357/v27经已审plan1/apply1真实Worker/BGE恢复，69原分块身份不变、69同模型向量齐全，Core/Search同任务/代际成功，源/确认/权限/AI账本不变；原回执及唯一窗口关闭见CURRENT。结构恢复已验，当前来源的真实私有全文召回仍待正常产品读取；BGE索引不将Native本文paper_search自动变成语义工具，也不证明科学蕴含或配图质量。
 
 显式来源补审（2026-09-21已部署，用户再次继续后）：将固定一次恢复改为原9项预算内的连续review链，每次仍须原retry-generation明确动作；全部失败记录、同原v4候选/SourceMap、无有效科学响应及主尝试审计必须一致，所有尝试计入原额度并预留后续制作。历史provider_error不反推瞬态根因，只允许接受重复供应商费用后的显式补审；自动科学消费仍拒绝无有效审阅。原始幂等键入已有audit，精确历史请求重放不再派发；旧ordinal1缺原key元数据，不能追溯识别改version的旧raw-key复用。无新分析器/供应商/迁移，实际部署与运行只见CURRENT。
 
