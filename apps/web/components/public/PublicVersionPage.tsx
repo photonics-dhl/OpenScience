@@ -13,6 +13,7 @@ import { EvidenceSheet } from './EvidenceSheet';
 import { PresentationAssetGallery } from './PresentationAssetGallery';
 import { ScientificText } from '@/components/content/ScientificText';
 import styles from './PublicReadingProduct.module.css';
+import { ResearchTypeLabel } from '@/components/research/ResearchTypeLabel';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
@@ -249,6 +250,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
         <article className="pub-reading-column" data-public-reading-column="true" data-hermes-protected="true">
           <header className={`pub-reading-identity ${styles.identity}`} data-public-identity="true">
             <h1>{research.title}</h1>
+            <ResearchTypeLabel core={version.core} />
             <div className={styles.identityMeta}>
               <p className={styles.sourceLine}>{version.publicVersionId}<span>{publishedAt}</span></p>
               <div className={styles.readingActions}><CopyButton text={research.citation} label={t('copyCitation')} /></div>
@@ -306,7 +308,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
           {research.artifactPaths.length > 0 && <details className="pub-reading-artifacts pub-reading-details" data-print-landmark="provenance">
             <summary>{t('artifactProvenance')}</summary>
             <ul>{research.artifactPaths.map((artifact) => <li className="break-all" key={`${artifact.logicalPath}-${artifact.blobSha256}`}>
-              {artifact.downloadAccess === 'public' && artifact.downloadUrl ? <a className="inline-flex min-h-11 items-center underline" href={artifact.downloadUrl} download>{artifact.logicalPath}</a> : <span>{artifact.logicalPath}</span>}
+              {artifact.downloadAccess === 'public' && artifact.downloadUrl ? <a className="inline-flex min-h-11 items-center underline" href={artifact.downloadUrl} download>{artifact.logicalPath}</a> : <><span>{artifact.logicalPath}</span><span className="mt-1 block text-sm leading-6 text-os-muted-paper">{t('artifactDownloadUnavailable')}</span></>}
             </li>)}</ul>
           </details>}
           <details className="pub-disclaimer" data-print-landmark="provenance"><summary>{t('legalDisclaimer')}</summary><p>{disclaimer}</p></details>

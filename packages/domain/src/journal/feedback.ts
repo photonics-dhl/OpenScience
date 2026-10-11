@@ -3,6 +3,7 @@ import type { JournalEvent, Prisma } from '@prisma/client';
 import type { WorkspaceDeps } from '../workspace/types';
 import { JournalError } from './contracts';
 import { JOURNAL_EDIT_ROLES, journalJson, journalScope, journalTransaction, type JournalTx } from './articles';
+import { journalReleaseExpired } from './release-authorization';
 
 export type JournalFeedbackStatus = 'open' | 'resolved' | 'declined';
 
@@ -121,7 +122,8 @@ export async function createJournalFeedback(
       },
       include: { article: true },
     });
-    if (!release || record(release.article.rights).publicDerivative !== true) throw new JournalError('JOURNAL_NOT_FOUND', '公开期刊版本不存在');
+    if (!release || journalReleaseExpired(release.snapshot, release.article.source, deps.now?.() ?? new Date()))
+      throw new JournalError('JOURNAL_NOT_FOUND', '公开期刊版本不存在');
     const payload: FeedbackPayload = { requestKey, articleId, versionId: release.versionId, versionNo: input.versionNo, content, status: 'open' };
     const created = await tx.journalEvent.create({ data: {
       id: feedbackId, journalId, actorId: reporterId, action: CREATE_ACTION, targetType: TARGET_TYPE, targetId: feedbackId, after: journalJson(payload),

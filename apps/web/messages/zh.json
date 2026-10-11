@@ -1,13 +1,157 @@
 {
+  "hermesAudioAudition": {
+    "title": "旁白试听",
+    "scene": "第 {number} 幕 · {seconds} 秒",
+    "resultUnavailable": "暂时无法加载这段旁白试听。",
+    "download": "下载 MP3",
+    "downloading": "正在准备下载…",
+    "loading": "正在加载音频…",
+    "playbackFailed": "音频加载失败。",
+    "reload": "重新加载",
+    "downloadFailed": "下载失败，请重试。",
+    "downloadStarted": "已开始下载。"
+  },
+  "technologyDiscovery": {
+    "eyebrow": "技术发现",
+    "queryLabel": "描述技术需求，或输入论文标题、DOI、arXiv 编号",
+    "queryHelp": "可描述需求，或粘贴论文标题、DOI、arXiv 编号 · 最多 500 字符",
+    "search": "检索来源",
+    "searching": "正在发起检索…",
+    "examplesLabel": "示例检索",
+    "tryExample": "试试",
+    "loginOnSearch": "可自由浏览；提交检索时登录，返回后草稿仍在。",
+    "conversation": "研究对话",
+    "queriesCount": "{count} 次检索",
+    "ready": "可以开始",
+    "yourQuery": "你的问题",
+    "sourceRetrieval": "来源检索",
+    "restoring": "正在恢复这次检索…",
+    "queued": "来源检索已排队。",
+    "retrieving": "正在查找来源元数据…",
+    "retrievalFailed": "来源检索失败，问题已保留。",
+    "metadataFound": "找到 {count} 条来源记录。请查阅原文后再下结论。",
+    "noMetadata": "未返回来源元数据。可尝试更明确的标题、标识符或需求。",
+    "providerUnavailable": "来源服务报告故障，且未返回记录。请稍后重试。",
+    "retry": "重试检索",
+    "metadataCaveat": "这些是来源记录，不是技术评估。性能、适用性和商业成熟度仍需独立核实。",
+    "identifierUnknown": "标识符未知",
+    "sourceUnknown": "来源链接未知",
+    "openSource": "打开来源",
+    "shortlist": "加入候选",
+    "remove": "移除",
+    "researchBrief": "工作简报",
+    "briefHint": "个人笔记仅保存在当前账号及服务对象的浏览器会话中。",
+    "shortlistTitle": "来源候选",
+    "shortlistEmpty": "最多选择三条来源，供对比和导出。",
+    "compareTitle": "对比来源记录",
+    "validationUnknown": "性能、使用条件及验证情况：未知",
+    "exportShortlist": "导出简报与候选",
+    "notProvided": "未填写",
+    "getInTouch": "联系我们",
+    "contactTitle": "准备咨询请求",
+    "contactHelp": "打开邮件草稿或导出前请检查内容。本页面不会发送请求。",
+    "name": "姓名",
+    "organization": "机构",
+    "email": "邮箱",
+    "need": "希望讨论什么？",
+    "contactValidation": "请填写姓名、机构、有效邮箱及咨询需求后再导出或打开邮件草稿。",
+    "previewDraft": "预览请求及所选来源",
+    "exportRequest": "导出请求",
+    "openEmailDraft": "打开邮件草稿",
+    "mailNotice": "你的邮件应用将打开致联系人的草稿；是否发送由你决定。",
+    "reconnecting": "正在重新连接检索任务…",
+    "requestFailed": "请求未完成，请重试。",
+    "pendingIntent": "先前的请求可能仍在处理，请先用相同问题重试。",
+    "sessionExpired": "登录已过期。重新登录后可继续；问题已保留。",
+    "taskUnavailable": "任务不可用。请重新检索或登录。",
+    "serviceUnavailable": "暂时无法确认登录状态。草稿仍在此处，服务恢复后可重试。",
+    "retrySession": "重新检查登录",
+    "industry": {
+      "title": "Industry",
+      "lead": "从实际技术需求出发，寻找相关研究，核对来源证据和仍需验证的问题。",
+      "placeholder": "search any technology with AI",
+      "example1": "面向制造业的低能耗光学传感",
+      "example2": "10.1038/nature12373",
+      "example3": "耐用柔性光子器件的方法",
+      "emptyTitle": "从你要解决的问题开始",
+      "emptyBody": "描述应用、性能目标和约束。检索会返回可进一步核对的来源记录，你可以继续修改简报。",
+      "briefLabel": "应用、性能与约束",
+      "briefPlaceholder": "应用场景…\n性能目标…\n材料、成本或部署约束…",
+      "unknowns": "请结合原文核实运行条件、实测性能、可复现性和集成成本。"
+    },
+    "investors": {
+      "title": "Investors",
+      "lead": "从公开来源了解新兴研究方向，记录机会、证据与尚未回答的问题。",
+      "placeholder": "search any potential technology with AI",
+      "example1": "有潜力的光子计算路径",
+      "example2": "arXiv:1706.03762",
+      "example3": "具有临床潜力的新型传感平台",
+      "emptyTitle": "从潜在机会开始",
+      "emptyBody": "描述市场或技术假设，也可以输入论文。阅读原始来源，记录仍需尽调的事项。",
+      "briefLabel": "机会、证据、团队与未知项",
+      "briefPlaceholder": "机会假设…\n待核实的证据…\n团队问题…\n未知项…",
+      "unknowns": "团队、知识产权、市场契合度和商业成熟度无法从来源元数据确定。"
+    },
+    "restoreFailed": "无法加载已保存的任务。请重试加载此任务。",
+    "retryRestore": "重试加载任务",
+    "partialProviders": "部分来源服务不可用，当前列表可能不完整。",
+    "checkingSignIn": "正在检查登录并恢复输入…"
+  },
+  "services": {
+    "upload": { "title": "论文 PDF", "description": "AI 助手协助提取和整理研究内容，你可以修改，并在确认后发布。", "drop": "拖入论文 PDF", "hint": "每次上传一份 PDF；选择后仍需点击下方按钮开始解析。" },
+    "researchTypes": { "published": "已发表论文", "preprint": "预出版成果", "originalDetails": "原发表信息（用户填写）：" },
+    "navigation": "服务对象", "navigationHint": "按服务对象了解平台，无需选择账号身份。", "getStarted": "开始使用", "journalDirectory": "浏览期刊目录", "explore": "浏览研究成果", "researcherLink": "了解面向科研人员的服务",
+    "audiences": {
+      "researchers": { "name": "科研人员", "english": "Researchers" },
+      "journals": { "name": "期刊", "english": "Journals", "description": "面向编辑部，让已发表研究更容易被阅读与理解。", "heading": "从论文原文到结构化研究内容", "body": "通过 OpenScience 整理论文资料，借助 AI 助手解析研究内容，再由编辑核对。期刊目录提供期刊和论文的浏览入口；本页介绍面向期刊的服务。" },
+      "institutions": { "name": "高校与科研机构", "english": "Academic Institutions", "description": "了解 OpenScience 如何帮助研究者整理与展示研究成果。", "heading": "让研究成果更容易被发现", "body": "研究者可以维护学术资料、整理已发表论文，并在核对后公开研究成果。从公开研究页面了解不同团队的研究问题、方法与结果。" },
+      "industry": { "name": "产业界", "english": "Industry", "description": "从公开研究中了解方法、结果及其适用条件。", "heading": "理解与你相关的研究", "body": "浏览结构化研究内容，结合研究局限与可复现性信息理解成果，并访问相关原文，进一步了解研究背景。" },
+      "investors": { "name": "投资机构", "english": "Investors", "description": "通过公开研究内容，了解新研究方向与技术进展。", "heading": "从研究问题与证据出发", "body": "探索研究成果，阅读其方法、结果和局限，并回到原文了解更多信息。OpenScience 提供科研内容的阅读与发现入口。" }
+    },
+    "researchers": {
+      "description": "打造你的个人学术主页，将已发表论文转化为 AI 友好的研究内容，让知识更易被Agent发现、理解与传播。更早上传你未发表的新研究，持续拓展你的学术影响力。",
+      "tagline": "Share early. Be discovered by AI. Make an impact.",
+      "actionsLabel": "面向科研人员的四项服务", "accessNote": "服务介绍和公开研究可直接浏览。操作本人内容时再登录，登录后会回到刚才选择的功能。",
+      "cards": {
+        "profile": { "title": "管理我的学术主页", "description": "完善并更新学术履历；关联展示论文与研究成果；让同行了解你的学术积累，也让 AI 更好地理解你的学科背景与研究方向。", "action": "开始使用：管理我的学术主页" },
+        "published": { "title": "解析已发表论文", "description": "上传已发表论文及补充材料，由 AI 助手提取、整理研究内容，并生成图片、视频、音频等多模态传播素材。经你核对确认后，形成结构化研究页面，支持后续修订与版本迭代。", "action": "开始使用：解析已发表论文" },
+        "preprint": { "title": "发布预出版成果", "description": "上传 PDF，或直接填写研究的核心贡献，借助 AI 助手整理内容，以多种形式呈现你的研究。核对确认后，可自主选择公开发布，并通过后续修订与版本迭代持续完善成果。", "action": "开始使用：创建预出版成果" },
+        "explore": { "title": "浏览研究成果", "description": "阅读其他人的结构化研究内容，了解问题、方法与发现，探索与你相关的研究。", "action": "开始使用：浏览研究成果" }
+      },
+      "faqTitle": "开始之前，你可能想了解",
+      "faq": {
+        "fields": { "question": "六字段分别是什么？", "answer": "问题、洞见、方法、结果、局限、可复现性。它们帮助你从六个角度说明研究，可以直接填写，也可以上传 PDF 后核对 AI 整理的草稿。" },
+        "types": { "question": "已发表论文与预出版成果有什么区别？", "answer": "已发表论文入口用于整理已有正式发表信息的研究，保留原题目、作者、期刊与 DOI。预出版入口用于尚未正式发表的成果，可从 PDF 或空白六字段开始创建。" },
+        "ai": { "question": "AI 助手会做什么？我可以修改结果吗？", "answer": "AI 助手协助提取和整理研究内容。解析结果需要你核对；你可以补充、修改，确认无误后再公开。上传文件和解析内容不会自动公开发布。" },
+        "publish": { "question": "可以先保存草稿，之后再公开吗？", "answer": "可以。创建与日常保存保留为私有草稿；准备好后，通过研究页面的发布入口核对并明确确认公开。公开后可查看与分享研究页面。" }
+      }
+    }
+  },
   "journalDirectory": {
     "eyebrow": "期刊",
-    "title": "期刊目录",
+    "title": "Browse all journals",
     "intro": "按研究领域浏览期刊，追踪论文与研究解读。",
     "skip": "跳到内容",
     "navigation": "主导航",
     "searchLabel": "搜索期刊",
     "searchPlaceholder": "搜索期刊名称、ISSN 或学科",
     "search": "搜索",
+    "filters": {
+      "label": "筛选与排序",
+      "defaults": "全部学科 · 全部获取方式 · A–Z",
+      "subjectLabel": "学科",
+      "allSubjects": "全部学科",
+      "accessLabel": "开放获取",
+      "accessAll": "全部获取方式",
+      "accessOpen": "仅开放获取",
+      "accessClosed": "非开放获取",
+      "accessUnknown": "状态未知",
+      "sortLabel": "排序",
+      "sortPaperCount": "平台收录篇数",
+      "sortCitationCount": "被引次数",
+      "availability": "开放获取状态未知不等于非开放获取；引用量排序在接入可靠数据后启用。",
+      "citationFallback": "引用量暂不可用，当前按 A–Z 排序"
+    },
     "loading": "正在加载期刊目录…",
     "loadFailed": "暂时无法加载期刊目录。",
     "retry": "重试",
@@ -15,6 +159,8 @@
     "emptyTitle": "发现，先从一篇研究开始。",
     "emptyBody": "期刊目录将随入驻期刊逐步丰富。现在也可以从公开研究开始阅读。",
     "noMatches": "没有找到匹配的期刊",
+    "accessUnavailable": "当前目录暂未提供开放获取信息",
+    "showAllAccess": "显示全部获取方式",
     "noMatchesBody": "试试期刊全名、ISSN 或研究领域。",
     "clearSearch": "查看全部期刊",
     "explore": "浏览公开研究",
@@ -23,7 +169,20 @@
     "openapi": "开放数据 API 规范",
     "sitemap": "公开期刊站点地图",
     "accountTools": "期刊账户工具",
-    "apply": "申请期刊入驻"
+    "apply": "申请期刊入驻",
+    "management": {
+      "title": "我的期刊",
+      "intro": "在这里维护你参与的期刊、目录与论文。",
+      "skip": "跳到内容",
+      "loading": "正在加载我的期刊…",
+      "loadFailed": "无法加载我的期刊。",
+      "retry": "重试加载",
+      "emptyTitle": "让研究汇成一本期刊。",
+      "emptyBody": "加入的期刊会出现在这里。你可以申请期刊入驻，维护目录与论文；也可以先浏览公开期刊。",
+      "apply": "申请期刊入驻",
+      "browse": "浏览期刊",
+      "open": "编辑工作台"
+    }
   },
   "developers": {
     "title": "开发者 API",
@@ -173,6 +332,7 @@
     "prepareVersionFailed": "当前正文尚未整理成可用版本，请查看具体原因后继续。",
     "productionSubmitted": "制作任务已交给服务器，成果会回到左侧。任务完成前仍可编辑正文。",
     "openResearchRun": "打开图文制作",
+    "openResearchVideoRun": "准备这篇论文的视频",
     "published": "已公开发布，可以打开正式研究页面。",
     "undone": "已请求撤销上次修改；正文和保存状态显示在左侧。",
     "cancelled": "已取消这次待确认的安排。",
@@ -370,6 +530,18 @@
     "primaryNavigation": "主导航"
   },
   "productNavigation": {
+    "features": "功能",
+    "about": "About",
+    "uploadCreate": "上传／创建研究",
+    "loginRegister": "登录／注册",
+    "personalCenter": "个人中心",
+    "contact": "联系我们",
+    "feedback": "反馈问题",
+    "analysisDemo": "申请情报分析演示",
+    "apiAccess": "接入 API",
+    "featureProfile": "管理我的学术主页",
+    "featurePublished": "解析已发表论文",
+    "featurePreprint": "发布预出版成果",
     "dashboard": "研究桌面",
     "dashboardShort": "工作台",
     "explore": "探索",
@@ -385,6 +557,46 @@
     "accountTools": "账户工具",
     "myJournals": "我的期刊",
     "developers": "开发者 API"
+  },
+  "emailDraft": {
+    "opening": "正在打开邮件草稿…",
+    "retry": "重试打开邮件草稿",
+    "failed": "暂时无法打开邮件草稿，请重试。"
+  },
+  "aboutContact": {
+    "topicsLabel": "联系主题",
+    "detailsTitle": "告诉我们你的需求",
+    "mailNote": "点击后会打开你的邮件客户端；请核对草稿内容，再决定是否发送。",
+    "contact": {
+      "title": "联系我们",
+      "intro": "关于 OpenScience 的使用、研究合作或其他想法，欢迎与我们联系。",
+      "hint1": "介绍你的研究方向或所属机构。",
+      "hint2": "说明你希望了解的服务或合作方式。",
+      "hint3": "留下方便进一步沟通的联系方式。",
+      "action": "撰写联系邮件",
+      "subject": "OpenScience 联系咨询",
+      "body": "你好，我想了解 OpenScience。\n\n姓名／机构：\n研究方向：\n咨询或合作需求：\n联系方式："
+    },
+    "feedback": {
+      "title": "反馈问题",
+      "intro": "遇到页面或功能异常时，请告诉我们发生了什么，帮助我们定位并改进。",
+      "hint1": "提供出现问题的页面链接和操作步骤。",
+      "hint2": "说明预期结果、实际结果，以及使用的浏览器或设备。",
+      "hint3": "可在邮件中附上截图，请遮挡密码、验证码等敏感信息。",
+      "action": "撰写问题反馈",
+      "subject": "OpenScience 问题反馈",
+      "body": "你好，我在使用 OpenScience 时遇到了问题。\n\n页面链接：\n复现步骤：\n预期结果：\n实际结果：\n浏览器／设备：\n联系方式："
+    },
+    "demo": {
+      "title": "申请情报分析演示",
+      "intro": "告诉我们你关注的技术领域和希望回答的问题，一起讨论适合你的情报分析演示。",
+      "hint1": "说明关注的研究方向、技术主题或应用场景。",
+      "hint2": "列出希望通过分析回答的问题，可附上相关论文或公开资料链接。",
+      "hint3": "介绍所属机构，并留下联系方式和方便沟通的时间。",
+      "action": "撰写演示申请",
+      "subject": "OpenScience 情报分析演示申请",
+      "body": "你好，我希望了解 OpenScience 的情报分析演示。\n\n姓名／机构：\n技术领域／应用场景：\n希望回答的问题：\n相关公开资料链接：\n联系方式／方便沟通的时间："
+    }
   },
   "editor": {
     "savedVersionSources": "核查最近保存版本的来源",
@@ -762,6 +974,7 @@
     "copyFailed": "复制失败",
     "legalDisclaimerDefault": "此时间戳仅证明平台在相应时间接收并记录了该版本及其内容哈希，不构成专利优先权、著作权归属、科研正确性或司法存证保证。",
     "artifactProvenance": "原文与附件",
+    "artifactDownloadUnavailable": "此版本未提供公开下载链接",
     "invalidVersion": "无效版本号",
     "aiReview": "AI 审核摘要",
     "status": "状态",
@@ -1079,8 +1292,22 @@
   "dashboard": {
     "eyebrow": "个人工作区",
     "title": "研究桌面",
-    "welcome": "{name}，继续手头的研究，或和 Hermes 一起梳理下一步。",
+    "welcome": "把上次停下的想法，继续向前推。",
+    "processingHistory": "处理历史",
+    "researchTools": "资料与管理工具",
     "loading": "正在恢复研究上下文…",
+    "current": {
+      "create": "创建研究",
+      "open": "打开研究工作区",
+      "savedVersion": "保存版本 {version}",
+      "publicationVersion": "公开版本 {version}",
+      "imageTitle": "研究图解",
+      "openImage": "查看完整图解",
+      "loading": "正在加载这项研究…",
+      "noImage": "这项研究还没有图解。",
+      "mediaFailed": "暂时无法加载研究预览。",
+      "retry": "重新加载预览"
+    },
     "context": {
       "navigation": "工作台工具",
       "skip": "跳到研究工作区",
@@ -1361,6 +1588,7 @@
     },
     "research": {
       "title": "你的研究",
+      "actions": "研究工具：{title}",
       "empty": "还没有研究对象。",
       "noResults": "没有匹配的研究对象。",
       "search": "搜索标题或全文",
@@ -1497,6 +1725,18 @@
     "manualEdit": "打开编辑器手动完善"
   },
   "hermesRun": {
+    "video": {
+      "title": "把研究讲成一支视频",
+      "startDescription": "让论文的核心思想成为连贯的画面与旁白。完成后先看整支视频，再告诉 Hermes 你想打磨的地方。",
+      "startFor": "开始制作研究视频：{source}",
+      "unavailable": "视频制作暂不可用。你可以继续编辑，或查看已有成果。",
+      "composing": "正在把画面与旁白串成故事",
+      "ready": "视频已就绪，来看看吧",
+      "runningDescription": "Hermes 正在梳理故事、制作画面并组织旁白。完成后，回到这里就能观看。",
+      "readyDescription": "看完完整视频，给出你的意见，再决定是否采用。",
+      "preview": "研究讲解视频",
+      "viewResult": "打开视频，给出反馈"
+    },
     "sourceReanalysis": {
       "start": "新建付费分析并继续",
       "continue": "继续分析",
@@ -1508,7 +1748,8 @@
       "uncertain": "尚未确认请求结果。点击“继续分析”恢复同一份申请；此前处理可能已经计费。",
       "contextError": "账号、来源或工作流版本已变化。请刷新当前账号的进度后再继续，已保存的申请仍保留。",
       "storageError": "浏览器无法保留恢复申请。请启用会话存储并刷新进度后继续；已有处理结果保留。",
-      "responseError": "返回的分析或工作流与当前来源、账号不匹配。请刷新进度后继续，已保存的申请仍保留。"
+      "responseError": "返回的分析或工作流与当前来源、账号不匹配。请刷新进度后继续，已保存的申请仍保留。",
+      "videoError": "视频生成当前不可用，未启动新的付费分析；已保存的申请仍保留。"
     },
     "narrative": {
       "correctionGrantDescription": "这张图需要修改科学表达。原流程已使用 8 项任务；将总额度从 9 项一次性增加到 11 项，可继续最多 1 项方案返工、1 项新图和 1 项内部返工；内部返工可用于再次修正方案或修正绘制，按实际使用计费。已有论文、图片和公开版本保留，不会自动发布。",
@@ -1821,7 +2062,7 @@
     },
     "searchAction": "搜索",
     "refineSearch": "细化搜索范围",
-    "recentFirst": "新公开的研究在前 · 展示各研究的最新公开版本",
+    "recentFirst": "公开号由新到旧 · 展示各研究的最新公开版本",
     "imageFor": "《{title}》的核心概念图",
     "readResearch": "阅读研究",
     "recentTitle": "最新公开研究",
@@ -1956,6 +2197,8 @@
       "charge": "每次提交扣除 1 AI credit，包括每次修订或新建重试任务。",
       "retained": "修订会创建独立草稿，原稿保持不变；请对比后再批准。",
       "generate": "生成分镜 · 1 AI credit",
+      "planOneImage": "规划一张科研图 · 1 AI credit",
+      "needsSources": "请先选择当前版本中已完成提取的研究内容，再规划配图。",
       "revise": "创建修订草稿 · 1 AI credit",
       "narration": "口述旁白",
       "visualAction": "画面动作",
@@ -2015,6 +2258,11 @@
     "viewFullSize": "打开完整尺寸图解",
     "imageNumber": "图解 {number}",
     "planningHistoryTitle": "详细制作指令",
+    "currentPlanTitle": "当前制作方案",
+    "currentPlanBody": "新方案会优先显示。核对内容后批准方案，再制作所选场景的图片。",
+    "selectPlan": "选择其他方案",
+    "selectScene": "选择要制作的场景",
+    "rejectedPlanHistory": "已拒绝的方案记录",
     "planningHistoryBody": "Hermes 自动整理制作指令，需要查看或自定义时再展开。",
     "videoSecondary": "这是后续的可选媒体，请与图解分开审阅。",
     "recoverInSources": "查看来源并继续",
@@ -2198,7 +2446,8 @@
       "diff": "内容比较"
     },
     "files": {
-      "savedMaterials": "已有材料与导入记录",
+      "savedMaterials": "已有材料",
+      "importHistory": "导入记录 · {count} 项",
       "snapshotVersion": "公开版本 v{version}",
       "confirmedDraft": "查看已确认草稿",
       "addMore": "可在上方添加更多材料。",
@@ -2451,7 +2700,9 @@
       "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
       "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
       "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
-    }
+    },
+    "entryHint": "一起梳理下一步",
+    "openConversation": "打开对话"
   },
   "researchWorkbenchReview": {
     "backHome": "返回 OpenScience",
@@ -2785,6 +3036,24 @@
     "kind_counter": "反向主张"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "制作内容",
+      "mode": "试听旁白",
+      "summary": "先听这一幕的旁白，再继续制作视频。",
+      "fullVideo": "完整视频",
+      "scene": "试听场景",
+      "narration": "已批准的旁白",
+      "preset": "声音：{voice} · 语速：{speed}×",
+      "hint": "先听一幕旁白，试听结果会保存在这篇研究中。",
+      "loading": "正在检查旁白试听是否可用…",
+      "unavailable": "旁白试听暂不可用。",
+      "availabilityError": "暂时无法检查旁白试听，请重试。",
+      "retryAvailability": "重新检查试听",
+      "needsNarration": "请选择含 1–120 字旁白、且视频画面已齐备的批准场景。",
+      "settingsChanged": "声音或语速已变化，请查看新设置后再次确认。",
+      "submit": "试听选中幕",
+      "ready": "旁白试听已就绪"
+    },
     "prepareVideoPlan": "整理视频制作指令",
     "planWillBePrepared": "Hermes 会先整理这张图的制作指令。",
     "eligibleSources": "已选用 {count} 项可用研究主张。",
@@ -2795,9 +3064,16 @@
     "artRequiresCompatiblePlan": "此方案不支持仅修改艺术风格。请返回并选择同语言的已完成图解方案，或让 Hermes 重新规划。",
     "briefWillUpdate": "你的修改会写入新方案，原图与原方案保留。",
     "updateBrief": "更新制作指令",
-    "needsApprovedScenes": "视频需要已确认的分镜与对应图片。先完成素材后即可制作。",
+    "needsApprovedScenes": "视频画面尚未就绪。回到当前制作任务查看进度或处理失败。",
+    "videoRevision": {
+      "label": "视频调整范围",
+      "all": "调整整个方案",
+      "scene": "仅调整第 {number} 幕"
+    },
     "mediaIntent": "制作什么",
     "preparePlan": "整理制作指令",
+    "planOneImage": "规划一张科研图 · 1 AI credit",
+    "planOneImageHint": "Hermes 将规划一张科研图，解释论文的核心关系或结论。",
     "usingApprovedPlan": "使用当前已确认的制作方案。",
     "video": "视频",
     "entry": "分镜与配图",
@@ -2842,6 +3118,9 @@
     "charge": "每次提交使用 1 AI credit。生成独立草稿，保留原稿，不会自动批准或发布。",
     "loadError": "无法加载研究上下文，请刷新重试。",
     "submitError": "提交失败，请检查来源分镜与权限后重试。",
+    "videoUnavailable": "视频制作暂不可用，已有成果仍可查看。",
+    "videoAvailabilityError": "暂时无法确认视频是否可制作，请稍后重试。",
+    "identityChanged": "账号已切换，请刷新后再继续制作。",
     "uncertain": "提交结果尚不明确。已锁定编辑，请重试同一请求以找回任务，避免重复提交。",
     "loading": "正在加载研究…",
     "refresh": "刷新",
@@ -3060,7 +3339,8 @@
         "title": "在哪里找到论文原文？",
         "body": "在研究阅读页的资料区域打开原文与来源；查看图文时可以随时回到正文。"
       }
-    }
+    },
+    "viewFigure": "查看完整研究图"
   },
   "journalServiceLabels": {
     "basic": "基础服务"

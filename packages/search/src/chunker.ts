@@ -253,29 +253,55 @@ export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
   return chunks;
 }
 
+/** Exact Docling cell text, grouped by connected row spans without inventing headers or empty cells. */
+function tableRowGroups(text: string): string[] | undefined {
+  const lines = text.split(/(?<=\n)/u).filter(line => line.length > 0);
+  const groups: string[] = [];
+  let groupEnd = 0, previousRow = 0, previousColumnEnd = 0;
+  for (const line of lines) {
+    const match = /^\[(?:row (\d+)|rows (\d+)–(\d+)), (?:column (\d+)|columns (\d+)–(\d+))\] \S/u.exec(line);
+    if (!match) return undefined;
+    const row = Number(match[1] ?? match[2]), rowEnd = Number(match[3] ?? match[1]);
+    const column = Number(match[4] ?? match[5]), columnEnd = Number(match[6] ?? match[4]);
+    if (![row, rowEnd, column, columnEnd].every(value => Number.isSafeInteger(value) && value > 0)
+      || rowEnd < row || columnEnd < column || row < previousRow
+      || row === previousRow && column <= previousColumnEnd) return undefined;
+    if (row > groupEnd) groups.push(line);
+    else groups[groups.length - 1] += line;
+    groupEnd = Math.max(groupEnd, rowEnd);
+    previousRow = row; previousColumnEnd = columnEnd;
+  }
+  return groups.length && groups.join('') === text ? groups : undefined;
+}
+
 /** Refine the same source units using the actual embedding tokenizer, without changing the source text. */
 export async function chunkDocumentForEmbedding(
   input: ChunkDocumentInput,
   tokenCounter: SearchChunkTokenCounter,
-): Promise<{ chunks: SearchChunkDraft[]; embeddingAvailable: boolean }> {
+): Promise<{ chunks: SearchChunkDraft[]; embeddingAvailable: boolean; embeddingWindows?: string[][] }> {
   const { sourceMap, sourceMapSha256, groups } = documentChunkUnits(input);
   const blockKinds = new Map(sourceMap.pages.flatMap(page => page.blocks.map(block => [block.id, block.kind] as const)));
   const accepted: ChunkUnit[][] = [];
+  const rejectedTables = new Set<number>();
   let embeddingAvailable = true;
+  let unwindowable = false;
   let requests = 0;
+  const count = async (text: string): Promise<number[] | undefined> => {
+    if (++requests > 2 * MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search tokenizer request limit exceeded');
+    const counts = await tokenCounter([text]);
+    if (counts !== undefined && (counts.length !== 1 || !Number.isSafeInteger(counts[0]) || counts[0]! < 1))
+      throw new Error('search tokenizer response is invalid');
+    return counts;
+  };
+  // Finish the original source partition before spending any temporary view budget.
   const refine = async (units: ChunkUnit[]): Promise<void> => {
     if (accepted.length >= MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search chunk limit exceeded');
     const text = units.map(unit => unit.text).join('\n\n');
+    let tokenRejected = false;
     if (text.length <= MAX_EMBEDDING_CHARACTERS) {
-      if (++requests > 2 * MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search tokenizer request limit exceeded');
-      const counts = await tokenCounter([text]);
-      if (counts !== undefined && (counts.length !== 1 || !Number.isSafeInteger(counts[0]) || counts[0]! < 1)) {
-        throw new Error('search tokenizer response is invalid');
-      }
-      if (counts !== undefined && counts[0]! <= MAX_CHUNK_TOKENS) {
-        accepted.push(units);
-        return;
-      }
+      const counts = await count(text);
+      if (counts !== undefined && counts[0]! <= MAX_CHUNK_TOKENS) { accepted.push(units); return; }
+      tokenRejected = true;
     }
     if (units.length > 1) {
       const middle = Math.ceil(units.length / 2);
@@ -289,6 +315,8 @@ export async function chunkDocumentForEmbedding(
     if (INDIVISIBLE_KINDS.has(kind)) {
       // Persistence bounds already passed. Keep scholarly units and locators whole
       // for lexical search when the embedding tokenizer cannot accept them.
+      if (kind === 'table' && tokenRejected) rejectedTables.add(accepted.length);
+      else unwindowable = true;
       embeddingAvailable = false;
       accepted.push(units);
       return;
@@ -307,8 +335,37 @@ export async function chunkDocumentForEmbedding(
     await refine([slice(middle, unit.text.length)]);
   };
   for (const group of groups) await refine(group);
-  return {
-    chunks: accepted.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group)),
-    embeddingAvailable,
+  const chunks = accepted.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group));
+  if (embeddingAvailable || unwindowable) return { chunks, embeddingAvailable };
+
+  const windows = chunks.map(chunk => [chunk.text]);
+  let plannedViews = chunks.length;
+  const tableWindows = async (rows: string[], rejected = false): Promise<string[] | undefined> => {
+    const text = rows.join('');
+    if (!rejected) {
+      if (requests >= 2 * MAX_SEARCH_CHUNKS_PER_DOCUMENT) return undefined;
+      const counts = await count(text);
+      if (counts !== undefined && counts[0]! <= MAX_CHUNK_TOKENS) return [text];
+    }
+    if (rows.length < 2 || plannedViews >= MAX_SEARCH_CHUNKS_PER_DOCUMENT) return undefined;
+    plannedViews++;
+    const middle = Math.ceil(rows.length / 2);
+    const left = await tableWindows(rows.slice(0, middle));
+    if (!left) return undefined;
+    const right = await tableWindows(rows.slice(middle));
+    return right ? [...left, ...right] : undefined;
   };
+  try {
+    for (const index of rejectedTables) {
+      const rows = tableRowGroups(chunks[index]!.text);
+      const views = rows && await tableWindows(rows, true);
+      if (!views) return { chunks, embeddingAvailable: false };
+      windows[index] = views;
+    }
+  } catch {
+    // Only the additional tokenizer work is optional. Its failure must preserve
+    // the established lexical generation; caller source/write authority stays outside.
+    return { chunks, embeddingAvailable: false };
+  }
+  return { chunks, embeddingAvailable: true, embeddingWindows: windows };
 }

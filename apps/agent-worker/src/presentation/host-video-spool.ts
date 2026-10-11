@@ -31,6 +31,10 @@ export interface HostVideoInput {
   locale?: StoryboardView['locale'];
   style?: StoryboardView['style'];
   sceneImages: Buffer[];
+  /** Existing provider image tasks, ordered exactly like the approved scene images. */
+  sceneImageTaskIds?: string[];
+  /** Complete reviewed native prompts; commercial consumers must compare them with the shared compiler. */
+  videoPrompts?: string[];
 }
 
 export interface HostVideoResult {
@@ -47,7 +51,34 @@ export interface HostVideoResult {
 }
 
 export interface PresentationVideoSpool {
+  readonly provider?: 'synclip';
   generate(input: HostVideoInput): Promise<{ filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: string; generatorVersion: string; inputHash: string; narration: unknown; metrics: Record<string, unknown>; runtime: unknown }>;
+  audition?(input: AudioAuditionInput): Promise<AudioAuditionResult>;
+}
+
+/** Source context is derived by the handler, never accepted as caller narration or budget. */
+export interface AudioAuditionInput extends HostVideoInput {
+  purpose: 'audio-audition'; sceneIndex: number; locale: 'zh' | 'en';
+  audio: { provider: 'synclip'; voice: string; speed: number };
+  actorId: string; workspaceId: string; researchObjectId: string; versionId: string; parentIdentity: string;
+}
+export interface AudioAuditionProposal extends Omit<AudioAuditionInput, 'sceneImages' | 'storyboard' | 'videoPrompts'> {
+  inputHash: string; createdAt: number; deadlineAt: number;
+}
+/** Persisted in original task.result before a request can become visible to the host. */
+export interface AudioAuditionGrant {
+  schemaVersion: 1; purpose: 'audio-audition'; taskId: string; executionAttempt: number; inputHash: string;
+  actorId: string; workspaceId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[]; parentIdentity: string;
+  sceneIndex: number; locale: 'zh' | 'en'; audio: { provider: 'synclip'; voice: string; speed: number };
+  workerMaxEstimatedCoins: number; hostMaxEstimatedCoins: number; createdAt: number; deadlineAt: number;
+}
+export interface AudioAuditionResult {
+  purpose: 'audio-audition'; taskId: string; executionAttempt: number; inputHash: string;
+  sceneIndex: number; locale: 'zh' | 'en'; voice: string; speed: number; audioTaskId: string;
+  filePath: string; contentType: 'audio/mpeg'; contentHash: string; size: number; durationSeconds: number;
+  timingStatus: 'decoded' | 'requires_revision';
+  quote: { coinsPerCharacter: number; characters: number; estimatedCoins: number; workerCeiling: number; hostCeiling: number };
+  coinsUsed?: number;
 }
 function fail(message = 'INVALID_VIDEO_SPOOL_OUTPUT'): never { throw new Error(message); }
 

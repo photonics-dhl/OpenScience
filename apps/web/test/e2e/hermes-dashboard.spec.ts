@@ -1,117 +1,45 @@
-import { expect, test, type Page, type Route } from 'playwright/test';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { expect, test, type Page, type Request, type Route } from 'playwright/test';
 
-import { HERMES_PATROL_MOTION_ENVELOPE, HERMES_PATROL_TRANSLATION_ENVELOPE } from '../../lib/hermes/companion-placement';
+import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
 
-const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
-  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-);
-
-interface PerformanceBubbleEvidence {
-  action: string;
-  actor: { x: number; y: number; width: number; height: number };
-  bubble: { x: number; y: number; width: number; height: number };
-  bubbleTransformY: number;
-  cue: string;
-  horizontal: string;
-  protectedRegions: Array<{ x: number; y: number; width: number; height: number }>;
-  scrollY: number;
-  vertical: string;
-  viewport: { height: number; width: number };
-}
-
-async function readPerformanceBubbleEvidence(page: Page): Promise<PerformanceBubbleEvidence | null> {
-  return page.evaluate(() => {
-    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
-    const bubble = stage?.querySelector<HTMLElement>('[data-hermes-performance-bubble="true"]');
-    const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
-    const cue = bubble?.dataset.hermesSpeechCue;
-    const horizontal = stage?.dataset.hermesBubbleHorizontal;
-    const vertical = stage?.dataset.hermesBubbleVertical;
-    if (!stage || !bubble || !actor || !cue || !horizontal || !vertical
-      || stage.dataset.hermesSpeechVisible !== 'true'
-      || bubble.dataset.hermesSpeechVisible !== 'true'
-      || stage.dataset.hermesBubbleSafe !== 'true') return null;
-    const rect = (element: Element) => {
-      const bounds = element.getBoundingClientRect();
-      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-    };
-    const bubbleBounds = rect(bubble);
-    const actorBounds = rect(actor);
-    if (bubbleBounds.width <= 0 || bubbleBounds.height <= 0 || actorBounds.width <= 0 || actorBounds.height <= 0) return null;
-    return {
-      action: stage.dataset.hermesAction ?? 'missing',
-      actor: actorBounds,
-      bubble: bubbleBounds,
-      bubbleTransformY: new DOMMatrixReadOnly(getComputedStyle(bubble).transform).m42,
-      cue,
-      horizontal,
-      protectedRegions: Array.from(document.querySelectorAll('[data-hermes-protected="true"]')).map(rect)
-        .filter((bounds) => bounds.width > 0 && bounds.height > 0),
-      scrollY: window.scrollY,
-      vertical,
-      viewport: { height: window.innerHeight, width: window.innerWidth },
-    };
-  });
-}
-
-async function waitForPerformanceBubbleEvidence(
-  page: Page,
-  accept: (evidence: PerformanceBubbleEvidence) => boolean = isSafePerformanceBubble,
-): Promise<PerformanceBubbleEvidence> {
-  const actions = new Set<string>();
-  for (let elapsed = 0; elapsed < 300_000; elapsed += 500) {
-    const evidence = await readPerformanceBubbleEvidence(page);
-    if (evidence) {
-      actions.add(evidence.action);
-      if (accept(evidence)) return evidence;
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  // Page-specific failure fixtures take priority; clearing them keeps this isolation boundary.
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'GET') {
+      if (url.pathname === '/api/auth/me') return json(route, {
+        userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
+      });
+      if (url.pathname === '/api/workspaces') return json(route, { workspaces: [{ id: 'workspace-hermes', name: 'Personal', type: 'personal', role: 'owner', status: 'active' }] });
+      if (url.pathname === '/api/agent/tasks' && url.searchParams.get('actionable') === 'false') {
+        if (url.searchParams.get('kind') === 'workspace.guide' && url.searchParams.size === 2) return json(route, { tasks: [] });
+        const routeRo = new URL(page.url()).pathname.match(/^\/research-objects\/([^/]+)\//u)?.[1];
+        if (url.searchParams.get('kind') === 'source.retrieve' && url.searchParams.get('recovery') === 'true'
+          && url.searchParams.get('targetKind') === (routeRo ? 'research_object' : 'personal')
+          && url.searchParams.get('researchObjectId') === (routeRo ?? null)
+          && url.searchParams.size === (routeRo ? 5 : 4)) return json(route, { tasks: [] });
+      }
     }
-    await page.clock.fastForward(500);
-    await page.waitForTimeout(5);
-  }
-  throw new Error(`No measurable performance bubble; observed actions: ${Array.from(actions).join(', ')}`);
-}
-
-function isSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
-  return !evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))
-    && isPerformanceCompositeInsideViewport(evidence)
-    && /^(left|right)$/u.test(evidence.horizontal)
-    && /^(above|below)$/u.test(evidence.vertical);
-}
-
-function isPerformanceCompositeInsideViewport(evidence: PerformanceBubbleEvidence) {
-  return evidence.actor.x >= 0
-    && evidence.actor.y >= 0
-    && evidence.actor.x + evidence.actor.width <= evidence.viewport.width
-    && evidence.actor.y + evidence.actor.height <= evidence.viewport.height
-    && evidence.bubble.x >= 0
-    && evidence.bubble.y >= 0
-    && evidence.bubble.x + evidence.bubble.width <= evidence.viewport.width
-    && evidence.bubble.y + evidence.bubble.height <= evidence.viewport.height;
-}
-
-function expectSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
-  expect(evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))).toBe(false);
-  expect(evidence.actor.x).toBeGreaterThanOrEqual(0);
-  expect(evidence.actor.y).toBeGreaterThanOrEqual(0);
-  expect(evidence.actor.x + evidence.actor.width).toBeLessThanOrEqual(evidence.viewport.width);
-  expect(evidence.actor.y + evidence.actor.height).toBeLessThanOrEqual(evidence.viewport.height);
-  expect(evidence.bubble.x).toBeGreaterThanOrEqual(0);
-  expect(evidence.bubble.y).toBeGreaterThanOrEqual(0);
-  expect(evidence.bubble.x + evidence.bubble.width).toBeLessThanOrEqual(evidence.viewport.width);
-  expect(evidence.bubble.y + evidence.bubble.height).toBeLessThanOrEqual(evidence.viewport.height);
-  expect(evidence.horizontal).toMatch(/left|right/u);
-  expect(evidence.vertical).toMatch(/above|below/u);
-}
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
 
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+function getJson(route: Route, body: unknown, status = 200) {
+  return route.request().method() === 'GET' ? json(route, body, status) : route.fallback();
+}
+
 async function mockDashboard(page: Page, taskState?: string) {
   await page.route('**/api/**', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
     const url = new URL(route.request().url());
     if (url.pathname === '/api/auth/me') return json(route, {
       userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
@@ -119,26 +47,280 @@ async function mockDashboard(page: Page, taskState?: string) {
     if (url.pathname === '/api/research-objects' && url.searchParams.get('limit') === '20') return json(route, { researchObjects: [{
       id: 'ro-hermes', publicId: 'OSR-2026-000042', title: 'Coherent transport at the attosecond frontier', version: 2, status: 'draft',
     }] });
+    if (url.pathname === '/api/research-objects/ro-hermes') return json(route, { researchObject: {
+      id: 'ro-hermes', workspaceId: 'workspace-hermes', publicId: null, title: 'Coherent transport at the attosecond frontier',
+      status: 'draft', visibility: 'private', version: 2, sdf: { core: {}, nodes: [] },
+    } });
+    if (url.pathname === '/api/research-objects/ro-hermes/versions') return json(route, { versions: [] });
     if (url.pathname === '/api/ingestion' && url.searchParams.get('actionable') === 'true') return json(route, { tasks: taskState ? [{
       id: 'task-hermes', researchObjectId: 'ro-hermes', researchTitle: 'Coherent transport at the attosecond frontier',
       logicalPath: 'manuscript.pdf', state: taskState, retryCount: 0, error: taskState.startsWith('failed_') ? 'Parser interrupted' : null,
     }] : [] });
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'workspace.guide') {
-      return json(route, { tasks: [] });
-    }
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
-      return json(route, { tasks: [] });
-    }
     return route.fallback();
   });
 }
 
-async function expectDashboardProtectedRegions(page: Page) {
+async function mockCurrentResearch(page: Page, published = false) {
+  await mockDashboard(page);
+  let currentTitle = 'Photonic learning structures';
+  const reads: string[] = [];
+  const content = '/api/research-objects/ro-hermes/versions/current-commit/presentation-assets/selected-image/content';
+  const publicContent = '/api/research/OSR-2026-000042/v/3/presentation-assets/selected-image';
+  const assetDefaults = { contentHash: 'fixture-content', generator: 'Controlled fixture renderer', generatorVersion: '1', sourceClaimIds: [], createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-10T00:00:00Z' };
+  await page.route('**/api/**', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    if (path.startsWith('/api/research-objects/ro-hermes') || path.startsWith('/api/research/')) reads.push(path);
+    if (path === '/api/research-objects' && url.searchParams.get('limit') === '20') return json(route, { researchObjects: Array.from({ length: 20 }, (_, index) => ({
+      id: index === 0 ? 'ro-hermes' : `other-study-${index}`, publicId: index === 0 && published ? 'OSR-2026-000042' : null,
+      title: index === 0 ? currentTitle : `Earlier study ${index}`, version: 9, status: published ? 'published' : 'draft',
+    })) });
+    if (path === '/api/research-objects/ro-hermes') return json(route, { researchObject: {
+      id: 'ro-hermes', workspaceId: 'workspace-hermes', publicId: published ? 'OSR-2026-000042' : null,
+      title: currentTitle, version: 9, status: published ? 'published' : 'draft', visibility: published ? 'public' : 'private',
+      sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: 'Live text must not replace the selected version.', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+    } });
+    if (path === '/api/research-objects/ro-hermes/versions') return json(route, { versions: [
+      { versionId: 'old-commit', versionNo: 2, status: 'published', publicationNo: 1 },
+      { versionId: 'current-commit', versionNo: 7, status: published ? 'published' : 'draft', publicationNo: published ? 3 : null },
+    ] });
+    if (path === '/api/research-objects/ro-hermes/versions/current-commit/record') return json(route, { record: {
+      objectId: 'ro-hermes', versionId: 'current-commit', versionNo: 7, citation: { title: currentTitle },
+      sdf: { schemaVersion: '0.1.0', problem: '', insight: 'Explore a photonic learning structure through its complete research figure.', method: '', results: '', limitations: '', reproducibility: '' },
+      claims: [], evidence: [], manifest: [],
+      media: [{ id: 'selected-image', kind: 'image', reader: { order: 0, title: 'Controlled optical figure' } }],
+    } });
+    if (path === '/api/research-objects/ro-hermes/versions/current-commit/presentation-assets') return json(route, { assets: [
+      { ...assetDefaults, id: 'unselected-approved', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Unselected' },
+      { ...assetDefaults, id: 'selected-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', contentHash: 'selected-content', label: 'presentation_not_evidence' },
+      { ...assetDefaults, id: 'draft-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'draft', label: 'Draft' },
+      { ...assetDefaults, id: 'foreign-image', researchObjectId: 'other', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Foreign' },
+      { ...assetDefaults, id: 'old-image', researchObjectId: 'ro-hermes', versionId: 'old-commit', kind: 'image', status: 'approved', label: 'Old' },
+    ] });
+    if (path === '/api/research/OSR-2026-000042/v/3') return json(route, { research: {
+      publicId: 'OSR-2026-000042', recordUrl: '/api/research-objects/ro-hermes/versions/current-commit/record',
+      title: 'Selected publication title', version: { versionNo: 3, status: 'published', core: { insight: 'The selected publication keeps its complete figure.' } },
+      presentationAssets: [{ id: 'selected-image', kind: 'image', contentHash: 'selected-content', reader: { order: 0, title: 'Controlled optical figure' }, url: publicContent }],
+    } });
+    if (path === content || path === publicContent) return route.fulfill({ contentType: 'image/png', headers: { 'cache-control': 'no-store' }, body: await readFile('public/research-journey/d2nn-artwork.png') });
+    return route.fallback();
+  });
+  return { reads, content, publicContent, setTitle: (title: string) => { currentTitle = title; } };
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`current research binds its complete figure to the actual private version at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const { reads, content, setTitle } = await mockCurrentResearch(page);
+    const otherReads: string[] = [];
+    page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/research-objects/other-study-')) otherReads.push(request.url()); });
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+    const card = page.locator('[data-current-research="ro-hermes"]');
+    await expect(card.getByRole('heading', { name: 'Photonic learning structures', exact: true })).toBeVisible();
+    await expect(card.getByText('Saved version 7', { exact: true })).toBeVisible();
+    await expect(card.getByText('Live text must not replace the selected version.', { exact: true })).toHaveCount(0);
+    const figure = card.getByRole('img', { name: 'Controlled optical figure', exact: true });
+    await expect(figure).toHaveAttribute('src', content);
+    await expect.poll(() => figure.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await expect(figure).toHaveCSS('object-fit', 'contain');
+    await expect(card.getByRole('link', { name: /View full-size figure/ })).toHaveAttribute('href', content);
+    const continueAction = card.getByRole('link', { name: 'Open research workspace', exact: true });
+    await continueAction.focus();
+    await page.keyboard.press('Tab');
+    await expect(card.getByRole('link', { name: /View full-size figure/ })).toBeFocused();
+    if (viewport.width === 390) {
+      const actionBox = (await continueAction.boundingBox())!;
+      const figureBox = (await figure.boundingBox())!;
+      expect(actionBox.y + actionBox.height).toBeLessThan(figureBox.y);
+    }
+    await page.context().route(`${baseUrl}${content}*`, async route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({ contentType: 'image/png', body: await readFile('public/research-journey/d2nn-artwork.png') });
+    });
+    const openedImage = page.waitForEvent('popup');
+    await card.getByRole('link', { name: /View full-size figure/ }).click();
+    const imageTab = await openedImage;
+    await expect(imageTab).toHaveURL(`${baseUrl}${content}`);
+    await expect.poll(() => imageTab.locator('img').evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await imageTab.close();
+    await expect(card.getByRole('link', { name: 'Open research workspace', exact: true })).toHaveAttribute('href', '/research-objects/ro-hermes/edit');
+    expect(reads.filter(path => path === '/api/research-objects/ro-hermes/versions')).toHaveLength(1);
+    expect(reads.filter(path => path.endsWith('/presentation-assets'))).toHaveLength(1);
+    expect(reads.some(path => path.includes('/versions/9/') || path.includes('/old-commit/'))).toBe(false);
+    expect(otherReads).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (viewport.width === 1440) expect((await figure.boundingBox())!.width).toBeGreaterThan(356);
+    await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-stage-size', '64');
+    await card.getByRole('heading', { name: 'Photonic learning structures', exact: true }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (viewport.width === 390) await expect(continueAction).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: test.info().outputPath(`current-research-${viewport.width}.png`), fullPage: false });
+    await card.screenshot({ path: test.info().outputPath(`current-research-card-${viewport.width}.png`) });
+    if (viewport.width === 1440) {
+      // The real versions endpoint is descending; retain that contract for the existing editor.
+      await page.route('**/api/research-objects/ro-hermes/versions', route => getJson(route, { versions: [
+        { versionId: 'current-commit', versionNo: 7, status: 'draft', publicationNo: null },
+        { versionId: 'old-commit', versionNo: 2, status: 'published', publicationNo: 1 },
+      ] }));
+      await page.route('**/api/versions/current-commit', route => getJson(route, { version: { versionId: 'current-commit', snapshot: { artifacts: [] } } }));
+      await page.route('**/api/research-objects/ro-hermes/authors', route => getJson(route, { authors: [] }));
+      await page.route('**/api/research-objects/ro-hermes/ingestion', route => getJson(route, { researchObjectId: 'ro-hermes', version: 9, tasks: [], latestConfirmation: null }));
+      await page.route('**/api/research-objects/ro-hermes/versions/current-commit/claims', route => getJson(route, { claims: [] }));
+      // The editor consumes the real, scoped asset list rather than the adversarial hero-filter fixture.
+      await page.route('**/api/research-objects/ro-hermes/versions/current-commit/presentation-assets', route => getJson(route, { assets: [{
+        id: 'selected-image', researchObjectId: 'ro-hermes', versionId: 'current-commit', kind: 'image', status: 'approved', label: 'Controlled optical figure',
+        contentHash: 'selected-content', generator: 'Controlled fixture renderer', generatorVersion: '1', sourceClaimIds: [],
+        createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-10T00:00:00Z',
+      }] }));
+      await card.getByRole('link', { name: 'Open research workspace', exact: true }).click();
+      await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/, { timeout: 20_000 });
+      await expect(page.locator('.editor-workspace p').filter({ hasText: 'Live text must not replace the selected version.' }).first()).toBeVisible();
+    } else {
+      const longTitle = 'Photonic learning structures for coherent transport across coupled nanoscale fields and reproducible optical inference at the attosecond frontier';
+      setTitle(longTitle);
+      await page.reload({ waitUntil: 'networkidle' });
+      const heading = card.getByRole('heading', { name: longTitle, exact: true });
+      await expect(heading).toBeVisible();
+      expect(await heading.evaluate(node => node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(card.getByText('Saved version 7', { exact: true })).toBeVisible();
+      await expect(card.getByRole('img', { name: 'Controlled optical figure', exact: true })).toHaveAttribute('src', content);
+      await page.screenshot({ path: test.info().outputPath('current-research-long-title-390.png'), fullPage: true });
+    }
+  });
+}
+
+test('current research uses only the selected public edition and its frozen media', async ({ page }) => {
+  const { reads, publicContent } = await mockCurrentResearch(page, true);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card.getByRole('heading', { name: 'Selected publication title', exact: true })).toBeVisible();
+  await expect(card.getByText('Publication 3', { exact: true })).toBeVisible();
+  await expect(card.getByRole('img', { name: 'Controlled optical figure', exact: true })).toHaveAttribute('src', publicContent);
+  expect(reads.filter(path => path === '/api/research/OSR-2026-000042/v/3')).toHaveLength(1);
+  expect(reads.some(path => path.endsWith('/record') || path.endsWith('/presentation-assets') || path.includes('/v/7'))).toBe(false);
+  await page.route('**/api/research/OSR-2026-000042/v/3', route => getJson(route, { research: {
+    publicId: 'OSR-2026-000042', recordUrl: '/api/research-objects/ro-hermes/versions/current-commit/record', title: 'Selected publication title',
+    version: { versionNo: 3, status: 'withdrawn', core: {} }, presentationAssets: [],
+  } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+  await page.route('**/api/research/OSR-2026-000042/v/3', route => getJson(route, { error: { code: 'NOT_FOUND' } }, 404));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+  expect(reads.some(path => path.includes('/v/1') || path.includes('/old-commit/'))).toBe(false);
+  await page.route('**/api/research-objects/ro-hermes/versions', route => getJson(route, { versions: [{ versionId: 'current-commit', versionNo: 7, status: 'draft', publicationNo: null }] }));
+  await page.route('**/api/research-objects/ro-hermes/versions/current-commit/record', route => getJson(route, { record: {
+    objectId: 'ro-hermes', versionId: 'current-commit', publicationNo: 3, citation: { title: 'Published during the read' }, sdf: {},
+  } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.locator('img')).toHaveCount(0);
+});
+
+test('current research keeps the actual Hermes opener focusable after the conversation shrinks to mobile', async ({ page }) => {
+  await mockCurrentResearch(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const opener = page.locator('[data-hermes-avatar-entry] .hermes-avatar-entry-label');
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(dialog).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dialog.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeVisible();
+  await expect(opener).toBeFocused();
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-stage-size', '64');
+});
+
+test('current research distinguishes an empty captured set from a binary failure and retries the exact image', async ({ page }) => {
+  const { reads, content } = await mockCurrentResearch(page);
+  const recordPattern = '**/api/research-objects/ro-hermes/versions/current-commit/record';
+  const emptyRecord = (route: Route) => getJson(route, { record: { objectId: 'ro-hermes', versionId: 'current-commit', citation: { title: 'Photonic learning structures' }, sdf: {}, media: [] } });
+  await page.route(recordPattern, emptyRecord);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card).toHaveAttribute('data-media-state', 'empty');
+  await expect(card.getByText('This study has no figure yet.', { exact: true })).toBeVisible();
+  expect(reads.filter(path => path === content)).toHaveLength(0);
+  await page.unroute(recordPattern, emptyRecord);
+  let binaryFailed = true;
+  let binaryReads = 0;
+  await page.route(`${baseUrl}${content}*`, async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    binaryReads += 1;
+    if (binaryFailed) return route.fulfill({ status: 503, body: 'Unavailable' });
+    return route.fulfill({ contentType: 'image/png', headers: { 'cache-control': 'no-store' }, body: await readFile('public/research-journey/d2nn-artwork.png') });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(card).toHaveAttribute('data-media-state', 'failed');
+  await expect(card.getByText('The research preview could not be loaded.', { exact: true })).toBeVisible();
+  await expect(card.locator('img')).toHaveCount(0);
+  binaryFailed = false;
+  await card.getByRole('button', { name: 'Reload preview', exact: true }).click();
+  await expect(card).toHaveAttribute('data-media-state', 'ready');
+  const image = card.getByRole('img', { name: 'Controlled optical figure', exact: true });
+  await expect.poll(() => image.evaluate(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(image).toHaveAttribute('src', `${content}?attempt=1`);
+  expect(binaryReads).toBe(2);
+});
+
+test('current research ignores a late old-account response and task-only refresh does not reload its metadata', async ({ page }) => {
+  const { reads } = await mockCurrentResearch(page);
+  let taskVisible = false;
+  await page.route('**/api/ingestion?*', route => getJson(route, { tasks: taskVisible && !new URL(route.request().url()).searchParams.has('researchObjectId')
+    ? [{ id: 'new-task', researchObjectId: 'other-study-1', researchTitle: 'Earlier study 1', state: 'queued', logicalPath: 'source.pdf', retryCount: 0 }] : [] }));
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const card = page.locator('[data-current-research="ro-hermes"]');
+  await expect(card).toHaveAttribute('data-media-state', 'ready');
+  taskVisible = true;
+  const refreshResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/ingestion' && url.searchParams.get('actionable') === 'true' && !url.searchParams.has('researchObjectId');
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await refreshResponse;
+  await expect(page.locator('details > summary').filter({ hasText: 'Processing history' })).toBeVisible();
+  expect(reads.filter(path => path === '/api/research-objects/ro-hermes/versions')).toHaveLength(1);
+  expect(reads.filter(path => path.endsWith('/presentation-assets'))).toHaveLength(1);
+
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let entered = false;
+  await page.route('**/api/research-objects/ro-hermes/versions/current-commit/record', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    entered = true;
+    await pending;
+    if (route.request().failure()) return;
+    await json(route, { record: { objectId: 'ro-hermes', versionId: 'current-commit', citation: { title: 'Old account private title' }, sdf: {}, media: [] } });
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => entered).toBe(true);
+    await page.route('**/api/auth/me', route => getJson(route, { userId: 'other-owner', email: 'other@example.invalid', displayName: 'Other owner', status: 'email_verified' }));
+    await page.route('**/api/research-objects?limit=20', route => getJson(route, { researchObjects: [{ id: 'other-current', publicId: null, title: 'New account research', version: 1, status: 'draft' }] }));
+    await page.route('**/api/research-objects/other-current', route => getJson(route, { researchObject: { id: 'other-current', title: 'New account research', version: 1, status: 'draft', visibility: 'private', sdf: { core: {} } } }));
+    await page.route('**/api/research-objects/other-current/versions', route => getJson(route, { versions: [] }));
+    await page.evaluate(() => { const channel = new BroadcastChannel('openscience-session'); channel.postMessage('changed'); channel.close(); });
+    const next = page.locator('[data-current-research="other-current"]');
+    await expect(next.getByRole('heading', { name: 'New account research', exact: true })).toBeVisible();
+    release();
+    await expect(next).toHaveAttribute('data-media-state', 'empty');
+    await expect(card).toHaveCount(0);
+    await expect(page.getByText('Old account private title', { exact: true })).toHaveCount(0);
+  } finally { release(); }
+});
+
+async function expectDashboardProtectedRegions(page: Page, empty = false) {
   const regions = [
     page.locator('header nav[data-hermes-primary-navigation="true"]'),
-    page.locator('section[aria-labelledby="continue-title"]'),
-    page.locator('section[aria-labelledby="import-stage-title"]'),
-    page.locator('aside[aria-labelledby="hermes-task-title"]'),
+    empty ? page.locator('section[aria-labelledby="import-stage-title"]')
+      : page.locator('section[aria-labelledby="research-list-title"]'),
+    page.locator('main header[data-hermes-protected="true"]'),
   ];
   for (const region of regions) {
     await expect(region).toHaveCount(1);
@@ -154,228 +336,101 @@ test('Dashboard protects semantic navigation, continuation, import and Hermes ta
 
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.reload({ waitUntil: 'networkidle' });
-  await expectDashboardProtectedRegions(page);
+  await expectDashboardProtectedRegions(page, true);
 });
 
-test('a patrol cycle stays inside its shared motion envelope and clears adjacent protected work', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await mockDashboard(page);
-  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-  const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
-  await expect(travelHull).toBeVisible();
-  await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  const geometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
-  await page.evaluate((motionEnvelope) => {
-    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
-    const blocker = document.createElement('div');
-    blocker.dataset.hermesProtected = 'true';
-    blocker.dataset.patrolEnvelopeBlocker = 'true';
-    const useRight = hull.right + motionEnvelope.right + 41 <= innerWidth;
-    Object.assign(blocker.style, {
-      height: `${hull.height}px`,
-      left: `${useRight ? hull.right + motionEnvelope.right + 1 : hull.left - motionEnvelope.left - 41}px`,
-      pointerEvents: 'none',
-      position: 'fixed', top: `${hull.top}px`, width: '40px', zIndex: '1',
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`Dashboard keeps a live interactive avatar inside its 64px tool entry at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+        writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+      }
     });
-    document.body.append(blocker);
-  }, HERMES_PATROL_MOTION_ENVELOPE);
-  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(geometryVersion);
-  await expect.poll(async () => {
-    const [hull, blocker] = await Promise.all([
-      travelHull.boundingBox(), page.locator('[data-patrol-envelope-blocker="true"]').boundingBox(),
-    ]);
-    return hull && blocker ? !overlaps(hull, blocker) : false;
-  }).toBe(true);
-  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
-
-  await page.evaluate(() => {
-    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
-    const forcePatrol = () => {
-      if (stageNode.dataset.hermesAction !== 'patrol') stageNode.dataset.hermesAction = 'patrol';
-    };
-    forcePatrol();
-    new MutationObserver(forcePatrol).observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
+    await mockDashboard(page);
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+    const entry = page.locator('[data-hermes-avatar-entry="true"]');
+    const anchor = entry.locator('[data-hermes-avatar-anchor="true"]');
+    const stage = anchor.locator('[data-hermes-workspace-stage="true"]');
+    const visual = stage.locator('[data-hermes-input-owner="true"]');
+    const rig = stage.locator('[data-hermes-rig="live2d-wanko"]');
+    await expect(entry).toHaveCount(1);
+    await expect(entry).toHaveAttribute('data-hermes-entry-open', 'false');
+    await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', '64');
+    await expect(visual).toHaveCSS('width', '64px');
+    await expect(visual).toHaveCSS('height', '64px');
+    await expect(visual).toHaveCSS('overflow', 'hidden');
+    await expect(stage).toHaveCSS('opacity', '1');
+    await expect(visual).toBeInViewport({ ratio: 1 });
+    await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+    await expect(rig).toHaveAttribute('data-hermes-static-frame', 'false');
+    await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+    const firstDraw = Number(await rig.getAttribute('data-hermes-last-draw-at'));
+    expect(firstDraw).toBeGreaterThan(0);
+    const face = await visual.boundingBox();
+    expect(face).not.toBeNull();
+    await page.mouse.move(face!.x + face!.width * .75, face!.y + face!.height * .4);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
+    await expect(rig).toHaveAttribute('data-hermes-gesture', 'focus');
+    await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(firstDraw);
+    const evidence = await visual.evaluate((element) => new Promise<{ frames: number; escaped: number; overlaps: number }>((resolve) => {
+      const host = element.closest('[data-hermes-avatar-anchor="true"]')!;
+      const content = [document.querySelector('header nav[data-hermes-primary-navigation="true"]')!, document.querySelector('main h1')!, document.querySelector('section[aria-labelledby="research-list-title"]')!];
+      const result = { frames: 0, escaped: 0, overlaps: 0 };
+      const started = performance.now();
+      const sample = () => {
+        const box = element.getBoundingClientRect();
+        const frame = host.getBoundingClientRect();
+        result.frames += 1;
+        if (box.left < frame.left || box.right > frame.right || box.top < frame.top || box.bottom > frame.bottom
+          || box.left < 0 || box.top < 0 || box.right > innerWidth || box.bottom > innerHeight) result.escaped += 1;
+        for (const region of content) {
+          const other = region.getBoundingClientRect();
+          if (box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top) result.overlaps += 1;
+        }
+        if (performance.now() - started >= 800) resolve(result);
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }));
+    expect(evidence.frames).toBeGreaterThan(1);
+    expect(evidence.escaped, JSON.stringify(evidence)).toBe(0);
+    expect(evidence.overlaps, JSON.stringify(evidence)).toBe(0);
+    await page.mouse.move(0, 0);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'false');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(writes).toEqual([]);
+    await test.info().attach('avatar-frame-evidence', { body: Buffer.from(JSON.stringify(evidence)), contentType: 'application/json' });
+    await page.screenshot({ path: `${outDir}/avatar-${viewport.width}x${viewport.height}.png`, fullPage: false });
   });
-  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
-  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
-  const settledEnvelope = await page.evaluate((motionEnvelope) => {
-    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
-    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!.getBoundingClientRect();
-    const envelope = {
-      bottom: hull.bottom + motionEnvelope.bottom, left: hull.left - motionEnvelope.left,
-      right: hull.right + motionEnvelope.right, top: hull.top - motionEnvelope.top,
-    };
-    const overlapsEnvelope = envelope.left < blocker.right && envelope.right > blocker.left
-      && envelope.top < blocker.bottom && envelope.bottom > blocker.top;
-    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope };
-  }, HERMES_PATROL_MOTION_ENVELOPE);
-  expect(settledEnvelope.overlapsEnvelope, `settled patrol envelope: ${JSON.stringify(settledEnvelope)}`).toBe(false);
-  const patrolOrigin = await travelHull.boundingBox();
-  expect(patrolOrigin).not.toBeNull();
-  const evidence = await page.evaluate(() => new Promise<{
-    collisions: number; frames: number; maxBottomDelta: number; maxRightDelta: number; maxX: number; maxY: number;
-    minLeftDelta: number; minTopDelta: number; minX: number; minY: number; viewportViolations: number;
-  }>((resolveEvidence) => {
-    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
-    const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
-    const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
-    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!;
-    const origin = hull.getBoundingClientRect();
-    const result = {
-      collisions: 0, frames: 0, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY,
-      maxBottomDelta: Number.NEGATIVE_INFINITY, maxRightDelta: Number.NEGATIVE_INFINITY,
-      minLeftDelta: Number.POSITIVE_INFINITY, minTopDelta: Number.POSITIVE_INFINITY,
-      minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, viewportViolations: 0,
-    };
-    const started = performance.now();
-    const overlapsRect = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    const sample = () => {
-      const bounds = hull.getBoundingClientRect();
-      const obstacle = blocker.getBoundingClientRect();
-      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
-      result.frames += 1;
-      result.minX = Math.min(result.minX, matrix.m41);
-      result.maxX = Math.max(result.maxX, matrix.m41);
-      result.minY = Math.min(result.minY, matrix.m42);
-      result.maxY = Math.max(result.maxY, matrix.m42);
-      result.minLeftDelta = Math.min(result.minLeftDelta, bounds.left - origin.left);
-      result.maxRightDelta = Math.max(result.maxRightDelta, bounds.right - origin.right);
-      result.minTopDelta = Math.min(result.minTopDelta, bounds.top - origin.top);
-      result.maxBottomDelta = Math.max(result.maxBottomDelta, bounds.bottom - origin.bottom);
-      result.collisions += Number(overlapsRect(bounds, obstacle));
-      result.viewportViolations += Number(bounds.left < 0 || bounds.top < 0 || bounds.right > innerWidth || bounds.bottom > innerHeight);
-      if (performance.now() - started >= 4_190) resolveEvidence(result);
-      else requestAnimationFrame(sample);
-    };
-    requestAnimationFrame(sample);
-  }));
-  expect(evidence.frames).toBeGreaterThan(120);
-  expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
-  expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
-  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
-  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
-  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
-  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom);
-  const cssExtrema = await page.evaluate(async () => {
-    const probeStage = document.createElement('div');
-    probeStage.className = 'hermes-workspace-stage';
-    probeStage.dataset.hermesAction = 'patrol';
-    probeStage.dataset.hermesMotionEnvelopeSafe = 'true';
-    probeStage.dataset.hermesMotionPreference = 'full';
-    probeStage.style.visibility = 'hidden';
-    const actor = document.createElement('div');
-    actor.className = 'hermes-companion-actor';
-    probeStage.append(actor);
-    document.body.append(probeStage);
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    const animation = actor.getAnimations().find((candidate) => (candidate as CSSAnimation).animationName === 'hermes-companion-patrol')!;
-    animation.pause();
-    const result = { maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY, minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY };
-    for (const progress of [0, .18, .38, .58, .78, .9, 1]) {
-      animation.currentTime = 4_200 * progress;
-      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
-      result.minX = Math.min(result.minX, matrix.m41);
-      result.maxX = Math.max(result.maxX, matrix.m41);
-      result.minY = Math.min(result.minY, matrix.m42);
-      result.maxY = Math.max(result.maxY, matrix.m42);
-    }
-    probeStage.remove();
-    return result;
-  });
-  expect(Math.abs(cssExtrema.minX + HERMES_PATROL_TRANSLATION_ENVELOPE.left)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.maxX - HERMES_PATROL_TRANSLATION_ENVELOPE.right)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.minY + HERMES_PATROL_TRANSLATION_ENVELOPE.top)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cssExtrema.maxY - HERMES_PATROL_TRANSLATION_ENVELOPE.bottom)).toBeLessThanOrEqual(1);
-});
+}
 
-test('Hermes measures a real performance bubble into a protected-safe viewport placement', async ({ page }) => {
+test('anchored Hermes suppresses automatic performance speech while a live runtime advances', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockDashboard(page);
   await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-  const initialEvidence = await waitForPerformanceBubbleEvidence(page);
-  expectSafePerformanceBubble(initialEvidence);
-
-  const transitionTarget = initialEvidence.protectedRegions.find((region) => (
-    region.width >= initialEvidence.bubble.width && region.height >= initialEvidence.bubble.height
-  ));
-  expect(transitionTarget).toBeDefined();
-  const transitionDelta = {
-    x: transitionTarget!.x + (transitionTarget!.width - initialEvidence.bubble.width) / 2 - initialEvidence.bubble.x,
-    y: transitionTarget!.y + (transitionTarget!.height - initialEvidence.bubble.height) / 2 - initialEvidence.bubble.y,
-  };
-  const forcedBubble = {
-    ...initialEvidence.bubble,
-    x: initialEvidence.bubble.x + transitionDelta.x,
-    y: initialEvidence.bubble.y + transitionDelta.y,
-  };
-  expect(overlaps(forcedBubble, transitionTarget!)).toBe(true);
-  await page.evaluate(() => {
-    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
-    if (!stage) throw new Error('Hermes stage missing');
-    stage.dataset.hermesTestGeometryMutationCount = '0';
-    new MutationObserver(() => {
-      stage.dataset.hermesTestGeometryMutationCount = String(Number(stage.dataset.hermesTestGeometryMutationCount ?? '0') + 1);
-    }).observe(stage, {
-      attributeFilter: ['data-hermes-bubble-horizontal', 'data-hermes-bubble-safe', 'data-hermes-bubble-vertical', 'style'],
-      attributes: true,
-    });
-  });
-  await page.evaluate((delta) => {
-    const anchor = document.querySelector<HTMLElement>('[data-hermes-dock-anchor="true"]');
-    if (!anchor) throw new Error('Hermes anchor missing');
-    anchor.style.transform = `translate(${delta.x}px, ${delta.y}px)`;
-    window.dispatchEvent(new Event('resize'));
-  }, transitionDelta);
-  await expect.poll(async () => Number(await page.locator('[data-hermes-workspace-stage="true"]')
-    .getAttribute('data-hermes-test-geometry-mutation-count') ?? '0')).toBeGreaterThan(0);
-  const transitionedEvidence = await waitForPerformanceBubbleEvidence(page, (evidence) => {
-    const targetStillPresent = evidence.protectedRegions.some((region) => (
-      Math.abs(region.x - transitionTarget!.x) < 1
-      && Math.abs(region.y - transitionTarget!.y) < 1
-      && Math.abs(region.width - transitionTarget!.width) < 1
-      && Math.abs(region.height - transitionTarget!.height) < 1
-    ));
-    return targetStillPresent
-      && !overlaps(evidence.bubble, transitionTarget!)
-      && !overlaps(evidence.actor, transitionTarget!)
-      && isSafePerformanceBubble(evidence);
-  });
-  expectSafePerformanceBubble(transitionedEvidence);
-  expect(overlaps(transitionedEvidence.bubble, transitionTarget!) || overlaps(transitionedEvidence.actor, transitionTarget!)).toBe(false);
-
-  await page.evaluate(() => {
-    document.querySelectorAll('[data-hermes-protected="true"]').forEach((element) => element.removeAttribute('data-hermes-protected'));
-    const spacer = document.createElement('div');
-    spacer.style.height = '1000px';
-    document.body.append(spacer);
-    document.body.classList.add('hermes-bubble-scroll-fixture');
-  });
-  let scrollEvidence: { before: PerformanceBubbleEvidence; after: PerformanceBubbleEvidence } | null = null;
-  for (let attempt = 0; attempt < 4 && !scrollEvidence; attempt += 1) {
-    const before = await waitForPerformanceBubbleEvidence(page, isPerformanceCompositeInsideViewport);
-    await page.evaluate(() => window.scrollBy(0, 40));
-    let after: PerformanceBubbleEvidence | null = null;
-    await expect.poll(async () => {
-      const candidate = await readPerformanceBubbleEvidence(page);
-      if (!candidate
-        || candidate.cue !== before.cue
-        || candidate.horizontal !== before.horizontal
-        || candidate.vertical !== before.vertical
-        || candidate.scrollY < before.scrollY + 30) return false;
-      after = candidate;
-      return true;
-    }, { timeout: 1_000 }).toBe(true).catch(() => undefined);
-    if (after) scrollEvidence = { after, before };
-  }
-  expect(scrollEvidence).not.toBeNull();
-  const beforeScroll = scrollEvidence!.before;
-  const afterScroll = scrollEvidence!.after;
-  expect(Math.abs(
-    ((afterScroll.bubble.y - afterScroll.bubbleTransformY) - (beforeScroll.bubble.y - beforeScroll.bubbleTransformY))
-      - (afterScroll.actor.y - beforeScroll.actor.y),
-  )).toBeLessThan(3);
+  await expectDashboardProtectedRegions(page);
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const rig = stage.locator('[data-hermes-rig="live2d-wanko"]');
+  await expect(page.locator('[data-hermes-dock-anchor="true"]')).toHaveCount(1);
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+  await expect(stage.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+  await expect(stage.locator('[data-hermes-articulated-canvas]')).toBeVisible();
+  const firstDraw = Number(await rig.getAttribute('data-hermes-last-draw-at'));
+  expect(firstDraw).toBeGreaterThan(0);
+  const before = await page.evaluate(() => Date.now());
+  await page.clock.fastForward(300_000);
+  expect(await page.evaluate(() => Date.now())).toBeGreaterThanOrEqual(before + 300_000);
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(firstDraw);
+  await expect(stage).toHaveAttribute('data-hermes-speech-visible', 'false');
+  await expect(stage.locator('[data-hermes-performance-bubble="true"]')).toHaveCount(0);
 });
 
 test('Hermes renders articulated, working and approval states with one visual owner', async ({ page }) => {
@@ -396,7 +451,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
     await mockDashboard(page, taskState);
     await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
     await expect(page.locator('main')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Research dashboard' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Research desk' })).toBeVisible({ timeout: 15_000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
     await expect(visual).toHaveAttribute('data-hermes-state', visualState);
@@ -422,7 +477,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
         canvas.getAttribute('data-hermes-torso'),
         canvas.getAttribute('data-hermes-tail'),
       ]);
-      const box = await rig.boundingBox();
+      const box = await visual.boundingBox();
       expect(box).not.toBeNull();
       await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
       await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
@@ -443,7 +498,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
       await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
       continue;
     }
-    const box = await rig.locator('[data-hermes-carrier-interaction-hull="true"]').boundingBox();
+    const box = await visual.boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
     await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
@@ -467,12 +522,56 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-  const mobileStageBox = await page.locator('[data-hermes-workspace-stage]').boundingBox();
-  const mobileMotionToggleBox = await page.locator('[data-hermes-motion-toggle]').boundingBox();
+  const mobileStage = page.locator('[data-hermes-workspace-stage]');
+  const mobileRig = page.locator('[data-hermes-rig="live2d-wanko"]');
+  const mobileMotionToggle = page.locator('[data-hermes-motion-toggle]');
+  await expect(mobileStage).toBeVisible();
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '64');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
+  await expect(mobileMotionToggle).toBeHidden();
+
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  const mobileDialog = page.getByRole('dialog', { name: 'Hermes research guide' });
+  await expect(mobileDialog).toBeVisible();
+  await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'false');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(mobileStage).toHaveCount(1);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
+  await expect(mobileMotionToggle).toBeVisible();
+  await expect(mobileMotionToggle).toBeEnabled();
+  await expect(mobileMotionToggle).toBeInViewport({ ratio: 1 });
+  const mobileStageBox = await mobileStage.boundingBox();
+  const mobileMotionToggleBox = await mobileMotionToggle.boundingBox();
   expect(mobileStageBox).not.toBeNull();
   expect(mobileMotionToggleBox).not.toBeNull();
   expect((mobileMotionToggleBox?.y ?? Infinity) + (mobileMotionToggleBox?.height ?? 0))
     .toBeLessThanOrEqual(mobileStageBox?.y ?? 0);
+
+  await mobileMotionToggle.click();
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'false');
+  await expect(mobileRig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'false');
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
+  await expect(mobileMotionToggle).toBeEnabled();
+  await mobileMotionToggle.click();
+  await expect(mobileStage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(mobileMotionToggle).toHaveAttribute('data-motion-active', 'true');
+  await expect(mobileRig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'true');
+
+  await mobileDialog.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(mobileDialog).toHaveCount(0);
+  await expect(mobileStage).toHaveAttribute('data-hermes-in-conversation', 'false');
+  await expect(mobileStage).toHaveAttribute('data-hermes-compact', 'true');
+  await expect(mobileStage).toHaveAttribute('data-hermes-stage-size', '64');
+  await expect(mobileMotionToggle).toBeHidden();
+  await expect(mobileStage).toHaveCount(1);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
   await page.screenshot({ path: `${outDir}/suggesting-needs-review-390x844.png`, fullPage: true, animations: 'disabled' });
 
   await page.unrouteAll({ behavior: 'wait' });
@@ -480,31 +579,35 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
   const reducedVisual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   await expect(reducedVisual).toHaveAttribute('data-hermes-input-ready', 'false');
-  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
+  const reducedRig = page.locator('[data-hermes-rig="live2d-wanko"]');
+  await expect(reducedRig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('[data-hermes-renderer="articulated-mesh"]')).toHaveAttribute('data-hermes-input-ready', 'false');
+  await expect(reducedRig.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'block');
-  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'true');
-  await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('opacity', '1');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'false');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('opacity', '0');
   await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('animation-name', 'none');
   await page.screenshot({ path: `${outDir}/idle-reduced-390x844.png`, fullPage: true, animations: 'disabled' });
   expect(browserErrors).toEqual([]);
 });
 
-test('Hermes contextual prompt is an integrated dark bubble instead of a white strip', async ({ page }) => {
+test('anchored Hermes keeps the automatic contextual prompt suppressed', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-anchored', 'true');
   const prompt = page.locator('.hermes-guide-nudge');
-  await expect(prompt).toHaveAttribute('data-visible', 'true');
-  const promptBackground = await prompt.evaluate((node) => getComputedStyle(node).backgroundColor);
-  const promptChannels = promptBackground.match(/[\d.]+/gu)?.map(Number) ?? [];
-  expect(promptChannels).toHaveLength(4);
-  expect(Math.max(...promptChannels.slice(0, 3))).toBeLessThan(48);
-  expect(promptChannels[3]).toBeGreaterThanOrEqual(.85);
+  await expect(prompt).toHaveAttribute('data-visible', 'false');
+  await expect(prompt).toHaveAttribute('aria-hidden', 'true');
+  await expect(prompt).toHaveCSS('opacity', '0');
+  await expect(prompt).toHaveCSS('pointer-events', 'none');
 });
 
 test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let releaseLoading!: () => void;
+  let failResearchIndex = false;
   const loadingGate = new Promise<void>((resolve) => { releaseLoading = resolve; });
   await page.route('**/api/auth/me', async (route) => {
     await loadingGate;
@@ -512,7 +615,9 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   });
   await page.route('**/api/research-objects?limit=20', async (route) => {
     await loadingGate;
-    await json(route, { researchObjects: [] });
+    await json(route, failResearchIndex
+      ? { error: { message: 'Research index unavailable' } }
+      : { researchObjects: [] }, failResearchIndex ? 503 : 200);
   });
   await page.route('**/api/ingestion?actionable=true*', async (route) => {
     await loadingGate;
@@ -530,34 +635,83 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
   const loadingSurface = page.locator('[data-os-surface="dashboard"][aria-busy="true"]');
   await expect(loadingSurface).toBeVisible();
-  await expect(loadingSurface.locator('[aria-live="polite"]')).toBeVisible();
+  await expect(loadingSurface.getByRole('status')).toBeVisible();
   await page.screenshot({ path: `${outDir}/loading-390x844.png`, fullPage: true });
-  releaseLoading();
-
-  await page.unrouteAll({ behavior: 'wait' });
-  await page.route('**/api/auth/me', (route) => json(route, {
-    userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free',
-  }));
-  await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
-  await page.route('**/api/ingestion?actionable=true*', (route) => json(route, { tasks: [] }));
-  await page.route('**/api/agent/tasks**', (route) => {
-    const url = new URL(route.request().url());
-    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
-      return json(route, { tasks: [] });
-    }
-    return route.fallback();
+  const initialResearchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/research-objects'
+      && url.searchParams.get('limit') === '20' && response.status() === 200;
   });
+  releaseLoading();
+  await initialResearchResponse;
+  // Keep handlers active while the first load schedules its follow-up requests.
+  failResearchIndex = true;
   const researchErrorResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === '/api/research-objects'
       && url.searchParams.get('limit') === '20'
       && response.status() === 503;
   });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await researchErrorResponse;
-  await expect(page.locator('p[role="alert"]')).toContainText('Research index unavailable');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-  await page.screenshot({ path: `${outDir}/error-390x844.png`, fullPage: true, animations: 'disabled' });
+  const reloadErrors: Array<{ message: string; filename: string; line: number; column: number }> = [];
+  const origin = new URL(baseUrl).origin;
+  await page.exposeFunction('__recordHermesReloadError', (entry: typeof reloadErrors[number]) => {
+    if (entry.filename && new URL(entry.filename, baseUrl).origin !== origin) return;
+    reloadErrors.push(entry);
+  });
+  await page.addInitScript(() => {
+    window.addEventListener('error', (event) => {
+      const diagnosticWindow = window as unknown as Window & { __recordHermesReloadError(entry: { message: string; filename: string; line: number; column: number }): Promise<void> };
+      void diagnosticWindow.__recordHermesReloadError({ message: event.message, filename: event.filename,
+        line: event.lineno, column: event.colno }).catch(() => undefined);
+    });
+  });
+  const scripts: Array<{ url: string; status?: number; headers?: Record<string, string>; bytes?: Buffer; error?: string }> = [];
+  const captures: Promise<void>[] = [];
+  const reloadStartedAt = Date.now();
+  const captureScript = (request: Request) => {
+    const url = new URL(request.url());
+    if (request.resourceType() !== 'script' || request.method() !== 'GET' || url.origin !== origin
+      || (!url.pathname.startsWith('/_next/') && !url.pathname.startsWith(`${LIVE2D_ASSET_ROOT}/`))
+      || request.timing().startTime < reloadStartedAt) return;
+    // Finished local fixture scripts only; exclude API bodies, cookies and earlier-document requests.
+    const entry: typeof scripts[number] = { url: url.href };
+    scripts.push(entry);
+    captures.push((async () => {
+      try {
+        const response = await request.response();
+        if (!response) return;
+        entry.status = response.status();
+        entry.headers = Object.fromEntries(Object.entries(response.headers()).filter(([name]) =>
+          ['content-type', 'content-encoding', 'content-length', 'transfer-encoding'].includes(name)));
+        entry.bytes = await response.body();
+      } catch (error) { entry.error = error instanceof Error ? error.message : String(error); }
+    })());
+  };
+  page.on('requestfinished', captureScript);
+  let errorSurfaceVerified = false;
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await researchErrorResponse;
+    await expect(page.locator('p[role="alert"]')).toContainText('Research index unavailable');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+    await page.screenshot({ path: `${outDir}/error-390x844.png`, fullPage: true, animations: 'disabled' });
+    errorSurfaceVerified = true;
+  } finally {
+    page.off('requestfinished', captureScript);
+    await Promise.allSettled(captures);
+    if (!errorSurfaceVerified) {
+      await mkdir(test.info().outputDir, { recursive: true });
+      for (const [index, script] of scripts.entries()) {
+        if (script.bytes) await writeFile(test.info().outputPath(`reload-script-${index}.bin`), script.bytes);
+      }
+      const metadata = scripts.map(({ bytes, ...script }, index) => ({ ...script,
+        file: bytes ? `reload-script-${index}.bin` : null, byteLength: bytes?.length ?? null }));
+      const path = test.info().outputPath('reload-diagnostics.json');
+      await writeFile(path, JSON.stringify({ reloadErrors, scripts: metadata,
+        representation: 'Playwright decoded response.body bytes; encoding headers retained, not raw compressed wire bytes' }, null, 2));
+      await test.info().attach('reload-diagnostics', { path, contentType: 'application/json' });
+    }
+  }
 });
 
 test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }) => {
@@ -571,12 +725,14 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   }`);
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await expect(page.getByRole('heading', { name: 'Research dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Research desk' })).toBeVisible();
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   await expect(visual.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const retry = page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i });
   await expect(retry).toBeVisible();
   const generation = Number(await rig.getAttribute('data-hermes-runtime-generation'));
@@ -584,7 +740,6 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   await expect(rig).toHaveAttribute('data-hermes-runtime-generation', String(generation + 1));
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('opacity', '0');
-  await visual.click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
@@ -592,19 +747,26 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
 test('Hermes disposes and restores its mesh when the persistent motion control changes live', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 
   await page.getByRole('button', { name: /Reduce Hermes motion|关闭 Hermes 动效/i }).click();
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(rig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'stopped');
+  await expect(rig.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'block');
+  const stoppedDraw = Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0);
 
   await page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0)).toBeGreaterThan(stoppedDraw);
 });
 
-test('Hermes replaces a lost canvas when approval ends live', async ({ page }) => {
+test('Hermes pauses and resumes the same canvas when approval ends live', async ({ page }) => {
   await page.goto(`${baseUrl}/_visual/hermes-articulation`, { waitUntil: 'networkidle' });
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
@@ -613,11 +775,20 @@ test('Hermes replaces a lost canvas when approval ends live', async ({ page }) =
   await page.getByRole('button', { name: 'Approval' }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(rig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(rig).toHaveAttribute('data-hermes-gesture', 'still');
+  const approvalDraw = await rig.getAttribute('data-hermes-last-draw-at');
+  expect(approvalDraw).not.toBeNull();
+  await page.waitForTimeout(180);
+  await expect(rig).toHaveAttribute('data-hermes-last-draw-at', approvalDraw!);
   await page.getByRole('button', { name: 'Idle' }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-static-frame', 'false');
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at') ?? 0)).toBeGreaterThan(Number(approvalDraw));
   const resumedCanvas = await page.locator('[data-hermes-articulated-canvas="true"]').elementHandle();
 
-  expect(await firstCanvas?.evaluate((first, second) => first !== second, resumedCanvas)).toBe(true);
+  expect(await firstCanvas?.evaluate((first, second) => first === second, resumedCanvas)).toBe(true);
+  await expect(rig).toHaveCount(1);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
 });
 
 test('Hermes releases a fallback WebGL context when WebGL2 initialization fails', async ({ page }) => {
@@ -630,7 +801,7 @@ test('Hermes releases a fallback WebGL context when WebGL2 initialization fails'
     testWindow.__hermesContexts = { acquired: 0, lost: 0 };
     const acquired = new WeakSet<object>();
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (kind: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
       if (kind === 'webgl2') return null;
       const context = original.call(this, kind as '2d', ...args as []) as WebGLRenderingContext | null;
       if (!context || (kind !== 'webgl' && kind !== 'experimental-webgl')) return context;
@@ -672,7 +843,7 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   let releaseTexture: (() => void) | undefined;
   const textureHold = new Promise<void>((resolve) => { releaseTexture = resolve; });
   let textureRequested = false;
-  await page.route('**/hermes/live2d/wanko/wanko_touch.1024/texture_00.png', async (route) => {
+  await page.route(`**${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.1024/texture_00.png`, async (route) => {
     textureRequested = true;
     await textureHold;
     await route.continue();
@@ -682,27 +853,41 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toBeVisible();
   await expect.poll(() => textureRequested).toBe(true);
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'initializing');
   const offscreenStyle = await page.addStyleTag({ content: '[data-hermes-rig="live2d-wanko"] { transform: translateY(1800px) !important; }' });
-  await page.waitForTimeout(120);
-  releaseTexture?.();
-  await page.waitForTimeout(600);
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
-  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
-
-  await offscreenStyle.evaluate((style) => style.remove());
+  let offscreenDrawAt = 0;
+  try {
+    await expect.poll(() => rig.evaluate((node) => node.getBoundingClientRect().top >= window.innerHeight)).toBe(true);
+    releaseTexture?.();
+    // Initialization started while visible, so its first frame may finish offscreen.
+    await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+    offscreenDrawAt = Number(await rig.getAttribute('data-hermes-last-draw-at'));
+    expect(offscreenDrawAt).toBeGreaterThan(0);
+    await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveAttribute('data-hermes-head', /.+/);
+    // The owner stays running while suspended; a stable draw timestamp proves
+    // no continuous drawing in this interval, not an exact initialization frame count.
+    await page.waitForTimeout(600);
+    await expect(rig).toHaveAttribute('data-hermes-last-draw-at', String(offscreenDrawAt));
+  } finally {
+    releaseTexture?.();
+    await offscreenStyle.evaluate((style) => (style as HTMLStyleElement).remove());
+  }
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect.poll(async () => Number(await rig.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(offscreenDrawAt);
+  await expect(page.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
 });
 
 test('Hermes aborts and releases a pending initialization on SPA unmount', async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.addInitScript((assetRoot: string) => {
     const testWindow = window as Window & {
       __hermesPendingContexts?: { acquired: number; lost: number };
-      __releaseHermesPendingImages?: () => void;
+      __releaseHermesPendingImages?: () => Promise<void>;
     };
     testWindow.__hermesPendingContexts = { acquired: 0, lost: 0 };
     const originalContext = HTMLCanvasElement.prototype.getContext;
     const tracked = new WeakSet<object>();
-    HTMLCanvasElement.prototype.getContext = function (kind: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
       const context = originalContext.call(this, kind as '2d', ...args as []) as WebGL2RenderingContext | null;
       if (kind !== 'webgl2' || !context || !this.matches('[data-hermes-articulated-canvas]')) return context;
       if (!tracked.has(context)) {
@@ -725,28 +910,44 @@ test('Hermes aborts and releases a pending initialization on SPA unmount', async
       return context;
     } as typeof HTMLCanvasElement.prototype.getContext;
     const originalDecode = HTMLImageElement.prototype.decode;
-    const pending: Array<() => void> = [];
+    const pending: Array<() => Promise<void>> = [];
     HTMLImageElement.prototype.decode = function () {
-      if (!this.src.includes('/hermes/live2d/wanko/')) return originalDecode.call(this);
+      if (!this.src.includes(`${assetRoot}/wanko/`)) return originalDecode.call(this);
       return new Promise<void>((resolve, reject) => {
-        pending.push(() => { void originalDecode.call(this).then(resolve, reject); });
+        pending.push(async () => {
+          try { await originalDecode.call(this); resolve(); } catch (error) { reject(error); }
+        });
       });
     };
-    testWindow.__releaseHermesPendingImages = () => pending.splice(0).forEach((release) => release());
-  });
+    testWindow.__releaseHermesPendingImages = async () => { await Promise.all(pending.splice(0).map((release) => release())); };
+  }, LIVE2D_ASSET_ROOT);
   await mockDashboard(page);
-  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
-  await expect.poll(() => page.evaluate(() => (
-    (window as Window & { __hermesPendingContexts?: { acquired: number } }).__hermesPendingContexts?.acquired ?? 0
-  ))).toBe(1);
-
-  await page.getByRole('link', { name: /settings|设置/i }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  // Enter through the existing Next Link so browser Back unmounts the global stage
+  // without the wordmark's ordinary anchor replacing the document.
+  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
+  await page.getByLabel('Account tools', { exact: true }).click();
+  await page.getByRole('link', { name: 'Research desk', exact: true }).click();
+  await expect(page).toHaveURL(`${baseUrl}/dashboard`);
+  try {
+    await expect.poll(() => page.evaluate(() => (
+      (window as Window & { __hermesPendingContexts?: { acquired: number } }).__hermesPendingContexts?.acquired ?? 0
+    ))).toBe(1);
+    await page.goBack();
+    await expect(page).toHaveURL(`${baseUrl}/`);
+    // The acquisition counter must survive: a document reload is not an SPA-unmount proof.
+    expect(await page.evaluate(() => (window as Window & { __hermesPendingContexts?: { acquired: number } }).__hermesPendingContexts?.acquired)).toBe(1);
+    await expect.poll(() => page.evaluate(() => {
+      const counts = (window as Window & { __hermesPendingContexts?: { acquired: number; lost: number } }).__hermesPendingContexts;
+      return (counts?.acquired ?? 0) - (counts?.lost ?? 0);
+    })).toBe(0);
+  } finally {
+    await page.evaluate(() => (window as Window & { __releaseHermesPendingImages?: () => Promise<void> }).__releaseHermesPendingImages?.());
+  }
   await expect.poll(() => page.evaluate(() => {
     const counts = (window as Window & { __hermesPendingContexts?: { acquired: number; lost: number } }).__hermesPendingContexts;
     return (counts?.acquired ?? 0) - (counts?.lost ?? 0);
   })).toBe(0);
-  await page.evaluate(() => (window as Window & { __releaseHermesPendingImages?: () => void }).__releaseHermesPendingImages?.());
+  await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(0);
 });
 
 test('Hermes focus and open presence drive real mesh articulation', async ({ page }) => {
@@ -758,9 +959,16 @@ test('Hermes focus and open presence drive real mesh articulation', async ({ pag
   await visual.focus();
   await expect(visual).toHaveAttribute('data-hermes-presence', 'attentive');
   await expect(canvas).toHaveAttribute('data-hermes-gesture', 'focus');
-  await visual.click();
-  await expect(visual).toHaveAttribute('data-hermes-presence', 'open');
+  const opener = page.getByRole('button', { name: 'Open conversation', exact: true });
+  await opener.click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-in-conversation', 'true');
   await expect(canvas).toHaveAttribute('data-hermes-gesture', 'focus');
+  await expect(canvas).toHaveCount(1);
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  await expect(opener).toBeFocused();
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'false');
 });
 
 test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ page }) => {
@@ -770,11 +978,13 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   const motionToggle = page.locator('[data-hermes-motion-toggle]');
   const oldCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
+  const originalGeneration = Number(await stage.getAttribute('data-hermes-runtime-generation'));
   await expect(motionToggle).toHaveAttribute('data-motion-active', 'true');
   await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas: HTMLCanvasElement) => {
     canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
   });
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
+  await expect(stage).toHaveAttribute('data-hermes-runtime-generation', String(originalGeneration + 1));
   const newCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
   expect(await oldCanvas?.evaluate((old, next) => old !== next, newCanvas)).toBe(true);
 
@@ -787,24 +997,55 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   await page.waitForTimeout(500);
   await expect(stage).toHaveAttribute('data-hermes-runtime-generation', boundedGeneration!);
   await expect(motionToggle).toHaveAttribute('data-motion-runtime', 'fallback');
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
   await expect(motionToggle).toBeEnabled();
+  const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
+  await motionToggle.click();
+  await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
+  await expect(stage).toHaveAttribute('data-hermes-runtime-owner', 'running');
+  await expect(stage).toHaveAttribute('data-hermes-runtime-generation', String(Number(boundedGeneration) + 1));
+  const manuallyRestored = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
+  expect(await newCanvas?.evaluate((automatic, manual) => automatic !== manual, manuallyRestored)).toBe(true);
+  await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
+  expect(await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'))).toBe(preferenceBeforeRetry);
 });
 
 test('Hermes retries with a fresh runtime after the required Cubism model fails', async ({ page }) => {
   await mockDashboard(page);
-  await page.route('**/hermes/live2d/wanko/wanko_touch.model3.json', (route) => route.abort('failed'));
+  let failedModelRequests = 0;
+  await page.route(`**${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.model3.json`, (route) => {
+    failedModelRequests += 1;
+    return route.abort('failed');
+  });
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback', { timeout: 20_000 });
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'asset-load-failed');
+  expect(failedModelRequests).toBeGreaterThan(0);
+  const failedGeneration = Number(await rig.getAttribute('data-hermes-runtime-generation'));
+  const failedCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
+  const preferenceBeforeRetry = await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'));
 
-  await page.unroute('**/hermes/live2d/wanko/wanko_touch.model3.json');
+  await page.unroute(`**${LIVE2D_ASSET_ROOT}/wanko/wanko_touch.model3.json`);
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-runtime-owner', 'running');
+  await expect(rig).toHaveAttribute('data-hermes-runtime-generation', String(failedGeneration + 1));
+  const restoredCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
+  expect(await failedCanvas?.evaluate((failed, restored) => failed !== restored, restoredCanvas)).toBe(true);
+  await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
+  expect(await page.evaluate(() => localStorage.getItem('openscience.hermes.motion'))).toBe(preferenceBeforeRetry);
 });
 
-test('Hermes keeps the real six-field approval surface still until confirmation succeeds', async ({ page }) => {
+test('Hermes keeps six-field confirmation explicit while its avatar remains interactive', async ({ page }) => {
+  await mockDashboard(page);
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: baseUrl }]);
   const detail = {
     batchId: 'batch-review',
     researchObjectId: 'ro-hermes',
@@ -818,19 +1059,55 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
       } },
     },
   };
+  const confirmation = { commitId: 'commit-review', versionId: 'version-review', versionNo: 3, version: 3, evidenceStatus: 'needs_review', missingFields: [] };
+  let confirmations = 0;
+  await page.route('**/api/research-objects/ro-hermes/ingestion', (route) => route.request().method() === 'GET' ? json(route, {
+    researchObjectId: 'ro-hermes', version: detail.version,
+    tasks: [{ ...detail.task, confirmation: detail.task.state === 'confirmed' ? confirmation : null }],
+    latestConfirmation: detail.task.state === 'confirmed' ? confirmation : null,
+  }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/hermes-runs?ingestionTaskId=task-review', (route) => route.request().method() === 'GET' ? json(route, { run: null }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes', (route) => route.request().method() === 'GET' ? json(route, { researchObject: {
+    id: 'ro-hermes', workspaceId: 'workspace-hermes', title: 'Reviewed research', version: detail.version,
+    status: 'draft', visibility: 'private', sdf: { core: detail.task.result.core },
+  } }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/versions', (route) => route.request().method() === 'GET' ? json(route, {
+    versions: detail.task.state === 'confirmed' ? [{ ...confirmation, status: 'draft', createdAt: '2026-10-08T00:00:00.000Z' }] : [],
+  }) : route.fallback());
+  await page.route('**/api/versions/version-review', (route) => route.request().method() === 'GET' ? json(route, {
+    version: { versionId: confirmation.versionId, snapshot: { core: detail.task.result.core, artifacts: [] } },
+  }) : route.fallback());
+  await page.route('**/api/research-objects/ro-hermes/versions/version-review/record', (route) => route.request().method() === 'GET' ? json(route, {
+    record: { objectId: 'ro-hermes', versionId: confirmation.versionId, recordState: 'recorded', sdf: detail.task.result.core, manifest: [], claims: [], evidence: [] },
+  }) : route.fallback());
   await page.route('**/api/ingestion/tasks/task-review', (route) => json(route, detail));
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'review-csrf' }));
   await page.route('**/api/ingestion/task-review/confirm', (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postDataJSON()).toEqual({ version: 2, core: detail.task.result.core, sourceAgentTaskId: 'agent-review' });
+    confirmations += 1;
     detail.task.state = 'confirmed';
-    return json(route, { sdf: { core: detail.task.result.core }, task: detail.task });
+    detail.version = confirmation.version;
+    return json(route, { sdf: { core: detail.task.result.core }, task: detail.task, confirmation });
   });
   await page.goto(`${baseUrl}/research-objects/ro-hermes/hermes?task=task-review&hermes-motion=full`, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { name: '确认你的研究结构' })).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-avatar', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-stage-size', '64');
+  const approvalAvatar = page.locator('[data-hermes-rig="live2d-wanko"]');
+  await expect(approvalAvatar).toHaveAttribute('data-hermes-static-frame', 'false');
+  const approvalDraw = Number(await approvalAvatar.getAttribute('data-hermes-last-draw-at'));
+  await expect.poll(async () => Number(await approvalAvatar.getAttribute('data-hermes-last-draw-at'))).toBeGreaterThan(approvalDraw);
   await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
+  expect(confirmations).toBe(0);
   await page.getByRole('button', { name: '确认并创建版本' }).click();
+  await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-hermes/versions?version=version-review`);
+  await expect(page.locator('[data-selected-version="version-review"]')).toContainText('Results');
+  expect(confirmations).toBe(1);
+  await page.goBack({ waitUntil: 'networkidle' });
+  await expect(page).toHaveURL(/hermes\?task=task-review&hermes-motion=full$/);
   await expect(page.getByText('已确认并写入新版本。')).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -838,6 +1115,7 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await expect(page.getByRole('button', { name: '已确认' })).toBeDisabled();
+  expect(confirmations).toBe(1);
 });
 
 test('Hermes keeps visible renderer-owned draw heartbeat gaps within 750ms', async ({ page }) => {
@@ -862,7 +1140,7 @@ test('Hermes keeps visible renderer-owned draw heartbeat gaps within 750ms', asy
   expect(Math.max(...heartbeats.slice(1).map((value, index) => value - heartbeats[index]))).toBeLessThanOrEqual(750);
 });
 
-test('Hermes idle story opens a real contextual guide without leaving the workspace', async ({ page }) => {
+test('anchored Hermes opens an explicit contextual guide without leaving the workspace', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockDashboard(page);
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'test-csrf' }));
@@ -891,44 +1169,48 @@ test('Hermes idle story opens a real contextual guide without leaving the worksp
       result: null, error: null, createdAt: 'now', updatedAt: 'now',
     } }, 201);
   });
-  await page.route('**/api/agent/tasks/guide-task', (route) => json(route, { task: succeededTask }));
+  let releaseGuideResult!: () => void;
+  const guideResultGate = new Promise<void>((resolve) => { releaseGuideResult = resolve; });
+  await page.route('**/api/agent/tasks/guide-task', async (route) => {
+    await guideResultGate;
+    return json(route, { task: succeededTask });
+  });
 
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready');
   await expect(page.locator('[data-hermes-part], [data-hermes-idle-signal]')).toHaveCount(0);
-  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'true', { timeout: 5_000 });
-  const promptBox = await page.locator('.hermes-guide-nudge').boundingBox();
-  expect(promptBox).not.toBeNull();
-  expect(promptBox!.x).toBeGreaterThanOrEqual(0);
-  expect(promptBox!.y).toBeGreaterThanOrEqual(0);
-  expect(promptBox!.x + promptBox!.width).toBeLessThanOrEqual(1440);
-  expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(900);
-  const protectedBoxes = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
-    const bounds = element.getBoundingClientRect();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
-  expect(protectedBoxes.some((region) => overlaps(promptBox!, region))).toBe(false);
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'false');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('opacity', '0');
+  await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('pointer-events', 'none');
 
-  await visual.click();
+  const opener = page.getByRole('button', { name: 'Open conversation', exact: true });
+  await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Shift+Tab');
   expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
-  await expect(visual).toHaveAttribute('data-hermes-presence', 'open');
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'true');
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-in-conversation', 'true');
+  await expect(page.locator('[data-hermes-articulated-canvas]')).toHaveCount(1);
   expect(new URL(page.url()).pathname).toBe('/dashboard');
-  await page.getByLabel('What would you like to advance today?').fill('Organise today’s imported paper');
-  await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
-  await expect(visual).toHaveAttribute('data-hermes-state', 'scanning');
-  await expect(page.getByText('Task progress 0%')).toBeVisible();
+  await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('Organise today’s imported paper');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  try {
+    await expect(visual).toHaveAttribute('data-hermes-state', 'scanning');
+    await expect(dialog.getByRole('status')).toHaveText('Hermes is organising the evidence…');
+  } finally { releaseGuideResult(); }
   await expect(page.getByText('Review the imported evidence, then shape it into a reusable research object.')).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText('I need a little more context before I can offer reliable guidance.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Start an import →' })).toHaveAttribute('href', '/research-objects/new?mode=import');
 
   await page.getByRole('button', { name: 'Close Hermes' }).click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
-  await expect(visual).toBeFocused();
+  await expect(opener).toBeFocused();
+  await expect(page.locator('[data-hermes-workspace-stage]')).toHaveAttribute('data-hermes-assistant-open', 'false');
   await expect(visual).toHaveAttribute('data-hermes-presence', 'attentive');
   await page.keyboard.press('Tab');
   await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
@@ -937,16 +1219,21 @@ test('Hermes idle story opens a real contextual guide without leaving the worksp
   await page.unroute('**/api/agent/tasks**');
   await page.route('**/api/agent/tasks**', (route) => json(route, { tasks: [succeededTask] }));
   await page.reload({ waitUntil: 'networkidle' });
-  await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
+  await opener.click();
   await expect(page.getByText('Review the imported evidence, then shape it into a reusable research object.')).toBeVisible();
   await page.getByRole('button', { name: 'Close Hermes' }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await visual.click();
+  await opener.click();
   const mobileDrawer = page.getByRole('dialog', { name: 'Hermes research guide' });
   await expect(mobileDrawer).toBeVisible();
-  expect(Math.round((await mobileDrawer.boundingBox())?.width ?? 0)).toBe(390);
-  await expect(mobileDrawer).toHaveCSS('background-color', 'rgb(11, 15, 12)');
+  // The current conversation sheet keeps an 8px viewport inset on each side.
+  const mobileDrawerBox = await mobileDrawer.boundingBox();
+  expect(mobileDrawerBox).not.toBeNull();
+  expect(Math.round(mobileDrawerBox!.x)).toBe(8);
+  expect(Math.round(mobileDrawerBox!.width)).toBe(390 - 16);
+  await expect(mobileDrawer).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(mobileDrawer).toHaveCSS('color', 'rgb(24, 47, 53)');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: `${outDir}/contextual-guide-390x844.png`, fullPage: true });
 });
@@ -977,9 +1264,9 @@ test('Hermes resumes polling the same task after a transient failure', async ({ 
 
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
-  await page.getByLabel('What would you like to advance today?').fill('Resume safely');
-  await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
-  await expect(page.locator('.hermes-guide-drawer [role="alert"]')).toContainText('Temporary polling failure');
+  await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('Resume safely');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' }).getByRole('alert')).toContainText('Temporary polling failure');
   expect(submissions).toBe(1);
   await page.getByRole('button', { name: 'Resume this task' }).click();
   await expect(page.getByText('The original task resumed.')).toBeVisible({ timeout: 5_000 });
@@ -1033,11 +1320,12 @@ for (const recoveryCase of [
     await page.route(`**/api/agent/tasks/${task.id}`, (route) => json(route, { task }));
 
     await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+    await expect(page.locator('main [data-literature-state]')).toHaveAttribute('data-literature-state', 'running');
     const recoveryBaseline = recoveryGets;
     const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
     await visual.click();
-    await page.getByLabel('What would you like to advance today?').fill('download paper 10.1038/nature12373');
-    await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+    await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('download paper 10.1038/nature12373');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
     let dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
     await expect.poll(() => callerKeys.length).toBe(1);
     expect(recoveryGets).toBe(recoveryBaseline);
@@ -1058,8 +1346,8 @@ for (const recoveryCase of [
     }
     if (recoveryCase.name === 'succeeded') {
       await page.getByRole('button', { name: 'Back to research guidance' }).click();
-      await page.getByLabel('What would you like to advance today?').fill('download paper 10.1000/new-intent');
-      await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+      await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('download paper 10.1000/new-intent');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
       await expect.poll(() => chargedKeys.size).toBe(2);
       expect(callerKeys.at(-1)).not.toBe(callerKeys[0]);
     }
@@ -1069,6 +1357,11 @@ for (const recoveryCase of [
 test('RO Hermes literature target comes from the route rather than a cross-RO task suggestion', async ({ page }) => {
   const routeRo = '00000000-0000-4000-8000-000000000701';
   const taskRo = '00000000-0000-4000-8000-000000000702';
+  await page.route(`**/api/research-objects/${routeRo}/ingestion`, (route) => route.request().method() === 'GET' ? json(route, {
+    researchObjectId: routeRo, version: 1, tasks: [], latestConfirmation: null,
+  }) : route.fallback());
+  await page.route(`**/api/research-objects/${routeRo}/hermes-runs?ingestionTaskId=task-cross-ro`, (route) => route.request().method() === 'GET' ? json(route, { run: null }) : route.fallback());
+  await page.route(`**/api/research-objects/${routeRo}/versions`, (route) => route.request().method() === 'GET' ? json(route, { versions: [] }) : route.fallback());
   await page.route('**/api/auth/me', (route) => json(route, { userId: 'cross-ro-user', email: 'cross@example.invalid', displayName: 'Cross RO', status: 'email_verified', level: 'free' }));
   await page.route('**/api/ingestion/tasks/task-cross-ro', (route) => json(route, {
     batchId: 'batch-cross', researchObjectId: taskRo, version: 1,
@@ -1094,10 +1387,13 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
   });
 
   await page.goto(`${baseUrl}/research-objects/${routeRo}/hermes?task=task-cross-ro`, { waitUntil: 'networkidle' });
+  await expect(page.locator('main [data-literature-state]')).toHaveAttribute('data-literature-state', 'running');
+  await expect(page.getByRole('alert').filter({ hasText: 'This task does not belong to the current research object.' })).toBeVisible();
   const recoveryBaseline = recoveryGets;
   await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
-  await page.getByLabel('What would you like to advance today?').fill('download paper 10.1038/nature12373');
-  await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+  await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('download paper 10.1038/nature12373');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => submittedTarget).toEqual({ kind: 'research_object', researchObjectId: routeRo });
   expect(recoveryGets).toBe(recoveryBaseline);
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).not.toContainText('unrelated-route-b');

@@ -1,5 +1,5 @@
 import type { WorkspaceDeps } from '../workspace/types';
-import { evaluateArticleProcessingCapability, journalSourceMaterials } from '../journal/enhancements';
+import { journalReleaseExpired } from '../journal/release-authorization';
 
 type PublicAccessDeps = Pick<WorkspaceDeps, 'prisma' | 'now'>;
 
@@ -14,7 +14,7 @@ function releaseScope(snapshot: unknown): 'abstract' | 'fulltext' | null {
 }
 
 /**
- * Public journal releases remain governed by the article's current source matrix.
+ * A journal release uses its reviewed, frozen authorization and publication state.
  * Ordinary Research Objects have no JournalArticle row and retain the existing
  * visibility/status behavior. The journal delegate is required so a stale schema
  * client cannot silently fail open on protected journal content.
@@ -27,37 +27,25 @@ export async function canReadCurrentPublicResearch(
     where: { researchObjectId: input.researchObjectId },
     select: {
       id: true,
-      source: true,
-      rights: true,
       contentState: true,
+      source: true,
       releases: {
         ...(input.versionId ? { where: { versionId: input.versionId } } : {}),
-        select: { versionId: true, snapshot: true },
+        select: { versionId: true, snapshot: true, version: { select: { status: true, researchObject: { select: { visibility: true, deletedAt: true } } } } },
       },
     },
   });
   if (!article) return true;
   if (!article.releases.length) return false;
 
-  const capability = evaluateArticleProcessingCapability(article, deps.now?.() ?? new Date());
-  const releaseAllowed = article.releases.every((release) => {
+  const now = deps.now?.() ?? new Date();
+  const eligible = article.releases.filter((release) => {
+    if (journalReleaseExpired(release.snapshot, article.source, now)) return false;
+    if (article.contentState !== 'active' || release.version.status !== 'published'
+      || release.version.researchObject.visibility !== 'public' || release.version.researchObject.deletedAt) return false;
     const scope = releaseScope(release.snapshot);
-    return scope === 'abstract'
-      ? capability.canPublishPublicSummary
-      : scope === 'fulltext'
-        ? capability.canPublishFullInterpretation
-        : false;
+    return scope === 'abstract' || scope === 'fulltext';
   });
-  if (!releaseAllowed || input.exposure !== 'source') return releaseAllowed;
-
-  const rights = article.rights && typeof article.rights === 'object' && !Array.isArray(article.rights)
-    ? article.rights as { publicSource?: unknown }
-    : {};
-  if (capability.mode === 'legacy') {
-    return capability.canExposeViaApi && rights.publicSource === true;
-  }
-  const active = journalSourceMaterials(article.source).find((item) => item.id === capability.activeSourceId);
-  return capability.canPublishFullInterpretation
-    && active?.rightsStatus === 'full_public_processing_allowed'
-    && active.permissions.publicSource;
+  if (input.exposure !== 'source') return eligible.length > 0;
+  return eligible.some((release) => typeof (release.snapshot as { source?: { text?: unknown } }).source?.text === 'string');
 }

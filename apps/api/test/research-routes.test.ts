@@ -113,7 +113,10 @@ describe('anonymous public research contract', () => {
         rightsStatus: 'full_public_processing_allowed', sourceConfidence: 'verified', permissions,
         evidence: { statement: 'Synthetic authorization.', license: 'CC-BY-4.0', expiresAt: '2000-01-01T00:00:00.000Z' },
       }] },
-      releases: [{ versionId: 'version-1', snapshot: { draft: { scope: 'fulltext' } } }],
+      releases: [{ versionId: 'version-1', snapshot: { draft: { scope: 'fulltext' },
+        // Historical publications predate frozen authorization metadata.
+        source: { textSha256: createHash('sha256').update(text).digest('hex') } },
+      version: { status: 'published', researchObject: { visibility: 'public', deletedAt: null } } }],
     });
     const storage = { headObject: vi.fn(), getObject: vi.fn() };
     const app = Fastify();

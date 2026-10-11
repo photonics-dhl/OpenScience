@@ -4,10 +4,14 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { AgentError } from './errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { lockTrashReferences } from '../trash/trash';
-import { parsePresentationGenerationPayload, requirePresentationWriteScope } from '../assets/presentation-asset';
+import { parsePresentationGenerationPayload, requirePresentationWriteScope, requireStoryboardBase } from '../assets/presentation-asset';
 import { requireHermesPresentationTaskAuthority } from './research-run';
 import { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, readVisualNarrativeSource } from '../assets/illustration-source';
 import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, type HermesAgentSourceReviewExecution } from '../ingestion/source-review-recovery';
+import { journalSourceProcessingAllowed } from '../journal/enhancements';
+import { journalDigest } from '../journal/content';
+import { readNativeImageAgentExecution, readNativeImageReviewCheckpoint } from '../assets/native-image-review';
+import { readStoredGeneratedImageReview, requireSceneImageParent, type ImageReviewIdentity } from '../assets/scene-image';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -18,19 +22,29 @@ export function nativeAgentRuntimeFromEnv(env: Record<string, string | undefined
     model: env.HERMES_NATIVE_AGENT_MODEL ?? 'MiniMax-M3' };
   initialNativeAgentExecution(runtime); return runtime;
 }
-export interface NativeAgentCheckpointReference {
+export interface NativeAgentPaperCheckpointReference {
+  sourceKind?: never; imageIdentity?: never;
   taskId: string; objectKey: string; serializedSha256: string; size: number;
   artifactId: string; documentSha256: string; sourceMapHash: string;
   executionAttempt: number; turnCount: number; state: 'started' | 'completed';
   target: { provider: string; model: string; promptHash: string };
   responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
 }
+export interface NativeAgentImageCheckpointReference {
+  taskId: string; objectKey: string; serializedSha256: string; size: number;
+  sourceKind: 'illustration-image'; imageIdentity: ImageReviewIdentity;
+  artifactId?: never; documentSha256?: never; sourceMapHash?: never;
+  executionAttempt: number; turnCount: number; state: 'started' | 'completed';
+  target: { provider: string; model: string; promptHash: string };
+  responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
+}
+export type NativeAgentCheckpointReference = NativeAgentPaperCheckpointReference | NativeAgentImageCheckpointReference;
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
-  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor'; checkpoint?: NativeAgentCheckpointReference;
+  kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor' | 'image-review'; checkpoint?: NativeAgentCheckpointReference;
 }
 /** Paper authors may need a bounded continuation to finish source reading and the saved review in one lease. */
-export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 32 | 48 {
-  return profile === 'paper-author' ? 48 : 32;
+export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 4 | 32 | 48 {
+  return profile === 'image-review' ? 4 : profile === 'paper-author' ? 48 : 32;
 }
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
@@ -43,6 +57,42 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   await lockTrashReferences(tx);
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   const marker = readNativeAgentExecution(task?.result);
+  if (marker?.profile === 'image-review') {
+    if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'running'
+      || task.executionAttempt !== input.executionAttempt || task.session.deletedAt || task.session.status !== 'active') blocked();
+    const planned = parsePresentationGenerationPayload(task.payload);
+    const checkpoint = readNativeImageReviewCheckpoint(task.result);
+    const cp = marker.checkpoint;
+    if (planned.kind !== 'image' || !planned.sceneImage || planned.researchObjectId !== task.session.researchObjectId
+      || checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed' || !cp || cp.state !== 'completed'
+      || cp.finishReason !== 'stop' || cp.hasToolCalls) blocked();
+    await requirePresentationWriteScope(tx, { userId: task.session.userId, researchObjectId: planned.researchObjectId, versionId: planned.versionId });
+    if (planned.hermesRunAuthority) await requireHermesPresentationTaskAuthority(tx, {
+      taskId: task.id, actorId: task.session.userId, payload: planned, authority: planned.hermesRunAuthority });
+    const ro = await tx.researchObject.findUnique({ where: { id: planned.researchObjectId } });
+    if (!ro || ro.deletedAt) blocked();
+    const { workspace } = await requireActiveMembership(tx, ro.workspaceId, task.session.userId);
+    const parent = await requireSceneImageParent(tx, planned);
+    const claims = await tx.claimNode.findMany({ where: { id: { in: planned.sourceClaimIds }, researchObjectId: ro.id, versionId: planned.versionId } });
+    if (!parent || claims.length !== planned.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')) blocked();
+    const lineage = planned.hermesRunAuthority ? new Map(claims.map(claim => {
+      const origin = record(claim.provenance) ? claim.provenance : {};
+      return [claim.id, origin.sourceTaskLineage ?? origin.sourceTaskId];
+    })) : undefined;
+    const evidence = await readReviewedPresentationEvidence(tx, planned, lineage);
+    const image = await tx.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: { select: { claimId: true } } } });
+    const provenance = record(image?.provenance) ? image.provenance : {};
+    const identity = { requestId: task.id, contentHash: checkpoint.contentHash,
+      sourceEvidenceIdentity: presentationEvidenceIdentity(evidence), parentIdentity: parent.identity };
+    if (!image || image.deletedAt || image.status !== 'draft' || image.kind !== 'image' || !image.objectKey
+      || image.researchObjectId !== ro.id || image.versionId !== planned.versionId || image.contentHash !== identity.contentHash
+      || provenance.source !== 'approved_storyboard_scene' || provenance.subtype !== 'storyboard_scene_image' || provenance.taskId !== task.id
+      || provenance.sourceEvidenceIdentity !== identity.sourceEvidenceIdentity || provenance.parentIdentity !== identity.parentIdentity
+      || !isDeepStrictEqual(provenance.sceneImage, planned.sceneImage)
+      || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), planned.sourceClaimIds)
+      || !readStoredGeneratedImageReview(provenance.imageReview, identity, task.result)) blocked();
+    return { task, marker, artifact: null, researchObject: ro, workspace, sourceReview: undefined, sourceCorrection: undefined };
+  }
   const sourceCorrection = await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: input.taskId, executionAttempt: input.executionAttempt });
   const payload = task?.payload;
   let sourceReview: HermesAgentSourceReviewExecution | undefined;
@@ -85,6 +135,17 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
   const source = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id }, include: { batch: true } });
   if (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || artifact.workspaceId !== workspace.id
     || !source || source.artifactId !== artifact.id || source.batch.userId !== task.session.userId || source.batch.researchObjectId !== ro.id) blocked();
+  const journalArticle = await tx.journalArticle.findUnique({ where: { workingResearchObjectId: ro.id }, include: { journal: true } });
+  if (journalArticle) {
+    const binding = await tx.journalSharedBinding.findUnique({ where: { articleId: journalArticle.id } });
+    if (journalArticle.journal.operationalState !== 'active' || journalArticle.journal.workspaceId !== workspace.id
+      || !['owner', 'maintainer', 'author'].includes(membership.role)
+      || binding?.actorId !== task.session.userId || binding.ingestionTaskId !== source.id
+      || binding.sourceArtifactId !== artifact.id || binding.sourceBlobSha256 !== artifact.blobSha256
+      || binding.sourceRevision !== journalArticle.revision || binding.sourceDigest !== journalDigest(journalArticle.source)
+      || (journalArticle.source as { artifactId?: string }).artifactId !== artifact.id
+      || !journalSourceProcessingAllowed(journalArticle, true)) blocked();
+  }
   if (marker.checkpoint && (!record(task.result) || task.result.sourceMapRef === undefined)) blocked();
   if (record(task.result) && task.result.sourceMapRef !== undefined) {
     const reference = parseDocumentSourceMapReference(task.result.sourceMapRef);
@@ -107,13 +168,14 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
 export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding'): { nativeAgentExecution: NativeAgentExecution } | undefined {
   if (!runtime) return undefined;
   const result = { nativeAgentExecution: { ...runtime, kind: 'hermes-agent' as const, profile } };
-  readNativeAgentExecution(result); return result;
+  readNativeAgentExecution(profile === 'image-review' ? { ...result, nativeImageReview: { mode: 'model-native', state: 'not_started' } } : result); return result;
 }
 
 /** Missing means historical execution. A malformed marker cannot reopen the legacy route. */
 export function readNativeAgentExecution(result: unknown): NativeAgentExecution | undefined {
   if (!record(result) || !Object.hasOwn(result, 'nativeAgentExecution')) return undefined;
   const marker = result.nativeAgentExecution;
+  if (record(marker) && marker.profile === 'image-review') return readNativeImageAgentExecution(result);
   if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
     || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration', 'journal-editor'].includes(String(marker.profile))
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
@@ -142,7 +204,7 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
-  if (!task || task.deletedAt || !marker || task.kind !== (marker.profile === 'paper-illustration' ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
+  if (!task || task.deletedAt || !marker || task.kind !== (['paper-illustration', 'image-review'].includes(marker.profile) ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
     || !isDeepStrictEqual(marker.checkpoint, input.expected)) blocked();
   const priorObjects = record(task.result) && Array.isArray(task.result.nativeAgentObjects) ? task.result.nativeAgentObjects : [];
   const oldObject = marker.checkpoint?.objectKey;
@@ -156,14 +218,23 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
     if (!old || old.state !== 'started' || input.next.state !== 'completed' || old.executionAttempt !== input.executionAttempt
       || ['taskId', 'artifactId', 'documentSha256', 'sourceMapHash', 'executionAttempt', 'turnCount'].some(k =>
         old[k as keyof NativeAgentCheckpointReference] !== input.next[k as keyof NativeAgentCheckpointReference])
+      || (marker.profile === 'image-review' && !isDeepStrictEqual((old as NativeAgentImageCheckpointReference).imageIdentity,
+        (input.next as NativeAgentImageCheckpointReference).imageIdentity))
       || !isDeepStrictEqual(old.target, input.next.target)) blocked();
   } else {
     if (task.status !== 'running' || task.executionAttempt !== input.executionAttempt || input.next.executionAttempt !== input.executionAttempt
       || input.next.state !== 'started' || input.next.turnCount !== (old?.turnCount ?? 0) + 1 || old?.state === 'started') blocked();
-    const source = parseDocumentSourceMapReference((task.result as Record<string, unknown>).sourceMapRef);
-    if (source.parserStatus !== 'succeeded' || source.artifactId !== input.next.artifactId || source.contentHash !== input.next.documentSha256
-      || source.serializedSha256 !== input.next.sourceMapHash || (old && ['artifactId', 'documentSha256', 'sourceMapHash'].some(k =>
-        old[k as keyof NativeAgentCheckpointReference] !== input.next[k as keyof NativeAgentCheckpointReference]))) blocked();
+    if (marker.profile === 'image-review') {
+      const envelope = readNativeImageReviewCheckpoint(task.result);
+      if (envelope?.mode !== 'agent-native' || envelope.state !== 'prepared' || envelope.executionAttempt !== input.executionAttempt
+        || Date.now() >= envelope.deadlineAt || input.next.target.provider !== envelope.provider || input.next.target.model !== envelope.model)
+        blocked();
+    } else {
+      const source = parseDocumentSourceMapReference((task.result as Record<string, unknown>).sourceMapRef);
+      if (source.parserStatus !== 'succeeded' || source.artifactId !== input.next.artifactId || source.contentHash !== input.next.documentSha256
+        || source.serializedSha256 !== input.next.sourceMapHash || (old && ['artifactId', 'documentSha256', 'sourceMapHash'].some(k =>
+          old[k as keyof NativeAgentCheckpointReference] !== input.next[k as keyof NativeAgentCheckpointReference]))) blocked();
+    }
   }
   const changed = await tx.agentTask.updateMany({ where: { id: task.id, kind: task.kind, status: task.status,
     deletedAt: null, executionAttempt: task.executionAttempt, result: { equals: task.result as Prisma.InputJsonValue } },
@@ -179,7 +250,10 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
   const payload = parsePresentationGenerationPayload(task.payload);
   const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
   const ro = await tx.researchObject.findUnique({ where: { id: payload.researchObjectId } });
-  if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload) || context.baseIdentity !== null) blocked();
+  if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload)) blocked();
+  const base = payload.storyboard?.output === 'video' && payload.storyboard.narrative === true
+    ? await requireStoryboardBase(tx, payload) : undefined;
+  if (context.baseIdentity !== (base?.identity ?? null)) blocked();
   const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
     researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
   const lineage = payload.hermesRunAuthority ? new Map(claims.map(claim => {
@@ -200,6 +274,12 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
   if (!marker) { if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution')) blocked(); return incoming; }
   if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution') && !isDeepStrictEqual(incoming.nativeAgentExecution, marker)) blocked();
   const privatePlan: Record<string, unknown> = {};
+  if (marker.profile === 'image-review') {
+    const checkpoint = readNativeImageReviewCheckpoint(task.result);
+    if (status === 'succeeded' && (checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed')) blocked();
+    return { ...(record(incoming) ? incoming : {}), nativeAgentExecution: marker,
+      ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
+  }
   if (marker.profile === 'paper-illustration') {
     const stored = record(task.result) ? task.result : {};
     for (const key of ['nativeIllustrationContext', 'storyboardCheckpoint', 'storyboardReview', 'nativeIllustration', 'illustrationPrompts']) {
@@ -237,10 +317,11 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
     ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
 }
 
-/** Only fresh single-paper narrative planning is supported; existing revisions retain their original engine. */
+/** New native video revisions retain their explicit base; historical image revisions keep their engine. */
 export function supportsNativeIllustration(payload: unknown): boolean {
   if (!record(payload) || payload.kind !== 'interactive_html' || !record(payload.storyboard)) return false;
   const settings = payload.storyboard;
-  return settings.output === 'image' && settings.narrative === true
-    && !['baseAssetId', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined);
+  return (settings.output === 'image' || settings.output === 'video') && settings.narrative === true
+    && !['revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex'].some(key => settings[key] !== undefined)
+    && (settings.output === 'video' || (settings.baseAssetId === undefined && settings.revisionSceneIndex === undefined));
 }

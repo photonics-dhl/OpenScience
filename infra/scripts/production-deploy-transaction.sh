@@ -4,17 +4,19 @@
 
 set -eEuo pipefail
 
-[ "$#" -ge 3 ] && [ "$#" -le 5 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
+[ "$#" -ge 3 ] && [ "$#" -le 6 ] || { echo "错误：生产事务 runner 参数不完整" >&2; exit 64; }
 RELEASE_SHA="$1"
 ROLLBACK_SHA="$2"
 SKIP_MIGRATE="$3"
 NO_TESTS="${4:-0}"
 REUSE_UNCHANGED_CAPABILITY_IMAGES="${5:-0}"
+REFRESH_NATIVE_RESOURCES="${6:-0}"
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]] \
   || { echo "错误：生产事务 SHA 非法" >&2; exit 64; }
 [[ "$SKIP_MIGRATE" =~ ^[01]$ ]] || { echo "错误：skip-migrate 标志非法" >&2; exit 64; }
 [[ "$NO_TESTS" =~ ^[01]$ ]] || { echo "错误：no-tests 标志非法" >&2; exit 64; }
 [[ "$REUSE_UNCHANGED_CAPABILITY_IMAGES" =~ ^[01]$ ]] || { echo "错误：能力镜像复用标志非法" >&2; exit 64; }
+[[ "$REFRESH_NATIVE_RESOURCES" =~ ^[01]$ ]] || { echo "错误：Native 资源刷新标志非法" >&2; exit 64; }
 
 REMOTE_ROOT="/opt/openscience"
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
@@ -85,8 +87,13 @@ require_match() {
 }
 
 journal_start() {
+  local native_args=() native_state
+  if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+    native_state="$(transaction_native_command native-capture)" || return
+    native_args=(--native-state "$native_state")
+  fi
   node "$SCRIPT_DIR/production-deploy-lock.mjs" journal-start --journal "$DEPLOY_JOURNAL" \
-    --candidate "$RELEASE_SHA" --rollback "$ROLLBACK_SHA" --phase prepared --lock-fd 9
+    --candidate "$RELEASE_SHA" --rollback "$ROLLBACK_SHA" --phase prepared --lock-fd 9 "${native_args[@]}"
 }
 
 journal_update() {
@@ -297,6 +304,10 @@ transaction_verify_already_active_release_without_tests() {
   fi
 }
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
+  if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+    echo "错误：Native 资源刷新必须使用新的 immutable candidate；same-SHA 不重装或冒称已刷新" >&2
+    exit 66
+  fi
   same_sha_verification_failed() {
     local original_status=$?
     trap - ERR
@@ -521,6 +532,25 @@ verify_running_release_images() {
 }
 
 transaction_assert_lock() { assert_production_deploy_lock; }
+transaction_native_command() {
+  local command="$1"; shift
+  node "$SCRIPT_DIR/production-deploy-lock.mjs" "$command" \
+    --candidate "$RELEASE_SHA" --rollback "$ROLLBACK_SHA" --lock-fd 9 "$@"
+}
+transaction_pause_native_producers() { transaction_native_command native-pause-original; }
+transaction_install_native_resources() { transaction_native_command native-install; }
+transaction_start_native_application() {
+  local target="$1" root sha compose runtime
+  case "$target" in
+    candidate) root="$RELEASE_ROOT"; sha="$RELEASE_SHA"; compose="$COMPOSE_FILE"; runtime="" ;;
+    original) root="$PREVIOUS_RELEASE_ROOT"; sha="$PREVIOUS_RELEASE_SHA"; compose="$ROLLBACK_COMPOSE_FILE"; runtime="$PREVIOUS_RUNTIME_ENV" ;;
+    *) return 64 ;;
+  esac
+  run_remote "cd '$root' && env $runtime XGS_RELEASE_ROOT='$root' XGS_RELEASE_IMAGE_TAG='$sha' docker compose --project-directory '$root' --env-file '$PROD_ENV' -f '$compose' up --no-start --no-deps --force-recreate --no-build --pull never api web agent-worker" || return
+  transaction_native_command native-verify-stopped --target "$target" || return
+  if [ "$target" = candidate ]; then transaction_native_command native-before-start || return; fi
+  transaction_native_command native-start-application --target "$target"
+}
 transaction_journal_start() { journal_start; }
 transaction_journal_update() { journal_update "$1"; }
 transaction_journal_clear() { journal_clear; }
@@ -572,8 +602,7 @@ transaction_publish_capability_and_cas() {
   CANDIDATE_CAPABILITY_STAGING_CREATED=0
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' cas-active --marker '$REMOTE_ROOT/.release-id' --expected '$ROLLBACK_SHA' --next '$RELEASE_SHA' --lock-fd 9"
 }
-transaction_perform_application_rollback() {
-  local rollback_ok=1 rollback_active
+transaction_preflight_application_rollback() {
   # Pre-lifecycle readers expose live private drafts of public ROs. Checking only
   # version numbers or whether trash is empty cannot make that rollback safe.
   if [ -d "$RELEASE_ROOT/infra/migrations/20260913010000_publication_identity" ] \
@@ -581,19 +610,36 @@ transaction_perform_application_rollback() {
     echo "ROLLBACK_FAILED_READER_INCOMPATIBLE: preserve the candidate and migration journal; repair forward with a lifecycle-compatible release" >&2
     return 70
   fi
-  rollback_active="$(run_remote "cat '$REMOTE_ROOT/.release-id' 2>/dev/null || true")"
-  case "$rollback_active" in
+  ROLLBACK_ACTIVE_SHA="$(run_remote "cat '$REMOTE_ROOT/.release-id' 2>/dev/null || true")"
+  case "$ROLLBACK_ACTIVE_SHA" in
     "$PREVIOUS_RELEASE_SHA"|"$RELEASE_SHA") ;;
     *)
       echo "ROLLBACK_FAILED_STALE_ACTIVE: active release is outside the locked deploy transition" >&2
       return 70
       ;;
   esac
-  log "[回滚] 恢复 application release=$PREVIOUS_RELEASE_SHA"
-  run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'" || rollback_ok=0
-  if [ "$rollback_ok" -eq 1 ]; then
-    run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null" || rollback_ok=0
+  run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'" || return 71
+  run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null" || return 71
+}
+
+transaction_perform_application_rollback() {
+  local rollback_ok=1 rollback_active preflight_status=0
+  transaction_preflight_application_rollback || preflight_status=$?
+  if [ "$preflight_status" -ne 0 ]; then
+    if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+      transaction_native_command native-hold-producers || true
+    elif [ "$preflight_status" -eq 71 ]; then
+      run_remote "set -e; rm -f $REMOTE_ROOT/.release-id; printf 'candidate=%s\nprevious=%s\ncompose_mode=%s\nfailed_at=%s\n' '$RELEASE_SHA' '$PREVIOUS_RELEASE_SHA' '$ROLLBACK_COMPOSE_MODE' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > $REMOTE_ROOT/.release-failed.next; mv $REMOTE_ROOT/.release-failed.next $REMOTE_ROOT/.release-failed" || \
+        echo "ROLLBACK_FAILED_IDENTITY_UNSAFE: unable to guarantee removal of release identity" >&2
+      echo "ROLLBACK_FAILED: release identity withdrawn; inspect $REMOTE_ROOT/.release-failed" >&2
+    fi
+    return 70
   fi
+  rollback_active="$ROLLBACK_ACTIVE_SHA"
+  if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+    transaction_native_command native-prepare-rollback || return 70
+  fi
+  log "[回滚] 恢复 application release=$PREVIOUS_RELEASE_SHA"
   if [ "$rollback_ok" -eq 1 ]; then
     if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then compose_embedding_current "stop embedding-worker" || true; fi
     if [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
@@ -607,7 +653,12 @@ transaction_perform_application_rollback() {
     transaction_restore_scansci_rollback "$PREVIOUS_HAS_SCANSCI" "$PREVIOUS_RELEASE_SHA" "$RELEASE_SHA" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
-    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
+    if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+      run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser" || return 70
+      transaction_start_native_application original || return 70
+    else
+      run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
+    fi
   fi
   if [ "$rollback_ok" -eq 1 ]; then
     run_remote "install -m 0644 $PREVIOUS_RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF && nginx -t && systemctl reload nginx" || rollback_ok=0
@@ -637,13 +688,21 @@ transaction_install_traps
 
 verify_candidate_switch_contract post-build
 transaction_begin
+REQUIRE_RUNNING_WORKER=1
+if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+  REQUIRE_RUNNING_WORKER="$(transaction_native_command native-original-running --service agent-worker)"
+fi
 
 if [ "$SKIP_MIGRATE" -ne 1 ]; then
   transaction_mark_phase migrating
   # A publication writer from the previous release must not run after ordinal backfill.
   # Build has completed and the durable rollback trap is installed before quiescing.
   log "[3] 暂停旧 API/Web/Worker 写入，迁移后由候选版本一并恢复..."
-  compose_current "stop --timeout 600 api web agent-worker"
+  if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+    transaction_quiesce_native_refresh
+  else
+    compose_current "stop --timeout 600 api web agent-worker"
+  fi
   run_remote "grep -q '^SEARCH_DATABASE_URL=.' $PROD_ENV" || {
     echo "错误：生产环境缺少 SEARCH_DATABASE_URL，拒绝把搜索索引写入核心数据库" >&2
     exit 66
@@ -669,10 +728,13 @@ if [ "$SKIP_MIGRATE" -ne 1 ]; then
   # recovery. Persist switching under deferred signals without an intermediate
   # prepared state that could clear the journal and leave services stopped.
   transaction_mark_phase switching
+elif [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+  transaction_quiesce_native_refresh
 fi
 
 verify_candidate_switch_contract pre-switch
 transaction_mark_phase switching
+if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then transaction_install_native_resources; fi
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
   log "[5] 初始化并验证 BGE-M3 模型卷身份..."
   compose_embedding_current "up -d --force-recreate --wait --wait-timeout 900 embedding-worker"
@@ -705,6 +767,9 @@ fi
 
 log "[5d] 切换 API/Web/Worker 并等待 healthy..."
 verify_candidate_switch_contract pre-worker-switch
+if [ "$REFRESH_NATIVE_RESOURCES" -eq 1 ]; then
+  transaction_start_native_application candidate
+else
 compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker" || {
   # Preserve the failing process log before rollback replaces its container.
   startup_log=$(umask 077; mktemp "$REMOTE_ROOT/.worker-startup-$RELEASE_SHA.XXXXXX.log")
@@ -712,11 +777,12 @@ compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-
   log "Worker startup log retained privately: $startup_log"
   false
 }
-verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"
+fi
+if [ "$REQUIRE_RUNNING_WORKER" -eq 1 ]; then verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"; fi
 verify_running_container_image document-parser "$FINAL_PARSER_IMAGE_ID"
-wait_for_healthy api web agent-worker
+if [ "$REFRESH_NATIVE_RESOURCES" -eq 0 ]; then wait_for_healthy api web agent-worker; fi
 if [ "$NO_TESTS" -eq 0 ]; then
-  verify_scansci_mcp_candidate 1 0
+  verify_scansci_mcp_candidate "$REQUIRE_RUNNING_WORKER" 0
 else
   log "UNVERIFIED_ACCEPTANCE: 跳过 ScanSci MCP/Worker capability probe"
 fi
@@ -729,13 +795,13 @@ if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
     log "UNVERIFIED_ACCEPTANCE: 跳过切换后 embedding health/vector runtime probe"
   fi
 fi
-verify_running_release_images
+if [ "$REQUIRE_RUNNING_WORKER" -eq 1 ]; then verify_running_release_images; fi
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
 transaction_publish_candidate
 if [ "$NO_TESTS" -eq 0 ]; then
-  verify_scansci_current 1 0
+  verify_scansci_current "$REQUIRE_RUNNING_WORKER" 0
 else
   log "UNVERIFIED_ACCEPTANCE: 跳过发布后 ScanSci MCP/Worker capability probe"
 fi

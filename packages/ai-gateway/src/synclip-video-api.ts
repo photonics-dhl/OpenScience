@@ -22,6 +22,7 @@ export interface SynclipVideoTask {
   output?: { type: 'video'; url: string; watermarked?: boolean }; url_expires_at?: string;
 }
 type ErrorCode = 'SYNCLIP_VIDEO_CONFIG_INVALID' | 'SYNCLIP_VIDEO_REQUEST_INVALID' | 'SYNCLIP_VIDEO_TASK_ID_INVALID'
+  | 'SYNCLIP_VIDEO_ADMIN_ACCESS_REQUIRED'
   | 'SYNCLIP_VIDEO_RESPONSE_INVALID' | 'SYNCLIP_VIDEO_RESPONSE_TOO_LARGE' | 'SYNCLIP_VIDEO_HTTP_FAILED'
   | 'SYNCLIP_VIDEO_TIMEOUT' | 'SYNCLIP_VIDEO_NETWORK_FAILED';
 export class SynclipVideoError extends Error {
@@ -41,15 +42,9 @@ export function validateSynclipVideoTaskId(v: unknown): string {
   return v;
 }
 function frameUrl(v: unknown): string {
-  if (typeof v !== 'string' || v.length > 16 * 1024 * 1024) throw new Error();
-  if (v.startsWith('data:image/png;base64,')) {
-    const encoded = v.slice('data:image/png;base64,'.length);
-    if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(encoded) || Buffer.byteLength(encoded, 'base64') > 10 * 1024 * 1024) throw new Error();
-    return v;
-  }
-  const u = new URL(v);
-  if (u.protocol !== 'https:' || u.port || u.username || u.password || u.hash || isIP(u.hostname.replace(/^\[|\]$/gu, ''))) throw new Error();
-  return v;
+  // /dev/docs/video and /dev/docs/video-admin require externally accessible URLs.
+  // Base64 support from a different provider is not evidence for this interface.
+  return publicUrl(v);
 }
 export function validateSynclipVideoRequest(v: unknown): SynclipVideoRequest {
   try {
@@ -87,13 +82,15 @@ async function boundedJson(response: Response): Promise<unknown> {
   try { for (;;) { const item = await reader.read(); if (item.done) break; size += item.value.byteLength; if (size > SYNCLIP_VIDEO_MAX_RESPONSE_BYTES) throw new SynclipVideoError('SYNCLIP_VIDEO_RESPONSE_TOO_LARGE'); chunks.push(item.value); } return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); }
   finally { reader.releaseLock(); }
 }
-export interface SynclipVideoClientConfig { apiKey: string; timeoutMs?: number; fetch?: typeof fetch; }
+export interface SynclipVideoClientConfig { apiKey: string; timeoutMs?: number; fetch?: typeof fetch; adminModelsEnabled?: boolean; }
 export class SynclipVideoClient {
-  readonly #apiKey: string; readonly #fetch: typeof fetch; readonly #timeoutMs: number;
+  readonly #apiKey: string; readonly #fetch: typeof fetch; readonly #timeoutMs: number; readonly #adminModelsEnabled: boolean;
   constructor(config: SynclipVideoClientConfig) {
     if (typeof config?.apiKey !== 'string' || !/^[\x21-\x7e]{1,4096}$/u.test(config.apiKey)
+      || (config.adminModelsEnabled !== undefined && typeof config.adminModelsEnabled !== 'boolean')
       || (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 30000))) throw new SynclipVideoError('SYNCLIP_VIDEO_CONFIG_INVALID', 'invalid');
     this.#apiKey = config.apiKey; this.#fetch = config.fetch ?? globalThis.fetch; this.#timeoutMs = config.timeoutMs ?? 15000;
+    this.#adminModelsEnabled = config.adminModelsEnabled === true;
   }
   async #request(method: 'POST' | 'GET', path: string, body?: string): Promise<Record<string, unknown>> {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
@@ -110,7 +107,19 @@ export class SynclipVideoClient {
     catch (error) { controller.abort(); if (error instanceof SynclipVideoError) throw error; throw new SynclipVideoError('SYNCLIP_VIDEO_NETWORK_FAILED'); }
     finally { if (timer !== undefined) clearTimeout(timer); }
   }
-  async create(input: SynclipVideoRequest): Promise<{ task_id: string }> { const data = await this.#request('POST', '/video', JSON.stringify(validateSynclipVideoRequest(input))); return { task_id: validateSynclipVideoTaskId(data.task_id) }; }
+  async create(input: SynclipVideoRequest): Promise<{ task_id: string }> {
+    const request = validateSynclipVideoRequest(input);
+    if (!this.#adminModelsEnabled) throw new SynclipVideoError('SYNCLIP_VIDEO_ADMIN_ACCESS_REQUIRED', 'invalid');
+    // Preserve the internal duration/target-resolution shape used by existing jobs.
+    // LTX accepts duration_seconds; resolution is a Seedance-only API field and
+    // cannot be represented as a guaranteed LTX output resolution.
+    const data = await this.#request('POST', '/video-admin', JSON.stringify({
+      prompt: request.prompt, model: request.model, duration_seconds: request.duration, orientation: 'landscape',
+      ...(request.first_frame_url === undefined ? {} : { first_frame_url: request.first_frame_url }),
+      ...(request.last_frame_url === undefined ? {} : { last_frame_url: request.last_frame_url }),
+    }));
+    return { task_id: validateSynclipVideoTaskId(data.task_id) };
+  }
   async query(taskId: string): Promise<SynclipVideoTask> { const id = validateSynclipVideoTaskId(taskId); return validateSynclipVideoTask(await this.#request('GET', '/tasks/' + id), id); }
 }
 export type SynclipVideoDownloadRequestOptions = RequestOptions & Pick<TcpSocketConnectOpts, 'autoSelectFamily'>;

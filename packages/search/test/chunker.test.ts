@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import {
   resolveSourceLocator,
+  parseDocumentSourceMap,
   type DocumentBlock,
   type DocumentSourceMap,
 } from '@openscience/domain';
@@ -43,6 +46,104 @@ function sourceMap(): DocumentSourceMap {
 }
 
 describe('locator-safe semantic chunking', () => {
+  it('keeps the real page14 chunk unchanged while preparing bounded table embedding windows', async () => {
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, 'fixtures/long-docling-table.json'), 'utf8'));
+    const map = parseDocumentSourceMap(fixture.sourceMap), table = map.pages[0]!.blocks[0]!;
+    const text = table.text!;
+    expect(text.length).toBe(3051);
+    expect(tokenizeSearchText(text).length).toBe(607);
+    const input = { sourceMap: map, claimIdsByBlockId: { [table.id]: ['claim-a'] } };
+    // This reproduces the HTTP token-limit boundary, not an executed BGE count.
+    const counter = vi.fn(async (texts: string[]) => texts[0] === text ? undefined : [1024]);
+    const result = await chunkDocumentForEmbedding(input, counter);
+    expect(result.embeddingAvailable).toBe(true);
+    expect(result.chunks).toEqual(chunkDocument(input));
+    const windows = result.embeddingWindows![0]!;
+    expect(windows.length).toBeGreaterThan(1);
+    expect(windows.join('')).toBe(text);
+    for (const window of windows) {
+      expect(counter).toHaveBeenCalledWith([window]);
+      for (const row of new Set(window.match(/\[row \d+,/gu))) {
+        const pattern = new RegExp(row!.replace('[', '\\['), 'gu');
+        expect(window.match(pattern)).toHaveLength(text.match(pattern)!.length);
+      }
+    }
+    expect(result.chunks[0]!.locators[0]!.charRange).toBeUndefined();
+    resolveSourceLocator(map, result.chunks[0]!.locators[0]!);
+  });
+  it('keeps a merged-row connected group intact and covers each cell once', async () => {
+    const text = '[rows 1–3, column 1] shared condition\n[row 1, column 2] first\n[row 2, column 2] second\n[row 3, column 2] third\n[row 4, column 1] independent\n[row 4, column 2] fourth';
+    const map = sourceMap(); map.pages[0]!.blocks = [block('table', 'table', text, 10)];
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, async texts => texts[0] === text ? undefined : [1024]);
+    expect(result.embeddingAvailable).toBe(true);
+    expect(result.embeddingWindows![0]).toEqual([text.slice(0, text.indexOf('[row 4,')), text.slice(text.indexOf('[row 4,'))]);
+    expect(result.chunks).toEqual(chunkDocument({ sourceMap: map }));
+  });
+  it('keeps the established lexical result when only a new window tokenizer call fails', async () => {
+    const text = '[row 1, column 1] first\n[row 2, column 1] second';
+    const map = sourceMap(); map.pages[0]!.blocks = [block('table', 'table', text, 10)];
+    const counter = async (texts: string[]) => {
+      if (texts[0] === text) return undefined;
+      throw new Error('embedding_transport_unavailable');
+    };
+    await expect(chunkDocumentForEmbedding({ sourceMap: map }, counter)).resolves.toEqual({
+      chunks: chunkDocument({ sourceMap: map }), embeddingAvailable: false,
+    });
+  });
+  it('does not let temporary table views change later paragraph partitions or chunk identities', async () => {
+    const text = Array.from({ length: 96 }, (_, i) => `[row ${i + 1}, column 1] symbol\n[row ${i + 1}, column 2] definition`).join('\n');
+    const map = sourceMap();
+    map.pages[0]!.blocks = [block('table', 'table', text, 10), block('later', 'paragraph', 'ordinary '.repeat(256), 40)];
+    const count = (value: string) => {
+      if (value.includes('[row')) return undefined;
+      const size = tokenizeSearchText(value).length;
+      return size <= 32 ? [size] : undefined;
+    };
+    const baseline = await chunkDocumentForEmbedding({ sourceMap: map }, async texts => texts[0] === text ? [1024] : count(texts[0]!));
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, async texts => {
+      const value = texts[0]!;
+      return value.includes('[row') && new Set(value.match(/\[row \d+,/gu)).size === 1 ? [100] : count(value);
+    });
+    expect(result.embeddingAvailable).toBe(false);
+    expect(result.chunks).toEqual(baseline.chunks);
+    expect(result.embeddingWindows).toBeUndefined();
+  });
+  it('does not start temporary windows after a character-only rejection without actual tokenization', async () => {
+    const text = `[row 1, column 1] ${'x'.repeat(10000)}\n[row 2, column 1] ${'y'.repeat(10000)}`;
+    const map = sourceMap(); map.pages[0]!.blocks = [block('table', 'table', text, 10)];
+    const counter = vi.fn(async () => [1024]);
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, counter);
+    expect(result).toEqual({ chunks: chunkDocument({ sourceMap: map }), embeddingAvailable: false });
+    expect(counter).not.toHaveBeenCalled();
+  });
+  it.each([
+    '[rows 1–3, column 1] shared\n[row 1, column 2] first\n[row 2, column 2] second\n[row 3, column 2] third',
+    '[row 2, column 1] second\n[row 1, column 1] first',
+  ])('retains lexical fallback for a table that cannot be split safely', async text => {
+    const map = sourceMap(); map.pages[0]!.blocks = [block('table', 'table', text, 10)];
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, async () => undefined);
+    expect(result.embeddingAvailable).toBe(false);
+    expect(result.embeddingWindows).toBeUndefined();
+    expect(result.chunks).toEqual(chunkDocument({ sourceMap: map }));
+  });
+  it('shares the 100-view and 200-tokenizer-attempt limits with ordinary chunks', async () => {
+    const map = sourceMap();
+    const text = Array.from({ length: 32 }, (_, i) => `[row ${i + 1}, column 1] symbol\n[row ${i + 1}, column 2] definition`).join('\n');
+    map.pages[0]!.blocks = [
+      ...Array.from({ length: 70 }, (_, i) => block(`ordinary-${i}`, 'reference', 'ordinary '.repeat(600), 10)),
+      block('table', 'table', text, 10),
+    ];
+    const counter = vi.fn(async (texts: string[]) => {
+      const value = texts[0]!;
+      if (!value.includes('[row')) return [600];
+      return new Set(value.match(/\[row \d+,/gu)).size === 1 ? [100] : undefined;
+    });
+    const result = await chunkDocumentForEmbedding({ sourceMap: map }, counter);
+    expect(result.embeddingAvailable).toBe(false);
+    expect(result.embeddingWindows).toBeUndefined();
+    expect(counter.mock.calls.length).toBeLessThanOrEqual(200);
+    expect(result.chunks.find(chunk => chunk.locators.some(locator => locator.blockId === 'table'))!.text).toBe(text);
+  });
   it.each(['table', 'equation', 'reference'] as const)('retains a whole %s and its locator when the embedding tokenizer rejects it', async (kind) => {
     const map = sourceMap();
     const text = Array.from({ length: 607 }, (_, index) => `x${index}`).join(' ');

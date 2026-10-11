@@ -13,11 +13,12 @@ import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
+import { HermesVideoUnavailableError, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
-import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
+import { ONCHIP_FIELD_SAMPLING_PROFILE, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents, type VideoGenerationRequest } from './video';
 import { requireAnimationSourceSupport } from './animation';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { validateSourceLocator } from '../research-intelligence/validation';
@@ -46,6 +47,8 @@ export interface PresentationAssetView {
   paperOriginal?: { figureId: string; caption?: string };
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
+  canGenerateAudioAudition: boolean;
+  videoFrameAssetIds?: string[];
   canTransition: boolean;
   canApprove: boolean;
   canDelete: boolean;
@@ -97,6 +100,7 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   if ((payload.kind === 'video') !== Boolean(video) || (video && (storyboard || sceneImage))) throw new PresentationAssetError('VALIDATION_ERROR', 'Video kind requires exact video settings');
   let hermesRunAuthority: HermesPresentationAuthority | undefined;
   if ('hermesRunAuthority' in payload) {
+    if (video?.purpose === 'audio-audition') throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition cannot complete a managed video step');
     const authority = payload.hermesRunAuthority as Record<string, unknown> | null;
     if (!authority || typeof authority !== 'object' || Array.isArray(authority)
       || Object.keys(authority).sort().join(',') !== 'ordinal,profile,runId,stage'
@@ -348,11 +352,26 @@ async function hasHermesAssetReviewAuthority(
   return true;
 }
 
-export async function submitPresentationGeneration(deps: AgentDeps, input: {
+/** Preparation only; this does not authorize any image, audio or video render. */
+export function isDirectNativeVideoStoryboard(payload: unknown): boolean {
+  try {
+    const parsed = parsePresentationGenerationPayload(payload);
+    const settings = parsed.storyboard;
+    return parsed.kind === 'interactive_html' && settings?.output === 'video' && settings.narrative === true
+      && settings.baseAssetId === undefined && parsed.hermesRunAuthority === undefined
+      && settings.narrativeSceneLimit === undefined && settings.revisionSceneIndex === undefined
+      && settings.revisionMode === undefined && settings.revisionTaskId === undefined
+      && settings.revisionImageAssetId === undefined && settings.artSceneIndex === undefined;
+  } catch { return false; }
+}
+
+export async function submitPresentationGeneration(deps: AgentDeps & HermesVideoReadinessDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
   await requirePresentationWriteScope(deps.prisma, input);
   const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}), ...(input.video !== undefined ? { video: input.video } : {}) });
+  const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } });
+  let videoIntent = payload.kind === 'video' || payload.storyboard?.output === 'video';
   await requireStoryboardRevisionTask(deps.prisma, payload, input.userId);
   const claims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: input.researchObjectId, versionId: input.versionId }, select: { id: true, extractionStatus: true } });
   const returnedClaimIds = new Set(claims.map((claim) => claim.id));
@@ -364,12 +383,23 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    videoIntent ||= sceneParent?.view.output === 'video';
     if (generatedSceneImageRequiresPixelReview(payload) && !/^[a-f0-9]{64}$/u.test(sceneParent?.sourceEvidenceIdentity ?? ''))
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Reviewed scene image requires a source-bound storyboard; revise the plan before generating');
-    if (sceneParent) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
+    if (sceneParent && !replay) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
+  if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload)) {
+    const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
+    if (audition) {
+      const policy = await readHermesAudioAuditionPolicy(deps);
+      if (!policy) throw new HermesVideoUnavailableError();
+      if (!isDeepStrictEqual(policy.audio, audition.audio)) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition voice must match the explicitly configured server voice');
+      }
+    } else await requireHermesVideoReady(deps);
+  }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
@@ -380,6 +410,13 @@ export async function submitPresentationGeneration(deps: AgentDeps, input: {
 export async function listPresentationAssets(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string;
 }): Promise<PresentationAssetView[]> {
+  const expectedNativeSourceFailure = (error: unknown) => error instanceof PresentationAssetError || (error instanceof Error && [
+    '[blocked] Each source Claim needs reviewed original evidence before scientific media planning',
+    '[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version',
+    '[blocked] Whole-paper narrative source is unavailable in this version',
+    '[blocked] Whole-paper narrative requires a completed internal scientific review; partial analysis is not a whole-paper source',
+    '[blocked] Whole-paper narrative SourceMap changed',
+  ].includes(error.message));
   const version = await requireScope(deps.prisma, input);
   const { workspace, membership } = await requireMembership(deps, version.researchObject.workspaceId, input.userId);
   const user = await deps.prisma.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } });
@@ -403,10 +440,12 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
     }
   }
   const sceneImagesByStoryboard = new Map<string, typeof assets>();
+  const sceneImagesByIndex = new Map<number, typeof assets>();
   for (const candidate of assets) {
     const scene = presentationSceneImageView(candidate);
     if (!scene) continue;
     sceneImagesByStoryboard.set(scene.storyboardAssetId, [...(sceneImagesByStoryboard.get(scene.storyboardAssetId) ?? []), candidate]);
+    sceneImagesByIndex.set(scene.sceneIndex, [...(sceneImagesByIndex.get(scene.sceneIndex) ?? []), candidate]);
   }
   return Promise.all(assets.map(async (asset) => {
     const ids = asset.sourceClaims.map(source => source.claimId).sort();
@@ -428,16 +467,43 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
           try { requireAcceptedSceneImageReview(asset, parent, await sceneImageReviewTaskResult(deps.prisma, asset.id)); }
           catch (error) { if (!(error instanceof PresentationAssetError)) throw error; pixelReviewAccepted = false; }
         }
-      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; sceneValid = false; }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; sceneValid = false; }
     }
     const video = presentationVideoView(asset);
     if (video && claimsValid) {
       try {
         const parents = await requireVideoGenerationParents(deps.prisma, { ...input, sourceClaimIds: ids, video });
         videoValid = parents?.identity === (asset.provenance as Prisma.JsonObject).parentIdentity;
-      } catch (error) { if (!(error instanceof PresentationAssetError)) throw error; }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
     }
     const storyboardForVideo = presentationStoryboardView(asset, ids);
+    const nativeVideo = storyboardForVideo?.output === 'video' && storyboardForVideo.narrative === true;
+    const mayGenerate = claimsValid && canWrite && user?.platformRole === 'platform_admin';
+    let nativeProof: Awaited<ReturnType<typeof requireNativeVideoStoryboard>> | undefined;
+    let videoFrameAssetIds: string[] | undefined;
+    if (nativeVideo && mayGenerate) {
+      try {
+        nativeProof = await requireNativeVideoStoryboard(deps.prisma, asset, { ...input, sourceClaimIds: ids });
+        const selected: string[] = [];
+        for (let sceneIndex = 0; sceneIndex < storyboardForVideo.document.scenes.length; sceneIndex++) {
+          const candidates = [...(sceneImagesByIndex.get(sceneIndex) ?? [])].sort((left, right) =>
+            Number(presentationSceneImageView(left)?.storyboardAssetId !== asset.id) - Number(presentationSceneImageView(right)?.storyboardAssetId !== asset.id));
+          for (const candidate of candidates) {
+            try {
+              await requireNativeVideoSceneImage(deps.prisma, candidate, asset, nativeProof, { ...input, sourceClaimIds: ids }, sceneIndex);
+              selected.push(candidate.id);
+              break;
+            } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
+          }
+          if (selected.length !== sceneIndex + 1) break;
+        }
+        if (selected.length === storyboardForVideo.document.scenes.length) {
+          const parents = await requireVideoGenerationParents(deps.prisma, { ...input, sourceClaimIds: ids,
+            video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: asset.id, sceneImageAssetIds: selected } });
+          if (parents) videoFrameAssetIds = parents.orderedImages.map(frame => frame.id);
+        }
+      } catch (error) { if (!expectedNativeSourceFailure(error)) throw error; }
+    }
     const storyboardIdentity = storyboardForVideo && JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids });
     const eligibleSceneIndexes = new Set((sceneImagesByStoryboard.get(asset.id) ?? []).flatMap((candidate) => {
       const scene = presentationSceneImageView(candidate);
@@ -448,19 +514,22 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         ? [scene.sceneIndex] : [];
     }));
     const canGenerateVideo = ids.length > 0 && ids.every(id => sourcedClaimIds.has(id)) && claimsValid && canWrite && user?.platformRole === 'platform_admin'
-      && asset.status === 'approved' && storyboardForVideo?.output === 'video' && storyboardForVideo.locale === 'zh'
+      && storyboardForVideo?.output === 'video' && (nativeVideo || storyboardForVideo.locale === 'zh')
       && storyboardForVideo.document.scenes.length >= 3 && storyboardForVideo.document.scenes.length <= 6
-      && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
       && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
-      && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index));
+      && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
+        && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
+    const canGenerateAudioAudition = nativeVideo && canGenerateVideo;
     const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
-    canGenerateSceneImage: claimsValid && canWrite && user?.platformRole === 'platform_admin' && asset.status === 'approved' && !!presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    canGenerateSceneImage: mayGenerate && (nativeVideo ? !!nativeProof : asset.status === 'approved' && !!storyboardForVideo),
     canGenerateVideo,
-    storyboard: presentationStoryboardView(asset, asset.sourceClaims.map(source => source.claimId)),
+    canGenerateAudioAudition,
+    ...(videoFrameAssetIds ? { videoFrameAssetIds } : {}),
+    storyboard: storyboardForVideo,
     canTransition,
     canApprove: canTransition && pixelReviewAccepted,
     canDelete: workspace.status === 'active' && (membership.role === 'owner'
@@ -682,6 +751,13 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
     const view = asset && presentationStoryboardView(asset, ids);
     if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || !['draft', 'approved'].includes(asset.status) || !view || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds))
         throw new PresentationAssetError('VALIDATION_ERROR', 'Base storyboard is invalid for these sources');
+    if (payload.storyboard?.output === 'video' && payload.storyboard.narrative === true
+        && (view.output !== 'video' || view.narrative !== true
+            || (payload.storyboard.revisionSceneIndex !== undefined && (view.locale !== payload.storyboard.locale
+                || view.style !== payload.storyboard.style || payload.storyboard.revisionSceneIndex >= view.document.scenes.length
+                || !isDeepStrictEqual(recordValue(asset.provenance).storyboardSettings
+                    && recordValue(recordValue(asset.provenance).storyboardSettings).figurePlan, payload.storyboard.figurePlan)))))
+        throw new PresentationAssetError('VALIDATION_ERROR', 'A local video revision must retain the native base language, style and resources');
     if (payload.storyboard?.revisionMode === 'art' && (view.output !== 'image' || view.locale !== payload.storyboard.locale
         || Boolean(view.document.narrative) !== Boolean(payload.storyboard.narrative)
         || view.document.scenes.some(scene => scene.illustration?.schemaVersion !== 2 || (!view.document.narrative && scene.paperOriginal))))
@@ -1592,7 +1668,7 @@ export async function requireManualSceneImageReviewReceipt(
 }
 
 /** Review existing private PNG pixels through the normal worker without paying for another render. */
-export async function submitExistingSceneImageReview(deps: AgentDeps & {
+export async function submitExistingSceneImageReview(deps: AgentDeps & HermesVideoReadinessDeps & {
   canRetryImageReviewBeforeSubmission?: (input: ImageReviewNotSubmittedInput) => Promise<boolean>;
 }, input: PresentationScope & {
   assetId: string; idempotencyKey: string;
@@ -1716,6 +1792,8 @@ export async function submitExistingSceneImageReview(deps: AgentDeps & {
       if (!proved) throw new PresentationAssetError('VALIDATION_ERROR', 'Existing review submission is not proven absent');
       failedCopyRecovery = { taskId: firstTask.id, promptHash };
     }
+    if (parent.view.output === 'video'
+      && !await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } })) await requireHermesVideoReady(deps);
     const { task, replayed } = await persistAgentTaskInTransaction(deps, tx, {
       sessionId: previous.sessionId, userId: input.userId, kind: 'presentation.generate',
       payload: previous.payload as Record<string, unknown>, idempotencyKey: input.idempotencyKey,

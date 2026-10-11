@@ -184,6 +184,30 @@ describe('Optical Editorial public reading surface', () => {
     expect(markup).toContain('figures/charge-map.png');
   });
 
+  it('keeps authorized public downloads and makes unavailable attachment names non-interactive', async () => {
+    const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
+    const publicUrl = '/api/research/OSR-2026-000241/v/4/artifacts/public-file/download';
+    const withArtifacts = { ...research, artifactPaths: [
+      { logicalPath: 'legacy.pdf', blobSha256: 'b'.repeat(64) },
+      { logicalPath: 'member.pdf', blobSha256: 'b'.repeat(64), downloadAccess: 'workspace_member', downloadUrl: '/api/artifacts/member-file/download' },
+      { logicalPath: 'missing-url.pdf', blobSha256: 'b'.repeat(64), downloadAccess: 'public' },
+      { logicalPath: 'public.pdf', blobSha256: 'b'.repeat(64), downloadAccess: 'public', downloadUrl: publicUrl },
+    ] };
+    const markup = renderToStaticMarkup(<PublicReadingSurface research={withArtifacts as never} />);
+    const resourceMarkup = markup.match(/<details class="pub-reading-artifacts[\s\S]*?<\/details>/)![0];
+    const rows = Array.from(resourceMarkup.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g), match => match[1]);
+    for (const name of ['legacy.pdf', 'member.pdf', 'missing-url.pdf']) {
+      const row = rows.find(item => item.includes(name))!;
+      expect(row).toContain('artifactDownloadUnavailable');
+      expect(row).not.toMatch(/<(?:a|button)\b|tabindex=|role="(?:link|button)"/);
+    }
+    const publicRow = rows.find(item => item.includes('public.pdf'))!;
+    expect(publicRow).toContain(`href="${publicUrl}"`);
+    expect(publicRow).toContain('download=""');
+    expect(publicRow).not.toContain('artifactDownloadUnavailable');
+    expect(resourceMarkup).not.toContain('/api/artifacts/member-file/download');
+  });
+
   it('uses an absolute server API transport and resolves the latest continuing object', async () => {
     await expect(import('../lib/public-server-api')).resolves.toMatchObject({
       getLatestPublicResearchVersion: expect.any(Function),

@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { PresentationAssetError } from './errors';
 import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
 import { nativeImageReviewProvider, nativeImageReviewMatches, readNativeImageReviewCheckpoint } from './native-image-review';
+import { requireNativeVideoStoryboard } from './video';
 
 export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string; revisionAssetId?: string }
 export interface GeneratedImageReview {
@@ -22,7 +23,7 @@ export function readStoredGeneratedImageReview(value: unknown, expected: ImageRe
   if (!saved || typeof saved !== 'object' || Array.isArray(saved)
     || Object.keys(saved).sort().join(',') !== 'contentHash,decision,model,parentIdentity,promptHash,provider,repairInstruction,requestId,responseHash,sourceEvidenceIdentity,stage,summary'
     || saved.stage !== 'generated-image'
-    || (native ? !nativeImageReviewProvider(saved.provider, saved.model) || !nativeImageReviewMatches(native, expected, saved)
+    || (native ? !nativeImageReviewProvider(saved.provider, saved.model) || !nativeImageReviewMatches(native, expected, saved, owningTaskResult)
       : saved.provider !== 'chatgpt-web-science-review'
         && !(saved.provider === 'codex-sol-image-review' && saved.model === 'gpt-5.6-sol'))
     || typeof saved.model !== 'string' || !saved.model.trim() || saved.model.length > 200
@@ -192,7 +193,7 @@ export function presentationSceneImageView(asset: { kind: string; provenance: un
     return parseSceneImageRequest(p.sceneImage);
   } catch { return undefined; }
 }
-export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>, payload: {
+export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'> & Partial<Prisma.TransactionClient>, payload: {
   researchObjectId: string; versionId: string; sourceClaimIds: string[]; sceneImage?: SceneImageRequest;
 }) {
   if (!payload.sceneImage) return undefined;
@@ -200,8 +201,11 @@ export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionCli
   const asset = await prisma.presentationAsset.findUnique({ where: { id: settings.storyboardAssetId }, include: { sourceClaims: { select: { claimId: true } } } });
   const ids = asset?.sourceClaims.map(link => link.claimId).sort() ?? [];
   const view = asset && presentationStoryboardView(asset, ids);
-  if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId || asset.status !== 'approved'
+  const nativeVideo = view?.output === 'video' && view.narrative === true;
+  if (!asset || asset.deletedAt || asset.researchObjectId !== payload.researchObjectId || asset.versionId !== payload.versionId
+    || (nativeVideo ? !['draft', 'approved'].includes(asset.status) : asset.status !== 'approved')
     || !view || !view.document.scenes[settings.sceneIndex] || JSON.stringify(ids) !== JSON.stringify(payload.sourceClaimIds)) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image requires an approved storyboard with the exact version and Claims');
+  if (nativeVideo) await requireNativeVideoStoryboard(prisma as Prisma.TransactionClient, asset, payload);
   const paperOriginal = view.document.scenes[settings.sceneIndex].paperOriginal;
   if (paperOriginal) {
     const original = await prisma.presentationAsset.findUnique({ where: { id: paperOriginal.assetId } });

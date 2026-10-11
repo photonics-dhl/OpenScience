@@ -6,6 +6,41 @@ afterEach(() => {
 });
 
 describe('workspace.guide API client contract', () => {
+  it('freshly reads the protected video capability without caching or mutation', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ canGenerateVideo: false }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ canGenerateVideo: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getHermesVideoCapability } = await import('../lib/api');
+    const signal = new AbortController().signal;
+    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: true, audioAudition: null });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledWith('/api/research-objects/paper%2Fscope/hermes-video-capability',
+      expect.objectContaining({ credentials: 'include', cache: 'no-store', signal }));
+    expect(fetchMock.mock.calls.every(([, init]) => !init.body && (!init.method || init.method === 'GET'))).toBe(true);
+  });
+  it('sends the explicit video hint only when requested and preserves legacy reanalysis bodies', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (path: string) => new Response(JSON.stringify(
+      path === '/api/csrf-token' ? { csrfToken: 'csrf' } : { task: { id: 'new-source' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { reanalyzeConfirmedIngestion } = await import('../lib/api');
+    await reanalyzeConfirmedIngestion('source', 'agent', 'new-video-key', undefined, 'video');
+    await reanalyzeConfirmedIngestion('source', 'agent', 'old-key');
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(posts[0][1].body)).toEqual({ processingConsent: true, sourceAgentTaskId: 'agent', output: 'video' });
+    expect(JSON.parse(posts[1][1].body)).toEqual({ processingConsent: true, sourceAgentTaskId: 'agent' });
+    expect(posts.map(([, init]) => init.headers['idempotency-key'])).toEqual(['new-video-key', 'old-key']);
+  });
+  it('qualifies video recovery without changing the legacy image query', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({run:null}), {status:200}));
+    vi.stubGlobal('fetch',fetchMock);
+    const {getExistingHermesResearchRun}=await import('../lib/api');
+    await getExistingHermesResearchRun('paper','source');
+    await getExistingHermesResearchRun('paper','source',undefined,'video');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/research-objects/paper/hermes-runs?ingestionTaskId=source');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/research-objects/paper/hermes-runs?ingestionTaskId=source&output=video');
+  });
   it('binds RO guidance to the existing authorized session context', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf' }), { status: 200 }))

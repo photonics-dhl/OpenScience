@@ -12,7 +12,7 @@ export type NativeImageReviewSubmission = (input: ScienceReviewInput, target: Na
 export function nativeImageReviewMessages(input: ScienceReviewInput): ChatMessage[] {
   const image = input.attachments?.[0];
   if (!('kind' in input.source) || input.source.kind !== 'illustration-image'
-    || input.illustrationContext?.imageReviewMode !== 'model-native' || input.attachments?.length !== 1
+    || !['model-native', 'agent-native'].includes(input.illustrationContext?.imageReviewMode ?? '') || input.attachments?.length !== 1
     || !image || image.mediaType === 'application/pdf' || !input.prompt.trim() || input.prompt.length > ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS
     || image.sha256 !== input.source.candidateHash
     || createHash('sha256').update(image.bytes).digest('hex') !== image.sha256)

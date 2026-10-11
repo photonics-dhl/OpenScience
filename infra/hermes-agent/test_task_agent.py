@@ -371,7 +371,7 @@ class PaperReceiptTests(unittest.TestCase):
                     max(current, key=lambda item: len(item['content']))['content'] = 'NATIVE_AGGREGATE_PREVIEW'
                 native_observed.extend(dict(item) for item in current)
                 return 'native-return'
-        cls = create_task_agent_class(NativeBudget, lambda: None, {'paper_read', 'paper_view', 'skill_view'}, page_images)
+        cls = create_task_agent_class(NativeBudget, lambda: None, {'paper_read', 'paper_view', 'paper_image_view', 'skill_view'}, page_images)
         return cls(), SimpleNamespace(tool_calls=calls), native_observed
 
     def test_exact_102278_character_receipt_survives_native_per_result_persistence(self):
@@ -439,6 +439,35 @@ class PaperReceiptTests(unittest.TestCase):
                 with self.assertRaises(NativeTaskStopped):
                     agent._execute_tool_calls(turn, [], 'task')
                 self.assertIs(agent.tool_complete_callback, previous)
+
+    def test_saved_image_pixels_follow_the_exact_image_tool_receipt(self):
+        identity = {'requestId': 'image-task', 'contentHash': 'a'*64,
+            'sourceEvidenceIdentity': 'b'*64, 'parentIdentity': 'approved-parent'}
+        original = json.dumps({'status': 'image_view_ready', **identity})
+        seen = []
+        pixels = [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,AA=='}}]
+        def images(call_id, args, output):
+            seen.append((call_id, args, output))
+            return pixels
+        agent, turn, _ = self.fixture([self.call(name='paper_image_view')], {'paper-1': original}, page_images=images)
+        messages = []
+        agent._execute_tool_calls(turn, messages, 'image-task')
+        self.assertEqual(seen, [('paper-1', {}, {'status': 'image_view_ready', **identity})])
+        self.assertEqual(messages, [{'role': 'tool', 'tool_call_id': 'paper-1', 'content': original},
+            {'role': 'user', 'content': pixels}])
+
+    def test_image_release_does_not_generalize_tool_names_or_success_statuses(self):
+        for name, status in [('paper_read', 'image_view_ready'), ('paper_view', 'image_view_ready'),
+                             ('paper_image_view', 'page_view_ready')]:
+            with self.subTest(name=name, status=status):
+                seen = []
+                original = json.dumps({'status': status})
+                agent, turn, _ = self.fixture([self.call(name=name)], {'paper-1': original},
+                    page_images=lambda *args: seen.append(args))
+                messages = []
+                agent._execute_tool_calls(turn, messages, 'image-task')
+                self.assertEqual(seen, [])
+                self.assertEqual([item['role'] for item in messages], ['tool'])
 
     def test_duplicate_current_call_id_is_rejected_before_native_execution(self):
         agent, turn, observed = self.fixture([self.call(), self.call(name='skill_view')], {'paper-1': '{}'})

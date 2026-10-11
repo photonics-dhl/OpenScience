@@ -15,6 +15,8 @@ import {
   CodexSpoolImageProvider,
   ChatGptWebSpoolImageProvider,
   SynclipSpoolImageProvider,
+  createNativeVideoReadinessReader,
+  type NativeVideoReadinessReader,
   ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
   MutableProviderKillSwitch,
@@ -43,6 +45,10 @@ import {
   type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
   requireJournalExternalOcrAuthority,
+  journalSourceProcessingAllowed,
+  journalDigest,
+  requirePresentationWriteScope, parsePresentationGenerationPayload, requireVideoGenerationParents,
+  type HermesVideoReadinessDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -76,7 +82,7 @@ import { createTextExtractor, type TextStageAdapter } from './parsers/text-extra
 import type { ParserInput } from './parsers/types';
 import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
-import { HostVideoSpool, type PresentationVideoSpool } from './presentation/host-video-spool';
+import { HostVideoSpool, type PresentationVideoSpool, type AudioAuditionProposal, type AudioAuditionGrant } from './presentation/host-video-spool';
 import { SynclipVideoSpool } from './presentation/synclip-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
@@ -86,6 +92,7 @@ import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector'
 import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
+import { admitPendingVideoTask, createVideoReadinessResumeScheduler, VIDEO_READINESS_HOLD } from './video-task-admission';
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
   sourceReview?: {
@@ -151,6 +158,101 @@ export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.ex
   };
 }
 
+/** A committed task grant authorizes one original host attempt; recovery never creates another grant. */
+export function createAudioAuditionAuthorization(deps: Pick<WorkerDeps, 'prisma' | 'videoEnabled' | 'readAudioAuditionReadiness'>) {
+  return async (proposal: AudioAuditionProposal): Promise<AudioAuditionGrant> => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== proposal.taskId || execution.executionAttempt !== proposal.executionAttempt)
+      throw new Error('[blocked] Audio audition lacks its claimed worker execution');
+    return deps.prisma.$transaction(async tx => {
+      await lockTrashReferences(tx);
+      const task = await tx.agentTask.findUnique({ where: { id: execution.taskId },
+        include: { session: { include: { researchObject: true } } } });
+      const ro = task?.session.researchObject;
+      if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.status !== 'running'
+        || task.executionAttempt !== execution.executionAttempt || task.session.deletedAt || task.session.status !== 'active'
+        || !ro || ro.deletedAt || task.session.researchObjectId !== ro.id || task.session.userId !== proposal.actorId || ro.id !== proposal.researchObjectId
+        || ro.workspaceId !== proposal.workspaceId)
+        throw new Error('[blocked] Audio audition task authority changed');
+      if (await tx.trashEntry.findFirst({ where: { kind: 'asset', resourceId: task.id,
+        state: { in: ['trashed', 'purge_pending', 'purged'] } }, select: { id: true } }))
+        throw new Error('[blocked] Audio audition task was deleted');
+      const rawPayload = task.payload as Record<string, unknown>;
+      if (Object.hasOwn(rawPayload, 'audioAuditionGrant') || Object.hasOwn(rawPayload, 'audioAudition'))
+        throw new Error('[blocked] Audio audition authority cannot come from task payload');
+      const payload = parsePresentationGenerationPayload(task.payload);
+      const video = payload.video;
+      if (payload.kind !== 'video' || video?.purpose !== 'audio-audition' || payload.hermesRunAuthority
+        || payload.researchObjectId !== ro.id || payload.versionId !== proposal.versionId)
+        throw new Error('[blocked] Audio audition payload authority changed');
+      const version = await requirePresentationWriteScope(tx, { userId: task.session.userId,
+        researchObjectId: payload.researchObjectId, versionId: payload.versionId });
+      const user = await tx.user.findUnique({ where: { id: task.session.userId }, select: { platformRole: true } });
+      if (version.researchObject?.workspaceId !== ro.workspaceId || user?.platformRole !== 'platform_admin')
+        throw new Error('[blocked] Audio audition requires the current platform administrator and write scope');
+      const booking = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${task.id}` } });
+      const bookingMetadata = booking?.metadata as Record<string, unknown> | null;
+      if (!booking || booking.userId !== task.session.userId || booking.resource !== 'ai_credit'
+        || booking.kind !== 'consume' || Number(booking.delta) !== -1 || bookingMetadata?.taskId !== task.id
+        || bookingMetadata.kind !== task.kind || bookingMetadata.policy !== 'charged-on-submit')
+        throw new Error('[blocked] Audio audition lacks the original task AI credit booking');
+      const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
+        researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
+      if (claims.length !== payload.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')
+        || payload.sourceClaimIds.some(id => !claims.some(claim => claim.id === id)))
+        throw new Error('[blocked] Audio audition source Claims changed');
+      const parents = await requireVideoGenerationParents(tx, payload);
+      const scene = parents?.storyboardView.document.scenes[video.sceneIndex];
+      if (!parents?.nativeParent || !scene?.narration.trim() || parents.identity !== proposal.parentIdentity
+        || !isDeepStrictEqual(payload.sourceClaimIds, proposal.sourceClaimIds) || video.profile !== proposal.profile
+        || video.sceneIndex !== proposal.sceneIndex || video.locale !== proposal.locale
+        || parents.storyboardView.locale !== proposal.locale || parents.storyboardView.style !== proposal.style
+        || !isDeepStrictEqual(video.audio, proposal.audio)
+        || !isDeepStrictEqual(parents.orderedImages.map(asset => (asset.provenance as Record<string, unknown>)?.taskId), proposal.sceneImageTaskIds)
+        || !/^[0-9a-f]{64}$/u.test(proposal.inputHash))
+        throw new Error('[blocked] Audio audition approved source identity changed');
+      const saved = task.result && typeof task.result === 'object' && !Array.isArray(task.result) ? task.result : {};
+      const identity = { schemaVersion: 1 as const, purpose: 'audio-audition' as const, taskId: task.id,
+        inputHash: proposal.inputHash, actorId: task.session.userId, workspaceId: ro.workspaceId,
+        researchObjectId: ro.id, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
+        parentIdentity: parents.identity, sceneIndex: video.sceneIndex, locale: video.locale, audio: video.audio };
+      if (Object.hasOwn(saved, 'audioAuditionGrant')) {
+        const original = saved.audioAuditionGrant as unknown as AudioAuditionGrant;
+        if (!original || typeof original !== 'object' || Array.isArray(original)
+          || !Number.isSafeInteger(original.executionAttempt) || original.executionAttempt < 1
+          || original.executionAttempt > execution.executionAttempt
+          || !Number.isFinite(original.workerMaxEstimatedCoins) || original.workerMaxEstimatedCoins <= 0
+          || !Number.isFinite(original.hostMaxEstimatedCoins) || original.hostMaxEstimatedCoins <= 0
+          || !Number.isSafeInteger(original.createdAt) || original.createdAt <= 0
+          || !Number.isSafeInteger(original.deadlineAt) || original.deadlineAt <= original.createdAt
+          || original.deadlineAt - original.createdAt > 30 * 60_000
+          || !isDeepStrictEqual(original, { ...identity, executionAttempt: original.executionAttempt,
+            workerMaxEstimatedCoins: original.workerMaxEstimatedCoins, hostMaxEstimatedCoins: original.hostMaxEstimatedCoins,
+            createdAt: original.createdAt, deadlineAt: original.deadlineAt }))
+          throw new Error('[blocked] Original audio audition grant identity changed');
+        return original;
+      }
+      if (execution.executionAttempt !== 1)
+        throw new Error('[blocked] Audio audition recovery has no original durable grant');
+      const policy = deps.videoEnabled === true ? await deps.readAudioAuditionReadiness?.() : null;
+      if (!policy || !isDeepStrictEqual(policy.audio, video.audio)
+        || !Number.isFinite(policy.maxEstimatedCoins) || policy.maxEstimatedCoins <= 0
+        || !Number.isSafeInteger(proposal.createdAt) || proposal.createdAt <= 0 || proposal.createdAt > Date.now() + 1_000
+        || !Number.isSafeInteger(proposal.deadlineAt) || proposal.deadlineAt <= Date.now()
+        || proposal.deadlineAt <= proposal.createdAt || proposal.deadlineAt - proposal.createdAt > 30 * 60_000)
+        throw new Error('[blocked] Audio audition configured voice or finite protected budget is unavailable');
+      const grant: AudioAuditionGrant = { ...identity, executionAttempt: execution.executionAttempt,
+        workerMaxEstimatedCoins: policy.maxEstimatedCoins, hostMaxEstimatedCoins: policy.maxEstimatedCoins,
+        createdAt: proposal.createdAt, deadlineAt: proposal.deadlineAt };
+      const changed = await tx.agentTask.updateMany({ where: { id: task.id, kind: task.kind, status: 'running', deletedAt: null,
+        executionAttempt: execution.executionAttempt, result: { equals: task.result ?? Prisma.AnyNull } },
+      data: { result: { ...saved, audioAuditionGrant: grant } as unknown as Prisma.InputJsonObject } });
+      if (changed.count !== 1) throw new Error('[blocked] Audio audition grant lost its current task result CAS');
+      return grant;
+    }, { isolationLevel: 'Serializable', timeout: 30_000 });
+  };
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const INGESTION_EXTERNAL_PROCESSING_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
@@ -191,7 +293,12 @@ export type ParserCascadeRunner = ((
   renderPages(input: ParserInput, pageNumbers: readonly number[], maxEncodedBytes?: number): Promise<ParserRasterResult>;
 };
 
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
+/** Video-only admission dependencies; generic AgentDeps remain unchanged. */
+export interface WorkerVideoReadinessDeps extends HermesVideoReadinessDeps {
+  videoEnabled?: boolean;
+  readVideoReadiness?: NativeVideoReadinessReader;
+}
+export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -783,6 +890,7 @@ export function createHandlers(
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
+        runtime: nativeAgentRuntimeFromEnv(process.env),
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
     'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
@@ -812,6 +920,31 @@ export async function sleep(ms: number): Promise<void> {
 }
 
 const AGENT_TASK_PROCESSING_QUEUE = `${AGENT_TASK_QUEUE}:processing`;
+
+/** Reclassify the current row on the next poll; never execute the stale payload. */
+async function requeueCurrentPendingTask(
+  deps: WorkerDeps, taskId: string, stopping: () => boolean,
+): Promise<'requeued' | 'discard' | 'deferred'> {
+  if (stopping()) return 'deferred';
+  const current = await deps.prisma.agentTask.findUnique({
+    where: { id: taskId }, include: { session: { include: { researchObject: true } } },
+  });
+  if (stopping()) return 'deferred';
+  if (current?.status !== 'pending' || current.deletedAt || current.session.deletedAt
+    || current.session.researchObjectId !== null && (!current.session.researchObject || current.session.researchObject.deletedAt)) return 'discard';
+  // Neither MULTI nor Lua rolls back LREM if a later LPUSH fails (e.g. OOM).
+  // Publish only when needed, before removing the original processing entry.
+  const moved = await deps.redis.eval(`
+    for _, key in ipairs(KEYS) do
+      local kind = redis.call('TYPE', key).ok
+      if kind ~= 'none' and kind ~= 'list' then return redis.error_reply('WRONGTYPE queue') end
+    end
+    if not redis.call('LPOS', KEYS[2], ARGV[1]) then return 0 end
+    if not redis.call('LPOS', KEYS[1], ARGV[1]) then redis.call('LPUSH', KEYS[1], ARGV[1]) end
+    return redis.call('LREM', KEYS[2], 1, ARGV[1])
+  `, 2, AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, taskId);
+  return moved === 1 ? 'requeued' : 'discard';
+}
 
 export async function reconcileResearchRunsTick(
   deps: WorkerDeps,
@@ -847,13 +980,32 @@ export function createResearchRunReconcileScheduler(options: {
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => boolean = () => false): Promise<number> {
   let recovered = 0;
-  while (!stopping()) {
-    const taskId = await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1);
-    if (!taskId) return recovered;
+  const snapshot = await deps.redis.lrange(AGENT_TASK_PROCESSING_QUEUE, 0, -1);
+  for (const taskId of snapshot.reverse()) {
+    if (stopping()) break;
+    const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+    if (task?.status === 'pending' && task.error === VIDEO_READINESS_HOLD) {
+      const admission = await admitPendingVideoTask(deps, task);
+      if (admission !== null) {
+        if (admission !== true) {
+          const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+          if (outcome === 'deferred') break;
+          if (outcome === 'requeued') recovered += 1;
+          else await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        } else if (admission === true) await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
+        continue;
+      }
+    }
     const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
     if (retryable) {
-      const moved = await deps.redis.rpoplpush(AGENT_TASK_PROCESSING_QUEUE, AGENT_TASK_QUEUE);
-      if (moved) recovered += 1;
+      if (await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1) === taskId) {
+        if (await deps.redis.rpoplpush(AGENT_TASK_PROCESSING_QUEUE, AGENT_TASK_QUEUE)) recovered += 1;
+      } else {
+        // A held tail may remain after a losing CAS. Publish this ordinary ID
+        // before removing its old entry, so a crash/error cannot lose the task.
+        await deps.redis.lpush(AGENT_TASK_QUEUE, taskId);
+        if (await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId)) recovered += 1;
+      }
     } else {
       await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId);
     }
@@ -872,10 +1024,13 @@ export async function createPollOnce(
   const runMaintenance = options.runMaintenance ?? true;
   const stopping = options.stopping ?? (() => false);
   const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
+  const resumeVideoTasks = runMaintenance ? createVideoReadinessResumeScheduler() : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     if (stopping()) return false;
     if (reconcileRuns) {
       await reconcileRuns(deps);
+      if (stopping()) return false;
+      await resumeVideoTasks!(deps);
       if (stopping()) return false;
       await recoverUndispatchedAgentTasks(deps);
     }
@@ -890,6 +1045,7 @@ export async function createPollOnce(
     let handlerCompleted = false;
     let processingEntryRequeued = false;
     let processingEntryDeferred = false;
+    let expectedPendingTask: Parameters<typeof claimAgentTask>[2];
     try {
       const task = await deps.prisma.agentTask.findUnique({
         where: { id: taskId },
@@ -897,11 +1053,48 @@ export async function createPollOnce(
       });
       if (!task) return true;
       if (stopping()) { processingEntryDeferred = true; return false; }
+      if (task.status === 'pending') {
+        // Keep the entry while intent/readiness and the pending CAS are unresolved.
+        processingEntryDeferred = true;
+        const admission = await admitPendingVideoTask(deps, task);
+        if (typeof admission === 'boolean') {
+          if (!admission) {
+            const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+            processingEntryRequeued = outcome === 'requeued';
+            processingEntryDeferred = outcome === 'deferred';
+            if (processingEntryDeferred) return false;
+          } else processingEntryDeferred = false;
+          return true;
+        }
+        if (admission) expectedPendingTask = admission.expectedPendingTask;
+        processingEntryDeferred = false;
+      }
+      if (stopping()) { processingEntryDeferred = true; return false; }
       // Once claim starts, drain this attempt even if a signal arrives while its
       // transaction awaits: deferring after claim would consume an unused attempt.
-      claimed = await claimAgentTask(deps, taskId);
-      if (!claimed) return true;
+      claimed = expectedPendingTask ? await claimAgentTask(deps, taskId, expectedPendingTask) : await claimAgentTask(deps, taskId);
+      if (!claimed) {
+        if (expectedPendingTask) {
+          processingEntryDeferred = true;
+          const outcome = await requeueCurrentPendingTask(deps, taskId, stopping);
+          processingEntryRequeued = outcome === 'requeued';
+          processingEntryDeferred = outcome === 'deferred';
+          if (processingEntryDeferred) return false;
+        }
+        return true;
+      }
       const executionClaim = claimed;
+      if (task.kind === 'sdf.extract') {
+        const allowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId },
+            include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!allowed) throw new Error('[blocked] Source processing authorization changed before claim execution');
+      }
       const handler = handlers[task.kind];
       if (!handler) throw new Error('unsupported agent task kind');
       const result = await spoolTaskExecution.run({ taskId: task.id, executionAttempt: executionClaim.executionAttempt }, () => handler(deps, {
@@ -913,6 +1106,16 @@ export async function createPollOnce(
         ...(executionClaim.result?.hermesRecovery === HERMES_AUTHORITY_REARM_MARKER ? { recoveryContract: HERMES_AUTHORITY_REARM_MARKER } : {}),
       }));
       handlerCompleted = true;
+      if (task.kind === 'sdf.extract') {
+        const stillAllowed = await deps.prisma.$transaction(async tx => {
+          const ingestion = await tx.ingestionTask.findUnique({ where: { agentTaskId: task.id } });
+          if (!ingestion) return true;
+          const session = await tx.agentSession.findUnique({ where: { id: task.sessionId }, include: { researchObject: true } });
+          return !!session?.researchObject && await buildIngestionExternalProcessingPolicy(tx)({
+            taskId: task.id, actorId: session.userId, workspaceId: session.researchObject.workspaceId });
+        }, { isolationLevel: 'Serializable' });
+        if (!stillAllowed) throw new Error('[blocked] Source processing authorization changed before result write');
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -922,6 +1125,7 @@ export async function createPollOnce(
       });
       return true;
     } catch (e) {
+      if (!claimed && processingEntryDeferred) throw e;
       if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
         const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
         if (!retryable) throw e;
@@ -948,7 +1152,7 @@ export async function createPollOnce(
   };
 }
 
-function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership'>): ExternalProcessingPolicy {
+function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionClient, 'ingestionTask' | 'membership' | 'journalArticle' | 'journalSharedBinding' | 'user'>): ExternalProcessingPolicy {
   return async (context) => {
     const task = await prisma.ingestionTask.findUnique({
       where: { agentTaskId: context.taskId },
@@ -971,16 +1175,34 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
     const membership = await prisma.membership.findUnique({
       where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.actorId } },
     });
-    return membership?.workspaceId === context.workspaceId && membership.userId === context.actorId
-      && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+    if (!membership || membership.workspaceId !== context.workspaceId || membership.userId !== context.actorId
+      || !INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role)) return false;
+    const article = await prisma.journalArticle.findUnique({ where: { workingResearchObjectId: task.batch.researchObjectId },
+      include: { journal: true } });
+    if (!article) return true;
+    const binding = await prisma.journalSharedBinding.findUnique({ where: { articleId: article.id } });
+    const user = await prisma.user.findUnique({ where: { id: context.actorId }, select: { status: true } });
+    return article.journal.workspaceId === context.workspaceId && article.journal.operationalState === 'active'
+      && !!user && !['suspended', 'deleted', 'invited'].includes(user.status)
+      && ['owner', 'maintainer', 'author'].includes(membership.role)
+      && !!binding && binding.actorId === context.actorId && binding.ingestionTaskId === task.id
+      && binding.sourceArtifactId === task.artifactId && binding.sourceBlobSha256 === task.artifact.blobSha256
+      && binding.sourceRevision === article.revision
+      && binding.sourceDigest === journalDigest(article.source)
+      && (article.source as { artifactId?: string }).artifactId === task.artifactId
+      && journalSourceProcessingAllowed(article, true);
   };
 }
 
 /** Shared dependency assembly used by the real Worker entry and automatic run scheduler. */
 export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 'storage' | 'audit'>, env: NodeJS.ProcessEnv = process.env): WorkerDeps {
+  const nativeAgentRuntime = nativeAgentRuntimeFromEnv(env);
+  const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env);
   return { ...input,
-    nativeAgentRuntime: nativeAgentRuntimeFromEnv(env),
-    nativeSceneImageEnabled: env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env),
+    nativeAgentRuntime, nativeSceneImageEnabled,
+    videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
+    readVideoReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }),
+    readAudioAuditionReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }, 'audio-audition'),
     malwareScanner: env.CLAMAV_HOST ? createClamAvScanner(env.CLAMAV_HOST, Number(env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
@@ -1075,7 +1297,8 @@ async function main(): Promise<void> {
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
       ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
         && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
-          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission }),
+          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
+            authorizeAudioAudition: createAudioAuditionAuthorization(deps) }),
         } : process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'local'
           && process.env.HOST_VIDEO_INBOX_DIR?.trim() && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
             videoSpool: new HostVideoSpool({ inboxDir: process.env.HOST_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.HOST_VIDEO_RESULTS_DIR.trim(), withSubmission: imageSubmission }),
@@ -1109,9 +1332,11 @@ async function main(): Promise<void> {
     console.log(`agent-worker 启动（P1D-2/3, concurrency=${workerConcurrency}）`);
     const maintenance = (async () => {
       const reconcileRuns = createResearchRunReconcileScheduler();
+      const resumeVideoTasks = createVideoReadinessResumeScheduler();
       while (!stopping) {
         try {
           await reconcileRuns(deps);
+          if (!stopping) await resumeVideoTasks(deps);
           if (!stopping) await recoverUndispatchedAgentTasks(deps);
         } catch (error) {
           console.error('agent-worker maintenance error', error);
@@ -1195,20 +1420,21 @@ export function buildGateway(
     (key, index, all): key is string => Boolean(key) && all.indexOf(key) === index,
   );
   const configuredKeys = keys.length > 0 ? keys : [''];
-  const providers = configuredKeys.flatMap((apiKey, keyIndex) => {
+  const buildProvider = (apiKey: string, keyIndex: number, model: string, modelIndex: number) => {
     const configuredMode = env.MINIMAX_API_MODE ?? 'auto';
     const tokenPlan = configuredMode === 'anthropic' || (configuredMode === 'auto' && apiKey.startsWith('sk-cp-'));
     const baseUrl = tokenPlan
       ? env.MINIMAX_TOKEN_PLAN_BASE_URL ?? 'https://api.minimax.io/anthropic'
       : env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
-    return models.map((model, modelIndex) => {
-      const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
-      const config = { baseUrl, apiKey, model };
-      return tokenPlan
-        ? new AnthropicCompatProvider(name, config, fetcher)
-        : new OpenAiCompatProvider(name, config, fetcher);
-    });
-  });
+    const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
+    const config = { baseUrl, apiKey, model };
+    return tokenPlan
+      ? new AnthropicCompatProvider(name, config, fetcher)
+      : new OpenAiCompatProvider(name, config, fetcher);
+  };
+  const providers = configuredKeys.flatMap((apiKey, keyIndex) => models.map((model, modelIndex) => buildProvider(apiKey, keyIndex, model, modelIndex)));
+  const pixelReviewModel = env.MINIMAX_IMAGE_REVIEW_MODEL?.trim();
+  const nativeImageReviewProvider = pixelReviewModel ? buildProvider(configuredKeys[0]!, 0, pixelReviewModel, 0) : undefined;
 
   const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
   const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
@@ -1307,6 +1533,7 @@ export function buildGateway(
     imageProviders,
     scientificReviewProvider,
     illustrationImageReviewProvider,
+    nativeImageReviewProvider,
     audit,
     logger: console,
     killSwitch,

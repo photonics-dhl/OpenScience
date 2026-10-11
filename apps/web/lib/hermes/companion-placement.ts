@@ -30,9 +30,9 @@ export const HERMES_PATROL_TRANSLATION_ENVELOPE: Readonly<HermesMotionEnvelope> 
 /** Browser-sampled travel-hull extrema, rounded outward from the translation + rotation/hover cycle. */
 export const HERMES_PATROL_MOTION_ENVELOPE: Readonly<HermesMotionEnvelope> = Object.freeze({
   bottom: 27,
-  left: 51,
-  right: 34,
-  top: 28,
+  left: 52,
+  right: 35,
+  top: 30,
 });
 
 export function expandHermesFootprintForMotion(

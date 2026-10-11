@@ -2,6 +2,7 @@ import type { AuditSink } from '@openscience/observability';
 import { snapshotToolDefinitions, validateToolHistory } from './native-tool-protocol';
 import { AiGatewayError } from './errors';
 import { isImageUsageLimit, validateImageBytes, validateImageRequest, type ImageProvider, type ImageRequest, type ImageResult } from './image';
+import { createHash } from 'node:crypto';
 import { imagePromptHash } from './codex-image-protocol';
 import {
   DEFAULT_OCR_LIMITS,
@@ -69,6 +70,8 @@ export interface AiGatewayOptions {
   scientificReviewProvider?: ScienceReviewProvider;
   /** Explicit pixel-only reviewer; all other review routes retain scientificReviewProvider. */
   illustrationImageReviewProvider?: ScienceReviewProvider;
+  /** Optional native PNG review role; unset preserves the primary text provider. */
+  nativeImageReviewProvider?: Provider;
   /** 缺省：第一条为 primary。 */
   primaryIndex?: number;
   /** §17 审计：调用日志落 AuditSink（action='ai.gateway.call'）；缺省 no-op。 */
@@ -100,7 +103,10 @@ type TextExecutionControls = {
   nativeAgent?: boolean;
 };
 
-export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>>;
+export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>> & {
+  /** Trusted Worker envelope, never an SDK/client-selected role or provider. */
+  imageReview?: { input: ScienceReviewInput; target: Pick<NativeImageReviewTarget, 'provider' | 'model'> };
+};
 
 export type StructuredGenerationOptions = TextGenerationOptions & {
   /** Do not submit a second key/model after an uncertain paid source-review call. */
@@ -155,6 +161,7 @@ export class AiGateway {
   private readonly imageProviders: ImageProvider[];
   private readonly scientificReviewProvider?: ScienceReviewProvider;
   private readonly illustrationImageReviewProvider?: ScienceReviewProvider;
+  private readonly nativeImageReviewProvider?: Provider;
   private readonly primaryIndex: number;
   private readonly audit?: AuditSink;
   private readonly logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -174,9 +181,11 @@ export class AiGateway {
     assertProviderPool(opts.imageProviders ?? [], 'image');
     if (opts.scientificReviewProvider) assertProviderPool([opts.scientificReviewProvider], 'scientific review');
     if (opts.illustrationImageReviewProvider) assertProviderPool([opts.illustrationImageReviewProvider], 'illustration image review');
+    if (opts.nativeImageReviewProvider) assertProviderPool([opts.nativeImageReviewProvider], 'native image review');
     this.imageProviders = [...(opts.imageProviders ?? [])];
     this.scientificReviewProvider = opts.scientificReviewProvider;
     this.illustrationImageReviewProvider = opts.illustrationImageReviewProvider;
+    this.nativeImageReviewProvider = opts.nativeImageReviewProvider;
     this.providers = [...opts.providers];
     this.ocrProviders = [...(opts.ocrProviders ?? [])];
     this.primaryIndex = opts.primaryIndex ?? 0;
@@ -210,7 +219,7 @@ export class AiGateway {
 
   private async reviewScientificControlled(input: ScienceReviewInput, guard: SchemaGuard<unknown> | undefined, completedOnly: boolean): Promise<ScienceReviewProviderResult> {
     if (input.illustrationContext?.imageReviewMode !== undefined) {
-      if (completedOnly || !guard || !this.authorizeIllustrationReview || !this.nativeImageReviewSubmission
+      if (input.illustrationContext.imageReviewMode !== 'model-native' || completedOnly || !guard || !this.authorizeIllustrationReview || !this.nativeImageReviewSubmission
         || !('kind' in input.source) || input.source.kind !== 'illustration-image')
         throw new AiGatewayError('SCHEMA_VALIDATION', 'Native image review requires its durable submission owner');
       const sourceEvidenceIdentity = input.source.sourceEvidenceIdentity;
@@ -228,7 +237,7 @@ export class AiGateway {
           await this.authorizeIllustrationReview!(input);
         },
         submitProvider: (target, submit) => this.nativeImageReviewSubmission!(input, target, submit),
-      });
+      }, this.nativeImageReviewProvider);
       let parsed: unknown;
       try {
         parsed = parseStructuredJson(result.text);
@@ -492,10 +501,50 @@ export class AiGateway {
     if (typeof controls?.beforeProviderAttempt !== 'function' || typeof controls?.submitProvider !== 'function') {
       throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native agent submission authority is required');
     }
+    if (controls.imageReview) {
+      const role = controls.imageReview;
+      const selected = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+      const target = this.resolveNativeImageReviewTarget();
+      const source = role.input.source;
+      if (role.input.illustrationContext?.imageReviewMode !== 'agent-native' || !('kind' in source) || source.kind !== 'illustration-image'
+        || target.provider !== role.target.provider || target.model !== role.target.model || !this.authorizeIllustrationReview
+        || role.input.requestId !== role.input.authorizationContext.taskId) {
+        throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review envelope changed');
+      }
+      const snapshot: ScienceReviewInput = { ...role.input, source: Object.freeze({ ...source }),
+        authorizationContext: Object.freeze({ ...role.input.authorizationContext }),
+        illustrationContext: Object.freeze({ ...role.input.illustrationContext }),
+        attachments: role.input.attachments?.map(image => Object.freeze({ ...image, bytes: Buffer.from(image.bytes) })) };
+      nativeImageReviewMessages(snapshot);
+      const attachment = snapshot.attachments![0]!;
+      const actual = snapshotChatMessages(messages);
+      const imageInputs = actual.flatMap(message => message.images ?? []);
+      if (imageInputs.length > 1 || imageInputs.some(image => image.mediaType !== attachment.mediaType
+        || createHash('sha256').update(Buffer.from(image.data, 'base64')).digest('hex') !== attachment.sha256)) {
+        throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent received pixels outside its saved image');
+      }
+      return this.completeWithControls(actual, opts, { primaryProviderOnly: true, nativeAgent: true,
+        reviewSourceIdentity: source.sourceEvidenceIdentity,
+        beforeProviderAttempt: async () => {
+          if (await this.illustrationReviewPolicy?.(snapshot.authorizationContext) !== true)
+            throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review denied');
+          await this.authorizeIllustrationReview!(snapshot);
+          await controls.beforeProviderAttempt();
+        }, submitProvider: controls.submitProvider,
+      }, selected);
+    }
     return this.completeWithControls(messages, opts, { ...controls, primaryProviderOnly: true, nativeAgent: true });
   }
 
-  private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}): Promise<GatewayCompletion> {
+  /** Non-secret identity only; resolving a role never submits or rotates a provider. */
+  resolveNativeImageReviewTarget(): Pick<NativeImageReviewTarget, 'provider' | 'model'> {
+    const provider = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+    if (!provider || provider.supportsImageInput !== true || !provider.preflightNativeImages || !provider.preflightNativeTools)
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'Native Agent pixel provider cannot inspect images and tools');
+    return Object.freeze({ provider: provider.name, model: provider.model });
+  }
+
+  private async completeWithControls(messages: ChatMessage[], opts: TextGenerationOptions = {}, controls: TextExecutionControls = {}, nativeImageReviewProvider?: Provider): Promise<GatewayCompletion> {
     messages = snapshotChatMessages(messages);
     opts = { ...opts, ...(opts.tools !== undefined ? { tools: snapshotToolDefinitions(opts.tools) } : {}) };
     validateToolHistory(messages, opts.tools);
@@ -504,9 +553,12 @@ export class AiGateway {
     const promptHash = sha256Text(JSON.stringify(opts.tools ? { messages, tools: opts.tools } : messages));
     let lastError: unknown;
     const fallbackNotes: string[] = [];
-    for (let i = 0; i < this.providers.length; i++) {
-      const provider = this.providers[i];
-      const isPrimary = i === this.primaryIndex;
+    // Per-call selection: overlapping native text turns keep their own primary.
+    const providers = nativeImageReviewProvider ? [nativeImageReviewProvider] : this.providers;
+    const primaryIndex = nativeImageReviewProvider ? 0 : this.primaryIndex;
+    for (let i = 0; i < providers.length; i++) {
+      const provider = providers[i];
+      const isPrimary = i === primaryIndex;
       if (controls.primaryProviderOnly && !isPrimary) continue;
       if (imageCount && provider.supportsImageInput !== true) {
         fallbackNotes.push(`${provider.name}:native_images_unsupported`);

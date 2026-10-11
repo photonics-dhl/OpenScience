@@ -11,13 +11,18 @@ async function fixture() {
  const root=await mkdtemp(join(tmpdir(),'xgs-codex-runner-'));
  const paths={inbox:join(root,'inbox'),results:join(root,'results'),privateRoot:join(root,'private')};
  for(const p of Object.values(paths))await mkdir(p);
- const request={schemaVersion:1,id,prompt:'A scientific picture',promptHash:createHash('sha256').update('A scientific picture').digest('hex'),createdAt:Date.now(),deadlineAt:Date.now()+600000};
+ const createdAt=Date.now();
+ const request={schemaVersion:1,id,prompt:'A scientific picture',promptHash:createHash('sha256').update('A scientific picture').digest('hex'),createdAt,deadlineAt:createdAt+600000};
  return {...paths,request};
 }
-test('publishes one result and never invokes a completed task twice',async()=>{
+test('publishes one result and never invokes a completed task twice',async(t)=>{
+ let clock=Date.now();
+ // Expose a second time sample crossing a millisecond, without wall-clock retries.
+ t.mock.method(Date,'now',()=>clock++);
  const f=await fixture();await writeFile(join(f.inbox,id+'.json'),JSON.stringify(f.request));let calls=0;
  const execute=async()=>{calls++;return Buffer.from('validated-normalized-image');};
- await runOne({...f,execute});
+ assert.deepEqual(await runOne({...f,execute}),{id,status:'succeeded'});
+ assert.equal(calls,1);assert.equal(f.request.deadlineAt-f.request.createdAt,600000);
  const result=JSON.parse(await readFile(join(f.results,id,'result.json'),'utf8'));
  assert.equal(result.status,'succeeded');assert.equal(result.promptHash,f.request.promptHash);
  await writeFile(join(f.inbox,id+'.json'),JSON.stringify(f.request));

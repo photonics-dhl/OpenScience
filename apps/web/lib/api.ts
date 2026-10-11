@@ -407,8 +407,8 @@ export function getAcademicIdentityStatus(options: ReadOptions = {}): Promise<Ac
   return readResearchData('/api/auth/academic-identity', options);
 }
 
-export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
-  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/me' }) });
+export function beginOrcidConnection(returnTo = '/me'): Promise<{ authorizationUrl: string }> {
+  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo }) });
 }
 
 export function requestInstitutionEmailCode(email: string): Promise<{
@@ -480,6 +480,7 @@ export interface HermesNarrativeGeneration {
   locale: 'zh' | 'en';
   style: string;
   instruction: string;
+  output?: 'video';
 }
 export interface HermesResearchRun {
   id: string;
@@ -489,7 +490,7 @@ export interface HermesResearchRun {
   version: number;
   versionId: string | null;
   profile: 'onchip-field-sampling-v1' | 'content-driven-v1' | 'content-driven-image-v1' | 'visual-narrative-v1' | null;
-  generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction'> | null;
+  generationSettings?: Pick<HermesNarrativeGeneration, 'locale' | 'style' | 'instruction' | 'output'> | null;
   generationHold?: 'image-api-pending';
   maxAgentTasks: number | null;
   canRetryGeneration?: boolean;
@@ -538,8 +539,15 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
-export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun | null }> {
-  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}`, { signal });
+export interface HermesAudioAuditionPreset { provider: 'synclip'; voice: string; speed: number }
+export interface HermesVideoCapability { canGenerateVideo: boolean; audioAudition: { audio: HermesAudioAuditionPreset } | null }
+export async function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<HermesVideoCapability> {
+  const capability = await request<HermesVideoCapability>(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+  return { ...capability, audioAudition: capability.audioAudition ?? null };
+}
+
+export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?ingestionTaskId=${encodeURIComponent(ingestionTaskId)}${output ? `&output=${output}` : ''}`, { signal });
 }
 
 export interface HermesArtStyleCapability {
@@ -780,14 +788,14 @@ export async function listWorkspaces(): Promise<{ workspaces: WorkspaceApi[] }> 
   return { workspaces: await listMyWorkspaces() };
 }
 
-export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: unknown }, idempotencyKey = crypto.randomUUID()): Promise<{
+export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: unknown }, idempotencyKey: string = crypto.randomUUID()): Promise<{
   researchObject: { id: string; workspaceId: string; version: number };
 }> {
-  const { workspaceId, title } = input;
+  const { workspaceId, title, sdf } = input;
   return request('/api/research-objects', {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ workspaceId, title }),
+    body: JSON.stringify({ workspaceId, title, ...(sdf === undefined ? {} : { sdf }) }),
   });
 }
 
@@ -987,6 +995,8 @@ export interface PresentationAsset {
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
   canGenerateVideo?: boolean;
+  canGenerateAudioAudition?: boolean;
+  videoFrameAssetIds?: string[];
   canTransition?: boolean;
   canApprove?: boolean;
   canDelete?: boolean;
@@ -1128,11 +1138,13 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   });
 }
 
-export interface PresentationVideoRequest {
+export type PresentationVideoRequest = {
   profile: 'content-driven-v1';
   storyboardAssetId: string;
   sceneImageAssetIds: string[];
-}
+} & ({ purpose?: undefined; sceneIndex?: never; audio?: never; locale?: never } | {
+  purpose: 'audio-audition'; sceneIndex: number; audio: HermesAudioAuditionPreset; locale: 'zh' | 'en';
+});
 export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
@@ -1149,6 +1161,48 @@ export async function generatePresentationStoryboard(roId: string, versionId: st
 
 export async function getPresentationTask(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}`, { signal });
+}
+
+export function presentationTaskAudioUrl(roId: string, versionId: string, taskId: string): string {
+  return `${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}/audio`;
+}
+
+export interface PresentationAudioAudition {
+  taskId: string;
+  sceneIndex: number;
+  contentType: 'audio/mpeg';
+  durationSeconds: number;
+  timingStatus: 'decoded' | 'requires_revision';
+}
+
+export function readPresentationAudioAudition(task: AgentTaskView): PresentationAudioAudition | null {
+  if (task.kind !== 'presentation.generate' || task.status !== 'succeeded' || task.result?.purpose !== 'audio-audition') return null;
+  const value = task.result.audioAudition;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const audio = value as Record<string, unknown>;
+  const fields = ['taskId', 'sceneIndex', 'contentType', 'durationSeconds', 'timingStatus'];
+  if (Object.keys(audio).length !== fields.length || !fields.every(field => Object.hasOwn(audio, field))
+    || audio.taskId !== task.id || typeof audio.taskId !== 'string' || !audio.taskId
+    || !Number.isInteger(audio.sceneIndex) || Number(audio.sceneIndex) < 0 || Number(audio.sceneIndex) > 5
+    || audio.contentType !== 'audio/mpeg' || typeof audio.durationSeconds !== 'number'
+    || !Number.isFinite(audio.durationSeconds) || audio.durationSeconds <= 0 || audio.durationSeconds > 600
+    || (audio.timingStatus !== 'decoded' && audio.timingStatus !== 'requires_revision')) return null;
+  return { taskId: audio.taskId, sceneIndex: Number(audio.sceneIndex), contentType: 'audio/mpeg', durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus };
+}
+
+export async function downloadPresentationTaskAudio(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<Blob> {
+  const revision = sessionRevision;
+  const response = await fetch(presentationTaskAudioUrl(roId, versionId, taskId), {
+    method: 'GET', credentials: 'include', cache: 'no-store', redirect: 'error', signal,
+  });
+  if (revision !== sessionRevision) throw sessionChangedError();
+  if (!response.ok) throw new ApiClientError('DOWNLOAD_FAILED', 'Audio download could not be completed', response.status);
+  if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'audio/mpeg') {
+    throw new ApiClientError('AUDIO_UNAVAILABLE', 'Audio is not available', response.status);
+  }
+  const blob = await response.blob();
+  if (revision !== sessionRevision) throw sessionChangedError();
+  return blob;
 }
 
 export async function reviewExistingPresentationImage(roId: string, versionId: string, assetId: string, idempotencyKey: string): Promise<{ task: AgentTaskView }> {
@@ -1436,6 +1490,7 @@ export interface WorkspaceGuideResult {
     locale: 'zh' | 'en';
     style: string;
     instruction: string;
+    output?: 'video';
   };
   draftEdit?: { base: NonNullable<WorkspaceGuidePayload['context']['editorDraft']>; changes: Partial<Omit<SdfCore, 'schemaVersion'>> };
   presentationDraft?: {
@@ -1921,11 +1976,11 @@ export async function refreshIngestionAnalysis(
 }
 
 export async function reanalyzeConfirmedIngestion(taskId: string, sourceAgentTaskId: string, idempotencyKey: string,
-  sourceReanalysis?: import('@openscience/domain').NativeSourceCorrectionInput): Promise<IngestionTaskSummary> {
+  sourceReanalysis?: import('@openscience/domain').NativeSourceCorrectionInput, output?: 'video'): Promise<IngestionTaskSummary> {
   const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/reanalyze`, {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, ...(sourceReanalysis ? { sourceReanalysis } : {}) }),
+    body: JSON.stringify({ processingConsent: true, sourceAgentTaskId, ...(sourceReanalysis ? { sourceReanalysis } : {}), ...(output ? { output } : {}) }),
   });
   return result.task;
 }

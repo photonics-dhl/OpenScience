@@ -43,8 +43,8 @@ export function PaperDoiAssociation({ object, onSaved }: { object: ResearchObjec
     finally { setBusy(null); }
   }
 
-  return <section className={styles.doiSection} aria-labelledby="paper-doi-heading" aria-busy={busy !== null}>
-    <h2 id="paper-doi-heading">{t('title')}</h2>
+  return <details className={styles.doiSection} aria-busy={busy !== null}>
+    <summary>{t('title')}</summary>
     <p className={styles.doiHelp}>{t('body')}</p>
     <label className={styles.doiLabel} htmlFor="paper-doi-input">{t('label')}</label>
     <div className={styles.doiControls}>
@@ -63,5 +63,5 @@ export function PaperDoiAssociation({ object, onSaved }: { object: ResearchObjec
     {feedback ? <p className={styles.feedback} role="status">{feedback}</p> : null}
     {error ? <p className={styles.error} role="alert">{error}</p> : null}
     <p className={styles.doiPrivacy}>{t('privacy')}</p>
-  </section>;
+  </details>;
 }

@@ -6,6 +6,7 @@ transaction_initialize_state() {
   TRANSACTION_PHASE=inactive
   TRANSACTION_JOURNAL_ACTIVE=0
   TRANSACTION_COMMITTED=0
+  TRANSACTION_NATIVE_STARTED=0
 }
 
 transaction_restore_signal_traps() {
@@ -27,6 +28,10 @@ transaction_rollback_application() {
   }
   case "$TRANSACTION_PHASE" in
     prepared)
+      if [ "$TRANSACTION_NATIVE_STARTED" -eq 1 ]; then
+        echo "ROLLBACK_FAILED_NATIVE_UNCERTAIN: durable original state retained" >&2
+        exit 70
+      fi
       transaction_journal_clear || exit 70
       TRANSACTION_JOURNAL_ACTIVE=0
       ;;
@@ -95,6 +100,17 @@ transaction_mark_phase() {
 transaction_complete_migration() {
   [ "$TRANSACTION_PHASE" = migrating ] || return 64
   TRANSACTION_PHASE=prepared
+}
+
+transaction_quiesce_native_refresh() {
+  [ "${REFRESH_NATIVE_RESOURCES:-0}" -eq 1 ] || return 64
+  case "$TRANSACTION_PHASE" in
+    prepared) transaction_mark_phase switching ;;
+    migrating|switching) ;;
+    *) return 64 ;;
+  esac
+  TRANSACTION_NATIVE_STARTED=1
+  transaction_pause_native_producers
 }
 
 transaction_publish_candidate() {

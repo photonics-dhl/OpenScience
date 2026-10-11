@@ -24,7 +24,7 @@
   --color-rejected-text: #991b1b;
   --color-warn-bg: #fef9c3;
   --color-warn-text: #854d0e;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', var(--font-noto-serif-sc, sans-serif), sans-serif;
 }
 
 * {
@@ -188,7 +188,7 @@ body {
   --color-accent-primary: #0d4d55;
   --color-accent-primary-strong: #125d66;
   --focus-ring: #125d66;
-  --font-ui: var(--font-bricolage, Arial), 'Microsoft YaHei', sans-serif;
+  --font-ui: var(--font-bricolage, Arial), 'Microsoft YaHei', 'PingFang SC', var(--font-noto-serif-sc, sans-serif), sans-serif;
   --os-paper-strong: #ffffff;
   --shadow-card: 0 14px 30px -22px rgb(28 62 68 / .18), 0 1px 3px rgb(28 62 68 / .04);
 }
@@ -1663,6 +1663,7 @@ textarea::placeholder {
   max-height: 82dvh;
   padding: 1.25rem !important;
   overflow: auto;
+  translate: none;
   transform: translateX(-50%) !important;
   border-radius: 1.25rem 1.25rem 0 0 !important;
 }
@@ -2457,7 +2458,7 @@ body {
 }
 
 .hermes-workspace-stage[data-hermes-assistant-open='true'] {
-  opacity: .18;
+  opacity: 1;
   pointer-events: none;
 }
 
@@ -2582,6 +2583,13 @@ body {
 
 .hermes-context-menu[data-compact='true'][data-side='left'] { translate: calc(50% + var(--hermes-menu-correction-x, 0px)) calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
 .hermes-context-menu[data-compact='true'][data-side='right'] { translate: calc(-50% + var(--hermes-menu-correction-x, 0px)) calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
+
+/* The avatar uses Radix viewport placement, without the full character's carried-sheet offsets. */
+.hermes-context-menu[data-hermes-menu-layout='avatar'][data-compact] {
+  translate: none;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
 
 .hermes-context-menu[data-hermes-menu-fallback='wide'] {
   width: min(56rem, calc(100vw - 1rem));
@@ -3630,7 +3638,6 @@ body [data-reading-role='reading'] {
 
 .hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-guide-nudge {
   animation: none !important;
-  opacity: 1;
   transform: none;
   transition: none;
 }

@@ -4,11 +4,27 @@ import {
   resolveHermesCompanionSurface,
   currentHermesPresentation,
   hermesPresentationCanDock,
+  currentHermesAnchorRect,
+  hermesStartsCompact,
+  hermesUsesAvatarEntry,
 } from '../lib/hermes/companion-surface';
 
 describe('global Hermes product routes', () => {
+  it('starts private research in an avatar entry at every viewport', () => {
+    for (const pathname of ['/guide', '/guide/', '/dashboard', '/dashboard/', '/research-objects/new', '/research-objects/object/edit', '/research-objects/object/overview']) {
+      expect(hermesStartsCompact(pathname)).toBe(true);
+      expect(hermesUsesAvatarEntry(pathname)).toBe(true);
+    }
+  });
+
+  it('keeps the research avatar out of public reading and landing', () => {
+    for (const pathname of ['/', '/research/OSR-2026-000023', '/research-objects-old/object/edit']) {
+      expect(hermesUsesAvatarEntry(pathname)).toBe(false);
+    }
+  });
+
   it.each([
-    '/guide', '/guide/', '/explore', '/research/OSR-2026-000023',
+    '/explore', '/research/OSR-2026-000023',
     '/research/OSR-2026-000023/v/1', '/collections/optics',
     '/auth/login', '/auth/register', '/me', '/settings', '/developers', '/trash',
     '/journals', '/journals/example', '/journals/apply', '/journals/apply/application',
@@ -19,7 +35,7 @@ describe('global Hermes product routes', () => {
   });
 
   it.each([
-    '/dashboard', '/research-objects/new', '/research-objects/object/edit',
+    '/guide', '/guide/', '/dashboard', '/research-objects/new', '/research-objects/object/edit',
     '/research-objects/object/overview', '/research-objects/object/hermes',
     '/research-objects/object/files', '/research-objects/object/presentation',
     '/research-objects/object/publish', '/research-objects/object/versions',
@@ -56,5 +72,16 @@ describe('Hermes presentation ownership', () => {
     expect(hermesPresentationCanDock({ floating: false })).toBe(true);
     expect(hermesPresentationCanDock({})).toBe(true);
     expect(hermesPresentationCanDock(null)).toBe(false);
+  });
+
+  it('does not place a new route in the outgoing page anchor before its effects run', () => {
+    const anchor = {};
+    const rect = { width: 360, height: 400, left: 900, top: 160 };
+    const measured = { pathname: '/dashboard', anchor, rect };
+    expect(currentHermesAnchorRect(measured, '/dashboard', anchor)).toBe(rect);
+    expect(currentHermesAnchorRect(measured, '/guide', anchor)).toBeNull();
+    expect(currentHermesAnchorRect(measured, '/guide', null)).toBeNull();
+    expect(currentHermesAnchorRect(measured, '/dashboard', {})).toBeNull();
+    expect(currentHermesAnchorRect(null, '/dashboard', anchor)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { runInNewContext } from 'node:vm';
+import { validateNativeJournalState } from './production-deploy-lock.mjs';
 
 import {
   deriveReleaseImageTags,
@@ -205,12 +206,13 @@ function retentionHost() {
     Image: images.get(`openscience-agent-worker:${active}`), State: { Running: true }, Mounts: [],
   }];
   const commands = [];
-  const host = { paths, nodes, images, containers, commands, file, directory, locked: true, failRemove: undefined };
+  const host = { paths, nodes, images, containers, commands, file, directory, reads: [], locked: true, failRemove: undefined };
   const bindings = {
     ...posix,
     randomUUID: () => 'fixture',
     retentionModuleUrl: 'file:///retention.mjs',
     fileURLToPath: () => '/retention.mjs',
+    validateNativeJournalState,
     verifyProductionDeployLockOnHost: async (options) => {
       assert.equal(options.lockFd, 9);
       assert.equal(options.requiredUid, 0);
@@ -226,7 +228,7 @@ function retentionHost() {
       };
     },
     realpath: async (path) => entry(path).realPath ?? path,
-    readFile: async (path) => entry(path).content,
+    readFile: async (path) => { host.reads.push(path); return entry(path).content; },
     readdir: async (path, options) => {
       assert.equal(entry(path).kind, 'directory');
       const names = [...nodes.keys()].filter((candidate) => posix.dirname(candidate) === path).map((candidate) => posix.basename(candidate));
@@ -300,6 +302,9 @@ function retentionHost() {
     return output;
   };
   host.snapshot = () => JSON.stringify({ nodes: [...nodes].sort(), images: [...images].sort() });
+  host.readJournal = () => runInNewContext(`${retentionProgram}\nreadJournalIdentity(PATHS);`, {
+    ...bindings, process: { argv: ['node', '/retention-test.mjs'] },
+  });
   return host;
 }
 
@@ -353,6 +358,106 @@ test('normal prepare still requires a journal and keeps historical runtime input
   host.nodes.delete(host.paths.pending);
   await assert.rejects(host.invoke('prepare', ['--prune-unused', '1']), /container mounts inactive release/u);
   assert.equal(host.nodes.has(host.paths.pending), false);
+});
+
+function publishedNativeJournal(restored = false) {
+  return {
+    schemaVersion: 1, candidateSha: active, rollbackSha: rollback, phase: 'published', updatedAt: '2026-10-10T04:18:00.000Z',
+    nativeRefresh: {
+      before: { runtimeId: `installed-native-continuation-${rollback}`, skillCatalogueId: `project-catalogue-${rollback}`,
+        timerEnableState: 'enabled-runtime', timerWasActive: true,
+        producers: { api: true, web: true, agentWorker: true }, containers: { api: '1'.repeat(64), web: '2'.repeat(64), agentWorker: '3'.repeat(64) } },
+      quiesceState: restored ? 'rollback_quiesced' : 'quiesced', installState: 'installed', restoreState: restored ? 'restored_verified' : 'not_started',
+      candidateCheckpoint: '2026-10-10T04:17:00.000Z',
+      installation: { releaseSha: active, runtimeId: `installed-native-continuation-${active}`, skillCatalogueId: `project-catalogue-${active}`, timerDeferred: true },
+      candidateContainers: { web: '5'.repeat(64), api: '4'.repeat(64), agentWorker: '6'.repeat(64) },
+    },
+  };
+}
+
+function retainedPending(host) {
+  host.file(host.paths.pending, JSON.stringify({ schemaVersion: 2, candidateSha: active, rollbackSha: rollback,
+    releaseShas: [], capabilityShas: [], imageTags: [] }), 0o600);
+  host.file(host.paths.active, `${rollback}\n`);
+}
+
+test('retention actual prepare and restored abort consume and preserve normalized Native journal', async t => {
+  for (const command of ['prepare', 'abort']) await t.test(command, async () => {
+    const host = retentionHost(), journal = publishedNativeJournal(command === 'abort'), content = JSON.stringify(journal);
+    host.file(host.paths.journal, content, 0o600);
+    if (command === 'abort') retainedPending(host);
+    await host.invoke(command);
+    assert.ok(host.reads.includes(host.paths.journal), 'CLI consumer must enter the real trusted journal reader');
+    assert.equal(host.nodes.has(host.paths.pending), command === 'prepare');
+    assert.equal(host.nodes.get(host.paths.journal).content, content, 'reading must not rewrite Native evidence');
+    const read = await host.readJournal();
+    assert.equal(JSON.stringify(read.nativeRefresh), JSON.stringify(validateNativeJournalState(journal.nativeRefresh, active)));
+    assert.equal(host.nodes.has(`${host.paths.releases}/${inactive}`), true);
+    assert.equal(host.nodes.has('/opt/openscience/data/business-data'), true);
+    assert.equal(host.commands.some(args => args[0] === 'image' && args[1] === 'rm'), false);
+  });
+});
+
+test('retention actual journal consumers keep legacy optional Native records readable', async t => {
+  for (const command of ['prepare', 'abort']) for (const mode of ['no-native', 'native-without-saved-ids']) await t.test(`${command}/${mode}`, async () => {
+    const host = retentionHost(), journal = publishedNativeJournal(command === 'abort');
+    if (mode === 'no-native') delete journal.nativeRefresh;
+    else delete journal.nativeRefresh.candidateContainers;
+    host.file(host.paths.journal, JSON.stringify(journal), 0o600);
+    if (command === 'abort') retainedPending(host);
+    await host.invoke(command);
+    assert.ok(host.reads.includes(host.paths.journal));
+    const read = await host.readJournal();
+    if (mode === 'no-native') assert.equal(Object.hasOwn(read, 'nativeRefresh'), false);
+    else assert.equal(Object.hasOwn(read.nativeRefresh, 'candidateContainers'), false, 'legacy IDs must not be inferred or backfilled');
+  });
+});
+
+test('retention actual journal consumers reject unknown or malformed Native without pending mutations', async t => {
+  const bad = {
+    'unknown top key': journal => { journal.unrecognized = true; },
+    'wrong Native top alias': journal => { journal.native = journal.nativeRefresh; delete journal.nativeRefresh; },
+    'null Native': journal => { journal.nativeRefresh = null; },
+    'array Native': journal => { journal.nativeRefresh = []; },
+    'empty Native': journal => { journal.nativeRefresh = {}; },
+    'unknown nested field': journal => { journal.nativeRefresh.unrecognized = true; },
+    'wrong candidate binding': journal => { journal.nativeRefresh.installation.releaseSha = rollback; },
+    'wrong runtime binding': journal => { journal.nativeRefresh.installation.runtimeId = `installed-native-continuation-${rollback}`; },
+    'malformed producer': journal => { journal.nativeRefresh.before.producers.api = 'true'; },
+    'malformed saved ID': journal => { journal.nativeRefresh.candidateContainers.api = 'invalid'; },
+    'IDs without checkpoint': journal => { journal.nativeRefresh.candidateCheckpoint = null; },
+    'unpublished phase': journal => { journal.phase = 'switching'; },
+  };
+  for (const command of ['prepare', 'abort']) for (const [label, damage] of Object.entries(bad)) await t.test(`${command}/${label}`, async () => {
+    const host = retentionHost(), journal = publishedNativeJournal(command === 'abort'); damage(journal);
+    host.file(host.paths.journal, JSON.stringify(journal), 0o600);
+    if (command === 'abort') retainedPending(host);
+    const before = host.snapshot();
+    await assert.rejects(host.invoke(command), /journal identity|Native deployment state/u);
+    assert.ok(host.reads.includes(host.paths.journal));
+    assert.equal(host.snapshot(), before, 'invalid input must neither publish nor remove pending intent or release/image data');
+    assert.deepEqual(host.commands, [], 'invalid journal must be rejected before retention Docker operations');
+  });
+});
+
+test('retention Native journal still respects FD9, file trust and referenced release protection', async t => {
+  const cases = {
+    'unheld lock': host => { host.locked = false; },
+    'untrusted journal owner': host => { host.nodes.get(host.paths.journal).uid = 1000; },
+    'wrong journal mode': host => { host.nodes.get(host.paths.journal).mode = 0o644; },
+    'linked journal': host => { host.nodes.get(host.paths.journal).kind = 'symlink'; },
+    'hardlinked journal': host => { host.nodes.get(host.paths.journal).nlink = 2; },
+    'journal wrong path': host => { host.nodes.get(host.paths.journal).realPath = '/foreign'; },
+    'wrong immutable source': host => { host.nodes.get(`${host.paths.releases}/${active}/.release-source`).content = `${rollback}\n`; },
+    'referenced inactive release': host => { host.containers[0].Mounts = [{ Source: `${host.paths.releases}/${inactive}/tools` }]; },
+  };
+  for (const [label, damage] of Object.entries(cases)) await t.test(label, async () => {
+    const host = retentionHost(); host.file(host.paths.journal, JSON.stringify(publishedNativeJournal()), 0o600); damage(host);
+    const before = host.snapshot();
+    await assert.rejects(host.invoke('prepare', ['--prune-unused', '1']), /flock|unsafe production state|identity|source|mounts inactive/u);
+    assert.equal(host.snapshot(), before);
+    assert.equal(host.nodes.has(host.paths.pending), false);
+  });
 });
 
 test('prepare-cleanup fails closed before publishing an intent when host guards reject', async (t) => {

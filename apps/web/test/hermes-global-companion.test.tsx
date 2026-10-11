@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigation = vi.hoisted(() => ({ pathname: '/guide', push: vi.fn() }));
-const handlers = vi.hoisted(() => ({ items: new Map<string, () => void>() }));
+const handlers = vi.hoisted(() => ({ items: new Map<string, () => void>(), invoke: null as (() => void) | null }));
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 vi.mock('next/navigation', () => ({
   usePathname: () => navigation.pathname,
@@ -13,7 +13,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('../components/ui/context-menu', () => {
   const PassThrough = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
   return {
-    ContextMenu: PassThrough, ContextMenuTrigger: PassThrough, ContextMenuContent: PassThrough,
+    ContextMenu: PassThrough, ContextMenuContent: PassThrough,
+    ContextMenuTrigger: ({ children }: { children: React.ReactElement<{ onClick: () => void }> }) => {
+      handlers.invoke = children.props.onClick;
+      return children;
+    },
     ContextMenuGroup: PassThrough, ContextMenuLabel: PassThrough, ContextMenuSeparator: () => null,
     ContextMenuItem: (props: { children: React.ReactNode; onSelect: () => void; 'data-hermes-navigation'?: string; 'data-hermes-action-key'?: string }) => {
       const key = props['data-hermes-navigation'] ?? props['data-hermes-action-key'];
@@ -32,7 +36,7 @@ import { ResearchGuide } from '../components/guide/ResearchGuide';
 
 const suggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral' as const, titleKey: 'guide.neutral.title' };
 
-beforeEach(() => { navigation.push.mockClear(); handlers.items.clear(); });
+beforeEach(() => { vi.stubGlobal('React', React); navigation.push.mockClear(); handlers.items.clear(); handlers.invoke = null; });
 
 describe('global companion SSR ownership', () => {
   it.each(['return', 'create'] as const)('keeps the %s identity invitation with only the floating companion', (intent) => {
@@ -46,11 +50,12 @@ describe('global companion SSR ownership', () => {
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
 
-  it('keeps the actual guide invitation with only the floating companion', () => {
+  it('keeps the actual guide composer with a single compact companion', () => {
     navigation.pathname = '/guide';
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><ResearchGuide /></HermesWorkspaceStageProvider>);
     expect(markup).toContain('href="/dashboard"');
-    expect(markup).toContain('role="tablist"');
+    expect(markup).toContain('id="guide-research-idea"');
+    expect(markup).not.toContain('role="tablist"');
     expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
@@ -77,7 +82,9 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('Current research object');
     expect(markup).not.toContain('data-hermes-presence-control');
     expect(markup).toContain('data-hermes-size-mode="automatic"');
-    expect(markup).toContain('data-hermes-stage-size="360"');
+    const isWorkspace = pathname === '/guide' || pathname === '/dashboard' || pathname === '/research-objects/object/edit';
+    expect(markup).toContain(`data-hermes-stage-size="${isWorkspace ? 64 : 120}"`);
+    if (isWorkspace) expect(markup).toContain('data-hermes-avatar="true"');
   });
 
   it.each(['/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {
@@ -102,7 +109,9 @@ describe('global companion SSR ownership', () => {
     const docked = renderToStaticMarkup(<HermesDockAnchor {...props} floating={false} />);
     expect(floating).toContain('data-hermes-floating-owner="true"');
     expect(docked).toContain('class="hermes-dock-anchor"');
-    expect(docked).not.toContain('hidden');
+    expect(docked).not.toMatch(/\shidden(?:=|>)/);
+    expect(docked).not.toMatch(/class="[^"]*\bhidden\b/);
+    expect(docked).not.toMatch(/<div\b[^>]*aria-hidden="true"/);
   });
 
   it('retains the editor conversation as the owner while it is closed', () => {
@@ -112,11 +121,43 @@ describe('global companion SSR ownership', () => {
       dashboardContext={{ tasks: [], researchObjects: [] }}
     />);
     expect(markup).toContain('data-hermes-floating-owner="editor"');
+    expect(markup).toContain('data-hermes-dock-anchor="true"');
     expect(markup).not.toContain('data-live2d-instance');
   });
 });
 
 describe('public pet navigation', () => {
+  it('removes the redundant conversation invoke from Tab order while keeping the pet menu available', () => {
+    const onInvoke = vi.fn();
+    const onMenuAction = vi.fn();
+    const markup = renderToStaticMarkup(<HermesVisualAdapter
+      inConversation onInvoke={onInvoke} onMenuAction={onMenuAction} state="idle" suggestion={suggestion}
+      protectedGeometryVersion={0} reducedMotion
+    />);
+    const invoke = markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0];
+    const menu = markup.match(/<button\b[^>]*data-hermes-pet-menu-button="true"[^>]*>/)?.[0];
+    expect(invoke).toContain('tabindex="-1"');
+    expect(invoke).not.toContain('disabled');
+    expect(menu).toBeDefined();
+    expect(menu).not.toMatch(/tabindex="-1"|disabled/);
+    expect(handlers.items.has('greet')).toBe(true);
+    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
+    handlers.invoke!();
+    expect(onInvoke).not.toHaveBeenCalled();
+    handlers.items.get('greet')!();
+    expect(onMenuAction).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the page invoke keyboard reachable and actionable outside the conversation', () => {
+    const onInvoke = vi.fn();
+    const markup = renderToStaticMarkup(<HermesVisualAdapter
+      onInvoke={onInvoke} state="idle" suggestion={suggestion} protectedGeometryVersion={0} reducedMotion
+    />);
+    expect(markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0]).not.toContain('tabindex="-1"');
+    handlers.invoke!();
+    expect(onInvoke).toHaveBeenCalledOnce();
+  });
+
   it('offers existing companion gestures and real product navigation without research-specific actions', () => {
     const onMenuAction = vi.fn();
     const markup = renderToStaticMarkup(<HermesVisualAdapter
@@ -127,7 +168,7 @@ describe('public pet navigation', () => {
       expect(handlers.items.has(key)).toBe(true);
     }
     for (const key of ['continue', 'evidence', 'sources', 'compare']) expect(handlers.items.has(key)).toBe(false);
-    expect(markup).toContain('aria-label="dashboard"');
+    expect(markup.match(/<button\b[^>]*data-hermes-input-owner="true"[^>]*>/)?.[0]).toContain('aria-label="guide.invoke"');
     expect(markup).toContain('data-hermes-pet-menu-button="true"');
     expect(markup).toContain('aria-haspopup="menu"');
     handlers.items.get('dashboard')!();

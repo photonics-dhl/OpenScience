@@ -28,11 +28,21 @@ function isSafeDeterministicSvg(bytes: Buffer): boolean {
 }
 export async function sendPresentationAssetContent(
   storage: StorageAdapter,
-  asset: { id: string; objectKey: string; contentHash: string; kind: string; generator: string; generatorVersion: string },
+  asset: { id: string; objectKey: string; contentHash: string; kind: string; generator: string; generatorVersion: string;
+    size?: number; contentType?: string },
   reply: FastifyReply,
   visibility: 'public' | 'private',
   headers: { range?: string; 'if-range'?: string } = {},
 ) {
+  const privateAudio = asset.kind === 'audio' && visibility === 'private';
+  if (asset.kind === 'audio') {
+    reply.header('Cache-Control', 'private, no-store').header('Referrer-Policy', 'no-referrer')
+      .header('X-Content-Type-Options', 'nosniff').header('Content-Security-Policy', "sandbox; default-src 'none'");
+    if (!privateAudio || asset.contentType !== 'audio/mpeg' || !Number.isSafeInteger(asset.size)
+      || (asset.size ?? 0) < 1 || (asset.size ?? 0) > MAX_PRESENTATION_BYTES || !/^[a-f0-9]{64}$/iu.test(asset.contentHash)) {
+      throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
+    }
+  }
   let head;
   try {
     head = await storage.headObject(asset.objectKey);
@@ -40,7 +50,8 @@ export async function sendPresentationAssetContent(
     throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable', { cause: error });
   }
   if (!head) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable');
-  if (head.size < 1 || head.size > MAX_PRESENTATION_BYTES) {
+  if (head.size < 1 || head.size > MAX_PRESENTATION_BYTES
+    || (privateAudio && (head.size !== asset.size || head.contentType?.toLowerCase().split(';', 1)[0] !== 'audio/mpeg'))) {
     throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
   }
   let object;
@@ -49,7 +60,8 @@ export async function sendPresentationAssetContent(
   } catch (error) {
     throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable', { cause: error });
   }
-  if (object.size !== head.size || object.size > MAX_PRESENTATION_BYTES) {
+  if (object.size !== head.size || object.size > MAX_PRESENTATION_BYTES
+    || (privateAudio && object.contentType?.toLowerCase().split(';', 1)[0] !== 'audio/mpeg')) {
     object.body.destroy();
     throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
   }
@@ -82,18 +94,18 @@ export async function sendPresentationAssetContent(
     && [DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, 'openscience-presentation-v1'].includes(asset.generatorVersion)
     && isSafeDeterministicSvg(bytes);
   const inline = ((asset.kind === 'image' || asset.kind === 'chart') && safeInlineImages.has(storedType))
-    || deterministicChartSvg || (asset.kind === 'video' && safeInlineVideos.has(storedType));
+    || deterministicChartSvg || (asset.kind === 'video' && safeInlineVideos.has(storedType)) || privateAudio;
   const contentType = inline ? storedType : 'application/octet-stream';
   reply
     .header('Content-Type', contentType)
-    .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="presentation-${asset.id}"`)
+    .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="presentation-${asset.id}${privateAudio ? '.mp3' : ''}"`)
     .header('X-Content-Type-Options', 'nosniff')
     .header('Content-Security-Policy', "sandbox; default-src 'none'")
     .header('Cache-Control', visibility === 'private' ? 'private, no-store' : 'public, max-age=31536000, immutable')
     .header('Referrer-Policy', 'no-referrer');
 
   // Authenticate and verify the complete stored object before exposing lengths or slices.
-  if (asset.kind === 'video' && safeInlineVideos.has(storedType)) {
+  if ((asset.kind === 'video' && safeInlineVideos.has(storedType)) || privateAudio) {
     const etag = `"${asset.contentHash.toLowerCase()}"`;
     reply.header('Accept-Ranges', 'bytes').header('ETag', etag);
     if (headers.range !== undefined && (headers['if-range'] === undefined || headers['if-range'] === etag)) {

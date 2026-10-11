@@ -11,6 +11,7 @@ import { HermesSourceReview } from '@/components/hermes/HermesSourceReview';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
@@ -58,14 +59,15 @@ export function isRetryableSdfExtraction(task: Pick<IngestionTaskDetail['task'],
 }
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
+  const [fallbackChoice, setFallbackChoice] = useState<string | null>(null);
   const guideTaskId = searchParams.get('guideTask') ?? '';
   const taskId = guideTaskId ? '' : searchParams.get('task') ?? '';
   const runId = searchParams.get('run') ?? '';
   const claimReview = searchParams.get('claimReview') === '1';
-  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}:${claimReview}:${guideTaskId}`} routeParams={routeParams} taskId={taskId} runId={runId} claimReview={claimReview} guideTaskId={guideTaskId} />;
+  return <HermesResearchPage key={`${routeParams.id}:${taskId}:${runId}:${claimReview}:${guideTaskId}`} routeParams={routeParams} taskId={taskId} runId={runId} claimReview={claimReview} guideTaskId={guideTaskId} fallbackChoice={fallbackChoice} chooseFallback={setFallbackChoice} />;
 }
 
-function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTaskId }: { routeParams: { id: string }; taskId: string; runId: string; claimReview: boolean; guideTaskId: string }) {
+function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTaskId, fallbackChoice, chooseFallback }: { routeParams: { id: string }; taskId: string; runId: string; claimReview: boolean; guideTaskId: string; fallbackChoice: string | null; chooseFallback: (objectId: string) => void }) {
   const router = useRouter();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
@@ -80,6 +82,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
   const [saved, setSaved] = useState(false);
   const [confirmation, setConfirmation] = useState<IngestionConfirmation | null>(null);
   const [hermesOpen, setHermesOpen] = useState(false);
+  const companion = useOptionalHermesWorkspaceStage();
+  useEffect(() => { if (companion?.companionOpen) chooseFallback(routeParams.id); }, [companion?.companionOpen, routeParams.id, chooseFallback]);
   const [run, setRun] = useState<HermesResearchRun | null>(null);
 
   const [researchTitle, setResearchTitle] = useState('');
@@ -199,9 +203,17 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
     }
   }
 
+  const fallbackChosen = fallbackChoice === routeParams.id;
+  const usesFallbackAssistant = fallbackChosen || Boolean(companion?.companionOpen) || Boolean(runId && (!run || run.profile === 'visual-narrative-v1'))
+    || Boolean(taskId && !detail);
+  const openAssistant = () => {
+    if (usesFallbackAssistant && companion) { chooseFallback(routeParams.id); companion.openCompanion(); }
+    else setHermesOpen(true);
+  };
   const workspaceNavigation = (
-    <div className="overflow-x-auto border-b border-os-rule-paper" data-workspace-mode-tabs="true">
-      <ResearchWorkspaceNav active="hermes" objectId={routeParams.id} />
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-os-rule-paper px-4 py-2" data-workspace-mode-tabs="true">
+      <div className="min-w-0 flex-1 basis-80 overflow-x-auto"><ResearchWorkspaceNav active="hermes" objectId={routeParams.id} /></div>
+      <HermesDockAnchor floating={false} usesFallbackAssistant={usesFallbackAssistant} assistantOpen={usesFallbackAssistant ? companion?.companionOpen ?? false : hermesOpen} onInvoke={openAssistant} state={approvalOpen ? 'awaiting_approval' : undefined} suggestion={reviewSuggestion} workspaceId={routeParams.id} />
     </div>
   );
   const literatureEntry = (
@@ -230,9 +242,9 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
         {!loading && !error ? <HermesResearchRunPanel key={runId} researchObjectId={routeParams.id} tasks={tasks} runId={runId} guideTaskId={guideTaskId} activeTaskId={taskId || undefined} onRunCreated={onRunCreated} onRunUpdated={setRun} /> : null}
         <details className="mt-6 max-w-3xl text-sm text-os-muted-paper" open={Boolean(error)}><summary className="min-h-11 cursor-pointer py-3">{runT('narrative.previousAnalyses')}</summary><HermesTaskEntry researchObjectId={routeParams.id} researchTitle={researchTitle} tasks={tasks} loading={loading} error={error} onRetry={() => setReload((value) => value + 1)} /></details>
         {!loading && !error && claimReview && run?.status === 'awaiting_claim_review' ? <HermesClaimEvidenceReview researchObjectId={routeParams.id} run={run} onDone={() => router.replace(`/research-objects/${encodeURIComponent(routeParams.id)}/hermes?run=${encodeURIComponent(run.id)}`)} /> : null}
-        {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={() => setHermesOpen(true)}>{t('askHermes')}</button>}
+        {!loading && !error && <button type="button" className="mt-5 min-h-11 rounded-panel border border-os-vermilion-ink px-4 py-2 font-semibold text-os-vermilion-ink" onClick={openAssistant}>{t('askHermes')}</button>}
         {literatureEntry}
-        <HermesAssistantDrawer dashboardContext={{ tasks: tasks.filter((task) => task.researchObjectId === routeParams.id).map(({ id, researchObjectId, state }) => ({ id, researchObjectId, state })), researchObjects: [{ id: routeParams.id, status: researchStatus, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={routeParams.id} suggestion={reviewSuggestion} target={null} />
+        {!usesFallbackAssistant && <HermesAssistantDrawer dashboardContext={{ tasks: tasks.filter((task) => task.researchObjectId === routeParams.id).map(({ id, researchObjectId, state }) => ({ id, researchObjectId, state })), researchObjects: [{ id: routeParams.id, status: researchStatus, title: researchTitle }] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={routeParams.id} suggestion={reviewSuggestion} target={null} />}
       </div>
     </DashboardShell>
   );
@@ -276,9 +288,8 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
         <aside aria-label={t('marginLabel')} className="border-t border-os-rule-paper pt-3 lg:border-l lg:border-t-0 lg:pl-5">
           <p data-reading-role="caption" className="text-os-muted-paper">{t('boundary')}</p>
           <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('boundaryNote')}</p>
-          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={approvalOpen ? 'awaiting_approval' : 'idle'} suggestion={reviewSuggestion} workspaceId={detail.researchObjectId} />
         </aside>
-        <HermesAssistantDrawer
+        {!usesFallbackAssistant && <HermesAssistantDrawer
           dashboardContext={{ tasks: [], researchObjects: [{ id: detail.researchObjectId, status: 'draft', title: detail.task.logicalPath }] }}
           locale={locale}
           onOpenChange={setHermesOpen}
@@ -287,7 +298,7 @@ function HermesResearchPage({ routeParams, taskId, runId, claimReview, guideTask
           routeResearchObjectId={routeParams.id}
           suggestion={reviewSuggestion}
           target={null}
-        />
+        />}
       </div>}
     </div>
     </div>

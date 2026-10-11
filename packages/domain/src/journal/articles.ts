@@ -5,6 +5,7 @@ import { publicVersionNumber } from '../publish/publication-metadata';
 import { JournalError } from './contracts';
 import { EMPTY_RIGHTS, JOURNAL_CORE_FIELDS, journalDigest, normalizeJournalDoi, safeJournalUrl, validateJournalDraft, validateJournalSource, type JournalMetadata, type JournalSource, type JournalRights, type JournalDraft } from './content';
 import { assertJournalReviewCapability, evaluateArticleProcessingCapability, journalSourceMaterials } from './enhancements';
+import { journalReleaseExpired } from './release-authorization';
 
 export type JournalTx = Prisma.TransactionClient;
 export const JOURNAL_EDIT_ROLES = ['owner', 'maintainer', 'author'];
@@ -96,15 +97,13 @@ export async function getManagedJournalArticle(deps: WorkspaceDeps, userId: stri
   })) };
 }
 export async function txReleases(tx: JournalTx, articleId: string, publishedOnly = false, now = new Date()) {
-  const [rows, article] = await Promise.all([
-    tx.journalRelease.findMany({ where: { articleId, ...(publishedOnly ? { version: { status: 'published', researchObject: { visibility: 'public' } } } : {}) }, orderBy: { publishedAt: 'desc' }, include: { version: { include: { researchObject: true } } } }),
-    publishedOnly ? tx.journalArticle.findUnique({ where: { id: articleId }, select: { id: true, source: true, rights: true, contentState: true } }) : null,
-  ]);
-  const capability = article ? evaluateArticleProcessingCapability(article, now) : null;
+  const rows = await tx.journalRelease.findMany({ where: { articleId, ...(publishedOnly ? { version: { status: 'published', researchObject: { visibility: 'public' } } } : {}) }, orderBy: { publishedAt: 'desc' }, include: { version: { include: { researchObject: true } } } });
+  const article = publishedOnly ? await tx.journalArticle.findUnique({ where: { id: articleId }, select: { source: true } }) : null;
   return rows.flatMap((r) => {
-    const draft = (r.snapshot as unknown as { draft?: { scope?: unknown } }).draft;
+    const snapshot = r.snapshot as unknown as { draft?: { scope?: unknown } };
+    if (publishedOnly && journalReleaseExpired(snapshot, article?.source, now)) return [];
+    const draft = snapshot.draft;
     const scope = draft?.scope === 'abstract' || draft?.scope === 'fulltext' ? draft.scope : null;
-    if (publishedOnly && (!capability || (scope === 'abstract' ? !capability.canPublishPublicSummary : scope === 'fulltext' ? !capability.canPublishFullInterpretation : true))) return [];
     const versionNo = publicVersionNumber(r.version);
     if (versionNo === null) throw new JournalError('INVALID_STATE', '期刊公开版本编号缺失');
     return [{ id: r.id, revision: r.revision, versionNo, publicId: r.version.researchObject.publicId, publishedAt: r.publishedAt, scope, url: `/research/${r.version.researchObject.publicId}/v/${versionNo}` }];
@@ -139,13 +138,6 @@ export async function updateJournalArticle(deps: WorkspaceDeps, userId: string, 
       metadata: journalJson(metadata), source: journalJson(source), rights: journalJson(rights), draft: draft === null ? Prisma.DbNull : journalJson(draft),
       directoryVisible: input.directoryVisible, ...(changed ? { revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } : {}),
     } });
-    if (sourceChanged || input.rights) {
-      // Source permission withdrawal also closes existing derivative access immediately.
-      if (!rights.publicDerivative && await tx.journalRelease.count({ where: { articleId } })) {
-        await tx.researchObject.update({ where: { id: article.researchObjectId }, data: { visibility: 'private', status: 'restricted' } });
-        await tx.version.updateMany({ where: { researchObjectId: article.researchObjectId, status: 'published' }, data: { status: 'restricted' } });
-      }
-    }
     await journalArticleEvent(tx, journalId, userId, 'journal.article.update', articleId, {
       revision: updated.revision, sourceChanged, sourceDigest: journalDigest(source), rightsDigest: journalDigest(rights),
       previousSourceDigest: journalDigest(article.source), previousRightsDigest: journalDigest(article.rights),

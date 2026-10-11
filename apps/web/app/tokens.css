@@ -28,7 +28,7 @@
   --font-editorial-serif: var(--font-bodoni, 'Times New Roman'), serif;
   --font-reading-serif: var(--font-source-serif, Georgia), var(--font-noto-serif-sc, 'Songti SC'), 'SimSun', serif;
   --font-cjk-serif: var(--font-noto-serif-sc, 'Songti SC'), 'SimSun', serif;
-  --font-ui: var(--font-bricolage, system-ui), 'PingFang SC', sans-serif;
+  --font-ui: var(--font-bricolage, system-ui), 'PingFang SC', 'Microsoft YaHei', var(--font-noto-serif-sc, sans-serif), sans-serif;
   --font-data: var(--font-ibm-plex-mono, 'Cascadia Mono'), monospace;
 
   /* A restrained shape vocabulary: editorial rules first, containers second. */

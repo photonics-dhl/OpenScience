@@ -1,13 +1,157 @@
 {
+  "hermesAudioAudition": {
+    "title": "Narration preview",
+    "scene": "Scene {number} · {seconds}s",
+    "resultUnavailable": "This narration preview could not be loaded.",
+    "download": "Download MP3",
+    "downloading": "Preparing download…",
+    "loading": "Loading audio…",
+    "playbackFailed": "Audio could not be loaded.",
+    "reload": "Reload audio",
+    "downloadFailed": "Download failed. Please try again.",
+    "downloadStarted": "Download started."
+  },
+  "technologyDiscovery": {
+    "eyebrow": "Technology discovery",
+    "queryLabel": "Describe a technology need or enter a paper title, DOI or arXiv ID",
+    "queryHelp": "Describe a need, or paste a paper title, DOI or arXiv ID · 500 characters max",
+    "search": "Search sources",
+    "searching": "Starting search…",
+    "examplesLabel": "Example searches",
+    "tryExample": "Try",
+    "loginOnSearch": "Explore freely. Sign in when you search; your draft will be here when you return.",
+    "conversation": "Research conversation",
+    "queriesCount": "{count} queries",
+    "ready": "Ready to explore",
+    "yourQuery": "Your request",
+    "sourceRetrieval": "Source retrieval",
+    "restoring": "Restoring this search…",
+    "queued": "Your source search is queued.",
+    "retrieving": "Looking for source metadata…",
+    "retrievalFailed": "Source retrieval failed. Your request is saved.",
+    "metadataFound": "Found {count} source records. Review the original sources before drawing conclusions.",
+    "noMetadata": "No source metadata was returned. Try a more specific title, identifier, or need.",
+    "providerUnavailable": "The source providers returned no records and reported a service problem. Please retry later.",
+    "retry": "Retry retrieval",
+    "metadataCaveat": "These are source records, not a technology assessment. Performance, applicability and commercial readiness need independent validation.",
+    "identifierUnknown": "Identifier unavailable",
+    "sourceUnknown": "Source link unavailable",
+    "openSource": "Open source",
+    "shortlist": "Shortlist",
+    "remove": "Remove",
+    "researchBrief": "Working brief",
+    "briefHint": "Your own notes stay in this browser session for this account and audience.",
+    "shortlistTitle": "Source shortlist",
+    "shortlistEmpty": "Select up to three sources to compare and export.",
+    "compareTitle": "Compare source records",
+    "validationUnknown": "Performance, use conditions and validation: unknown",
+    "exportShortlist": "Export brief & shortlist",
+    "notProvided": "Not provided",
+    "getInTouch": "Get in touch",
+    "contactTitle": "Prepare a consultation request",
+    "contactHelp": "Review this draft before opening your email app or exporting it. Nothing is sent from this page.",
+    "name": "Name",
+    "organization": "Organization",
+    "email": "Email",
+    "need": "What do you need to discuss?",
+    "contactValidation": "Enter your name, organization, valid email and consultation need before exporting or opening a draft.",
+    "previewDraft": "Preview request and selected sources",
+    "exportRequest": "Export request",
+    "openEmailDraft": "Open email draft",
+    "mailNotice": "Your email app will open a draft addressed to our contact. You decide whether to send it.",
+    "reconnecting": "Reconnecting to the retrieval task…",
+    "requestFailed": "The request could not be completed. Please retry.",
+    "pendingIntent": "A previous request may still be processing. Retry the same query first.",
+    "sessionExpired": "Your session expired. Sign in again to continue; your query is preserved.",
+    "taskUnavailable": "This task is unavailable. Start a new search or sign in again.",
+    "serviceUnavailable": "Sign-in status is temporarily unavailable. Your draft is saved here; retry when the service returns.",
+    "retrySession": "Check sign-in again",
+    "industry": {
+      "title": "Industry",
+      "lead": "Find research that may inform a real-world technical need. Start with the question, then inspect source evidence and open validation gaps.",
+      "placeholder": "search any technology with AI",
+      "example1": "Low-energy optical sensing for manufacturing",
+      "example2": "10.1038/nature12373",
+      "example3": "Methods for durable flexible photonics",
+      "emptyTitle": "Start with the problem you need to solve",
+      "emptyBody": "Describe the application, performance target and constraints. Source retrieval will give you records to investigate, and you can refine your brief as you go.",
+      "briefLabel": "Application, performance and constraints",
+      "briefPlaceholder": "Application context…\nPerformance target…\nMaterials, cost or deployment constraints…",
+      "unknowns": "Validate operating conditions, measured performance, reproducibility and integration costs against the full source."
+    },
+    "investors": {
+      "title": "Investors",
+      "lead": "Explore an emerging research direction through its published sources. Keep the opportunity, evidence and unanswered questions in view.",
+      "placeholder": "search any potential technology with AI",
+      "example1": "Promising photonic computing approaches",
+      "example2": "arXiv:1706.03762",
+      "example3": "New sensing platforms with clinical potential",
+      "emptyTitle": "Start with a possible opportunity",
+      "emptyBody": "Describe the market or technical thesis, or enter a paper. Inspect original sources and record what still needs diligence.",
+      "briefLabel": "Opportunity, evidence, team and unknowns",
+      "briefPlaceholder": "Opportunity thesis…\nEvidence to verify…\nTeam questions…\nUnknowns…",
+      "unknowns": "Team, intellectual property, market fit and commercial readiness are not established by source metadata."
+    },
+    "restoreFailed": "The saved task could not be loaded. Retry this exact task.",
+    "retryRestore": "Retry loading task",
+    "partialProviders": "Some source providers were unavailable. This list may be incomplete.",
+    "checkingSignIn": "Checking sign-in and restoring your draft…"
+  },
+  "services": {
+    "upload": { "title": "Paper PDF", "description": "AI helps extract and organize your research. Edit and review it before choosing to publish.", "drop": "Drop your paper PDF here", "hint": "One PDF at a time. Use the button below to start processing after choosing a file." },
+    "researchTypes": { "published": "Published paper", "preprint": "Preprint", "originalDetails": "Original publication details (provided by user):" },
+    "navigation": "Who we serve", "navigationHint": "Explore our services without choosing an account role.", "getStarted": "Get started", "journalDirectory": "Browse the journal directory", "explore": "Explore research", "researcherLink": "Discover services for researchers",
+    "audiences": {
+      "researchers": { "name": "Researchers", "english": "Researchers" },
+      "journals": { "name": "Journals", "english": "Journals", "description": "Help readers understand the research your journal publishes.", "heading": "From original papers to structured research", "body": "Organize paper materials and use AI assistance to extract research content for editorial review. The journal directory is a separate place to find journals and papers; this page introduces services for journals." },
+      "institutions": { "name": "Academic Institutions", "english": "Academic Institutions", "description": "Help researchers organize and showcase their work with OpenScience.", "heading": "Make research easier to discover", "body": "Researchers can maintain their academic information, organize published papers and make reviewed work public. Explore public research pages to understand the questions, methods and findings of different teams." },
+      "industry": { "name": "Industry", "english": "Industry", "description": "Explore methods, findings and their conditions of use through public research.", "heading": "Understand research relevant to your work", "body": "Read structured research alongside its limitations and reproducibility information, then visit the original sources for further context." },
+      "investors": { "name": "Investors", "english": "Investors", "description": "Discover research directions and technical progress through public research.", "heading": "Start with research questions and evidence", "body": "Explore research methods, results and limitations, and return to the original sources for more detail. OpenScience provides a place to read and discover research." }
+    },
+    "researchers": {
+      "description": "Build your personal academic profile and turn published papers into AI-friendly research content that agents can discover, understand and share. Upload new, unpublished research earlier to grow your academic impact over time.",
+      "tagline": "Share early. Be discovered by AI. Make an impact.",
+      "actionsLabel": "Four services for researchers", "accessNote": "Browse these services and public research freely. Sign in when you need to manage your work, then return to the action you selected.",
+      "cards": {
+        "profile": { "title": "My research profile", "description": "Complete and update your academic profile; connect your papers and research outputs; help peers understand your academic record and help AI better understand your field and research interests.", "action": "Get started: manage my research profile" },
+        "published": { "title": "Published papers", "description": "Upload published papers and supplementary materials. An AI assistant extracts and organizes the research content and creates multimodal materials such as images, video and audio. After you review and confirm them, the content becomes a structured research page that you can revise and version over time.", "action": "Get started: add a published paper" },
+        "preprint": { "title": "Preprints", "description": "Upload a PDF or describe your research’s core contribution. An AI assistant helps organize the content and present your research in multiple formats. After review, you can choose to publish it publicly, then continue improving it through revisions and new versions.", "action": "Get started: create a preprint" },
+        "explore": { "title": "Explore research", "description": "Read structured research from others, understand their questions, methods and findings, and discover work relevant to you.", "action": "Get started: explore research" }
+      },
+      "faqTitle": "Before you get started",
+      "faq": {
+        "fields": { "question": "What are the six fields?", "answer": "Problem, insight, method, results, limitations and reproducibility. These are six ways to explain your research. Write them directly or upload a PDF and review the AI-assisted draft." },
+        "types": { "question": "How do published papers and preprints differ?", "answer": "The published paper flow organizes work that already has formal publication details, retaining its title, authors, journal and DOI. The preprint flow is for work that has not been formally published, starting with a PDF or blank fields." },
+        "ai": { "question": "What does the AI assistant do? Can I edit the result?", "answer": "The AI assistant helps extract and organize research content. Review, complete and edit its draft before making it public. Uploading and parsing do not automatically publish your work." },
+        "publish": { "question": "Can I save a draft and publish later?", "answer": "Yes. Creation and everyday saving keep your work as a private draft. When ready, use the research page’s publishing action to review and explicitly confirm public release, then view and share the public page." }
+      }
+    }
+  },
   "journalDirectory": {
     "eyebrow": "Journals",
-    "title": "Journal directory",
+    "title": "Browse all journals",
     "intro": "Browse journals by field and follow papers and research interpretations.",
     "skip": "Skip to content",
     "navigation": "Main navigation",
     "searchLabel": "Search journals",
     "searchPlaceholder": "Journal name, ISSN or field",
     "search": "Search",
+    "filters": {
+      "label": "Filter and sort",
+      "defaults": "All subjects · All access types · A–Z",
+      "subjectLabel": "Subject",
+      "allSubjects": "All subjects",
+      "accessLabel": "Open Access",
+      "accessAll": "All access types",
+      "accessOpen": "Open Access only",
+      "accessClosed": "Non-OA",
+      "accessUnknown": "Unknown",
+      "sortLabel": "Sort by",
+      "sortPaperCount": "Paper count (on this platform)",
+      "sortCitationCount": "Citation count",
+      "availability": "Unknown Open Access status is not classified as non-OA. Citation sorting requires a verified data source.",
+      "citationFallback": "Citation count unavailable; currently sorted A–Z"
+    },
     "loading": "Loading journals…",
     "loadFailed": "The journal directory could not be loaded.",
     "retry": "Retry",
@@ -15,6 +159,8 @@
     "emptyTitle": "Discovery starts with a paper.",
     "emptyBody": "The directory grows as journals join. Explore public research while you are here.",
     "noMatches": "No matching journals",
+    "accessUnavailable": "Open Access information is not available for this directory yet",
+    "showAllAccess": "Show all access types",
     "noMatchesBody": "Try the full journal name, an ISSN or a research field.",
     "clearSearch": "View all journals",
     "explore": "Explore public research",
@@ -23,7 +169,20 @@
     "openapi": "Open data API specification",
     "sitemap": "Public journal sitemap",
     "accountTools": "Journal account tools",
-    "apply": "Bring your journal to OpenScience"
+    "apply": "Bring your journal to OpenScience",
+    "management": {
+      "title": "My journals",
+      "intro": "A workspace for the journals, papers and catalogues you help shape.",
+      "skip": "Skip to content",
+      "loading": "Loading your journals…",
+      "loadFailed": "Your journals could not be loaded.",
+      "retry": "Try loading again",
+      "emptyTitle": "Give research a place to gather.",
+      "emptyBody": "Your journals will appear here. Bring a journal to OpenScience to work on its catalogue and papers, or explore the public collection first.",
+      "apply": "Bring your journal",
+      "browse": "Browse journals",
+      "open": "Open editorial workspace"
+    }
   },
   "developers": {
     "title": "Developer API",
@@ -173,6 +332,7 @@
     "prepareVersionFailed": "The current draft could not be prepared as a usable version. See the specific reason before continuing.",
     "productionSubmitted": "The server has received the production task. Results will appear on the left; you can keep editing in the meantime.",
     "openResearchRun": "Open content and illustration creation",
+    "openResearchVideoRun": "Prepare this paper's video",
     "published": "Published successfully. You can open the public research page.",
     "undone": "Requested undo of the last edit. The text and save status are shown on the left.",
     "cancelled": "Cancelled the arrangement awaiting confirmation.",
@@ -370,6 +530,18 @@
     "primaryNavigation": "Primary navigation"
   },
   "productNavigation": {
+    "features": "Features",
+    "about": "About",
+    "uploadCreate": "Upload / Create research",
+    "loginRegister": "Log in / Sign up",
+    "personalCenter": "My account",
+    "contact": "Contact us",
+    "feedback": "Report a problem",
+    "analysisDemo": "Request an intelligence demo",
+    "apiAccess": "Access the API",
+    "featureProfile": "Manage my research profile",
+    "featurePublished": "Add a published paper",
+    "featurePreprint": "Create a preprint",
     "dashboard": "Research desk",
     "dashboardShort": "Desk",
     "explore": "Explore",
@@ -385,6 +557,46 @@
     "accountTools": "Account tools",
     "myJournals": "My journals",
     "developers": "Developer API"
+  },
+  "emailDraft": {
+    "opening": "Opening email draft…",
+    "retry": "Retry opening email draft",
+    "failed": "The email draft could not be opened. Please retry."
+  },
+  "aboutContact": {
+    "topicsLabel": "Contact topic",
+    "detailsTitle": "Tell us what you need",
+    "mailNote": "This opens your email app. Review the draft before deciding whether to send it.",
+    "contact": {
+      "title": "Contact us",
+      "intro": "Get in touch about using OpenScience, research collaborations or an idea you would like to discuss.",
+      "hint1": "Introduce your research area or organization.",
+      "hint2": "Describe the service or collaboration you are interested in.",
+      "hint3": "Include a convenient way to reach you.",
+      "action": "Write an email",
+      "subject": "OpenScience enquiry",
+      "body": "Hello, I would like to learn more about OpenScience.\n\nName / organization:\nResearch area:\nEnquiry or collaboration:\nContact details:"
+    },
+    "feedback": {
+      "title": "Report a problem",
+      "intro": "If a page or feature is not working as expected, tell us what happened so we can investigate and improve it.",
+      "hint1": "Include the page link and the steps that led to the problem.",
+      "hint2": "Describe the expected and actual results, plus your browser or device.",
+      "hint3": "You can attach screenshots to your email. Hide passwords, verification codes and other sensitive information.",
+      "action": "Write a problem report",
+      "subject": "OpenScience problem report",
+      "body": "Hello, I encountered a problem while using OpenScience.\n\nPage link:\nSteps to reproduce:\nExpected result:\nActual result:\nBrowser / device:\nContact details:"
+    },
+    "demo": {
+      "title": "Request an intelligence demo",
+      "intro": "Share the technology area and questions you are exploring, and we can discuss an intelligence analysis demo for your needs.",
+      "hint1": "Describe your research area, technology topic or application.",
+      "hint2": "List the questions you want to answer. Include relevant papers or public sources if useful.",
+      "hint3": "Introduce your organization and share your contact details and availability.",
+      "action": "Write a demo request",
+      "subject": "OpenScience intelligence analysis demo request",
+      "body": "Hello, I am interested in an OpenScience intelligence analysis demo.\n\nName / organization:\nTechnology area / application:\nQuestions to explore:\nRelevant public sources:\nContact details / availability:"
+    }
   },
   "editor": {
     "savedVersionSources": "Check sources in the latest saved version",
@@ -762,6 +974,7 @@
     "copyFailed": "Copy failed",
     "legalDisclaimerDefault": "This timestamp only proves that the platform received and recorded this version and its content hash; it does not guarantee priority, ownership, scientific correctness, or legal evidence.",
     "artifactProvenance": "Original text and attachments",
+    "artifactDownloadUnavailable": "This version does not provide a public download link.",
     "invalidVersion": "Invalid version",
     "aiReview": "AI review summary",
     "status": "Status",
@@ -1079,8 +1292,22 @@
   "dashboard": {
     "eyebrow": "Personal workspace",
     "title": "Research desk",
-    "welcome": "{name}, continue your current research or work out the next step with Hermes.",
+    "welcome": "Pick up where your ideas left off.",
+    "processingHistory": "Processing history",
+    "researchTools": "Materials and management",
     "loading": "Restoring your research context…",
+    "current": {
+      "create": "New research",
+      "open": "Open research workspace",
+      "savedVersion": "Saved version {version}",
+      "publicationVersion": "Publication {version}",
+      "imageTitle": "Research figure",
+      "openImage": "View full-size figure",
+      "loading": "Loading this research…",
+      "noImage": "This study has no figure yet.",
+      "mediaFailed": "The research preview could not be loaded.",
+      "retry": "Reload preview"
+    },
     "context": {
       "navigation": "Dashboard utilities",
       "skip": "Skip to research workspace",
@@ -1361,6 +1588,7 @@
     },
     "research": {
       "title": "Your research",
+      "actions": "Research tools: {title}",
       "empty": "No research objects yet.",
       "noResults": "No research objects match your search.",
       "search": "Search titles or full text",
@@ -1497,6 +1725,18 @@
     "manualEdit": "Continue manually in the editor"
   },
   "hermesRun": {
+    "video": {
+      "title": "A video for your research",
+      "startDescription": "Turn the paper's central ideas into a visual story with narration. Watch the finished video, then tell Hermes what you would like to refine.",
+      "startFor": "Create a research video: {source}",
+      "unavailable": "Video creation is temporarily unavailable. You can continue editing or view your existing results.",
+      "composing": "Bringing the scenes and narration together",
+      "ready": "Your video is ready to watch",
+      "runningDescription": "Hermes is shaping the story, preparing the scenes and composing the narration. You can return here when it is ready.",
+      "readyDescription": "Watch the complete video, share your feedback and decide whether to use it.",
+      "preview": "Your research video",
+      "viewResult": "Open the video and give feedback"
+    },
     "sourceReanalysis": {
       "start": "Start new paid analysis",
       "continue": "Continue analysis",
@@ -1508,7 +1748,8 @@
       "uncertain": "The response could not be confirmed. Continue analysis to restore this same request. Earlier processing may already have been charged.",
       "contextError": "The account, source or workflow version changed. Reload progress for the current account before continuing; the saved request is preserved.",
       "storageError": "This browser could not retain the request for recovery. Enable session storage and reload progress before continuing. Saved processing is preserved.",
-      "responseError": "The returned analysis or workflow does not match this source and account. Reload progress before continuing; the saved request is preserved."
+      "responseError": "The returned analysis or workflow does not match this source and account. Reload progress before continuing; the saved request is preserved.",
+      "videoError": "Video generation is currently unavailable. No new paid analysis was started; the saved request is preserved."
     },
     "narrative": {
       "correctionGrantDescription": "This image needs a scientific correction. The existing workflow has used 8 tasks. A one-time increase from 9 to 11 total tasks permits at most one revised plan, one new image and one internal correction of either the plan or its rendering, charged by actual use. Existing papers, images and published versions remain; nothing is published automatically.",
@@ -1821,7 +2062,7 @@
     },
     "searchAction": "Search",
     "refineSearch": "Refine search",
-    "recentFirst": "Newly public research first · Latest published version of each study",
+    "recentFirst": "Research IDs, newest first · Latest published version of each study",
     "imageFor": "Core concept image for {title}",
     "readResearch": "Read research",
     "recentTitle": "Recently shared research",
@@ -1956,6 +2197,8 @@
       "charge": "Submitting charges 1 AI credit, including each revision or new retry task.",
       "retained": "This creates a separate draft. The original stays unchanged; review the comparison before approving.",
       "generate": "Generate storyboard · 1 AI credit",
+      "planOneImage": "Plan one research image · 1 AI credit",
+      "needsSources": "Select research content that has finished extraction in this version before planning an image.",
       "revise": "Create revised draft · 1 AI credit",
       "narration": "Spoken narration",
       "visualAction": "Visual action",
@@ -2015,6 +2258,11 @@
     "viewFullSize": "Open full-size diagram",
     "imageNumber": "Illustration {number}",
     "planningHistoryTitle": "Detailed instructions",
+    "currentPlanTitle": "Current production plan",
+    "currentPlanBody": "New plans appear first. Review and approve the plan, then generate an image for the selected scene.",
+    "selectPlan": "Choose another plan",
+    "selectScene": "Choose a scene to generate",
+    "rejectedPlanHistory": "Rejected plan history",
     "planningHistoryBody": "Hermes prepares the production instructions. Expand them only to review or customize details.",
     "videoSecondary": "Optional follow-up media. Review it separately from the illustration.",
     "recoverInSources": "Review sources and continue",
@@ -2198,7 +2446,8 @@
       "diff": "Content comparison"
     },
     "files": {
-      "savedMaterials": "Saved materials and imports",
+      "savedMaterials": "Saved materials",
+      "importHistory": "Import history · {count}",
       "snapshotVersion": "Public version v{version}",
       "confirmedDraft": "View confirmed draft",
       "addMore": "Add more materials above.",
@@ -2451,7 +2700,9 @@
       "sdf-limitations": "Make sample, method, generalisation, and unverified boundaries explicit.",
       "hermes-diff": "Check evidence and wording one change at a time. Only accepted changes are written.",
       "commit": "Confirm the version note and scope before committing; published versions are never overwritten."
-    }
+    },
+    "entryHint": "Shape the next step together",
+    "openConversation": "Open conversation"
   },
   "researchWorkbenchReview": {
     "backHome": "Return to OpenScience",
@@ -2785,6 +3036,24 @@
     "kind_counter": "Counterclaim"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "What to produce",
+      "mode": "Audition narration",
+      "summary": "Hear the selected scene's narration before making the video.",
+      "fullVideo": "Complete video",
+      "scene": "Scene to audition",
+      "narration": "Approved narration",
+      "preset": "Voice: {voice} · Speed: {speed}×",
+      "hint": "Hear one scene first. The sample stays with this research.",
+      "loading": "Checking narration audition availability…",
+      "unavailable": "Narration audition is temporarily unavailable.",
+      "availabilityError": "Could not check narration audition availability. Try again.",
+      "retryAvailability": "Check audition availability again",
+      "needsNarration": "Choose an approved scene with 1–120 characters of narration and its complete video frames.",
+      "settingsChanged": "The voice or speed changed. Review the updated settings, then confirm again.",
+      "submit": "Audition selected scene",
+      "ready": "Ready to audition"
+    },
     "prepareVideoPlan": "Prepare video brief",
     "planWillBePrepared": "Hermes will first prepare the illustration brief.",
     "eligibleSources": "{count} eligible research claims selected.",
@@ -2795,9 +3064,16 @@
     "artRequiresCompatiblePlan": "This plan does not support a style-only revision. Go back and select a completed illustration plan in the same language, or ask Hermes to create a new plan.",
     "briefWillUpdate": "Your edits will create a revised brief. Existing images and plans are preserved.",
     "updateBrief": "Update production brief",
-    "needsApprovedScenes": "Video needs an approved storyboard and its corresponding images. Prepare those assets first.",
+    "needsApprovedScenes": "The video frames are not ready. Open the current production task to check its progress or resolve a failure.",
+    "videoRevision": {
+      "label": "Video revision scope",
+      "all": "Revise the complete plan",
+      "scene": "Revise scene {number} only"
+    },
     "mediaIntent": "What to create",
     "preparePlan": "Prepare production brief",
+    "planOneImage": "Plan one research image · 1 AI credit",
+    "planOneImageHint": "Hermes will plan one research image explaining the paper's core relationship or conclusion.",
     "usingApprovedPlan": "Using the current approved production brief.",
     "video": "Video",
     "entry": "Storyboards and scene images",
@@ -2842,6 +3118,9 @@
     "charge": "1 AI credit per submission. A separate draft will be created; nothing is approved or published automatically.",
     "loadError": "Could not load this research context. Refresh to try again.",
     "submitError": "Could not submit. Check the source storyboard and permissions, then retry.",
+    "videoUnavailable": "Video creation is temporarily unavailable. Your existing results are still available.",
+    "videoAvailabilityError": "Video availability could not be checked. Try again before starting production.",
+    "identityChanged": "Your account changed. Refresh before continuing production.",
     "uncertain": "Submission outcome is unknown. Editing is locked; retry the same request to recover it without creating another submission.",
     "loading": "Loading research…",
     "refresh": "Refresh",
@@ -3060,7 +3339,8 @@
         "title": "Where can I find the original paper?",
         "body": "Open the materials area on the research reading page for the original paper and sources. You can return to the text while viewing its figures."
       }
-    }
+    },
+    "viewFigure": "View full research figure"
   },
   "journalServiceLabels": {
     "basic": "Basic service"

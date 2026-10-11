@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { TrashError } from '@openscience/domain';
+import { HermesVideoUnavailableError, TrashError } from '@openscience/domain';
 import { JournalError } from '@openscience/domain';
 import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, ClaimEvidenceError, CommitError, EditorialError, ForkError, HermesResearchRunError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PresentationAssetError, PublicEvidenceSourceError, PublishError, ReadingPreferenceError, ResearchIdentityProfileError, ResearchIntelligenceValidationError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type HermesResearchRunErrorCode, type ReadingPreferenceErrorCode, type ResearchIdentityProfileErrorCode, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
@@ -237,6 +237,7 @@ export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
 export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
+  if (err instanceof HermesVideoUnavailableError) return { status: 503, body: buildErrorBody(err.code, err.message, requestId) };
   if (err instanceof JournalError) return { status: err.status, body: buildErrorBody(err.code, err.message, requestId) };
   if (err instanceof TrashError) {
     const status = { NOT_FOUND: 404, FORBIDDEN: 403, CONFLICT: 409, CLEANUP_PENDING: 202 }[err.code];

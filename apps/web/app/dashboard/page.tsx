@@ -9,15 +9,15 @@ import { useEffect, useState } from 'react';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { AccountLink } from '@/components/navigation/AccountLink';
-import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
-import { HermesConversationCard } from '@/components/dashboard/HermesConversationCard';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
-import { ResearchList } from '@/components/dashboard/ResearchList';
+import { CurrentResearchCard, ResearchList } from '@/components/dashboard/ResearchList';
+import { useSession } from '@/components/auth/SessionProvider';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
+import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { apiRequest, ApiClientError, getCurrentUser, getDashboardOverview, listResearchIngestionTasks, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser, type DashboardResearchApi } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
@@ -30,6 +30,8 @@ export default function DashboardPage() {
   const trashT = useTranslations('trash');
   const locale = useLocale() as Locale;
   const router = useRouter();
+  const session = useSession();
+  const sessionOwner = session.status === 'authenticated' ? session.user?.userId : undefined;
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
   const [tasks, setTasks] = useState<HermesRailTask[]>([]);
@@ -44,6 +46,19 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
+    if (!sessionOwner) {
+      if (session.status === 'anonymous') router.replace('/auth/login?returnTo=%2Fdashboard');
+      if (session.status === 'unavailable') setError(t('errors.load'));
+      return;
+    }
+    setUser(null);
+    setResearchObjects([]);
+    setTasks([]);
+    setError('');
+    setGuideTask(null);
+    setLiteratureTask(null);
+    setLiteratureRecovered(false);
+    setTaskLoadState('loading');
     let active = true;
     let stopTaskRefresh: (() => void) | undefined;
     void Promise.all([
@@ -52,6 +67,7 @@ export default function DashboardPage() {
     ])
       .then(([currentUser, researchOverview]) => {
         if (!active) return;
+        if (currentUser.userId !== sessionOwner) throw new Error(t('errors.load'));
         let currentResearch = researchOverview.researchObjects;
         let latestId = currentResearch[0]?.id;
         let globalTasks: HermesRailTask[] = [];
@@ -174,9 +190,10 @@ export default function DashboardPage() {
       active = false;
       stopTaskRefresh?.();
     };
-  }, [router, t]);
+  }, [router, t, sessionOwner, session.status]);
 
-  if (!user && !error) {
+  const ownsLoadedResearch = Boolean(user && user.userId === sessionOwner);
+  if (!ownsLoadedResearch && !error) {
     return (
       <DashboardShell
         activeRoute="dashboard"
@@ -236,53 +253,43 @@ export default function DashboardPage() {
       skipLabel={t('context.skip')}
     >
       <div className={styles.layout}>
-        <header className={styles.heading}>
-          <div>
-            <p data-reading-role="caption" className={styles.eyebrow}>
-              {t('eyebrow')}
-            </p>
-            <h1 className={styles.title}>
-              {t('title')}
-            </h1>
+        <header className={styles.heading} data-hermes-protected="true">
+          <div className={styles.headingCopy}>
+            <div className={styles.headingTitleRow}>
+              <h1 className={styles.title}>{t('title')}</h1>
+              <div className={styles.headingActions}>
+                {researchObjects.length > 0 ? <Link className={styles.createResearch} data-action-priority="secondary" href="/research-objects/new?mode=import">{t('current.create')}</Link> : null}
+                <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={deriveHermesCompositeVisualState(tasks, guideWorking)} suggestion={suggestion} />
+              </div>
+            </div>
             <p data-reading-role="body" className={styles.welcome}>
               {t('welcome', { name: user?.displayName ?? '' })}
             </p>
           </div>
-          <details className={styles.deskTools}>
-            <summary>{t('deskTools')}</summary>
-            <div><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
-          </details>
         </header>
 
         <div className={styles.workSurface}>
-          <div className={styles.continueResearch}>
-            <ContinueResearch research={researchObjects[0] ?? null} tasks={tasks} />
+          <div className={styles.researchStack}>
+            {researchObjects[0] && user && ownsLoadedResearch ? <CurrentResearchCard key={`${user.userId}:${researchObjects[0].id}`} research={researchObjects[0]} ownerId={user.userId} /> : null}
+            {researchObjects.length > 0 ? <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} /> : <ImportStage />}
+            {tasks.length > 0 || taskLoadState !== 'ready' ? (
+              <details className={styles.processHistory}>
+                <summary>{t('processingHistory')}</summary>
+                <HermesRail tasks={tasks} loadState={taskLoadState} headingLabel={t('processingHistory')} />
+              </details>
+            ) : null}
+            <details className={styles.researchTools}>
+              <summary>{t('researchTools')}</summary>
+              <div className={styles.literature}>
+                <LiteratureAcquisitionDisclosure initialTask={literatureTask}
+                  onAuthenticationRequired={handleLiteratureAuthenticationRequired}
+                  recoveryComplete={literatureRecovered} userId={user!.userId} />
+              </div>
+              <div className={styles.managementActions}><ResearchContentManager /><Link href="/trash">{trashT('title')}</Link></div>
+            </details>
           </div>
-          <div className={styles.taskRail}>
-            <HermesConversationCard onInvoke={() => setHermesOpen(true)} open={hermesOpen} working={guideWorking} />
-          </div>
-          {tasks.length > 0 || taskLoadState !== 'ready' ? (
-            <div className={styles.activityRail}>
-              <HermesRail tasks={tasks} loadState={taskLoadState} />
-            </div>
-          ) : null}
-        </div>
-        {researchObjects.length > 0 ? <div className={styles.startResearch}>
-          <ImportStage />
-        </div> : null}
-        <div className={styles.literature}>
-          <LiteratureAcquisitionDisclosure
-            initialTask={literatureTask}
-            onAuthenticationRequired={handleLiteratureAuthenticationRequired}
-            recoveryComplete={literatureRecovered}
-            userId={user!.userId}
-          />
-        </div>
-        <div className={styles.library}>
-          <ResearchList researchObjects={researchObjects} onChanged={() => window.location.reload()} />
         </div>
       </div>
-      <HermesDockAnchor floating assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={guideWorking ? 'scanning' : 'idle'} suggestion={suggestion} />
       <HermesAssistantDrawer
         dashboardContext={dashboardContext}
         locale={locale}

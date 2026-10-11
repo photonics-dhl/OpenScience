@@ -1,5 +1,13 @@
 export type HermesCompanionSurface = 'navigation' | 'workspace';
 
+export function hermesStartsCompact(pathname: string): boolean {
+  return resolveHermesCompanionSurface(pathname) !== null;
+}
+
+export function hermesUsesAvatarEntry(pathname: string): boolean {
+  return resolveHermesCompanionSurface(pathname) === 'workspace';
+}
+
 const productRoots = new Set([
   'guide', 'explore', 'research', 'collections', 'auth', 'me', 'settings',
   'developers', 'trash', 'journals', 'admin', 'editorial',
@@ -8,7 +16,7 @@ const productRoots = new Set([
 export function resolveHermesCompanionSurface(pathname: string): HermesCompanionSurface | null {
   if (pathname === '/') return null;
   const root = pathname.split('/')[1];
-  if (root === 'dashboard' || root === 'research-objects') return 'workspace';
+  if (root === 'dashboard' || root === 'research-objects' || root === 'guide') return 'workspace';
   return productRoots.has(root) ? 'navigation' : null;
 }
 
@@ -22,4 +30,12 @@ export function currentHermesPresentation<T extends { pathname: string }>(
 
 export function hermesPresentationCanDock(presentation: { floating?: boolean } | null): boolean {
   return presentation !== null && !presentation.floating;
+}
+
+export function currentHermesAnchorRect<TAnchor, TRect>(
+  measurement: { pathname: string; anchor: TAnchor; rect: TRect } | null,
+  pathname: string,
+  anchor: TAnchor | null | undefined,
+): TRect | null {
+  return measurement?.pathname === pathname && measurement.anchor === anchor ? measurement.rect : null;
 }

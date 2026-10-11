@@ -3,9 +3,159 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
-  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
 } from '../../src/agent/agent';
 import { buildInterestContext } from '../../src/research-intelligence/interest-context';
+import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
+import { requireSceneImageParent } from '../../src/assets/scene-image';
+import { presentationEvidenceIdentity, readReviewedPresentationEvidence } from '../../src/assets/illustration-source';
+
+async function nativeImageTerminalFixture(decision: 'accepted' | 'blocked' = 'accepted') {
+  const { prisma, db } = createFakePrisma();
+  const uuid = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const user = seedUser(db, { id: uuid(1) });
+  db.usageLedger.push({ id: 'image-fixture-credit', userId: user.id, resource: 'ai_credit', delta: 100, kind: 'grant', createdAt: new Date() });
+  db.workspaces.push({ id: uuid(2), status: 'active' });
+  db.memberships.push({ id: 'image-member', userId: user.id, workspaceId: uuid(2), role: 'owner' });
+  db.researchObjects.push({ id: uuid(3), workspaceId: uuid(2), createdBy: user.id, status: 'draft', visibility: 'private' });
+  db.commits.push({ id: uuid(9), branchId: uuid(10) });
+  db.versions.push({ id: uuid(4), researchObjectId: uuid(3), status: 'draft', versionNo: 1, commitId: uuid(9), publicVersionId: null, createdAt: new Date() });
+  db.claimNodes.push({ id: uuid(5), researchObjectId: uuid(3), versionId: uuid(4), kind: 'core', statement: 'The field points along x.',
+    assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded' });
+  db.evidenceRecords.push({ id: uuid(6), claimId: uuid(5), researchObjectId: uuid(3), versionId: uuid(4), artifactId: uuid(7), contentHash: 'a'.repeat(64),
+    exactQuote: 'The field points along x.', relation: 'supports', locator: { page: 1 }, extractionStatus: 'succeeded', updatedAt: new Date(), provenance: {} });
+  db.artifacts.push({ id: uuid(7), workspaceId: uuid(2), blobSha256: 'a'.repeat(64), deletedAt: null, bytesPurgedAt: null });
+  const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+  const deps = { prisma, redis: fakeRedis(), mailer: {} as never, nativeAgentRuntime: runtime };
+  const session = await createAgentSession(deps as never, { userId: user.id, researchObjectId: uuid(3), kind: 'visualization' });
+  const payload = { schemaVersion: 1, researchObjectId: uuid(3), versionId: uuid(4), kind: 'image', sourceClaimIds: [uuid(5)],
+    sceneImage: { storyboardAssetId: uuid(8), sceneIndex: 0 } };
+  const sourceEvidenceIdentity = presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload as never));
+  const parent = { id: uuid(8), researchObjectId: uuid(3), versionId: uuid(4), kind: 'interactive_html', status: 'approved', contentHash: 'c'.repeat(64),
+    provenance: { subtype: 'sourced_storyboard', sourceEvidenceIdentity,
+      storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain the field.', output: 'image' },
+      storyboardDocument: { schemaVersion: 1, title: 'Field', scenes: [{ title: 'Field direction', narration: 'The field points along x.',
+        visualAction: 'One arrow along x.', sourceClaimIds: [uuid(5)] }] } } };
+  db.presentationAssets.push(parent); db.presentationAssetClaims.push({ presentationAssetId: parent.id, claimId: uuid(5) });
+  const task = await submitAgentTask(deps as never, { userId: user.id, sessionId: session.id, kind: 'presentation.generate', payload,
+    idempotencyKey: 'native-image-terminal', dispatch: false });
+  const row = db.agentTasks.find(value => value.id === task.id)!;
+  await claimAgentTask(deps as never, task.id);
+  const parentProof = (await requireSceneImageParent(prisma, payload as never))!;
+  const identity = { requestId: task.id, contentHash: 'd'.repeat(64), sourceEvidenceIdentity, parentIdentity: parentProof.identity };
+  const envelope = await prisma.$transaction(tx => prepareAgentNativeImageReview(tx, { taskId: task.id, executionAttempt: row.executionAttempt,
+    identity, runtime, target: { provider: 'minimax-key-1-model-1', model: runtime.model }, maxInputBytes: 64_000_000 }));
+  const target = { provider: envelope.provider, model: envelope.model, promptHash: 'e'.repeat(64) };
+  row.result.nativeAgentExecution.checkpoint = { taskId: task.id, sourceKind: 'illustration-image', imageIdentity: identity,
+    objectKey: `derived/native-agent/${'f'.repeat(64)}.json`, serializedSha256: 'f'.repeat(64), size: 100,
+    executionAttempt: row.executionAttempt, turnCount: 2, state: 'completed', target,
+    responseHash: 'a'.repeat(64), finishReason: 'stop', hasToolCalls: false };
+  const review = { stage: 'generated-image', ...identity, ...target, responseHash: 'a'.repeat(64), decision,
+    summary: decision === 'accepted' ? 'The actual field direction matches its source.' : 'The drawn direction needs repair.', repairInstruction: null };
+  await prisma.$transaction(tx => completeNativeImageReview(tx, { taskId: task.id, executionAttempt: row.executionAttempt, review: review as never }));
+  const image = { id: task.id, researchObjectId: uuid(3), versionId: uuid(4), kind: 'image', status: 'draft', contentHash: identity.contentHash,
+    objectKey: 'derived/field.png', provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: task.id,
+      sceneImage: { ...payload.sceneImage }, parentIdentity: identity.parentIdentity, sourceEvidenceIdentity, contentType: 'image/png', imageReview: review } };
+  db.presentationAssets.push(image); db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: uuid(5) });
+  const result = { assetId: image.id, kind: 'image', status: 'draft', contentHash: identity.contentHash, sourceClaimIds: payload.sourceClaimIds, imageReview: review };
+  return { deps, prisma, db, task, row, session: db.agentSessions.find(value => value.id === session.id)!, parent, image, result, envelope };
+}
+
+describe('native image task public terminal completion', () => {
+  it.each(['accepted', 'blocked'] as const)('finishes a legitimate %s image review through markTaskProgress without another charge', async decision => {
+    const f = await nativeImageTerminalFixture(decision); const ledger = structuredClone(f.db.usageLedger);
+    const completed = await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded',
+      expectedExecutionAttempt: f.row.executionAttempt, result: f.result });
+    expect(completed.status).toBe('succeeded');
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.result.nativeAgentExecution.profile).toBe('image-review');
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it('consumes the original final receipt after deadline and lease advancement under Serializable authority', async () => {
+    const f = await nativeImageTerminalFixture(); f.row.executionAttempt += 1;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);
+    const transaction = vi.spyOn(f.prisma, '$transaction');
+    try {
+      await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded', expectedExecutionAttempt: f.row.executionAttempt,
+        result: f.result })).resolves.toMatchObject({ status: 'succeeded' });
+      expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
+    } finally { now.mockRestore(); transaction.mockRestore(); }
+  });
+  it.each(['Temporary database write conflict', 'Temporary storage error reading checkpoint.json', '[blocked] Native Agent original request deadline expired'])(
+    'makes canRetry and the actual retry agree for a paid final after %s, retaining the original envelope and zero-charge terminal adoption', async error => {
+    const f = await nativeImageTerminalFixture();
+    await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'failed', error });
+    const original = structuredClone(f.db.agentTasks.find(value => value.id === f.task.id)!.result);
+    const ledger = structuredClone(f.db.usageLedger);
+    const actor = f.session.userId;
+    expect((await getAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).canRetry).toBe(true);
+    await retryAgentTask(f.deps as never, { userId: actor, taskId: f.task.id });
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.result).toEqual(original);
+    await claimAgentTask(f.deps as never, f.task.id);
+    await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded',
+      expectedExecutionAttempt: f.db.agentTasks.find(value => value.id === f.task.id)!.executionAttempt, result: f.result })).resolves.toMatchObject({ status: 'succeeded' });
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['prepared-no-cp', 'started', 'intermediate', 'schema', 'invalid-json', 'invalid-decision', 'authority-blocked', 'exhausted'])(
+    'offers no retry or new attempt for unrecoverable %s image Agent state', async state => {
+    const f = await nativeImageTerminalFixture();
+    await markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'failed', error: 'Temporary database write conflict' });
+    const row = f.db.agentTasks.find(value => value.id === f.task.id)!;
+    const envelope = row.result.nativeImageReview; envelope.state = 'prepared'; delete envelope.review;
+    const cp = row.result.nativeAgentExecution.checkpoint;
+    if (state === 'prepared-no-cp') delete row.result.nativeAgentExecution.checkpoint;
+    if (state === 'started') { cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+    if (state === 'intermediate') { cp.finishReason = 'tool_calls'; cp.hasToolCalls = true; }
+    if (state === 'schema') row.error = 'Native image review response failed schema validation; explicit review retry required';
+    if (state === 'invalid-json') row.error = 'Unexpected end of JSON input';
+    if (state === 'invalid-decision') row.error = '[blocked] Invalid generated image review decision';
+    if (state === 'authority-blocked') row.error = '[blocked] Native Agent execution binding changed';
+    if (state === 'exhausted') row.retryCount = 1;
+    const before = structuredClone(row); const ledger = structuredClone(f.db.usageLedger);
+    const actor = f.session.userId;
+    expect((await getAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).canRetry).toBe(false);
+    await expect(retryAgentTask(f.deps as never, { userId: actor, taskId: f.task.id })).rejects.toThrow();
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)).toEqual(before); expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['session-inactive', 'session-deleted', 'session-scope', 'membership', 'workspace', 'version', 'payload-scope',
+    'task-kind', 'lease', 'prepared', 'started-cp', 'tool-cp', 'response-hash', 'image-deleted', 'image-hash', 'image-kind', 'image-status',
+    'image-scene', 'image-claims', 'image-source', 'image-parent', 'source', 'claim-status', 'parent', 'parent-deleted', 'parent-status'])(
+    'refuses terminal adoption after %s changes without another debit', async change => {
+    const f = await nativeImageTerminalFixture(); const attempt = f.row.executionAttempt; const ledger = structuredClone(f.db.usageLedger);
+    if (change === 'session-inactive') f.session.status = 'closed';
+    if (change === 'session-deleted') f.session.deletedAt = new Date();
+    if (change === 'session-scope') f.session.researchObjectId = 'foreign';
+    if (change === 'membership') f.db.memberships[0].role = 'viewer';
+    if (change === 'workspace') f.db.workspaces[0].status = 'suspended';
+    if (change === 'version') f.db.versions[0].status = 'published';
+    if (change === 'payload-scope') f.row.payload.researchObjectId = '30000000-0000-4000-8000-000000000099';
+    if (change === 'task-kind') f.row.kind = 'sdf.extract';
+    if (change === 'lease') f.row.executionAttempt += 1;
+    if (change === 'prepared') { f.row.result.nativeImageReview.state = 'prepared'; delete f.row.result.nativeImageReview.review; }
+    if (change === 'started-cp') {
+      const cp = f.row.result.nativeAgentExecution.checkpoint; cp.state = 'started';
+      delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls;
+    }
+    if (change === 'tool-cp') f.row.result.nativeAgentExecution.checkpoint.hasToolCalls = true;
+    if (change === 'response-hash') f.row.result.nativeAgentExecution.checkpoint.responseHash = 'e'.repeat(64);
+    if (change === 'image-deleted') Object.assign(f.image, { deletedAt: new Date() });
+    if (change === 'image-hash') f.image.contentHash = 'f'.repeat(64);
+    if (change === 'image-kind') f.image.kind = 'video';
+    if (change === 'image-status') f.image.status = 'rejected';
+    if (change === 'image-scene') f.image.provenance.sceneImage.sceneIndex = 1;
+    if (change === 'image-claims') f.db.presentationAssetClaims.splice(f.db.presentationAssetClaims.findIndex(link => link.presentationAssetId === f.image.id), 1);
+    if (change === 'image-source') f.image.provenance.sourceEvidenceIdentity = 'f'.repeat(64);
+    if (change === 'image-parent') f.image.provenance.parentIdentity = 'foreign';
+    if (change === 'source') f.db.evidenceRecords[0].exactQuote = 'The field points along y.';
+    if (change === 'claim-status') f.db.claimNodes[0].extractionStatus = 'failed';
+    if (change === 'parent') f.parent.contentHash = 'f'.repeat(64);
+    if (change === 'parent-deleted') Object.assign(f.parent, { deletedAt: new Date() });
+    if (change === 'parent-status') f.parent.status = 'rejected';
+    await expect(markTaskProgress(f.deps as never, { taskId: f.task.id, status: 'succeeded', expectedExecutionAttempt: attempt,
+      result: f.result })).rejects.toThrow();
+    expect(f.db.agentTasks.find(value => value.id === f.task.id)!.status).toBe('running');
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+});
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {
@@ -41,6 +191,42 @@ const DURABLE_SOURCE_RETRIEVE_PAYLOAD = {
   query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
   identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
 } as const;
+
+function makeSnapshotDispatch() {
+  const task = { id: 'snapshot-dispatch-task', status: 'pending', executionAttempt: 1,
+    deletedAt: null, dispatchedAt: null as Date | null, updatedAt: new Date('2026-10-08T00:00:00Z'),
+    result: { paidReceipt: 'unchanged' } };
+  const pushes: Array<{ queue: string; id: string }> = [];
+  let notifyPushed!: () => void;
+  let unblock!: () => void;
+  let first = true;
+  const pushed = new Promise<void>(resolve => { notifyPushed = resolve; });
+  const barrier = new Promise<void>(resolve => { unblock = resolve; });
+  const deps = {
+    prisma: { agentTask: {
+      // Prisma returns a snapshot, never the mutable backing row.
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        where.id === task.id ? structuredClone(task) : null,
+      updateMany: async ({ where, data }: {
+        where: { id: string; dispatchedAt: null; updatedAt?: Date };
+        data: { dispatchedAt: Date; updatedAt?: Date };
+      }) => {
+        if (where.id !== task.id || task.dispatchedAt !== where.dispatchedAt
+          || (where.updatedAt && where.updatedAt.getTime() !== task.updatedAt.getTime())) return { count: 0 };
+        task.dispatchedAt = data.dispatchedAt;
+        // Model Prisma @updatedAt: omitting an explicit value writes the wall clock.
+        task.updatedAt = data.updatedAt ?? new Date();
+        return { count: 1 };
+      },
+    } },
+    redis: { lpush: async (queue: string, id: string) => {
+      pushes.push({ queue, id });
+      if (first) { first = false; notifyPushed(); await barrier; }
+      return 1;
+    } },
+  };
+  return { deps: deps as never, task, pushes, pushed, unblock };
+}
 
 function seedSourceRetrieveTask(
   db: { agentTasks: Array<Record<string, unknown>> },
@@ -107,6 +293,158 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('snapshot dispatch cannot acknowledge an outbox reopened while its LPUSH was pending', async () => {
+    const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
+    const oldDispatch = dispatchAgentTask(deps, task.id);
+    await pushed;
+    const originalResult = structuredClone(task.result);
+    // The admission owner atomically parks, then releases with increasing timestamps.
+    task.dispatchedAt = new Date(task.updatedAt.getTime() + 1);
+    task.updatedAt = new Date(task.updatedAt.getTime() + 1);
+    task.dispatchedAt = null;
+    task.updatedAt = new Date(task.updatedAt.getTime() + 1);
+    unblock();
+    await expect(oldDispatch).resolves.toBe(true);
+    expect(task.dispatchedAt).toBeNull();
+    await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+    expect(task.dispatchedAt).toBeInstanceOf(Date);
+    expect(pushes).toEqual([{ queue: 'agent:queue', id: task.id }, { queue: 'agent:queue', id: task.id }]);
+    expect(task).toMatchObject({ status: 'pending', executionAttempt: 1, result: originalResult });
+  });
+
+  it('snapshot dispatch preserves a parked row and acknowledges an unchanged outbox only once', async () => {
+    const held = makeSnapshotDispatch();
+    const oldDispatch = dispatchAgentTask(held.deps, held.task.id);
+    await held.pushed;
+    const heldAt = new Date(held.task.updatedAt.getTime() + 1);
+    held.task.dispatchedAt = heldAt;
+    held.task.updatedAt = heldAt;
+    held.unblock();
+    await expect(oldDispatch).resolves.toBe(true);
+    expect(held.task.dispatchedAt).toEqual(heldAt);
+    await expect(dispatchAgentTask(held.deps, held.task.id)).resolves.toBe(false);
+    expect(held.pushes).toHaveLength(1);
+    const normal = makeSnapshotDispatch();
+    normal.unblock();
+    await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(true);
+    await expect(dispatchAgentTask(normal.deps, normal.task.id)).resolves.toBe(false);
+    expect(normal.pushes).toEqual([{ queue: 'agent:queue', id: normal.task.id }]);
+    expect(normal.task.updatedAt.getTime()).toBeGreaterThanOrEqual(normal.task.dispatchedAt!.getTime());
+  });
+
+  it('snapshot dispatch keeps acknowledgement versions monotonic ahead of the ORM clock', async () => {
+    vi.useFakeTimers();
+    try {
+      const clock = Date.parse('2026-10-08T00:00:00.100Z');
+      vi.setSystemTime(clock);
+      const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
+      task.updatedAt = new Date(clock + 2);
+      const oldVersion = task.updatedAt.getTime();
+      const oldDispatch = dispatchAgentTask(deps, task.id);
+      await pushed;
+      // A competing ack must not move102 back to the wall clock100.
+      await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+      const parkedAt = new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
+      task.dispatchedAt ??= parkedAt;
+      task.updatedAt = parkedAt;
+      task.dispatchedAt = null;
+      task.updatedAt = new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
+      unblock();
+      await expect(oldDispatch).resolves.toBe(true);
+      expect(task.dispatchedAt).toBeNull();
+      expect(task.updatedAt.getTime()).toBeGreaterThan(oldVersion);
+      await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(true);
+      expect(task.dispatchedAt).toBeInstanceOf(Date);
+      expect(pushes).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('explicit source-index token-limit recovery reuses the original owner and remaining budget', async () => {
+    const { deps, user, task, source, db, redis } = await makeSourceIndexRecovery();
+    Object.assign(task, { status: 'succeeded', error: null, progress: 100, retryCount: 1, executionAttempt: 2,
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    const payload = structuredClone(task.payload);
+    Object.assign(deps, { audit: { record: async (event: unknown) => { db.auditLogs.push(event); } } });
+    const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+    await expect(getAgentTask(deps, input)).resolves.toMatchObject({ canRetry: false });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
+    await expect(retryAgentTask(deps, input)).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 2 });
+    expect(task.executionAttempt).toBe(2);
+    expect(db.agentTasks.find(row => row.id === task.id)?.payload).toEqual(payload);
+    expect(db.agentTasks.find(row => row.id === source.id)?.executionAttempt).toBe(1);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+    expect(db.auditLogs).toEqual(expect.arrayContaining([expect.objectContaining({
+      action: 'agent.task.retry', targetId: task.id, metadata: expect.objectContaining({
+        creditPolicy: 'not-applicable-deterministic', sourceIndexRecovery: 'token-limit-after-upgrade',
+      }),
+    })]));
+    await claimAgentTask(deps, task.id);
+    expect(db.agentTasks.find(row => row.id === task.id)?.executionAttempt).toBe(3);
+    await markTaskProgress(deps, { taskId: task.id, status: 'succeeded',
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    await expect(retryAgentTask(deps, input)).rejects.toThrow();
+    expect(db.agentTasks.find(row => row.id === task.id)?.retryCount).toBe(2);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+  });
+
+  it.each(['stale-attempt', 'changed-reference', 'deleted-source', 'membership', 'owner', 'artifact',
+    'manifest', 'producer-owner', 'cas', 'failed-status', 'wrong-code', 'already-dense', 'inline-source', 'exhausted', 'unknown-mode'])(
+    'explicit source-index token-limit recovery rejects %s without dispatch', async (failure) => {
+      const { deps, user, task, source, db, redis, prisma } = await makeSourceIndexRecovery();
+      Object.assign(task, { status: 'succeeded', error: null, retryCount: 1, executionAttempt: 2,
+        result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+      const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+      if (failure === 'stale-attempt') source.executionAttempt += 1;
+      if (failure === 'changed-reference') source.result = { sourceMapRef: { ...source.result.sourceMapRef, size: 124 } };
+      if (failure === 'deleted-source') source.deletedAt = new Date();
+      if (failure === 'membership') db.memberships.length = 0;
+      if (failure === 'owner') db.agentSessions[0].userId = 'another-user';
+      if (failure === 'artifact') prisma.artifact.findFirst.mockResolvedValue(null);
+      if (failure === 'manifest') prisma.version.findFirst.mockResolvedValue(null);
+      if (failure === 'producer-owner') {
+        const findUnique = prisma.agentTask.findUnique;
+        prisma.agentTask.findUnique = vi.fn(async (query) => query.where.idempotencyKey
+          ? { ...task, id: '55555555-5555-4555-8555-555555555555' } : findUnique(query));
+      }
+      if (failure === 'cas') prisma.agentTask.updateMany = vi.fn(async () => ({ count: 0 }));
+      if (failure === 'failed-status') {
+        task.status = 'failed';
+        task.error = 'indivisible block exceeds embedding token limit';
+      }
+      if (failure === 'wrong-code') Object.assign(task.result, { errorCode: 'embedding_unavailable' });
+      if (failure === 'already-dense') Object.assign(task.result, { status: 'succeeded' });
+      if (failure === 'inline-source') task.payload = { artifactId: task.payload.artifactId, sourceMap: {} };
+      if (failure === 'exhausted') task.retryCount = 2;
+      if (failure === 'unknown-mode') input.sourceIndexRecovery = 'unknown' as never;
+      await expect(retryAgentTask(deps, input)).rejects.toThrow();
+      expect(db.agentTasks.find(row => row.id === task.id)?.retryCount).toBe(failure === 'exhausted' ? 2 : 1);
+      expect(redis.lists.get('agent:queue') ?? []).toEqual([]);
+      expect(db.agentTasks).toHaveLength(2);
+      expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+      if (failure === 'cas') expect(prisma.agentTask.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: task.id, status: 'succeeded', retryCount: 1, executionAttempt: 2,
+          result: { equals: expect.objectContaining({ errorCode: 'token_limit_exceeded' }) } }),
+      }));
+    });
+
+  it('concurrent explicit source-index token-limit recovery dispatches only one original owner', async () => {
+    const { deps, user, task, db, redis } = await makeSourceIndexRecovery();
+    Object.assign(task, { status: 'succeeded', error: null, retryCount: 1, executionAttempt: 2,
+      result: { status: 'needs_review', chunkCount: 69, errorCode: 'token_limit_exceeded' } });
+    const input = { userId: user.id, taskId: task.id, sourceIndexRecovery: 'token-limit-after-upgrade' as const };
+    const outcomes = await Promise.allSettled([retryAgentTask(deps, input), retryAgentTask(deps, input)]);
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter(outcome => outcome.status === 'rejected')).toHaveLength(1);
+    expect(task.retryCount).toBe(2);
+    expect(db.agentTasks).toHaveLength(2);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
+    expect(db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(0);
+  });
+
   it.each(['token_limit_exceeded', 'embedding_unavailable'] as const)(
     'recovers the original source-index failure and honors the real succeeded/%s terminal result', async (errorCode) => {
     const { deps, user, task, db, redis } = await makeSourceIndexRecovery();
@@ -202,7 +540,11 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
-  it('allows bounded explicit review-only retries after a malformed native review response', async () => {
+  it.each([
+    [0, 'Native image review response invalid JSON; explicit review retry required'],
+    [1, "Expected ',' or '}' after property value in JSON at position 153 (line 1 column 154)"],
+    [2, 'Native image review response invalid JSON; explicit review retry required'],
+  ] as const)('preserves diagnostics during bounded native review recovery (retry=%s)', async (retryCount, error) => {
     const { deps, user, ro, db, redis } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
     const taskId = 'native-review-schema-recovery';
@@ -211,25 +553,54 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const sourceEvidenceIdentity = 'e'.repeat(64);
     db.agentTasks.push({
       id: taskId, sessionId: session.id, kind: 'presentation.generate', status: 'failed', progress: 10,
-      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(),
+      retryCount, executionAttempt: 1, dispatchedAt: new Date(),
       payload: { kind: 'image', researchObjectId: ro.id, versionId: 'version-1', sourceClaimIds: ['claim-1'],
         sceneImage: { storyboardAssetId: 'storyboard-1', sceneIndex: 0 } },
       interestContext: null, idempotencyKey: null,
-      result: { nativeImageReview: { mode: 'model-native', state: 'started', executionAttempt: 1,
+      result: { scienceDiagnostics: { receiptId: 'saved-science-receipt', issues: ['preserve original issue'] },
+        nativeImageReview: { mode: 'model-native', state: 'started', executionAttempt: 1,
         requestId: taskId, contentHash, sourceEvidenceIdentity, parentIdentity,
         provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'b'.repeat(64) } },
-      error: 'Native image review response invalid JSON; explicit review retry required',
+      error,
       createdAt: new Date(), updatedAt: new Date(), deletedAt: null,
     });
     db.presentationAssets.push({ id: taskId, researchObjectId: ro.id, versionId: 'version-1', kind: 'image', status: 'draft',
       objectKey: 'image.png', contentHash, provenance: { taskId, source: 'approved_storyboard_scene', parentIdentity, sourceEvidenceIdentity },
       createdAt: new Date(), updatedAt: new Date(), deletedAt: null });
 
+    if (retryCount === 2) {
+      const before = structuredClone(db.agentTasks.find(task => task.id === taskId)!.result);
+      await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ canRetry: false });
+      await expect(retryAgentTask(deps, { userId: user.id, taskId })).rejects.toThrow();
+      expect(db.agentTasks.find(task => task.id === taskId)?.result).toEqual(before);
+      expect(redis.lists.get('agent:queue') ?? []).not.toContain(taskId);
+      return;
+    }
     await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ canRetry: true });
-    await expect(retryAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, status: 'pending', retryCount: 1 });
-    expect(db.agentTasks.find((task) => task.id === taskId)?.result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, status: 'pending', retryCount: retryCount + 1 });
+    expect(db.agentTasks.find((task) => task.id === taskId)?.result).toEqual({
+      scienceDiagnostics: { receiptId: 'saved-science-receipt', issues: ['preserve original issue'] },
+      nativeImageReview: { mode: 'model-native', state: 'not_started' },
+    });
     expect(redis.lists.get('agent:queue')?.filter((id) => id === taskId)).toHaveLength(1);
     expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
+  it('keeps malformed native review checkpoints readable but never retryable', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'visualization' });
+    const taskId = 'malformed-native-review-checkpoint';
+    db.agentTasks.push({ id: taskId, sessionId: session.id, kind: 'presentation.generate', status: 'failed', progress: 10,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(),
+      payload: { kind: 'image', researchObjectId: ro.id, versionId: 'version-1', sourceClaimIds: ['claim-1'],
+        sceneImage: { storyboardAssetId: 'storyboard-1', sceneIndex: 0 } },
+      interestContext: null, idempotencyKey: null, result: { nativeImageReview: { mode: 'model-native', state: 'started' } },
+      error: 'Native image review response invalid JSON; explicit review retry required',
+      createdAt: new Date(), updatedAt: new Date(), deletedAt: null });
+    await expect(getAgentTask(deps, { userId: user.id, taskId })).resolves.toMatchObject({ id: taskId, canRetry: false });
+    await expect(listAgentTasks(deps, { userId: user.id })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId, canRetry: false })]));
+    await expect(retryAgentTask(deps, { userId: user.id, taskId })).rejects.toThrow();
+    expect(redis.lists.get('agent:queue') ?? []).not.toContain(taskId);
   });
 
   it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
@@ -1195,7 +1566,8 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   it('永久阻断错误同步为 failed_blocked，不允许普通 retry', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'ingestion' });
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract',
+      payload: { manuscriptText: 'Text rejected by the parser.' } });
     db.ingestionTasks.push({
       id: 'ingestion-task-1', batchId: 'batch-1', artifactId: 'artifact-1', agentTaskId: task.id,
       state: 'parsing', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(),

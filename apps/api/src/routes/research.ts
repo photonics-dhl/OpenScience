@@ -188,12 +188,11 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     let journalSourcePublic = true;
     if (journalRelease) {
       reply.header('Cache-Control', 'no-store');
-      const rights = journalRelease.article.rights as Record<string, unknown>;
       journalPackage = { ...(journalRelease.snapshot as Record<string, unknown>), articleId: journalRelease.articleId };
       journalSourcePublic = await canReadCurrentPublicResearch(deps, {
         researchObjectId: ro.id, versionId: version.id, exposure: 'source',
       });
-      if (!journalSourcePublic || rights.publicSource !== true) {
+      if (!journalSourcePublic) {
         const source = { ...(journalPackage.source as Record<string, unknown>) }; delete source.text; journalPackage.source = source;
       }
     }

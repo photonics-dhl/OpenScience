@@ -239,20 +239,25 @@ function matchesIdentity(result: EmbeddingResult, identity: DenseModelIdentity):
     && sameHash(result.modelManifestSha256, identity.modelManifestSha256);
 }
 
-function encodeVector(chunkId: string, values: readonly number[]): DenseEmbeddingDraft {
-  if (!HASH_PATTERN.test(chunkId) || values.length !== EMBEDDING_DIMENSION) {
+function unitVectorNorm(values: readonly number[]): number {
+  if (values.length !== EMBEDDING_DIMENSION) {
     throw new Error('embedding_response_invalid');
   }
-  const vector = Buffer.alloc(EMBEDDING_DIMENSION * Float32Array.BYTES_PER_ELEMENT);
   let squaredNorm = 0;
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
+  for (const value of values) {
     if (value === undefined || !Number.isFinite(value)) throw new Error('embedding_response_invalid');
-    vector.writeFloatLE(value, index * Float32Array.BYTES_PER_ELEMENT);
     squaredNorm += value * value;
   }
   const norm = Math.sqrt(squaredNorm);
   if (!Number.isFinite(norm) || Math.abs(norm - 1) > 1e-4) throw new Error('embedding_response_invalid');
+  return norm;
+}
+
+function encodeVector(chunkId: string, values: readonly number[]): DenseEmbeddingDraft {
+  if (!HASH_PATTERN.test(chunkId)) throw new Error('embedding_response_invalid');
+  const norm = unitVectorNorm(values);
+  const vector = Buffer.alloc(EMBEDDING_DIMENSION * Float32Array.BYTES_PER_ELEMENT);
+  for (let index = 0; index < values.length; index++) vector.writeFloatLE(values[index]!, index * Float32Array.BYTES_PER_ELEMENT);
   return {
     chunkId,
     vector,
@@ -375,14 +380,23 @@ export function createSearchIndexer(dependencies: {
         // distinguishes deterministic overflow so it cannot offer a futile retry.
         return { status: 'needs_review', chunkCount: chunks.length, errorCode: 'token_limit_exceeded' };
       }
-      for (let offset = 0; offset < chunks.length; offset += MAX_EMBEDDING_BATCH) {
+      const views = chunking.embeddingWindows ?? chunks.map(chunk => [chunk.text]);
+      // This is a retrieval projection, not a substitute source or a fabricated
+      // whole-text provider receipt. Exact coverage keeps every original cell.
+      if (views.length !== chunks.length || views.some((view, index) => !view.length || view.join('') !== chunks[index]!.text)) {
+        await failIndexTaskBestEffort(dependencies.storage, begin);
+        throw new Error('embedding_window_source_changed');
+      }
+      const inputs = views.flatMap((view, chunkIndex) => view.map(text => ({ chunkIndex, text })));
+      const pooled = chunks.map(() => ({ count: 0, sum: Array<number>(EMBEDDING_DIMENSION).fill(0), single: undefined as number[] | undefined }));
+      for (let offset = 0; offset < inputs.length; offset += MAX_EMBEDDING_BATCH) {
         try {
           await dependencies.storage.renewIndexTaskLease(begin);
         } catch {
           await failIndexTaskBestEffort(dependencies.storage, begin);
           throw new Error('index_storage_unavailable');
         }
-        const batch = chunks.slice(offset, offset + MAX_EMBEDDING_BATCH);
+        const batch = inputs.slice(offset, offset + MAX_EMBEDDING_BATCH);
         try {
           const result = await dependencies.embedder.embed(
             { purpose: 'chunk', texts: batch.map(({ text }) => text) }, EMBEDDING_REQUEST_BUDGET,
@@ -390,7 +404,24 @@ export function createSearchIndexer(dependencies: {
           if (result.dimension !== EMBEDDING_DIMENSION || result.vectors.length !== batch.length
             || !matchesIdentity(result, modelIdentity)) throw new Error('embedding_response_invalid');
           for (let index = 0; index < batch.length; index += 1) {
-            embeddings.push(encodeVector(batch[index]!.id, result.vectors[index] ?? []));
+            const values = result.vectors[index] ?? [];
+            unitVectorNorm(values);
+            const accumulator = pooled[batch[index]!.chunkIndex]!;
+            accumulator.count++;
+            if (accumulator.count === 1) accumulator.single = [...values];
+            for (let component = 0; component < EMBEDDING_DIMENSION; component++) accumulator.sum[component]! += values[component]!;
+          }
+          if (offset + batch.length === inputs.length) {
+            for (const [chunkIndex, accumulator] of pooled.entries()) {
+              let values = accumulator.single!;
+              if (accumulator.count > 1) {
+                const mean = accumulator.sum.map(value => value / accumulator.count);
+                const norm = Math.sqrt(mean.reduce((sum, value) => sum + value * value, 0));
+                if (!Number.isFinite(norm) || norm === 0) throw new Error('embedding_response_invalid');
+                values = mean.map(value => value / norm);
+              }
+              embeddings.push(encodeVector(chunks[chunkIndex]!.id, values));
+            }
           }
         } catch {
           await withWriteAuthority(() => finalizeWithCompensation(dependencies.storage, begin, {

@@ -101,3 +101,7 @@ export {
   type SynclipVideoClientConfig, type SynclipVideoRequest, type SynclipVideoTask, type SynclipVideoStatus,
   type SynclipVideoModel, type SynclipVideoDuration,
 } from './synclip-video-api';
+export * from './synclip-audio-api';
+export { readSynclipVideoReady, createNativeVideoReadinessReader,
+  type SynclipVideoReady, type SynclipVideoReadyConfig, type SynclipVideoNarrationConfig,
+  type NativeVideoPrerequisites, type NativeVideoReadinessReader } from './synclip-video-readiness';

@@ -26,7 +26,7 @@ export interface HermesRailTask {
   error: string | null;
 }
 
-export function HermesRail({ tasks, loadState = 'ready' }: { tasks: HermesRailTask[]; loadState?: 'loading' | 'ready' | 'unavailable' }) {
+export function HermesRail({ tasks, loadState = 'ready', headingLabel }: { tasks: HermesRailTask[]; loadState?: 'loading' | 'ready' | 'unavailable'; headingLabel?: string }) {
   const t = useTranslations('dashboard');
   const [expanded, setExpanded] = React.useState(false);
   const actionableTasks = tasks.filter(isActionableHermesTask);
@@ -62,7 +62,7 @@ export function HermesRail({ tasks, loadState = 'ready' }: { tasks: HermesRailTa
       className="border-t border-os-rule-paper pt-5"
       data-hermes-protected="true"
     >
-      <h2 id="hermes-task-title" className="border-b border-os-rule-paper pb-3 text-lg font-medium text-os-ink">{t('hermes.activity.title')}</h2>
+      <h2 id="hermes-task-title" className={headingLabel ? 'sr-only' : 'border-b border-os-rule-paper pb-3 text-lg font-medium text-os-ink'}>{headingLabel ?? t('hermes.activity.title')}</h2>
 
       {loadState !== 'ready' ? <p role="status" className="py-3 text-sm leading-6 text-os-muted-paper">{t(loadState === 'loading' ? 'hermes.activity.loading' : 'hermes.activity.unavailable')}</p> : null}
       {visibleTasks.length > 0 ? <ol className="mt-1 list-none divide-y divide-os-rule-paper p-0">{visibleTasks.map(taskRow)}</ol> : null}

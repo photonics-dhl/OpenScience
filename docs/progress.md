@@ -1,45 +1,49 @@
 # CURRENT Progress Window
 
-动态状态以 Hermes CURRENT（docs/handoff/2026-09-10-hermes-web-image-handoff.md）为准；本页只保留最近检查点。
+> 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
 ## 最近检查点
-- 2026-10-08：建立并提交 `aaf24e29` 的 OpenScience 全站审美工作流（`.agents/skills/openscience-aesthetic-design/`，含能力台账与 eval prompts），并补入全站公共阅读分栏构图；Hermes 360px detached 舞台在路由渲染时强制收敛到可见视口，`/me` 重复 React key 随 `7d4f4731` 修正。真实 Chrome 巡检 `/guide`、`/explore`、`/journals`、`/developers`、`/auth/login`、公开研究阅读页、`/dashboard`、`/me`：均有 h1、无横向溢出、无页面错误；detached Hermes `top=70..430` 完整在视口内，指南/登录为 anchored。Web typecheck、Hermes 定向 25/25、Impeccable detector、docs lint 与 docs-sync 通过；本轮仍是候选，尚未部署或用户审美确认。Figma 账号连接已恢复，但尚未选定具体 file key，暂不宣称 Figma 文件级证据。
-- 2026-10-08：线上 `e4ed24571d7037e957c80808147faa54ae2e32cf` 已接入 Synclip 视频 bundle，timer/broker/Worker 环境和公网 release 已核对；RO9067 的真实站内视频任务 `321b013e-9606-4858-82a7-f767105d0069` 在 Hermes 分镜结构化阶段5次 schema/json失败后阻断，未发起 Synclip POST。新增修复让 Hermes 只生成科学 `videoProduction`/`videoDirection`，由服务端从核验 Claim 派生有界动画层；storyboard 定向测试1/1、Worker typecheck/build通过，待发布后再新建一次私有验证，不重放失败任务。
-- 2026-10-08：Worker 科学绑定修正提交 `52f6c1a3` 已上线，线上 release 为 `52f6c1a361d60fd6f7df7d308a24d282192c683f`、回滚 `decf3759b6d40764d39e7467f01e368be9022e92`；发布按 Worker-only 范围使用 `--no-tests --skip-migrate`，容器/active/public/retention 通过，深层 Parser/ScanSci/Embedding 与公网 auth/admin 探针未执行。Synclip 仍锁定已验证的 `gpt-image-2`。
-- 2026-10-08：针对“结构正确但缺少美感”的反馈，重新审查指南真实首屏并完成一轮艺术指导：真实研究图解改为展品构图，增加轻微错位纸张色块、印刷式 metadata、错位投影与更有张力的标题比例；Hermes 仍保持页面自有锚定位。内置浏览器窄屏截图已观察到研究对象、光学丝带与 Hermes 的层次关系，尚未部署。
-- 2026-10-08：历史错误表述已撤回；Synclip 同时是图片和视频供应商。当前源码新增 Synclip LTX video candidate adapter/broker，尚未部署或完成真实私有解码验收；MiniMax H3 保留为独立 pilot。`openscience-research-video` Skill、能力台账和 CURRENT 已统一到 H3 的 `/v2/video_generation` + `/v2/query/video_generation/{task_id}`、15s/2K/16:9、参考图、原生音轨及逐幕 attempt/receipt 保护。
-- 2026-10-08：Synclip video candidate 已落入 canonical worktree：LTX `ltx23`/`ltx23fast`、5/10/15 秒、root-only broker、逐镜 receipts、首帧 inline reference、MP4 download/concat。源码和定向测试通过；尚未安装服务器 bundle、真实调用或宣称音频可用。
-- 2026-10-08：继续完成全站 UI 视觉收口候选。真实浏览器以线上公开 API 驱动本地前端，实际检查 `/guide`、`/explore`、`/journals`、`/developers`、`/auth/login` 与公开研究阅读页：无横向溢出，指南 Hermes 从旧拖拽偏好恢复的 detached 状态修正为页面 anchored，公开阅读正文确认移除全局卡片阴影，探索/期刊首屏构图保持编辑式层级；开发者 API 页收窄为“文档主列 + Hermes 旁栏”，实测重叠为 0；指南 tab 点击切换后无浏览器错误。研究工作区二级入口改为连续目录线，契约测试 74/74、Web typecheck 通过；本轮仍是未部署候选，移动端需在可控 390px 视口复验后再发布。
-- 2026-10-08：应用 `ef2d6cf4a04e13f43fe98c7602bf480c33f37d41` 已发布，回滚 `784c6b25342c29bdc5c2db193258d34dfafd4e64`；API/Web/Worker/Parser/ScanSci/Embedding healthy，公网 `/__release`、Nginx 与 retention journal 通过。视频 CI `37685249300` 全绿；独立视频 bundle `86d5295cbf19fc89d8bcd198991d9b50aae2ad8c` 已切换并修复 symlink 入口静默不输出。真实 H3 hook `447219218062265` 成功并完成解码/抽帧/音轨核对；mechanism 因 `402 insufficient_balance_error` 拒绝，未重发，四幕最终片仍未完成。浏览器内置页已实际验收 `/guide`、指南 tab、公开 RO、证据展开。
-- 2026-10-08：真实 CdS 图反馈已转为可执行修正：插图 Skill 升至 v19，增加“FWHM 必须沿原文定义轴、S(z) 沿 z、同符号不同不等式分别绑定原文”的 Hermes/几何规则；定向 Worker 32/32、Web storyboard 6/6、Web typecheck 通过。全量修订 b053/091e 均在科学物化阶段拒收、无 Synclip 调用；新增 art-only UI 入口已提交，等待并行视频发布锁后部署。
-- 2026-10-07：启动全站 UI 质量重整。已调研 GitHub Primer、Apple HIG Motion、OpenAI UI/Product Design 官方资料，并将“公开阅读／研究桌面／工作区／账户管理／身份页”页面系统与验收标准固化到 `docs/plans/2026-10-07-product-ui-quality-plan.md`；补充 `design-system/openscience` 的 OpenScience 覆盖规则与研究桌面、公开阅读、指南页面规则。第一批共享壳层改动在 `ShellPrimitives.tsx`、`ProductRouteNavigation.tsx`、`product-polish.css`：产品页头保持文档流、当前路由有稳定底部指示、移动端导航保持可用。浏览器真实观察：本地 `/guide`、`/explore` 均可加载，无横向溢出，指南 Hermes 360px、当前路由正确；TypeScript 与 tokens contrast 10/10 通过。整站其余页面仍待继续打磨，尚未部署。
-- 2026-10-07：指南艺术方向样板第一版已改为编辑式首屏：真实研究证据承担主视觉，去除后台卡片式外框，Hermes 与研究区域共享视觉轴；本地浏览器实际点击验证场景 tab 切换，impeccable detector 无发现，Web typecheck 与 tokens contrast 10/10 通过。由于本机 API 未启动，真实研究图在本地进入可见空状态；该状态已单独观察，最终审美仍需用 API 正常的真实素材验收。尚未部署，下一步先做 390px 真实视口复查，再迁移构图语法到探索、期刊与研究桌面。
-- 2026-10-07：指南 390px 规则继续细化：标题/引导保持全宽，紧凑 Hermes 与“下一步”并列进入首屏，避免陪伴入口被推到页面后部。TypeScript、tokens contrast 10/10、impeccable detector 通过；本地预览端口随后不可连接，尚未把该轮视为真实视口验收，也未部署。交付树中 `packages/domain/test/assets/storyboard.test.ts` 的并行未提交改动未归本轮处理。
-- 2026-10-07：公开探索页继续收敛为研究目录：搜索工具去除大圆角卡片与阴影，改为安静的上下规则线和扁平动作按钮，研究条目的编辑式节奏保持不变。Web typecheck、tokens contrast 10/10 与 impeccable detector 通过；尚未做真实浏览器截图或部署。
-- 2026-10-07：期刊目录与研究桌面继续做视觉层级收敛：期刊搜索改为安静的目录工具，首个期刊条目获得更明确的编辑式主次；研究桌面“继续研究”去除厚重卡片阴影，保留主任务与状态带。Web typecheck、tokens contrast 10/10 与 impeccable detector 通过；并行 storyboard 代码改动未归本轮处理。
-- 2026-10-08：按真实 390px 几何证据定位指南首屏约 174px 空白的根因：`PublicShell` 公共 Hermes 兜底占位与指南页面自有 Hermes 入口同时渲染。`guide/page.tsx` 已关闭公共兜底；修复后指南首屏从 y=283 收敛到 y=127，Hermes 148px、研究证据 y=639、无横向溢出。调研并记录成熟网页的审美原则：GitHub 的真实产品叙事/编辑式 vignettes、Primer 的焦点与网格、UI Pro Max 的 Editorial Grid + Parallax Storytelling + purposeful GSAP reveal；待继续把这些原则扩展为页面级美感验收。
-- 2026-10-07：已读取 Synclip 官方博客页当前列出的25篇文章，整理为 Synclip 总指南，并新增 `.agents/skills/openscience-research-video/SKILL.md`：Hermes 现在有基于论文原文/Claims/已确认分镜的短镜头规划、连续性审查和额度保护方法。两项 Skill 已加入并安装到原生 Hermes catalogue；生产仍只确认 `gpt-image-2` 图片 adapter，Synclip 视频 exact API/model contract 尚未确认。
-- 2026-10-08：沿现有 Hermes 分镜链补入 provider-neutral 的 `videoProduction` 与逐幕 `videoDirection` 合同；它们承载论文来源约束下的叙事弧、主体连续性、生成元素、动作/相机、参考帧、音频候选策略、字幕和负向约束。Domain 分镜合同、Hermes 生成提示、视频 Skill 与本地 runner 兼容均已定向检查通过；当前为未部署候选，Synclip 视频 exact contract 与真实私有解码结果仍未确认，不发起付费视频请求。
-- 2026-10-08：依据真实页面几何和 UI Pro Max 的 Editorial Grid / purposeful reveal 建议，指南研究证据加载状态加入单一渐变扫光；减少动态效果时保持静态。TypeScript、tokens contrast 10/10 与 impeccable detector 通过，尚未部署。
-- 2026-10-08：研究阅读页完成第一轮出版物式收敛：正文从大白色圆角卡片和阴影中释放，改为规则线与纸面节奏；真实媒体保留轻量边角，标题、贡献和正文成为主视觉。TypeScript、tokens contrast 10/10 与 impeccable detector 通过，尚未部署。
-- 2026-10-08：候选 `784c6b25342c29bdc5c2db193258d34dfafd4e64` 已发布，回滚 `0c8fbf58824a59abc585643241a3083315b496df`；视频 CI `37652305743`、媒体技能 CI `37652305759` 全绿。Hermes 原生 catalogue/runtime 已切换并读回 `project-catalogue-784c6b25342c29bdc5c2db193258d34dfafd4e64` / `installed-native-continuation-784c6b25342c29bdc5c2db193258d34dfafd4e64`，timer active/enabled。未发起 Synclip 视频请求，仍待 exact contract 与一次私有解码验收。
-- 2026-10-07：应用 release `0c8fbf58824a59abc585643241a3083315b496df` 已按既有发布事务成功上线，回滚为 `33f4ffedfed4b2acac0646c2f9a42c28ceeb24cd`；CI `37643577812` 全绿。服务器原生 catalogue/runtime 已安装并读回 `project-catalogue-0c8fbf58824a59abc585643241a3083315b496df` / `installed-native-continuation-0c8fbf58824a59abc585643241a3083315b496df`，API/Worker healthy、Hermes timer active/enabled，Worker 绑定检查通过。此次部署使用 `--no-tests`，Parser/ScanSci/embedding 深层 canary 仍未观察。
-- 2026-10-06：用户固定 GitHub 协作目标为 DHL 仓库 `frontend/nanqing`，不合并 `main`；Nanqing96 三条旧分支与旧前端 tip 已原样归档至 DHL `archive/*`，保留提交/文件。共享期刊 PDF 候选补实时页图和每次 OCR 外发授权修复 `81ae7d2c`，本地 Domain14、Gateway38、Worker6 与类型检查通过，独立 High 代码 GO；最终分支 CI、Linux socket、parser acceptance、服务器部署及真实 Hermes 科学验收尚未完成，详见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
-- 2026-10-06：按用户要求建立期刊 PDF 与首页论文入口共用解析/核源候选：保留私有页码 SourceMap，新 PDF 调用首页 P 工具、六字段与 Claims 终审，期刊授权/编辑确认/发布仍独立；旧 J 检查点不变。基于共享分支 `0a773d93`，本地检查与期刊/共享 Hermes 两组 CI 成功；尚未做真实 Hermes PDF 或部署验收，运行收据与限制见[期刊 CURRENT](handoff/2026-09-15-journal-onboarding-handoff.md)。
-- 2026-10-06：修复随 `d6ddcd57` 发布后，用同一 RO 第二幕新任务 `e8b6cb5d-f251-426a-8017-8d5b79354976` 完成真实验证：Synclip `gpt-image-2` 产出私有 draft，MiniMax-M3 原生审校 `completed/accepted`，任务 100%/无错误；页面显示两张图片，未公开。公网 `/__release` 与 `.release-id` 均为 `d6ddcd57fb8848328183460ae91783248915b604`，Worker 近10分钟无该解析错误。
-- 2026-10-06：最终 Hermes UI 修正随 `456e550f69652b00569d2435c5f8283df3534d9f` 部署，回滚为 `4c5cd1c7974301a0552b691b83f4f8fd1a103abf`。390px 线上验收确认指南与登录页使用页面自有 196×156 紧凑陪伴位，探索页使用公共 shell 兜底位，Landing 无 Hermes；指南滚动到底部重叠 0、无横向溢出，点击展开 300px，桌面指南保持 360px。发布使用 `--no-tests`，Parser/ScanSci/embedding 深层功能探针未验证。
-- 2026-10-06：第二篇独立论文真实复测发现 Worker 在图片已由 Synclip `gpt-image-2` 成功保存后，因重复使用窄 `JSON.parse` 误拒绝 MiniMax-M3 返回的 `<think>`/代码围栏审校结果；任务 `73746a85-3c51-4d2e-8cec-fbdf2d70e2b6` 保留私有 draft PNG `6ac218…`，原生审校 checkpoint 保持 `started`，未盲目重发。修复提交 `4c5cd1c7`：Worker 复用 Gateway `parseStructuredJson`，定向回归 14/14、Worker typecheck 通过；CI `37347672220` 已全绿，尚未部署或再次真实验证。
-- 2026-10-06：线上 `4ed53b71faa11692756bcf79d5b3504e57581b19` 部署完成并通过 release/CAS、Nginx、容器启动健康和公网 `/__release` 复核，回退为 `7d208827d0e0bc41811b46dc1bf67231daf8230a`。Hermes 窄屏入口已改为右下角透明浮动邀请，不再生成全宽底栏；内容末尾保留透明安全区，390px 指南页滚动到底部与 CTA 重叠数为 0、无横向溢出，点击后展开 300px companion surface；桌面仍为 360px。Landing 保持不变。Parser/ScanSci/embedding 深层能力探针因本次 `--no-tests` 未验证。
-- 2026-10-06：在现有已确认分镜上完成一次新的真实站内生图复测。RO 9067a2d5-42ad-4c06-b234-753728b71064 的 `presentation.generate` task `ead639dc-e480-4520-8f0c-691402c8b739` 单次执行 succeeded/100%，retry0、attempt1、error=null；Synclip `gpt-image-2` 资产已保存为私有 draft，Hermes/MiniMax-M3 图像审校 accepted，页面实际可见且人工核对公式、分区和曲线可读。
-- 2026-10-05：线上 fcc8ad62357134cfe16238f6a04bf0e5b2598a64 完成第二篇真实入口部署；后续 UI 候选已合并至本次 7d208827 发布。
-- RO 9067a2d5-42ad-4c06-b234-753728b71064 的 Hermes run 7a959a7f-dbcb-4dfa-afc1-28a12867cdbf 完成全文来源、独立 source-review 和4幕科学分镜；source task 8aa82e71-92e6-4bf5-86c6-bd5ecec07efb 为 review_received，分镜 task 7244a6c3-b166-4d09-8494-4e75f4eb4e23 为 succeeded/illustrationReview=accepted。
-- Synclip gpt-image-2 四幕结果为3次供应商成功、其中2次图像审阅接受、1次图像审阅阻断；第四次 task 28ab61b0-7931-41d3-8200-2d63c1f986ad 为 UNCERTAIN，没有可安全重试的 task_id/receipt，run 为 failed。
-- 真实结果说明传输链路当前可运行，但还不能称长期跨论文稳定：旧第四幕未知外部终态仍未分类；本次新图已完成一次实际像素核对，其他旧图的科学/像素结论仍按原记录处理。
-- 只读服务器核查显示 timer/broker 正常，当前 Synclip GET 诊断请求返回404且约0.28秒；本次证据排除了“服务整体不可达”，但客户端仍缺少第四次 POST 的原始错误分类。
-- 分镜完成后真实 run 自动开始了图像任务；本次复测没有自动公开，资产仍为私有 draft。另有生产日志出现 `/auth/me` 的重复 reply/HTTP 500，需要单独修复并验证，当前未证明它阻断了本次生图。
-- `f52ee24c` 的 session guard 修复已随 `4ed53b71` 上线；线上未登录 `/auth/me` 返回统一401，发布后15分钟未再出现重复响应错误。定向 API 16/16、文件级 ESLint通过；API全包typecheck仍复现 journals/papers 的6个 HEAD既有错误。
 
-## 后续
-- 不重放未知 task；先确认 Synclip 的幂等/客户端关联合同，再决定最小 transport 诊断或恢复改动。
-- 依照用户目标继续以Hermes作为论文理解与科学分镜主体；当前图像审阅由既有 imageReview/M3 步骤执行，Hermes独立像素核验尚未作为真实验收事实。图像API只处理已绑定的科学prompt；本次 Worker 解析断点已修复并完成一次生产复测，但长期跨论文稳定性仍需更多不同论文/分镜样本，不重放旧未知任务或当前 `started` 审校任务。
-- 旧失败运行、Skills审阅和安装记录保留在Git历史与ignored tmp，不作为当前入口。
+- 2026-10-11 10:40：Guide输入保护P2已由总控修复并独立High闭合，10项定向浏览器/scoped类型和lint通过，提示语另1例通过，补丁待最终组合CI/发布。10:44总控已只读核并行Guide发布后的9a11/rollback3245及服务/任务保护状态，原运行事实已更新。实际头像姿态/指针已观察，关闭本地2对照通过但原生产点击未确认。
+- 2026-10-11 用户认可Guide布局，已正常推送现有frontend/nanqing并部署9a11c931，回滚3245，main未改。精确CI全通过、新双库备份及线上版本/服务健康核验正常；实际站内入口、直接填写、整卡标题输入与手机布局已观察。证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-10 Guide已替换为本页创建/上传/手填/任务对话与研究修订界面；定向交互和独立High检查通过，本地候选尚未推送部署，真实模型质量未重跑，线上主页发布保持。需求与状态见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-10 主页版式修正已按用户认可推送并上线：保留5eeb48ce，正常合并远端test-only/docs后发布c239；四CI成功、独立High GO、备份及精确公网版本/健康核验通过，main未改。旧版退出当前展示，仅留一个回滚版本；实际站内入口及登录返回已观察。精确身份和证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)，下方待发布状态为历史。
+- 2026-10-10 个人学术主页按用户反馈完成版式返工：空卡始终保留并灰字提示，恢复示例左右比例，移除返回个人资料。10项浏览器测试及类型/lint通过，root已看桌面/手机空账户；当前仅本地候选与预览，线上仍为下方043版本。证据与待办见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-10 个人学术主页已按用户授权推至既有 nanqing 并部署：精确候选三项 CI 全通过、双库备份校验完成、新表迁移成功、服务健康、实际站内入口及登录返回已观察。真实账户保存/发布与外部 ORCID 未操作；精确版本、证据与存储边界见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。下方原应用发布与当时待推状态为历史。
+- 以下并行开发检查点记录当时状态；其中“生产未变／尚未迁移”已由上方个人主页发布更新，后续Hermes候选仍未随该次发布上线。
+- 2026-10-10 19:19：另一会话已完成学术主页043发布，本总控fresh只读确认三主容器健康、Native393/M3不变、无事务或锁。原生产59记录降为历史，既有备份/迁移及个人主页入口证据保留；后续发布采用新实际基线，所有未执行e5命令弃用。
+- 生图/短窗口候选未随043上线；研究续作test-only修复已RED2→Green2/独立High GO并全等收取1946，待新组合CI。真实PG1与原profile5在e5已通过。video继续后端，UI已得明确DTO并继续音频结果入口，本聊天目标不被另一发布取消。
+- 2026-10-10 19:02：生图入口联合High GO并全等集入；推送前发现另一条学术主页已推进共享分支，现已正常合并保留双方。原CI实际迁移新表成功；真实profile存储/并发/公开快照用例已补入同一PG job并获High源码GO，等待组合CI，生产未变。视频继续后端持久试听，UI已开独立GET播放器任务，生图已完成下一真实产物的本地来源准备。
+- 2026-10-10 18:47：HTTP单幕字段与短窗口修复已审并集入本地，真实路由51项/短窗口4例通过；旧准备包“字段不支持”及旧UI待修状态已纠正。生图两个可见入口候选已交付，19单测/13个不同页面用例通过，正在联合High；视频API写锁释放并继续持久试听恢复，UI接下一项私有音频入口。新批尚未CI或发布，生产仍原版、POST0。
+- 18:15：已审批次六CI全成功，未部署新版本。真实Native首幕计划的操作审查发现当前正常UI漏narrative，且单幕sceneLimit已获后端支持；原准备包判断已纠正，0提交。生图owner立即转做既有可见入口/精确请求接线，与UI短窗口三文件、视频后端范围分开；保留原错误材料，修复发布后再安排真实制作。
+- 2026-10-10 18:01：已审SDK/内部试听独立推送，不继续等未闭合UI；六CI中视频/期刊四条成功，Linux broker/引用合组136通过、零跳过，两条media尚运行。视频backend消费者写权已划，原High要求持久grant与跨attempt恢复防重复扣费。生图核到当前工作稿及真实管理员自动fund/debit语义，Settings零余额不是该正常入口阻断；供应商额度/真实科学质量另验。
+- 2026-10-10 个人学术主页：按确认方案完成已有 ORCID 连接、自定义个人链接、工作成果／本人贡献／能力与经验、意向开关及团队／求学经历／新闻/报道/会议... 三入口。原增量 High、类型/lint、API 5/5 与浏览器 7/7 通过；043已推且CI真实隔离PG16迁移52成功，尚未生产迁移。总控保留双方源码合并，补真实持久化/版本冲突/公开快照生命周期后统一CI；原产品证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
+- 2026-10-10 17:36：内部短试听已独立High审查并集入，复用原旁白/回执，未知提交不重发；19定向通过，模块61通过、2项待LinuxCI。视频继续正常任务/权限/额度/MP3消费接线；UI首轮三视口通过，但审查发现临界切换和焦点两项P2，仍在修正，未发布。生图仍准备合法真实科学任务，不重放旧unknown。
+- 17:06：真实已安装SDK离线图像循环一次通过，原科学工具控制与新增PNG运输/身份校验通过，外部模型0；80行回归已审全等收取，待UI修复同批CI。生图准备下一正常任务的当前来源/原额度，视频开发复用原语音阶段的私有试听消费者，UI已取得短窗口预期RED；三条线都有明确下一项工作，真实成片/科学质量尚未完成。
+- 2026-10-10 16:59：独立视频执行器已完成实际升级和保持关闭的验收，受保护API首次只读返回77个音色；没有生成请求，声音选择/真实成片仍待处理。生图真实SDK离线图片运输用例已获独立High，已派一次执行，结果不代替科学质量。
+- 16:22发布后的真实短窗口观察发现新视觉缺口：头像/焦点/开闭与编辑布局正常，但展开后的完整精灵被裁切，已派UI按1536×681修复，不能宣称界面全绿。生图证实原失败任务已实际收到完整来源与Skill，继续真实SDK图片工具循环验证，不把来源齐全当科学错绑已修。
+- 2026-10-10 16:22：新版应用正式发布完成，五条精确CI全部成功，原头像互动32例与工作区25例通过；网页/API/Worker健康，原生Hermes运行时及M3保持原配对。UI正在正常可见入口做最小生产观察；视频owner准备独立执行器升级/音色读取，生图owner已转回来源错绑与真实SDK审图循环修复。
+- Fig2授权五项软回收全部对账完成，原对象、任务、捕获来源与封存记录保留，公开页面和选定图片实际GET成功；人类三项额外回收/一次采用原样保留。正常管理/回收站/搜索阅读已观察；旧成员直链被浏览器工具拦截，准确保留该验证缺口。精确回执及边界只见CURRENT。
+
+- 2026-10-11 09:55：生图错误定位修复两文件已集入，9项定向测试及Worker类型通过、独立High通过，待本组合CI；保留真实错绑拒收。UI正常入口恢复并实际观察框内姿态/指针反馈；关闭后弹窗仍开的新观察正在核原点击目标，未认定源码缺陷，眨眼/呼吸未确认。视频仍缺真实父/帧、声音/有限费用，不新付费试片。
+- 2026-10-11 03:42历史阻塞：头像动态验收被浏览器超时阻断，必要源站只读未定位对应应用故障。原记录和待答的日常浏览器问句保留，不能据服务健康宣称页面或动效通过；此次恢复来自新human指令，不循环重试或改网络/重启。
+- 2026-10-11 02:56：首个Native视频分镜准入、任务恢复和附件/Explore提示已通过五条实际CI并发布；API/Web/Worker健康、双库迁移no-op、回退身份及原未知任务保持均实核。Native/M3和视频Host关闭状态不变。具体运行/回退身份与日志只见Hermes CURRENT；软件上线不代表真实视频或三篇科学质量通过。
+- 本批媒体CI实际Worker95/95，包含四项真实Redis执行且零skip；所选媒体工作台browser19/19与四browser-entry全部通过。原文档同步、首计划本机1/1和未变Domain/类型证据复用，旧失败与High闭合记录保留。
+- 同一独立High应用审、fresh零工作状态及双库备份条件满足，发布窗口已关闭。回退旧应用前不得有新未完成Native首计划；running/started/unknown或native-bound pending须保留候选并前向恢复，不强退/重派。无模型、素材、声音配置或预算操作。
+- 生图线通用记号修复已发布；Explore提示已上线且排序/分页保持。新增定位修复只改善错误字段提示，不放宽解析或来源要求。原唯一新图计划预算终态失败仍无新图，真实错绑不放行、不重放；未通过整篇科学质量验收。
+- 视频首计划与恢复修复已发布；队列先确保目标ID，再移处理中记录，避免写入失败丢任务。商业API矩阵已同步能力台账，参数快照、代码消费与未验效果分开。真实输入父/完整帧、声音与有限费用仍是业务缺口，不自动新付费试片。
+- UI正常个人中心→研究编辑→Hermes、Explore与公开附件提示已观察并保留回执；首份计划提交未执行。头像恢复观察只补真实动作及当前reduced-motion，静态和开关证据复用，0新任务/模型/资产写。
+- 三线当前没有生产 writer。已完成块由总控接入、CI和串行发布；无独立可推进工作时记录具体依赖，不以重复测试、付费调用或额外环境操作制造忙碌。
+
+## 保留的业务目标与边界
+
+- 真实 NousResearch Hermes Agent 理解全文、凝练六维与来源，按研究含义规划并生成准确、易懂、美观的图像；2–3篇论文仍需用户确认与正常公开展示。局部图获赞、测试或部署成功不代表整篇质量认可。
+- 私有试听、完整视频及普通用户使用旅程仍未全部完成。已认可图片、公开标识、sealed记录、费用与原回执保留；未知任务不自动重发，主Gateway/Native M3不全局切换。
+- Fig2 exact5已按授权移入回收站并持久化核验，原对象/任务/Claims/封存记录保留；人类另行手动采用/回收的媒体不恢复。77/929债务不扩本轮授权；BGE真实恢复未执行，crypto仍暂停。
+- 个人学术主页已独立发布，版式与真实入口证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。期刊真实PDF→共用Hermes试用与公司上线目标继续，执行状态见 [期刊 CURRENT](handoff/2026-10-08-journal-workbench-handoff.md) 和 Hermes CURRENT。
+- 运维、缓存退役的既有审批阻断及外部工具限制保留原收据，不绕过、不将零删除写成清理完成。
+
+## 历史定位
+
+- 压缩前的本页完整历史见 Git `ce968707fd32856e185627b99289464927fe4f8f:docs/progress.md`；旧发布、回退、CI、原失败与所有原始收据仍保留。
+- 更早长交接见 Git `d8a02e26a2ca5225c7977370584a7181fbc9a0b6:docs/handoff/2026-09-10-hermes-web-image-handoff.md`，再前为 bebe897c/748e33a4。历史 next action 不作为当前指令。

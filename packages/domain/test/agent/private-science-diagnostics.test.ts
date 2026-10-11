@@ -1,6 +1,30 @@
 import { expect, it } from 'vitest';
 import { projectAgentTaskResult } from '../../src/agent/agent';
 
+it('projects only the minimal private audition playback DTO and keeps its grant, path, quote and provider identity server-side', () => {
+  const stored = { purpose: 'audio-audition', inputHash: 'a'.repeat(64), audioAuditionGrant: { workerMaxEstimatedCoins: 200 },
+    audioAudition: { taskId: 'task', sceneIndex: 1, contentType: 'audio/mpeg', durationSeconds: 2.5, timingStatus: 'requires_revision',
+      objectKey: 'presentation/private/audio.mp3', filePath: '/private/audition.mp3', audioTaskId: 'paid-provider-id',
+      contentHash: 'b'.repeat(64), quote: { estimatedCoins: 22 }, coinsUsed: 22 } };
+  const before = structuredClone(stored);
+  expect(projectAgentTaskResult(stored, 'presentation.generate')).toEqual({ purpose: 'audio-audition', audioAudition: {
+    taskId: 'task', sceneIndex: 1, contentType: 'audio/mpeg', durationSeconds: 2.5, timingStatus: 'requires_revision',
+  } });
+  expect(stored).toEqual(before);
+});
+
+it('hides an authorized but not yet completed audition grant without manufacturing a playable result', () => {
+  expect(projectAgentTaskResult({ audioAuditionGrant: { inputHash: 'secret-internal-binding' }, progressNote: 'Preparing narration' },
+    'presentation.generate')).toEqual({ progressNote: 'Preparing narration' });
+});
+
+it.each([undefined, 'video', 'unknown'])('strips raw private audio metadata when the audition purpose is missing or wrong: %s', purpose => {
+  const stored = { ...(purpose ? { purpose } : {}), progressNote: 'Preparing media',
+    audioAudition: { objectKey: 'PRIVATE_OBJECT_KEY', filePath: 'PRIVATE_PATH', quote: { estimatedCoins: 22 } },
+    audioAuditionGrant: { inputHash: 'PRIVATE_GRANT' } };
+  expect(projectAgentTaskResult(stored, 'presentation.generate')).toEqual({ ...(purpose ? { purpose } : {}), progressNote: 'Preparing media' });
+});
+
 it('never projects private rejected scientific candidates into an API task result', () => {
   expect(projectAgentTaskResult({ assetId: 'asset', storyboardScienceDiagnostics: {
     candidates: [{ text: 'unreviewed private manuscript excerpt' }], sources: ['private source'],

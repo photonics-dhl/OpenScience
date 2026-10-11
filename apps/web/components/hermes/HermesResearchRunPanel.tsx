@@ -12,7 +12,9 @@ import {
   getCurrentUser,
   getExistingHermesResearchRun,
   getHermesResearchRun,
+  getHermesVideoCapability,
   retryHermesGeneration,
+  presentationAssetContentUrl,
   SESSION_CHANGED_EVENT,
   SESSION_INVALIDATED_EVENT,
   type DashboardTaskApi,
@@ -21,9 +23,11 @@ import {
   type WorkspaceGuideResult,
 } from '@/lib/api';
 import { clearPendingHermesRunStart, getHermesDraftStorage, loadPendingHermesRunStart, readHermesResearchRunDraft, savePendingHermesRunStart, type PendingHermesRunStart } from '@/lib/hermes/draft-state';
-import { prepareHermesNarrativeSource } from '@/lib/hermes/start-paper-narrative';
+import { hasHermesRunOutput, prepareHermesNarrativeSource } from '@/lib/hermes/start-paper-narrative';
 import { continueSourceReanalysis, isSourceReanalysisCurrent, loadSourceReanalysisIntent, SourceReanalysisIntentError,
   type SourceReanalysisIntent } from '@/lib/hermes/source-reanalysis-intent';
+import { journalEditorMessages } from '@/messages/journal-editor';
+import type { JournalArticle, JournalSharedFiles } from '@/lib/journal-api';
 
 function isNativeSourceReviewResume(run: HermesResearchRun): boolean {
   return run.generationRecovery === 'source-review-fresh' && run.chargeableAttempts === 0;
@@ -44,7 +48,7 @@ function reviewHref(researchObjectId: string, run: HermesResearchRun): string {
   return `/research-objects/${encodeURIComponent(researchObjectId)}/hermes?${query.toString()}`;
 }
 
-export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTaskId = '', activeTaskId, onRunCreated, onRunUpdated }: {
+type GenericRunProps = {
   researchObjectId: string;
   tasks: DashboardTaskApi[];
   runId: string;
@@ -52,7 +56,36 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   activeTaskId?: string;
   onRunCreated(run: HermesResearchRun): void;
   onRunUpdated?(run: HermesResearchRun): void;
-}) {
+};
+export interface JournalRunScope {
+  journalId: string; articleId: string; researchObjectId: string | null;
+  sourceLabel: string; sourceRevision: number;
+  jobs: JournalArticle['jobs']; hasDraft: boolean; canStart: boolean; busy: boolean;
+  processing?: JournalSharedFiles['processing'];
+  issues: string[]; onStart(retryOf?: string): void | Promise<void>; onCancel(jobId: string): void | Promise<void>;
+}
+function JournalScopedHermesPanel({ scope }: { scope: JournalRunScope }) {
+  const locale = useLocale();
+  const copy = journalEditorMessages[locale === 'en' ? 'en' : 'zh'];
+  const [processingConsent, setProcessingConsent] = React.useState(false);
+  React.useEffect(() => { setProcessingConsent(false); }, [scope.articleId, scope.sourceRevision]);
+  const generationJobs = scope.jobs.filter((job) => job.kind === 'generate');
+  const current = generationJobs.at(-1);
+  const state = current?.state ?? current?.status;
+  const active = state === 'staging' || state === 'pending' || state === 'running';
+  const status = state === 'succeeded' ? copy.hermesJobDone : state === 'failed' ? copy.hermesJobFailed : state === 'cancelled' ? copy.hermesJobCancelled : active ? copy.hermesJobRunning : current ? copy.hermesJobUnknown : '';
+  const sharedState = scope.processing?.state;
+  const sharedStatus = sharedState === 'needs_review' ? copy.sharedReview : sharedState === 'failed_retryable' || sharedState === 'failed_blocked' ? copy.sharedFailed : sharedState === 'written' || sharedState === 'confirmed' ? copy.sharedReady : sharedState ? copy.sharedPreparing : '';
+  return <div className="min-w-0" aria-busy={scope.busy || active}>
+    <p className="max-w-2xl text-sm leading-6 text-os-muted-paper">{copy.hermesDisclosure}</p>
+    {scope.issues.length ? <div className="mt-4 border-l-2 border-os-vermilion-ink pl-4" id="generation-readiness"><p className="text-sm font-medium">{copy.scopeBlocked}</p><ul className="mt-2 list-disc pl-5 text-sm text-os-muted-paper">{scope.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div> : <p className="mt-4 text-sm text-os-muted-paper" id="generation-readiness">{copy.scopeAllowed}</p>}
+    <label className="mt-5 flex max-w-2xl items-start gap-3 text-sm leading-6"><input className="mt-1 accent-teal-700" type="checkbox" disabled={!scope.canStart || scope.busy} checked={processingConsent} onChange={(event) => setProcessingConsent(event.target.checked)} /><span>{copy.processingConsent} <strong className="font-medium">{scope.sourceLabel || copy.sourceFile}</strong></span></label>
+    <div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" disabled={!scope.canStart || !processingConsent || scope.busy} className="min-h-11 bg-os-ink px-5 text-sm font-medium text-paper-bg disabled:opacity-50" onClick={() => { setProcessingConsent(false); void scope.onStart(); }}>{sharedState === 'failed_retryable' || sharedState === 'failed_blocked' ? copy.handToHermesRetry : scope.hasDraft ? copy.handToHermesAgain : copy.handToHermes}</button>{active && current ? <button type="button" className="min-h-11 border border-os-rule-paper px-4 text-sm" disabled={scope.busy} onClick={() => void scope.onCancel(current.id)}>{locale === 'en' ? 'Cancel task' : '取消任务'}</button> : null}</div>
+    {sharedStatus ? <p className="mt-4 text-sm" role="status">{sharedStatus}{typeof scope.processing?.progress === 'number' && sharedState !== 'needs_review' ? ` · ${Math.round(scope.processing.progress)}%` : ''}</p> : status ? <p className="mt-4 text-sm" role="status">{status}</p> : null}
+    {scope.processing?.error ? <p className="mt-2 text-sm text-state-danger" role="alert">{scope.processing.error}</p> : null}
+  </div>;
+}
+function GenericHermesResearchRunPanel({ researchObjectId, tasks, runId, guideTaskId = '', activeTaskId, onRunCreated, onRunUpdated }: GenericRunProps) {
   const t = useTranslations('hermesRun');
   const sourceStatus = useTranslations('ingestion.status');
   const locale = useLocale().startsWith('zh') ? 'zh' : 'en';
@@ -70,6 +103,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [resolving, setResolving] = React.useState(false);
   React.useEffect(() => { if (!pendingRestored && !starting) setGenerationLocale(locale); }, [locale, pendingRestored, starting]);
   const startInFlight = React.useRef(false);
+  const startController = React.useRef<AbortController | null>(null);
   const mounted = React.useRef(false);
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [granting, setGranting] = React.useState(false);
@@ -92,6 +126,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const [guideLoading, setGuideLoading] = React.useState(Boolean(guideTaskId));
   const [guideRetry, setGuideRetry] = React.useState(0);
   const guided = guideDraft?.actorId === actorId ? guideDraft.value : null;
+  const output = guided?.output;
   React.useEffect(() => {
     let active = true;
     let revision = 0;
@@ -146,44 +181,53 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const eligibleTasks = React.useMemo(
     () => tasks.filter((task) => task.researchObjectId === researchObjectId && /\.pdf$/iu.test(task.logicalPath)
       && (isEligible(task) || (actorId && loadPendingHermesRunStart(getHermesDraftStorage(), {
-        userId: actorId, researchObjectId, ingestionTaskId: task.id,
+        userId: actorId, researchObjectId, ingestionTaskId: task.id, output,
       })))),
-    [actorId, researchObjectId, tasks],
+    [actorId, researchObjectId, tasks, output],
   );
   const [selectedTaskId, setSelectedTaskId] = React.useState('');
   const restoreTask = React.useCallback((taskId: string) => {
-    const pending = actorId ? loadPendingHermesRunStart(getHermesDraftStorage(), { userId: actorId, researchObjectId, ingestionTaskId: taskId }) : null;
+    const pending = actorId ? loadPendingHermesRunStart(getHermesDraftStorage(), { userId: actorId, researchObjectId, ingestionTaskId: taskId, output }) : null;
     setSelectedTaskId(taskId);
-    setInstruction(guided?.instruction ?? pending?.generation.instruction ?? '');
-    setGenerationLocale(guided?.locale ?? pending?.generation.locale ?? locale);
-    setStyle(guided?.style ?? pending?.generation.style ?? 'auto');
-    setPendingRestored(Boolean(pending && (!guided || (pending.generation.instruction === guided.instruction
-      && pending.generation.locale === guided.locale && pending.generation.style === guided.style))));
-  }, [actorId, researchObjectId, locale, guided]);
-  const owner = `${actorId}:${researchObjectId}`;
+    setInstruction(pending?.generation.instruction ?? guided?.instruction ?? '');
+    setGenerationLocale(pending?.generation.locale ?? guided?.locale ?? locale);
+    setStyle(pending?.generation.style ?? guided?.style ?? 'auto');
+    setPendingRestored(Boolean(pending));
+  }, [actorId, researchObjectId, locale, guided, output]);
+  const owner = `${actorId}:${researchObjectId}${output === 'video' ? ':video' : ''}`;
   React.useEffect(() => {
     if (!actorId || !eligibleTasks.length || runId || (guideTaskId && (!guided || guideLoading))) return;
     if (restoredOwner === owner && (eligibleTasks.some(task => task.id === selectedTaskId) || (guided && !guided.ingestionTaskId && !selectedTaskId))) return;
     const pending = eligibleTasks.map(task => ({ task, request: loadPendingHermesRunStart(getHermesDraftStorage(), {
-      userId: actorId, researchObjectId, ingestionTaskId: task.id,
+      userId: actorId, researchObjectId, ingestionTaskId: task.id, output,
     }) })).filter(item => item.request).sort((left, right) => right.request!.savedAt - left.request!.savedAt);
     const task = guided ? eligibleTasks.find(item => item.id === guided.ingestionTaskId)
       : eligibleTasks.find(item => item.id === activeTaskId) ?? pending[0]?.task ?? eligibleTasks[0]!;
     restoreTask(task?.id ?? ''); setRestoredOwner(owner);
     if (guided?.ingestionTaskId && !task) setError(t('narrative.guideSourceUnavailable'));
-  }, [activeTaskId, actorId, eligibleTasks, owner, researchObjectId, restoreTask, restoredOwner, runId, selectedTaskId, guided, guideLoading, guideTaskId, t]);
+  }, [activeTaskId, actorId, eligibleTasks, owner, researchObjectId, restoreTask, restoredOwner, runId, selectedTaskId, guided, guideLoading, guideTaskId, output, t]);
   const selectedTask = eligibleTasks.find((task) => task.id === selectedTaskId)
     ?? (!guideTaskId ? eligibleTasks.find((task) => task.id === activeTaskId) ?? eligibleTasks[0] : null)
     ?? null;
   const sourceScope = `${owner}:${selectedTask?.id ?? ''}`;
+  const currentStartContext = React.useRef({ sourceScope, guideTaskId });
+  currentStartContext.current = { sourceScope, guideTaskId };
+  React.useEffect(() => {
+    setStarting(false);
+    return () => {
+      startController.current?.abort();
+      startController.current = null;
+      startInFlight.current = false;
+    };
+  }, [sourceScope, guideTaskId, runId]);
   React.useEffect(() => {
     if (runId || !actorId || restoredOwner !== owner || !selectedTask) return;
     const controller = new AbortController();
     setResolving(true); setResolvedSource(''); setError('');
-    void getExistingHermesResearchRun(researchObjectId, selectedTask.id, controller.signal).then(({ run: existing }) => {
+    void getExistingHermesResearchRun(researchObjectId, selectedTask.id, controller.signal, output).then(({ run: existing }) => {
       if (controller.signal.aborted || actorRef.current !== actorId) return;
       if (existing) {
-        if (existing.actorId !== actorId || existing.researchObjectId !== researchObjectId
+        if (existing.actorId !== actorId || existing.researchObjectId !== researchObjectId || !hasHermesRunOutput(existing, output)
           || !existing.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === selectedTask.id)) {
           throw new Error(t('narrative.identityChanged'));
         }
@@ -195,7 +239,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       if (!controller.signal.aborted && actorRef.current === actorId) setResolving(false);
     });
     return () => controller.abort();
-  }, [actorId, owner, restoredOwner, selectedTask?.id, researchObjectId, runId, sourceScope, resolveRetry, onRunCreated, t]);
+  }, [actorId, owner, restoredOwner, selectedTask?.id, researchObjectId, runId, sourceScope, resolveRetry, output, onRunCreated, t]);
   const sourceLabel = (task: DashboardTaskApi) => {
     const number = eligibleTasks.findIndex(other => other.id === task.id) + 1;
     return `${task.logicalPath} · ${sourceStatus(task.state)} · ${t('analysisRecord', { number })}`;
@@ -227,7 +271,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     if (!runId || run?.id !== runId || run.actorId !== actorId || run.researchObjectId !== researchObjectId) return;
     for (const step of run.steps) {
       if (step.stage === 'source_ingestion' && step.ingestionTaskId) clearPendingHermesRunStart(getHermesDraftStorage(), {
-        userId: actorId, researchObjectId, ingestionTaskId: step.ingestionTaskId,
+        userId: actorId, researchObjectId, ingestionTaskId: step.ingestionTaskId, output: run.generationSettings?.output,
       }, runId);
     }
   }, [actorId, researchObjectId, run, runId]);
@@ -264,37 +308,67 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
 
   const start = React.useCallback(async () => {
     if (!selectedTask || !actorId || restoredOwner !== owner || resolvedSource !== sourceScope || startInFlight.current || (guideTaskId && (!guided || guideLoading))) return;
+    const controller = new AbortController();
+    startController.current = controller;
+    const isCurrentStart = () => !controller.signal.aborted && mounted.current && actorRef.current === actorId
+      && visibleContext.current.researchObjectId === researchObjectId && visibleContext.current.runId === runId
+      && currentStartContext.current.sourceScope === sourceScope && currentStartContext.current.guideTaskId === guideTaskId;
     startInFlight.current = true;
     setStarting(true); setError('');
     try {
       const viewer = await getCurrentUser({ fresh: true });
-      if (!mounted.current || actorRef.current !== actorId) return;
+      if (!isCurrentStart()) return;
       if (viewer.userId !== actorId) {
         actorRef.current = viewer.userId; setActorId(viewer.userId); setRestoredOwner(''); setInstruction('');
         setError(t('narrative.identityChanged')); return;
       }
-      const existing = await getExistingHermesResearchRun(researchObjectId, selectedTask.id);
-      if (!mounted.current || actorRef.current !== actorId) return;
-      if (existing.run) { onRunCreated(existing.run); return; }
+      const existing = await getExistingHermesResearchRun(researchObjectId, selectedTask.id, controller.signal, output);
+      if (!isCurrentStart()) return;
+      if (existing.run) {
+        if (existing.run.actorId !== actorId || existing.run.researchObjectId !== researchObjectId || !hasHermesRunOutput(existing.run, output)
+          || !existing.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === selectedTask.id)) throw new Error(t('narrative.identityChanged'));
+        onRunCreated(existing.run); return;
+      }
       const generation: HermesNarrativeGeneration = { profile: 'visual-narrative-v1', maxAgentTasks: 9,
-        locale: guided?.locale ?? generationLocale, style: guided?.style ?? style, instruction: guided?.instruction ?? (instruction.trim() || t('narrative.defaultGoal')) };
-      const scope = { userId: actorId, researchObjectId, ingestionTaskId: selectedTask.id };
+        locale: generationLocale, style, instruction: instruction.trim() || guided?.instruction || t('narrative.defaultGoal'), ...(output ? { output } : {}) };
+      const scope = { userId: actorId, researchObjectId, ingestionTaskId: selectedTask.id, output };
       const storage = getHermesDraftStorage();
       const pending = loadPendingHermesRunStart(storage, scope);
-      const guideKey = guided ? `hermes-guide-run:${actorId}:${guideTaskId}:${selectedTask.id}` : null;
-      const request: PendingHermesRunStart = pending && (!guideKey || pending.key === guideKey) && JSON.stringify(pending.generation) === JSON.stringify(generation)
-        ? pending : { key: guideKey ?? crypto.randomUUID(), generation, savedAt: Date.now() };
+      if (output === 'video' && !pending) {
+        const capability = await getHermesVideoCapability(researchObjectId, controller.signal);
+        if (!isCurrentStart()) return;
+        if (!capability.canGenerateVideo) throw new Error(t('video.unavailable'));
+      }
+      const guideKey = guided ? `hermes-guide-run:${actorId}:${guideTaskId}:${selectedTask.id}${output === 'video' ? ':video' : ''}` : null;
+      const request: PendingHermesRunStart = pending ?? { key: guideKey ?? crypto.randomUUID(), generation, savedAt: Date.now(), phase: 'source' };
       // Persist before the paid mutation; all unknown outcomes retain this exact request.
       if (!savePendingHermesRunStart(storage, scope, request)) throw new Error(t('narrative.storageError'));
       setPendingRestored(true);
       const prepared = request.runId ? { scope, pending: request } : await prepareHermesNarrativeSource({
-        scope, pending: request, storage, isCurrent: () => mounted.current && actorRef.current === actorId
-          && selectedTask.id === scope.ingestionTaskId, identityError: t('narrative.identityChanged'), storageError: t('narrative.storageError'),
+        scope, pending: request, storage, isCurrent: isCurrentStart,
+        identityError: t('narrative.identityChanged'), storageError: t('narrative.storageError'),
       });
-      const result = request.runId ? await getHermesResearchRun(researchObjectId, request.runId)
-        : await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
-      if (!mounted.current || actorRef.current !== actorId) return;
-      if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId
+      if (!isCurrentStart()) return;
+      let result: { run: HermesResearchRun };
+      if (prepared.pending.runId) {
+        result = await getHermesResearchRun(prepared.scope.researchObjectId, prepared.pending.runId, controller.signal);
+      } else {
+        const existingPrepared = output === 'video'
+          ? await getExistingHermesResearchRun(prepared.scope.researchObjectId, prepared.scope.ingestionTaskId, controller.signal, output)
+          : { run: null };
+        if (!isCurrentStart()) return;
+        if (existingPrepared.run) result = { run: existingPrepared.run };
+        else {
+          if (output === 'video') {
+            const capability = await getHermesVideoCapability(prepared.scope.researchObjectId, controller.signal);
+            if (!isCurrentStart()) return;
+            if (!capability.canGenerateVideo) throw new Error(t('video.unavailable'));
+          }
+          result = await createHermesResearchRun(prepared.scope.researchObjectId, [prepared.scope.ingestionTaskId], prepared.pending.key, prepared.pending.generation);
+        }
+      }
+      if (!isCurrentStart()) return;
+      if (result.run.actorId !== actorId || result.run.researchObjectId !== researchObjectId || !hasHermesRunOutput(result.run, output)
         || !result.run.steps.some(step => step.stage === 'source_ingestion' && step.ingestionTaskId === prepared.scope.ingestionTaskId)) {
         throw new Error(t('narrative.identityChanged'));
       }
@@ -302,12 +376,16 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       setRun(result.run);
       onRunCreated(result.run);
     } catch (cause) {
-      if (mounted.current && actorRef.current === actorId) setError(cause instanceof Error ? cause.message : t('startError'));
+      if (isCurrentStart()) setError(cause instanceof ApiClientError && cause.code === 'VIDEO_UNAVAILABLE'
+        ? t('video.unavailable') : cause instanceof Error ? cause.message : t('startError'));
     } finally {
-      startInFlight.current = false;
-      if (mounted.current) setStarting(false);
+      if (startController.current === controller) {
+        startController.current = null;
+        startInFlight.current = false;
+        if (mounted.current) setStarting(false);
+      }
     }
-  }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, onRunCreated, t]);
+  }, [selectedTask, actorId, restoredOwner, owner, resolvedSource, sourceScope, guideTaskId, guided, guideLoading, generationLocale, style, instruction, researchObjectId, runId, output, onRunCreated, t]);
 
   async function upgradeGenerationGrant() {
     if (!run || grantInFlight.current || sourceReanalysisInFlight.current || !actorId || run.actorId !== actorId) return;
@@ -414,10 +492,13 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   }
 
   const narrative = run?.profile === 'visual-narrative-v1';
+  const videoOutput = run ? narrative && run.generationSettings?.output === 'video' : output === 'video';
+  const resultVideo = videoOutput && run?.versionId && ['awaiting_video_review', 'succeeded'].includes(run.status)
+    ? run.steps.find(step => step.stage === 'video' && step.availableAssetId && ['draft', 'approved'].includes(step.availableAssetStatus ?? '')) : undefined;
   const pendingSourceReanalysis = sourceReanalysisIntent?.actorId === actorId
     && sourceReanalysisIntent.researchObjectId === researchObjectId && sourceReanalysisIntent.sourceRunId === run?.id
     ? sourceReanalysisIntent : null;
-  const showSourceReanalysis = run?.status === 'failed' && narrative && run.maxAgentTasks === 9
+  const showSourceReanalysis = run?.status === 'failed' && narrative && !videoOutput && run.maxAgentTasks === 9
     && Boolean(run.sourceReanalysis || pendingSourceReanalysis);
   const continuingSourceReanalysis = Boolean(pendingSourceReanalysis || run?.sourceReanalysis?.existingIngestionTaskId);
   const reanalyzingSource = sourceReanalysisPhase !== null;
@@ -434,7 +515,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
   const legacyGrantNeedsUpgrade = Boolean(run
     && ['awaiting_claim_review', 'awaiting_storyboard_review'].includes(run.status)
     && run.profile === 'onchip-field-sampling-v1' && run.maxAgentTasks === 7);
-  const narrativeStage = run?.generationHold === 'image-api-pending' ? 'planReady' : sourceParsing ? 'parsingIncomplete' : sourceReady ? 'awaitingSourceReview' : terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
+  const narrativeStage = run?.generationHold === 'image-api-pending' ? 'planReady' : sourceParsing ? 'parsingIncomplete' : sourceReady && !videoOutput ? 'awaitingSourceReview' : terminal ? 'incomplete' : run?.status === 'succeeded' ? 'complete'
     : ['generating_storyboard', 'awaiting_storyboard_review'].includes(run?.status ?? '') ? 'planning'
       : run?.status === 'generating_scene_images' ? 'illustrating'
         : ['awaiting_scene_images_review', 'generating_video', 'awaiting_video_review'].includes(run?.status ?? '') ? 'reviewing' : 'understanding';
@@ -445,16 +526,15 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     </li>)}
   </ol> : null;
   return <section className="surface-folio-sheet mt-7 max-w-3xl border-y border-os-rule-paper px-5 py-6 sm:px-7" aria-labelledby="hermes-run-title" data-hermes-research-run={run?.status ?? 'new'}>
-    <p data-reading-role="caption" className="text-os-vermilion-ink">Hermes</p>
-    <h2 id="hermes-run-title" className="mt-2 text-2xl font-medium text-os-ink">{t('title')}</h2>
+    <h2 id="hermes-run-title" className="text-2xl font-medium text-os-ink">{t(videoOutput ? 'video.title' : 'title')}</h2>
     {!runId && !run && !loading && !resolving && (!selectedTask || resolvedSource === sourceScope) && (!guideTaskId || (guided && !guideLoading)) ? <>
-      <p className="mt-3 max-w-[66ch] leading-7 text-os-muted-paper">{t(eligibleTasks.length ? 'narrative.startDescription' : 'narrative.unavailableDescription')}</p>
-      {guided ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-os-ink">{guided.instruction}</p> : null}
+      <p className="mt-3 max-w-[66ch] leading-7 text-os-muted-paper">{t(eligibleTasks.length ? videoOutput ? 'video.startDescription' : 'narrative.startDescription' : 'narrative.unavailableDescription')}</p>
+      {guided ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-os-ink">{instruction}</p> : null}
       {(!guided && eligibleTasks.length > 1) || (guided && !guided.ingestionTaskId && eligibleTasks.length > 0) ? <label className="mt-4 grid max-w-lg gap-2 text-sm font-semibold text-os-ink">{t('sourceLabel')}<select disabled={starting || !actorId || restoredOwner !== owner} value={selectedTask?.id ?? ''} onChange={(event) => restoreTask(event.target.value)} className="min-h-11 rounded-panel border border-os-rule-paper bg-os-paper px-3 font-normal disabled:opacity-50">{guided ? <option value="" disabled>{t('narrative.chooseSource')}</option> : null}{eligibleTasks.map((task) => <option key={task.id} value={task.id}>{sourceLabel(task)}</option>)}</select></label> : null}
       {selectedTask ? <>
-        {!guided ? <label className="mt-5 grid gap-2 text-sm font-semibold text-os-ink">{t('narrative.goalLabel')}<textarea value={instruction} onChange={(event) => { setInstruction(event.target.value); setGenerationLocale(locale); setPendingRestored(false); }} maxLength={1000} rows={3} disabled={starting || !actorId || restoredOwner !== owner} placeholder={t('narrative.goalPlaceholder')} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper p-3 font-normal leading-6 disabled:opacity-50" /></label> : null}
+        {!guided ? <label className="mt-5 grid gap-2 text-sm font-semibold text-os-ink">{t('narrative.goalLabel')}<textarea value={instruction} onChange={(event) => { setInstruction(event.target.value); setGenerationLocale(locale); setPendingRestored(false); }} maxLength={1000} rows={3} disabled={starting || pendingRestored || !actorId || restoredOwner !== owner} placeholder={t('narrative.goalPlaceholder')} className="w-full resize-y rounded-panel border border-os-rule-paper bg-os-paper p-3 font-normal leading-6 disabled:opacity-50" /></label> : null}
         {pendingRestored ? <p className="mt-3 text-sm leading-6 text-os-muted-paper" role="status">{t('narrative.pendingRestored')}</p> : null}
-        <button type="button" onClick={() => void start()} disabled={starting || !actorId || restoredOwner !== owner} className="mt-5 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(starting ? 'starting' : pendingRestored ? 'narrative.resumePending' : 'narrative.startFor', { source: sourceLabel(selectedTask) })}</button>
+        <button type="button" onClick={() => void start()} disabled={starting || !actorId || restoredOwner !== owner} className="mt-5 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(starting ? 'starting' : pendingRestored ? 'narrative.resumePending' : videoOutput ? 'video.startFor' : 'narrative.startFor', { source: videoOutput ? selectedTask.logicalPath : sourceLabel(selectedTask) })}</button>
       </> : null}
     </> : null}
     {loading || resolving || (guideTaskId && guideLoading) ? <p role="status" className="mt-4 text-os-muted-paper">{t('loading')}</p> : null}
@@ -463,10 +543,11 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
     {runId && !run && !loading && error ? <button type="button" onClick={() => void loadRun()} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {guideTaskId && !guided && !guideLoading && error ? <button type="button" onClick={() => setGuideRetry(value => value + 1)} className="mt-3 min-h-11 font-semibold text-os-vermilion-ink underline">{t('narrative.refreshStatus')}</button> : null}
     {run && narrative ? <div className="mt-4 border-t border-os-rule-paper pt-4">
-      <p className="font-semibold text-os-ink" role="status">{t(`narrative.status.${narrativeStage}`)}</p>
-      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(run.generationHold === 'image-api-pending' ? 'narrative.planReadyDescription' : sourceParsing ? 'sourceParsingDescription' : sourceReady ? 'narrative.awaitingSourceReviewDescription' : terminal ? 'narrative.incompleteDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
+      <p className="font-semibold text-os-ink" role="status">{t(videoOutput && run.status === 'generating_video' ? 'video.composing' : videoOutput && run.status === 'awaiting_video_review' ? 'video.ready' : `narrative.status.${narrativeStage}`)}</p>
+      <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t(run.generationHold === 'image-api-pending' ? 'narrative.planReadyDescription' : sourceParsing ? 'sourceParsingDescription' : terminal ? 'narrative.incompleteDescription' : videoOutput ? resultVideo ? 'video.readyDescription' : 'video.runningDescription' : sourceReady ? 'narrative.awaitingSourceReviewDescription' : run.status === 'succeeded' ? 'narrative.completeDescription' : 'narrative.runningDescription')}</p>
+      {resultVideo && run.versionId ? <div className="mt-5" data-hermes-video-result="true"><video className="aspect-video w-full bg-os-paper-strong object-contain" controls preload="metadata" aria-label={t('video.preview')} src={presentationAssetContentUrl(researchObjectId, run.versionId, resultVideo.availableAssetId!)} /><Link className="mt-4 inline-flex min-h-11 items-center font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(run.versionId)}`}>{t('video.viewResult')}</Link></div> : null}
       {sourceParsing?.unresolvedPageNumbers?.length ? <p className="mt-2 text-sm text-os-muted-paper">{t('sourceParsingPages', { pages: sourceParsing.unresolvedPageNumbers.join(', ') })}</p> : null}
-      {imageSteps.length ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
+      {imageSteps.length && !videoOutput ? <p className="mt-3 text-sm font-semibold text-os-vermilion-ink" role="status">{t('narrative.imageProgress', { current: run.availableImageCount ?? 0, total: imageSteps.length })}</p> : null}
       {showSourceReanalysis ? <div className="mt-4">
         <p className="text-sm leading-6 text-os-muted-paper">{t(pendingSourceReanalysis?.newIngestionTaskId || run.sourceReanalysis?.existingIngestionTaskId
           ? 'sourceReanalysis.restoreDescription' : pendingSourceReanalysis ? 'sourceReanalysis.pendingDescription' : 'sourceReanalysis.description')}</p>
@@ -489,7 +570,7 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
         <button type="button" disabled={retrying || reanalyzingSource} onClick={() => void retryGeneration()} className="mt-3 min-h-11 rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white disabled:opacity-40">{t(retrying ? 'retrying' : run.generationRecovery === 'source-composition' ? 'sourceCompositionContinue' : run.generationRecovery === 'source-review-not-submitted' ? 'sourceReviewTechnicalContinue' : run.generationRecovery === 'source-review-independent' ? 'sourceReviewIndependent' : run.generationRecovery === 'source-review-saved' ? 'sourceReviewSaved' : isNativeSourceReviewResume(run) ? 'sourceReviewNativeResume' : run.generationRecovery === 'source-review-fresh' ? 'sourceReviewFresh' : run.generationRecovery === 'source-parser' ? 'sourceParsingResume' : 'narrative.resume')}</button>
       </div> : null}
       <details className="mt-4 text-sm text-os-muted-paper"><summary className="min-h-11 cursor-pointer py-3">{t('narrative.details')}</summary>{steps}</details>
-      {run.status === 'succeeded' && run.versionId ? <Link className="mt-5 inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white" href={`/research-objects/${encodeURIComponent(researchObjectId)}/overview?version=${encodeURIComponent(run.versionId)}`}>{t('narrative.viewResult')}</Link> : null}
+      {run.status === 'succeeded' && run.versionId && !videoOutput ? <Link className="mt-5 inline-flex min-h-11 items-center rounded-panel bg-os-vermilion-ink px-4 py-2 font-semibold text-white" href={`/research-objects/${encodeURIComponent(researchObjectId)}/overview?version=${encodeURIComponent(run.versionId)}`}>{t('narrative.viewResult')}</Link> : null}
     </div> : run ? <div className="mt-4 border-t border-os-rule-paper pt-4">
       <p className="font-semibold text-os-ink">{t(`status.${run.status}`)}</p>
       <p className="mt-2 text-sm leading-6 text-os-muted-paper">{run.imageUsageLimited ? t('usageLimited') : run.profile === 'content-driven-image-v1' && run.status === 'awaiting_scene_images_review' ? t('imageReviewDescription') : t(`description.${run.status}`)}</p>
@@ -508,4 +589,9 @@ export function HermesResearchRunPanel({ researchObjectId, tasks, runId, guideTa
       </nav>
     </div> : null}
   </section>;
+}
+
+export function HermesResearchRunPanel(props: GenericRunProps | { journalScope: JournalRunScope }) {
+  if ('journalScope' in props) return <JournalScopedHermesPanel scope={props.journalScope} />;
+  return GenericHermesResearchRunPanel(props);
 }

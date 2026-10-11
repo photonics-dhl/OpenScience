@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { createAgentSession, submitAgentTask, markTaskProgress } from '../../../../packages/domain/src/agent/agent';
 import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../../../packages/domain/src/agent/research-run';
-import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution } from '@openscience/domain';
+import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
 import { createPresentationGenerationHandler } from '../../src/presentation/handler';
 import * as scenePlanning from '../../src/presentation/scene-image';
+import { SynclipVideoTimingError } from '../../src/presentation/synclip-video-spool';
 import type { runHostedNativeTask } from '../../src/native-agent/host-task';
 
 // Only the operating-system Agent process is replaced. The actual gateway, private store,
@@ -44,7 +45,7 @@ const responses = [
   ['review', 'paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Source, scientific relationship and layout agree.', corrections: [], issues: [] }],
 ] as const;
 
-async function fixture(automaticRun = false) {
+async function fixture(automaticRun = false, nativeVideo = false) {
   let transactionError: unknown;
   const { prisma, db } = createFakePrisma(); seedUser(db, { id: id(1), platformRole: 'user' });
   db.workspaces.push({ id: id(2), status: 'active' }); db.memberships.push({ userId: id(1), workspaceId: id(2), role: 'author' });
@@ -79,7 +80,7 @@ async function fixture(automaticRun = false) {
       getObject: async (key: string) => { const data = objects.get(key); if (!data) throw new Error('Missing fixture object'); return { body: Readable.from([data]), size: data.length }; } } };
   const session = await createAgentSession(deps as never, { userId: id(1), researchObjectId: id(3), kind: 'visualization' });
   let payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'interactive_html', sourceClaimIds: [id(5)],
-    storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: 'image', narrative: true, narrativeSceneLimit: 1 } };
+    storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: nativeVideo ? 'video' : 'image', narrative: true, narrativeSceneLimit: nativeVideo ? 3 : 1 } };
   const submit = () => submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'native-plan', dispatch: false });
   if (automaticRun) {
     const findTasks = prisma.agentTask.findMany.bind(prisma.agentTask);
@@ -118,9 +119,23 @@ async function fixture(automaticRun = false) {
   Object.assign(owner, { status: 'running', executionAttempt: 1 });
   prisma.trashEntry = { findFirst: async () => null } as never;
   prisma.agentTask.findUniqueOrThrow = async args => (await prisma.agentTask.findUnique(args))!;
+  let localVideoScene: number | undefined;
   const fetcher = vi.fn(async () => {
     const step = responses[fetcher.mock.calls.length - 1];
-    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+    let input: unknown = step?.[2];
+    if (nativeVideo && step?.[1] === 'paper_illustration_science') input = { ...science,
+      videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway', visualContinuity: 'Keep the same connected regions.',
+        audioPolicy: 'external-narration', modelPolicy: 'commercial-primary' },
+      scenes: Array.from({ length: 3 }, () => ({ ...science.scenes[0], durationSeconds: 10,
+        videoDirection: { shotType: 'mechanism', purpose: 'Explain the connection', subjectLock: 'The connected regions',
+          generatedElements: 'Only the source-supported regions', motion: 'Reveal the connection while keeping its endpoints fixed', camera: 'Fixed view',
+          reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration', subtitleMode: 'none',
+          negativeConstraints: ['Do not invent a measurement'], modelPolicy: 'commercial-primary' } })) };
+    if (nativeVideo && step?.[1] === 'paper_illustration_art') input = { scienceToolCallId: 'science',
+      scenes: Array.from({ length: localVideoScene === undefined ? 3 : 1 }, () => ({
+        layout: localVideoScene === undefined ? 'Place label 0 above subject 0.' : 'Place label 0 above subject 0 with generous negative space.',
+        treatment: 'Crisp ink on plain white paper.' })) };
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input }]
       : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
   });
   const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('minimax-key-1-model-1', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, fetcher)] });
@@ -129,7 +144,8 @@ async function fixture(automaticRun = false) {
   const task = () => ({ id: owner.id, payload, executionAttempt: owner.executionAttempt, retryCount: 0 });
   const resume = vi.spyOn(gateway, 'resumeImageFromCompletedResult');
   const canResume = vi.spyOn(gateway, 'canResumeImageFromCompletedResult');
-  return { deps, db, owner, task, handler, fetcher, oldPlan, oldReview, generate, resume, canResume, submit, putObject, transactionError: () => transactionError };
+  return { deps, db, owner, task, handler, fetcher, oldPlan, oldReview, generate, resume, canResume, submit, putObject,
+    useLocalVideoScene: (index: number) => { localVideoScene = index; }, transactionError: () => transactionError };
 }
 
 async function failedNativeImage() {
@@ -152,12 +168,107 @@ async function failedNativeImage() {
 }
 
 describe('ordinary-user native illustration through real task/store/asset boundaries', () => {
-  it('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay', async () => {
+  it.each(['noncommercial', 'timing', 'stale-lease'] as const)('keeps the native video executor and timing receipt bound through the real handler: %s', async mode => {
+    const f = await fixture(false, true), planned = await f.handler(f.deps as never, f.task() as never);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: planned });
+    const parent = f.db.presentationAssets.find(row => row.id === f.owner.id)!;
+    const parentIdentity = JSON.stringify({ contentHash: parent.contentHash, provenance: parent.provenance, ids: [id(5)] });
+    const sourceEvidenceIdentity = parent.provenance.sourceEvidenceIdentity;
+    const pixels = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
+    f.db.users[0].platformRole = 'platform_admin'; Object.assign(f.deps, { nativeSceneImageEnabled: true });
+    const frames: string[] = [];
+    for (let sceneIndex = 0; sceneIndex < 3; sceneIndex++) {
+      const imagePayload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'image', sourceClaimIds: [id(5)],
+        sceneImage: { storyboardAssetId: parent.id, sceneIndex } };
+      const submitted = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: f.owner.sessionId, kind: 'presentation.generate',
+        payload: imagePayload, idempotencyKey: 'offline-video-frame-' + sceneIndex, dispatch: false });
+      const image = f.db.agentTasks.find(row => row.id === submitted.id)!, contentHash = sha(pixels), objectKey = 'offline-frame-' + sceneIndex + '.png';
+      await f.deps.storage.putObject(objectKey, pixels);
+      const imageReview = { stage: 'generated-image', requestId: image.id, decision: 'accepted', summary: 'Offline saved-pixel review fixture.',
+        repairInstruction: null, contentHash, sourceEvidenceIdentity, parentIdentity, provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
+        promptHash: '4'.repeat(64), responseHash: '5'.repeat(64) };
+      Object.assign(image, { status: 'succeeded', result: { assetId: image.id, contentHash, imageReview,
+        nativeImageReview: { mode: 'model-native', state: 'completed', executionAttempt: 1, requestId: image.id, contentHash,
+          sourceEvidenceIdentity, parentIdentity, provider: imageReview.provider, model: imageReview.model,
+          promptHash: imageReview.promptHash, review: imageReview } } });
+      f.db.presentationAssets.push({ id: image.id, researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', contentHash, objectKey,
+        provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: image.id,
+          sceneImage: imagePayload.sceneImage, contentType: 'image/png', sourceEvidenceIdentity, parentIdentity, imageReview } });
+      f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: id(5) }); frames.push(image.id);
+    }
+    const payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'video', sourceClaimIds: [id(5)],
+      video: { profile: 'content-driven-v1', storyboardAssetId: parent.id, sceneImageAssetIds: frames } };
+    const submitted = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: f.owner.sessionId, kind: 'presentation.generate',
+      payload, idempotencyKey: 'offline-native-video', dispatch: false });
+    const owner = f.db.agentTasks.find(row => row.id === submitted.id)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    const generate = vi.fn(async () => {
+      if (mode === 'stale-lease') owner.executionAttempt = 2;
+      throw new SynclipVideoTimingError({ inputHash: sha('bound-offline-spool'), voice: 'test-voice', speed: 1, noVideoSubmissions: true,
+        scenes: parent.provenance.storyboardDocument.scenes.map((scene: { narration: string; durationSeconds: number }, sceneIndex: number) => ({
+          sceneIndex, narration: scene.narration, plannedDurationSeconds: scene.durationSeconds, durationSeconds: sceneIndex === 1 ? 11 : 2,
+          taskId: 'tts-' + sceneIndex, contentHash: sha('audio-' + sceneIndex), size: 1024 })) });
+    });
+    const handler = createPresentationGenerationHandler({ videoSpool: { ...(mode === 'noncommercial' ? {} : { provider: 'synclip' as const }), generate } });
+    await expect(handler(f.deps as never, { id: owner.id, payload, executionAttempt: 1, retryCount: 0 } as never)).rejects.toThrow(
+      mode === 'noncommercial' ? 'Synclip commercial video executor' : mode === 'timing' ? 'AUDIO_TIMING_REVISION_REQUIRED' : 'Video timing revision authority changed');
+    if (mode === 'timing') {
+      await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: 1, status: 'failed', error: 'AUDIO_TIMING_REVISION_REQUIRED' });
+      expect(owner.result.videoAudioTiming).toMatchObject({ schemaVersion: 1, taskId: owner.id, executionAttempt: 1, storyboardAssetId: parent.id,
+        sourceEvidenceIdentity, noVideoSubmissions: true, voice: 'test-voice' });
+      expect(generate).toHaveBeenCalledWith(expect.objectContaining({ videoPrompts: f.owner.result.illustrationPrompts.map((item: { videoPrompt: string }) => item.videoPrompt) }));
+    } else { expect(owner.result?.videoAudioTiming).toBeUndefined(); if (mode === 'noncommercial') expect(generate).not.toHaveBeenCalled(); }
+    expect(f.db.presentationAssets.some(row => row.id === owner.id)).toBe(false); expect(f.fetcher).toHaveBeenCalledTimes(5);
+  });
+
+  it.each([false, true])('replays the actual accepted private base before a local video revision (tampered prompt=%s)', async tampered => {
+    const f = await fixture(false, true), first = await f.handler(f.deps as never, f.task() as never);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: first });
+    const base = structuredClone(f.db.presentationAssets.find(row => row.id === f.owner.id)!);
+    const basePrompts = structuredClone(f.owner.result.illustrationPrompts);
+    if (tampered) f.owner.result.illustrationPrompts[0].prompt += ' An unreviewed addition.';
+    const payload = { ...f.owner.payload, storyboard: { ...f.owner.payload.storyboard, baseAssetId: f.owner.id,
+      revisionSceneIndex: 1, instruction: 'Improve only the middle scene composition.' } };
+    const submitted = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: f.owner.sessionId,
+      kind: 'presentation.generate', payload, idempotencyKey: 'native-video-local-revision', dispatch: false });
+    const owner = f.db.agentTasks.find(row => row.id === submitted.id)!;
+    Object.assign(owner, { status: 'running', executionAttempt: 1 }); f.fetcher.mockClear(); f.useLocalVideoScene(1);
+    const execute = () => f.handler(f.deps as never, { id: owner.id, payload, executionAttempt: 1, retryCount: 0 } as never);
+    if (tampered) { await expect(execute()).rejects.toThrow(/history changed/u); expect(f.fetcher).not.toHaveBeenCalled(); return; }
+    const result = await execute();
+    await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    const revised = f.db.presentationAssets.find(row => row.id === owner.id)!;
+    expect(revised.status).toBe('draft'); expect(base.status).toBe('draft');
+    for (const index of [0, 2]) {
+      expect(revised.provenance.storyboardDocument.scenes[index]).toEqual(base.provenance.storyboardDocument.scenes[index]);
+      expect(owner.result.illustrationPrompts[index]).toEqual(basePrompts[index]);
+    }
+    expect(revised.provenance.storyboardDocument.scenes[1].illustration.composition).toContain('generous negative space');
+    expect(f.oldPlan).not.toHaveBeenCalled(); expect(f.oldReview).not.toHaveBeenCalled(); expect(f.generate).not.toHaveBeenCalled();
+  });
+
+  it('authorizes a native video plan through the real handler and retains its accepted full video document at adoption', async () => {
+    const f = await fixture(false, true);
+    const result = await f.handler(f.deps as never, f.task() as never);
+    expect(result).toMatchObject({ assetId: f.owner.id, status: 'draft', storyboardReview: { decision: 'accepted' } });
+    const asset = f.db.presentationAssets.find(row => row.id === f.owner.id)!;
+    expect(asset.provenance.storyboardDocument).toMatchObject({ narrative: science.narrative,
+      videoProduction: { audioPolicy: 'external-narration' }, scenes: Array.from({ length: 3 }, () => ({ durationSeconds: 10,
+        illustration: { schemaVersion: 2 }, videoDirection: { frameStrategy: 'start-reference' } })) });
+    expect(f.owner.result.illustrationPrompts).toHaveLength(3);
+    expect(f.owner.result.illustrationPrompts[0].videoPrompt).toContain('Reveal the connection');
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    expect(f.owner.status).toBe('succeeded');
+    expect(f.oldPlan).not.toHaveBeenCalled(); expect(f.oldReview).not.toHaveBeenCalled(); expect(f.generate).not.toHaveBeenCalled();
+  });
+
+  it.each(['fresh paired', 'legacy'] as const)('offers completed native image recovery and reuses the same task, review state and reservation across lost-response replay: %s', async role => {
     const f = await failedNativeImage();
+    if (role === 'legacy') delete f.image.result.nativeAgentExecution;
     const before = { tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, result: structuredClone(f.image.result) };
     expect(await getHermesResearchRun(f.deps as never, f.input)).toMatchObject({ canRetryGeneration: true, chargeableAttempts: 0, generationRecovery: 'image-render' });
     await retryHermesGeneration(f.deps as never, f.input);
-    expect(f.image).toMatchObject({ status: 'pending', retryCount: 1, result: before.result });
+    expect(f.image).toMatchObject({ status: 'pending', retryCount: 1 });
+    expect(f.image.result).toEqual(before.result);
     expect(f.run).toMatchObject({ status: 'generating_scene_images', maxAgentTasks: 9 });
     await retryHermesGeneration(f.deps as never, f.input);
     expect(f.db.agentTasks).toHaveLength(before.tasks);
@@ -192,6 +303,51 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     expect(f.image.status).toBe('failed');
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
     expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['null', 'extra-result', 'extra-review', 'malformed-role', 'wrong-profile', 'checkpoint', 'provider-failed', 'provider-throws'] as const)(
+    'keeps completed native image recovery closed without writes for %s', async change => {
+    const f = await failedNativeImage();
+    if (change === 'null') f.image.result = null;
+    if (change === 'extra-result') f.image.result.unrelatedResult = true;
+    if (change === 'extra-review') f.image.result.nativeImageReview.unrelatedReview = true;
+    if (change === 'malformed-role') f.image.result.nativeAgentExecution.kind = 'foreign-agent';
+    if (change === 'wrong-profile') f.image.result.nativeAgentExecution.profile = 'paper-author';
+    if (change === 'checkpoint') f.image.result.nativeAgentExecution.checkpoint = { state: 'completed' };
+    if (change === 'provider-failed') Object.assign(f.deps, { inspectImageRecoveryState: async () => 'failed' });
+    if (change === 'provider-throws') Object.assign(f.deps, { inspectImageRecoveryState: async () => { throw new Error('Provider receipt unavailable'); } });
+    const before = { task: structuredClone(f.image), run: structuredClone(f.run),
+      tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, audit: f.db.auditLogs.length };
+    expect((await getHermesResearchRun(f.deps as never, f.input)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps as never, f.input)).rejects.toThrow();
+    expect(f.image).toEqual(before.task); expect(f.run).toEqual(before.run);
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.auditLogs).toHaveLength(before.audit); expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['prepared', 'started', 'completed', 'mismatched-pair'] as const)(
+    'retains the existing non-fresh native review state without render recovery: %s', async state => {
+    const f = await failedNativeImage();
+    const identity = { requestId: f.image.id, executionAttempt: 1, contentHash: 'a'.repeat(64),
+      sourceEvidenceIdentity: 'b'.repeat(64), parentIdentity: 'bound-parent', provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' };
+    if (state === 'prepared' || state === 'mismatched-pair') {
+      f.image.result.nativeImageReview = { ...identity, mode: 'agent-native', state: 'prepared',
+        preparedAt: 1000, deadlineAt: 301000, ...f.deps.nativeAgentRuntime,
+        reservationLedgerId: 'original-reservation', maxTurns: 4, maxOutputTokens: 32768,
+        maxTotalOutputTokens: 32768, maxInputBytes: 8_000_000 };
+      expect(readNativeAgentExecution(f.image.result)).toEqual(f.image.result.nativeAgentExecution);
+      if (state === 'mismatched-pair') f.image.result.nativeAgentExecution.runtimeId = 'foreign-runtime';
+    } else {
+      delete f.image.result.nativeAgentExecution;
+      f.image.result.nativeImageReview = { ...identity, mode: 'model-native', state, promptHash: 'c'.repeat(64),
+        ...(state === 'completed' ? { review: { ...identity, promptHash: 'c'.repeat(64), decision: 'accepted' } } : {}) };
+    }
+    expect(readNativeImageReviewCheckpoint(f.image.result)?.state).toBe(state === 'mismatched-pair' ? 'prepared' : state);
+    const before = { task: structuredClone(f.image), run: structuredClone(f.run),
+      tasks: f.db.agentTasks.length, ledger: f.db.usageLedger.length, audit: f.db.auditLogs.length };
+    expect((await getHermesResearchRun(f.deps as never, f.input)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps as never, f.input)).rejects.toThrow();
+    expect(f.image).toEqual(before.task); expect(f.run).toEqual(before.run);
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.usageLedger).toHaveLength(before.ledger);
+    expect(f.db.auditLogs).toHaveLength(before.audit); expect(f.generate).not.toHaveBeenCalled();
   });
   it('sends the accepted native prompt unchanged without a second model planning request', async () => {
     const f = await fixture();
@@ -228,7 +384,9 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     const images = f.db.agentTasks.filter(row => row.payload?.sceneImage);
     expect(images, JSON.stringify({ run, assets: f.db.presentationAssets.map(row => ({ id: row.id, status: row.status })) })).toHaveLength(1);
     expect(images[0].payload.sceneImage).toEqual({ storyboardAssetId: f.owner.id, sceneIndex: 0 });
-    expect(images[0].result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    const imageRole = { kind: 'hermes-agent', profile: 'image-review', ...f.deps.nativeAgentRuntime };
+    expect(images[0].result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' }, nativeAgentExecution: imageRole });
+    expect(readNativeAgentExecution(images[0].result)).toEqual(imageRole);
     expect(f.fetcher).toHaveBeenCalledTimes(5);
   });
   it('rechecks the original source after a serializable completion conflict without another paid call', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readNativeAgentExecution, initialNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult,
-  type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
+  supportsNativeIllustration, type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
 import { projectAgentTaskResult, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, markTaskProgress } from '../../src/agent/agent';
 import { fixture as sourceFixture } from './direct-source-review-fixture';
 
@@ -24,6 +24,15 @@ function fixture() {
   return { task, tx: tx as never };
 }
 describe('native Agent server-owned execution receipts', () => {
+  it('routes native narrative video and explicit video bases to the same profile without upgrading legacy image revisions', () => {
+    const payload = { kind: 'interactive_html', storyboard: { output: 'video', narrative: true } };
+    expect(supportsNativeIllustration(payload)).toBe(true);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'video' } })).toBe(false);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { ...payload.storyboard, baseAssetId: 'old-plan', revisionSceneIndex: 2 } })).toBe(true);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'image', narrative: true, baseAssetId: 'old-plan' } })).toBe(false);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { ...payload.storyboard, revisionTaskId: 'old-task' } })).toBe(false);
+    expect(supportsNativeIllustration({ ...payload, storyboard: { output: 'image', narrative: true } })).toBe(true);
+  });
   it.each(['nativeIllustrationContext', 'storyboardCheckpoint', 'storyboardReview', 'nativeIllustration', 'illustrationPrompts'])('retains server-owned %s on failure and rejects a substituted incoming value', key => {
     const f = fixture(); f.task.kind = 'presentation.generate';
     Object.assign(f.task.result, initialNativeAgentExecution(runtime, 'paper-illustration'), { [key]: { saved: true } });

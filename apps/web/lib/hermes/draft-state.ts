@@ -18,6 +18,7 @@ export interface StoredPresentationDraft {
   selected: string[];
   parentId: string;
   revisionMode?: 'art';
+  revisionSceneIndex?: number;
   scene: number;
   figurePlan?: StoryboardRequest['figurePlan'];
 }
@@ -35,6 +36,7 @@ export interface HermesRunStartScope {
   userId: string;
   researchObjectId: string;
   ingestionTaskId: string;
+  output?: 'video';
 }
 
 export interface PendingHermesRunStart {
@@ -43,22 +45,26 @@ export interface PendingHermesRunStart {
   savedAt: number;
   runId?: string;
   sourceReanalysisKey?: string;
+  /** First source POST body only; missing on a legacy key means output was omitted. */
+  sourceReanalysisOutput?: 'video';
+  /** New intents prepare their source; run-phase/legacy unknown run bodies never prepare again. */
+  phase?: 'source' | 'run';
 }
 
 export function readHermesResearchRunDraft(value: unknown): WorkspaceGuideResult['researchRunDraft'] | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const draft = value as Record<string, unknown>;
   const uuid = (id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id);
-  if (Object.keys(draft).some(key => !['researchObjectId', 'ingestionTaskId', 'locale', 'style', 'instruction'].includes(key))
+  if (Object.keys(draft).some(key => !['researchObjectId', 'ingestionTaskId', 'locale', 'style', 'instruction', 'output'].includes(key))
     || !uuid(draft.researchObjectId) || (draft.ingestionTaskId !== undefined && !uuid(draft.ingestionTaskId))
-    || (draft.locale !== 'zh' && draft.locale !== 'en')
+    || (draft.locale !== 'zh' && draft.locale !== 'en') || (draft.output !== undefined && draft.output !== 'video')
     || typeof draft.style !== 'string' || !draft.style.trim() || draft.style.length > 100
     || typeof draft.instruction !== 'string' || !draft.instruction.trim() || draft.instruction.length > 1000) return null;
   return draft as unknown as NonNullable<WorkspaceGuideResult['researchRunDraft']>;
 }
 
 function runStartKey(scope: HermesRunStartScope): string {
-  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.ingestionTaskId)}:run-start:v1`;
+  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.ingestionTaskId)}:run-start${scope.output === 'video' ? ':video' : ''}:v1`;
 }
 
 export function loadPendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope): PendingHermesRunStart | null {
@@ -72,19 +78,31 @@ export function loadPendingHermesRunStart(storage: Storage | null, scope: Hermes
       || (value.runId !== undefined && (typeof value.runId !== 'string' || !value.runId || value.runId.length > 100))
       || (value.sourceReanalysisKey !== undefined && (typeof value.sourceReanalysisKey !== 'string'
         || !value.sourceReanalysisKey || value.sourceReanalysisKey.length > 64))
+      || (value.sourceReanalysisOutput !== undefined && (value.sourceReanalysisOutput !== 'video'
+        || !value.sourceReanalysisKey || scope.output !== 'video'))
+      || (value.phase !== undefined && value.phase !== 'source' && value.phase !== 'run')
+      || (value.phase === 'run' && (value.sourceReanalysisKey !== undefined || value.sourceReanalysisOutput !== undefined))
       || !generation || generation.profile !== 'visual-narrative-v1' || generation.maxAgentTasks !== 9
+      || generation.output !== scope.output || (generation.output !== undefined && generation.output !== 'video')
       || (generation.locale !== 'zh' && generation.locale !== 'en')
       || typeof generation.style !== 'string' || !generation.style.trim() || generation.style.length > 100
       || typeof generation.instruction !== 'string' || generation.instruction.length > 1_000) return null;
     return { key: value.key, savedAt: value.savedAt, ...(value.runId ? { runId: value.runId } : {}),
       ...(value.sourceReanalysisKey ? { sourceReanalysisKey: value.sourceReanalysisKey } : {}),
-      generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction } };
+      ...(value.sourceReanalysisOutput ? { sourceReanalysisOutput: value.sourceReanalysisOutput } : {}),
+      ...(value.phase ? { phase: value.phase } : {}),
+      generation: { profile: 'visual-narrative-v1', maxAgentTasks: 9, locale: generation.locale, style: generation.style, instruction: generation.instruction,
+        ...(generation.output ? { output: generation.output } : {}) } };
   } catch { return null; }
 }
 
 export function savePendingHermesRunStart(storage: Storage | null, scope: HermesRunStartScope, pending: PendingHermesRunStart): boolean {
   try {
-    if (!storage) return false;
+    if (!storage || pending.generation.output !== scope.output) return false;
+    if (pending.sourceReanalysisOutput !== undefined && (pending.sourceReanalysisOutput !== 'video'
+      || !pending.sourceReanalysisKey || scope.output !== 'video')) return false;
+    if (pending.phase !== undefined && pending.phase !== 'source' && pending.phase !== 'run') return false;
+    if (pending.phase === 'run' && (pending.sourceReanalysisKey !== undefined || pending.sourceReanalysisOutput !== undefined)) return false;
     storage.setItem(runStartKey(scope), JSON.stringify({ version: 1, ...pending }));
     return true;
   } catch { return false; }
@@ -145,6 +163,8 @@ export function loadHermesPresentationDraft(storage: Storage | null, scope: Herm
       || !isFigurePlanValid(value.figurePlan)
       || !Array.isArray(value.selected) || value.selected.length > 12 || value.selected.some((id: unknown) => typeof id !== 'string' || (id as string).length > 100)
       || (value.revisionMode !== undefined && (value.revisionMode !== 'art' || value.action !== 'storyboard.revise' || !value.parentId))
+      || (value.revisionSceneIndex !== undefined && (!Number.isInteger(value.revisionSceneIndex) || value.revisionSceneIndex < 0 || value.revisionSceneIndex > 5
+        || !value.parentId || !['storyboard.revise', 'video.create'].includes(String(value.action)) || value.revisionMode !== undefined))
       || typeof value.parentId !== 'string' || value.parentId.length > 100 || typeof value.scene !== 'number' || !Number.isInteger(value.scene) || value.scene < 0) return null;
     return value as StoredPresentationDraft;
   } catch { return null; }

@@ -154,16 +154,37 @@ function retryAuthorityInclude(userId: string) {
   } as const;
 }
 
-function isRetryableSourceSearchIndex(task: Pick<AgentTask, 'kind' | 'status' | 'result' | 'payload' | 'error'>): boolean {
+function isRetryableSourceSearchIndex(
+  task: Pick<AgentTask, 'kind' | 'status' | 'result' | 'payload' | 'error'>,
+  tokenLimitRecovery = false,
+): boolean {
   if (task.kind !== 'search.index') return false;
   const incomplete = task.status === 'succeeded' && isJsonRecord(task.result)
-    && task.result.status === 'needs_review' && task.result.errorCode === 'embedding_unavailable';
-  const transientFailure = task.status === 'failed' && [
+    && task.result.status === 'needs_review'
+    && task.result.errorCode === (tokenLimitRecovery ? 'token_limit_exceeded' : 'embedding_unavailable');
+  const transientFailure = !tokenLimitRecovery && task.status === 'failed' && [
     'embedding_worker_worker_busy', 'embedding_transport_unavailable', 'embedding_response_unavailable',
     'indivisible block exceeds embedding token limit',
   ].includes(task.error ?? '');
   if (!incomplete && !transientFailure) return false;
   try { return parseSourceMapSearchIndexPayload(task.payload) !== undefined; } catch { return false; }
+}
+
+/** Known final CP recovery consumes saved bytes only; it never restarts the Agent conversation. */
+function canRecoverAgentNativeImageFinal(task: AgentTaskRetrySnapshot): boolean {
+  const envelope = readNativeImageReviewCheckpoint(task.result);
+  const cp = readNativeAgentExecution(task.result)?.checkpoint;
+  const error = task.error ?? '';
+  const expiredAfterFinal = error === '[blocked] Native Agent original deadline expired'
+    || error === '[blocked] Native Agent original request deadline expired';
+  const invalidResponse = error === 'Native image review response invalid JSON; explicit review retry required'
+    || error === 'Native image review response failed schema validation; explicit review retry required'
+    || error === 'structured output is not JSON' || error === 'Unexpected end of JSON input'
+    || /^(?:Expected|Unexpected token|Unterminated string|Bad (?:control|escaped) character).*(?:in JSON|not valid JSON)/u.test(error);
+  return task.kind === 'presentation.generate' && task.status === 'failed' && task.retryCount === 0
+    && envelope?.mode === 'agent-native' && envelope.requestId === task.id && cp?.state === 'completed'
+    && cp.finishReason === 'stop' && cp.hasToolCalls === false
+    && !invalidResponse && (!error.startsWith('[blocked]') || expiredAfterFinal);
 }
 
 function evaluateAgentTaskRetryEligibility(
@@ -213,9 +234,19 @@ function evaluateAgentTaskRetryEligibility(
       || task.error === 'Native image review response failed schema validation; explicit review retry required'
       || task.error === 'structured output is not JSON'
       || /^Expected ',' or '\}' after property value in JSON at position [0-9]+(?: \(line [0-9]+ column [0-9]+\))?$/u.test(task.error ?? ''));
+  let nativeCheckpoint: ReturnType<typeof readNativeImageReviewCheckpoint>;
+  try { nativeCheckpoint = readNativeImageReviewCheckpoint(task.result); }
+  catch { return { authorityValid: true, canRetry: false }; }
+  if (nativeCheckpoint?.mode === 'agent-native') {
+    try {
+      return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) && canRecoverAgentNativeImageFinal(task)
+        && Boolean(researchObject?.workspace.members.some(member => member.userId === userId
+          && ['owner', 'maintainer', 'author', 'contributor'].includes(member.role))) };
+    } catch { return { authorityValid: true, canRetry: false }; }
+  }
   if (task.status !== 'failed' || (task.retryCount !== 0 && !nativeImageReviewSchemaRecovery)
     || (task.error?.startsWith('[blocked]') && !manualReviewPreflight && !latePaidImageRecovery)
-    || (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
+    || (nativeCheckpoint?.state === 'started' && !nativeImageReviewSchemaRecovery)) {
     return { authorityValid: true, canRetry: false };
   }
   if (task.kind === 'sdf.extract') {
@@ -223,11 +254,6 @@ function evaluateAgentTaskRetryEligibility(
   }
   if (task.kind === 'presentation.generate') {
     // Managed runs must restore their task, step and run together through retry-generation.
-    try {
-      if (readNativeImageReviewCheckpoint(task.result)?.state === 'started' && !nativeImageReviewSchemaRecovery)
-        return { authorityValid: true, canRetry: false };
-    }
-    catch { return { authorityValid: true, canRetry: false }; }
     return { authorityValid: true, canRetry: !('hermesRunAuthority' in payload) };
   }
   if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
@@ -523,7 +549,8 @@ async function persistAgentTaskCoreInTransaction(
   tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
-  billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string } = 'ai_credit',
+  billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string }
+    | { journalGrantJobId: string } = 'ai_credit',
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   await lockTrashReferences(tx);
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -617,7 +644,12 @@ async function persistAgentTaskCoreInTransaction(
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
-      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration') : undefined;
+      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
+      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
+  if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
+    && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
+    throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
+  }
   try {
     task = await tx.agentTask.create({
       data: {
@@ -626,7 +658,7 @@ async function persistAgentTaskCoreInTransaction(
         payload: input.payload as never,
         interestContext: interestContext as never,
         idempotencyKey: input.idempotencyKey,
-        ...(nativeReviewResult ? { result: nativeReviewResult } : nativeAgentResult ? { result: nativeAgentResult as unknown as Prisma.InputJsonObject } : {}),
+        ...(nativeReviewResult || nativeAgentResult ? { result: { ...nativeReviewResult, ...nativeAgentResult } as unknown as Prisma.InputJsonObject } : {}),
       },
     });
   } catch (error) {
@@ -658,7 +690,8 @@ async function persistAgentTaskCoreInTransaction(
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
     metadata: { kind: input.kind, sessionId: session.id, creditPolicy: billing === 'ai_credit' ? 'charged-on-submit'
-      : typeof billing === 'object' ? 'reuse-original-reservation' : 'not-applicable-deterministic',
+      : typeof billing === 'object' && 'journalGrantJobId' in billing ? 'journal-grant-reservation'
+        : typeof billing === 'object' ? 'reuse-original-reservation' : 'not-applicable-deterministic',
       ...(typeof billing === 'object' ? billing : {}),
       ...(adminAutoFunded ? { funding: 'platform-admin-auto-funded' } : {}) },
   }, ctx);
@@ -679,6 +712,26 @@ export async function persistAgentTaskInTransaction(
     throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
   }
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Only a server-created, live journal grant reservation can sponsor one staged paper extraction. */
+export async function persistJournalSponsoredPaperTaskInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>, journalGrantJobId: string, ctx: AuditContext = {}) {
+  if (input.kind !== 'sdf.extract' || typeof input.payload.artifactId !== 'string'
+    || typeof input.payload.researchObjectId !== 'string') throw new AgentError('VALIDATION_ERROR', 'Journal sponsorship requires one bound paper artifact');
+  const job = await tx.journalJob.findUnique({ where: { id: journalGrantJobId }, include: { article: true, grant: true } });
+  if (!job || job.kind !== 'shared_ingestion' || !['running', 'succeeded'].includes(job.state) || job.requestedBy !== input.userId
+    || !job.grant || job.grant.journalId !== job.journalId || (job.state === 'running' && job.grant.reserved < 1)
+    || job.article.workingResearchObjectId !== input.payload.researchObjectId
+    || (job.article.source as { artifactId?: string }).artifactId !== input.payload.artifactId)
+    throw new AgentError('FORBIDDEN', 'Journal grant reservation changed');
+  if (job.state === 'succeeded') {
+    const replay = input.idempotencyKey ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } }) : null;
+    if (!replay || replay.kind !== 'sdf.extract' || replay.sessionId !== input.sessionId
+      || JSON.stringify(replay.payload) !== JSON.stringify(input.payload)) throw new AgentError('FORBIDDEN', 'Journal grant task replay changed');
+    return { task: replay, replayed: true };
+  }
+  return persistAgentTaskCoreInTransaction(deps, tx, input, ctx, { journalGrantJobId });
 }
 
 /** Package-internal historical operation after its caller validates the persisted correction/review proof.
@@ -784,9 +837,12 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task || task.deletedAt || task.dispatchedAt != null) return false;
   await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
+  const acknowledgedAt = new Date();
   await deps.prisma.agentTask.updateMany({
-    where: { id: task.id, dispatchedAt: null },
-    data: { dispatchedAt: new Date() },
+    // Park/release advances updatedAt; an old acknowledgement cannot close its new outbox.
+    where: { id: task.id, dispatchedAt: null, updatedAt: task.updatedAt },
+    data: { dispatchedAt: acknowledgedAt,
+      updatedAt: new Date(Math.max(acknowledgedAt.getTime(), task.updatedAt.getTime() + 1)) },
   });
   return true;
 }
@@ -898,13 +954,23 @@ async function waitForSerializableRetry(attempt: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 }
 
-export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
+type PendingTaskClaimSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'sessionId' | 'progress' | 'error'
+  | 'retryCount' | 'executionAttempt' | 'payload' | 'result' | 'interestContext' | 'dispatchedAt' | 'updatedAt'>;
+
+export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?: PendingTaskClaimSnapshot): Promise<AgentTaskView | null> {
+  if (expected && (expected.id !== taskId || expected.status !== 'pending')) return null;
   let task: AgentTask | null = null;
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
         const claimed = await tx.agentTask.updateMany({
-          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] } },
+          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+            ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,
+              retryCount: expected.retryCount, executionAttempt: expected.executionAttempt,
+              payload: { equals: expected.payload === null ? Prisma.AnyNull : expected.payload as Prisma.InputJsonValue },
+              result: { equals: expected.result === null ? Prisma.AnyNull : expected.result as Prisma.InputJsonValue },
+              interestContext: { equals: expected.interestContext === null ? Prisma.AnyNull : expected.interestContext as Prisma.InputJsonValue },
+              dispatchedAt: expected.dispatchedAt, updatedAt: expected.updatedAt } : {}) },
           data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
         });
         if (claimed.count !== 1) return null;
@@ -941,7 +1007,7 @@ export async function getAgentTask(
 /** Model tasks retain one retry; deterministic source indexes allow two explicit recoveries. */
 export async function retryAgentTask(
   deps: AgentDeps,
-  input: { userId: string; taskId: string },
+  input: { userId: string; taskId: string; sourceIndexRecovery?: 'token-limit-after-upgrade' },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
   let updated: AgentTask | null | undefined;
@@ -954,7 +1020,15 @@ export async function retryAgentTask(
         if (!task || task.deletedAt || task.session.deletedAt || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
         if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-        if (!eligibility.canRetry) {
+        // Internal operator recovery after the windowing fix; public canRetry and
+        // default retry keep the deterministic token-limit terminal unchanged.
+        const sourceIndexRecovery = input.sourceIndexRecovery === 'token-limit-after-upgrade'
+          && task.retryCount < 2 && Boolean(task.session.researchObjectId)
+          && isRetryableSourceSearchIndex(task, true);
+        if (input.sourceIndexRecovery !== undefined && !sourceIndexRecovery) {
+          throw new AgentError('ILLEGAL_TRANSITION', 'Token-limit source-index recovery is not available');
+        }
+        if (!eligibility.canRetry && !sourceIndexRecovery) {
           if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
           if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
           throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
@@ -982,8 +1056,10 @@ export async function retryAgentTask(
             throw new AgentError('ILLEGAL_TRANSITION', 'Manual image review is not safe to resume');
           }
         }
-        const sourceSearch = isRetryableSourceSearchIndex(task);
+        const sourceSearch = sourceIndexRecovery || isRetryableSourceSearchIndex(task);
         const nativeReview = readNativeImageReviewCheckpoint(task.result);
+        if (nativeReview?.mode === 'agent-native' && !canRecoverAgentNativeImageFinal(task))
+          throw new AgentError('ILLEGAL_TRANSITION', 'Image Agent has no recoverable final receipt');
         const nativeImageReviewSchemaRecovery = task.kind === 'presentation.generate'
           && task.retryCount < 2
           && !('hermesRunAuthority' in (task.payload as Record<string, unknown>))
@@ -1033,7 +1109,8 @@ export async function retryAgentTask(
           },
           data: {
             status: 'pending', progress: 0,
-            result: nativeImageReviewSchemaRecovery ? { nativeImageReview: { mode: 'model-native', state: 'not_started' } } as Prisma.InputJsonValue
+            result: nativeImageReviewSchemaRecovery ? { ...(isJsonRecord(task.result) ? task.result : {}),
+              nativeImageReview: { mode: 'model-native', state: 'not_started' } } as Prisma.InputJsonValue
               : nativeAgent ? task.result as Prisma.InputJsonValue
               : nativeSource ? { nativeSourceReview: nativeSource } as unknown as Prisma.InputJsonValue
               : nativeReview ? { nativeImageReview: nativeReview } as unknown as Prisma.InputJsonValue
@@ -1052,6 +1129,7 @@ export async function retryAgentTask(
         await recordAudit(deps, tx, {
           actorId: input.userId, action: 'agent.task.retry', workspaceId,
           targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: task.retryCount + 1, ...scienceRecovery,
+            ...(sourceIndexRecovery ? { sourceIndexRecovery: input.sourceIndexRecovery } : {}),
             creditPolicy: sourceSearch ? 'not-applicable-deterministic' : 'reuse-original-reservation' },
         }, ctx);
         return tx.agentTask.findUnique({ where: { id: task.id } });
@@ -1217,7 +1295,7 @@ async function markTaskProgressOnce(
     const row = await tx.agentTask.findUnique({ where: { id: current.id } });
     if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
-  }, isNativeSourceCorrectionTaskKey(task.idempotencyKey) || ['paper-illustration', 'paper-source-review', 'paper-author'].includes(readNativeAgentExecution(task.result)?.profile ?? '')
+  }, isNativeSourceCorrectionTaskKey(task.idempotencyKey) || ['paper-illustration', 'paper-source-review', 'paper-author', 'image-review'].includes(readNativeAgentExecution(task.result)?.profile ?? '')
     ? { isolationLevel: 'Serializable' } : undefined);
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
@@ -1345,8 +1423,21 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
 /** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
   if (!isJsonRecord(rawResult)) return null;
+  if (kind === 'presentation.generate' && rawResult.purpose === 'audio-audition') {
+    const audio = rawResult.audioAudition;
+    return { purpose: 'audio-audition', ...(isJsonRecord(audio) && typeof audio.taskId === 'string'
+      && Number.isSafeInteger(audio.sceneIndex) && Number(audio.sceneIndex) >= 0 && Number(audio.sceneIndex) <= 5
+      && audio.contentType === 'audio/mpeg' && typeof audio.durationSeconds === 'number'
+      && Number.isFinite(audio.durationSeconds) && audio.durationSeconds > 0 && audio.durationSeconds <= 600
+      && ['decoded', 'requires_revision'].includes(String(audio.timingStatus)) ? { audioAudition: {
+        taskId: audio.taskId, sceneIndex: audio.sceneIndex, contentType: 'audio/mpeg',
+        durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus,
+      } } : {}) };
+  }
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  delete publicResult.audioAuditionGrant;
+  delete publicResult.audioAudition;
   if (isJsonRecord(rawResult.scientificReview)) {
     const scientificReview = { ...rawResult.scientificReview };
     delete scientificReview.rejectedCandidates;

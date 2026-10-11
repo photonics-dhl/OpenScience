@@ -9,30 +9,48 @@ async function setup(page: Page, loseResponse = false) {
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async route => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (request.method() === 'POST') writes.push({ path, key: request.headers()['idempotency-key'], body: path.endsWith('/ingest') ? null : request.postDataJSON() });
-    if (path === '/api/auth/me') return route.fulfill({ json: { userId: 'owner', email: 'author@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' } });
-    if (path === '/api/auth/csrf') return route.fulfill({ json: { csrfToken: 'fixture-token', token: 'fixture-token' } });
-    if (path === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal research', role: 'owner' }] } });
-    if (path === '/api/research-objects') return route.fulfill({ json: request.method() === 'POST' ? { researchObject: ro } : { researchObjects: [ro] } });
-    if (path.endsWith('/ingest')) return route.fulfill({ json: { batchId: 'batch', tasks: [source] } });
-    if (path === `/api/ingestion/tasks/${source.id}`) return route.fulfill({ json: { task: { ...source, result: null } } });
-    if (path.endsWith('/hermes-runs')) {
-      if (request.method() === 'POST') {
+    const url = new URL(request.url()), path = url.pathname, method = request.method();
+    const researchPath = `/api/research-objects/${ro.id}`;
+    if (method === 'POST') {
+      expect(['/api/research-objects', `${researchPath}/ingest`, `${researchPath}/hermes-runs`]).toContain(path);
+      expect(request.headers()['x-csrf-token']).toBe('fixture-token');
+      writes.push({ path, key: request.headers()['idempotency-key'], body: path === `${researchPath}/ingest` ? null : request.postDataJSON() });
+      if (path === '/api/research-objects') return route.fulfill({ json: { researchObject: ro } });
+      if (path === `${researchPath}/ingest`) return route.fulfill({ json: { batchId: 'batch', tasks: [source] } });
+      if (path === `${researchPath}/hermes-runs`) {
         runCreated = true;
         if (loseResponse) { loseResponse = false; return route.abort('failed'); }
+        return route.fulfill({ json: { run } });
       }
-      return route.fulfill({ json: { run: runCreated ? run : null } });
     }
-    if (path.endsWith('/hermes-runs/paper-run')) return route.fulfill({ json: { run } });
-    if (path === `/api/research-objects/${ro.id}`) return route.fulfill({ json: { researchObject: { ...ro, sdf: { core: {}, nodes: [] } } } });
-    if (path.endsWith('/ingestion')) return route.fulfill({ json: { tasks: [source] } });
-    if (path.endsWith('/versions')) return route.fulfill({ json: { versions: [] } });
-    if (path.endsWith('/assets') || path.endsWith('/presentation-assets')) return route.fulfill({ json: { assets: [] } });
-    return route.fulfill({ json: { tasks: [], claims: [], evidence: [], user: null } });
+    expect(method, `Unexpected write ${method} ${url.pathname}`).toBe('GET');
+    const get = `${path}${url.search}`;
+    if (get === '/api/auth/me') return route.fulfill({ json: { userId: 'owner', email: 'author@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' } });
+    if (get === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'fixture-token' } });
+    if (get === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal research', role: 'owner' }] } });
+    if (get === '/api/research-objects?limit=20') return route.fulfill({ json: { researchObjects: [ro] } });
+    if (get === '/api/ingestion?actionable=true' || get === `/api/ingestion?actionable=true&researchObjectId=${ro.id}`)
+      return route.fulfill({ json: { tasks: [] } });
+    if (get === '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal'
+      || get === `/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${ro.id}`
+      || get === '/api/agent/tasks?actionable=false&kind=workspace.guide') return route.fulfill({ json: { tasks: [] } });
+    if (get === `/api/ingestion/tasks/${source.id}`) return route.fulfill({ json: { task: { ...source, result: null }, batchId: 'batch', researchObjectId: ro.id, version: ro.version } });
+    if (get === `${researchPath}/hermes-runs?ingestionTaskId=${source.id}`) return route.fulfill({ json: { run: runCreated ? run : null } });
+    if (get === `${researchPath}/hermes-runs/paper-run`) return route.fulfill({ json: { run } });
+    if (get === researchPath) return route.fulfill({ json: { researchObject: { ...ro, sdf: { core: {}, nodes: [] } } } });
+    if (get === `${researchPath}/ingestion`) return route.fulfill({ json: { tasks: [source] } });
+    if (get === `${researchPath}/versions`) return route.fulfill({ json: { versions: [] } });
+    if (get === `${researchPath}/authors`) return route.fulfill({ json: { authors: [] } });
+    if (get === `${researchPath}/assets` || get === `${researchPath}/presentation-assets`) return route.fulfill({ json: { assets: [] } });
+    throw new Error(`Unexpected API read ${get}`);
   });
   await page.goto('/dashboard');
-  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
+  const createEntry = page.getByRole('main').getByRole('link', { name: '创建研究', exact: true });
+  await expect(createEntry).toHaveCount(1);
+  await expect(createEntry).toBeVisible();
+  await expect(createEntry).toHaveAccessibleName('创建研究');
+  await expect(createEntry).toHaveAttribute('href', '/research-objects/new?mode=import');
+  await createEntry.click();
   await expect(page).toHaveURL(/research-objects\/new\?mode=import$/);
   return { writes };
 }
@@ -62,8 +80,8 @@ test('illustrated creation recovers a lost committed response without duplicate 
 });
 
 test('illustrated creation remains optional and readable at phone width', async ({ page }) => {
-  const { writes } = await setup(page);
   await page.setViewportSize({ width: 375, height: 812 });
+  const { writes } = await setup(page);
   await page.locator('input[type=file]').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 controlled fixture') });
   await page.getByRole('checkbox', { name: '同时生成图文解读' }).uncheck();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

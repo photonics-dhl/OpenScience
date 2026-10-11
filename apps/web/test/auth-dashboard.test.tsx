@@ -40,6 +40,7 @@ const translations: Record<string, string> = {
   'dashboard.research.title': 'Your research',
   'dashboard.research.empty': 'No research objects yet.',
   'dashboard.research.search': 'Search research objects',
+  'dashboard.research.draftRevision': 'Private draft',
   'dashboard.research.status.draft': 'Draft',
   'createResearch.back': 'Dashboard',
   'createResearch.title': 'Create a research object',
@@ -419,12 +420,13 @@ describe('dashboard product states', () => {
     expect(markup).toContain('data-continuation-priority="primary"');
   });
 
-  it('keeps upload and blank creation at equal primary priority', () => {
+  it('makes material import primary and keeps blank creation available as a secondary action', () => {
     const markup = renderToStaticMarkup(createElement(ImportStage, { compact: false }));
 
     expect(markup).toContain('href="/research-objects/new?mode=import"');
     expect(markup).toContain('href="/research-objects/new?mode=blank"');
-    expect(markup.match(/data-action-priority="primary"/g)).toHaveLength(2);
+    expect(markup.match(/data-action-priority="primary"/g)).toHaveLength(1);
+    expect(markup.match(/data-action-priority="secondary"/g)).toHaveLength(1);
   });
 
   it('shows only actionable Hermes tasks with the action appropriate to their state', () => {
@@ -485,6 +487,6 @@ describe('dashboard product states', () => {
 
     expect(markup).toContain('<ul');
     expect(markup).toContain('Transient-state spectroscopy');
-    expect(markup).toContain('Draft');
+    expect(markup).toContain('Private draft');
   });
 });

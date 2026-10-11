@@ -5,6 +5,7 @@ export * from './journal/articles';
 export * from './journal/processing';
 export * from './journal/publishing';
 export * from './journal/source-upload';
+export * from './journal/shared-workspace';
 export * from './journal/feedback';
 export * from './journal/enhancements';
 export * from './journal/paper-identity';
@@ -172,7 +173,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,
@@ -184,6 +185,7 @@ export {
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
+export { HermesVideoUnavailableError, isHermesVideoReady, requireHermesVideoReady, isHermesVideoRun, isHermesVideoTask, type HermesVideoReadinessDeps } from './agent/video-readiness';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
@@ -263,7 +265,7 @@ export {
   type UpdateEvidenceInput,
   type ReviewedIngestionClaimEvidenceBatchInput,
 } from './research-intelligence/claim-evidence-service';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, createIngestionBatchFromArtifact, getIngestionBatch, getIngestionTask, getResearchObjectIngestion, listActionableIngestionTasks, reanalyzeConfirmedIngestion, refreshIngestionAnalysis, retryIngestionTask, type IngestionDeps, type IngestionConfirmation } from './ingestion/ingestion-service';
 export { MAX_CANONICAL_CORE_CHARS, MAX_CANONICAL_EVIDENCE_CHARS, MAX_CANONICAL_EVIDENCE_SEGMENTS } from './ingestion/canonical-evidence-contract';
 export { findSavedIngestionCommit, type SavedIngestionOrigin } from './ingestion/saved-source-commit';
 export { ensureHermesIngestionReview } from './ingestion/ingestion-service';
@@ -338,6 +340,7 @@ export {
   getPresentationAssetForRead,
   getPresentationTask,
   submitPresentationGeneration,
+  isDirectNativeVideoStoryboard,
   submitExistingSceneImageReview,
   requireManualSceneImageReviewReceipt,
   transitionPresentationAsset,
@@ -454,13 +457,15 @@ export {
 export { importReviewedPresentationMedia, type ReviewedMediaImportInput } from './assets/reviewed-media-import';
 
 export { STORYBOARD_IMAGE_VISUAL_ACTION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_GENERATION_MAX, STORYBOARD_VIDEO_VISUAL_ACTION_STORED_MAX, STORYBOARD_STYLE_ALIASES, canonicalStoryboardStyle, parseIllustrationStyleRecommendations, type IllustrationStyleRecommendations, storyboardSceneStyles, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, type StoryboardRequest, type StoryboardDocument, type StoryboardView, type VideoProductionDirection, type VideoSceneDirection, type VideoNarrativeArc, type VideoAudioPolicy, type VideoModelPolicy, type VideoShotType, type VideoReference, type VideoFrameStrategy, type VideoAudioMode, type VideoSubtitleMode } from './assets/storyboard';
-export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
+export { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, VISUAL_NARRATIVE_PROFILE, hasVideoProvenance, parseVideoGenerationRequest, presentationVideoView, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents, type VideoGenerationRequest } from './assets/video';
 export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation, type AnimationObject, type AnimationAction } from './assets/animation';
 
 export { requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativeImageReplanSource, readNarrativePixelReplanAuthority, WRITE_ROLES } from './assets/presentation-asset';
 
 export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, readStoredGeneratedImageReview, generatedSceneImageRequiresPixelReview, type GeneratedImageReview, type ImageReviewIdentity, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
 export { readNativeImageReviewCheckpoint, nativeImageReviewMatches, nativeImageReviewProvider, startNativeImageReview, completeNativeImageReview,
+  prepareAgentNativeImageReview, agentNativeImageReviewEnvelope, requireAgentNativeImageReviewReservation, readNativeImageAgentExecution,
+  type AgentNativeImageReviewPrepared, type AgentNativeImageReviewCompleted,
   type NativeImageReviewCheckpoint, type NativeImageReviewStarted, type NativeImageReviewCompleted,
   type NativeImageReviewTarget } from './assets/native-image-review';
 export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
@@ -468,7 +473,7 @@ export { requireMembership } from './workspace/helpers';
 export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, projectIllustrationEvidence, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
-export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority,
-  type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
+export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority, supportsNativeIllustration,
+  type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentImageCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
 
 export { presentationClaimContent, readReviewedPresentationEvidence, presentationEvidenceIdentity, hasSingleReviewedVisualSource, readVisualNarrativeSource } from './assets/illustration-source';

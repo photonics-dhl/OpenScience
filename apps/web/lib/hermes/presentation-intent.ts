@@ -2,6 +2,7 @@ export interface HermesPresentationIntent {
   action: 'storyboard.create' | 'storyboard.revise' | 'scene.image' | 'video.create';
   instruction: string;
   sceneIndex?: number;
+  revisionSceneIndex?: number;
 }
 
 /** These shortcuts prepare a review card only; they never grant write authority. */

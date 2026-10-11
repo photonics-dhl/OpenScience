@@ -4,7 +4,7 @@
   margin-inline: auto;
 }
 
-.prose { max-width: 72ch; margin-inline: auto; }
+.prose { max-width: 45rem; margin-inline: auto; }
 
 .passage {
   position: relative;
@@ -26,7 +26,7 @@
 .sectionHeading > span:not(.sectionMarker),
 .sectionEdit {
   color: var(--craft-ink, #182f35);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.012em;
   line-height: 1.4;
@@ -68,8 +68,8 @@
   background: transparent;
   color: var(--craft-ink, #182f35);
   font: inherit;
-  font-size: 18px;
-  line-height: 1.85;
+  font-size: 17px;
+  line-height: 1.9;
   padding: 8px 12px 8px 34px;
   text-wrap: pretty;
   caret-color: var(--craft-accent, #125d66);
@@ -94,8 +94,8 @@
   border-radius: 6px;
   color: var(--craft-ink, #182f35);
   cursor: text;
-  font-size: 18px;
-  line-height: 1.85;
+  font-size: 17px;
+  line-height: 1.9;
   overflow-wrap: anywhere;
   transition: background-color var(--craft-action, 160ms) var(--craft-ease, cubic-bezier(.16, 1, .3, 1));
 }

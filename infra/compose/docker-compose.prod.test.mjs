@@ -4,6 +4,16 @@ import test from 'node:test';
 
 const composeUrl = new URL('./docker-compose.prod.yml', import.meta.url);
 
+test('API observes video readiness through only the existing read-only results directory', async () => {
+  const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
+  const api = compose.split('\n  api:\n', 2)[1]?.split(/\n {2}[a-zA-Z0-9_-]+:\n/u, 1)[0] ?? '';
+  const mounts = api.match(/^\s+- \/opt\/openscience-synclip-video[^\n]*/gmu) ?? [];
+  assert.deepEqual(mounts.map(line => line.trim()), ['- /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro']);
+  assert.ok(api.includes('SYNCLIP_VIDEO_ENABLED: ${SYNCLIP_VIDEO_ENABLED:-false}'));
+  assert.ok(api.includes('SYNCLIP_VIDEO_INBOX_DIR: /synclip-video-jobs/inbox'));
+  assert.ok(api.includes('SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results'));
+});
+
 test('production compose provides private persistent S3-compatible storage', async () => {
   const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
   assert.match(compose, /\n  object-storage:\n/);

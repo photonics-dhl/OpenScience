@@ -235,15 +235,6 @@ async function applyMatrixChange(tx: Prisma.TransactionClient, article: JournalA
   if (rights.internalProcessing && rights.evidence && (source as JournalSource).artifactId && activeMaterial?.fileId === (source as JournalSource).artifactId) {
     await tx.journalJob.updateMany({ where: { articleId: article.id, kind: 'source_parse', state: 'staging' }, data: { state: 'pending', revision: updated.revision, sourceDigest: journalDigest({ source, rights }), result: Prisma.DbNull } });
   }
-  const releases = await tx.journalRelease.findMany({ where: { articleId: article.id }, select: { snapshot: true } });
-  const exceedsCurrentRights = releases.some((release) => {
-    const snapshot = release.snapshot as { draft?: { scope?: string; figures?: unknown[] }; source?: { text?: unknown } };
-    return !capability.canPublishPublicSummary || snapshot.draft?.scope === 'fulltext' && !capability.canPublishFullInterpretation || snapshot.source?.text !== undefined && !rights.publicSource;
-  });
-  if (exceedsCurrentRights) {
-    await tx.researchObject.update({ where: { id: article.researchObjectId }, data: { visibility: 'private', status: 'restricted' } });
-    await tx.version.updateMany({ where: { researchObjectId: article.researchObjectId, status: 'published' }, data: { status: 'restricted' } });
-  }
   await journalArticleEvent(tx, article.journalId, userId, action, article.id, { ...(detail as object), capability, sourceDigest: journalDigest(source), rightsDigest: journalDigest(rights) });
   return { articleRevision: updated.revision, sources: materials, capability };
 }

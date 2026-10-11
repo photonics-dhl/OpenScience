@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -73,6 +73,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
   let articleId: string;
   let slug: string;
   let journalName: string;
+  const journalNameEn = 'Synthetic Open Science Journal';
   let releaseUrl: string;
 
   beforeAll(async () => {
@@ -93,7 +94,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
     adminToken = await createSession(redis, { userId: admin.id, status: admin.status });
     app = await buildApp({ prisma, redis, mailer: createFakeMailer(), cookieSecret: 'isolated-journal-browser-test', secureCookies: false, journalsEnabled: true, publicIdPrefix: 'BRW', nativeAgentRuntime });
 
-    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: 'Synthetic Open Science Journal', pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
+    const applicationResponse = await app.inject({ method: 'POST', url: '/journals/applications', cookies: { openscience_session: ownerToken }, payload: { nameZh: journalName, nameEn: journalNameEn, pIssn: validIssn(), websiteUrl: 'https://journal.example.invalid', publisherName: 'Synthetic Local Publisher', subjects: ['Open Science', 'Validation'], description: 'Only synthetic local data for bounded browser acceptance.', applicantName: owner.displayName, applicantTitle: 'Editor', applicantEmail: owner.email, representationEvidence: 'Synthetic local authorization', rightsDeclaration: 'Synthetic directory and derivative use only.', rightsDeclarationVersion: 'browser-v1' } });
     expect(applicationResponse.statusCode, applicationResponse.body).toBe(200);
     const application = applicationResponse.json().application as { id: string; revision: number };
     const submitted = await app.inject({ method: 'POST', url: `/journals/applications/${application.id}/submit`, cookies: { openscience_session: ownerToken }, payload: { revision: application.revision, submissionKey: randomUUID() } });
@@ -146,13 +147,13 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       await adminContext.addCookies([{ name: 'openscience_session', value: adminToken, url: baseUrl, sameSite: 'Lax' }]);
 
       const surfaces = [
-        { name: 'directory', context: publicContext, path: '/journals', expected: ['期刊目录'] },
-        { name: 'homepage', context: publicContext, path: `/journals/${slug}`, expected: ['编辑部身份已核验', 'Synthetic evidence comparison paper', '阅读固定解读版本'] },
+        { name: 'directory', context: publicContext, path: '/journals', expected: [] },
+        { name: 'homepage', context: publicContext, path: `/journals/${slug}`, expected: ['编辑部身份已核验', 'Synthetic evidence comparison paper', '解析版本 · v1'] },
         { name: 'release', context: publicContext, path: releaseUrl, expected: ['期刊解读', '14.7 TW'] },
-        { name: 'workbench', context: ownerContext, path: `/journals/manage/${journalId}`, expected: ['我的期刊', '论文与审核队列', '试用与专业服务'] },
-        { name: 'processing', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['加工优先级', 'Synthetic evidence comparison paper'] },
+        { name: 'workbench', context: ownerContext, path: `/journals/manage/${journalId}`, expected: ['期刊工作台', '草稿箱', '已完成处理', '已公开解读'] },
+        { name: 'processing-redirect', context: ownerContext, path: `/journals/manage/${journalId}/processing`, expected: ['期刊工作台', '草稿箱'] },
         { name: 'services', context: ownerContext, path: `/journals/manage/${journalId}/services`, expected: ['服务包与额度', '可用 AI 草稿额度'] },
-        { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['研究素材', '上传研究素材', '查看原文'] },
+        { name: 'article', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}`, expected: ['论文与文件', '上传论文文件', '查看原文', 'Hermes 助手 AI 解读', '审批与发布'] },
         { name: 'sources', context: ownerContext, path: `/journals/manage/${journalId}/articles/${articleId}/sources`, expected: ['研究素材', '加工与公开范围'] },
         { name: 'admin', context: adminContext, path: '/admin/journals', expected: ['期刊核验与运营', '期刊运营状态'] },
       ];
@@ -186,15 +187,177 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
           expect(response?.status(), `${surface.name} ${viewport.name}`).toBe(200);
           // The responsive navigation keeps a hidden desktop link in the DOM on mobile.
           for (const text of surface.expected) await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible' });
+          let directoryRefinement: Record<string, unknown> | undefined;
           if (surface.name === 'directory') {
-            await page.getByLabel('搜索期刊').fill(journalName);
-            await page.getByRole('button', { name: '搜索' }).click();
-            await page.getByText(journalName).waitFor({ state: 'visible' });
+            // The directory's primary browse heading is intentional in both locales.
+            const main = page.getByRole('main');
+            await main.getByRole('heading', { level: 1, name: 'Browse all journals', exact: true }).waitFor({ state: 'visible' });
+            const directory = main.locator('[data-journal-directory]');
+            await directory.waitFor({ state: 'visible' });
+            expect(await directory.getAttribute('aria-label')).toBeTruthy();
+            await expect.poll(() => directory.locator('form').getAttribute('aria-busy')).toBe('false');
+            const refinement = directory.locator('details[data-journal-refinement]');
+            const refinementSummary = refinement.locator('summary');
+            // Hidden controls remain addressable for closed-state/popstate assertions.
+            const subject = refinement.getByRole('combobox', { name: /^学科/, includeHidden: true });
+            const access = refinement.getByRole('combobox', { name: /^开放获取/, includeHidden: true });
+            const sort = refinement.getByRole('combobox', { name: /^排序/, includeHidden: true });
+            const readRefinement = async () => ({
+              url: page.url(), open: await refinement.evaluate(element => (element as HTMLDetailsElement).open),
+              summary: await refinementSummary.innerText(),
+              values: { subject: await subject.inputValue(), access: await access.inputValue(), sort: await sort.inputValue() },
+            });
+            const initial = await readRefinement();
+            expect(initial.open).toBe(false);
+            expect(initial.values).toEqual({ subject: '', access: 'all', sort: 'az' });
+            expect(initial.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            const firstHeading = directory.locator('[data-journal-entry]').first().getByRole('heading', { level: 2 });
+            await firstHeading.waitFor({ state: 'visible' });
+            // Measure the initial viewport before focus/keyboard actions can scroll it.
+            const firstResult = await firstHeading.evaluate(element => ({ text: element.textContent?.trim(),
+              bounds: element.getBoundingClientRect().toJSON(), scrollY,
+              viewport: { width: innerWidth, height: innerHeight } }));
+            directoryRefinement = { initial, firstResult };
+            if (viewport.width === 375) {
+              expect(firstResult.scrollY).toBe(0);
+              expect(firstResult.bounds.height).toBeGreaterThan(0);
+              expect(firstResult.bounds.top, JSON.stringify(firstResult)).toBeGreaterThanOrEqual(0);
+              expect(firstResult.bounds.bottom, JSON.stringify(firstResult)).toBeLessThanOrEqual(firstResult.viewport.height);
+            }
+            await refinementSummary.focus();
+            expect(await refinementSummary.evaluate(element => element === document.activeElement)).toBe(true);
+            await refinementSummary.press('Enter');
+            await expect.poll(() => refinement.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+            // Playwright's state queries follow the wrapping label to its SELECT.
+            // With each SELECT enabled, check the OPTION's own native disabled state.
+            const availability = {
+              subjectEnabled: await subject.isEnabled(), accessEnabled: await access.isEnabled(), sortEnabled: await sort.isEnabled(),
+              fixtureSubjectEnabled: await subject.locator('option[value="Open Science"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              openDisabled: await access.locator('option[value="open"]').evaluate(option => (option as HTMLOptionElement).disabled),
+              closedDisabled: await access.locator('option[value="closed"]').evaluate(option => (option as HTMLOptionElement).disabled),
+              unknownEnabled: await access.locator('option[value="unknown"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              paperCountEnabled: await sort.locator('option[value="paper_count"]').evaluate(option => !(option as HTMLOptionElement).disabled),
+              citationDisabled: await sort.locator('option[value="citation_count"]').evaluate(option => (option as HTMLOptionElement).disabled),
+            };
+            directoryRefinement.availability = availability;
+            expect(availability).toEqual({ subjectEnabled: true, accessEnabled: true, sortEnabled: true,
+              fixtureSubjectEnabled: true, openDisabled: true, closedDisabled: true, unknownEnabled: true,
+              paperCountEnabled: true, citationDisabled: true });
+            await subject.selectOption('Open Science');
+            expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
+            await refinementSummary.press('Enter');
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: 'Open Science' } });
+            const active = await readRefinement();
+            expect(active.summary).toContain('Open Science');
+            directoryRefinement.active = active;
+            await page.goBack({ waitUntil: 'networkidle' });
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            expect(new URL(page.url()).searchParams.get('subject')).toBeNull();
+            const back = await readRefinement();
+            expect(back.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            directoryRefinement.back = back;
+            await page.goForward({ waitUntil: 'networkidle' });
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: 'Open Science', access: 'all', sort: 'az' } });
+            expect(new URL(page.url()).searchParams.get('subject')).toBe('Open Science');
+            const forward = await readRefinement();
+            expect(forward.summary).toContain('Open Science');
+            directoryRefinement.forward = forward;
+            await refinementSummary.press('Enter');
+            await expect.poll(() => refinement.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
+            await access.selectOption('unknown');
+            await sort.selectOption('paper_count');
+            await expect.poll(readRefinement).toMatchObject({ values: { subject: 'Open Science', access: 'unknown', sort: 'paper_count' } });
+            const selected = await readRefinement();
+            expect(new URL(selected.url).searchParams.get('access')).toBe('unknown');
+            expect(new URL(selected.url).searchParams.get('sort')).toBe('paper_count');
+            expect(selected.summary).toContain('状态未知'); expect(selected.summary).toContain('平台收录篇数');
+            directoryRefinement.selected = selected;
+            await subject.selectOption(''); await access.selectOption('all'); await sort.selectOption('az');
+            await refinementSummary.press('Enter');
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            const reset = await readRefinement();
+            for (const key of ['subject', 'access', 'sort']) expect(new URL(reset.url).searchParams.get(key)).toBeNull();
+            expect(reset.summary).toContain('全部学科 · 全部获取方式 · A–Z');
+            directoryRefinement.reset = reset;
+            await directory.getByRole('searchbox').fill(journalName);
+            await directory.getByRole('button', { name: '搜索', exact: true }).click();
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            const result = directory.locator('[data-journal-entry]').filter({ has: page.getByRole('heading', { name: journalNameEn, exact: true }) });
+            await result.waitFor({ state: 'visible' });
+            await result.getByText(journalName, { exact: true }).waitFor({ state: 'visible' });
+            expect(await result.getAttribute('href')).toBe(`/journals/${slug}`);
+            await result.click();
+            await page.waitForURL(`${baseUrl}/journals/${slug}`, { waitUntil: 'networkidle' });
+            await page.getByRole('heading', { level: 1, name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            await page.goBack({ waitUntil: 'networkidle' });
+            await directory.waitFor({ state: 'visible' });
+            await directory.getByRole('heading', { name: journalNameEn, exact: true }).waitFor({ state: 'visible' });
+            await expect.poll(() => directory.getByRole('searchbox').inputValue()).toBe(journalName);
+            expect(new URL(page.url()).searchParams.get('q')).toBe(journalName);
+            await expect.poll(readRefinement).toMatchObject({ open: false, values: { subject: '', access: 'all', sort: 'az' } });
+            directoryRefinement.searchReturn = await readRefinement();
           }
           if (surface.name === 'release') {
             const sourceLink = page.getByRole('link', { name: /查看原始来源/ });
             await sourceLink.waitFor({ state: 'visible' });
             expect(await sourceLink.getAttribute('href')).toBe(source.url);
+          }
+          if (surface.name === 'workbench') {
+            await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '已完成处理' }).click();
+            await page.getByText('完成处理不代表已公开').waitFor({ state: 'visible' });
+            await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '已公开解读' }).click();
+            await page.getByRole('heading', { name: 'Synthetic evidence comparison paper' }).waitFor({ state: 'visible' });
+            await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '草稿箱' }).click();
+          }
+          if (surface.name === 'processing-redirect') expect(new URL(page.url()).searchParams.get('view')).toBe('drafts');
+          if (['directory', 'homepage', 'release'].includes(surface.name)) {
+            // Back navigation can restore scroll/focus before the deferred Live2D first frame.
+            // A loaded heading and the overflow check below do not establish actor visibility.
+            const before = await page.evaluate(() => ({ scrollY, activeTag: document.activeElement?.tagName, activeText: document.activeElement?.textContent?.trim().slice(0, 100) }));
+            const readingScope = surface.name === 'homepage' ? '[data-journal-reading-companion="home"] '
+              : surface.name === 'release' ? '[data-journal-reading-companion="release"] ' : '';
+            const anchorSelector = `${readingScope}[data-hermes-dock-anchor="true"][data-hermes-companion-margin="true"]`;
+            const anchor = page.locator(anchorSelector);
+            await anchor.scrollIntoViewIfNeeded();
+            const readCompanion = () => page.evaluate((selector) => {
+              const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+              const inlineAnchor = document.querySelector<HTMLElement>(selector);
+              const carrier = stage?.closest('[data-hermes-portal-carrier="true"]');
+              const bounds = (element: Element | null | undefined) => element?.getBoundingClientRect().toJSON() ?? null;
+              return {
+                stageCount: document.querySelectorAll('[data-hermes-workspace-stage="true"]').length,
+                anchorCount: document.querySelectorAll('[data-hermes-dock-anchor="true"]').length,
+                anchored: stage?.dataset.hermesAnchored,
+                dockReady: stage?.dataset.hermesDockReady,
+                rigStatus: stage?.querySelector<HTMLElement>('[data-hermes-rig="live2d-wanko"]')?.dataset.hermesRigStatus,
+                carrierAtAnchor: Boolean(inlineAnchor && carrier?.parentElement === inlineAnchor),
+                scrollY, activeTag: document.activeElement?.tagName,
+                activeText: document.activeElement?.textContent?.trim().slice(0, 100),
+                stageBounds: bounds(stage), anchorBounds: bounds(inlineAnchor),
+              };
+            }, anchorSelector);
+            let warmed: Awaited<ReturnType<typeof readCompanion>> | null = null;
+            try {
+              await expect.poll(readCompanion, { timeout: 20_000 }).toMatchObject({
+                stageCount: 1, anchorCount: 1, anchored: 'true', dockReady: 'true', rigStatus: 'ready', carrierAtAnchor: true,
+              });
+              warmed = await readCompanion();
+              // Full-page capture at a restored scroll offset can paint an offscreen fixed skip link over page content.
+              // Keep the real focus state while using a declared top-of-page capture viewport.
+              await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+            } finally {
+              await writeFile(resolve(outputDir, `${surface.name}-${viewport.name}-companion.json`), JSON.stringify({ before, warmed, after: await readCompanion(), ...(directoryRefinement ? { directoryRefinement } : {}) }, null, 2));
+            }
+            if (surface.name === 'release') {
+              const stageBox = await page.locator('[data-hermes-workspace-stage="true"]').boundingBox();
+              const summaryBox = await page.getByText(draft.summary, { exact: true }).boundingBox();
+              expect(stageBox).not.toBeNull(); expect(summaryBox).not.toBeNull();
+              // A floating actor can cover text while every element remains within scrollWidth.
+              const overlap = stageBox && summaryBox && stageBox.x < summaryBox.x + summaryBox.width
+                && stageBox.x + stageBox.width > summaryBox.x && stageBox.y < summaryBox.y + summaryBox.height
+                && stageBox.y + stageBox.height > summaryBox.y;
+              expect(overlap, `journal summary is obscured at ${viewport.width}px`).toBe(false);
+            }
           }
           await page.screenshot({ path: resolve(outputDir, `${surface.name}-${viewport.name}.png`), fullPage: true });
           const layout = await page.evaluate(() => ({
@@ -260,6 +423,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
 
       const actionPage = await ownerContext.newPage();
       await actionPage.goto(`${baseUrl}/journals/manage/${journalId}`, { waitUntil: 'networkidle' });
+      await actionPage.getByRole('navigation', { name: '期刊管理功能' }).getByRole('link', { name: '服务包与额度' }).click();
       await actionPage.getByRole('button', { name: '提交服务申请' }).click();
       await actionPage.getByRole('status').filter({ hasText: '服务申请已提交' }).waitFor({ state: 'visible' });
 
@@ -271,11 +435,12 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       try {
         const editPage = await ownerContext.newPage();
         await editPage.goto(`${baseUrl}/journals/manage/${journalId}/articles/${articleId}`, { waitUntil: 'networkidle' });
+        await editPage.getByText('核对提取的论文文本', { exact: true }).click();
         await editPage.getByRole('textbox', { name: '来源文本', exact: true }).waitFor({ state: 'visible', timeout: 10000 }).catch(async (error) => { await editPage.screenshot({ path: resolve(outputDir, 'article-edit-failure.png'), fullPage: true }); throw new Error(String(error) + '\nPAGE: ' + (await editPage.locator('body').innerText()).slice(0, 1800)); });
         const changedSource = `${sourceSentence} Local editor verification.`;
         const changedSummary = `${draft.summary} Local editor verification.`;
         await editPage.getByRole('textbox', { name: '来源文本', exact: true }).fill(changedSource);
-        await editPage.getByRole('textbox', { name: '摘要', exact: true }).fill(changedSummary);
+        await editPage.getByRole('textbox', { name: '解读摘要', exact: true }).fill(changedSummary);
         await editPage.getByText('有未保存修改，请先保存，再确认内容或公开发布。').waitFor({ state: 'visible' });
         expect(await editPage.getByRole('button', { name: '公开发布已确认版本' }).isDisabled()).toBe(true);
         // This published revision stays confirmed until the changed draft is saved.
@@ -283,9 +448,14 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         expect(await editPage.getByRole('button', { name: '确认当前解读' }).count()).toBe(0);
         await editPage.waitForTimeout(2_500);
         expect(await editPage.getByRole('textbox', { name: '来源文本', exact: true }).inputValue()).toBe(changedSource);
-        expect(await editPage.getByRole('textbox', { name: '摘要', exact: true }).inputValue()).toBe(changedSummary);
+        expect(await editPage.getByRole('textbox', { name: '解读摘要', exact: true }).inputValue()).toBe(changedSummary);
         await editPage.getByRole('button', { name: '保存私有修订' }).click();
         await editPage.getByText('已保存；修改素材或解读后，需要重新确认内容。').waitFor({ state: 'visible' });
+        const originalPublication = await fetch(`${baseUrl}${releaseUrl}`);
+        expect(originalPublication.status).toBe(200);
+        const originalPublicationBody = await originalPublication.text();
+        expect(originalPublicationBody).toContain(draft.summary);
+        expect(originalPublicationBody).not.toContain(changedSummary);
         expect(await editPage.getByRole('button', { name: '确认当前解读' }).isDisabled()).toBe(true);
         await editPage.getByRole('checkbox', { name: /我已核对摘要、数字/ }).check();
         await expect.poll(() => editPage.getByRole('button', { name: '确认当前解读' }).isEnabled()).toBe(true);
@@ -294,7 +464,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
         const confirmed = await confirmedResponse;
         expect(confirmed.status(), await confirmed.text()).toBe(200);
         expect(confirmed.request().postDataJSON()).toMatchObject({ decision: 'confirm', humanConfirmed: true });
-        await editPage.getByText(/fulltext · approved · 修订/).waitFor({ state: 'visible' });
+        await editPage.getByText(/解读已确认 · 当前修订/).waitFor({ state: 'visible' });
         await editPage.screenshot({ path: resolve(outputDir, 'article-edit-saved-submitted.png'), fullPage: true });
         const restricted = editPage.waitForResponse((response) => response.url().includes(`/journals/${journalId}/articles/${articleId}/restrict`) && response.ok());
         editPage.once('dialog', (dialog) => { void dialog.accept('Synthetic browser restriction verification'); });
@@ -325,16 +495,21 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
     } finally { await browser.close(); }
   }, 180_000);
 
-  it('persists processing choices and reconciles queue credits through the new pages', async () => {
+  it('navigates draft, archive and rights flows and reconciles a single-paper generation reservation', async () => {
     const csrf = await app.inject({ url: '/csrf-token' });
     expect(csrf.statusCode).toBe(200);
     const fixtureCookies = { ...Object.fromEntries(csrf.cookies.map((cookie) => [cookie.name, cookie.value])), openscience_session: ownerToken };
     const fixtureHeaders = { 'x-csrf-token': csrf.json().csrfToken as string };
-    const created = await app.inject({ method: 'POST', url: `/journals/${journalId}/articles`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { metadata: { title: 'Synthetic priority and credits paper', authors: ['Synthetic Author'], publishedDate: '2026-09-22', journalTitle: journalName, issns: [], originalUrl: 'https://journal.example.invalid/priority-source' } } });
+    const title = 'Synthetic draft and credits paper';
+    const created = await app.inject({ method: 'POST', url: `/journals/${journalId}/articles`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { metadata: { title, authors: ['Synthetic Author'], publishedDate: '2026-09-22', journalTitle: journalName, issns: [], originalUrl: 'https://journal.example.invalid/draft-source' } } });
     expect(created.statusCode, created.body).toBe(200);
     const fresh = created.json().article as { id: string; revision: number };
     const prepared = await app.inject({ method: 'PATCH', url: `/journals/${journalId}/articles/${fresh.id}`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { revision: fresh.revision, source, rights } });
     expect(prepared.statusCode, prepared.body).toBe(200);
+    const expiry = '2030-12-31T00:00:00.000Z';
+    const noPermissions = { internalProcessing: false, derivativeGeneration: false, externalProcessing: false, publicSource: false, publicDerivative: false, figureReuse: false, derivativeIllustration: false };
+    const expiringSource = await app.inject({ method: 'POST', url: `/journals/${journalId}/articles/${fresh.id}/sources`, cookies: fixtureCookies, headers: fixtureHeaders, payload: { revision: prepared.json().article.revision, source: { sourceType: 'supplementary', title: 'Time-limited supplementary record', url: 'https://journal.example.invalid/expiring-supplement', rightsStatus: 'unknown', sourceConfidence: 'editor_claimed', permissions: noPermissions, evidence: { statement: 'Synthetic time-limited record only.', expiresAt: expiry }, activeForGeneration: false } } });
+    expect(expiringSource.statusCode, expiringSource.body).toBe(200);
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
     await context.addCookies([{ name: 'openscience_session', value: ownerToken, url: baseUrl, sameSite: 'Lax' }]);
@@ -343,57 +518,82 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
     page.on('pageerror', (error) => errors.push(error.message));
     let submittedJobId: string | undefined;
     try {
-      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}/sources`, { waitUntil: 'networkidle' });
-      const sourceForm = page.getByRole('region', { name: '添加研究素材' });
-      await sourceForm.getByLabel('素材类型', { exact: true }).selectOption('supplementary');
-      await sourceForm.getByLabel('素材标题', { exact: true }).fill('Synthetic supplementary registration');
-      await sourceForm.getByLabel('来源链接', { exact: true }).fill('https://journal.example.invalid/supplementary');
-      await sourceForm.getByLabel(/^授权从哪里获得/).fill('Synthetic material registration; this record does not authorize the main source.');
+      await page.goto(`${baseUrl}/journals/manage/${journalId}`, { waitUntil: 'networkidle' });
+      const views = page.getByRole('navigation', { name: '论文工作视图' });
+      const draftRow = page.getByRole('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+      await draftRow.getByRole('link', { name: '继续编辑' }).waitFor({ state: 'visible' });
+      page.once('dialog', (dialog) => { void dialog.accept(); });
+      await draftRow.getByRole('button', { name: '删除草稿' }).click();
+      await page.getByRole('status').filter({ hasText: '草稿已删除' }).waitFor({ state: 'visible' });
+      expect(await draftRow.count()).toBe(0);
+      await views.getByRole('button', { name: '已删除草稿' }).click();
+      const archivedRow = page.getByRole('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+      await archivedRow.getByRole('button', { name: '恢复草稿' }).waitFor({ state: 'visible' });
+      page.once('dialog', (dialog) => { void dialog.accept(); });
+      await archivedRow.getByRole('button', { name: '恢复草稿' }).click();
+      await page.getByRole('status').filter({ hasText: '草稿已恢复' }).waitFor({ state: 'visible' });
+      await views.getByRole('button', { name: '草稿箱' }).click();
+      await draftRow.getByRole('link', { name: '继续编辑' }).click();
+      await page.getByRole('heading', { name: title, exact: true }).waitFor({ state: 'visible' });
+      await page.getByRole('link', { name: '管理研究素材与授权' }).click();
+      const sourceForm = page.getByText('添加研究素材', { exact: true });
+      await sourceForm.click();
+      await page.getByLabel('素材类型', { exact: true }).selectOption('supplementary');
+      await page.getByLabel('素材标题', { exact: true }).fill('Synthetic supplementary registration');
+      await page.getByLabel('来源链接', { exact: true }).fill('https://journal.example.invalid/supplementary');
+      const registration = page.locator('details').filter({ hasText: '添加研究素材' }).locator('form');
+      expect(await registration.getByRole('checkbox', { name: /允许 Hermes 助手 AI 解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开原文/ }).isChecked()).toBe(false);
+      await registration.getByLabel('这份素材获准如何使用？').selectOption('full_public_processing_allowed');
+      expect(await registration.getByRole('checkbox', { name: /公开解读/ }).isChecked()).toBe(false);
+      expect(await registration.getByRole('checkbox', { name: /公开原文/ }).isChecked()).toBe(false);
+      await registration.getByLabel('这份素材获准如何使用？').selectOption('unknown');
+      expect(await registration.getByRole('button', { name: '添加素材并评估', exact: true }).isDisabled()).toBe(true);
+      await registration.getByLabel(/^授权从哪里获得/).fill('Synthetic material registration; this record does not authorize the main source.');
+      expect(await registration.getByRole('button', { name: '添加素材并评估', exact: true }).isEnabled()).toBe(true);
       const addedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/sources`));
-      await sourceForm.getByRole('button', { name: '添加素材并评估', exact: true }).click();
+      await registration.getByRole('button', { name: '添加素材并评估', exact: true }).click();
       const added = await addedResponse;
+      const submittedSource = added.request().postDataJSON() as { source: { evidence: Record<string, unknown>; permissions: typeof noPermissions } };
+      expect(submittedSource.source.evidence).toMatchObject({ statement: 'Synthetic material registration; this record does not authorize the main source.' });
+      expect(submittedSource.source.evidence).not.toHaveProperty('expiresAt');
+      expect(submittedSource.source.permissions).toEqual(noPermissions);
       expect(added.status(), await added.text()).toBe(200);
-      const matrix = await added.json() as { sources: Array<{ sourceType: string }>; capability: { canGenerateFullSixFields: boolean } };
-      expect(matrix.sources.some((item) => item.sourceType === 'supplementary')).toBe(true);
+      const matrix = await added.json() as { sources: Array<{ sourceType: string; title: string; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } };
+      expect(matrix.sources.find((item) => item.title === 'Synthetic supplementary registration')).toMatchObject({ sourceType: 'supplementary', permissions: noPermissions });
       expect(matrix.capability.canGenerateFullSixFields).toBe(true);
       await page.reload({ waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: 'Synthetic supplementary registration', exact: true }).waitFor({ state: 'visible' });
+      await page.getByText('Synthetic supplementary registration · 授权待确认').waitFor({ state: 'visible' });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       await page.screenshot({ path: resolve(outputDir, 'sources-supplementary-mobile-375.png'), fullPage: true });
-      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}`, { waitUntil: 'networkidle' });
-      await page.getByRole('textbox', { name: '来源文本', exact: true }).fill(`${sourceSentence} This source text was amended by the synthetic editor.`);
-      expect(await page.getByRole('button', { name: '请 Hermes 生成私有解读', exact: true }).isDisabled()).toBe(true);
-      await page.getByRole('button', { name: '保存私有修订', exact: true }).click();
-      await page.getByText('已保存；修改素材或解读后，需要重新确认内容。', { exact: true }).waitFor();
-      expect(await page.getByRole('button', { name: '请 Hermes 生成私有解读', exact: true }).isDisabled()).toBe(true);
-      await page.goto(`${baseUrl}/journals/manage/${journalId}/articles/${fresh.id}/sources`, { waitUntil: 'networkidle' });
-      const primary = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Synthetic source paragraph', exact: true }) });
+      const timed = page.locator('details').filter({ hasText: 'Time-limited supplementary record · 授权待确认' });
+      await timed.locator('summary').click();
+      expect(await timed.getByLabel('授权到期时间').count()).toBe(0);
+      await timed.getByLabel(/^授权从哪里获得/).fill('Synthetic time-limited record checked again; original expiry remains.');
       const reboundResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes(`/articles/${fresh.id}/sources/`) && response.url().endsWith('/rights'));
-      await primary.getByRole('button', { name: '保存此项授权', exact: true }).click();
+      await timed.getByRole('button', { name: '保存此项授权', exact: true }).click();
       const rebound = await reboundResponse;
+      expect((rebound.request().postDataJSON() as { evidence: { expiresAt?: string } }).evidence.expiresAt).toBe(expiry);
       expect(rebound.status(), await rebound.text()).toBe(200);
-      expect((await rebound.json() as { capability: { canGenerateFullSixFields: boolean } }).capability.canGenerateFullSixFields).toBe(true);
-      await page.goto(`${baseUrl}/journals/manage/${journalId}/processing`, { waitUntil: 'networkidle' });
-      const row = page.getByRole('article').filter({ hasText: 'Synthetic priority and credits paper' });
-      await row.getByRole('button', { name: '标记重点', exact: true }).click();
-      await row.getByRole('button', { name: '取消重点', exact: true }).waitFor({ state: 'visible' });
-      await page.reload({ waitUntil: 'networkidle' });
-      await row.getByRole('button', { name: '取消重点', exact: true }).waitFor({ state: 'visible' });
-      await row.getByRole('button', { name: '延后 7 天', exact: true }).click();
-      await row.getByRole('button', { name: '恢复处理', exact: true }).waitFor({ state: 'visible' });
-      await row.getByRole('button', { name: '恢复处理', exact: true }).click();
-      await row.getByRole('button', { name: '延后 7 天', exact: true }).waitFor({ state: 'visible' });
+      const savedSource = (await rebound.json() as { sources: Array<{ title: string; evidence: { expiresAt?: string }; permissions: typeof noPermissions }>; capability: { canGenerateFullSixFields: boolean } }).sources.find((item) => item.title === 'Time-limited supplementary record');
+      expect(savedSource?.evidence.expiresAt).toBe(expiry);
+      expect(savedSource?.permissions).toEqual(noPermissions);
+      await page.getByRole('link', { name: '返回论文工作台' }).click();
+      await page.getByRole('button', { name: '交给 Hermes 解读', exact: true }).waitFor({ state: 'visible' });
+      expect(await page.getByRole('button', { name: '交给 Hermes 解读', exact: true }).isDisabled()).toBe(true);
+      await page.getByText('上传论文正文文件', { exact: true }).first().waitFor({ state: 'visible' });
       const before = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as { available: number; reserved: number; consumed: number };
-      page.once('dialog', (dialog) => { void dialog.accept(); });
-      const queuedResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/articles/${fresh.id}/processing-jobs`));
-      await row.getByRole('button', { name: '确认并入队', exact: true }).click();
-      const queued = await queuedResponse;
-      expect(queued.status(), await queued.text()).toBe(200);
-      submittedJobId = (await queued.json() as { job: { id: string } }).job.id;
+      const current = await prisma.journalArticle.findUniqueOrThrow({ where: { id: fresh.id } });
+      const queued = await submitJournalJob({ prisma, mailer: createFakeMailer() }, ownerId, journalId, fresh.id, { requestKey: `browser-quota-${randomUUID()}`, revision: current.revision, language: 'zh' }, true);
+      submittedJobId = queued.id;
       const during = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as typeof before;
       expect(during.available).toBe(before.available - 1);
       expect(during.reserved).toBe(before.reserved + 1);
       expect(during.consumed).toBe(before.consumed);
+      await page.getByRole('link', { name: '返回期刊工作台' }).click();
+      await page.getByRole('navigation', { name: '论文工作视图' }).getByRole('button', { name: '处理中' }).click();
+      await page.getByRole('heading', { name: title, exact: true }).waitFor({ state: 'visible' });
       const cancelled = await cancelJournalJob({ prisma, mailer: createFakeMailer() }, ownerId, journalId, submittedJobId);
       expect(cancelled.state).toBe('cancelled');
       const after = (await app.inject({ url: `/journals/${journalId}/service-plan`, cookies: { openscience_session: ownerToken } })).json().credits as typeof before;
@@ -401,7 +601,7 @@ suite('journal real-browser acceptance against isolated PostgreSQL', () => {
       expect(after.reserved).toBe(before.reserved);
       expect(after.consumed).toBe(before.consumed);
 
-      await page.goto(`${baseUrl}/journals/manage/${journalId}/services`, { waitUntil: 'networkidle' });
+      await page.getByRole('navigation', { name: '期刊管理功能' }).getByRole('link', { name: '服务包与额度' }).click();
       await page.getByRole('radio', { name: /Starter/ }).check();
       await page.getByLabel('需求说明', { exact: true }).fill('Synthetic browser service request; no purchase or entitlement activation.');
       const serviceResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/journals/${journalId}/service-requests`));

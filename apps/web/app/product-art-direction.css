@@ -1,35 +1,60 @@
-/* Shared composition layer for non-Landing OpenScience surfaces. */
+/* Non-Landing paper surfaces share a quiet canvas. Content determines the grid. */
 [data-os-surface='public'][data-surface-role='public-reading'] > main#main-content {
   position: relative;
   isolation: isolate;
-  overflow: clip;
-  background: var(--os-paper);
-}
-[data-os-surface='public'][data-surface-role='public-reading'] > main#main-content::after {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
-  width: 392px;
-  border-left: 1px solid rgb(18 93 102 / .12);
-  background: #eaf1f1;
-  content: '';
-  pointer-events: none;
+  background: #f5f7f6;
 }
 [data-os-surface='public'][data-surface-role='public-reading'] > .shell-header {
-  background: rgb(255 255 255 / .88);
-  box-shadow: 0 1px 0 rgb(24 47 53 / .08);
+  background: #fff;
+  border-bottom: 1px solid #dce3e1;
+  box-shadow: none;
 }
-@media (min-width: 1100px) {
-  [data-os-surface='public'] > main#main-content > [data-explore-index='true'],
-  [data-os-surface='public'] > main#main-content.craft-journal-public > section {
-    padding-right: 392px;
-  }
+.craft-journal-public > section {
+  width: min(100%, 1280px);
+  margin-inline: auto;
+  padding-inline: 48px;
 }
-@media (max-width: 1099px) {
-  [data-os-surface='public'][data-surface-role='public-reading'] > main#main-content::after { display: none; }
+.craft-journal-public .journal-directory-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: center;
+  gap: 56px;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  [data-os-surface='public'][data-surface-role='public-reading'] > .shell-header { backdrop-filter: none; }
+.craft-journal-public .journal-directory-heading h1 {
+  margin-block: 20px;
+  font: 400 clamp(44px, 4.4vw, 64px)/1.2 var(--font-reading-serif);
+  letter-spacing: -.04em;
+  color: #153b40;
+}
+.craft-journal-public .journal-directory-heading p { max-width: 38em; }
+.craft-journal-public .journal-directory-companion { width: 100%; max-width: 320px; min-height: 140px; }
+.craft-journal-public .journal-directory-companion .hermes-dock-anchor { width: 120px; min-height: 140px; }
+@media (max-width: 1100px) {
+  .craft-journal-public > section { padding-inline: 32px; }
+  .craft-journal-public .journal-directory-heading { grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; }
+  .craft-journal-public .journal-directory-companion .hermes-dock-anchor { width: 120px; min-height: 140px; }
+}
+@media (max-width: 700px) {
+  .craft-journal-public > section { padding-inline: 20px; }
+  .craft-journal-public .journal-directory-heading { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .craft-journal-public .journal-directory-companion { margin-top: 24px; }
+  .craft-journal-public .journal-directory-heading h1 { font-size: 44px; }
+}
+.craft-journal-public:has([data-journal-directory]) { max-width: none; padding: 32px 0 72px; }
+.craft-journal-public .journal-directory-heading > div > p:first-child { color: #54686b; font-size: 11px; letter-spacing: .08em; }
+.craft-journal-public .journal-directory-heading > div > p:last-child { color: #54686b; font-size: 16px; line-height: 1.85; }
+@media (max-width: 700px) {
+  .craft-journal-public:has([data-journal-directory]) { padding-top: 4px; }
+  .craft-journal-public .journal-directory-heading h1 { margin-block: 12px; font-size: 40px; }
+  .craft-journal-public .journal-directory-companion { min-height: 120px; margin-top: 12px; }
+  .craft-journal-public .journal-directory-companion .hermes-dock-anchor { min-height: 120px; }
+}
+@media (max-width: 760px) {
+  [data-hermes-companion-surface='navigation'][data-hermes-compact='true'] { width: 120px; height: 120px; }
+  .hermes-compact-dock[data-hermes-compact-placement='anchored'] { width: 120px; height: 140px; }
+  .hermes-compact-dock[data-hermes-compact-placement='anchored'] .hermes-compact-invoke { display: none; }
+  .craft-journal-public .journal-directory-heading { grid-template-columns: minmax(0,1fr); gap: 0; }
+  .craft-journal-public .journal-directory-heading > div > p:last-child { font-size: 16px; }
 }

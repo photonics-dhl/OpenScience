@@ -5,6 +5,13 @@ import { PublicJournalRelease } from '../components/journals/PublicJournalReleas
 import { journalArticlePermissions } from '../components/journals/JournalArticleWorkbench';
 import { shouldOfferHomepageActivation } from '../components/journals/JournalManagementWorkbench';
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/research/OSR-1/v/3',
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
+
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
 describe('journal role screens', () => {
@@ -45,6 +52,9 @@ describe('public journal derivative screen', () => {
     expect(markup).toContain('Measured value');
     expect(markup).toContain('Figure 1');
     expect(markup).toContain('What changed?');
+    expect(markup).toContain('data-journal-reading-companion="release"');
+    expect(markup.match(/data-hermes-dock-anchor="true"/g)).toHaveLength(1);
+    expect(markup).not.toContain('data-hermes-floating-owner');
   });
 });
 

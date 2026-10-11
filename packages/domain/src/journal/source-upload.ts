@@ -104,10 +104,6 @@ export async function uploadJournalSource(deps: WorkspaceDeps & { storage: Stora
       if (journalSourceDigest({ source: staged.source, rights: EMPTY_RIGHTS }) !== current.sourceDigest) throw new JournalError('REVISION_CONFLICT', '来源或授权已改变，请使用新的请求标识重试');
       if (await tx.journalJob.count({ where: { articleId, id: { not: current.id }, state: { in: ['staging', 'pending', 'running'] } } })) throw new JournalError('INVALID_STATE', '请先完成或取消此论文的已有作业');
       await tx.journalArticle.update({ where: { id: articleId }, data: { source: journalJson(staged.source), rights: journalJson(EMPTY_RIGHTS), draft: Prisma.DbNull, revision: { increment: 1 }, reviewState: 'draft', reviewedRevision: null, reviewedDigest: null, reviewedBy: null } });
-      if (await tx.journalRelease.count({ where: { articleId } })) {
-        await tx.researchObject.update({ where: { id: article.researchObjectId }, data: { visibility: 'private', status: 'restricted' } });
-        await tx.version.updateMany({ where: { researchObjectId: article.researchObjectId, status: 'published' }, data: { status: 'restricted' } });
-      }
       const descriptor = current.result as Record<string, unknown> | null;
       const pending = await tx.journalJob.update({ where: { id: current.id }, data: { result: journalJson({ ...descriptor, awaitingRights: true }) } });
       await journalArticleEvent(tx, journalId, userId, 'journal.source.upload', articleId, { jobId: current.id, bytes: input.content.length, sourceDigest: current.sourceDigest });

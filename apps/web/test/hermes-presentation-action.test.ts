@@ -1,7 +1,34 @@
 import { expect, it } from 'vitest';
-import { selectPresentationVersion, presentationSources, SubmissionIntent, validPresentationInstruction, hasCurrentPresentationSources } from '../lib/hermes/presentation-action';
+import { selectPresentationVersion, presentationSources, SubmissionIntent, validPresentationInstruction, hasCurrentPresentationSources, newestEligibleStoryboard, presentationVideoFrameIds, presentationStoryboardRequest, hasSingleReviewedPaperSource } from '../lib/hermes/presentation-action';
 import type { VersionSummary, PresentationAsset, PresentationClaim } from '../lib/api';
 const versions = [{versionId:'published',status:'published'},{versionId:'draft',status:'draft'}] as VersionSummary[];
+
+it('recognizes only the selected successful claims from one reviewed paper', () => {
+  const claims = [{ id: 'a', extractionStatus: 'succeeded', provenance: { source: 'reviewed_ingestion', sourceTaskId: 'source-a' } },
+    { id: 'b', extractionStatus: 'succeeded', provenance: { sourceTaskLineage: 'source-a' } },
+    { id: 'c', extractionStatus: 'succeeded', provenance: { sourceTaskLineage: 'source-b' } }] as PresentationClaim[];
+  expect(hasSingleReviewedPaperSource(['a', 'b'], claims)).toBe(true);
+  expect(hasSingleReviewedPaperSource(['a', 'c'], claims)).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a', 'missing'], claims)).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a'], [{ ...claims[0]!, extractionStatus: 'failed' }])).toBe(false);
+  expect(hasSingleReviewedPaperSource(['a'], [{ ...claims[0]!, provenance: { source: 'human' } }])).toBe(false);
+  expect(hasSingleReviewedPaperSource([], claims)).toBe(false);
+});
+
+it('uses one native paper scene only for a new focused image and preserves all other requests', () => {
+  const input = { action: 'storyboard.create' as const, output: 'image' as const, locale: 'zh' as const,
+    style: 'auto', instruction: 'Explain the author intent', singlePaperImage: true };
+  expect(presentationStoryboardRequest(input)).toEqual({ locale: 'zh', style: 'auto', output: 'image',
+    instruction: 'Explain the author intent', narrative: true, narrativeSceneLimit: 1 });
+  const figurePlan = { figures: [{ id: 'Fig. 1', decision: 'abstract' as const }] };
+  expect(presentationStoryboardRequest({ ...input, figurePlan })).toMatchObject({ figurePlan });
+  expect(presentationStoryboardRequest({ ...input, figurePlan })).not.toHaveProperty('narrativeSceneLimit');
+  const parent = { id: 'base', storyboard: { output: 'image', narrative: true } } as PresentationAsset;
+  const revised = presentationStoryboardRequest({ ...input, action: 'storyboard.revise', parent, revisionMode: 'art' });
+  expect(revised).toMatchObject({ baseAssetId: 'base', revisionMode: 'art' });
+  expect(revised).not.toHaveProperty('narrativeSceneLimit');
+  expect(presentationStoryboardRequest({ ...input, singlePaperImage: false })).not.toHaveProperty('narrative');
+});
 it('never substitutes an explicit version and defaults only to a draft',()=>{
  expect(selectPresentationVersion(versions,'missing')).toBeNull();
  expect(selectPresentationVersion(versions,'published')?.status).toBe('published');
@@ -36,4 +63,37 @@ it('blocks rejected parents, unsuccessful sources and overlong instructions',()=
  expect(hasCurrentPresentationSources(['a'],[{id:'a',extractionStatus:'succeeded'}] as PresentationClaim[])).toBe(true);
  expect(validPresentationInstruction('x'.repeat(1000))).toBe(true);
  expect(validPresentationInstruction('x'.repeat(1001))).toBe(false);
+});
+
+it('uses server-qualified native drafts without requiring intermediate user adoption', () => {
+ const parent = { id:'native',kind:'interactive_html',status:'draft',updatedAt:'2026-10-08',canGenerateSceneImage:true,canGenerateVideo:true,sourceClaimIds:['claim'],
+  videoFrameAssetIds:['frame-b','frame-a','frame-c'],storyboard:{output:'video',narrative:true,document:{scenes:[{},{},{}]}} } as PresentationAsset;
+ expect(newestEligibleStoryboard([parent],'video.create')).toBe(parent);
+ expect(newestEligibleStoryboard([parent],'scene.image')).toBe(parent);
+ expect(presentationSources('scene.image',[],parent,1)).toEqual(['claim']);
+ expect(newestEligibleStoryboard([{...parent,canGenerateVideo:false}],'video.create')).toBeUndefined();
+ expect(newestEligibleStoryboard([{...parent,status:'rejected'}],'video.create')).toBeUndefined();
+ const decoy = {id:'unreviewed',kind:'image',status:'approved',sceneImage:{storyboardAssetId:'native',sceneIndex:0}} as PresentationAsset;
+ expect(presentationVideoFrameIds(parent,[decoy])).toEqual(['frame-b','frame-a','frame-c']);
+ expect(presentationVideoFrameIds({...parent,videoFrameAssetIds:undefined},[decoy])).toEqual([]);
+});
+
+it('keeps native video and local scene scope in the submitted storyboard request', () => {
+ const parent = {id:'base',storyboard:{output:'video'}} as PresentationAsset;
+ expect(presentationStoryboardRequest({action:'storyboard.create',output:'video',locale:'en',style:'auto',instruction:'Explain this paper'})).toEqual({
+  output:'video',narrative:true,locale:'en',style:'auto',instruction:'Explain this paper',
+ });
+ expect(presentationStoryboardRequest({action:'storyboard.revise',output:'image',locale:'en',style:'auto',instruction:'Fix scene three',parent,revisionSceneIndex:2})).toEqual({
+  output:'video',narrative:true,locale:'en',style:'auto',instruction:'Fix scene three',baseAssetId:'base',revisionSceneIndex:2,
+ });
+ expect(presentationStoryboardRequest({action:'storyboard.create',output:'image',locale:'zh',style:'ink',instruction:'Draw the mechanism',revisionSceneIndex:2})).toEqual({
+  output:'image',locale:'zh',style:'ink',instruction:'Draw the mechanism',
+ });
+});
+
+it('preserves the existing legacy manual frame order without applying it to native drafts', () => {
+ const parent = {id:'legacy',canGenerateVideo:true,storyboard:{output:'video',document:{scenes:[{},{},{}]}}} as PresentationAsset;
+ const frames = [2,0,1].map(index => ({id:`frame-${index}`,kind:'image',status:'approved',sceneImage:{storyboardAssetId:'legacy',sceneIndex:index}} as PresentationAsset));
+ expect(presentationVideoFrameIds(parent,frames)).toEqual(['frame-0','frame-1','frame-2']);
+ expect(presentationVideoFrameIds({...parent,canGenerateVideo:false},frames)).toEqual([]);
 });

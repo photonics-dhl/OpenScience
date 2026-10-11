@@ -21,9 +21,9 @@
   margin: 12px 0 24px;
   color: var(--os-ink);
   font-family: var(--font-reading-serif, Georgia, serif);
-  font-size: clamp(30px, 3.4vw, 42px);
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: clamp(30px, 3vw, 38px);
+  font-weight: 400;
+  line-height: 1.28;
   letter-spacing: -.02em;
   overflow-wrap: anywhere;
   text-wrap: balance;

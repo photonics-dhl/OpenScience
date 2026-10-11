@@ -36,7 +36,10 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
     if (!turn || binding.taskId !== input.taskId || binding.runtimeId !== input.execution.runtimeId
       || binding.skillCatalogueId !== input.execution.skillCatalogueId || binding.model !== input.execution.model) blocked();
     const reference: NativeAgentCheckpointReference = { taskId: input.taskId, objectKey, serializedSha256: hash, size: bytes.length,
-      artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash,
+      ...(binding.sourceKind === 'illustration-image' ? { sourceKind: 'illustration-image' as const, imageIdentity: {
+        requestId: binding.imageReview.requestId, contentHash: binding.imageReview.contentHash,
+        sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity, parentIdentity: binding.imageReview.parentIdentity,
+      } } : { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash }),
       executionAttempt: input.executionAttempt, turnCount: state.turns.length, state: turn.state, target: turn.target,
       ...(turn.state === 'completed' ? { responseHash: sha(turn.response.text), finishReason: turn.response.finishReason,
         hasToolCalls: Boolean(turn.response.toolCalls?.length) } : {}) };
@@ -94,8 +97,13 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
       const state = JSON.parse(bytes.toString('utf8')) as NativeAgentSessionState;
       const turn = state.turns?.at(-1);
       if (state.binding?.sourceKind === 'journal-text') blocked();
-      if (state.kind !== 'hermes-native-agent' || state.binding?.taskId !== cp.taskId || state.binding.artifactId !== cp.artifactId
-        || state.binding.documentSha256 !== cp.documentSha256 || state.binding.sourceMapHash !== cp.sourceMapHash
+      const binding = state.binding;
+      const sameSource = binding?.sourceKind === 'illustration-image' ? cp.sourceKind === 'illustration-image'
+        && isDeepStrictEqual(cp.imageIdentity, { requestId: binding.imageReview.requestId, contentHash: binding.imageReview.contentHash,
+          sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity, parentIdentity: binding.imageReview.parentIdentity })
+        : cp.sourceKind === undefined && binding.artifactId === cp.artifactId
+          && binding.documentSha256 === cp.documentSha256 && binding.sourceMapHash === cp.sourceMapHash;
+      if (state.kind !== 'hermes-native-agent' || state.binding?.taskId !== cp.taskId || !sameSource
         || state.binding.runtimeId !== input.execution.runtimeId || state.binding.skillCatalogueId !== input.execution.skillCatalogueId
         || state.binding.model !== input.execution.model || state.turns.length !== cp.turnCount || turn?.state !== cp.state
         || !isDeepStrictEqual(turn.target, cp.target)

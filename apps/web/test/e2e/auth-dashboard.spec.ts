@@ -1,6 +1,26 @@
 import { expect, test, type Page } from 'playwright/test';
+import type { ResearchObjectSummary, SdfCore } from '../../lib/api';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
+
+async function fillNewResearchTitle(page: Page, title: string) {
+  await page.locator('summary').filter({ hasText: /^Workspace and title$/ }).click();
+  await page.getByLabel('Title (optional)', { exact: true }).fill(title);
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
+  await page.context().route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    const anonymousRead = url.pathname === '/api/auth/me'
+      || (url.pathname === '/api/research-objects' && url.search === '?limit=20')
+      || (url.pathname === '/api/agent/tasks' && url.search === '?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal');
+    if (route.request().method() === 'GET' && anonymousRead) {
+      return route.fulfill({ status: 401, json: { error: { code: 'SESSION_INVALID', message: 'Not signed in' } } });
+    }
+    throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
+  });
+});
 
 async function mockAuthenticatedUser(page: Page, options: {
   researchObjects?: unknown[];
@@ -10,6 +30,11 @@ async function mockAuthenticatedUser(page: Page, options: {
   // Dashboard literature recovery is part of the current read contract.
   // Individual retrieval tests override these defaults with more specific fixtures.
   await page.route('**/api/agent/tasks?**', async (route) => {
+    const { searchParams } = new URL(route.request().url());
+    const guide = searchParams.get('kind') === 'workspace.guide' && searchParams.size === 2;
+    const literature = searchParams.get('kind') === 'source.retrieve' && searchParams.get('recovery') === 'true'
+      && searchParams.get('targetKind') === 'personal' && searchParams.size === 4;
+    if (route.request().method() !== 'GET' || searchParams.get('actionable') !== 'false' || (!guide && !literature)) return route.fallback();
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
   });
   await page.route('**/api/auth/me', async (route) => {
@@ -31,7 +56,7 @@ async function mockAuthenticatedUser(page: Page, options: {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: options.tasks ?? [] }) });
   });
   await page.route('**/api/workspaces', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner' }] }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner', status: 'active' }] }) });
   });
 }
 
@@ -120,6 +145,14 @@ for (const viewport of [
 ]) {
   test(`dashboard navigation remains complete at ${viewport.name} width`, async ({ page }) => {
     let uploadedBody = '';
+    const writes: string[] = [];
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method()))
+        writes.push(`${request.method()} ${path}`);
+    });
+    const core = { schemaVersion: 1, problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const researchObject = { id: 'ro-created', workspaceId: 'workspace-1', title: 'Imported study', status: 'draft', visibility: 'private', version: 1, sdf: { core, nodes: [] } };
     await page.setViewportSize(viewport);
     await mockAuthenticatedUser(page);
     await page.route('**/api/csrf-token', async (route) => {
@@ -130,7 +163,7 @@ for (const viewport of [
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
-        body: JSON.stringify({ researchObject: { id: 'ro-created', workspaceId: 'workspace-1', version: 1 } }),
+        body: JSON.stringify({ researchObject }),
       });
     });
     const tasks = [
@@ -150,39 +183,61 @@ for (const viewport of [
     await page.route('**/api/ingestion/batch-1', async (route) => {
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-created', tasks }) });
     });
+    await page.route('**/api/**', route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() !== 'GET') return route.fallback();
+      if (url.pathname === '/api/research-objects/ro-created') return route.fulfill({ json: { researchObject } });
+      if (url.pathname === '/api/research-objects/ro-created/authors') return route.fulfill({ json: { authors: [] } });
+      if (url.pathname === '/api/research-objects/ro-created/versions') return route.fulfill({ json: { versions: [] } });
+      if (url.pathname === '/api/research-objects/ro-created/ingestion') return route.fulfill({ json: { researchObjectId: researchObject.id, version: 1, tasks: tasks.map(task => ({ ...task, confirmation: null })), latestConfirmation: null } });
+      if (url.pathname === '/api/ingestion/tasks/task-paper') return route.fulfill({ json: { researchObjectId: researchObject.id, batchId: 'batch-1', version: 1, task: { ...tasks[0], result: { core: { ...core, problem: 'Imported evidence' } } } } });
+      if (url.pathname === '/api/research-objects/ro-created/hermes-runs' && url.searchParams.get('ingestionTaskId') === tasks[0].id) return route.fulfill({ json: { run: null } });
+      const literature = url.pathname === '/api/agent/tasks' && url.searchParams.get('actionable') === 'false'
+        && url.searchParams.get('kind') === 'source.retrieve' && url.searchParams.get('recovery') === 'true'
+        && url.searchParams.get('targetKind') === 'research_object' && url.searchParams.get('researchObjectId') === researchObject.id && url.searchParams.size === 5;
+      if (literature) return route.fulfill({ json: { tasks: [] } });
+      return route.fallback();
+    });
     await page.goto(`${baseUrl}/dashboard`);
 
-    await expect(page.getByRole('heading', { name: /research dashboard/i })).toBeVisible();
-    await expect(page.locator('[data-action-priority="primary"]').filter({ hasText: /upload materials/i })).toHaveAttribute(
+    await expect(page.getByRole('heading', { name: /research desk/i })).toBeVisible();
+    await expect(page.locator('[data-action-priority="primary"]')).toHaveAttribute(
       'href',
       '/research-objects/new?mode=import',
     );
-    await expect(page.getByRole('link', { name: /create blank ro/i })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /start from blank/i })).toHaveAttribute(
       'href',
       '/research-objects/new?mode=blank',
     );
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflow).toBe(false);
-    await page.locator('[data-action-priority="primary"]').filter({ hasText: /upload materials/i }).click();
+    await page.locator('[data-action-priority="primary"]').click();
     await expect(page).toHaveURL(`${baseUrl}/research-objects/new?mode=import`);
-    await expect(page.getByRole('heading', { name: /create a research object/i })).toBeVisible();
-    await page.getByLabel(/research title/i).fill('Imported study');
+    await expect(page.getByRole('heading', { name: 'New research', level: 1, exact: true })).toBeVisible();
+    await fillNewResearchTitle(page, 'Imported study');
     await page.getByLabel(/choose files/i).setInputFiles([
       { name: 'paper.md', mimeType: 'text/markdown', buffer: Buffer.from('# evidence') },
       { name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('png') },
       { name: 'measurements.csv', mimeType: 'text/csv', buffer: Buffer.from('x,y\n1,2') },
       { name: 'analysis.py', mimeType: 'text/x-python', buffer: Buffer.from('print(1)') },
     ]);
-    await page.getByRole('button', { name: /create research object/i }).click();
-    await expect(page.getByText(/evidence is ready for review/i)).toBeVisible();
-    await expect(page.getByRole('link', { name: /paper.md/i })).toHaveAttribute('href', '/research-objects/ro-created/hermes?task=task-paper');
+    await page.getByRole('button', { name: 'Start research', exact: true }).click();
+    await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-created/edit?ingestionTask=task-paper`);
+    await expect(page.getByText('Imported study', { exact: true })).toBeVisible();
+    const source = page.getByRole('combobox', { name: 'Current material', exact: true });
+    await expect(source).toHaveValue('task-paper');
+    await expect(source.locator('option:not([value=""])')).toHaveCount(4);
+    await expect(page.getByRole('link', { name: 'View task details and recovery', exact: true })).toHaveAttribute('href', '/research-objects/ro-created/hermes?task=task-paper');
     for (const filename of ['paper.md', 'figure.png', 'measurements.csv', 'analysis.py']) expect(uploadedBody).toContain(filename);
+    expect(uploadedBody.match(/name="file"; filename="/g)).toHaveLength(4);
+    expect(writes).toEqual(['POST /api/research-objects', 'POST /api/research-objects/ro-created/ingest']);
     const finalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(finalOverflow).toBe(false);
   });
 }
 
-test('dashboard binds Hermes portrait and queue to the same real approval task', async ({ page }) => {
+test('dashboard keeps the real task reachable in history without duplicating the companion', async ({ page }) => {
   const task = {
     id: 'ingestion-review-1',
     researchObjectId: 'ro-1',
@@ -197,10 +252,27 @@ test('dashboard binds Hermes portrait and queue to the same real approval task',
     researchObjects: [{ id: 'ro-1', publicId: 'OSR-2026-000123', title: task.researchTitle, version: 3, status: 'draft' }],
     tasks: [task],
   });
+  const researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } = {
+    id: 'ro-1', workspaceId: 'workspace-1', publicId: 'OSR-2026-000123', title: task.researchTitle,
+    status: 'draft', visibility: 'private', version: 3, createdAt: '2026-10-10T00:00:00Z',
+    sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] },
+  };
+  for (const [path, body] of [
+    ['/api/research-objects/ro-1', { researchObject }],
+    ['/api/research-objects/ro-1/versions', { versions: [] }],
+  ] as const) {
+    await page.route(url => url.pathname + url.search === path, route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({ json: body });
+    });
+  }
 
   await page.goto(`${baseUrl}/dashboard`);
-  const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
-  await expect(page.locator(`[href="${href}"]`)).toHaveCount(2);
+  const href = `/research-objects/${task.researchObjectId}/edit?ingestionTask=${task.id}`;
+  await expect(page.locator(`[href="${href}"]`)).toHaveCount(1);
+  await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
+  await page.getByText('Processing history', { exact: true }).first().click();
+  await expect(page.locator(`[href="${href}"]`)).toBeVisible();
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
   await expect(page.locator('[data-live2d-instance="wanko"]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
@@ -208,7 +280,8 @@ test('dashboard binds Hermes portrait and queue to the same real approval task',
   await page.screenshot({ path: 'test/visual/out/dashboard-approval-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(page.getByRole('heading', { name: /research dashboard/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: /research desk/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -217,6 +290,10 @@ test('dashboard binds Hermes portrait and queue to the same real approval task',
 
 test('a server-blocked material remains visible without a retry action', async ({ page }) => {
   await mockAuthenticatedUser(page);
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=ro-blocked', route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { tasks: [] } });
+  });
   await page.route('**/api/csrf-token', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) });
   });
@@ -228,9 +305,9 @@ test('a server-blocked material remains visible without a retry action', async (
   });
 
   await page.goto(`${baseUrl}/research-objects/new?mode=import`);
-  await page.getByLabel(/research title/i).fill('Blocked evidence study');
+  await fillNewResearchTitle(page, 'Blocked evidence study');
   await page.getByLabel(/choose files/i).setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg><script /></svg>') });
-  await page.getByRole('button', { name: /create research object/i }).click();
+  await page.getByRole('button', { name: 'Start research', exact: true }).click();
   await expect(page.getByText('Security scan blocked this file').first()).toBeVisible();
   await expect(page.getByText(/KB · Blocked/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);
@@ -254,11 +331,13 @@ test('personal literature acquisition recovers a running server task after reloa
   await page.route('**/api/agent/tasks/literature-reload', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: runningTask }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
+  await page.getByText('Materials and management', { exact: true }).click();
   await page.locator('[data-literature-entry] > summary').click();
   await page.getByLabel(/title, doi, or arxiv id/i).fill('Reload recovery');
   await page.getByRole('button', { name: /search metadata/i }).click();
   await expect.poll(() => submissions).toBe(1);
   await page.reload();
+  await page.getByText('Materials and management', { exact: true }).click();
   await expect(page.getByText(/retrieving source/i)).toBeVisible();
   expect(submissions).toBe(1);
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('openscience:literature:')))).toEqual([]);
@@ -286,6 +365,7 @@ for (const status of [403, 404]) {
     });
 
     await page.goto(`${baseUrl}/dashboard`);
+    await page.getByText('Materials and management', { exact: true }).click();
     await expect(page.getByText(/task could no longer be recovered/i)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByLabel(/title, doi, or arxiv id/i)).toBeEnabled();
     await page.waitForTimeout(1_500);
@@ -313,6 +393,7 @@ test('a failed source retrieval retries the same task without a new acquisition 
   await page.route('**/api/agent/tasks/literature-failed', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: succeededTask }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
+  await page.getByText('Materials and management', { exact: true }).click();
   await page.getByRole('button', { name: /try again/i }).press('Enter');
   await expect(page.getByText(/source ready/i)).toBeVisible({ timeout: 4_000 });
   expect(retries).toBe(1);
@@ -338,6 +419,7 @@ test('concurrent retry activation sends one POST and reconciles a 409 through au
   });
 
   await page.goto(`${baseUrl}/dashboard`);
+  await page.getByText('Materials and management', { exact: true }).click();
   const retry = page.getByRole('button', { name: /try again/i });
   await retry.click();
   expect(await retry.isDisabled()).toBe(true);
@@ -384,6 +466,7 @@ test('metadata selection starts a second acquisition and finishes with one tempo
     return route.fulfill({ contentType: 'application/pdf', body: '%PDF-final' });
   });
   await page.goto(`${baseUrl}/dashboard`);
+  await page.getByText('Materials and management', { exact: true }).click();
   await page.locator('[data-literature-entry] > summary').click();
   const input = page.getByLabel(/title, doi, or arxiv id/i);
   await input.focus();

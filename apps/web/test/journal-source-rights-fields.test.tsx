@@ -10,10 +10,11 @@ const value = (parts: Partial<SourceRightsValue> = {}): SourceRightsValue => ({
 });
 
 describe('journal research material rights', () => {
-  it('saves unknown materials without invented evidence or public rights', () => {
+  it('requires a real evidence statement even when rights are unknown and grants no public rights', () => {
     const draft = value();
-    expect(sourceRightsIssues(draft, 'abstract')).toEqual([]);
+    expect(sourceRightsIssues(draft, 'abstract')).toEqual(['needsEvidence']);
     expect(Object.values(draft.permissions).every((allowed) => !allowed)).toBe(true);
+    expect(sourceRightsIssues(value({ evidence: 'Publisher notice reviewed by editor' }), 'abstract')).toEqual([]);
   });
 
   it('requires evidence for an asserted status, and license only for derivative or public tasks', () => {
@@ -43,6 +44,7 @@ describe('journal research material rights', () => {
     expect(html).toContain('aria-describedby="material-status-help"');
     expect(html).toContain('aria-describedby="material-license-help"');
     expect(html).toContain('aria-describedby="material-evidence-help"');
+    expect(html).toContain('aria-required="true"');
     expect(html).toContain('处理可能将论文文本发送至配置的外部模型服务');
     expect(html).toContain('公开原文');
     expect(html).toContain('复用原图');

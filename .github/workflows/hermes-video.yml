@@ -6,7 +6,7 @@ name: Hermes video
 on:
   workflow_dispatch:
   push:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - 'infra/codex-image-runner/video-*'
       - 'infra/codex-image-runner/minimax-video-*'
@@ -14,6 +14,16 @@ on:
       - 'infra/codex-image-runner/core.test.mjs'
       - 'packages/ai-gateway/src/minimax-video*.ts'
       - 'packages/ai-gateway/src/minimax-speech.ts'
+      - 'packages/ai-gateway/src/synclip-video-api.ts'
+      - 'packages/ai-gateway/test/synclip-video-api.test.ts'
+      - 'packages/ai-gateway/src/synclip-audio-api.ts'
+      - 'packages/ai-gateway/test/synclip-audio-api.test.ts'
+      - 'infra/synclip-video/**'
+      - 'apps/agent-worker/src/presentation/synclip-video-spool.ts'
+      - 'apps/agent-worker/test/synclip-video-spool.test.ts'
+      - 'apps/agent-worker/src/presentation/handler.ts'
+      - 'apps/agent-worker/src/presentation/host-video-spool.ts'
+      - 'apps/agent-worker/test/presentation/video-reference-handoff.test.ts'
       - 'packages/ai-gateway/test/minimax-speech.test.ts'
       - 'apps/media-demo/**'
       - 'packages/ai-gateway/test/minimax-video*.test.ts'
@@ -21,7 +31,7 @@ on:
       - 'packages/ai-gateway/test/fixtures/minimax-reference.png'
       - '.github/workflows/hermes-video.yml'
   pull_request:
-    branches: [release/onchip-production-line]
+    branches: [release/onchip-production-line, frontend/nanqing]
     paths:
       - 'infra/codex-image-runner/video-*'
       - 'infra/codex-image-runner/minimax-video-*'
@@ -29,6 +39,16 @@ on:
       - 'infra/codex-image-runner/core.test.mjs'
       - 'packages/ai-gateway/src/minimax-video*.ts'
       - 'packages/ai-gateway/src/minimax-speech.ts'
+      - 'packages/ai-gateway/src/synclip-video-api.ts'
+      - 'packages/ai-gateway/test/synclip-video-api.test.ts'
+      - 'packages/ai-gateway/src/synclip-audio-api.ts'
+      - 'packages/ai-gateway/test/synclip-audio-api.test.ts'
+      - 'infra/synclip-video/**'
+      - 'apps/agent-worker/src/presentation/synclip-video-spool.ts'
+      - 'apps/agent-worker/test/synclip-video-spool.test.ts'
+      - 'apps/agent-worker/src/presentation/handler.ts'
+      - 'apps/agent-worker/src/presentation/host-video-spool.ts'
+      - 'apps/agent-worker/test/presentation/video-reference-handoff.test.ts'
       - 'packages/ai-gateway/test/minimax-speech.test.ts'
       - 'apps/media-demo/**'
       - 'packages/ai-gateway/test/minimax-video*.test.ts'
@@ -52,10 +72,29 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Prepare codecs for narrated-video acceptance
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter '@openscience/ai-gateway...' build
+      - name: Synclip host update and rollback in isolated shell fixtures
+        run: node --test infra/synclip-video/install.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/minimax-video.test.ts test/minimax-video-download.test.ts test/minimax-speech.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-video-api.test.ts test/synclip-audio-api.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/synclip-video-spool.test.ts
+      - run: npx pnpm@9.15.0 --filter '@openscience/domain...' build
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/presentation/video-reference-handoff.test.ts
+      - name: Synclip offline receipts and Linux frame confinement
+        env:
+          CI: 'true'
+        run: node --test infra/synclip-video/broker.test.mjs infra/synclip-video/image-reference.test.mjs
+      - run: bash -n infra/synclip-video/install.sh
       - run: node --test apps/media-demo/test/artwork-explainer.test.mjs apps/media-demo/test/storyboard-input.test.mjs
       - name: Linux root-owned runner recovery, no Docker or provider requests
         run: sudo "$(command -v node)" --test infra/codex-image-runner/core.test.mjs infra/codex-image-runner/video-runner.test.mjs infra/codex-image-runner/minimax-video-pilot.test.mjs infra/codex-image-runner/minimax-video-download.test.mjs infra/codex-image-runner/video-narration-pilot.test.mjs

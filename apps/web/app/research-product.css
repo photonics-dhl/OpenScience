@@ -30,6 +30,15 @@
 .research-product :is(h1, h2, h3, h4, button, textarea, input, select) { font-family: inherit; }
 .research-product :is(button, a, summary, input, textarea, select):focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 3px; }
 .research-product :is(button, a, summary) { -webkit-tap-highlight-color: transparent; }
+
+/* The compact actor and its invitation occupy one page-owned reading margin. */
+.hermes-anchored-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; width: 100%; max-width: 360px; min-width: 0; min-height: 140px; }
+.hermes-anchored-entry > .hermes-dock-anchor { flex: 0 0 120px; width: 120px; min-height: 140px; margin: 0; }
+.hermes-anchored-entry-copy { flex: 1 1 144px; min-width: 0; color: var(--craft-ink, #182f35); font-family: var(--font-ui), sans-serif; }
+.hermes-anchored-entry-copy p { margin: 0 0 6px; font-size: 16px; line-height: 1.5; font-weight: 600; }
+.hermes-anchored-entry-copy > span { display: block; color: var(--craft-muted, #51666c); font-size: 13px; line-height: 1.7; }
+.hermes-anchored-entry-copy button { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; min-height: 44px; max-width: 100%; padding: 4px 0; border: 0; background: transparent; color: var(--craft-accent, #125d66); font: 500 14px/1.6 var(--font-ui); text-align: start; cursor: pointer; }
+.hermes-anchored-entry-copy button:focus-visible { outline: 2px solid var(--craft-accent, #125d66); outline-offset: 4px; }
 .research-section-title { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; color: var(--rp-ink); font-size: 20px; font-weight: 650; line-height: 1.4; }
 .research-section-title::before { content: none; }
 .research-publication-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 18px; }
@@ -96,7 +105,7 @@
 [data-os-surface='identity'] [data-auth-flow] [role='alert'] { line-height: 1.75; }
 
 /* Reading typography is deliberately separate from workbench/assistant type. */
-.pub-reading-surface.research-product .pub-reading-identity h1 { max-width: 30ch; font-family: var(--font-reading-serif); font-weight: 400; line-height: 1.3; text-wrap: balance; }
+.pub-reading-surface.research-product .pub-reading-identity h1 { max-width: 30ch; font-family: var(--font-bodoni, 'Bodoni Moda'), var(--font-noto-serif-sc, 'Songti SC'), serif; font-weight: 400; line-height: 1.16; text-wrap: balance; }
 .pub-reading-surface.research-product .pub-reading-identity h1:lang(zh) { letter-spacing: 0; }
 .pub-reading-surface.research-product .pub-reading-summary > p { max-width: 65ch; text-wrap: pretty; }
 .pub-reading-surface.research-product .pub-reading-sdf > section { padding-block: 28px; }

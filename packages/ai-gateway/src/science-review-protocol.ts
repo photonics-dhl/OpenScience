@@ -75,7 +75,7 @@ export interface ScienceReviewInput {
   /** Worker-only authorization snapshot; never serialized into the review job. */
   illustrationContext?: {
     /** Persisted server-owned task role; never taken from a user payload or browser job. */
-    imageReviewMode?: 'model-native';
+    imageReviewMode?: 'model-native' | 'agent-native';
     executionAttempt: number;
     claimContent: string;
     baseIdentity: string | null;

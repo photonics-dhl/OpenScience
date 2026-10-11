@@ -1,18 +1,100 @@
-/* The global pet owns only its floating controls; page art and layouts stay local. */
-/* The compact companion is a small floating invitation, never a page-wide
-   footer. The end safe area is transparent and only keeps the fixed stage
-   from covering the last reading action. */
+/* A single compact Live2D entry opens the complete companion. Page-owned seats
+   take precedence; the generic shell uses a small corner launcher, with end
+   space so the last reading action remains reachable. */
 body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-padding-bottom: 176px; }
 .hermes-dock-anchor--floating { position: absolute; width: 1px; height: 1px; min-height: 0; pointer-events: none; }
-.hermes-compact-dock[data-hermes-compact-placement='anchored'] { position: relative; inset: auto; width: 196px; height: 156px; margin-left: auto; margin-right: 0; }
-.hermes-compact-dock[data-hermes-compact-placement='anchored'] .hermes-workspace-stage[data-hermes-placement='anchored'] { position: absolute; right: 0; bottom: 0; margin: 0; }
-.hermes-compact-dock { --os-vermilion-ink: #125d66; --os-rule-paper: #dce3e5; position: fixed; bottom: 12px; right: 12px; z-index: 44; width: 196px; height: 156px; pointer-events: none; }
-.hermes-compact-invoke { position: absolute; right: 128px; bottom: 10px; display: grid; gap: 2px; min-width: max-content; padding: 7px 11px; border: 1px solid var(--os-rule-paper); border-radius: 999px; background: rgb(255 255 255 / .94); color: var(--os-muted-paper); font: 500 11px/1.35 var(--font-ui); text-align: left; cursor: pointer; pointer-events: auto; box-shadow: 0 4px 16px rgb(24 47 53 / .1); }
-.hermes-compact-invoke span { color: var(--os-vermilion-ink); font-size: 13px; }
-.hermes-compact-invoke:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
+.hermes-dock-anchor[data-hermes-compact-context='true'] { width: 120px; min-height: 140px; }
+.hermes-avatar-entry {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true'] {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  margin: 0;
+}
+.hermes-avatar-entry-label {
+  display: flex;
+  min-height: 64px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--os-ink);
+  text-align: left;
+  font: 600 16px/1.4 var(--font-ui);
+  cursor: pointer;
+}
+.hermes-avatar-entry-label small { color: var(--os-muted-paper); font: 400 12px/1.6 var(--font-ui); }
+.hermes-avatar-entry-label:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 4px; }
+.hermes-avatar-entry[data-hermes-entry-open='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true'] {
+  width: 0;
+  min-width: 0;
+  visibility: hidden;
+}
+.hermes-compact-dock[data-hermes-avatar='true'][data-hermes-compact-placement] { width: 64px; height: 64px; background: transparent; border-radius: 50%; box-shadow: none; }
+.hermes-compact-dock[data-hermes-avatar='true'][data-hermes-compact-placement='fallback'] { visibility: hidden; }
+.hermes-compact-dock .hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-compact='true'] {
+  top: 0;
+  right: 0;
+  min-width: 64px;
+  min-height: 64px;
+  margin: 0;
+  opacity: 1;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual {
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: 50%;
+  background: var(--os-paper-strong);
+  pointer-events: auto;
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:focus-visible { outline: 2px solid var(--os-vermilion-ink); outline-offset: 3px; }
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true']:has([data-hermes-menu-open='true']) { min-height: 64px; }
+.hermes-avatar-entry .hermes-dock-anchor[data-hermes-avatar-anchor='true']:has([data-hermes-menu-open='true']) .hermes-workspace-stage[data-hermes-avatar='true'] { margin: 0; }
+.hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-compact='true'] .hermes-companion-actor {
+  inset: auto;
+  left: -48px;
+  top: -8px;
+  width: 160px;
+  height: 160px;
+  opacity: 1;
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] :is(.hermes-motion-enable, .hermes-pet-menu-button, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
+.hermes-workspace-stage[data-hermes-avatar='true'][data-hermes-motion-preference='full'][data-hermes-presentation-state='awaiting_approval'] .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-wanko-carrier { animation: hermes-carrier-hover 6.2s ease-in-out infinite !important; }
+@media (hover: hover) and (pointer: fine) {
+  .hermes-avatar-entry-label:hover { color: var(--os-vermilion-ink); }
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:hover { background: var(--os-paper); }
+}
+.hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual { transition: none; }
+  .hermes-workspace-stage[data-hermes-avatar='true'] .hermes-visual:active { transform: none; }
+}
+body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { display: none; }
+.hermes-editor-anchor:not([hidden]) { width: 120px; min-height: 140px; margin: 16px auto; }
+.hermes-editor-anchor[hidden] { display: none; }
+.hermes-compact-dock { position: fixed; bottom: 12px; right: 12px; z-index: 44; width: 120px; height: 140px; border-radius: 12px; background: var(--os-paper-strong); box-shadow: inset 0 0 0 1px var(--os-rule-paper); pointer-events: none; }
+.hermes-compact-dock[data-hermes-compact-placement='anchored'] { position: relative; inset: auto; margin-left: auto; margin-right: 0; }
+.hermes-compact-dock .hermes-workspace-stage[data-hermes-compact='true'] { position: absolute; top: 10px; right: 0; bottom: auto; margin: 0; }
 .hermes-workspace-stage[data-hermes-compact='true'] { touch-action: manipulation; }
 .hermes-workspace-stage[data-hermes-compact='true'] .hermes-companion-actor { inset: 0; }
-.hermes-workspace-stage[data-hermes-compact='true'] :is(.hermes-pet-menu-button, .hermes-motion-enable, .hermes-visual-state-label, .hermes-visual-invoke-label, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
+.hermes-workspace-stage[data-hermes-compact='true'] :is(.hermes-pet-menu-button, .hermes-motion-enable:not([data-motion-runtime='fallback']), .hermes-visual-state-label, .hermes-visual-invoke-label, .hermes-menu-feedback, .hermes-performance-bubble) { display: none; }
 [data-hermes-conversation-companion='true'] { display: none; }
 .drawer.hermes-companion-invitation { width: min(440px, calc(100vw - 24px)); top: 12px; right: 12px; bottom: 12px; height: auto; border-radius: 16px; background: var(--os-paper-strong); overflow-y: auto; }
 .hermes-companion-invitation [data-hermes-conversation-companion='true'] { display: grid; place-items: center; height: min(360px, 45dvh); margin-top: 44px; }
@@ -21,14 +103,20 @@ body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-paddin
 .hermes-companion-invitation-copy p { color: var(--os-muted-paper); font: 400 16px/1.8 var(--font-ui); }
 .hermes-companion-invitation-copy a { display: inline-flex; min-height: 48px; align-items: center; padding: 10px 20px; border-radius: 10px; background: var(--os-vermilion-ink); color: #fff; text-decoration: none; }
 [data-hermes-in-conversation='true'][data-hermes-placement='anchored'] { margin: 0; opacity: 1; pointer-events: auto; }
+[data-hermes-assistant-open='true'][data-hermes-in-conversation='false'] { visibility: hidden; }
 [data-hermes-in-conversation='true'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
-[data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
+[data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 16px; }
+.hermes-conversation-transcript > [data-hermes-conversation-companion='true'] {
+  display: grid;
+  place-items: center;
+  width: calc(100% + 40px);
+  height: 360px;
+  min-height: 7.5rem;
+  max-height: max(0px, calc(100cqh - (3.25rem - 24px)));
+  margin: calc(3.25rem - 24px) -20px 20px;
+}
 @media (max-width: 1100px) {
-  body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { position: relative; width: 100%; height: 156px; min-height: 156px; }
-  body[data-hermes-compact-navigation='true'] .hermes-dock-anchor:not(.hermes-dock-anchor--floating) { min-height: 156px; }
-  .hermes-compact-dock { width: 196px; height: 156px; background: transparent; border: 0; }
-  .hermes-compact-invoke { right: 128px; bottom: 10px; }
-  .hermes-conversation [data-hermes-conversation-companion='true'] { display: grid; flex: none; place-items: center; height: min(300px, 30dvh); border-bottom: 1px solid var(--os-rule-paper); background: #f6f9f8; }
+  .hermes-conversation-transcript > [data-hermes-conversation-companion='true'] { height: min(360px, 42dvh); }
 }
 [data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
   visibility: hidden;
@@ -174,4 +262,25 @@ body[data-hermes-compact-fallback='true'] { padding-bottom: 176px; scroll-paddin
 
 @media print {
   [data-hermes-global-companion='true'], [data-hermes-action-menu='true'] { display: none !important; }
+}
+
+/* A navigation companion is a character, not a dashboard of runtime labels. */
+[data-hermes-companion-surface='navigation'][data-hermes-placement='anchored'] { margin: 0; }
+[data-hermes-companion-surface='navigation']:not([data-hermes-compact='true']) .hermes-companion-actor { inset: 1rem; }
+[data-hermes-companion-surface='navigation'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) { display: none; }
+[data-hermes-companion-surface='navigation'] .hermes-motion-enable {
+  top: auto;
+  right: 4px;
+  bottom: 48px;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+[data-hermes-companion-surface='navigation']:is(:hover, :focus-within) .hermes-motion-enable { opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  [data-hermes-companion-surface='navigation'] .hermes-motion-enable { transition: none; }
 }

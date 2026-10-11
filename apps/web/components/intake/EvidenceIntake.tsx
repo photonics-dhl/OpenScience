@@ -12,7 +12,9 @@ import { createIntakeMaterials, setPrimaryMaterial, type IntakeMaterial, type Ma
 
 const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.pptx,.tex,.zip,.md,.markdown,.html,.htm,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.xlsx,.json,.yaml,.yml,.ipynb,.py,.r';
 
-export function EvidenceIntake({ literature, materials, onChange, onRetry, variant = 'default' }: {
+export function EvidenceIntake({ literature, materials, onChange, onRetry, variant = 'default', pdfOnly = false, disabled = false }: {
+  pdfOnly?: boolean;
+  disabled?: boolean;
   literature?: LiteratureAcquisitionProps;
   materials: IntakeMaterial[];
   onChange: (materials: IntakeMaterial[]) => void;
@@ -20,12 +22,13 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
   variant?: 'default' | 'research-start';
 }) {
   const t = useTranslations('ingestion.intake');
+  const serviceT = useTranslations('services.upload');
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const researchStart = variant === 'research-start';
 
   function add(files: File[]) {
-    if (files.length === 0) return;
+    if (disabled || files.length === 0) return;
     const additions = createIntakeMaterials(files).map((row, index) => ({ ...row, localId: `${row.localId}:${materials.length + index}` }));
     onChange([...materials, ...additions]);
   }
@@ -39,8 +42,8 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
       <div className="flex items-end justify-between gap-5 border-b border-os-rule-paper pb-4">
         <div>
           {!researchStart ? <p data-reading-role="caption" className="text-os-vermilion-ink">{t('stepLabel')}</p> : null}
-          <h2 className={`${researchStart ? '' : 'mt-2 '}text-2xl font-normal text-os-ink`} id="evidence-intake-title">{t(researchStart ? 'researchStartTitle' : 'title')}</h2>
-          {researchStart ? <p className="mt-2 text-sm leading-6 text-os-muted-paper">{t('researchStartDescription')}</p> : null}
+          <h2 className={`${researchStart ? '' : 'mt-2 '}text-2xl font-normal text-os-ink`} id="evidence-intake-title">{pdfOnly ? serviceT('title') : t(researchStart ? 'researchStartTitle' : 'title')}</h2>
+          {researchStart ? <p className="mt-2 text-sm leading-6 text-os-muted-paper">{pdfOnly ? serviceT('description') : t('researchStartDescription')}</p> : null}
         </div>
         <p className="hidden max-w-sm text-right text-sm leading-5 text-os-muted-paper sm:block">{t('localOnly')}</p>
       </div>
@@ -55,8 +58,8 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
       >
         <div>
           <FileUp className="mx-auto text-os-vermilion-ink" size={28} strokeWidth={1.5} aria-hidden="true" />
-          <p className="font-medium">{t(researchStart ? 'researchStartDropTitle' : 'dropTitle')}</p>
-          {researchStart ? (
+          <p className="font-medium">{pdfOnly ? serviceT('drop') : t(researchStart ? 'researchStartDropTitle' : 'dropTitle')}</p>
+          {pdfOnly ? <p className="mt-2 text-sm leading-5 text-os-muted-paper">{serviceT('hint')}</p> : researchStart ? (
             <>
               <p className="mt-2 text-sm leading-5 text-os-muted-paper">{t('commonFormats')}</p>
               <details className="mt-2 text-sm text-os-muted-paper">
@@ -65,8 +68,8 @@ export function EvidenceIntake({ literature, materials, onChange, onRetry, varia
               </details>
             </>
           ) : <p className="mt-2 text-sm leading-5 text-os-muted-paper">{t('formats')}</p>}
-          <button data-reading-role="control" className="mt-4 border-x-0 border-t-0 border-b border-os-vermilion-ink bg-transparent p-0 pb-1 text-sm font-semibold text-os-vermilion-ink" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
-          <input ref={input} aria-label={t('browse')} className="sr-only" type="file" multiple accept={EVIDENCE_ACCEPT} onChange={(event) => add(Array.from(event.target.files ?? []))} />
+          <button disabled={disabled} data-reading-role="control" className="mt-4 border-x-0 border-t-0 border-b border-os-vermilion-ink bg-transparent p-0 pb-1 text-sm font-semibold text-os-vermilion-ink" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
+          <input disabled={disabled} ref={input} aria-label={t('browse')} className="sr-only" type="file" multiple={!pdfOnly} accept={pdfOnly ? '.pdf,application/pdf' : EVIDENCE_ACCEPT} onChange={(event) => { add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
         </div>
       </div>
       {literature ? <div className="mt-6"><LiteratureAcquisitionDisclosure {...literature} /></div> : null}

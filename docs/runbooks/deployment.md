@@ -2,7 +2,19 @@
 
 ## 当前原生 Hermes 发布入口
 
-新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图在新API接入前暂停。实际版本、回滚身份、付费任务和科学验收只读[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
+新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图沿当前已授权的Synclip通道，启用范围与质量以[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)为准。实际版本、回滚身份与付费任务同见CURRENT。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
+
+### Native目录与关闭中的视频执行器
+
+> 原`deploy.sh --refresh-native-resources`沿同FD9事务，安装器使用`--restore-previous <candidate_sha>`；候选身份/恢复顺序的Scoped GO不覆盖未验证的实际Compose参数与源码权限合同，已知阻点、精确CI、运行锚点和串行窗口统一见CURRENT。该flag默认关闭；正常无flag路径保持原行为，不另建写门禁、锁或状态库。
+
+- 前置：沿原精确CI/High、备份和单FD9流程；journal创建/暂停前先核旧API/Web/Worker实际env、mount、image与旧Native绑定，再保存原timer层/活动及容器状态。Refresh正常stop采用Docker24的`docker stop --time -1`（无限daemon超时），客户端等待600秒，不发KILL。API/Worker须exit0且非OOM；Web须service/label、Cmd精确`npm run start`、WorkingDir精确`/opt/openscience/apps/web`，停止后exited/nonRunning/nonOOM且Error为空，才可接受原先running的exit1。重复恢复的已停Web另须rollback_quiescing、非install/restore attempting、原producer为true及持久化旧/候选ID全等；其余已停非零、137/143、身份变化及超时拒绝。这只证明停止，不证明HTTP请求排空。正式工作分类在迁移后的native-install前执行，query从Worker包目录加载，避免根包解析缺口及新Prisma读旧schema。已有旧Native marker的pending任务必须hold；未绑定合法pending队列/outbox、无lease journal及明确paid-unknown hold原样保留。running、无法解释processing、lease、Native实例/inbox阻替换，不消费清空。SDK相同不代表资源不变。
+- 执行：复用原确切构建及受保护runtime-snapshot，沿`python3 -B <候选release>/infra/hermes-agent/install.py --source <候选release> --runtime-snapshot <原构建快照> --defer-timer`制作新不可变配对。复用已装SDK，不改旧目录或手拼配对；stage必须在live写前让timer inactive+disabled。原journal先存install_attempting，严格核原四字段receipt后才存installed；无receipt中断保持停机/journal，不能猜成功。静态核candidate env/挂载/receipt，启动API/Web核binding/health，再恢复原timer层和活动，最后启动Worker；若原timer inactive且有待执行Native任务，停在Worker启动前。不能先让Worker写inbox等待已停timer。
+- 恢复源码身份：git archive的源码目录0775/文件0664须由既有release manifest校验，不将其套入私有backup/live的非group-write检查，也不chmod不可变source。restore_attempting仅是已持久化意图，不能猜测完成或直接重调installer；先核固定文件/备份与实际权限，独立审查精确恢复。恢复后保留事故与restored journal，再沿原clear helper收尾；不得清任务来放行。
+
+- 视频：Native配对不以应用video开关为前提；视频受理沿原host readiness与收费前检查。仅上线不可用提示和新收费前检查时，可保留现有关闭的host；新reader对缺旁白声明/关闭/过期返回不可用，无需为此升级host。实际启用新配音请求前才另做完整bundle升级与配置验收；配置开关不证明Key权限，不自动选音色或调用供应商。模型接单关闭与systemd timer关闭是不同事实。
+- 回滚：先执行旧app纯只读preflight（reader/迁移兼容、active身份、旧source/images），通过后才正常停candidate并分类工作、恢复Native。candidate启动前核三容器均精确配对且从未启动，将DB checkpoint与三ID原子写入原journal；之后恢复只认同一批ID，legacy无ID不可从live补造。checkpoint为空时逐项接受原ID或精确配对、从未启动的created候选，以支持完整/部分create失败；运行过或异常的新ID拒绝。rollback_quiescing可重入，但仍须工作分类通过；checkpoint之后新增/更新的未完成Native/outbox/paidunknown阻自动旧app恢复，保留candidate配对/journal。Native restore先核全部fixed files为candidate/backup/原缺失，再用原previous恢复并核旧IDs；无receipt/restore_attempting中断不猜，失败禁enable/start。旧API/Web健康配对后恢复原timer层/活动，再启原本running的旧Worker，最后health/CAS；保留新增迁移数据。旧app SHA不代替实际旧Native SHA，不删旧目录、CP或paid证据。
+- 验证：只读核应用、API/Worker、broker/task unit的实际身份与资源挂载，确认新版Skill引用和科学正文进入目录；保持视频不可用时观察原站内入口、既有任务及capability，不新增付费任务。该核对不证明模型实际消费了Skill或科研质量合格。
 
 2026-10-04用户明确正常应用发布只保留当前发布版和一个回滚版。源修复恢复在公开验收成功后、同一FD9事务内以`prepare --prune-unused 1`准备精确旧版计划，再提交并执行`complete`；准备失败仍回滚候选，提交后清理失败保留pending，不把已接受应用回滚。Host执行器使用自己的完整运行包，模型、浏览器状态、上传数据与备份独立存放；不得用保留整份旧应用源解决运行依赖。该改动已定向验证/High GO，下一正常发版验证；当前清盘进度只见CURRENT。
 
@@ -39,7 +51,7 @@
 - 图片排队/执行分离及技术子集恢复（候选/实际版本见CURRENT）：复用private/started作为领取时刻，单次执行最多10分钟，Chat总期限按worker并发×15分钟+5分钟（当前4为65分钟，最多8为125分钟），Codex仍10分钟；原请求期限/身份不修改。该余量覆盖单worker实例本波次及其一次迟到恢复，不保证任意旧积压/其他生产者。每个image oneshot只作一次慢恢复或一次新执行，保持TimeoutStartSec660。先按已推干净SHA物化并构建Gateway及依赖，再原三锁/空闲备份安装兼容新协议的provider，最后正常无测试/无迁移应用构建启动；旧provider不能消费新长请求。只有当前真实任务自然终态后才能切换，600秒部署排空不覆盖新的65分钟排队等待。技术恢复新收据启用后保留兼容Domain/worker，原失败任务、PNG及spool不变，不回滚额度/清marker；优先前向修复。
 - 全叙事65K、独立顺序maintenance与通用像素反馈返工（2026-09-22）：沿原cloud-sync/干净已推SHA/正常服务器build-start，no-tests、skip-migrate、复用未变能力镜像；不改独立Chat receiver或共享浏览器。当前动态DB约束已允许>=9，无新迁移。先等实际在途请求落存再发布。`narrative_pixel_scientific_replan`按整组正式审阅追加1计划+N图；正式blocked计划沿`narrative_pixel_plan_scientific_revision`显式只增1计划、继承N图预留，最多两级revision。两者均依赖新Domain连续收据，不能交给只认历史11/13/单图render回执的旧worker；新恢复请求提交前可回退原版本，提交后优先向前修复并保留全部任务/资产/审计，不缩额度、不删收据、不手工改run状态。实际候选/审查/release/rollback唯一见CURRENT。
 - 初始设计schema恢复仍沿原task：仅无checkpoint且符合已保存3次65K/stop/主provider审计的失败可续接，按actor/task限定连续授权回执，最多executionAttempt3；不重新分析论文，不增加逻辑任务或图片额度。每个模型阶段与末审重验原来源及同任务收据；旧worker不能消费新增schema恢复，提交后同样优先前向修复并保留失败证据。
-- 前台事务需服务器私有日志时，先以077/noclobber打开日志FD，再恢复构建默认022后执行原runner；不能把077泄漏给构建（已实见Next BUILD_ID0600导致非root Web启动EACCES/首页502）。连接中断或发布失败仍先读journal和运行身份，日志落盘不等于事务成功；不手改release marker或绕过公网确认。
+- 前台事务需服务器私有日志时，先以077/noclobber打开日志FD，再恢复构建默认022后执行原runner；不能把077泄漏给构建（已实见Next BUILD_ID0600导致非root Web启动EACCES/首页502）。连接中断或发布失败仍先读journal、运行身份和候选cwd内构建进程；SSH消失可能留下已释放FD9的构建子进程，必须等writer自然退出后才判断原命令重试条件，不能只看锁空。日志落盘不等于事务成功；不手改release marker或绕过公网确认。
 - 无checkpoint的方案技术失败续接：对已停止的叙事修订，或首次science两次thinking-only耗尽且尚无方案的failed叙事任务，沿既有明确授权复用原task再执行一次；两类均要求来源不变、仅终态text调用。初次science恢复只有science使用65536/600s，science/art均primary-only；art容量不变；Domain同事务保存原失败/调用证据、CAS run/step/task，worker仅凭唯一审计及既有来源身份允许executionAttempt2。UI明确新增模型用量；不新增迁移/receiver协议/逻辑任务额度。沿正常no-tests/skip-migrate部署；收据生成前可回退，恢复任务在途时先自然完成再回退，保留失败与恢复审计/所有资产，不归零执行次数或重新派发。其后保存了完整checkpoint但末审尚未调用时，原checkpoint续接可进入第三次执行，只审阅已保存方案；原来源/候选/调用谱系复验。方案审阅实际走文本池，沿既有100000字符输入边界；Chat协议与像素审阅仍60KiB，本次不需receiver更新。
 
 同任务art-only修正仅修改应用Domain/worker及恢复提示；不改receiver/迁移/产品总额度。沿正常no-tests/skip-migrate从干净已推送HEAD部署，部署本身不派发模型。显式续作提交后须等原任务自然终态再回退；旧worker不能消费新的storyboardArtCorrection，保留授权审计、原拒收与修正记录，不归零attempt/清除marker重发。若原授权仅初始字段且授权后无模型审计，可沿原retry-generation做一次pre-submission恢复，原收费收据不变、追加零授权运行收据、计数正常增长；存在任何submitted marker不可走该路径。checkpoint只对P2034有限重试数据库事务，模型调用不在循环内。
@@ -134,7 +146,15 @@ HISTORICAL（已被10-04两版策略替代）—2026-09-14发布收尾修正：�
 
 ## 1. 前置检查
 
-### 期刊编辑与原论文身份增量
+### 2026-10-08 期刊共用论文管线
+
+本次重做以用户提供的[完整期刊需求](../specs/2026-09-15-journal-onboarding-design.md)为准，当前实现及发布证据仅见[期刊 CURRENT](../handoff/2026-10-08-journal-workbench-handoff.md)。正文上传仅创建共用 Artifact 与私有 working RO 版本；显式授权后走共用 ingestion 和 Native paper-author，不再为新正文启动第二次 journal-text 生成。期刊额度赞助该处理，个人额度不得重复扣减；确认理解与批准公开是不同操作。
+
+迁移51仅增加私有工作稿关联与共享任务绑定。先执行既有双库备份，再以精确已推送、CI通过的干净SHA正常构建并运行迁移。候选 Native 资源与视频执行器均使用原安装器延迟 timer，待应用与运行时身份匹配后恢复原 timer 状态；视频管理员开关保持关闭。异常恢复必须先验证运行时已恢复到旧应用的配套版本，才能启动旧写入服务。
+
+回滚应用保留新增关联、版本、任务、账本和文件，不做数据库回退；先等待在途任务自然终态。未知付费提交和已保存结果不得交给旧 Worker 重发。部署验收只观察已授权的真实路径，不自动审批、生成或公开科研结果。
+
+### 历史：期刊编辑与原论文身份增量
 
 本增量含可空 `research_objects.original_doi` 字段和工作区索引，发布前沿既有双库备份流程备份，正常部署不得使用 `--skip-migrate`。它不改历史冻结出版记录，也不合并工作区或继承素材授权；回退应用时保留新增字段及数据，不执行删列。新期刊生成使用原生 Hermes 的 `journal-text` 工具配置，只有配置可用时才受理生成；未提供原页像素时不能声称看过 PDF 页。实际 Native 运行时及目录配对须核实，不能由单元测试推断已安装或已成功生成。
 

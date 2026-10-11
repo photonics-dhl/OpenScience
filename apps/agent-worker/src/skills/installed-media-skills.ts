@@ -10,6 +10,7 @@ const SCIENTIFIC_VISUALIZATION_COMMIT = '49c6e97775eaa18ba791bebe23162a70ae601c1
 const HANDDRAW_STYLE_COMMIT = 'e1d7586e8a986deff92860e3e7c053a2bba81b64';
 const HANDDRAW_ROUTER_COMMIT = 'a778615aeca393085a1d0a89e7c3cd493ee2f474';
 const SKILLS_ROOT = resolve(__dirname, '../../../../.agents/skills');
+const HISTORICAL_EXECUTION_V19 = 'openscience-research-illustration/references/legacy-execution-v19.md';
 
 type SkillId = 'openscience-research-illustration' | 'openscience-scientific-visual-clarity' | 'openscience-handdraw-style' | 'openscience-handdraw-router' | 'baoyu-article-illustrator' | 'baoyu-cover-image' | 'baoyu-infographic';
 export type DesignSkillUsage = { id: SkillId | typeof SCIENTIFIC_CRITICAL_THINKING_SKILL.id; upstreamCommit?: string; version?: string; resources: string[] };
@@ -52,12 +53,14 @@ function readMarkdown(relativePath: string): string {
   }
   return text;
 }
-function projectIllustrationSkillVersion(): string {
+function projectIllustrationSkillVersion(stage: Stage): string {
   const match = /^ {2}version: "([1-9]\d*)"$/mu.exec(readMarkdown('openscience-research-illustration/SKILL.md'));
   if (!match) throw new Error('[blocked] Installed illustration skill version is unavailable');
-  return match[1]!;
+  // v21 changes only Scientific review. Preserve the unchanged selected-section
+  // attribution in paid Native planning/render results; future versions are not projected.
+  return match[1] === '21' && stage !== 'review' ? '20' : match[1]!;
 }
-function readMarkdownHeadings(relativePath: string, headings: readonly string[]): string {
+function readMarkdownHeadings(relativePath: string, headings: readonly string[], historicalExecution = false): string {
   const text = readMarkdown(relativePath);
   const lines = text.split('\n');
   // The catalogue is heterogeneous — some style files use "Design Aesthetic", some use
@@ -67,6 +70,10 @@ function readMarkdownHeadings(relativePath: string, headings: readonly string[])
   // Either way, never block on a missing section.
   const present: string[] = [];
   for (const heading of headings) {
+    if (historicalExecution && relativePath === 'openscience-research-illustration/SKILL.md' && heading === 'Execution') {
+      present.push(readMarkdownHeadings(HISTORICAL_EXECUTION_V19, ['Execution']));
+      continue;
+    }
     const start = lines.indexOf(`## ${heading}`);
     if (start >= 0) {
       let end = start + 1;
@@ -242,6 +249,7 @@ export function loadInstalledMediaSkills(
   instruction: string,
   stage: Stage = 'plan',
   opts?: IllustrationStyleSelection,
+  historicalIllustrationRevision?: '19',
 ): InstalledMediaSkills {
   const rawStyle = opts?.style ?? style;
   const qualified = /:|^#/u.test(rawStyle);
@@ -263,7 +271,8 @@ export function loadInstalledMediaSkills(
 
   function include(skill: SkillId, relativePath: string, headings?: readonly string[]) {
     const resource = `${skill}/${relativePath}`;
-    const selected = headings ? readMarkdownHeadings(resource, headings) : readMarkdown(resource);
+    const historical = historicalIllustrationRevision === '19' && stage === 'render' && skill === 'openscience-research-illustration';
+    const selected = headings ? readMarkdownHeadings(resource, headings, historical) : readMarkdown(resource);
     excerpts.push(`SOURCE: ${resource}${headings ? ` — sections: ${headings.join('; ')}` : ''}\n${selected}`);
     let entry = usage.find((item) => item.id === skill);
     if (!entry) {
@@ -271,14 +280,15 @@ export function loadInstalledMediaSkills(
       const isVisualClarity = skill === 'openscience-scientific-visual-clarity';
       const isHanddrawStyle = skill === 'openscience-handdraw-style';
       const isHanddrawRouter = skill === 'openscience-handdraw-router';
-      entry = { id: skill, ...(isIllustration ? { version: projectIllustrationSkillVersion() } : isVisualClarity
+      entry = { id: skill, ...(isIllustration ? { version: historical ? '19' : projectIllustrationSkillVersion(stage) } : isVisualClarity
         ? { version: '1', upstreamCommit: SCIENTIFIC_VISUALIZATION_COMMIT }
         : isHanddrawStyle ? { version: '3', upstreamCommit: HANDDRAW_STYLE_COMMIT }
         : isHanddrawRouter ? { version: '1', upstreamCommit: HANDDRAW_ROUTER_COMMIT }
         : { upstreamCommit: UPSTREAM_COMMIT }), resources: [] };
       usage.push(entry);
     }
-    entry.resources.push(...(headings ? headings.map((heading) => `${relativePath}#${heading}`) : [relativePath]));
+    entry.resources.push(...(headings ? headings.map((heading) => historical && relativePath === 'SKILL.md' && heading === 'Execution'
+      ? 'references/legacy-execution-v19.md#Execution' : `${relativePath}#${heading}`) : [relativePath]));
   }
 
   const isInfographic = exactStyle ? rawStyle.startsWith('infographic:') : fileExists(infographicPath(selection.style));
@@ -286,7 +296,7 @@ export function loadInstalledMediaSkills(
   const handdrawTarget = selection.style === 'scientific' || selection.style === 'editorial' || selection.style === 'watercolor';
 
   if (explicitHanddraw && stage !== 'science') {
-    const rendered = loadInstalledMediaSkills('auto', automaticStyleTreatment(rawStyle, 'Selected appearance')!, 'render');
+    const rendered = loadInstalledMediaSkills('auto', automaticStyleTreatment(rawStyle, 'Selected appearance')!, 'render', undefined, historicalIllustrationRevision);
     const shared = stage === 'review' ? loadInstalledMediaSkills('auto', instruction, 'review') : undefined;
     if (stage === 'plan') {
       include('openscience-research-illustration', 'SKILL.md', ['Planning', 'Visual craft']);

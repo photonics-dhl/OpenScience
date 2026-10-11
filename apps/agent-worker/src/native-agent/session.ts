@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse, type AiGateway, type GatewayCompletion,
   type ChatMessage, type TextGenerationOptions } from '@openscience/ai-gateway';
+import type { ScienceReviewInput } from '@openscience/ai-gateway';
+import type { AgentNativeImageReviewPrepared } from '@openscience/domain';
 
 export type NativeAgentSessionBinding = {
   taskId: string;
@@ -12,7 +14,8 @@ export type NativeAgentSessionBinding = {
   /** Private immutable review input; never included in the native host configuration. */
   sourceReview?: { sourceAgentTaskId: string; authorCheckpointSha256: string; boundDraft: unknown };
 } & ({ sourceKind?: 'paper'; artifactId: string; documentSha256: string; sourceMapHash: string }
-  | { sourceKind: 'journal-text'; journalText: { jobId: string; sourceDigest: string; revision: number; sourceTextSha256: string } });
+  | { sourceKind: 'journal-text'; journalText: { jobId: string; sourceDigest: string; revision: number; sourceTextSha256: string } }
+  | { sourceKind: 'illustration-image'; imageReview: AgentNativeImageReviewPrepared });
 type Target = { provider: string; model: string; promptHash: string };
 type Request = { messages: ChatMessage[]; options: TextGenerationOptions };
 type RejectedAttempt = { httpStatus: 529; maxOutputTokens: number };
@@ -40,9 +43,11 @@ const reservedOutput = (turn: Turn) => (turn.state === 'completed' ? turn.respon
 const reservedCalls = (turn: Turn) => 1 + (turn.rejectedAttempt ? 1 : 0);
 
 /** Owns SDK transport checkpoints; the installed AIAgent still owns every conversation/tool iteration. */
-export function createNativeAgentSession(input: { gateway: AiGateway; binding: NativeAgentSessionBinding;
+export function createNativeAgentSession(input: { gateway: AiGateway; binding: NativeAgentSessionBinding; imageReviewInput?: ScienceReviewInput;
+  validateImageHistory?: (messages: readonly ChatMessage[], final?: boolean) => void;
   store: NativeAgentSessionStore; authorize: () => Promise<void>; now?: () => number }) {
   const binding = structuredClone(input.binding);
+  if (binding.sourceKind === 'illustration-image' && (!input.imageReviewInput || !input.validateImageHistory)) blocked('saved image authorization missing');
   const now = input.now ?? Date.now;
   let cursor = 0;
   let inFlight = false;
@@ -94,6 +99,11 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       const { messages, options } = nativeAgentSdkRequest(raw, binding.model);
       let state = await read();
       checkHistory(messages, state);
+      if (binding.sourceKind === 'illustration-image') {
+        input.validateImageHistory!(messages);
+        if (state?.turns.slice(0, cursor).some(turn => turn.request.messages.some(message => message.images?.length)))
+          blocked('saved image already consumed its visual request');
+      }
       const names = options.tools?.map(t => t.function.name).sort();
       if (!isDeepStrictEqual(names, [...binding.allowedTools].sort())) blocked('advertised tools changed');
       if (state && !isDeepStrictEqual(options.tools, state.turns[0]?.request.options.tools)) blocked('tool definitions changed');
@@ -116,6 +126,9 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
         const attempt: { rejection?: { started: NativeAgentSessionState; error: TextProviderError } } = {};
         try {
           result = await input.gateway.nativeAgentComplete(messages, boundedOptions, {
+            ...(binding.sourceKind === 'illustration-image' ? { imageReview: {
+              input: input.imageReviewInput!, target: { provider: binding.imageReview.provider, model: binding.imageReview.model },
+            } } : {}),
             beforeProviderAttempt: authorize,
             submitProvider: async (target, submit) => {
               await authorize(); state = await read(); checkHistory(messages, state);
@@ -185,6 +198,11 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       await authorize(); // Receipt persistence does not grant permission to consume it.
       if (now() >= callDeadlineAt) blocked('original request deadline expired');
       if (result.model !== binding.model) blocked('provider reported a different model');
+      if (binding.sourceKind === 'illustration-image' && (result.toolCalls?.filter(call => call.function.name === 'paper_image_view').length ?? 0) > 1)
+        blocked('only one saved image view is allowed');
+      if (binding.sourceKind === 'illustration-image' && messages.some(message => message.images?.length)
+        && (result.toolCalls?.length || result.finishReason !== 'stop' || !result.text.trim()))
+        blocked('saved image view must finish without more tools');
       if (result.usage.outputTokens > responseAllowance) blocked('provider exceeded reserved output budget');
       if (result.finishReason === 'length') blocked('output truncated; no automatic paid correction');
       // The matching new SDK snapshot retains this reply in its own loop; old immutable runtimes still stop.

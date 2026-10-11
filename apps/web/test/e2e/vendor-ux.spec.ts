@@ -1,4 +1,5 @@
 import { expect, test, type Page } from 'playwright/test';
+
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
 
 async function prepare(page: Page, profileFails = false) {
@@ -20,79 +21,77 @@ async function prepare(page: Page, profileFails = false) {
   });
 }
 
-test('public guidance reaches creation through the research desk', async ({ page }) => {
+
+test('guide keeps one personal workspace entry for existing work', async ({ page }) => {
   await prepare(page);
   await page.goto('/guide');
-  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
+  const workspace = page.locator('article').getByRole('link', { name: '个人工作空间', exact: true });
+  await expect(workspace).toHaveCount(1);
   await expect(page.locator('article a[href^="/research-objects/new"]')).toHaveCount(0);
-  await page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first().click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-  await page.getByRole('link', { name: '上传 PDF 或资料', exact: true }).click();
-  await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/);
-  await page.getByRole('link', { name: '返回研究桌面', exact: true }).click();
+  await workspace.click();
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
-test('public guide sends an anonymous researcher to login with the desk destination', async ({ page }) => {
+test('anonymous guide workspace link preserves the login destination', async ({ page }) => {
   await prepare(page);
   await page.route('**/api/auth/me', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'fixture anonymous' } } }));
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/guide');
-  await expect(page.locator('header a[href="/auth/login"]')).toBeVisible();
-  await expect(page.locator('header a[href="/research-objects/new"]')).toHaveCount(0);
-  await page.getByRole('banner').getByRole('link', { name: '研究桌面', exact: true }).click();
+  await page.locator('article').getByRole('link', { name: '个人工作空间', exact: true }).click();
   await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fdashboard$/);
 });
 
-test('guide scenes support keyboard and small screens without business writes', async ({ page }) => {
+test('guide workspace supports keyboard and small screens without business writes', async ({ page }) => {
   await prepare(page);
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/guide');
-  await expect(page.getByRole('tab')).toHaveCount(3);
-  const first = page.getByRole('tab', { name: '从论文开始', exact: true });
-  const second = page.getByRole('tab', { name: '读懂研究', exact: true });
-  await first.focus();
-  await first.press('ArrowRight');
-  await expect(second).toBeFocused();
-  await expect(second).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel').getByRole('heading', { name: '先抓住贡献，再深入阅读' })).toBeVisible();
-  await second.press('End');
-  await expect(page.getByRole('tab', { name: '继续完善', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Turn papers into structured, verifiable, machine-readable research objects.');
+  const input = page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。');
+  await expect(input).toBeVisible();
+  const box = await input.boundingBox();
+  expect(box && box.y + box.height <= 900).toBe(true);
+  await expect(page.getByRole('tablist')).toHaveCount(0);
+  await page.getByText('“可核验”具体指什么？', { exact: true }).press('Enter');
+  await expect(page.getByText('研究页面通过关联原文、材料和相关依据，让读者能够核对整理后的内容。它不表示平台已经证明研究结论正确。', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-desktop.png', fullPage: true, animations: 'disabled' });
   await page.setViewportSize({ width: 375, height: 812 });
-  await first.click();
-  await expect(page.getByRole('tabpanel').getByRole('link', { name: '在桌面找到入口' })).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await page.getByRole('tabpanel').locator('div').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  await expect(input).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test/visual/out/product-craft/guide-mobile-zh.png', fullPage: true, animations: 'disabled' });
   expect(writes).toEqual([]);
 });
 
-test('English guide keeps task tabs and the desk entry readable on phones', async ({ page }) => {
+test('English guide keeps the inline composer readable on phones', async ({ page }) => {
   await prepare(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto('/guide');
-  await page.getByRole('tab', { name: 'Keep developing', exact: true }).click();
-  await expect(page.getByRole('tabpanel').getByRole('heading', { name: 'Pick up where you want to work' })).toBeVisible();
-  await expect(page.locator('article').getByRole('link', { name: 'Enter research desk', exact: true }).first()).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  for (const width of [375, 320]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto('/guide');
+    await expect(page.locator('article').getByRole('link', { name: 'Personal workspace', exact: true })).toHaveCount(1);
+    await expect(page.getByPlaceholder('Upload your paper and other research files, and tell Hermes here what you want to accomplish.')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  expect(writes).toEqual([]);
 });
 
-test('guide remains usable when the public preview fails and can reload it', async ({ page }) => {
+test('guide remains independent of unavailable public preview data', async ({ page }) => {
   await prepare(page);
   let reads = 0;
-  await page.route('**/api/explore?*', route => {
+  await page.route('**/api/research/OSR-2026-000022/v/4', route => {
     reads++;
-    return reads === 1 ? route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } }) : route.fulfill({ json: { items: [], nextCursor: null } });
+    return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } });
   });
   await page.goto('/guide');
-  await expect(page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).first()).toBeVisible();
-  await page.getByRole('button', { name: '重新加载画面', exact: true }).click();
-  await expect(page.getByRole('button', { name: '重新加载画面', exact: true })).toHaveCount(0);
-  await expect(page.locator('article').getByRole('link', { name: '探索公开研究', exact: true })).toBeVisible();
-  expect(reads).toBe(2);
+  await expect(page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。')).toBeVisible();
+  const example = page.locator('article a[href="/research/OSR-2026-000022/v/4"]');
+  await expect(example).toHaveAttribute('target', '_blank');
+  await expect(example).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(reads).toBe(0);
 });
 
 test('account tools keep secondary entries accessible and gate platform administration', async ({ page }) => {
