@@ -229,6 +229,11 @@ const OPTIONAL_AUDIO_VIDEO_SCIENCE_SCHEMA = object({ title: str, narrative: obje
     visualContinuity: str, audioPolicy: { type: 'string', enum: ['external-narration', 'native-first'] }, modelPolicy: { type: 'string', enum: ['commercial-primary'] } }),
   scenes: { type: 'array', minItems: 3, maxItems: 6, items: OPTIONAL_AUDIO_VIDEO_SCIENCE_SCENE },
 });
+const OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS = NATIVE_VIDEO_TOOLS.map(tool => tool.name === 'paper_illustration_science'
+  ? { ...tool, description: OPTIONAL_AUDIO_VIDEO_SCIENCE_DESCRIPTION, parameters: OPTIONAL_AUDIO_VIDEO_SCIENCE_SCHEMA }
+  : tool.name === 'paper_illustration_science_repair'
+    ? { ...tool, parameters: object({ scienceToolCallId: str, sceneIndex: { type: 'integer', minimum: 0, maximum: 5 }, scene: OPTIONAL_AUDIO_VIDEO_SCIENCE_SCENE }) }
+    : tool.name === 'paper_illustration_context' ? { ...tool, description: OPTIONAL_AUDIO_VIDEO_CONTEXT_DESCRIPTION } : tool);
 
 export type VerifiedNativeVideoBase = { view: StoryboardView; settings: StoryboardRequest;
   prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt: string; renderResources?: DesignSkillUsage[] }>; designSkills: DesignSkillUsage[] };
@@ -452,12 +457,14 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
 
 export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | null, output: StoryboardRequest['output'] = 'image',
   planningContract?: NativeAgentExecution['planningContract']) {
-  if (planningContract !== undefined && (planningContract !== 'video-optional-audio-v1' || !saved || output !== 'video')) stopped();
+  if (planningContract !== undefined && (planningContract !== 'video-optional-audio-v1' || output !== 'video')) stopped();
   const originalTools = saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => {
     if (typeof tool.function.description !== 'string') stopped();
     return { ...structuredClone(tool.function), description: tool.function.description };
   });
-  const definitions = !saved && output === 'video' ? NATIVE_VIDEO_TOOLS : NATIVE_ILLUSTRATION_TOOLS;
+  const definitions = !saved && output === 'video'
+    ? planningContract === 'video-optional-audio-v1' ? OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS : NATIVE_VIDEO_TOOLS
+    : NATIVE_ILLUSTRATION_TOOLS;
   const sourceTools = originalTools ?? [...(saved ? LEGACY_NATIVE_PAPER_TOOLS : NATIVE_PAPER_TOOLS), ...definitions.map(tool =>
     saved && tool.name === 'paper_illustration_science' ? { ...tool, description: PAID_SCIENCE_DESCRIPTION, parameters: PAID_SCIENCE_SCHEMA }
       : saved && tool.name === 'paper_illustration_context' ? { ...tool, description: PAID_CONTEXT_DESCRIPTION } : tool)];
@@ -465,8 +472,9 @@ export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | n
   const originalRepair = originalTools?.find(tool => tool.name === 'paper_illustration_science_repair');
   const scienceDescription = originalScience?.description;
   const contextDescription = originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description;
-  const nativeVideoAudio = Boolean(saved && scienceDescription === OPTIONAL_AUDIO_VIDEO_SCIENCE_DESCRIPTION
-    && contextDescription === OPTIONAL_AUDIO_VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, OPTIONAL_AUDIO_VIDEO_SCIENCE_SCHEMA));
+  const nativeVideoAudio = !saved ? output === 'video' && planningContract === 'video-optional-audio-v1'
+    : scienceDescription === OPTIONAL_AUDIO_VIDEO_SCIENCE_DESCRIPTION
+      && contextDescription === OPTIONAL_AUDIO_VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, OPTIONAL_AUDIO_VIDEO_SCIENCE_SCHEMA);
   if (planningContract !== undefined && !nativeVideoAudio) stopped();
   const videoContext = (!saved && output === 'video') || nativeVideoAudio || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION
     && contextDescription === VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, VIDEO_SCIENCE_SCHEMA));

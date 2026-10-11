@@ -38,6 +38,11 @@ function planningContractHold(task: Pick<AgentTask, 'kind' | 'payload' | 'result
   } catch { return true; }
 }
 
+function optionalFirstNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
+  return (task.error === null || task.error === VIDEO_READINESS_HOLD) && firstNativePlan(task, task.error)
+    && readNativeAgentExecution(task.result)?.planningContract === 'video-optional-audio-v1';
+}
+
 function pendingSnapshotWhere(task: VideoTaskAdmissionSnapshot): Prisma.AgentTaskWhereInput {
   return { id: task.id, kind: task.kind, status: 'pending', deletedAt: null, error: task.error,
     sessionId: task.sessionId, progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
@@ -118,7 +123,7 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
   planningContract?: NativeAgentExecution['planningContract']): Promise<boolean> {
   if (task.status !== 'pending' || task.error !== VIDEO_READINESS_HOLD) return false;
   if (planningContract !== undefined) {
-    // Future R2 can release the original untouched row once. R1 callers never pass this argument.
+    // Compatible R2 callers release the original untouched row once; generic Host recovery cannot opt in.
     try {
       if (planningContract !== 'video-optional-audio-v1' || !firstNativePlan(task, VIDEO_READINESS_HOLD)
         || readNativeAgentExecution(task.result)?.planningContract !== planningContract) return false;
@@ -136,6 +141,11 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
+  if (optionalFirstNativePlan(current)) {
+    if (!await isHermesVideoTask(deps.prisma, current.id)) return false;
+    return current.error === VIDEO_READINESS_HOLD
+      ? releasePendingVideoTask(deps, current, 'video-optional-audio-v1') : { expectedPendingTask: current };
+  }
   // Intent lookup also awaits DB reads: a non-video result must not reopen an
   // unfenced claim of the poller's earlier payload.
   const contractHeld = planningContractHold(current);
@@ -169,6 +179,11 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
   });
   let released = 0;
   for (const task of tasks) {
+    if (optionalFirstNativePlan(task)) {
+      if (await isHermesVideoTask(deps.prisma, task.id)
+        && await releasePendingVideoTask(deps, task, 'video-optional-audio-v1')) released++;
+      continue;
+    }
     if (planningContractHold(task)) continue;
     if (!await isHermesVideoTask(deps.prisma, task.id)) continue;
     try { await requirePersistedVideoReady(deps, task); }
