@@ -11,7 +11,8 @@ import { initialNativeAgentExecution, readNativeAgentExecution, type NativeAgent
 import { describeIllustrationBrief, type IllustrationBrief } from '../../../packages/domain/src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../../packages/domain/src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../../packages/domain/src/assets/storyboard';
-import { parsePresentationGenerationPayload, requireSceneImageParent } from '../../../packages/domain/src/assets/presentation-asset';
+import { parsePresentationGenerationPayload } from '../../../packages/domain/src/assets/presentation-asset';
+import { requireSceneImageParent } from '../../../packages/domain/src/assets/scene-image';
 import { CONTENT_DRIVEN_PROFILE } from '../../../packages/domain/src/assets/video';
 
 const execution = vi.hoisted(() => ({ claim: vi.fn(), progress: vi.fn() }));
@@ -1095,7 +1096,7 @@ async function persistedNativeAdmissionFixture() {
   Object.assign(f.task.session, native.parentTask.session, { researchObject: await native.prisma.researchObject.findUnique() });
   const findTask = f.agentTask.findUnique.getMockImplementation()!;
   f.agentTask.findUnique.mockImplementation(async args => await findTask(args)
-    ?? structuredClone(await native.prisma.agentTask.findUnique(args)));
+    ?? structuredClone(await native.prisma.agentTask.findUnique(args)) as QueueTask | null);
   const { agentTask: _parentTasks, ...readers } = native.prisma;
   void _parentTasks; // Preserve the poller's own task reader while reusing the authoritative parent readers.
   const ingestionUpdate = f.deps.prisma.ingestionTask.updateMany;
@@ -1149,12 +1150,44 @@ describe('ordinary inherited Native local revision admission', () => {
       idempotencyKey: 'original-ordinary-local-key' });
     expect(ledger).toEqual(paid); expect(f.deps.prisma.usageLedger.create).not.toHaveBeenCalled();
     expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[], []]);
+    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([['native-first'], ['native-first']]);
+  });
+  it.each(['fresh', 'held'] as const)('admits %s native-only local work using the saved purpose without another debit', async state => {
+    const f = await local(); f.setAudio('native-first', ['native', 'native', 'native']);
+    f.deps.readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const ledger = [{ id: 'original-credit', taskId: f.task.id, delta: -1 }];
+    Object.assign(f.deps.prisma, { usageLedger: { create: vi.fn(), findMany: vi.fn(async () => ledger) } });
+    const paid = structuredClone(ledger);
+    if (state === 'held') {
+      f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(1); expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+      expect(await f.outbox()).toBe(1); expect(await f.outbox()).toBe(0);
+    }
+    await f.poll();
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, idempotencyKey: 'original-ordinary-local-key' });
+    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual(state === 'held' ? [['native-first'], ['native-first']] : [['native-first']]);
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(ledger).toEqual(paid); expect(f.deps.prisma.usageLedger.create).not.toHaveBeenCalled();
+  });
+  it.each(['closed', 'external', 'mode-race', 'identity-race', 'contract-race'] as const)('keeps %s local native-only work held at attempt zero', async change => {
+    const f = await local(); f.setAudio('native-first', ['native', 'native', 'native']);
+    if (change === 'external') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
+    f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+    f.deps.readVideoReadiness = vi.fn(async (purpose?: 'native-first') => {
+      if (change === 'mode-race') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
+      if (change === 'identity-race') f.native.parentTask.result.illustrationPrompts[0]!.videoPrompt = 'Changed video prompt';
+      if (change === 'contract-race') Object.assign(f.native.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+      return change !== 'closed' && purpose === 'native-first';
+    });
+    const held = structuredClone(f.task);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(f.task).toEqual(held);
+    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([change === 'external' ? [] : ['native-first']]);
+    expect(await f.outbox()).toBe(0); expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
   });
   it('admits a newly inherited local row only with default complete Host/TTS readiness', async () => {
     const f = await local(), before = structuredClone(f.task);
     expect(await admitPendingVideoTask(f.deps, before as never)).toEqual({ expectedPendingTask: before });
-    expect(f.task).toEqual(before); expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[]]);
+    expect(f.task).toEqual(before); expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([[]]);
   });
   it('releases the inherited local snapshot once under concurrent compatible recovery', async () => {
     const f = await local(); f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);

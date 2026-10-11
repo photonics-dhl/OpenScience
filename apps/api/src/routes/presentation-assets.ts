@@ -5,7 +5,6 @@ import {
   getPresentationAssetForRead,
   getPresentationTask,
   listPresentationAssets,
-  isHermesVideoReady,
   PublicEvidenceSourceError,
   PresentationAssetError,
   submitPresentationGeneration,
@@ -149,8 +148,7 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     if (!user) return;
     const params = scopeParams.parse(req.params);
     const assets = await listPresentationAssets(deps, { userId: user.userId, ...params });
-    const videoReady = await isHermesVideoReady(deps);
-    return reply.send({ assets: assets.map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage, canGenerateVideo: videoReady && asset.canGenerateVideo })) });
+    return reply.send({ assets: assets.map(asset => ({ ...asset, canGenerateSceneImage: !!deps.sceneImageEnabled && asset.canGenerateSceneImage })) });
   });
 
   app.post('/research-objects/:researchObjectId/versions/:versionId/presentation-assets/:assetId/review', async (req, reply) => {
@@ -170,7 +168,6 @@ export function registerPresentationAssetRoutes(app: FastifyInstance, deps: Agen
     const asset = await transitionPresentationAsset(deps, { userId: user.userId, ...params, ...body }, auditCtx(req));
     const assets = await listPresentationAssets(deps, { userId: user.userId, researchObjectId: params.researchObjectId, versionId: params.versionId });
     const view = assets.find(item => item.id === asset.id);
-    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage,
-      canGenerateVideo: await isHermesVideoReady(deps) && view.canGenerateVideo } });
+    return reply.send({ asset: view && { ...view, canGenerateSceneImage: !!deps.sceneImageEnabled && view.canGenerateSceneImage } });
   });
 }

@@ -59,15 +59,17 @@ async function requireLocalNativePlanReady(deps: VideoTaskAdmissionDeps, task: V
       const base = await requireStoryboardBase(deps.prisma, parsePresentationGenerationPayload(task.payload));
       if (!base?.nativeIdentity || base.nativePlanningContract !== readNativeAgentExecution(task.result)?.planningContract)
         throw new HermesVideoUnavailableError();
-      return base.nativeIdentity;
+      const mode = classifyNativeVideoAudio(base.view.document);
+      if (!mode) throw new HermesVideoUnavailableError();
+      return { identity: base.nativeIdentity, mode, purpose: mode === 'native-first' ? mode : undefined };
     } catch (error) {
       if (error instanceof PresentationAssetError) throw new HermesVideoUnavailableError();
       throw error;
     }
   };
-  const identity = await read();
-  await requirePersistedVideoReady(deps, task);
-  if (await read() !== identity) throw new HermesVideoUnavailableError();
+  const parent = await read();
+  await requireHermesVideoReady(deps, parent.purpose);
+  if (!isDeepStrictEqual(await read(), parent)) throw new HermesVideoUnavailableError();
 }
 
 function pendingSnapshotWhere(task: VideoTaskAdmissionSnapshot): Prisma.AgentTaskWhereInput {

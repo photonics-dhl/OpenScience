@@ -13,7 +13,7 @@ import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, taskToView, type AgentDeps, type AgentTaskView } from '../agent/agent';
-import { HermesVideoUnavailableError, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
+import { HermesVideoUnavailableError, isHermesVideoReady, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
 import { readNativeAgentExecution, type NativeAgentExecution } from '../agent/native-agent-execution';
 import { requireMembership } from '../workspace/helpers';
@@ -419,13 +419,10 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   if (payload.storyboard?.baseAssetId) {
     const base = await requireStoryboardBase(deps.prisma, payload);
     if (!replay && isOrdinaryNativeVideoSceneRevision(payload) && base?.nativeIdentity) {
-      const mode = classifyNativeVideoAudio(base.view.document);
-      if (!mode) throw new PresentationAssetError('VALIDATION_ERROR', 'Native video base audio is inconsistent');
-      // Local planning retains complete default readiness; parent audio never grants a Host exemption.
-      nativeAudioParent = { identity: base.nativeIdentity, mode, read: async () => {
+      selectNativeAudio(base.view.document, base.nativeIdentity, async () => {
         const current = await requireStoryboardBase(deps.prisma, payload);
         return current?.nativeIdentity ? { identity: current.nativeIdentity, document: current.view.document } : undefined;
-      } };
+      });
     }
   }
   if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
@@ -473,9 +470,13 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     : submitAgentTask(deps, taskInput, ctx);
 }
 
-export async function listPresentationAssets(deps: AgentDeps, input: {
+export async function listPresentationAssets(deps: AgentDeps & HermesVideoReadinessDeps, input: {
   userId: string; researchObjectId: string; versionId: string;
 }): Promise<PresentationAssetView[]> {
+  let defaultReadiness: Promise<boolean> | undefined, nativeReadiness: Promise<boolean> | undefined;
+  const videoReady = (purpose?: 'native-first') => purpose === 'native-first'
+    ? (nativeReadiness ??= isHermesVideoReady(deps, purpose))
+    : (defaultReadiness ??= isHermesVideoReady(deps));
   const expectedNativeSourceFailure = (error: unknown) => error instanceof PresentationAssetError || (error instanceof Error && [
     '[blocked] Each source Claim needs reviewed original evidence before scientific media planning',
     '[blocked] Whole-paper narrative requires reviewed Claims from one paper in this exact version',
@@ -583,14 +584,16 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
         && provenance?.parentIdentity === storyboardIdentity && JSON.stringify(candidateIds) === JSON.stringify(ids)
         ? [scene.sceneIndex] : [];
     }));
-    const canGenerateVideo = ids.length > 0 && ids.every(id => sourcedClaimIds.has(id)) && claimsValid && canWrite && user?.platformRole === 'platform_admin'
+    const videoEligible = ids.length > 0 && ids.every(id => sourcedClaimIds.has(id)) && claimsValid && canWrite && user?.platformRole === 'platform_admin'
       && storyboardForVideo?.output === 'video' && (nativeVideo || storyboardForVideo.locale === 'zh')
       && storyboardForVideo.document.scenes.length >= 3 && storyboardForVideo.document.scenes.length <= 6
       && storyboardForVideo.document.scenes.every((scene) => [...scene.narration].length <= 120)
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
       && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
         && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
-    const canGenerateAudioAudition = nativeVideo && canGenerateVideo;
+    const canGenerateVideo = videoEligible && await videoReady(nativeProof
+      && classifyNativeVideoAudio(storyboardForVideo!.document) === 'native-first' ? 'native-first' : undefined);
+    const canGenerateAudioAudition = nativeVideo && videoEligible;
     const canTransition = sceneValid && videoValid && (!nativeVideo || !!nativeProof) && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
