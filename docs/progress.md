@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-11 后端续作：生图4文件daba8375已冻结交原High，328定向/直接Domain build/Worker TC通过，保存compact成功和真实错误回放另有定向证据；原完整末稿仍描述绑定无效，保存错误回执与旧reader兼容未过，隔离候选不集入视频R1/R2。视频R1已报告actual ad99/a0f2跨版本回放通过，继续补原发布失败窗口与task-store绑定回归，待冻结审查。Task4原96b的69分块/向量恢复不再apply；UI首条真实查询目标第1/3，却是lexical_only/embedding_unavailable，语义召回尚未恢复，第二条仍执行；生图已接API→BGE本地只读定位。UI稿件冻结待审，本轮无生产/模型/付费操作，详情见Hermes CURRENT。
+- 2026-10-11 后端续作：生图4文件daba8375已获原High结论：有限语法本身正确，双向保存回放兼容两P1、NO-GO；328定向/直接Domain build/Worker TC通过，保存compact成功和真实错误回放另有定向证据；原完整末稿仍描述绑定无效，保存错误回执与旧reader兼容未过，隔离候选不集入视频R1/R2。视频R1已报告actual ad99/a0f2跨版本回放通过，继续补原发布失败窗口与task-store绑定回归，待冻结审查。Task4原96b的69分块/向量恢复不再apply；UI首条真实查询目标第1/3，却是lexical_only/embedding_unavailable，语义召回尚未恢复，第二条仍执行；生图已接API→BGE本地只读定位。UI稿件冻结待审，本轮无生产/模型/付费操作，详情见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
