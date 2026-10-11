@@ -1,10 +1,116 @@
 import { describe, expect, it } from 'vitest';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS } from '../src/native-agent/paper-tools';
-import type { DocumentSourceMap } from '@openscience/domain';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, mapNativePaperSearchHits } from '../src/native-agent/paper-tools';
+import { canonicalPassages } from '../src/extractor';
+import type { DocumentSourceMap, SourceLocator } from '@openscience/domain';
 const parser = { name: 'fixture', version: '1' };
 const map: DocumentSourceMap = { artifactId: 'paper', contentHash: 'a'.repeat(64), parser, pages: [1, 2].map(page => ({ page, width: 100, height: 100,
   blocks: [{ id: `block-${page}`, kind: 'paragraph', text: page === 1 ? 'Main contribution: emission from moving electrons.' : 'Appendix: electron y is homogeneous; field varies along x.',
     boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] })) };
+describe('current native passage locator mapper', () => {
+  const oneBlock = (text: string): DocumentSourceMap => ({ ...structuredClone(map), pages: [{
+    ...structuredClone(map.pages[0]!), blocks: [{ ...structuredClone(map.pages[0]!.blocks[0]!), text }],
+  }] });
+  const locator = (doc: DocumentSourceMap, charRange?: SourceLocator['charRange']): SourceLocator => ({
+    artifactId: doc.artifactId, contentHash: doc.contentHash, page: 1, blockId: doc.pages[0]!.blocks[0]!.id,
+    ...(charRange === undefined ? {} : { charRange }),
+  });
+  const long = () => oneBlock(' \t' + 'A'.repeat(1_200) + 'B'.repeat(1_200) + '  ');
+
+  it('maps actual split canonical passages many-to-many, deduplicating in current P order', () => {
+    const doc = long(), before = structuredClone(doc), passages = canonicalPassages(doc);
+    expect(passages).toHaveLength(2);
+    const hits = [{ id: 'f'.repeat(64), locators: [locator(doc, { start: 1_500, end: 1_700 })] },
+      { id: 'P99999', locators: [locator(doc, { start: 1_100, end: 1_300 }), locator(doc, { start: 1_700, end: 1_900 })] }];
+    const result = mapNativePaperSearchHits(doc, hits);
+    expect(result.map(p => p.id)).toEqual(passages.map(p => p.id));
+    expect(result.every(p => p.text.length <= 500)).toBe(true);
+    expect(result[1]!.text).toContain('B');
+    expect(doc).toEqual(before);
+  });
+
+  it.each([
+    [{ start: 0, end: 2 }, []],
+    [{ start: 2, end: 1_202 }, ['P00001']],
+    [{ start: 1_201, end: 1_202 }, ['P00001']],
+    [{ start: 1_202, end: 1_203 }, ['P00002']],
+    [{ start: 2_402, end: 2_404 }, []],
+  ] as const)('uses raw trimmed offsets and half-open overlap %j', (range, ids) => {
+    const doc = long();
+    expect(mapNativePaperSearchHits(doc, [{ locators: [locator(doc, range)] }]).map(p => p.id)).toEqual(ids);
+  });
+
+  it('treats absent charRange as the whole original block, without casting the chunk id', () => {
+    const doc = long(), hits = [{ id: '0'.repeat(64), locators: [locator(doc)] }];
+    expect(mapNativePaperSearchHits(doc, hits).map(p => p.id)).toEqual(canonicalPassages(doc).map(p => p.id));
+  });
+
+  it('locates the original interval inside a merged passage without losing its block separator', () => {
+    const doc = oneBlock('A'.repeat(700));
+    doc.pages[0]!.blocks.push({ ...structuredClone(doc.pages[0]!.blocks[0]!), id: 'second-block',
+      text: '     ' + 'B'.repeat(300) + '  ' });
+    const passages = canonicalPassages(doc);
+    expect(passages).toHaveLength(1);
+    const item = { ...locator(doc, { start: 25, end: 35 }), blockId: 'second-block' };
+    expect(mapNativePaperSearchHits(doc, [{ locators: [item] }]))
+      .toEqual([{ id: passages[0]!.id, pageStart: 1, pageEnd: 1, text: passages[0]!.text.slice(601, 1_101) }]);
+  });
+
+  it.each(['artifact', 'content', 'page', 'block', 'no-page', 'no-block', 'negative', 'too-long',
+    'empty', 'reverse', 'fraction', 'nan'] as const)('does not map a wrong or invalid %s locator', failure => {
+      const doc = long(), item = locator(doc, { start: 2, end: 3 });
+      if (failure === 'artifact') item.artifactId = 'foreign';
+      if (failure === 'content') item.contentHash = 'b'.repeat(64);
+      if (failure === 'page') item.page = 2;
+      if (failure === 'block') item.blockId = 'old-block';
+      if (failure === 'no-page') delete item.page;
+      if (failure === 'no-block') delete item.blockId;
+      if (failure === 'negative') item.charRange = { start: -1, end: 4 };
+      if (failure === 'too-long') item.charRange = { start: 0, end: 2_405 };
+      if (failure === 'empty') item.charRange = { start: 2, end: 2 };
+      if (failure === 'reverse') item.charRange = { start: 4, end: 2 };
+      if (failure === 'fraction') item.charRange = { start: 2.5, end: 4 };
+      if (failure === 'nan') item.charRange = { start: NaN, end: 4 };
+      expect(mapNativePaperSearchHits(doc, [{ locators: [item] }])).toEqual([]);
+    });
+
+  it('skips the suppressed native block rather than matching its page or bbox to vision', () => {
+    const doc = oneBlock('Native transcription');
+    doc.pages[0]!.blocks.push({ ...structuredClone(doc.pages[0]!.blocks[0]!), id: 'vision-block', text: 'Correct visual transcription',
+      parser: { name: 'llm_ocr_candidate', version: '1' } });
+    expect(canonicalPassages(doc)[0]!.text).toBe('Correct visual transcription');
+    expect(mapNativePaperSearchHits(doc, [{ locators: [locator(doc)] }])).toEqual([]);
+    expect(mapNativePaperSearchHits(doc, [{ locators: [{ ...locator(doc), blockId: 'vision-block' }] }])[0]!.text)
+      .toBe('Correct visual transcription');
+  });
+
+  it('does not choose among ambiguous same-id/page original blocks', () => {
+    const doc = oneBlock('First original');
+    doc.pages[0]!.blocks.push({ ...structuredClone(doc.pages[0]!.blocks[0]!), text: 'Second original' });
+    expect(mapNativePaperSearchHits(doc, [{ locators: [locator(doc)] }])).toEqual([]);
+  });
+
+  it('bounds hits, locators, passage results and current excerpts', () => {
+    const doc = oneBlock('A'.repeat(1_200)), bad = { ...locator(doc), artifactId: 'foreign' };
+    expect(mapNativePaperSearchHits(doc, [...Array.from({ length: 12 }, () => ({ locators: [bad] })), { locators: [locator(doc)] }])).toEqual([]);
+    expect(mapNativePaperSearchHits(doc, [{ locators: [...Array.from({ length: 64 }, () => bad), locator(doc)] }])).toEqual([]);
+    const many: DocumentSourceMap = { ...doc, pages: Array.from({ length: 14 }, (_, index) => ({ ...doc.pages[0]!, page: index + 1,
+      blocks: [{ ...doc.pages[0]!.blocks[0]!, id: 'block-' + index, text: 'X'.repeat(900) }] })) };
+    const locators = many.pages.map(page => ({ artifactId: many.artifactId, contentHash: many.contentHash, page: page.page, blockId: page.blocks[0]!.id }));
+    const result = mapNativePaperSearchHits(many, [{ locators }]);
+    expect(result).toHaveLength(12);
+    expect(result.map(p => p.id)).toEqual(canonicalPassages(many).slice(0, 12).map(p => p.id));
+    expect(result.every(p => p.text.length === 500 && Object.keys(p).sort().join(',') === 'id,pageEnd,pageStart,text')).toBe(true);
+  });
+
+  it('does not mark a retrieval reference read; only existing paper_read observes it', async () => {
+    const doc = long(), tools = createNativePaperTools(doc, async () => []);
+    const result = mapNativePaperSearchHits(doc, [{ locators: [locator(doc)] }]);
+    expect(tools.observedPassageIds).toEqual([]);
+    await tools.call('paper_read', { passageIds: [result[0]!.id] });
+    expect(tools.observedPassageIds).toEqual([result[0]!.id]);
+  });
+});
+
 describe('bound native paper tools', () => {
   it('does not authorize a cross-page passage after seeing only one of its actual pages', async () => {
     const tools = createNativePaperTools(map, async pages => pages.map(pageNumber =>

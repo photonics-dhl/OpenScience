@@ -1,4 +1,4 @@
-import type { DocumentSourceMap } from '@openscience/domain';
+import type { DocumentSourceMap, SourceLocator } from '@openscience/domain';
 import { isDeepStrictEqual } from 'node:util';
 import { canonicalPassages } from '../extractor';
 
@@ -18,6 +18,48 @@ export const LEGACY_NATIVE_PAPER_TOOLS = NATIVE_PAPER_TOOLS.map(tool => tool.nam
 export type NativePaperImage = { pageNumber: number; mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; bytesBase64: string };
 type Arguments = Record<string, unknown>;
 const record = (value: unknown): value is Arguments => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** Location only: the caller has already verified generation scope. Only paper_read observes evidence. */
+export function mapNativePaperSearchHits(sourceMap: DocumentSourceMap,
+  hits: readonly { locators: readonly SourceLocator[] }[]): Array<{ id: string; pageStart: number; pageEnd: number; text: string }> {
+  const passages = canonicalPassages(sourceMap);
+  const originals = new Map<string, { length: number; count: number }>();
+  const key = (page: number, blockId: string) => JSON.stringify([page, blockId]);
+  for (const page of sourceMap.pages) for (const block of page.blocks) {
+    const identity = key(page.page, block.id), prior = originals.get(identity);
+    originals.set(identity, { length: block.text?.length ?? 0, count: (prior?.count ?? 0) + 1 });
+  }
+  const anchors = new Map<string, number>();
+  // Match the existing native search/read response budget; avoid an unbounded
+  // locator expansion while keeping each returned excerpt in current P order.
+  for (const hit of hits.slice(0, 12)) for (const locator of hit.locators.slice(0, 64)) {
+    if (locator.artifactId !== sourceMap.artifactId || locator.contentHash !== sourceMap.contentHash
+      || !Number.isSafeInteger(locator.page) || Number(locator.page) < 1
+      || typeof locator.blockId !== 'string' || !locator.blockId) continue;
+    const original = originals.get(key(locator.page!, locator.blockId));
+    if (!original || original.count !== 1) continue;
+    const range = locator.charRange;
+    if (range !== undefined && (!record(range) || !Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end)
+      || range.start < 0 || range.end <= range.start || range.end > original.length)) continue;
+    const start = range?.start ?? 0, end = range?.end ?? original.length;
+    for (const passage of passages) {
+      let offset = 0;
+      for (const [index, slice] of passage.slices.entries()) {
+        if (index > 0 && passage.slices[index - 1]!.block.id !== slice.block.id) offset += 1;
+        const originalStart = slice.block.originalStart + slice.start, originalEnd = slice.block.originalStart + slice.end;
+        if (slice.block.id === locator.blockId && slice.block.page === locator.page && start < originalEnd && end > originalStart) {
+          const anchor = offset + Math.max(start, originalStart) - originalStart;
+          anchors.set(passage.id, Math.min(anchors.get(passage.id) ?? anchor, anchor));
+        }
+        offset += slice.end - slice.start;
+      }
+    }
+  }
+  return passages.filter(passage => anchors.has(passage.id)).slice(0, 12).map(passage => {
+    const start = Math.max(0, anchors.get(passage.id)! - 120);
+    return { id: passage.id, pageStart: passage.pageStart, pageEnd: passage.pageEnd, text: passage.text.slice(start, start + 500) };
+  });
+}
 
 /** Bound to the already parsed map. No provider, OCR, filesystem path or URL is exposed to the Agent. */
 export function createNativePaperTools(sourceMap: DocumentSourceMap, renderPages: (pages: number[]) => Promise<NativePaperImage[]>,
