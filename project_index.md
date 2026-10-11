@@ -36,7 +36,7 @@ Synclip图像与视频接入：图像沿`packages/ai-gateway/src/synclip-image-a
 
 原生插画历史回放：`installed-media-skills.ts` / `illustration-styles.ts` / `native-agent/illustration-task.ts`复用[Skill v19历史Execution](.agents/skills/openscience-research-illustration/references/legacy-execution-v19.md)，仅按已验证旧CP回执重建；SDK与finish回归在`apps/agent-worker/test/native-illustration-skill-replay.test.ts`，边界见[能力台账](docs/runbooks/hermes-capability-registry.md)，不作为新请求的provider指导。
 
-并行产品 UI 质量计划：`docs/plans/2026-10-07-product-ui-quality-plan.md` 由对应 UI 工作单元维护；本任务不修改其未提交实现。全站审美工作流与能力证据见 [`openscience-aesthetic-design`](.agents/skills/openscience-aesthetic-design/SKILL.md) 及其[能力台账](.agents/skills/openscience-aesthetic-design/references/aesthetic-capability-ledger.md)。
+并行产品 UI 质量计划：`docs/plans/2026-10-07-product-ui-quality-plan.md` 由对应 UI 工作单元维护；本任务不修改其未提交实现。全站审美工作流与能力证据见 [`openscience-aesthetic-design`](.agents/skills/openscience-aesthetic-design/SKILL.md) 及其[能力台账](.agents/skills/openscience-aesthetic-design/references/aesthetic-capability-ledger.md)：按任务定位Figma、图像设计、前端、动效与真实浏览器能力，区分安装/调用/观察/认可；包含审稿冻结边界和获选P页的现有组件实施流程，不另建任务库。
 
 论文旁白与原图试片：`packages/ai-gateway/src/minimax-speech.ts`、`infra/codex-image-runner/video-narration-pilot.mjs` 沿现有按量配置生成独立音轨并保留单次提交；`apps/media-demo/` 的 `artwork-explainer-v1` 消费已审原图及实际音频字幕。操作见[视频手册](docs/runbooks/science-video-demo.md#论文独立旁白试片2026-09-30)，实际成片与未完成 RO 接线只见 CURRENT。
 
