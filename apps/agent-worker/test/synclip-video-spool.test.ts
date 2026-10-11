@@ -37,8 +37,119 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
       executionAttempt: 1, status: 'succeeded', contentType: 'video/mp4', outputSha256: createHash('sha256').update(mp4).digest('hex'),
       outputSize: mp4.length, narration: { provider: 'synclip', speaker: audio.voice, speed: audio.speed, timingStatus: 'measured_aligned' }, ...reply(request) }));
   } });
-  return { input, spool, inboxDir, readyPath };
+  return { input, spool, inboxDir, resultsDir, readyPath, now };
 }
+
+describe('private audio audition transport', () => {
+  const mp3Frame = Buffer.concat([Buffer.from([255, 251, 144, 0]), Buffer.alloc(413)]);
+  const audioBytes = Buffer.concat([mp3Frame, mp3Frame]);
+  const audio = { provider: 'synclip' as const, voice: 'test-catalog-voice', speed: 1 };
+  async function fixture() {
+    const f = await nativeFixture();
+    await writeFile(f.readyPath, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23', adapterRevision: 'synclip-video-v2',
+      accepting: false, audioAccepting: true, updatedAt: f.now, narration: audio, audioAuditionBudget: { maxEstimatedCoins: 200 } }));
+    const input = { ...f.input, purpose: 'audio-audition' as const, sceneIndex: 1, locale: 'zh' as const, audio,
+      actorId: 'actor', workspaceId: 'workspace', researchObjectId: 'ro', versionId: 'version', parentIdentity: 'verified-parent' };
+    return { ...f, input };
+  }
+  async function output(f: Awaited<ReturnType<typeof fixture>>, grant: Record<string, unknown>) {
+    const outDir = join(f.resultsDir, TASK); await mkdir(outDir, { recursive: true });
+    await writeFile(join(outDir, 'audition.mp3'), audioBytes);
+    await writeFile(join(outDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, purpose: 'audio-audition', status: 'succeeded',
+      inputHash: grant.inputHash, executionAttempt: grant.executionAttempt, audio: { sceneIndex: 1, locale: 'zh', voice: audio.voice, speed: 1,
+        audioTaskId: 'known-tts', contentType: 'audio/mpeg', outputSha256: createHash('sha256').update(audioBytes).digest('hex'),
+        outputSize: audioBytes.length, durationSeconds: 2.5, timingStatus: 'decoded',
+        quote: { coinsPerCharacter: 2, characters: 11, estimatedCoins: 22, workerCeiling: 200, hostCeiling: 200 }, coinsUsed: 22 } }));
+  }
+  it('awaits the committed grant before exposing a request and consumes only typed MP3', async () => {
+    const f = await fixture(); let grant: Record<string, unknown>;
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+        grant = { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        return grant as never;
+      }, sleep: async () => { await output(f, grant); } });
+    const result = await spool.audition(f.input);
+    expect(result).toMatchObject({ purpose: 'audio-audition', taskId: TASK, sceneIndex: 1, audioTaskId: 'known-tts', contentType: 'audio/mpeg', coinsUsed: 22 });
+    const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
+    expect(request).toMatchObject({ purpose: 'audio-audition', sceneIndex: 1, executionAttempt: 1 });
+    expect(request.audioAuditionGrant.inputHash).toBe(request.inputHash);
+    await expect(readFile(join(f.resultsDir, TASK, 'result.mp4'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('new execution attempts consume the original known result without republishing even after its deadline', async () => {
+    const f = await fixture(); let original: Record<string, unknown>;
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => { original = { ...proposal, executionAttempt: 1, createdAt: f.now - 1000, deadlineAt: f.now - 1,
+        schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 }; await output(f, original); return original as never; } });
+    const result = await spool.audition({ ...f.input, executionAttempt: 2 });
+    expect(result.executionAttempt).toBe(1);
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('audition narration length only bounds the selected scene and retains an unselected long scene', async () => {
+    const f = await fixture(); let grant: Record<string, unknown>; let grants = 0;
+    const longNarration = 'Unselected source narration. '.repeat(5);
+    f.input.storyboard.scenes[0]!.narration = longNarration;
+    expect([...longNarration].length).toBeGreaterThan(120);
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        grants++; grant = { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        return grant as never;
+      }, sleep: async () => { await output(f, grant); } });
+    expect((await spool.audition(f.input)).sceneIndex).toBe(1);
+    expect(grants).toBe(1);
+    const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
+    const story = JSON.parse(await readFile(join(f.inboxDir, TASK, 'storyboard.json'), 'utf8'));
+    expect(request.scenes[0].narration).toBe(longNarration);
+    expect(story.scenes[0].narration).toBe(longNarration);
+    expect(request.scenes[1].narration).toBe(f.input.storyboard.scenes[1]!.narration);
+    expect(request.audioAuditionGrant.inputHash).toBe(request.inputHash);
+  });
+  it.each([['ASCII', 'a'.repeat(121)], ['non-BMP', '\u{20BB7}'.repeat(121)]])(
+    'audition narration length rejects a selected 121-codepoint %s scene before granting or publishing', async (_label, text) => {
+      const f = await fixture(); let grants = 0;
+      f.input.storyboard.scenes[1]!.narration = text!;
+      const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir,
+        authorizeAudioAudition: async () => { grants++; throw Error('overlong audition must not receive a grant'); } });
+      await expect(spool.audition(f.input)).rejects.toThrow('AUDIO_AUDITION_INPUT');
+      expect(grants).toBe(0);
+      await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+  it('never exposes a request when its dedicated authority is missing or denies the grant', async () => {
+    const f = await fixture();
+    const missing = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir });
+    await expect(missing.audition(f.input)).rejects.toThrow('AUDIO_AUDITION_AUTHORITY_REQUIRED');
+    const denied = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir,
+      authorizeAudioAudition: async () => { throw Error('current source authority changed'); } });
+    await expect(denied.audition(f.input)).rejects.toThrow('current source authority changed');
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('keeps expired old-grant recovery without a known result uncertain and never republishes', async () => {
+    const f = await fixture();
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => ({ ...proposal, schemaVersion: 1, executionAttempt: 1,
+        createdAt: f.now - 1000, deadlineAt: f.now - 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 }) });
+    await expect(spool.audition({ ...f.input, executionAttempt: 2 })).rejects.toThrow('UNCERTAIN');
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it.each(['purpose', 'attempt', 'voice', 'quote', 'digest'])('refuses a changed known MP3 result %s', async field => {
+    const f = await fixture();
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        const grant = { ...proposal, schemaVersion: 1, executionAttempt: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        await output(f, grant);
+        const path = join(f.resultsDir, TASK, 'result.json'), value = JSON.parse(await readFile(path, 'utf8'));
+        if (field === 'purpose') value.purpose = 'video';
+        if (field === 'attempt') value.executionAttempt = 2;
+        if (field === 'voice') value.audio.voice = 'different-voice';
+        if (field === 'quote') value.audio.quote.estimatedCoins = 9999;
+        if (field === 'digest') value.audio.outputSha256 = 'f'.repeat(64);
+        await writeFile(path, JSON.stringify(value));
+        return grant as never;
+      } });
+    await expect(spool.audition({ ...f.input, executionAttempt: 2 })).rejects.toThrow(/UNCERTAIN|AUDIO_AUDITION_RESULT/u);
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
 
 describe('Synclip commercial video spool', () => {
   it('requires the reviewed prompts, exact native shot duration and configured narration before publishing', async () => {

@@ -340,6 +340,7 @@ export {
   getPresentationAssetForRead,
   getPresentationTask,
   submitPresentationGeneration,
+  isDirectNativeVideoStoryboard,
   submitExistingSceneImageReview,
   requireManualSceneImageReviewReceipt,
   transitionPresentationAsset,

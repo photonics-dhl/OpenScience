@@ -1,4 +1,16 @@
 {
+  "hermesAudioAudition": {
+    "title": "Narration preview",
+    "scene": "Scene {number} · {seconds}s",
+    "resultUnavailable": "This narration preview could not be loaded.",
+    "download": "Download MP3",
+    "downloading": "Preparing download…",
+    "loading": "Loading audio…",
+    "playbackFailed": "Audio could not be loaded.",
+    "reload": "Reload audio",
+    "downloadFailed": "Download failed. Please try again.",
+    "downloadStarted": "Download started."
+  },
   "technologyDiscovery": {
     "eyebrow": "Technology discovery",
     "queryLabel": "Describe a technology need or enter a paper title, DOI or arXiv ID",
@@ -962,6 +974,7 @@
     "copyFailed": "Copy failed",
     "legalDisclaimerDefault": "This timestamp only proves that the platform received and recorded this version and its content hash; it does not guarantee priority, ownership, scientific correctness, or legal evidence.",
     "artifactProvenance": "Original text and attachments",
+    "artifactDownloadUnavailable": "This version does not provide a public download link.",
     "invalidVersion": "Invalid version",
     "aiReview": "AI review summary",
     "status": "Status",
@@ -2049,7 +2062,7 @@
     },
     "searchAction": "Search",
     "refineSearch": "Refine search",
-    "recentFirst": "Newly public research first · Latest published version of each study",
+    "recentFirst": "Research IDs, newest first · Latest published version of each study",
     "imageFor": "Core concept image for {title}",
     "readResearch": "Read research",
     "recentTitle": "Recently shared research",
@@ -3023,6 +3036,24 @@
     "kind_counter": "Counterclaim"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "What to produce",
+      "mode": "Audition narration",
+      "summary": "Hear the selected scene's narration before making the video.",
+      "fullVideo": "Complete video",
+      "scene": "Scene to audition",
+      "narration": "Approved narration",
+      "preset": "Voice: {voice} · Speed: {speed}×",
+      "hint": "Hear one scene first. The sample stays with this research.",
+      "loading": "Checking narration audition availability…",
+      "unavailable": "Narration audition is temporarily unavailable.",
+      "availabilityError": "Could not check narration audition availability. Try again.",
+      "retryAvailability": "Check audition availability again",
+      "needsNarration": "Choose an approved scene with 1–120 characters of narration and its complete video frames.",
+      "settingsChanged": "The voice or speed changed. Review the updated settings, then confirm again.",
+      "submit": "Audition selected scene",
+      "ready": "Ready to audition"
+    },
     "prepareVideoPlan": "Prepare video brief",
     "planWillBePrepared": "Hermes will first prepare the illustration brief.",
     "eligibleSources": "{count} eligible research claims selected.",

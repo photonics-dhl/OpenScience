@@ -13,7 +13,7 @@ import type { AuditContext } from '@openscience/observability';
 import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, type AgentDeps, type AgentTaskView } from '../agent/agent';
-import { requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
+import { HermesVideoUnavailableError, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
@@ -47,6 +47,7 @@ export interface PresentationAssetView {
   paperOriginal?: { figureId: string; caption?: string };
   canGenerateSceneImage: boolean;
   canGenerateVideo: boolean;
+  canGenerateAudioAudition: boolean;
   videoFrameAssetIds?: string[];
   canTransition: boolean;
   canApprove: boolean;
@@ -99,6 +100,7 @@ export function parsePresentationGenerationPayload(value: unknown): Presentation
   if ((payload.kind === 'video') !== Boolean(video) || (video && (storyboard || sceneImage))) throw new PresentationAssetError('VALIDATION_ERROR', 'Video kind requires exact video settings');
   let hermesRunAuthority: HermesPresentationAuthority | undefined;
   if ('hermesRunAuthority' in payload) {
+    if (video?.purpose === 'audio-audition') throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition cannot complete a managed video step');
     const authority = payload.hermesRunAuthority as Record<string, unknown> | null;
     if (!authority || typeof authority !== 'object' || Array.isArray(authority)
       || Object.keys(authority).sort().join(',') !== 'ordinal,profile,runId,stage'
@@ -350,6 +352,19 @@ async function hasHermesAssetReviewAuthority(
   return true;
 }
 
+/** Preparation only; this does not authorize any image, audio or video render. */
+export function isDirectNativeVideoStoryboard(payload: unknown): boolean {
+  try {
+    const parsed = parsePresentationGenerationPayload(payload);
+    const settings = parsed.storyboard;
+    return parsed.kind === 'interactive_html' && settings?.output === 'video' && settings.narrative === true
+      && settings.baseAssetId === undefined && parsed.hermesRunAuthority === undefined
+      && settings.narrativeSceneLimit === undefined && settings.revisionSceneIndex === undefined
+      && settings.revisionMode === undefined && settings.revisionTaskId === undefined
+      && settings.revisionImageAssetId === undefined && settings.artSceneIndex === undefined;
+  } catch { return false; }
+}
+
 export async function submitPresentationGeneration(deps: AgentDeps & HermesVideoReadinessDeps, input: {
   userId: string; researchObjectId: string; versionId: string; kind: PresentationGenerationKind; sourceClaimIds: string[]; storyboard?: StoryboardRequest; sceneImage?: SceneImageRequest; video?: VideoGenerationRequest; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
@@ -375,7 +390,16 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) await requireVideoGenerationParents(deps.prisma, payload);
-  if (videoIntent && !replay) await requireHermesVideoReady(deps);
+  if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload)) {
+    const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
+    if (audition) {
+      const policy = await readHermesAudioAuditionPolicy(deps);
+      if (!policy) throw new HermesVideoUnavailableError();
+      if (!isDeepStrictEqual(policy.audio, audition.audio)) {
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Audio audition voice must match the explicitly configured server voice');
+      }
+    } else await requireHermesVideoReady(deps);
+  }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
@@ -496,12 +520,14 @@ export async function listPresentationAssets(deps: AgentDeps, input: {
       && storyboardForVideo.document.scenes.reduce((total, scene) => total + [...scene.narration].length, 0) <= 450
       && (nativeVideo ? !!videoFrameAssetIds : asset.status === 'approved' && storyboardForVideo.document.scenes.every(scene => !!scene.animation)
         && storyboardForVideo.document.scenes.every((_, index) => eligibleSceneIndexes.has(index)));
+    const canGenerateAudioAudition = nativeVideo && canGenerateVideo;
     const canTransition = sceneValid && videoValid && !hasInvalidStoryboard(asset, asset.sourceClaims.map(source => source.claimId)) && canWrite && asset.status === 'draft' && (!(asset.kind === 'image' || asset.kind === 'video') || user?.platformRole === 'platform_admin' || hermesReviewable.has(asset.id));
     return ({
     sceneImage: presentationSceneImageView(asset),
     ...(paperOriginal ? { paperOriginal } : {}),
     canGenerateSceneImage: mayGenerate && (nativeVideo ? !!nativeProof : asset.status === 'approved' && !!storyboardForVideo),
     canGenerateVideo,
+    canGenerateAudioAudition,
     ...(videoFrameAssetIds ? { videoFrameAssetIds } : {}),
     storyboard: storyboardForVideo,
     canTransition,

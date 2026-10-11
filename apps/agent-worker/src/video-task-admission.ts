@@ -1,14 +1,40 @@
 import type { AgentTask } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import {
-  HermesVideoUnavailableError, isHermesVideoTask, requireHermesVideoReady,
+  HermesVideoUnavailableError, isHermesVideoTask, isDirectNativeVideoStoryboard, readNativeAgentExecution, requireHermesVideoReady,
   type AgentDeps, type HermesVideoReadinessDeps,
 } from '@openscience/domain';
 
 export const VIDEO_READINESS_HOLD = new HermesVideoUnavailableError().message;
 type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma'> & HermesVideoReadinessDeps;
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt'>;
-type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
+type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'progress' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
+type PendingVideoAdmission = { expectedPendingTask: VideoTaskAdmissionSnapshot };
+const admissionFields = ['id', 'kind', 'status', 'sessionId', 'progress', 'error', 'retryCount', 'executionAttempt',
+  'payload', 'result', 'interestContext', 'dispatchedAt', 'updatedAt'] as const;
+
+function firstNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
+  if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.error !== null || task.executionAttempt !== 0 || task.retryCount !== 0
+    || !isDirectNativeVideoStoryboard(task.payload) || !task.result || Array.isArray(task.result)
+    || typeof task.result !== 'object' || Object.keys(task.result).length !== 1) return false;
+  try {
+    const marker = readNativeAgentExecution(task.result);
+    return marker?.profile === 'paper-illustration' && !Object.hasOwn(marker, 'checkpoint');
+  } catch { return false; }
+}
+
+function audioAdmission(task: Pick<AgentTask, 'id' | 'kind' | 'payload' | 'result' | 'executionAttempt'>) {
+  const payload = task.payload as Record<string, unknown> | null;
+  const video = payload?.video as Record<string, unknown> | null;
+  const purpose = task.kind === 'presentation.generate' && payload?.kind === 'video' && video?.purpose === 'audio-audition'
+    ? 'audio-audition' as const : undefined;
+  const grant = (task.result as Record<string, unknown> | null)?.audioAuditionGrant as Record<string, unknown> | null;
+  // Routing only: the handler still rechecks current authority and can only adopt the original operation.
+  const recovery = purpose && grant?.schemaVersion === 1 && grant.purpose === purpose && grant.taskId === task.id
+    && Number.isSafeInteger(grant.executionAttempt) && Number(grant.executionAttempt) > 0
+    && Number(grant.executionAttempt) <= task.executionAttempt && typeof grant.inputHash === 'string' && /^[a-f0-9]{64}$/u.test(grant.inputHash);
+  return { purpose, recovery };
+}
 
 function nextUpdatedAt(task: VideoTaskSnapshot): Date {
   return new Date(Math.max(Date.now(), task.updatedAt.getTime() + 1));
@@ -33,11 +59,17 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
   return released.count === 1;
 }
 
-/** null means normal claim may proceed; false preserves the caller's processing entry. */
-export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean | null> {
-  if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)
-    || !await isHermesVideoTask(deps.prisma, task.id)) return null;
-  try { await requireHermesVideoReady(deps); }
+/** null allows a normal claim; false requires current-state recovery before removing processing. */
+export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean | PendingVideoAdmission | null> {
+  if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
+  const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
+  if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
+  // Intent lookup also awaits DB reads: a non-video result must not reopen an
+  // unfenced claim of the poller's earlier payload.
+  if (!await isHermesVideoTask(deps.prisma, task.id)) return { expectedPendingTask: current };
+  if (firstNativePlan(current)) return { expectedPendingTask: current };
+  const audio = audioAdmission(current);
+  try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
   catch (error) {
     if (!(error instanceof HermesVideoUnavailableError)) throw error;
     if (await parkPendingVideoTask(deps, task)) return true;
@@ -52,7 +84,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
       || !await isHermesVideoTask(deps.prisma, current.id)) return false;
     return parkPendingVideoTask(deps, current);
   }
-  return task.error === VIDEO_READINESS_HOLD ? releasePendingVideoTask(deps, task) : null;
+  return current.error === VIDEO_READINESS_HOLD ? releasePendingVideoTask(deps, current) : { expectedPendingTask: current };
 }
 
 /** Only pending held rows are released; Redis is owned by the existing outbox dispatcher. */
@@ -63,7 +95,8 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
   let released = 0;
   for (const task of tasks) {
     if (!await isHermesVideoTask(deps.prisma, task.id)) continue;
-    try { await requireHermesVideoReady(deps); }
+    const audio = audioAdmission(task);
+    try { if (!audio.recovery) await requireHermesVideoReady(deps, audio.purpose); }
     catch (error) { if (error instanceof HermesVideoUnavailableError) continue; throw error; }
     if (await releasePendingVideoTask(deps, task)) released++;
   }

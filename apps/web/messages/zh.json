@@ -1,4 +1,16 @@
 {
+  "hermesAudioAudition": {
+    "title": "旁白试听",
+    "scene": "第 {number} 幕 · {seconds} 秒",
+    "resultUnavailable": "暂时无法加载这段旁白试听。",
+    "download": "下载 MP3",
+    "downloading": "正在准备下载…",
+    "loading": "正在加载音频…",
+    "playbackFailed": "音频加载失败。",
+    "reload": "重新加载",
+    "downloadFailed": "下载失败，请重试。",
+    "downloadStarted": "已开始下载。"
+  },
   "technologyDiscovery": {
     "eyebrow": "技术发现",
     "queryLabel": "描述技术需求，或输入论文标题、DOI、arXiv 编号",
@@ -962,6 +974,7 @@
     "copyFailed": "复制失败",
     "legalDisclaimerDefault": "此时间戳仅证明平台在相应时间接收并记录了该版本及其内容哈希，不构成专利优先权、著作权归属、科研正确性或司法存证保证。",
     "artifactProvenance": "原文与附件",
+    "artifactDownloadUnavailable": "此版本未提供公开下载链接",
     "invalidVersion": "无效版本号",
     "aiReview": "AI 审核摘要",
     "status": "状态",
@@ -2049,7 +2062,7 @@
     },
     "searchAction": "搜索",
     "refineSearch": "细化搜索范围",
-    "recentFirst": "新公开的研究在前 · 展示各研究的最新公开版本",
+    "recentFirst": "公开号由新到旧 · 展示各研究的最新公开版本",
     "imageFor": "《{title}》的核心概念图",
     "readResearch": "阅读研究",
     "recentTitle": "最新公开研究",
@@ -3023,6 +3036,24 @@
     "kind_counter": "反向主张"
   },
   "hermesPresentation": {
+    "audioAudition": {
+      "action": "制作内容",
+      "mode": "试听旁白",
+      "summary": "先听这一幕的旁白，再继续制作视频。",
+      "fullVideo": "完整视频",
+      "scene": "试听场景",
+      "narration": "已批准的旁白",
+      "preset": "声音：{voice} · 语速：{speed}×",
+      "hint": "先听一幕旁白，试听结果会保存在这篇研究中。",
+      "loading": "正在检查旁白试听是否可用…",
+      "unavailable": "旁白试听暂不可用。",
+      "availabilityError": "暂时无法检查旁白试听，请重试。",
+      "retryAvailability": "重新检查试听",
+      "needsNarration": "请选择含 1–120 字旁白、且视频画面已齐备的批准场景。",
+      "settingsChanged": "声音或语速已变化，请查看新设置后再次确认。",
+      "submit": "试听选中幕",
+      "ready": "旁白试听已就绪"
+    },
     "prepareVideoPlan": "整理视频制作指令",
     "planWillBePrepared": "Hermes 会先整理这张图的制作指令。",
     "eligibleSources": "已选用 {count} 项可用研究主张。",

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, seedUser } from '@openscience/domain/test-helpers';
 import { createSession } from '@openscience/auth';
@@ -14,7 +14,7 @@ type RunQuery = { where?: { actorId?: string; researchObjectId?: string; profile
   orderBy?: Array<{ createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' }>;
   cursor?: { id: string }; skip?: number; take?: number };
 
-async function fixture(role = 'author', video: { videoEnabled?: boolean; readVideoReadiness?: () => Promise<boolean> } = {}) {
+async function fixture(role = 'author', video: Pick<Parameters<typeof buildApp>[0], 'videoEnabled' | 'readVideoReadiness' | 'readAudioAuditionReadiness'> = {}) {
   const { prisma, db } = createFakePrisma();
   const redis = createFakeRedis();
   const user = seedUser(db, { email: 'run@example.com', displayName: 'Run User' });
@@ -123,12 +123,30 @@ describe('Hermes research run API contract', () => {
     expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
     const available = await app.inject({ method: 'GET', url, cookies });
     expect(available.statusCode, available.body).toBe(200);
-    expect(available.json()).toEqual({ canGenerateVideo: true });
+    expect(available.json()).toEqual({ canGenerateVideo: true, audioAudition: null });
     expect(available.headers['cache-control']).toContain('no-store');
     ready = false;
-    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ canGenerateVideo: false });
+    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ canGenerateVideo: false, audioAudition: null });
     expect(db.hermesResearchRuns).toHaveLength(0);
     expect(db.usageLedger).toHaveLength(0);
+  });
+
+  it('serves only a scoped admin audio preset while full-video generation is closed', async () => {
+    const readAudioAuditionReadiness = vi.fn(async () => ({ audio: { provider: 'synclip' as const, voice: 'configured-voice', speed: 1 }, maxEstimatedCoins: 0.25 }));
+    const { app, db, cookies } = await fixture('author', { videoEnabled: true, readVideoReadiness: async () => false, readAudioAuditionReadiness });
+    const url = `/research-objects/${RO_ID}/hermes-video-capability`;
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(readAudioAuditionReadiness).not.toHaveBeenCalled();
+    db.users[0].platformRole = 'platform_admin';
+    const response = await app.inject({ method: 'GET', url, cookies });
+    expect(response.statusCode).toBe(200); expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.json()).toEqual({ canGenerateVideo: false, audioAudition: { audio: { provider: 'synclip', voice: 'configured-voice', speed: 1 } } });
+    expect(readAudioAuditionReadiness).toHaveBeenCalledTimes(1);
+    db.memberships[0].role = 'viewer';
+    expect((await app.inject({ method: 'GET', url, cookies })).json()).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(readAudioAuditionReadiness).toHaveBeenCalledTimes(1);
+    expect(db.hermesResearchRuns).toHaveLength(0); expect(db.usageLedger).toHaveLength(0);
   });
 
   it('preserves same-key run creation replay and read-only restore after video service closes', async () => {

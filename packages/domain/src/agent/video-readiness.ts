@@ -2,9 +2,14 @@ import type { Prisma } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import { requireSceneImageParent } from '../assets/scene-image';
 
+export interface HermesAudioAuditionPolicy {
+  audio: { provider: 'synclip'; voice: string; speed: number }; maxEstimatedCoins: number;
+}
+
 export interface HermesVideoReadinessDeps {
   videoEnabled?: boolean;
   readVideoReadiness?: () => Promise<boolean>;
+  readAudioAuditionReadiness?: () => Promise<HermesAudioAuditionPolicy | null>;
 }
 
 export class HermesVideoUnavailableError extends Error {
@@ -15,13 +20,27 @@ export class HermesVideoUnavailableError extends Error {
   }
 }
 
-export async function isHermesVideoReady(deps: HermesVideoReadinessDeps): Promise<boolean> {
+export async function readHermesAudioAuditionPolicy(deps: HermesVideoReadinessDeps): Promise<HermesAudioAuditionPolicy | null> {
+  if (deps.videoEnabled !== true || typeof deps.readAudioAuditionReadiness !== 'function') return null;
+  try {
+    const policy = await deps.readAudioAuditionReadiness();
+    const audio = policy?.audio;
+    if (!policy || !Number.isFinite(policy.maxEstimatedCoins) || policy.maxEstimatedCoins <= 0
+      || audio?.provider !== 'synclip' || typeof audio.voice !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(audio.voice)
+      || !Number.isFinite(audio.speed) || audio.speed <= 0) return null;
+    return { audio: { provider: 'synclip', voice: audio.voice, speed: audio.speed }, maxEstimatedCoins: policy.maxEstimatedCoins };
+  } catch { return null; }
+}
+
+export async function isHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition'): Promise<boolean> {
+  if (purpose === 'audio-audition') return await readHermesAudioAuditionPolicy(deps) !== null;
   if (deps.videoEnabled !== true || typeof deps.readVideoReadiness !== 'function') return false;
   try { return await deps.readVideoReadiness() === true; } catch { return false; }
 }
 
-export async function requireHermesVideoReady(deps: HermesVideoReadinessDeps): Promise<void> {
-  if (!await isHermesVideoReady(deps)) throw new HermesVideoUnavailableError();
+export async function requireHermesVideoReady(deps: HermesVideoReadinessDeps, purpose?: 'audio-audition'): Promise<void> {
+  if (!await isHermesVideoReady(deps, purpose)) throw new HermesVideoUnavailableError();
 }
 
 function object(value: unknown): Record<string, unknown> {

@@ -5,6 +5,8 @@ import styles from '@/app/research-objects/[id]/presentation/presentation-page.m
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
+import { HermesAudioAuditionPlayer } from '@/components/hermes/HermesAudioAuditionPlayer';
+import { useHermesViewerId } from '@/components/hermes/useHermesViewerId';
 import { useLocale, useTranslations } from 'next-intl';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,6 +26,7 @@ import {
   type PresentationVideoRequest,
   type StoryboardRequest, type SceneImageRequest,
   getPresentationTask,
+  readPresentationAudioAudition, type PresentationAudioAudition,
   getCurrentUser,
   reviewExistingPresentationImage,
   type AgentTaskView,
@@ -105,6 +108,9 @@ function standaloneUrl(roId: string, versionId: string, taskId?: string): string
 
 export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void }) {
   const t = useTranslations('presentation');
+  const audioText = useTranslations('hermesAudioAudition');
+  const viewerId = useHermesViewerId();
+  const viewerRef = useRef(viewerId); viewerRef.current = viewerId;
   const versionLabels = useVersionLabels();
   const locale = useLocale() as 'zh' | 'en';
   const companion = useTranslations('productSurfaces.overview');
@@ -137,6 +143,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const [actorId, setActorId] = useState('');
   const [error, setError] = useState('');
   const [taskState, setTaskState] = useState<PresentationTaskState | null>(null);
+  const [audioAudition, setAudioAudition] = useState<{ scope: string; ownerId: string; result: PresentationAudioAudition } | null>(null);
   const [resumeNonce, setResumeNonce] = useState(0);
   const retryInFlight = useRef(new Map<string, { scope: ActiveScope; taskId: string }>());
   const [pendingRetries, setPendingRetries] = useState<ReadonlySet<string>>(new Set());
@@ -236,6 +243,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     paperFigureUploadScope.current = null;
     transitionScope.current = null;
     setTaskState(null);
+    setAudioAudition(null);
     setWorking(false);
     setError('');
     setClaims([]);
@@ -278,7 +286,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   }, [assets, canReviewImage, scopeKey]);
 
   useEffect(() => {
-    if (!taskId || !versionId || !scopeReady) return;
+    setAudioAudition(null);
+    if (!taskId || !versionId || !scopeReady || !viewerId) return;
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return;
     const controller = new AbortController();
@@ -293,10 +302,17 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       try {
         for (let attempt = 0; !controller.signal.aborted; attempt += 1) {
           const current = (await getPresentationTask(params.id, versionId, taskId, controller.signal)).task;
-          if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
+          if (!scopeIsCurrent(scope) || controller.signal.aborted || viewerRef.current !== viewerId) return;
           loadedTaskId.current = taskId;
           setTaskState({ status: current.status, progress: current.progress, paused: false });
           if (current.status === 'succeeded') {
+            if (current.result?.purpose === 'audio-audition') {
+              const result = readPresentationAudioAudition(current);
+              setTaskState(null); setWorking(false);
+              if (!result) { setError(audioText('resultUnavailable')); return; }
+              setAudioAudition({ scope: scope.key, ownerId: viewerId, result });
+              return;
+            }
             const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
             if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
             setAssets(refreshed.assets);
@@ -325,7 +341,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
           await abortableDelay(interval, controller.signal);
         }
       } catch (cause) {
-        if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause)) return;
+        if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause) || viewerRef.current !== viewerId) return;
         setError(cause instanceof ApiClientError ? cause.message : cause instanceof Error ? cause.message : t('generationFailed'));
         if (isRecoverableTaskRead(cause)) {
           setTaskState((current) => ({ status: current?.status ?? 'running', progress: current?.progress ?? 0, paused: true }));
@@ -338,7 +354,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
       scope.controller.signal.removeEventListener('abort', abortFromScope);
       controller.abort();
     };
-  }, [params.id, resumeNonce, router, scopeKey, scopeReady, t, taskId, versionId]);
+  }, [audioText, params.id, resumeNonce, router, scopeKey, scopeReady, t, taskId, versionId, viewerId]);
 
   async function reviewSavedImage(asset: PresentationAsset) {
     const scope = scopeRef.current;
@@ -607,6 +623,9 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             </label>
             <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink underline" href={`/research-objects/${encodeURIComponent(params.id)}/edit`}>{t('openEditor')}</Link>
           </div>}
+          {audioAudition?.scope === scopeKey && audioAudition.ownerId === viewerId && audioAudition.result.taskId === taskId && viewerId ? <HermesAudioAuditionPlayer
+            ownerId={viewerId} researchObjectId={params.id} versionId={versionId} taskId={taskId}
+            caption={audioText('scene', { number: audioAudition.result.sceneIndex + 1, seconds: audioAudition.result.durationSeconds.toFixed(1) })} /> : null}
           <PresentationWorkbench
             key={scopeKey}
             researchObjectId={params.id}

@@ -954,13 +954,23 @@ async function waitForSerializableRetry(attempt: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 }
 
-export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
+type PendingTaskClaimSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'sessionId' | 'progress' | 'error'
+  | 'retryCount' | 'executionAttempt' | 'payload' | 'result' | 'interestContext' | 'dispatchedAt' | 'updatedAt'>;
+
+export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?: PendingTaskClaimSnapshot): Promise<AgentTaskView | null> {
+  if (expected && (expected.id !== taskId || expected.status !== 'pending')) return null;
   let task: AgentTask | null = null;
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
         const claimed = await tx.agentTask.updateMany({
-          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] } },
+          where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+            ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,
+              retryCount: expected.retryCount, executionAttempt: expected.executionAttempt,
+              payload: { equals: expected.payload === null ? Prisma.AnyNull : expected.payload as Prisma.InputJsonValue },
+              result: { equals: expected.result === null ? Prisma.AnyNull : expected.result as Prisma.InputJsonValue },
+              interestContext: { equals: expected.interestContext === null ? Prisma.AnyNull : expected.interestContext as Prisma.InputJsonValue },
+              dispatchedAt: expected.dispatchedAt, updatedAt: expected.updatedAt } : {}) },
           data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
         });
         if (claimed.count !== 1) return null;
@@ -1413,8 +1423,21 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
 /** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
   if (!isJsonRecord(rawResult)) return null;
+  if (kind === 'presentation.generate' && rawResult.purpose === 'audio-audition') {
+    const audio = rawResult.audioAudition;
+    return { purpose: 'audio-audition', ...(isJsonRecord(audio) && typeof audio.taskId === 'string'
+      && Number.isSafeInteger(audio.sceneIndex) && Number(audio.sceneIndex) >= 0 && Number(audio.sceneIndex) <= 5
+      && audio.contentType === 'audio/mpeg' && typeof audio.durationSeconds === 'number'
+      && Number.isFinite(audio.durationSeconds) && audio.durationSeconds > 0 && audio.durationSeconds <= 600
+      && ['decoded', 'requires_revision'].includes(String(audio.timingStatus)) ? { audioAudition: {
+        taskId: audio.taskId, sceneIndex: audio.sceneIndex, contentType: 'audio/mpeg',
+        durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus,
+      } } : {}) };
+  }
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  delete publicResult.audioAuditionGrant;
+  delete publicResult.audioAudition;
   if (isJsonRecord(rawResult.scientificReview)) {
     const scientificReview = { ...rawResult.scientificReview };
     delete scientificReview.rejectedCandidates;

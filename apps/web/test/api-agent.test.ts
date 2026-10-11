@@ -13,8 +13,8 @@ describe('workspace.guide API client contract', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { getHermesVideoCapability } = await import('../lib/api');
     const signal = new AbortController().signal;
-    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: false });
-    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: true });
+    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: false, audioAudition: null });
+    expect(await getHermesVideoCapability('paper/scope', signal)).toEqual({ canGenerateVideo: true, audioAudition: null });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith('/api/research-objects/paper%2Fscope/hermes-video-capability',
       expect.objectContaining({ credentials: 'include', cache: 'no-store', signal }));

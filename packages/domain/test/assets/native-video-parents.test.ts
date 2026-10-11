@@ -4,7 +4,8 @@ import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
-import { listPresentationAssets } from '../../src/assets/presentation-asset';
+import { listPresentationAssets, submitPresentationGeneration } from '../../src/assets/presentation-asset';
+import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { CONTENT_DRIVEN_PROFILE, ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, requireNativeVideoSceneImage, requireNativeVideoStoryboard, requireVideoGenerationParents } from '../../src/assets/video';
 
 const uuid = (n: number) => `${n.toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`;
@@ -15,14 +16,14 @@ const record = (value: unknown) => value as Record<string, unknown>;
 const parentIdentity = (asset: { contentHash: string; provenance: unknown }) => JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids: [claimId] });
 type RenderResources = Array<{ id: string; version?: string; upstreamCommit?: string; resources: string[] }>;
 
-function document() {
+function document(sceneCount = 3) {
   const illustration: IllustrationBrief = { schemaVersion: 2, message: 'The source transfers energy to the receiver.', domain: 'real-space',
     encoding: 'The supported transfer runs left to right.', subjects: [{ description: 'A source left of a receiver',
       basis: { claimId, evidenceId: uuid(7), quote: 'The source transfers energy to the receiver.' } }],
     composition: 'Both objects remain visible.', treatment: 'Scientific linework.', labels: ['Source', 'Receiver'], constraints: ['No invented apparatus.'] };
   return { schemaVersion: 1, title: 'Energy transfer', narrative: { mainMessage: 'Explain the supported transfer.', audience: 'Researchers' },
     videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway', visualContinuity: 'Keep the same source and receiver.', audioPolicy: 'external-narration', modelPolicy: 'commercial-primary' },
-    scenes: Array.from({ length: 3 }, () => ({ title: 'Transfer', narration: 'The source transfers energy to the receiver.',
+    scenes: Array.from({ length: sceneCount }, () => ({ title: 'Transfer', narration: 'The source transfers energy to the receiver.',
       visualAction: describeIllustrationBrief(illustration), illustration: structuredClone(illustration), durationSeconds: 10, sourceClaimIds: [claimId],
       videoDirection: { shotType: 'mechanism', purpose: 'Explain the transfer.', subjectLock: 'Source stays left of receiver.', generatedElements: 'One transfer trace.',
         motion: 'Trace advances left to right.', camera: 'Fixed view.', reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration',
@@ -107,6 +108,19 @@ async function fixture() {
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+describe('native original narration audition parent scope', () => {
+  it('reuses the accepted native source/frames and original language for a selected narration', async () => {
+    const f = await fixture();
+    const input = { ...f.input, video: { ...f.input.video, purpose: 'audio-audition' as const,
+      sceneIndex: 1, audio: { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 }, locale: 'zh' as const } };
+    const parents = await requireVideoGenerationParents(f.prisma as never, input);
+    expect(parents?.nativeParent).toBeDefined();
+    expect(parents?.storyboardView.document.scenes[1].narration).toBe(f.parent.provenance.storyboardDocument.scenes[1].narration);
+    await expect(requireVideoGenerationParents(f.prisma as never, { ...input, video: { ...input.video, locale: 'en' } }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
 type ChainEntry = { asset: Fixture['parent']; task: Fixture['parentTask'] };
 function refreshChain(f: Fixture, chain: ChainEntry[]) {
   for (const { asset, task } of chain) {
@@ -209,6 +223,119 @@ async function listFixture(base?: Fixture) {
   const input = { userId, researchObjectId: roId, versionId };
   return { ...f, prisma, input, assets, version, tip, workspace, membership, user };
 }
+
+type ListFixture = Awaited<ReturnType<typeof listFixture>>;
+const auditionAudio = { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 };
+const auditionRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'video' as const, sourceClaimIds: [claimId],
+  video: { profile: CONTENT_DRIVEN_PROFILE, purpose: 'audio-audition' as const, storyboardAssetId: parentId,
+    sceneImageAssetIds: f.frames.map(frame => frame.id), sceneIndex: 1, audio: auditionAudio, locale: 'zh' as const }, idempotencyKey: key });
+function submissionFixture(f: ListFixture) {
+  const { prisma, db } = createFakePrisma();
+  seedUser(db, { id: f.input.userId, platformRole: f.user.platformRole });
+  db.workspaces.push(f.workspace);
+  db.memberships.push({ id: uuid(81), workspaceId: f.workspace.id, userId: f.input.userId, role: f.membership.role });
+  db.researchObjects.push({ ...f.version.researchObject, status: 'draft', visibility: 'private' });
+  db.commits.push({ id: uuid(82), branchId: f.version.commit.branchId });
+  db.versions.push({ ...f.version, commitId: uuid(82) });
+  db.usageLedger.push({ id: uuid(83), userId: f.input.userId, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: now });
+  for (const name of ['presentationAsset', 'claimNode', 'evidenceRecord', 'ingestionTask', 'version', 'researchObject', 'workspace', 'membership', 'hermesResearchStep'] as const)
+    Object.assign(prisma[name], f.prisma[name]);
+  const findTask = prisma.agentTask.findUnique.bind(prisma.agentTask);
+  prisma.agentTask.findUnique = (async args => args.where.id
+    ? await f.prisma.agentTask.findUnique({ where: { id: args.where.id } }) ?? await findTask(args) : findTask(args)) as typeof prisma.agentTask.findUnique;
+  const findSession = prisma.agentSession.findUnique.bind(prisma.agentSession);
+  prisma.agentSession.findUnique = (async args => args.where.id === f.parentTask.sessionId
+    ? f.prisma.agentSession.findUnique() : findSession(args)) as typeof prisma.agentSession.findUnique;
+  let audioPolicyReads = 0, videoPolicyReads = 0;
+  const deps = { prisma, redis: { lpush: async () => 1 }, videoEnabled: true,
+    readAudioAuditionReadiness: async () => { audioPolicyReads++; return { audio: auditionAudio, maxEstimatedCoins: 500 }; },
+    readVideoReadiness: async () => { videoPolicyReads++; return true; } };
+  return { deps, db, reads: () => ({ audioPolicyReads, videoPolicyReads }) };
+}
+
+describe('audio parent eligibility projection and submission', () => {
+  it('submits an original already-eligible graph through the real task and ledger path', async () => {
+    const f = await listFixture(), ctx = submissionFixture(f);
+    const task = await submitPresentationGeneration(ctx.deps as never, auditionRequest(f, 'original-short'));
+    expect(task.status).toBe('pending'); expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    expect(ctx.reads()).toEqual({ audioPolicyReads: 1, videoPolicyReads: 0 });
+    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
+  });
+  it.each(['index', 'locale'] as const)('rejects a selected %s mismatch before policy read or charge', async change => {
+    const f = await listFixture(), ctx = submissionFixture(f), input = auditionRequest(f, 'bad-selected-' + change);
+    if (change === 'index') input.video.sceneIndex = f.frames.length;
+    if (change === 'locale') Object.assign(input.video, { locale: 'en' });
+    await expect(submitPresentationGeneration(ctx.deps as never, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
+    expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
+    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
+  });
+  it('retains normal video submission and the common validated frame collection', async () => {
+    const f = await listFixture(), ctx = submissionFixture(f), input = auditionRequest(f, 'ordinary-video');
+    const video = { profile: input.video.profile, storyboardAssetId: input.video.storyboardAssetId, sceneImageAssetIds: input.video.sceneImageAssetIds };
+    const task = await submitPresentationGeneration(ctx.deps as never, { ...input, video });
+    expect(task.status).toBe('pending'); expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 1 });
+    expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
+  });
+  it.each(['admin', 'read-only', 'foreign', 'missing-source', 'missing-frame', 'wrong-frame-version', 'blocked-pixel', 'legacy'] as const)(
+    'does not expose or submit an audition with %s authority/source failure', async change => {
+      const f = await listFixture(), input = auditionRequest(f, 'bad-' + change);
+      if (change === 'admin') f.user.platformRole = 'user';
+      if (change === 'read-only') f.membership.role = 'viewer';
+      if (change === 'foreign') { f.input.researchObjectId = uuid(91); input.researchObjectId = uuid(91); }
+      if (change === 'missing-source') f.evidence.length = 0;
+      if (change === 'missing-frame') { f.frames.pop(); f.frameTasks.pop(); f.assets.splice(f.assets.length - 1, 1); }
+      if (change === 'wrong-frame-version') f.frames[2]!.versionId = uuid(92);
+      if (change === 'blocked-pixel') f.frames[2]!.provenance.imageReview.decision = 'blocked';
+      if (change === 'legacy') {
+        const doc = f.parent.provenance.storyboardDocument;
+        f.parent.status = 'approved'; delete record(f.parent.provenance.storyboardSettings).narrative;
+        f.parent.provenance.storyboardDocument = parseStoryboardDocument({ schemaVersion: 1, title: doc.title,
+          scenes: doc.scenes.map(scene => ({ title: scene.title, narration: scene.narration, visualAction: scene.visualAction,
+            durationSeconds: scene.durationSeconds, sourceClaimIds: scene.sourceClaimIds, videoDirection: scene.videoDirection,
+            animation: { objects: [{ id: 'source', kind: 'rect', x: 0.1, y: 0.1, width: 0.2, height: 0.2, color: 'ink', sourceClaimIds: [claimId] }],
+              actions: [{ kind: 'pulse', target: 'source', start: 0, end: 1, meaning: f.claims[0]!.statement,
+                basis: { claimId, quote: f.claims[0]!.statement } }] } })) }, [claimId], 'video');
+        f.frames.forEach((frame, index) => {
+          frame.status = 'approved'; frame.provenance.parentIdentity = parentIdentity(f.parent);
+          frame.provenance.imageReview.parentIdentity = frame.provenance.parentIdentity;
+          f.frameTasks[index]!.result.imageReview = structuredClone(frame.provenance.imageReview);
+          f.frameTasks[index]!.result.nativeImageReview.parentIdentity = frame.provenance.parentIdentity;
+          f.frameTasks[index]!.result.nativeImageReview.review = structuredClone(frame.provenance.imageReview);
+        });
+      }
+      const ctx = submissionFixture(f);
+      await expect(submitPresentationGeneration(ctx.deps as never, input)).rejects.toThrow();
+      expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
+      expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
+      if (change === 'foreign') await expect(listPresentationAssets({ prisma: f.prisma } as never, f.input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      else {
+        const views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+        expect(views.find(asset => asset.id === parentId)).toMatchObject({ canGenerateAudioAudition: false, canGenerateVideo: change === 'legacy' });
+      }
+    });
+});
+
+describe('native producer narration boundary evidence', () => {
+  it('rejects raw overlong scenes and total narration before any Native approval record is constructed', () => {
+    const long = document(); long.scenes[0]!.narration = 'a'.repeat(121);
+    expect(() => parseStoryboardDocument(long, [claimId], 'video', { nativeNarrativeVideo: true })).toThrow(/narration:length_121:max_120/u);
+    const total = document(4); total.scenes.forEach(scene => { scene.narration = 'a'.repeat(120); });
+    expect(() => parseStoryboardDocument(total, [claimId], 'video', { nativeNarrativeVideo: true })).toThrow('storyboard:total_narration');
+  });
+  it('preserves the actual UTF16 producer limit separately from the downstream Unicode quote convention', () => {
+    const doc = document(); doc.scenes[1]!.narration = '\u{20BB7}'.repeat(60);
+    expect([...doc.scenes[1]!.narration]).toHaveLength(60); expect(doc.scenes[1]!.narration).toHaveLength(120);
+    expect(parseStoryboardDocument(doc, [claimId], 'video', { nativeNarrativeVideo: true }).scenes[1]!.narration).toBe(doc.scenes[1]!.narration);
+    doc.scenes[1]!.narration += '\u{20BB7}';
+    expect(() => parseStoryboardDocument(doc, [claimId], 'video', { nativeNarrativeVideo: true })).toThrow(/narration:length_122:max_120/u);
+  });
+});
 
 describe('native narrative video technical parents', () => {
   it('accepts an English native video with matching reconstructed settings and original pixel-parent identities', async () => {
@@ -651,7 +778,7 @@ describe('native video asset-list capabilities', () => {
       return readAssets(args);
     };
     const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
-    expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: false });
+    expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: false, canGenerateAudioAudition: false });
     expect(view?.videoFrameAssetIds).toBeUndefined();
   });
 

@@ -53,7 +53,15 @@ async function fixture() {
   const prerequisites = { nativeAgentConfigured: true, nativeSceneImageEnabled: true };
   return { root, resultsDir, readyPath, now, value, write, env, prerequisites,
     read: () => readSynclipVideoReady({ resultsDir, now: () => now }),
-    capable: () => createNativeVideoReadinessReader(env, prerequisites)() };
+    capable: () => createNativeVideoReadinessReader(env, prerequisites)(),
+    audition: () => createNativeVideoReadinessReader(env, prerequisites, 'audio-audition')() };
+}
+
+async function audioFixture() {
+  const f = await fixture();
+  await f.write({ accepting: false, audioAccepting: true, audioAuditionBudget: { maxEstimatedCoins: 2.5 },
+    narration: { provider: 'synclip', voice: 'audition-voice', speed: 1.25 } });
+  return f;
 }
 
 describe('Synclip video readiness from the existing heartbeat', () => {
@@ -132,5 +140,108 @@ describe('Synclip video readiness from the existing heartbeat', () => {
   });
   it('does not allow an inbox configuration to alias the read-only results directory', async () => {
     const f = await fixture(); expect(await createNativeVideoReadinessReader({ ...f.env, SYNCLIP_VIDEO_INBOX_DIR: f.resultsDir }, f.prerequisites)()).toBe(false);
+  });
+});
+
+describe('Synclip audio audition readiness from the protected heartbeat', () => {
+  it('returns the explicit voice, speed and coin cap while full-film accepting is false', async () => {
+    const f = await audioFixture();
+    expect(await f.read()).toMatchObject({ accepting: false, audioAccepting: true,
+      audioAuditionBudget: { maxEstimatedCoins: 2.5 }, narration: { provider: 'synclip', voice: 'audition-voice', speed: 1.25 } });
+    expect(await f.audition()).toEqual({ audio: { provider: 'synclip', voice: 'audition-voice', speed: 1.25 }, maxEstimatedCoins: 2.5 });
+    expect(await f.capable()).toBe(false);
+  });
+  it('keeps legacy full-film readiness boolean and leaves legacy audio audition closed', async () => {
+    const f = await fixture(); expect(await f.read()).toEqual(f.value);
+    expect(await f.capable()).toBe(true); expect(await f.audition()).toBeNull();
+    await f.write({ narration: undefined }); expect(await f.audition()).toBeNull(); expect(await f.capable()).toBe(false);
+  });
+  it.each([undefined, false])('does not infer audio permission from a budget or full-film accepting: %s', async audioAccepting => {
+    const f = await fixture(); await f.write({ audioAccepting, audioAuditionBudget: { maxEstimatedCoins: 2.5 } });
+    expect(await f.audition()).toBeNull(); expect(await f.capable()).toBe(true);
+  });
+  it.each(['true', 1, null])('rejects malformed audio permission without coercion: %s', async audioAccepting => {
+    const f = await fixture(); await f.write({ audioAccepting, audioAuditionBudget: { maxEstimatedCoins: 2.5 } });
+    expect(await f.read()).toBeNull(); expect(await f.audition()).toBeNull();
+  });
+  it.each([undefined, null, [], 2.5, {}, { maxEstimatedCoins: undefined }, { maxEstimatedCoins: null },
+    { maxEstimatedCoins: 0 }, { maxEstimatedCoins: -1 }, { maxEstimatedCoins: '2.5' }, { maxEstimatedCoins: true }])(
+    'requires a finite positive explicit audition budget: case %#', async audioAuditionBudget => {
+      const f = await fixture(); await f.write({ audioAccepting: true, audioAuditionBudget });
+      expect(await f.read()).toBeNull(); expect(await f.audition()).toBeNull();
+    });
+  it('rejects a nonfinite JSON coin cap and a malformed budget even when audio is closed', async () => {
+    const f = await audioFixture(); const bytes = await fs.readFile(f.readyPath, 'utf8');
+    await fs.writeFile(f.readyPath, bytes.replace('"maxEstimatedCoins":2.5', '"maxEstimatedCoins":1e309'));
+    expect(await f.read()).toBeNull(); expect(await f.audition()).toBeNull();
+    await f.write({ audioAccepting: false, audioAuditionBudget: { maxEstimatedCoins: 0 } });
+    expect(await f.read()).toBeNull(); expect(await f.audition()).toBeNull();
+  });
+  it.each([undefined, { provider: 'other', voice: 'audition-voice', speed: 1.25 },
+    { provider: 'synclip', voice: 'bad voice', speed: 1.25 }, { provider: 'synclip', speed: 1.25 },
+    { provider: 'synclip', voice: 'audition-voice', speed: 0 }, { provider: 'synclip', voice: 'audition-voice', speed: '1.25' }])(
+    'requires valid explicit narration for audio permission: case %#', async narration => {
+      const f = await fixture(); await f.write({ audioAccepting: true, audioAuditionBudget: { maxEstimatedCoins: 2.5 }, narration });
+      expect(await f.read()).toBeNull(); expect(await f.audition()).toBeNull();
+    });
+  it.each(['synclip-video-v1', 'future-adapter', undefined])('keeps the existing v2 adapter requirement for audio: %s', async adapterRevision => {
+    const f = await fixture(); await f.write({ adapterRevision, audioAccepting: true, audioAuditionBudget: { maxEstimatedCoins: 2.5 } });
+    expect(await f.audition()).toBeNull();
+  });
+  it.each(['json-stale', 'mtime-stale', 'json-future', 'mtime-future', 'missing'])(
+    'closes audio audition for unavailable heartbeat data: %s', async change => {
+      const f = await audioFixture();
+      if (change === 'json-stale') await f.write({ accepting: false, audioAccepting: true,
+        audioAuditionBudget: { maxEstimatedCoins: 2.5 }, updatedAt: f.now - 60_001 });
+      if (change === 'json-future') await f.write({ accepting: false, audioAccepting: true,
+        audioAuditionBudget: { maxEstimatedCoins: 2.5 }, updatedAt: f.now + 5001 });
+      if (change === 'mtime-stale') await fs.utimes(f.readyPath, (f.now - 60_001) / 1000, (f.now - 60_001) / 1000);
+      if (change === 'mtime-future') await fs.utimes(f.readyPath, (f.now + 5001) / 1000, (f.now + 5001) / 1000);
+      if (change === 'missing') await fs.unlink(f.readyPath);
+      expect(await f.audition()).toBeNull();
+    });
+  it.each(['file-owner', 'file-group', 'file-mode', 'directory-owner', 'directory-group', 'directory-mode'])(
+    'closes audio audition for unsafe POSIX metadata: %s', async change => {
+      const f = await audioFixture(); const path = change.startsWith('file') ? f.readyPath : f.resultsDir;
+      osBoundary.permissions.set(path, change.endsWith('owner') ? { uid: 1000 } : change.endsWith('group') ? { gid: 0 }
+        : { mode: change.startsWith('file') ? 0o100666 : 0o40777 });
+      expect(await f.audition()).toBeNull();
+    });
+  it('rejects a symlinked results directory for audio audition', async () => {
+    const f = await audioFixture(); const alias = join(f.root, 'alias');
+    await fs.symlink(f.resultsDir, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    expect(await createNativeVideoReadinessReader({ ...f.env, SYNCLIP_VIDEO_RESULTS_DIR: alias }, f.prerequisites, 'audio-audition')()).toBeNull();
+  });
+  it.each([{ AI_ENABLED: 'false' }, { HERMES_NATIVE_AGENT_ENABLED: 'false' }, { HERMES_VIDEO_ENABLED: 'false' },
+    { HERMES_VIDEO_PROVIDER: 'local' }, { SYNCLIP_VIDEO_ENABLED: 'false' }, { SYNCLIP_VIDEO_INBOX_DIR: ' ' },
+    { SYNCLIP_VIDEO_INBOX_DIR: 'relative/inbox' }, { SYNCLIP_VIDEO_RESULTS_DIR: ' ' },
+    { SYNCLIP_VIDEO_RESULTS_DIR: 'relative/results' }, { AI_DISABLED_PROVIDERS: ' other, synclip ' }])(
+    'preserves every shared native configuration prerequisite for audio: %j', async patch => {
+      const f = await audioFixture();
+      expect(await createNativeVideoReadinessReader({ ...f.env, ...patch }, f.prerequisites, 'audio-audition')()).toBeNull();
+    });
+  it.each(['nativeAgentConfigured', 'nativeSceneImageEnabled'] as const)('preserves the native prerequisite %s for audio', async prerequisite => {
+    const f = await audioFixture();
+    expect(await createNativeVideoReadinessReader(f.env, { ...f.prerequisites, [prerequisite]: false }, 'audio-audition')()).toBeNull();
+  });
+  it('rejects an aliased inbox/results configuration for audio audition', async () => {
+    const f = await audioFixture();
+    expect(await createNativeVideoReadinessReader({ ...f.env, SYNCLIP_VIDEO_INBOX_DIR: f.resultsDir }, f.prerequisites, 'audio-audition')()).toBeNull();
+  });
+  it.each(['EACCES', 'EMFILE'])('keeps permission denial closed and unexpected filesystem errors observable for audio: %s', async code => {
+    const f = await audioFixture(); osBoundary.openError = code;
+    if (code === 'EACCES') expect(await f.audition()).toBeNull(); else await expect(f.audition()).rejects.toMatchObject({ code });
+  });
+  it('resamples the heartbeat and returns only the current bounded policy on a zero-argument invocation', async () => {
+    const f = await audioFixture(); const callback = createNativeVideoReadinessReader(f.env, f.prerequisites, 'audio-audition');
+    expect(await callback()).toEqual({ audio: { provider: 'synclip', voice: 'audition-voice', speed: 1.25 }, maxEstimatedCoins: 2.5 });
+    const temporary = join(f.resultsDir, '.ready.tmp');
+    await fs.writeFile(temporary, JSON.stringify({ ...f.value, audioAccepting: true,
+      audioAuditionBudget: { maxEstimatedCoins: 0.5 }, narration: { provider: 'synclip', voice: 'replacement-voice', speed: 0.75 },
+      privateField: 'never-return-this-field' }));
+    await fs.utimes(temporary, f.now / 1000, f.now / 1000); await fs.rename(temporary, f.readyPath);
+    expect(await callback()).toEqual({ audio: { provider: 'synclip', voice: 'replacement-voice', speed: 0.75 }, maxEstimatedCoins: 0.5 });
+    expect(await f.capable()).toBe(true);
+    await f.write({ audioAccepting: false }); expect(await callback()).toBeNull(); expect(await f.capable()).toBe(true);
   });
 });

@@ -539,8 +539,11 @@ export function getHermesResearchRun(researchObjectId: string, runId: string, si
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
 
-export function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<{ canGenerateVideo: boolean }> {
-  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+export interface HermesAudioAuditionPreset { provider: 'synclip'; voice: string; speed: number }
+export interface HermesVideoCapability { canGenerateVideo: boolean; audioAudition: { audio: HermesAudioAuditionPreset } | null }
+export async function getHermesVideoCapability(researchObjectId: string, signal?: AbortSignal): Promise<HermesVideoCapability> {
+  const capability = await request<HermesVideoCapability>(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-video-capability`, { signal, cache: 'no-store' });
+  return { ...capability, audioAudition: capability.audioAudition ?? null };
 }
 
 export function getExistingHermesResearchRun(researchObjectId: string, ingestionTaskId: string, signal?: AbortSignal, output?: 'image' | 'video'): Promise<{ run: HermesResearchRun | null }> {
@@ -992,6 +995,7 @@ export interface PresentationAsset {
   sceneImage?: SceneImageRequest;
   canGenerateSceneImage?: boolean;
   canGenerateVideo?: boolean;
+  canGenerateAudioAudition?: boolean;
   videoFrameAssetIds?: string[];
   canTransition?: boolean;
   canApprove?: boolean;
@@ -1134,11 +1138,13 @@ export async function generatePresentationSceneImage(roId: string, versionId: st
   });
 }
 
-export interface PresentationVideoRequest {
+export type PresentationVideoRequest = {
   profile: 'content-driven-v1';
   storyboardAssetId: string;
   sceneImageAssetIds: string[];
-}
+} & ({ purpose?: undefined; sceneIndex?: never; audio?: never; locale?: never } | {
+  purpose: 'audio-audition'; sceneIndex: number; audio: HermesAudioAuditionPreset; locale: 'zh' | 'en';
+});
 export async function generatePresentationVideo(roId: string, versionId: string, sourceClaimIds: string[], video: PresentationVideoRequest, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-assets/generations`, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, signal,
@@ -1155,6 +1161,48 @@ export async function generatePresentationStoryboard(roId: string, versionId: st
 
 export async function getPresentationTask(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   return request(`${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}`, { signal });
+}
+
+export function presentationTaskAudioUrl(roId: string, versionId: string, taskId: string): string {
+  return `${presentationScopePath(roId, versionId)}/presentation-tasks/${encodeURIComponent(taskId)}/audio`;
+}
+
+export interface PresentationAudioAudition {
+  taskId: string;
+  sceneIndex: number;
+  contentType: 'audio/mpeg';
+  durationSeconds: number;
+  timingStatus: 'decoded' | 'requires_revision';
+}
+
+export function readPresentationAudioAudition(task: AgentTaskView): PresentationAudioAudition | null {
+  if (task.kind !== 'presentation.generate' || task.status !== 'succeeded' || task.result?.purpose !== 'audio-audition') return null;
+  const value = task.result.audioAudition;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const audio = value as Record<string, unknown>;
+  const fields = ['taskId', 'sceneIndex', 'contentType', 'durationSeconds', 'timingStatus'];
+  if (Object.keys(audio).length !== fields.length || !fields.every(field => Object.hasOwn(audio, field))
+    || audio.taskId !== task.id || typeof audio.taskId !== 'string' || !audio.taskId
+    || !Number.isInteger(audio.sceneIndex) || Number(audio.sceneIndex) < 0 || Number(audio.sceneIndex) > 5
+    || audio.contentType !== 'audio/mpeg' || typeof audio.durationSeconds !== 'number'
+    || !Number.isFinite(audio.durationSeconds) || audio.durationSeconds <= 0 || audio.durationSeconds > 600
+    || (audio.timingStatus !== 'decoded' && audio.timingStatus !== 'requires_revision')) return null;
+  return { taskId: audio.taskId, sceneIndex: Number(audio.sceneIndex), contentType: 'audio/mpeg', durationSeconds: audio.durationSeconds, timingStatus: audio.timingStatus };
+}
+
+export async function downloadPresentationTaskAudio(roId: string, versionId: string, taskId: string, signal?: AbortSignal): Promise<Blob> {
+  const revision = sessionRevision;
+  const response = await fetch(presentationTaskAudioUrl(roId, versionId, taskId), {
+    method: 'GET', credentials: 'include', cache: 'no-store', redirect: 'error', signal,
+  });
+  if (revision !== sessionRevision) throw sessionChangedError();
+  if (!response.ok) throw new ApiClientError('DOWNLOAD_FAILED', 'Audio download could not be completed', response.status);
+  if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'audio/mpeg') {
+    throw new ApiClientError('AUDIO_UNAVAILABLE', 'Audio is not available', response.status);
+  }
+  const blob = await response.blob();
+  if (revision !== sessionRevision) throw sessionChangedError();
+  return blob;
 }
 
 export async function reviewExistingPresentationImage(roId: string, versionId: string, assetId: string, idempotencyKey: string): Promise<{ task: AgentTaskView }> {

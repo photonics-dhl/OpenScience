@@ -221,7 +221,7 @@ function requireBoundNumericalResults(fields: readonly (readonly [string, string
     cache.set(text, parsed);
     return parsed;
   };
-  const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; expectedVariable?: string | null }> = [];
+  const missing: Array<{ field: string; quantity: ScientificQuantity; code: string; subjectFields: string[]; expectedVariable?: string | null }> = [];
   for (const [field, value] of fields) for (const quantity of quantities(value)) {
     const described = subjects.filter(subject => quantities(subject.description)
       .some(item => sameScientificQuantity(quantity, item, true, sourceQuantityProse)));
@@ -241,27 +241,38 @@ function requireBoundNumericalResults(fields: readonly (readonly [string, string
       const sourceVariables = [...new Set(feedbackSubjects.flatMap(subject => quantities(subject.basis.quote))
         .filter(item => sameScientificQuantity({ ...quantity, binding: null }, item)).map(item => bindingKey(item)))];
       const onlySourceVariable = sourceVariables.length === 1 ? sourceVariables[0] : null;
-      missing.push({ field, quantity, code,
+      // The caller supplies scene-scoped paths only for fresh location feedback.
+      // A failed description binding must point back to the subject, not only
+      // its displayed use. Match the subject's own quote with the same existing
+      // rules; never borrow a source or infer meaning from a neighbouring scene.
+      const scenePath = sourceNotation && reason === 'description' ? /^(scenes\[\d+\])\./u.exec(field)?.[1] : undefined;
+      const subjectFields = scenePath ? subjects.flatMap((subject, index) => quantities(subject.basis.quote)
+        .some(item => sameScientificQuantity(quantity, item, false, sourceQuantityProse))
+        ? [`${scenePath}.subjects[${index}].description`] : []) : [];
+      missing.push({ field, quantity, code, subjectFields,
         expectedVariable: onlySourceVariable ? SOURCE_VARIABLE_NAMES.get(onlySourceVariable)
           : quantity.binding && sourceVariables.length === 1 && sourceVariables[0] === null ? null : undefined });
     }
   }
   if (missing.length) {
     const first = missing[0]!;
-    const sameResultFields = [...new Set(missing.filter(item => item.quantity.value === first.quantity.value
-      && item.quantity.unit === first.quantity.unit && bindingKey(item.quantity) === bindingKey(first.quantity))
-      .map(item => item.field))].slice(0, 12);
-    const otherResults = new Map<string, { code: string; variable: string | null; fields: string[] }>();
+    const sameResults = missing.filter(item => item.quantity.value === first.quantity.value
+      && item.quantity.unit === first.quantity.unit && bindingKey(item.quantity) === bindingKey(first.quantity));
+    const sameResultFields = [...new Set(sameResults.map(item => item.field))].slice(0, 12);
+    sameResultFields.push(...new Set(sameResults.flatMap(item => item.subjectFields)));
+    const otherResults = new Map<string, { code: string; variable: string | null; fields: string[]; subjectFields: string[] }>();
     for (const item of missing) {
       if (item.quantity.value === first.quantity.value && item.quantity.unit === first.quantity.unit
           && bindingKey(item.quantity) === bindingKey(first.quantity)) continue;
       const key = JSON.stringify([item.code, bindingKey(item.quantity)]);
       const existing = otherResults.get(key);
-      if (existing) { if (!existing.fields.includes(item.field)) existing.fields.push(item.field); }
-      else otherResults.set(key, { code: item.code, variable: bindingKey(item.quantity), fields: [item.field] });
+      if (existing) {
+        if (!existing.fields.includes(item.field)) existing.fields.push(item.field);
+        for (const field of item.subjectFields) if (!existing.subjectFields.includes(field)) existing.subjectFields.push(field);
+      } else otherResults.set(key, { code: item.code, variable: bindingKey(item.quantity), fields: [item.field], subjectFields: [...item.subjectFields] });
     }
     const otherDiagnostics = [...otherResults.values()].map(item =>
-      `${item.code}${item.variable ? ` (asserted binding ${item.variable})` : ''}: ${item.fields.slice(0, 12).join(', ')}`);
+      `${item.code}${item.variable ? ` (asserted binding ${item.variable})` : ''}: ${[...item.fields.slice(0, 12), ...item.subjectFields].join(', ')}`);
     throw new UnboundNumericSourceError(first.code, first.expectedVariable, sameResultFields, otherDiagnostics);
   }
 }

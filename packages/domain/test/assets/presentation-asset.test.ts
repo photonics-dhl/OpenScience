@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
+import { claimAgentTask } from '../../src/agent/agent';
+import { initialNativeAgentExecution } from '../../src/agent/native-agent-execution';
 import {
   parsePresentationGenerationPayload,
   listPresentationAssets,
@@ -302,6 +304,55 @@ it('charges storyboard submissions once and blocks the free path', async () => {
     const { submitDeterministicPresentationTask } = await import('../../src/agent/agent');
     await expect(submitDeterministicPresentationTask(ctx as never, { sessionId: ctx.db.agentSessions[0].id, userId: USER, kind: 'presentation.generate', payload: ctx.db.agentTasks[0].payload, idempotencyKey: 'bypass' })).rejects.toThrow();
 });
+describe('first Native video plan readiness', () => {
+  const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html' as const,
+    sourceClaimIds: [CLAIM], storyboard: { locale: 'en' as const, style: 'technical', instruction: 'Explain this finding',
+      output: 'video' as const, narrative: true as const }, idempotencyKey: 'native-first-plan' };
+
+  it('reserves once through the real producer while Host is closed, then claims pending0 as attempt1', async () => {
+    const ctx = { ...fixture(), nativeAgentRuntime: runtime };
+    ctx.readVideoReadiness.mockResolvedValue(false);
+    const task = await submitPresentationGeneration(ctx as never, input);
+    const pending = ctx.db.agentTasks.find(row => row.id === task.id)!;
+    expect(pending).toMatchObject({ status: 'pending', executionAttempt: 0, retryCount: 0, error: null });
+    expect(pending.result).toEqual(initialNativeAgentExecution(runtime, 'paper-illustration'));
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+    const claimed = await claimAgentTask(ctx as never, task.id);
+    expect(claimed).toMatchObject({ status: 'running', executionAttempt: 1 });
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+    expect(ctx.db.presentationAssets).toHaveLength(0);
+  });
+
+  it('keeps a real Native producer replay exact and does not debit again while closed', async () => {
+    const ctx = { ...fixture(), nativeAgentRuntime: runtime };
+    const task = await submitPresentationGeneration(ctx as never, input);
+    ctx.readVideoReadiness.mockResolvedValue(false);
+    expect((await submitPresentationGeneration(ctx as never, input)).id).toBe(task.id);
+    await expect(submitPresentationGeneration(ctx as never, { ...input,
+      storyboard: { ...input.storyboard, instruction: 'A different finding' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  });
+
+  it('does not substitute a legacy producer when Native runtime is missing', async () => {
+    const ctx = fixture();
+    ctx.readVideoReadiness.mockResolvedValue(false);
+    await expect(submitPresentationGeneration(ctx as never, input)).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(ctx.db.agentTasks).toHaveLength(0);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+  });
+
+  it('keeps an explicit run scene allowance behind full video readiness while closed', async () => {
+    const ctx = { ...fixture(), nativeAgentRuntime: runtime };
+    ctx.readVideoReadiness.mockResolvedValue(false);
+    await expect(submitPresentationGeneration(ctx as never, { ...input,
+      storyboard: { ...input.storyboard, narrativeSceneLimit: 3 } })).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(ctx.db.agentTasks).toHaveLength(0);
+    expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
+  });
+});
+
 it('does not charge or create a session for a new direct video storyboard while closed', async () => {
   const ctx = fixture();
   ctx.readVideoReadiness.mockResolvedValue(false);
