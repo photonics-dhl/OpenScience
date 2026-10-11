@@ -63,8 +63,8 @@ jobs:
           try { await client.$executeRawUnsafe(`CREATE DATABASE "${name}"`); }
           finally { await client.$disconnect(); }
           NODE
-          SEARCH_DATABASE_URL="$SEARCH_TEST_DATABASE_URL" pnpm --filter @openscience/search migrate:deploy
-          pnpm --filter @openscience/search exec vitest run test/storage.integration.test.ts --testTimeout=20000 --no-file-parallelism
+          SEARCH_DATABASE_URL="$SEARCH_TEST_DATABASE_URL" npx pnpm@9.15.0 --filter @openscience/search migrate:deploy
+          npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/storage.integration.test.ts --testTimeout=20000 --no-file-parallelism
       - name: Verify source, tenancy, concurrency and immutable publication
         run: pnpm --filter @openscience/domain exec vitest run journal --testTimeout=20000 --no-file-parallelism
       - name: Verify HTTP boundary and public data contracts
