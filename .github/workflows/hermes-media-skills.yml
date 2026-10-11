@@ -601,7 +601,7 @@ jobs:
           node --test infra/compose/docker-compose.prod.test.mjs
       - name: Source-preserving long table indexing
         run: |
-          npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/chunker.test.ts test/embedder.test.ts
+          npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/chunker.test.ts test/embedder.test.ts test/service.test.ts test/lexical.test.ts test/dense.test.ts
           npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/search-indexer.test.ts
       - name: Task creation, source-index recovery and dispatch acknowledgements
         run: |

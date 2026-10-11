@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-12 00:46 组合候选已完成：视频StageB的public paid replay已修，生图core/saved-reader已集入；新增发现的image合同误入视频父证明在原校验处修正，独立High、5个定向例、Domain build与lint通过，现有CI选择器同步。候选未部署，生产仍是已核ca23；精确组合CI/串行发布归总控。生图继续fresh指导实现，准入设计已获限定High；视频继续native-only无TTS入口缺口；UI检索SourceMap复用方案已交、页面冻结待human。此前一次中文检索恢复不代表性能、科学计划或完整影片已验收，版本/回执/写权统一见Hermes CURRENT。
+- 2026-10-12 后端持续交付：视频paid replay与组合合同误入问题已修并High通过，5个定向例/Domain build/lint通过，现有CI选择器同步；生图新指导77b已收为06176338，32定向/WorkerTC/lint0与High通过，保持旧工具/回执。三owner分别继续当前SourceMap纯mapper、native-only无TTS误拦的4处补接、packages/search排序前限域；共享admission先video后image。生产仍是已核ca23，图文稿待human但后端未停；精确CI、候选/部署、原回执及写权统一见Hermes CURRENT。一次查询或离线测试不代表性能、科学计划或影片已验收。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
