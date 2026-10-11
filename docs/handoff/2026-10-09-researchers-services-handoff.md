@@ -5,8 +5,8 @@
 ## 2026-10-11 个人主页与创建研究
 
 - 2026-10-11用户认可9b31cf7b布局并授权推送部署。保留远端8d5ed444与线上3245，正常合并为9f1ef728；上游新增subject诊断使旧标签测试失配，只将一条断言改为完整位置精确相等，193/193及独立High GO，最终应用9a11c931f212169c13b6a6c1af18eb2382962ec8已推frontend/nanqing并部署exit0，rollback3245f9c1ac79e52b8743c2155174d4c4ef12e421，main仍62b83372。精确CI media38104475601（含四browser-entry）、video38104475653、journals38104475644全成功；整合后Web类型、Guide五条浏览器通过。新双库备份db-set-20261011T021952Z-3283927校验及权限正常，任务safe=true；无迁移/Native刷新，全部生产服务healthy、journal清除、公网与active同SHA。实走首页→上传/创建研究→直接填写，标题输入铺满卡片、旧Hermes标题删除、版本入口一行、390px无溢出；匿名只读无业务写入，不声称真实模型效果验收。截图tmp/guide-release/production-{desktop,mobile}.png，发布日志tmp/guide-release/deploy-logs/1791685707477-3eb78fee-96ee-47d9-a87a-dca9658642ca.log；保留本树供预览，原资料确认/私有保存/显式发布与最近100项选择边界保持。
-- 总控随后增量审查发现Guide切换研究会静默清空未提交输入；636→f35仅补切换保护、dec→753改进中英文提示，RED4→GREEN10/22.1s、scoped类型/lint与同一High通过，提示消费另1例通过。该补丁尚未发布，待最终组合CI与以实际最新运行版本为回退点的串行发布；原认可版式/来源/私有草稿和显式公开边界保持。
-
+- 总控随后发现Guide切换研究会静默清空未提交输入；636→f35补切换保护、dec→753改进中英文提示，RED4→GREEN10/22.1s、scoped类型/lint与同一High通过，提示另1例通过。11:09:48已串行发布ad993ee8913293bc5288b7c408d54d7756b2cfd0、rollback9a11；最终五CI全成功、Guide新增10例含于实际浏览器54/54，公网/active及11:10服务/任务/Native配对核对通过。原版式/来源/私有与显式公开边界保持，正常首页→Guide输入保护已不提交观察：新版提示、原选择和临时文字均保留，清空临时输入后关闭自有tab，原PNG/JSON在UI tmp/ui-art-20261008/product-page-planning-20261011且root已看图；精确备份/日志/身份见Hermes CURRENT。
+- UI human 10-11 11:03要求先暂停新增设计实现，清点全产品每页功能、入口、叙事与两设计线优点及现有skills/Figma能力，先交完整页面文档，再逐页讨论示意图由human判断。UI owner只读整理中；不把Git author当设计归属，不以本轮已审防丢补丁发布替代新页面设计批准。
 - 用户已认可并授权替换旧版：`5eeb48ce` 已保留在现有 `frontend/nanqing`，正常合并远端 test-only/docs 更新后以 `c239c4ecbce98441dfeb05bcd048e38a3c3f484b` 推送并部署；回滚版为 `04352895148395465fbeaaa29e1cd6540331f36e`，main仍62b83372、无新分支/强推。旧版退出展示，Git历史及一个回滚版保留。版式返工：移除空数据隐藏与本人嵌套限宽，保留左224px/右三卡及灰色字段提示；删除返回个人资料，空槽仅展示、不入库。浏览器10/10、类型/lint通过，root已观察1440/390空账户及填写区定位。日志 `%TEMP%/token-smart-checks/1791631168018-74d4a19f-7520-44fb-a359-3d8716e8ebf8.log`；隔离空账户预览 `http://127.0.0.1:3020/api/test/profile-preview`（代理3020/API3102，临时内存），原3010示例保留。Guide后续开发见上方当前记录。
 - 最新发布独立High GO、精确c239四CI全成功：media38048564707、video38048564712、journals38048564709/38048562474；新双库备份112907已完成，发布前核最新114156备份校验和/权限通过，formal work safe=true且无Native pending。正常构建/启动、无迁移/Native刷新、retention/journal收尾exit0；公网同SHA、全部服务healthy、主页两路由200、本人API匿名401、核心52源码迁移齐全。实走首页→Researchers→主页→登录且返回目标保留；浏览器未登录，不称生产本人内容已实看或保存。证据 `tmp/profile-20261010/layout-deploy-logs/1791632564200-24180455-eb7d-4646-a67c-9dc705c9c225.log`、`predeploy-layout-readonly-final.log`、`postdeploy-layout-readonly.log`。下列043发布为历史。
 - 用户已明确授权推送及部署；现有 `frontend/nanqing` 合入远端 `8cc8eff7` 后，以干净提交 `04352895148395465fbeaaa29e1cd6540331f36e` 正常推送并部署成功。active/公网版本同该 SHA，rollback=`59a23906cec85092a6100a7a281a24079136cf4d`；没有新建分支、强推或修改 main。当时应用为该发布 SHA；后续已由上方c239替换。
@@ -61,10 +61,7 @@
 
 ## 验证与限制
 
-- 前轮 Researchers 证据：Domain 构建、Web TypeScript 通过；确认服务 82/82、客户端请求体 1/1、新增范围 ESLint 与 diff 检查通过。
-- 前轮 Researchers 菜单、手机登录返回、无 PDF 创建、已发表上传、格式反馈/提交锁定五条浏览器用例通过；原通用图文创建用例通过（共 6 条），本轮未重复运行。
-- 浏览器使用受控 API fixture；未触发真实模型、论文上传或公开发布。ignored 截图：`apps/web/tmp/researchers-{desktop,mobile,mobile-menu,english}.png`。本机 Google Fonts 下载受限，截图使用回退字体。
-- Sol/medium 实现创建，Sol/high 发现并复核关闭漏传 SDF、忙时模式切换、格式反馈问题；最终增量 GO。模拟流程不等于生产可用。
+- 前轮Researchers的确认82/82、请求体1/1、浏览器6/6、构建/类型/lint与独立High证据复用；fixture零真实模型/上传/公开，模拟通过不代线上。原截图`apps/web/tmp/researchers-{desktop,mobile,mobile-menu,english}.png`及字体限制、SDF/忙时切换修复详见Git `ad993ee8913293bc5288b7c408d54d7756b2cfd0`本页，不重复旧测试。
 - 技术发现本机实际页面可打开；`/api/auth/me` 返回 500，因此真实服务不可用状态已观察，成功检索只使用真实生产者 DTO 形状的模拟 API 验证。没有真实模型调用、邮件发送或线上部署。
 - 技术发现由 Sol/medium 实现、Sol/high 独立检查权限与异步状态，最终增量 GO。已修联系状态隔离、任务恢复重试、上游状态误判、跨账号请求锁和登录恢复覆盖输入；编辑同步保存，身份与草稿准备完成前明确显示加载状态。
 - 前轮技术发现验证：单元测试 3/3、浏览器 7/7、Web TypeScript、ESLint、文档同步与差异检查通过。浏览器覆盖站内入口/登录返回、DTO 检索/比较/导出/邮件草稿、幂等重试、手机故障、账号切换、慢身份检查、部分来源/精确任务恢复。ignored 截图 `apps/web/tmp/{industry-results-desktop,investors-mobile}.png`。
