@@ -238,8 +238,11 @@ const OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS = NATIVE_VIDEO_TOOLS.map(tool => tool.na
 // Saved-image reader only. Fresh marked tasks stay blocked until admission and
 // a compatible producer are installed; historical descriptions remain exact.
 const EXPLICIT_TRIG_IMAGE_SCIENCE_DESCRIPTION = SCIENCE_DESCRIPTION + ' Image source explicit-trig contract: complete sin/cos/tan calls with one Greek argument are equivalent to their compact source notation only under this exact saved image contract. Retain every coefficient, function, argument and denominator; unknown or incomplete syntax stays unsupported.';
+const IMAGE_DIAGNOSTIC_REPAIR_DESCRIPTION = "After invalid_illustration, use the actual diagnostic and named fields. If its source or conditions are uncertain, make a bounded paper_read/paper_view of the same authorized paper or read one relevant existing Skill before repairing. Then copy the latest returned scienceToolCallId and replace exactly one reported scene, preserving every other scene and root field. Never add Claims/evidence grants, change author meaning, resend full science or submit art while unresolved. Syntax alone may be malformed output, not a platform fault. On an explicit platform/resource/budget failure or no source-supported scene repair, preserve the candidate and diagnostic and stop. (exact scienceToolCallId feedback)";
+const IMAGE_DIAGNOSTIC_REPAIR_GUIDANCE = "如果science返回invalid_illustration，先看真实诊断及指出的字段。来源或成立条件不确定时，只按需有界回读同一授权文献的相关paper_read/paper_view，或完整读取1个相关的既有科学核对Skill；核查后复制最新失败结果中的精确scienceToolCallId，只用paper_illustration_science_repair替换指出的一个scene，其他scene及根字段保持不变。不要添加Claim、证据授权、模型或新科学推断；不要重发整份science或在未解决时提交art/review。普通syntax错误先核对完整写法和输入格式，不自动当成平台故障。明确的平台/资源/预算失败，或既有来源不能支持局部修复时，保留候选和诊断并停止；不得猜测、删除作者的函数/单位或靠增加轮数掩盖问题。";
 const EXPLICIT_TRIG_NATIVE_IMAGE_TOOLS = NATIVE_ILLUSTRATION_TOOLS.map(tool => tool.name === 'paper_illustration_science'
-  ? { ...tool, description: EXPLICIT_TRIG_IMAGE_SCIENCE_DESCRIPTION } : tool);
+  ? { ...tool, description: EXPLICIT_TRIG_IMAGE_SCIENCE_DESCRIPTION }
+  : tool.name === 'paper_illustration_science_repair' ? { ...tool, description: IMAGE_DIAGNOSTIC_REPAIR_DESCRIPTION } : tool);
 
 export type VerifiedNativeVideoBase = { view: StoryboardView; settings: StoryboardRequest;
   prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt: string; renderResources?: DesignSkillUsage[] }>; designSkills: DesignSkillUsage[] };
@@ -510,6 +513,14 @@ export function nativeIllustrationToolProfile(saved: NativeAgentSessionState | n
   return { nativeVideo, videoContext: false, sourceExplicitTrig: false, sourceNotation, sourceTools, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback };
 }
 
+/** Preserve old instructions; only the exact new image profile selects diagnostic guidance. */
+export function nativeScienceRepairGuidance(sourceTools: readonly { name: string }[], sourceExplicitTrig = false): string {
+  if (sourceExplicitTrig === true) return IMAGE_DIAGNOSTIC_REPAIR_GUIDANCE;
+  return sourceTools.some(tool => tool.name === 'paper_illustration_science_repair')
+    ? "如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。"
+    : '';
+}
+
 /**
  * Keep provider capability guidance explicit at the native Hermes boundary. Saved
  * sessions replay their original tool contract and must not gain a new media route.
@@ -577,9 +588,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')
       ? materializer.call(name, args, sequence!, callId!) : source.call(name, args) };
-  const scienceRepairGuidance = sourceTools.some(tool => tool.name === 'paper_illustration_science_repair')
-    ? '如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。'
-    : '';
+  const scienceRepairGuidance = nativeScienceRepairGuidance(sourceTools, sourceExplicitTrig);
   const mediaCapabilityGuidance = [...nativeMediaCapabilityGuidance(input.settings, Boolean(saved)),
     ...(nativeVideo && input.base ? [input.settings.revisionSceneIndex === undefined
       ? 'context.basePlan 是已完成并核验的原视频方案。按本次指令创建新的完整私有修订，不覆盖原方案或产物。'
