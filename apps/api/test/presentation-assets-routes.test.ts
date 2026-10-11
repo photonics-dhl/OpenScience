@@ -11,12 +11,14 @@ import { sendPresentationAssetContent } from '../src/routes/presentation-asset-c
 import { httpStatusForError } from '../src/error-map';
 
 // Domain tests cover the Native source, permission and complete frame proof.
-// Override only its returned DTO to exercise the real HTTP readiness mask.
-const projection = vi.hoisted(() => ({ assets: null as unknown }));
+// Override returned DTOs to exercise the HTTP projection, not Domain authority.
+const projection = vi.hoisted(() => ({ assets: null as unknown, transitionAsset: null as unknown }));
 vi.mock('@openscience/domain', async importOriginal => {
   const actual = await importOriginal<typeof import('@openscience/domain')>();
   return { ...actual, listPresentationAssets: async (...args: Parameters<typeof actual.listPresentationAssets>) =>
-    projection.assets === null ? actual.listPresentationAssets(...args) : projection.assets };
+    projection.assets === null ? actual.listPresentationAssets(...args) : projection.assets,
+    transitionPresentationAsset: async (...args: Parameters<typeof actual.transitionPresentationAsset>) =>
+      projection.transitionAsset === null ? actual.transitionPresentationAsset(...args) : projection.transitionAsset };
 });
 
 const USER = '10000000-0000-4000-8000-000000000001';
@@ -90,7 +92,7 @@ describe('HTTP audio eligibility projection', () => {
           cookies: { openscience_session: ctx.token } });
         expect(response.statusCode, response.body).toBe(200);
         const view = response.json().assets[0];
-        expect(view.canGenerateVideo).toBe(videoEnabled);
+        expect(view.canGenerateVideo).toBe(asset.canGenerateVideo);
         if (source === 'missing') expect(view).not.toHaveProperty('canGenerateAudioAudition');
         else expect(view.canGenerateAudioAudition).toBe(source === 'native');
         expect(asset).toEqual(original);
@@ -102,6 +104,22 @@ describe('HTTP audio eligibility projection', () => {
       }
     });
   }
+});
+
+describe('HTTP per-parent readiness PATCH projection', () => {
+  it.each([true, false])('preserves Domain video readiness %s independently of the scene-image flag', async ready => {
+    const ctx = await fixture('platform_admin');
+    const asset = { id: ASSET, kind: 'interactive_html', canGenerateSceneImage: true, canGenerateVideo: ready, canGenerateAudioAudition: true };
+    projection.assets = [asset]; projection.transitionAsset = { id: ASSET };
+    const before = structuredClone(ctx.db), original = structuredClone(asset);
+    try {
+      const response = await ctx.app.inject({ method: 'PATCH', url: `/research-objects/${RO}/versions/${VERSION}/presentation-assets/${ASSET}`,
+        ...writeAuth(ctx.token, ctx.csrfCookie, ctx.csrfToken), payload: { status: 'rejected', expectedUpdatedAt: '2026-10-12T00:00:00Z' } });
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json().asset).toMatchObject({ canGenerateVideo: ready, canGenerateSceneImage: false, canGenerateAudioAudition: true });
+      expect(asset).toEqual(original); expect(ctx.db).toEqual(before);
+    } finally { projection.assets = null; projection.transitionAsset = null; await ctx.app.close(); }
+  });
 });
 
 describe('Presentation asset routes', () => {

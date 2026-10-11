@@ -145,7 +145,17 @@ export function HermesPresentationAction({ researchObjectId: ro, requestedVersio
       // even when new video work is no longer available.
       const firstVideoPlan = effectiveAction === 'storyboard.create' && action === 'video.create'
         && 'output' in request && request.output === 'video' && 'narrative' in request && request.narrative === true;
-      if (!replayRequest && !firstVideoPlan && (effectiveAction === 'video.create' || ('output' in request && request.output === 'video'))) {
+      const boundVideo = effectiveAction === 'video.create' && !audition && parent?.canGenerateVideo === true
+        && 'storyboardAssetId' in request && request.storyboardAssetId === parent.id
+        && 'sceneImageAssetIds' in request && videoImageIds.length >= 3
+        && request.sceneImageAssetIds.length === videoImageIds.length && request.sceneImageAssetIds.every((id, index) => id === videoImageIds[index]);
+      const boundSceneRevision = effectiveAction === 'storyboard.revise' && parent?.storyboard?.output === 'video'
+        && 'output' in request && request.output === 'video' && request.narrative === true
+        && request.baseAssetId === parent.id && request.revisionSceneIndex !== undefined
+        && request.revisionMode === undefined && request.narrativeSceneLimit === undefined;
+      // Source-bound operations use the current POST authority; the RO-only capability has no parent audio context.
+      if (!replayRequest && !firstVideoPlan && !boundVideo && !boundSceneRevision
+        && (effectiveAction === 'video.create' || ('output' in request && request.output === 'video'))) {
         try {
           const capability = await getHermesVideoCapability(ro, activeController.signal);
           if (activeController.signal.aborted || scopeRef.current !== requestScope) return;

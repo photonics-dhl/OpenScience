@@ -225,6 +225,7 @@ async function listFixture(base?: Fixture) {
 }
 
 type ListFixture = Awaited<ReturnType<typeof listFixture>>;
+const readyListDeps = (prisma: ListFixture['prisma']) => ({ prisma, videoEnabled: true, readVideoReadiness: async () => true });
 const auditionAudio = { provider: 'synclip' as const, voice: 'selected-voice', speed: 1 };
 const auditionRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'video' as const, sourceClaimIds: [claimId],
   video: { profile: CONTENT_DRIVEN_PROFILE, purpose: 'audio-audition' as const, storyboardAssetId: parentId,
@@ -266,6 +267,76 @@ describe('native video audio pre-charge selection', () => {
     video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parentId, sceneImageAssetIds: f.frames.map(frame => frame.id) }, idempotencyKey: key });
   const sceneRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'image' as const, sourceClaimIds: [claimId],
     sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 }, idempotencyKey: key });
+  const localRequest = (f: ListFixture, key: string) => ({ ...f.input, kind: 'interactive_html' as const, sourceClaimIds: [claimId],
+    storyboard: { ...f.parentTask.payload.storyboard, locale: 'zh' as const, output: 'video' as const, narrative: true as const,
+      baseAssetId: parentId, revisionSceneIndex: 1, instruction: 'Revise the selected scene.' }, idempotencyKey: key });
+
+  it.each([true, false])('projects native-only runtime readiness %s without implying an audition preset', async ready => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => ready && purpose === 'native-first');
+    const readAudioAuditionReadiness = vi.fn(async () => null);
+    const view = (await listPresentationAssets({ prisma: f.prisma, videoEnabled: true, readVideoReadiness, readAudioAuditionReadiness } as never, f.input))
+      .find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateVideo: ready, canGenerateAudioAudition: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
+    expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+    expect(readAudioAuditionReadiness).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('keeps historical/marked external list parents on default readiness (marked=%s)', async marked => {
+    const f = await listFixture();
+    if (marked) setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const view = (await listPresentationAssets({ prisma: f.prisma, videoEnabled: true, readVideoReadiness } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateVideo: false, canGenerateAudioAudition: true });
+    expect(readVideoReadiness.mock.calls).toEqual([[]]);
+  });
+  it('memoizes readiness for the same proven mode across eligible parents in one list', async () => {
+    const chain = await chainFixture(), f = await listFixture(chain);
+    const readVideoReadiness = vi.fn(async () => true);
+    const views = await listPresentationAssets({ prisma: f.prisma, videoEnabled: true, readVideoReadiness } as never, f.input);
+    expect(views.filter(view => view.canGenerateVideo)).toHaveLength(3);
+    expect(readVideoReadiness.mock.calls).toEqual([[]]);
+  });
+  it.each(['mixed', 'deleted', 'source', 'image-contract', 'missing-frame'] as const)('does not read native readiness for %s list authority', async change => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    if (change === 'mixed') setAudio(f, 'native-first', ['native', 'external-narration', 'native']);
+    if (change === 'deleted') f.parent.deletedAt = now;
+    if (change === 'source') f.claims[0]!.statement = 'Unreviewed changed source';
+    if (change === 'image-contract') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+    if (change === 'missing-frame') f.frames[0]!.deletedAt = now;
+    const readVideoReadiness = vi.fn(async () => true);
+    const view = (await listPresentationAssets({ prisma: f.prisma, videoEnabled: true, readVideoReadiness } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view?.canGenerateVideo ?? false).toBe(false); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('books a native-only selected-scene revision once and replays before mutable parent or Host reads', async () => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    const ctx = submissionFixture(f), readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
+    const deps = { ...ctx.deps, readVideoReadiness, nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } },
+      input = localRequest(f, 'local-native-once');
+    const task = await submitPresentationGeneration(deps as never, input);
+    expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+    expect(ctx.db.agentTasks).toHaveLength(1); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    expect(record(ctx.db.agentTasks[0]!.result).nativeAgentExecution).toMatchObject({ planningContract: 'video-optional-audio-v1' });
+    const paid = structuredClone(ctx.db); f.parent.deletedAt = now;
+    const parentRead = vi.spyOn(ctx.deps.prisma.presentationAsset, 'findUnique').mockRejectedValue(new Error('Parent unavailable'));
+    readVideoReadiness.mockClear().mockResolvedValue(false);
+    expect((await submitPresentationGeneration(deps as never, input)).id).toBe(task.id);
+    expect(ctx.db).toEqual(paid); expect(parentRead).not.toHaveBeenCalled(); expect(readVideoReadiness).not.toHaveBeenCalled();
+    await expect(submitPresentationGeneration(deps as never, { ...input, idempotencyKey: 'new-local-intent' })).rejects.toThrow();
+    expect(ctx.db).toEqual(paid);
+  });
+  it.each(['external', 'closed', 'identity-race', 'mode-race', 'contract-race'] as const)('refuses %s local revision before booking', async change => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
+    if (change === 'external') setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db);
+    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => {
+      if (change === 'identity-race') { f.parent.contentHash = '9'.repeat(64); f.parentTask.result.contentHash = f.parent.contentHash; refreshChain(f, [{ asset: f.parent, task: f.parentTask }]); }
+      if (change === 'mode-race') setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+      if (change === 'contract-race') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+      return change !== 'closed' && purpose === 'native-first';
+    });
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never, localRequest(f, 'blocked-local-' + change))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness.mock.calls).toEqual([change === 'external' ? [] : ['native-first']]);
+  });
 
   it.each(['video', 'scene-image'] as const)('rejects external %s without a preset before all task/ledger/audit writes', async kind => {
     const f = await listFixture(), ctx = submissionFixture(f);
@@ -361,7 +432,7 @@ describe('native video parent audio contract authority', () => {
     const savedParent = structuredClone(f.parent), savedResult = structuredClone(f.parentTask.result);
     await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never,
       { ...f.input, sourceClaimIds: [claimId] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false, canGenerateAudioAudition: false });
     const ctx = submissionFixture(f), before = structuredClone(ctx.db);
     const requests = [
@@ -403,7 +474,7 @@ describe('native video parent audio contract authority', () => {
     f.parent.provenance.illustrationReview = structuredClone(f.parentTask.result.storyboardReview);
     const savedParent = structuredClone(f.parent), savedResult = structuredClone(f.parentTask.result);
     await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never, { ...f.input, sourceClaimIds: [claimId] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ id: parentId, canGenerateSceneImage: false, canGenerateVideo: false, canGenerateAudioAudition: false });
     const ctx = submissionFixture(f), before = structuredClone(ctx.db);
     const requests = [
@@ -431,7 +502,7 @@ describe('native video parent audio contract authority', () => {
       refreshChain(f, [{ asset: f.parent, task: f.parentTask }]);
     }
     await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never, { ...f.input, sourceClaimIds: [claimId] })).resolves.toMatchObject({ task: { id: parentId } });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: true, canGenerateAudioAudition: true });
     const ctx = submissionFixture(f);
     const scene = { ...f.input, kind: 'image' as const, sourceClaimIds: [claimId], sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 }, idempotencyKey: mode + '-scene' };
@@ -478,7 +549,7 @@ describe('native video storyboard approval authority', () => {
       if (change === 'silent' || change === 'hybrid') document.scenes[1]!.videoDirection!.audioMode = change;
       if (change === 'missing-mode') delete record(document.scenes[1]!.videoDirection).audioMode;
       syncDocument(f);
-      const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+      const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
       expect.soft(view).toMatchObject({ canTransition: false, canApprove: false });
       const ctx = transitionFixture(f), before = structuredClone(ctx.db), saved = structuredClone(f.parentTask.result);
       await expect(transitionPresentationAsset(ctx.deps as never, ctx.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -496,7 +567,7 @@ describe('native video storyboard approval authority', () => {
       f.parent.provenance.storyboardDocument.scenes.forEach(scene => { scene.videoDirection!.audioMode = 'native'; });
       syncDocument(f);
     }
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canTransition: true, canApprove: true });
     if (role === 'user') expect(view).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false });
     const ctx = transitionFixture(f), saved = structuredClone(f.parentTask.result);
@@ -525,7 +596,7 @@ describe('audio parent eligibility projection and submission', () => {
     expect(task.status).toBe('pending'); expect(ctx.db.agentTasks).toHaveLength(1);
     expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
     expect(ctx.reads()).toEqual({ audioPolicyReads: 1, videoPolicyReads: 0 });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
   });
   it.each(['index', 'locale'] as const)('rejects a selected %s mismatch before policy read or charge', async change => {
@@ -535,7 +606,7 @@ describe('audio parent eligibility projection and submission', () => {
     await expect(submitPresentationGeneration(ctx.deps as never, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
     expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
   });
   it('retains normal video submission and the common validated frame collection', async () => {
@@ -544,7 +615,7 @@ describe('audio parent eligibility projection and submission', () => {
     const task = await submitPresentationGeneration(ctx.deps as never, { ...input, video });
     expect(task.status).toBe('pending'); expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 1 });
     expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateAudioAudition: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
   });
   it.each(['admin', 'read-only', 'foreign', 'missing-source', 'missing-frame', 'wrong-frame-version', 'blocked-pixel', 'legacy'] as const)(
@@ -578,9 +649,9 @@ describe('audio parent eligibility projection and submission', () => {
       await expect(submitPresentationGeneration(ctx.deps as never, input)).rejects.toThrow();
       expect(ctx.db.agentTasks).toHaveLength(0); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
       expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
-      if (change === 'foreign') await expect(listPresentationAssets({ prisma: f.prisma } as never, f.input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      if (change === 'foreign') await expect(listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
       else {
-        const views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+        const views = await listPresentationAssets(readyListDeps(f.prisma) as never, f.input);
         expect(views.find(asset => asset.id === parentId)).toMatchObject({ canGenerateAudioAudition: false, canGenerateVideo: change === 'legacy' });
       }
     });
@@ -905,7 +976,7 @@ describe('native per-frame render-resource reuse', () => {
     const parents = await requireVideoGenerationParents(f.prisma as never, f.input);
     expect(parents?.orderedImages.map(frame => frame.id)).toEqual([f.frames[0]!.id, f.frames[1]!.id, newFrame.id]);
     const listing = await listFixture(f);
-    const view = (await listPresentationAssets({ prisma: listing.prisma } as never, listing.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(listing.prisma) as never, listing.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateVideo: true, videoFrameAssetIds: f.input.video.sceneImageAssetIds });
   });
 
@@ -949,14 +1020,14 @@ describe('native video asset-list capabilities', () => {
     base.parent.provenance.storyboardSettings.locale = 'en';
     refreshChain(base, [{ asset: base.parent, task: base.parentTask }]);
     const f = await listFixture(base);
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ storyboard: { locale: 'en' }, canGenerateSceneImage: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
   });
 
   it('exposes ordered qualified draft frame IDs and native draft generation capabilities without approving assets', async () => {
     const f = await listFixture();
     f.assets.reverse();
-    const views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+    const views = await listPresentationAssets(readyListDeps(f.prisma) as never, f.input);
     expect(views.find(asset => asset.id === parentId)).toMatchObject({ status: 'draft', canGenerateSceneImage: true, canGenerateVideo: true,
       videoFrameAssetIds: f.frames.map(frame => frame.id) });
     expect(views).toHaveLength(f.assets.length);
@@ -967,7 +1038,7 @@ describe('native video asset-list capabilities', () => {
   it('allows scene-image generation before any reviewed frames exist', async () => {
     const base = await fixture(); base.frames.length = 0; base.frameTasks.length = 0;
     const f = await listFixture(base);
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: false });
     expect(view?.videoFrameAssetIds).toBeUndefined();
   });
@@ -982,7 +1053,7 @@ describe('native video asset-list capabilities', () => {
     if (change === 'orphan') frame.provenance.sceneImage.storyboardAssetId = uuid(90);
     if (change === 'rejected') frame.status = 'rejected';
     if (change === 'missing-frame') base.frames.shift();
-    const f = await listFixture(base), views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+    const f = await listFixture(base), views = await listPresentationAssets(readyListDeps(f.prisma) as never, f.input);
     const view = views.find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: false });
     expect(view?.videoFrameAssetIds).toBeUndefined();
@@ -992,7 +1063,7 @@ describe('native video asset-list capabilities', () => {
   it('selects explicit-base frames in scene order while retaining their original identities', async () => {
     const base = await chainFixture(), f = await listFixture(base);
     const originalFrames = structuredClone(f.frames);
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: true, videoFrameAssetIds: f.frames.map(frame => frame.id) });
     expect(f.frames).toEqual(originalFrames);
   });
@@ -1007,7 +1078,7 @@ describe('native video asset-list capabilities', () => {
     task.result.nativeImageReview.review = structuredClone(frame.provenance.imageReview);
     base.frames.push(frame); base.frameTasks.push(task);
     const f = await listFixture(base);
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view?.videoFrameAssetIds).toEqual([frame.id, base.frames[1]!.id, base.frames[2]!.id]);
   });
 
@@ -1021,7 +1092,7 @@ describe('native video asset-list capabilities', () => {
     if (change === 'missing-manifest') base.version.manifest.entries.length = 0;
     if (change === 'source-review') base.ingestion.agentTask.result.scientificReview.status = 'needs_review';
     if (change === 'source-map') base.ingestion.agentTask.result.sourceMapRef.contentHash = '0'.repeat(64);
-    const f = await listFixture(base), views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+    const f = await listFixture(base), views = await listPresentationAssets(readyListDeps(f.prisma) as never, f.input);
     const view = views.find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false });
     expect(view?.videoFrameAssetIds).toBeUndefined();
@@ -1035,7 +1106,7 @@ describe('native video asset-list capabilities', () => {
     if (change === 'archived-workspace') f.workspace.status = 'archived';
     if (change === 'immutable-version') f.version.status = 'published';
     if (change === 'historical-tip') f.tip.id = uuid(90);
-    const views = await listPresentationAssets({ prisma: f.prisma } as never, f.input);
+    const views = await listPresentationAssets(readyListDeps(f.prisma) as never, f.input);
     expect(views.find(asset => asset.id === parentId)).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false });
     expect(views).toHaveLength(f.assets.length);
   });
@@ -1046,7 +1117,7 @@ describe('native video asset-list capabilities', () => {
       if (args.where.id) f.frameTasks[0]!.status = 'failed';
       return readAssets(args);
     };
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: true, canGenerateVideo: false, canGenerateAudioAudition: false });
     expect(view?.videoFrameAssetIds).toBeUndefined();
   });
@@ -1054,7 +1125,7 @@ describe('native video asset-list capabilities', () => {
   it.each(['Database unavailable', '[blocked] Database unavailable'])('propagates unexpected system error: %s', async message => {
     const f = await listFixture(), failure = new Error(message);
     f.prisma.agentTask.findUnique = async () => { throw failure; };
-    await expect(listPresentationAssets({ prisma: f.prisma } as never, f.input)).rejects.toBe(failure);
+    await expect(listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).rejects.toBe(failure);
   });
 
   it.each(['approved', 'draft', 'draft-frame'])('preserves the %s legacy animation projection', async state => {
@@ -1068,7 +1139,7 @@ describe('native video asset-list capabilities', () => {
         objects: [{ id: 'source', kind: 'ellipse', x: 0.1, y: 0.1, width: 0.1, height: 0.1, color: 'teal', sourceClaimIds: [claimId] }],
         actions: [{ kind: 'translate', target: 'source', start: 0, end: 1, toX: 0.5, toY: 0.1, meaning: 'Supported transfer', basis: { claimId, quote: f.claims[0]!.statement } }] } })) };
     f.frames.forEach(frame => { frame.provenance.parentIdentity = parentIdentity(f.parent); });
-    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    const view = (await listPresentationAssets(readyListDeps(f.prisma) as never, f.input)).find(asset => asset.id === parentId);
     expect(view).toMatchObject({ canGenerateSceneImage: state !== 'draft', canGenerateVideo: state === 'approved' });
     expect(view?.videoFrameAssetIds).toBeUndefined();
   });
