@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { claimAgentTask } from '../../src/agent/agent';
 import { initialNativeAgentExecution } from '../../src/agent/native-agent-execution';
+import { parseStoryboardDocument } from '../../src/assets/storyboard';
+import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
+import { requireNativeVideoStoryboard } from '../../src/assets/video';
+import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import {
   parsePresentationGenerationPayload,
   listPresentationAssets,
@@ -316,7 +321,7 @@ describe('first Native video plan readiness', () => {
     const task = await submitPresentationGeneration(ctx as never, input);
     const pending = ctx.db.agentTasks.find(row => row.id === task.id)!;
     expect(pending).toMatchObject({ status: 'pending', executionAttempt: 0, retryCount: 0, error: null });
-    expect(pending.result).toEqual(initialNativeAgentExecution(runtime, 'paper-illustration'));
+    expect(pending.result).toEqual(initialNativeAgentExecution(runtime, 'paper-illustration', 'video-optional-audio-v1'));
     expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
     const claimed = await claimAgentTask(ctx as never, task.id);
     expect(claimed).toMatchObject({ status: 'running', executionAttempt: 1 });
@@ -429,6 +434,207 @@ function sceneFixture(output: 'image' | 'video' = 'video') {
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
   return { ...ctx, input };
 }
+
+async function nativeLocalFixture(mode: 'historical-external' | 'marked-external' | 'marked-native') {
+  const f = fixture(), now = new Date('2026-10-11T00:00:00Z');
+  const artifactId = '70000000-0000-4000-8000-000000000001', ingestionId = '70000000-0000-4000-8000-000000000002';
+  const evidenceId = '70000000-0000-4000-8000-000000000003', sessionId = '70000000-0000-4000-8000-000000000004';
+  const runtime = { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' };
+  const parentRuntime = { runtimeId: 'parent-native', skillCatalogueId: 'parent-catalogue', model: 'MiniMax-M3' };
+  Object.assign(f.db.claimNodes[0], { kind: 'finding', statement: 'The source transfers energy to the receiver.', conditions: [], updatedAt: now,
+    provenance: { source: 'reviewed_ingestion', sourceTaskId: ingestionId } });
+  const claim = f.db.claimNodes[0];
+  const evidence = { id: evidenceId, claimId: CLAIM, researchObjectId: RO, versionId: VERSION, artifactId,
+    contentHash: 'a'.repeat(64), exactQuote: claim.statement, relation: 'supports', locator: { page: 1 },
+    extractionStatus: 'succeeded', updatedAt: now, provenance: { source: 'reviewed_ingestion', sourceTaskId: ingestionId } };
+  f.db.evidenceRecords.push(evidence);
+  const sourceMapRef = { schemaVersion: 1, parserStatus: 'succeeded', artifactId, contentHash: 'a'.repeat(64),
+    objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, serializedSha256: 'b'.repeat(64), size: 100 };
+  f.db.artifacts.push({ id: artifactId, workspaceId: WORKSPACE, blobSha256: sourceMapRef.contentHash, deletedAt: null, bytesPurgedAt: null });
+  const session = { id: sessionId, userId: USER, researchObjectId: RO, kind: 'visualization', title: 'Presentation asset generation', status: 'active', deletedAt: null,
+    idempotencyKey: `presentation-session:${USER}:${RO}:${VERSION}`, createdAt: now, updatedAt: now };
+  f.db.agentSessions.push(session);
+  const ingestion = { id: ingestionId, artifactId, state: 'confirmed', batch: { userId: USER, researchObjectId: RO },
+    artifact: { workspaceId: WORKSPACE, blobSha256: sourceMapRef.contentHash, deletedAt: null, bytesPurgedAt: null },
+    agentTask: { id: '70000000-0000-4000-8000-000000000005', kind: 'sdf.extract', status: 'succeeded', deletedAt: null, updatedAt: now, session,
+      result: { sourceMapRef, scientificReview: { status: 'review_received', contractVersion: 4, responseHash: 'c'.repeat(64) },
+        core: { problem: 'Problem', insight: 'Insight', method: 'Method', results: 'Results', limitations: 'Limitations', reproducibility: 'Reproducibility' } } } };
+  f.prisma.ingestionTask.findUnique = vi.fn(async ({ where }) => where.id === ingestionId ? ingestion : null) as typeof f.prisma.ingestionTask.findUnique;
+  f.prisma.hermesResearchRun.findFirst = vi.fn(async () => null) as typeof f.prisma.hermesResearchRun.findFirst;
+  const findVersion = f.prisma.version.findFirst.bind(f.prisma.version);
+  f.prisma.version.findFirst = (async args => args.where?.id === VERSION ? { ...f.db.versions[0],
+    manifest: { id: 'manifest', coreJson: {}, entries: [{ artifactId, blobSha256: sourceMapRef.contentHash }] } } : findVersion(args)) as typeof f.prisma.version.findFirst;
+  const payload = { schemaVersion: 1, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', sourceClaimIds: [CLAIM],
+    storyboard: { locale: 'en', style: 'scientific', instruction: 'Explain the supported transfer.', output: 'video', narrative: true } };
+  const audioPolicy = mode === 'marked-native' ? 'native-first' : 'external-narration';
+  const illustration: IllustrationBrief = { schemaVersion: 2, message: claim.statement, domain: 'real-space', encoding: 'Transfer from left to right.',
+    subjects: [{ description: 'The source and receiver', basis: { claimId: CLAIM, evidenceId, quote: claim.statement } }], composition: 'Both objects visible.',
+    treatment: 'Scientific linework.', labels: ['Source', 'Receiver'], constraints: ['No invented apparatus.'] };
+  const document = parseStoryboardDocument({ schemaVersion: 1, title: 'Energy transfer', narrative: { mainMessage: claim.statement, audience: 'Researchers' },
+    videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway', visualContinuity: 'Keep both objects.', audioPolicy, modelPolicy: 'commercial-primary' },
+    scenes: ['Question', 'Mechanism', 'Takeaway'].map(title => ({ title, narration: claim.statement, durationSeconds: 10, sourceClaimIds: [CLAIM],
+      visualAction: describeIllustrationBrief(illustration), illustration: structuredClone(illustration),
+      videoDirection: { shotType: 'mechanism', purpose: 'Explain transfer.', subjectLock: 'Both objects stay fixed.', generatedElements: 'One transfer trace.', motion: 'Trace moves right.', camera: 'Fixed view.',
+        reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: audioPolicy === 'native-first' ? 'native' : 'external-narration', subtitleMode: 'sidecar', negativeConstraints: ['No invented apparatus.'], modelPolicy: 'commercial-primary' } })) },
+  [CLAIM], 'video', { nativeNarrativeVideo: true });
+  const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const sourceEvidenceIdentity = presentationEvidenceIdentity([evidence] as never);
+  const source = await readVisualNarrativeSource(f.prisma, { userId: USER, workspaceId: WORKSPACE, researchObjectId: RO, versionId: VERSION, sourceClaimIds: [CLAIM] });
+  const context = { payload, sourceEvidenceIdentity, claimContent: presentationClaimContent([claim] as never), baseIdentity: null, narrativeSourceIdentity: source.identity };
+  const cp = { taskId: ASSET, objectKey: `derived/native-agent/${'d'.repeat(64)}.json`, serializedSha256: 'd'.repeat(64), size: 100, artifactId,
+    documentSha256: sourceMapRef.contentHash, sourceMapHash: sourceMapRef.serializedSha256, executionAttempt: 1, turnCount: 4, state: 'completed',
+    target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'e'.repeat(64) }, responseHash: 'f'.repeat(64), finishReason: 'stop', hasToolCalls: false };
+  const review = { stage: 'final-brief', decision: 'accepted', requestId: ASSET, candidateHash: hash(document), sourceEvidenceIdentity, summary: 'The saved source is preserved.', ...cp.target, responseHash: cp.responseHash };
+  const designSkills = [{ id: 'scientific', version: '20', resources: ['SKILL.md#Execution'] }];
+  const initial = mode === 'historical-external' ? initialNativeAgentExecution(parentRuntime, 'paper-illustration')!
+    : initialNativeAgentExecution(parentRuntime, 'paper-illustration', 'video-optional-audio-v1')!;
+  const result = { ...initial, nativeAgentExecution: { ...initial.nativeAgentExecution, checkpoint: cp }, sourceMapRef, assetId: ASSET, contentHash: '1'.repeat(64), nativeIllustrationContext: context,
+    storyboardCheckpoint: { ...context, executionAttempt: 1, planned: { document, promptHash: review.promptHash, reviewFormat: 2, designSkills } }, storyboardReview: review,
+    nativeIllustration: { ...parentRuntime, planToolCallId: 'parent-art', reviewToolCallId: 'parent-review' },
+    illustrationPrompts: document.scenes.map((_, sceneIndex) => ({ sceneIndex, prompt: `Frame ${sceneIndex}`, videoPrompt: `Motion ${sceneIndex}` })) };
+  const parent = { id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'draft', deletedAt: null, label: 'presentation_not_evidence',
+    contentHash: result.contentHash, createdAt: now, updatedAt: now, generator: 'OpenScience Hermes storyboard planner', generatorVersion: 'test', objectKey: 'test/parent',
+    provenance: { source: 'verified_claims', subtype: 'sourced_storyboard', taskId: ASSET, sourceEvidenceIdentity,
+      storyboardSettings: payload.storyboard, storyboardDocument: document, illustrationReview: review, designSkills } };
+  f.db.presentationAssets.push(parent); f.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
+  const parentTask = { id: ASSET, sessionId, kind: 'presentation.generate', status: 'succeeded', deletedAt: null, error: null, executionAttempt: 1, retryCount: 0,
+    updatedAt: now, createdAt: now, dispatchedAt: now, progress: 100, interestContext: null, payload, result };
+  f.db.agentTasks.push(parentTask);
+  await requireNativeVideoStoryboard(f.prisma, { ...parent, sourceClaims: [{ claimId: CLAIM }] } as never, { researchObjectId: RO, versionId: VERSION, sourceClaimIds: [CLAIM] });
+  const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html' as const, sourceClaimIds: [CLAIM],
+    storyboard: { ...payload.storyboard, locale: 'en' as const, output: 'video' as const, baseAssetId: ASSET, revisionSceneIndex: 1 }, idempotencyKey: 'new-local-' + mode };
+  return { ...f, nativeAgentRuntime: runtime, runtime, parent, parentTask, input, hash };
+}
+
+describe('ordinary Native video revision parent contract', () => {
+  it.each(['historical-external', 'marked-external', 'marked-native'] as const)(
+    'inherits the actual %s parent contract in one task/debit and retains full Host readiness', async mode => {
+      const f = await nativeLocalFixture(mode), parent = structuredClone(f.parentTask);
+      const beforeTasks = f.db.agentTasks.length, beforeDebits = f.db.usageLedger.filter(row => row.kind === 'consume').length;
+      const task = await submitPresentationGeneration(f as never, f.input);
+      const child = f.db.agentTasks.find(row => row.id === task.id)!;
+      const expected = mode === 'historical-external' ? initialNativeAgentExecution(f.runtime, 'paper-illustration')
+        : initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1');
+      expect(child.result).toEqual(expected); expect(child.result.nativeAgentExecution).not.toHaveProperty('checkpoint');
+      expect(f.db.agentTasks).toHaveLength(beforeTasks + 1); expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(beforeDebits + 1);
+      expect(f.readVideoReadiness.mock.calls).toEqual([[]]); expect(f.parentTask).toEqual(parent);
+      const paid = structuredClone(f.db); f.readVideoReadiness.mockClear().mockResolvedValue(false);
+      expect((await submitPresentationGeneration(f as never, f.input)).id).toBe(task.id);
+      expect(f.db).toEqual(paid); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    });
+  it.each(['deleted', 'failed-task', 'unknown-contract', 'started-parent', 'claim-drift', 'invalid-index'] as const)(
+    'rejects %s before all new task/debit writes', async change => {
+      const f = await nativeLocalFixture('marked-native');
+      if (change === 'deleted') f.parent.deletedAt = new Date() as never;
+      if (change === 'failed-task') f.parentTask.status = 'failed';
+      if (change === 'unknown-contract') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'unknown' });
+      if (change === 'started-parent') f.parentTask.result.nativeAgentExecution.checkpoint.state = 'started';
+      if (change === 'claim-drift') f.db.claimNodes[0].statement = 'Different unsupported source';
+      if (change === 'invalid-index') f.input.storyboard.revisionSceneIndex = 5;
+      const before = structuredClone(f.db);
+      await expect(submitPresentationGeneration(f as never, f.input)).rejects.toThrow();
+      expect(f.db).toEqual(before); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    });
+  it('refuses valid-but-changed parent execution after readiness instead of inferring a new contract', async () => {
+    const f = await nativeLocalFixture('marked-external');
+    f.readVideoReadiness.mockImplementation(async () => {
+      delete (f.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+      return true;
+    });
+    const tasks = f.db.agentTasks.length, debits = f.db.usageLedger.length;
+    await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(debits);
+  });
+  it('keeps native-first local revisions blocked when complete default-TTS readiness is absent', async () => {
+    const f = await nativeLocalFixture('marked-native'); f.readVideoReadiness.mockResolvedValue(false);
+    const before = structuredClone(f.db);
+    await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
+    expect(f.db).toEqual(before); expect(f.readVideoReadiness.mock.calls).toEqual([[]]);
+  });
+  it.each(['deleted-parent', 'contract-drift', 'claim-drift', 'temporarily-unreadable-parent'] as const)(
+    'publicly replays the exact paid child after %s without parent/Claim/Host reads or any write', async change => {
+      const f = await nativeLocalFixture('marked-native');
+      const first = await submitPresentationGeneration(f as never, f.input);
+      const child = f.db.agentTasks.find(row => row.id === first.id)!;
+      child.result.providerOutcome = 'unknown';
+      if (change === 'deleted-parent') f.parent.deletedAt = new Date() as never;
+      if (change === 'contract-drift') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'unknown' });
+      if (change === 'claim-drift') f.db.claimNodes[0].statement = 'A changed source claim';
+      const before = structuredClone(f.db), receipt = structuredClone(child);
+      const parents = vi.spyOn(f.prisma.presentationAsset, 'findUnique'), claims = vi.spyOn(f.prisma.claimNode, 'findMany');
+      if (change === 'temporarily-unreadable-parent') parents.mockImplementation(async () => { throw new Error('Parent temporarily unavailable'); });
+      const tasks = vi.spyOn(f.prisma.agentTask, 'findUnique'); f.readVideoReadiness.mockClear().mockResolvedValue(false);
+      expect((await submitPresentationGeneration(f as never, f.input)).id).toBe(first.id);
+      expect(f.db).toEqual(before); expect(child).toEqual(receipt);
+      expect(parents).not.toHaveBeenCalled(); expect(claims).not.toHaveBeenCalled(); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+      expect(tasks.mock.calls.some(([args]) => args.where.id === ASSET)).toBe(false);
+    });
+  it('rejects a conflicting public replay before parent/readiness without returning or charging a new task', async () => {
+    const f = await nativeLocalFixture('marked-native'); await submitPresentationGeneration(f as never, f.input);
+    const before = structuredClone(f.db), parents = vi.spyOn(f.prisma.presentationAsset, 'findUnique'); f.readVideoReadiness.mockClear();
+    await expect(submitPresentationGeneration(f as never, { ...f.input, storyboard: { ...f.input.storyboard, instruction: 'A conflicting request' } }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(f.db).toEqual(before); expect(parents).not.toHaveBeenCalled(); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('does not return another actor paid task just because its key is known', async () => {
+    const f = await nativeLocalFixture('marked-native'); await submitPresentationGeneration(f as never, f.input);
+    const other = '10000000-0000-4000-8000-000000000009'; seedUser(f.db, { id: other });
+    f.db.memberships.push({ id: 'other-author', workspaceId: WORKSPACE, userId: other, role: 'author' });
+    const before = structuredClone(f.db), parents = vi.spyOn(f.prisma.presentationAsset, 'findUnique'); f.readVideoReadiness.mockClear();
+    await expect(submitPresentationGeneration(f as never, { ...f.input, userId: other })).rejects.toThrow();
+    expect(f.db).toEqual(before); expect(parents).not.toHaveBeenCalled(); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('preserves current write permission on a public paid replay', async () => {
+    const f = await nativeLocalFixture('marked-native'); await submitPresentationGeneration(f as never, f.input);
+    f.db.memberships[0].role = 'viewer';
+    const before = structuredClone(f.db), parents = vi.spyOn(f.prisma.presentationAsset, 'findUnique'); f.readVideoReadiness.mockClear();
+    await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(f.db).toEqual(before); expect(parents).not.toHaveBeenCalled(); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it('rolls back a newly inherited local task and its credit together on reservation failure', async () => {
+    const f = await nativeLocalFixture('marked-native'), before = structuredClone(f.db);
+    const create = f.prisma.usageLedger.create.bind(f.prisma.usageLedger);
+    let atReservation: unknown;
+    vi.spyOn(f.prisma.usageLedger, 'create').mockImplementation(async args => {
+      await create(args); atReservation = structuredClone(f.db.agentTasks.find(row => row.id !== ASSET)!.result);
+      throw new Error('local reservation interrupted');
+    });
+    await expect(submitPresentationGeneration(f as never, f.input)).rejects.toThrow('local reservation interrupted');
+    expect(atReservation).toEqual(initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1'));
+    expect(f.db).toEqual(before);
+  });
+  it.each(['marked-external', 'marked-native'] as const)('consumes and approves a saved %s local child through the actual shared authority', async mode => {
+    const f = await nativeLocalFixture(mode);
+    const view = (await listPresentationAssets(f as never, f.input)).find(asset => asset.id === ASSET)!.storyboard!;
+    const baseIdentity = JSON.stringify({ contentHash: f.parent.contentHash, provenance: f.parent.provenance, ids: [CLAIM] });
+    const task = await submitPresentationGeneration(f as never, f.input), child = f.db.agentTasks.find(row => row.id === task.id)!;
+    const childDocument = structuredClone(view.document);
+    childDocument.scenes[1]!.narration = 'The source transfers energy along the supported link.';
+    const document = parseStoryboardDocument(childDocument, [CLAIM], 'video', { nativeNarrativeVideo: true });
+    const cp = { ...structuredClone(f.parentTask.result.nativeAgentExecution.checkpoint), taskId: child.id,
+      objectKey: `derived/native-agent/${'8'.repeat(64)}.json`, serializedSha256: '8'.repeat(64), responseHash: '9'.repeat(64) };
+    const review = { ...structuredClone(f.parentTask.result.storyboardReview), requestId: child.id, candidateHash: f.hash(document), responseHash: cp.responseHash };
+    const context = { ...structuredClone(f.parentTask.result.nativeIllustrationContext), payload: child.payload, baseIdentity };
+    const prompts = structuredClone(f.parentTask.result.illustrationPrompts); prompts[1]!.prompt = 'New selected frame'; prompts[1]!.videoPrompt = 'New selected motion';
+    Object.assign(child, { status: 'succeeded', executionAttempt: 1, error: null, deletedAt: null,
+      result: { ...child.result, nativeAgentExecution: { ...child.result.nativeAgentExecution, checkpoint: cp }, sourceMapRef: f.parentTask.result.sourceMapRef,
+        assetId: child.id, contentHash: '7'.repeat(64), nativeIllustrationContext: context,
+        storyboardCheckpoint: { ...context, executionAttempt: 1, planned: { document, promptHash: review.promptHash, reviewFormat: 2,
+          designSkills: f.parentTask.result.storyboardCheckpoint.planned.designSkills } }, storyboardReview: review,
+        nativeIllustration: { runtimeId: f.runtime.runtimeId, skillCatalogueId: f.runtime.skillCatalogueId, planToolCallId: 'child-art', reviewToolCallId: 'child-review' },
+        illustrationPrompts: prompts } });
+    const asset = { ...structuredClone(f.parent), id: child.id, contentHash: child.result.contentHash, status: 'draft',
+      provenance: { ...structuredClone(f.parent.provenance), taskId: child.id, storyboardSettings: child.payload.storyboard,
+        storyboardDocument: document, illustrationReview: review } };
+    f.db.presentationAssets.push(asset); f.db.presentationAssetClaims.push({ presentationAssetId: child.id, claimId: CLAIM });
+    await expect(requireNativeVideoStoryboard(f.prisma, { ...asset, sourceClaims: [{ claimId: CLAIM }] } as never, f.input)).resolves.toMatchObject({ task: { id: child.id } });
+    await expect(transitionPresentationAsset(f as never, { ...f.input, assetId: child.id, status: 'approved', expectedUpdatedAt: asset.updatedAt }))
+      .resolves.toMatchObject({ id: child.id, status: 'approved' });
+    expect(document.videoProduction).toEqual(view.document.videoProduction);
+    expect(document.scenes[0]).toEqual(view.document.scenes[0]); expect(document.scenes[2]).toEqual(view.document.scenes[2]);
+    expect(prompts[0]).toEqual(f.parentTask.result.illustrationPrompts[0]); expect(prompts[2]).toEqual(f.parentTask.result.illustrationPrompts[2]);
+  });
+});
 it('does not charge a new direct frame of an approved video storyboard while closed', async () => {
   const ctx = sceneFixture();
   ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);

@@ -28,7 +28,7 @@ import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } fro
 import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, isNativeSourceCorrectionTaskKey, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
-import { isDirectNativeVideoStoryboard } from '../assets/presentation-asset';
+import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoSceneRevision, parsePresentationGenerationPayload, requireStoryboardBase } from '../assets/presentation-asset';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
 import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, requireNativeIllustrationTerminalSource, supportsNativeIllustration, type NativeAgentRuntimeConfig } from './native-agent-execution';
@@ -642,6 +642,8 @@ async function persistAgentTaskCoreInTransaction(
   }
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
+  const inheritedContract = input.kind === 'presentation.generate' && isOrdinaryNativeVideoSceneRevision(input.payload)
+    ? (await requireStoryboardBase(tx, parsePresentationGenerationPayload(input.payload)))?.nativePlanningContract : undefined;
   // Only a new direct first video plan opts in, atomically with its task and credit.
   // Existing rows replay above; other Native entry points retain the historical contract.
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
@@ -649,7 +651,9 @@ async function persistAgentTaskCoreInTransaction(
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
       ? isDirectNativeVideoStoryboard(input.payload)
         ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', 'video-optional-audio-v1')
-        : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
+        : inheritedContract !== undefined
+          ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', inheritedContract)
+          : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
       : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
@@ -1486,7 +1490,8 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   }
 }
 
-function taskToView(task: {
+/** Package-internal serialization shared by submission and exact read-only replay. */
+export function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;

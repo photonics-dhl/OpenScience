@@ -341,6 +341,7 @@ export {
   getPresentationTask,
   submitPresentationGeneration,
   isDirectNativeVideoStoryboard,
+  isOrdinaryNativeVideoSceneRevision,
   submitExistingSceneImageReview,
   requireManualSceneImageReviewReceipt,
   transitionPresentationAsset,

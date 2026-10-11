@@ -207,6 +207,7 @@ describe.skipIf(process.env.XGS_WORKER_TEST_REDIS_URL === undefined)('real Redis
 describe('ordinary local Native video planning compatibility floor', () => {
   function localRevision() {
     const f = firstNativePlanFixture(); f.state.ready = true;
+    Object.assign(f.deps.prisma, { presentationAsset: { findUnique: vi.fn(async () => null) } });
     Object.assign(f.task.payload.storyboard!, { baseAssetId: '10000000-0000-4000-8000-000000000001', revisionSceneIndex: 0 });
     Object.assign(f.task.result!.nativeAgentExecution!, { planningContract: 'video-optional-audio-v1' });
     Object.assign(f.task, { idempotencyKey: 'original-local-video-once' });
@@ -1124,6 +1125,83 @@ async function persistedNativeAdmissionFixture() {
   };
   return { ...f, native, setAudio, asSceneImage };
 }
+
+describe('ordinary inherited Native local revision admission', () => {
+  async function local() {
+    const f = await persistedNativeAdmissionFixture(); f.state.ready = true;
+    f.task.payload = { ...structuredClone(f.native.parentTask.payload), storyboard: {
+      ...f.native.parentTask.payload.storyboard, baseAssetId: f.native.parent.id, revisionSceneIndex: 1, instruction: 'Revise only the selected scene.',
+    } };
+    f.task.result = initialNativeAgentExecution({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' }, 'paper-illustration', 'video-optional-audio-v1')!;
+    Object.assign(f.task, { idempotencyKey: 'original-ordinary-local-key' });
+    return f;
+  }
+  it('recovers the same inherited local NULL-CP row once through complete readiness and the real outbox/claim', async () => {
+    const f = await local(); f.setAudio('native-first', ['native', 'native', 'native']);
+    f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+    const ledger = [{ id: 'local-existing-credit', taskId: f.task.id, delta: -1 }];
+    Object.assign(f.deps.prisma, { usageLedger: { create: vi.fn(), findMany: vi.fn(async () => ledger) } });
+    const before = structuredClone(f.task), paid = structuredClone(ledger);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1); expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(f.task).toEqual({ ...before, error: null, dispatchedAt: null, updatedAt: new Date(before.updatedAt.getTime() + 1) });
+    expect(await f.outbox()).toBe(1); expect(await f.outbox()).toBe(0); await f.poll();
+    expect(f.task).toMatchObject({ id: before.id, status: 'succeeded', executionAttempt: 1, result: before.result, payload: before.payload,
+      idempotencyKey: 'original-ordinary-local-key' });
+    expect(ledger).toEqual(paid); expect(f.deps.prisma.usageLedger.create).not.toHaveBeenCalled();
+    expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[], []]);
+  });
+  it('admits a newly inherited local row only with default complete Host/TTS readiness', async () => {
+    const f = await local(), before = structuredClone(f.task);
+    expect(await admitPendingVideoTask(f.deps, before as never)).toEqual({ expectedPendingTask: before });
+    expect(f.task).toEqual(before); expect(vi.mocked(f.deps.readVideoReadiness).mock.calls).toEqual([[]]);
+  });
+  it('releases the inherited local snapshot once under concurrent compatible recovery', async () => {
+    const f = await local(); f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+    const counts = await Promise.all([recoverHeldVideoTasks(f.deps), recoverHeldVideoTasks(f.deps)]);
+    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(await f.outbox()).toBe(1); expect(await f.outbox()).toBe(0);
+    expect(f.task.executionAttempt).toBe(0); expect(execution.claim).not.toHaveBeenCalled();
+  });
+  it('retains a local row changed after parent/readiness checks before full-snapshot release', async () => {
+    const f = await local(); f.task.error = VIDEO_READINESS_HOLD;
+    let changed: unknown;
+    f.state.beforeUpdate = () => { f.task.result!.providerOutcome = 'unknown'; changed = structuredClone(f.task); };
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(changed).toBeDefined(); expect(f.task).toEqual(changed);
+    expect(f.task).toMatchObject({ error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+  });
+  it.each(['not-ready', 'unknown-parent', 'deleted-parent', 'unmarked-parent', 'parent-drift'] as const)(
+    'keeps %s inherited local work held with unchanged result/key/attempt', async change => {
+      const f = await local(); f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+      if (change === 'not-ready') f.state.ready = false;
+      if (change === 'unknown-parent') Object.assign(f.native.parentTask.result.nativeAgentExecution, { planningContract: 'unknown' });
+      if (change === 'deleted-parent') f.native.parent.deletedAt = new Date();
+      if (change === 'unmarked-parent') delete (f.native.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+      if (change === 'parent-drift') f.deps.readVideoReadiness = vi.fn(async () => {
+        delete (f.native.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+        return true;
+      });
+      const held = structuredClone(f.task);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(f.task).toEqual(held);
+      expect(await releasePendingVideoTask(f.deps, held as never, 'video-optional-audio-v1')).toBe(false);
+      expect(await f.outbox()).toBe(0); expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    });
+  it.each(['started', 'unknown', 'retry', 'attempt', 'terminal', 'deleted'] as const)(
+    'cannot use local compatibility release to reopen %s work', async change => {
+      const f = await local(); f.task.error = VIDEO_READINESS_HOLD;
+      if (change === 'started') Object.assign(f.task.result!.nativeAgentExecution!, { checkpoint: { state: 'started' } });
+      if (change === 'unknown') f.task.result!.providerOutcome = 'unknown';
+      if (change === 'retry') f.task.retryCount = 1;
+      if (change === 'attempt') f.task.executionAttempt = 1;
+      if (change === 'terminal') f.task.status = 'succeeded';
+      if (change === 'deleted') f.task.deletedAt = new Date();
+      const before = structuredClone(f.task);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+      expect(await releasePendingVideoTask(f.deps, before as never, 'video-optional-audio-v1')).toBe(false);
+      expect(f.task).toEqual(before); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+    });
+});
 
 describe('persisted Native audio admission', () => {
   it.each(['video', 'scene-image'] as const)('holds external %s without a preset through the default zero-argument readiness', async kind => {

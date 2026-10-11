@@ -892,6 +892,44 @@ describe('native Hermes complete video planning', () => {
     expect(prompts[0]).toEqual(base.prompts[0]); expect(prompts[2]).toEqual(base.prompts[2]);
     expect(document.scenes[1]!.narration).toBe('A supported connection.');
   });
+  it.each(['external-narration', 'native-first'])('finishes an inherited %s selected-scene plan with exact global and unselected content', policy => {
+    const { narrativeSceneLimit: _limit, ...ordinarySettings } = settings; void _limit;
+    const profile = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    const originalScience = structuredClone(science); originalScience.videoProduction.audioPolicy = policy;
+    originalScience.scenes.forEach(scene => { scene.videoDirection.audioMode = policy === 'native-first' ? 'native' : 'external-narration'; });
+    const parent = createNativeIllustrationMaterializer({ claims, settings: ordinarySettings, paperOriginals: new Map(), ...profile });
+    expect(parent.call('paper_illustration_science', originalScience, 0, 'science-video')).toMatchObject({ status: 'science_ready' });
+    const original = parent.call('paper_illustration_art', art, 1, 'parent-art');
+    expect(original).toMatchObject({ status: 'art_ready' });
+    const base = { settings: ordinarySettings, view: { document: original.document, locale: ordinarySettings.locale, style: ordinarySettings.style,
+      output: 'video', narrative: true }, prompts: original.prompts, designSkills: [] } as unknown as import('../src/native-agent/illustration-task').VerifiedNativeVideoBase;
+    const revision = { ...ordinarySettings, baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 1, instruction: 'Shorten only the selected scene.' };
+    const child = createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile });
+    const messages: ChatMessage[] = [];
+    const call = (name: string, args: unknown, id: string) => {
+      const result = child.call(name, args, messages.length, id);
+      messages.push({ role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+        { role: 'tool', toolCallId: id, content: JSON.stringify(result) });
+      return result;
+    };
+    const revised = structuredClone(originalScience); revised.scenes[1]!.narration = 'A supported connection.';
+    expect(call('paper_illustration_science', revised, 'local-science')).toMatchObject({ status: 'science_ready' });
+    const planned = call('paper_illustration_art', { scienceToolCallId: 'local-science', scenes: [art.scenes[1]] }, 'local-art');
+    expect(planned, JSON.stringify(planned)).toMatchObject({ status: 'art_ready' });
+    expect(call('paper_illustration_review', { planToolCallId: 'local-art', decision: 'accepted', summary: 'The selected change preserves science and all other scenes.',
+      corrections: [], issues: [] }, 'local-review')).toMatchObject({ decision: 'accepted' });
+    const final = '{"reviewToolCallId":"local-review"}', result = child.finish(messages, final);
+    const restored = createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile });
+    expect(restored.finish(messages, final)).toEqual(result);
+    const document = planned.document as typeof base.view.document, prompts = planned.prompts as typeof base.prompts;
+    expect(document.videoProduction).toEqual(base.view.document.videoProduction); expect(document.narrative).toEqual(base.view.document.narrative);
+    for (const index of [0, 2]) { expect(document.scenes[index]).toEqual(base.view.document.scenes[index]); expect(prompts[index]).toEqual(base.prompts[index]); }
+    expect(document.scenes[1]!.narration).toBe('A supported connection.');
+    expect(prompts[1]!.videoPrompt).toBe(compileShotPrompt(document, document.scenes[1]!, revision.locale));
+    const mixed = structuredClone(originalScience); mixed.scenes[1]!.videoDirection.audioMode = policy === 'native-first' ? 'external-narration' : 'native';
+    expect(createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile })
+      .call('paper_illustration_science', mixed, 0, 'bad-local-audio')).toMatchObject({ status: 'invalid_illustration' });
+  });
 
   it.each(['continuity', 'narrative', 'title', 'count', 'order', 'other-narration', 'other-motion'] as const)('rejects a local revision that changes %s outside its authorized scene', change => {
       const base = basePlan(), altered = structuredClone(science);

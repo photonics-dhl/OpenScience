@@ -344,6 +344,35 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(replay).toEqual({ task: original, replayed: true });
     expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
   });
+  it('rejects a new ordinary local video task with no authoritative parent before any task or credit write', async () => {
+    const f = await makeDeps(1);
+    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
+    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
+    const before = structuredClone(f.db);
+    await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
+      userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'new-local-missing-parent',
+      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html',
+        sourceClaimIds: ['10000000-0000-4000-8000-000000000002'], storyboard: { output: 'video', narrative: true, locale: 'en', style: 'scientific',
+          instruction: 'Revise only the second scene', baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 1 } },
+    }))).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
+  });
+  it('preserves an existing paid local row without retagging or revalidating a now-missing parent on exact replay', async () => {
+    const f = await makeDeps(1);
+    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
+    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
+    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'paid-local-history',
+      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html',
+        sourceClaimIds: ['10000000-0000-4000-8000-000000000002'], storyboard: { output: 'video', narrative: true, locale: 'en', style: 'scientific',
+          instruction: 'Original local request', baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 1 } } };
+    const row = await deps.prisma.agentTask.create({ data: { sessionId: session.id, kind: input.kind, payload: input.payload,
+      idempotencyKey: input.idempotencyKey, result: { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
+        runtimeId: 'historical-native', skillCatalogueId: 'historical-catalogue', model: 'MiniMax-M3' }, providerOutcome: 'unknown' } } });
+    f.db.usageLedger.push({ id: 'old-local-debit', userId: f.user.id, resource: 'ai_credit', delta: -1, kind: 'consume', createdAt: new Date(), metadata: { taskId: row.id } });
+    const before = structuredClone(f.db);
+    expect(await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input))).toEqual({ task: row, replayed: true });
+    expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
+  });
   it.each(['base', 'run', 'scene-limit', 'revision', 'art', 'image', 'non-narrative'] as const)(
     'leaves %s outside the R2 direct-first-plan marker scope', async change => {
       const f = await makeDeps(1);
@@ -358,12 +387,12 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       if (change === 'art') storyboard.artSceneIndex = 0;
       if (change === 'image') storyboard.output = 'image';
       if (change === 'non-narrative') storyboard.narrative = false;
-      if (change === 'art') {
-        // This existing non-Native art shape is already rejected; R2 must not widen it.
+      if (change === 'art' || change === 'revision') {
+        // Art stays outside Native video; a real local revision now needs its authoritative parent.
         const before = structuredClone(f.db);
         await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
           userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'r2-outside-art',
-        }))).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+        }))).rejects.toMatchObject({ code: change === 'art' ? 'ILLEGAL_TRANSITION' : 'VALIDATION_ERROR' });
         expect(f.db).toEqual(before); return;
       }
       const fresh = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
