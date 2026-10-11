@@ -14,7 +14,8 @@ export function buildHybridSearchFromEnv(core: PrismaClient, search: SearchPrism
   if (!search) throw new Error('SEARCH_DATABASE_URL is required when BGE_M3_ENABLED=true');
   return createHybridSearchService({
     storage: new SearchStorage(search, core),
-    embedder: new EmbeddingClient({ baseUrl: config.endpoint, requestTimeoutMs: 3_000, maxAttempts: 1 }),
+    // Reuse the client's bounded window; keep one attempt when acceptance is unknown.
+    embedder: new EmbeddingClient({ baseUrl: config.endpoint, maxAttempts: 1 }),
     modelIdentity: config.modelIdentity,
     // Query telemetry already uses keyed fingerprints. Keep the ephemeral key in memory;
     // a process restart deliberately starts a new, unlinkable telemetry window.
