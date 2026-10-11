@@ -27,7 +27,6 @@ export interface NativeSemanticSearch {
     status: 'ok'; candidates: readonly { locators: readonly SourceLocator[] }[];
   } | { status: 'unavailable'; code: string }>;
 }
-
 /** Location only: the caller has already verified generation scope. Only paper_read observes evidence. */
 export function mapNativePaperSearchHits(sourceMap: DocumentSourceMap,
   hits: readonly { locators: readonly SourceLocator[] }[]): Array<{ id: string; pageStart: number; pageEnd: number; text: string }> {
