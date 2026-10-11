@@ -41,7 +41,7 @@ export interface NativeAgentImageCheckpointReference {
 export type NativeAgentCheckpointReference = NativeAgentPaperCheckpointReference | NativeAgentImageCheckpointReference;
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
   kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor' | 'image-review'; checkpoint?: NativeAgentCheckpointReference;
-  planningContract?: 'video-optional-audio-v1';
+  planningContract?: 'video-optional-audio-v1' | 'image-source-explicit-trig-v1';
 }
 /** Paper authors may need a bounded continuation to finish source reading and the saved review in one lease. */
 export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 4 | 32 | 48 {
@@ -51,6 +51,7 @@ const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x ===
 const hash = (x: unknown): x is string => typeof x === 'string' && /^[a-f0-9]{64}$/u.test(x);
 const text = (x: unknown): x is string => typeof x === 'string' && !!x.trim() && x.length <= 200;
 const exact = (x: Record<string, unknown>, keys: string[]) => Object.keys(x).sort().join(',') === keys.sort().join(',');
+const nativePlanningContract = (x: unknown) => x === 'video-optional-audio-v1' || x === 'image-source-explicit-trig-v1';
 function blocked(): never { throw new AgentError('ILLEGAL_TRANSITION', '[blocked] Native Agent execution binding changed'); }
 
 /** Reuse live task/source/membership authority for every native call and for final scientific adoption. */
@@ -168,9 +169,9 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */
 export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding',
   planningContract?: NativeAgentExecution['planningContract']): { nativeAgentExecution: NativeAgentExecution } | undefined {
-  // Only an explicit trusted producer can opt in; a runtime object must never carry the contract into a new R1 task.
+  // Only an explicit trusted producer can opt in; a runtime object must never implicitly select a contract.
   const marked = arguments.length >= 3;
-  if (marked && (profile !== 'paper-illustration' || planningContract !== 'video-optional-audio-v1')) blocked();
+  if (marked && (profile !== 'paper-illustration' || !nativePlanningContract(planningContract))) blocked();
   if (!runtime) return undefined;
   const result = { nativeAgentExecution: { runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model,
     kind: 'hermes-agent' as const, profile, ...(marked ? { planningContract } : {}) } };
@@ -185,7 +186,7 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
   if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model',
     ...(Object.hasOwn(marker, 'planningContract') ? ['planningContract'] : []), ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
     || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration', 'journal-editor'].includes(String(marker.profile))
-    || Object.hasOwn(marker, 'planningContract') && (marker.profile !== 'paper-illustration' || marker.planningContract !== 'video-optional-audio-v1')
+    || Object.hasOwn(marker, 'planningContract') && (marker.profile !== 'paper-illustration' || !nativePlanningContract(marker.planningContract))
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
   if (Object.hasOwn(marker, 'checkpoint')) {
     const cp = marker.checkpoint;

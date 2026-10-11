@@ -23,6 +23,92 @@ function fixture() {
   } } };
   return { task, tx: tx as never, mockTx: tx };
 }
+describe('image source explicit trig core receipts', () => {
+  const imageContract = 'image-source-explicit-trig-v1';
+  const imageResult = () => initialNativeAgentExecution(runtime, 'paper-illustration', imageContract)!;
+  const imageFixture = () => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    Object.assign(f.task.result, imageResult());
+    return f;
+  };
+
+  it('initializes and reads only the exact image capability on the illustration profile', () => {
+    const expected = { nativeAgentExecution: { ...runtime, kind: 'hermes-agent', profile: 'paper-illustration', planningContract: imageContract } };
+    const result = imageResult();
+    expect(result).toEqual(expected);
+    const read = readNativeAgentExecution(result)!;
+    expect(read).toEqual(expected.nativeAgentExecution);
+    expect(read).not.toBe(result.nativeAgentExecution);
+    read.model = 'changed clone';
+    expect(result.nativeAgentExecution.model).toBe(runtime.model);
+  });
+
+  it('does not opt an unmarked runtime or disabled installation into the image capability', () => {
+    const historical = initialNativeAgentExecution(runtime, 'paper-illustration')!;
+    expect(initialNativeAgentExecution({ ...runtime, planningContract: imageContract } as typeof runtime,
+      'paper-illustration')).toEqual(historical);
+    expect(historical.nativeAgentExecution).not.toHaveProperty('planningContract');
+    expect(initialNativeAgentExecution(undefined, 'paper-illustration', imageContract)).toBeUndefined();
+  });
+
+  it.each(['image-source-explicit-trig-v2', 'IMAGE-source-explicit-trig-v1', 'image-source-explicit-trig-v1 '])(
+    'rejects a non-exact image capability %s', planningContract => {
+      const initialize = initialNativeAgentExecution as (...args: unknown[]) => unknown;
+      expect(() => initialize(runtime, 'paper-illustration', planningContract)).toThrow('binding');
+      const marker = initialNativeAgentExecution(runtime, 'paper-illustration')!.nativeAgentExecution;
+      expect(() => readNativeAgentExecution({ nativeAgentExecution: { ...marker, planningContract } })).toThrow('binding');
+    });
+
+  it.each(['paper-understanding', 'paper-author', 'paper-source-review', 'journal-editor', 'image-review'] as const)(
+    'never grants the image planning capability to %s', profile => {
+      expect(() => initialNativeAgentExecution(runtime, profile, imageContract)).toThrow('binding');
+      expect(() => readNativeAgentExecution({ nativeAgentExecution: { ...runtime, kind: 'hermes-agent', profile,
+        planningContract: imageContract } })).toThrow();
+    });
+
+  it('retains the exact image capability through started, paid completion and terminal preservation', async () => {
+    const f = imageFixture(), expectedExecution = readNativeAgentExecution(f.task.result)!;
+    await compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: undefined,
+      next: reference('started'), paidCompletion: false, expectedExecution });
+    expect(readNativeAgentExecution(f.task.result)).toHaveProperty('planningContract', imageContract);
+    await compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: reference('started'),
+      next: reference('completed'), paidCompletion: true, expectedExecution });
+    const marker = readNativeAgentExecution(f.task.result)!;
+    expect(nativeAgentTerminalResult(f.task as never, 'failed', { reason: 'stopped' }))
+      .toHaveProperty('nativeAgentExecution', marker);
+    expect(() => nativeAgentTerminalResult(f.task as never, 'failed', {
+      nativeAgentExecution: { ...marker, planningContract: 'video-optional-audio-v1' },
+    })).toThrow('binding');
+  });
+
+  it.each(['remove', 'to-video', 'from-unmarked', 'from-video'] as const)(
+    'rejects a changed authority marker before the checkpoint read: %s', async change => {
+      const f = imageFixture();
+      if (change === 'from-unmarked') delete f.task.result.nativeAgentExecution!.planningContract;
+      if (change === 'from-video') f.task.result.nativeAgentExecution!.planningContract = 'video-optional-audio-v1';
+      const expectedExecution = readNativeAgentExecution(f.task.result)!;
+      if (change === 'remove') delete f.task.result.nativeAgentExecution!.planningContract;
+      else f.task.result.nativeAgentExecution!.planningContract = change === 'to-video' ? 'video-optional-audio-v1' : imageContract;
+      await expect(compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: undefined,
+        next: reference('started'), paidCompletion: false, expectedExecution })).rejects.toThrow('binding');
+      expect(f.task.result.nativeAgentExecution).not.toHaveProperty('checkpoint');
+    });
+
+  it.each(['remove', 'to-video'] as const)('rejects image marker %s between read and CAS', async change => {
+    const f = imageFixture(), update = f.mockTx.agentTask.updateMany;
+    const expectedExecution = readNativeAgentExecution(f.task.result)!;
+    f.mockTx.agentTask.findUnique = async () => structuredClone(f.task);
+    f.mockTx.agentTask.updateMany = async args => {
+      if (change === 'remove') delete f.task.result.nativeAgentExecution!.planningContract;
+      else f.task.result.nativeAgentExecution!.planningContract = 'video-optional-audio-v1';
+      return update(args);
+    };
+    await expect(compareNativeAgentCheckpoint(f.tx, { taskId: 'task', executionAttempt: 1, expected: undefined,
+      next: reference('started'), paidCompletion: false, expectedExecution })).rejects.toThrow('binding');
+    expect(f.task.result.nativeAgentExecution).not.toHaveProperty('checkpoint');
+  });
+});
+
 describe('native Agent server-owned execution receipts', () => {
   it('reads the exact optional video contract without changing historical initialization', () => {
     const historical = initialNativeAgentExecution(runtime, 'paper-illustration')!;
