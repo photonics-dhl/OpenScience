@@ -10,7 +10,7 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 async function fixture(page: Page, options: { delayedSelection?: boolean; publishedSource?: boolean } = {}) {
-  const calls = { create: 0, guide: 0, confirm: 0, publish: 0 };
+  const calls = { create: 0, guide: 0, confirm: 0, publish: 0, ingestionBodies: [] as string[], ingestionKeys: [] as string[] };
   let confirmed = false;
   const sourceTask = { id: 'source-1', artifactId: 'artifact-1', logicalPath: 'paper.pdf', state: confirmed ? 'confirmed' : 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-source-1', result: { core: core('Hermes finding grounded in paper'), evidence: { problem: { quote: 'The paper states its research problem.' } } } };
   const publishedVersion = { versionId: 'version-public-1', versionNo: 1, publicationNo: 1, status: 'published', commitId: 'commit-1', createdAt: '2026-10-01T00:00:00.000Z' };
@@ -23,6 +23,11 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
     if (path === '/api/workspaces') return json(route, { workspaces: [{ id: 'personal-1', name: 'Personal', type: 'personal', role: 'owner' }] });
     if (path === '/api/research-objects' && method === 'GET') return json(route, { researchObjects: [research('ro-old', 'Older study'), research('ro-next', 'Next study')] });
     if (path === '/api/research-objects' && method === 'POST') { calls.create++; return json(route, { researchObject: { id: 'ro-new', workspaceId: 'personal-1', version: 1 } }); }
+    if (path === '/api/research-objects/ro-new/ingest' && method === 'POST') {
+      calls.ingestionBodies.push(route.request().postDataBuffer()?.toString('utf8') ?? '');
+      calls.ingestionKeys.push(route.request().headers()['idempotency-key']);
+      return json(route, { batchId: 'text-batch-1', researchObjectId: 'ro-new', tasks: [{ id: 'text-source-1', artifactId: 'text-artifact-1', logicalPath: '研究内容.md', state: 'queued', retryCount: 0, error: null }], artifacts: [] });
+    }
     if (path === '/api/agent/sessions' && method === 'POST') return json(route, { session: { id: 'session-1' } });
     if (path === '/api/agent/tasks' && method === 'POST') { calls.guide++; return json(route, { task }); }
     if (path === '/api/agent/tasks' && method === 'GET') return json(route, { tasks: [task] });
@@ -81,20 +86,48 @@ test('changing research hides the previous editor until the authorized target ha
   await expect(page).toHaveURL(/\/guide$/u);
 });
 
-test('a manually entered research draft can be created without a PDF or an AI task', async ({ page }) => {
+test('direct writing submits the complete passage as source material without filling six fields', async ({ page }) => {
   const calls = await fixture(page);
   await page.goto('/guide');
   await expect(page.getByRole('combobox', { name: '选择研究' }).locator('option')).toHaveCount(3);
   await page.getByRole('button', { name: '直接填写', exact: true }).click();
-  await page.locator('#sdf-field-problem').fill('A manually written research question.');
-  const request = page.waitForRequest((item) => new URL(item.url()).pathname === '/api/research-objects' && item.method() === 'POST');
-  await page.getByRole('button', { name: '保存私有草稿', exact: true }).click();
-  expect((await request).postDataJSON().sdf.core.problem).toBe('A manually written research question.');
+  await expect(page.locator('#sdf-field-problem')).toHaveCount(0);
+  const passage = '研究内容：我们搭建了一套实验平台，并记录了方法、测量过程与初步发现。\n'.repeat(100);
+  await page.locator('#guide-research-text').fill(passage);
+  await page.getByRole('button', { name: '直接填写', exact: true }).click();
+  await expect(page.locator('#guide-research-text')).toHaveValue(passage);
+  await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('私有草稿已保存');
+  expect(calls.ingestionBodies).toHaveLength(1);
+  expect(calls.ingestionBodies[0]).toContain(passage);
   expect(calls.create).toBe(1);
   expect(calls.guide).toBe(0);
   expect(calls.publish).toBe(0);
   await expect(page).toHaveURL(/\/guide$/u);
+});
+
+test('the three input cards align on desktop and remain equal and usable on a phone', async ({ page }) => {
+  await fixture(page);
+  await page.route('**/api/auth/me', (route) => json(route, { error: { code: 'SESSION_INVALID', message: 'Anonymous preview' } }, 401));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/guide');
+  const cards = page.locator('[data-guide-input-card]');
+  await expect(cards).toHaveCount(3);
+  const desktop = await cards.evaluateAll((items) => items.map((item) => { const box = item.getBoundingClientRect(); return { width: box.width, height: box.height, y: box.y }; }));
+  expect(Math.max(...desktop.map((item) => item.width)) - Math.min(...desktop.map((item) => item.width))).toBeLessThan(1);
+  expect(Math.max(...desktop.map((item) => item.height)) - Math.min(...desktop.map((item) => item.height))).toBeLessThan(1);
+  expect(Math.max(...desktop.map((item) => item.y)) - Math.min(...desktop.map((item) => item.y))).toBeLessThan(1);
+  if (process.env.GUIDE_SCREENSHOT_DIR) {
+    mkdirSync(process.env.GUIDE_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({ path: `${process.env.GUIDE_SCREENSHOT_DIR}/guide-cards-desktop.png`, fullPage: true });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await cards.evaluateAll((items) => items.map((item) => { const box = item.getBoundingClientRect(); return { width: box.width, height: box.height }; }));
+  expect(Math.max(...mobile.map((item) => item.width)) - Math.min(...mobile.map((item) => item.width))).toBeLessThan(1);
+  expect(Math.max(...mobile.map((item) => item.height)) - Math.min(...mobile.map((item) => item.height))).toBeLessThan(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('#guide-research-idea')).toHaveAttribute('placeholder', '上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。');
+  if (process.env.GUIDE_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.GUIDE_SCREENSHOT_DIR}/guide-cards-mobile.png`, fullPage: true });
 });
 
 test('reviewing a source creates a private revision while the published version remains available', async ({ page }) => {

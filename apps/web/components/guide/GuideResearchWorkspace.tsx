@@ -67,6 +67,10 @@ export function GuideResearchWorkspace() {
   const [selectedId, setSelectedId] = useState('');
   const [title, setTitle] = useState('');
   const [idea, setIdea] = useState('');
+  const [freeText, setFreeText] = useState('');
+  const freeTextFile = useRef<{ text: string; file: File } | null>(null);
+  const freeTextInput = useRef<HTMLTextAreaElement>(null);
+  const [existingSources, setExistingSources] = useState<string[]>([]);
   const [materials, setMaterials] = useState<IntakeMaterial[]>([]);
   const [directMode, setDirectMode] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -117,6 +121,7 @@ export function GuideResearchWorkspace() {
     busyRef.current = false; setBusy(false); switchingRef.current = false; setSwitching(false);
     setWorkspaces([]); setWorkspaceId(''); setResearch([]); setSelectedId('');
     if (!preserveInitialIdea) { setTitle(''); setIdea(''); setMaterials([]); setDirectMode(false); setSourceOpen(false); }
+    setFreeText(''); freeTextFile.current = null; setExistingSources([]);
     setCore(emptyCore()); setVersion(1); setVersions([]);
     setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId(''); setIngestionDetail(null); setProposal(null); setDirty(false);
     setStatus(''); setError(''); setConversationOpen(false); setConversationGoal('');
@@ -147,11 +152,12 @@ export function GuideResearchWorkspace() {
 
   const selectResearch = useCallback(async (id: string) => {
     if (!owner || busyRef.current || switchingRef.current) return;
-    if (dirtyRef.current && id !== chosenId.current) { setError(copy.switchWarning); return; }
+    const pendingText = Boolean(freeText.trim() && (freeTextFile.current?.text !== freeText || !uploadedFiles.current.has(freeTextFile.current.file)));
+    if ((dirtyRef.current || pendingText) && id !== chosenId.current) { setError(copy.switchWarning); return; }
     const current = ++epoch.current;
     switchingRef.current = true; setSwitching(true); setError(''); setStatus('');
     if (!id) {
-      setSelectedId(''); setTitle(''); setIdea(''); setMaterials([]); setCore(emptyCore()); setVersion(1); setDirty(false); setDirectMode(false); setSourceOpen(false);
+      setSelectedId(''); setTitle(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setExistingSources([]); setCore(emptyCore()); setVersion(1); setDirty(false); setDirectMode(false); setSourceOpen(false);
       setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId(''); setIngestionDetail(null); setProposal(null); setVersions([]);
       createKey.current = ''; createIntent.current = null; uploadKey.current = ''; uploadSignature.current = '';
       guideSessionKey.current = ''; guideSessionTitle.current = ''; guideTaskKey.current = ''; guideTaskIntent.current = null; guideSessionId.current = ''; setInitialTaskId('');
@@ -163,7 +169,8 @@ export function GuideResearchWorkspace() {
         getResearchObject(id, { fresh: true }), listVersions(id, { fresh: true }), loadResearchMaterials(id, { fresh: true }),
       ]);
       if (!isCurrent(owner, current)) return;
-      setSelectedId(id); setConversationOpen(false); setInitialTaskId(''); setIdea(''); setMaterials([]); setDirectMode(false); setSourceOpen(false);
+      setSelectedId(id); setConversationOpen(false); setInitialTaskId(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setDirectMode(false); setSourceOpen(false);
+      setExistingSources([...source.artifacts.map((item) => item.logicalPath), ...source.ingestion.tasks.map((task) => task.logicalPath)]);
       setTitle(found.researchObject.title); setVersion(found.researchObject.version);
       setVersions(history.versions);
       const browserDraft = loadGuideDraft(window.localStorage, owner, id, found.researchObject.version);
@@ -178,7 +185,7 @@ export function GuideResearchWorkspace() {
       uploadedFiles.current = new WeakSet<File>(); fileIdentities.current = new WeakMap<File, string>();
     } catch (cause) { if (isCurrent(owner, current)) setError(errorText(cause, copy.failure)); }
     finally { if (isCurrent(owner, current)) { switchingRef.current = false; setSwitching(false); } }
-  }, [copy.failure, copy.switchWarning, isCurrent, owner]);
+  }, [copy.failure, copy.switchWarning, freeText, isCurrent, owner]);
 
   function editField(field: SdfField, value: string) {
     if (busyRef.current || switchingRef.current) return;
@@ -192,24 +199,28 @@ export function GuideResearchWorkspace() {
     event.preventDefault();
     if (busyRef.current || switchingRef.current) return;
     if (!owner || !workspaceId) { router.push(directMode ? directLoginHref : loginHref); return; }
-    if (!idea.trim() && !title.trim() && materials.length === 0 && !SDF_FIELDS.some((field) => coreRef.current[field].trim())) { setError(copy.required); return; }
+    if (!idea.trim() && !title.trim() && !freeText.trim() && materials.length === 0 && !SDF_FIELDS.some((field) => coreRef.current[field].trim())) { setError(copy.required); return; }
     const current = epoch.current;
     const goal = guideSessionTitle.current || idea.trim();
-    const resolvedTitle = title.trim() || goal.replace(/\s+/gu, ' ').slice(0, 120) || materials[0]?.file.name.replace(/\.[^.]+$/u, '') || copy.titlePlaceholder;
+    const resolvedTitle = title.trim() || goal.replace(/\s+/gu, ' ').slice(0, 120) || materials[0]?.file.name.replace(/\.[^.]+$/u, '') || freeText.trim().split(/\r?\n/u)[0].slice(0, 120) || copy.titlePlaceholder;
     busyRef.current = true; setBusy(true); setError(''); setStatus(copy.saving);
     try {
       createKey.current ||= crypto.randomUUID();
       let id = selectedId;
       let guideTasks = ingestionTaskIds.map((taskId) => ({ id: taskId, researchObjectId: id, state: 'queued' }));
       if (!id) {
-        createIntent.current ||= { workspaceId, title: resolvedTitle, ...(directMode ? { core: { ...coreRef.current } } : {}) };
+        createIntent.current ||= { workspaceId, title: resolvedTitle, ...(SDF_FIELDS.some((field) => coreRef.current[field].trim()) ? { core: { ...coreRef.current } } : {}) };
         const intent = createIntent.current;
         id = (await createResearchObject({ workspaceId: intent.workspaceId, title: intent.title, ...(intent.core ? { sdf: { core: intent.core } } : {}) }, createKey.current)).researchObject.id;
         if (!isCurrent(owner, current)) return;
         setSelectedId(id); setTitle(intent.title); setDirty(false);
         createKey.current = ''; createIntent.current = null;
       }
-      const newFiles = materials.map((item) => item.file).filter((file) => !uploadedFiles.current.has(file));
+      if (freeText.trim() && freeTextFile.current?.text !== freeText) {
+        freeTextFile.current = { text: freeText, file: new File([freeText], copy.pastedFileName, { type: 'text/markdown;charset=utf-8' }) };
+      }
+      const pastedFile = freeText.trim() ? freeTextFile.current?.file : undefined;
+      const newFiles = [...materials.map((item) => item.file), ...(pastedFile ? [pastedFile] : [])].filter((file) => !uploadedFiles.current.has(file));
       if (newFiles.length) {
         const signature = `${id}:${newFiles.map((file) => {
           let identity = fileIdentities.current.get(file);
@@ -230,6 +241,7 @@ export function GuideResearchWorkspace() {
         setIngestionTaskIds((ids) => [...ids, ...result.tasks.map((task) => task.id)]);
         setIngestionLabels((labels) => ({ ...labels, ...Object.fromEntries(result.tasks.map((task) => [task.id, task.logicalPath])) }));
         setIngestionStates((states) => ({ ...states, ...Object.fromEntries(result.tasks.map((task) => [task.id, task.state])) }));
+        setExistingSources((names) => [...names, ...result.tasks.map((task) => task.logicalPath)]);
         setReviewTaskId(result.tasks[0]?.id ?? '');
         guideTasks = [...guideTasks, ...result.tasks.map((task) => ({ id: task.id, researchObjectId: id, state: task.state }))];
         uploadKey.current = ''; uploadSignature.current = '';
@@ -364,16 +376,8 @@ export function GuideResearchWorkspace() {
 
   function startDirect() {
     if (busyRef.current || switchingRef.current) return;
-    if (dirty) { setError(copy.switchWarning); return; }
-    epoch.current++;
-    createKey.current = ''; createIntent.current = null; uploadKey.current = ''; uploadSignature.current = '';
-    guideSessionKey.current = ''; guideSessionTitle.current = ''; guideTaskKey.current = '';
-    guideTaskIntent.current = null; guideSessionId.current = '';
-    setInitialTaskId(''); setDirectMode(true); setSourceOpen(false); setIdea(''); setTitle(''); setMaterials([]);
-    setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId('');
-    setIngestionDetail(null); setProposal(null); setSelectedId(''); setCore(emptyCore()); setVersion(1);
-    setVersions([]); setConversationOpen(false);
-    window.requestAnimationFrame(() => document.getElementById('sdf-field-problem')?.focus());
+    setDirectMode(true);
+    window.requestAnimationFrame(() => freeTextInput.current?.focus());
   }
 
   return <section className={styles.workspace} aria-label={copy.heading} data-guide-workspace="true">
@@ -383,19 +387,37 @@ export function GuideResearchWorkspace() {
         state={busy ? 'scanning' : error ? 'failed' : 'idle'} onInvoke={() => owner ? setConversationOpen(true) : router.push(directMode ? directLoginHref : loginHref)} workspaceId={selectedId || 'guide'} />
     </div>
     <form onSubmit={begin} className={styles.composer}>
-      <div className={styles.entryActions}><button type="button" onClick={() => setSourceOpen(true)} disabled={busy || switching}>{copy.upload}</button><button type="button" onClick={startDirect} disabled={busy || switching}>{copy.direct}</button></div>
-      <label className={styles.srOnly} htmlFor="guide-research-idea">{copy.placeholder}</label>
-      <textarea id="guide-research-idea" value={idea} placeholder={copy.placeholder} rows={3}
-        onChange={(event) => setIdea(event.target.value)} disabled={busy} />
-      <div className={styles.prompts}>{copy.prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setIdea(prompt)}>{prompt}</button>)}</div>
-      <div className={styles.controls}>
-        <label>{copy.title}<input value={title} placeholder={copy.titlePlaceholder} disabled={busy} onChange={(event) => setTitle(event.target.value)} /></label>
-        {owner && workspaces.length > 1 ? <label>{copy.workspaces}<select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} disabled={busy}>{workspaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label> : null}
+      <div className={styles.inputCards}>
+        <section className={styles.inputCard} data-guide-input-card="upload">
+          <h3>{copy.upload}</h3>
+          <p>{copy.uploadHint}</p>
+          <div className={styles.entryActions}><button type="button" onClick={() => setSourceOpen(true)} disabled={busy || switching}>{copy.upload}</button><button type="button" onClick={startDirect} disabled={busy || switching}>{copy.direct}</button></div>
+        </section>
+        <section className={styles.inputCard} data-guide-input-card="title">
+          <label htmlFor="guide-research-title">{copy.title}</label>
+          <input id="guide-research-title" value={title} placeholder={copy.titlePlaceholder} disabled={busy || switching} onChange={(event) => setTitle(event.target.value)} />
+          <p>{copy.titleHint}</p>
+        </section>
+        <section className={styles.inputCard} data-guide-input-card="sources">
+          <h3>{copy.source}</h3>
+          {materials.length || freeText.trim() || existingSources.length ? <ul>{Array.from(new Set([
+            ...materials.map((item) => item.file.name), ...(freeText.trim() ? [copy.pastedSource] : []), ...existingSources,
+          ])).map((name) => <li key={name}>{name}</li>)}</ul> : <p>{copy.sourceHint}</p>}
+        </section>
       </div>
-      <details className={styles.source} open={sourceOpen || materials.length > 0 ? true : undefined}>
-        <summary>{copy.source}{materials.length ? ` · ${materials.length}` : ''}</summary>
-        <EvidenceIntake materials={materials} onChange={setMaterials} disabled={busy} variant="research-start" />
-      </details>
+      {sourceOpen ? <div className={styles.source}><EvidenceIntake materials={materials} onChange={setMaterials} disabled={busy || switching} variant="research-start" /></div> : null}
+      {directMode ? <div className={styles.directEntry}>
+        <label htmlFor="guide-research-text">{copy.directLabel}</label>
+        <textarea id="guide-research-text" ref={freeTextInput} value={freeText} placeholder={copy.directPlaceholder} rows={10}
+          onChange={(event) => setFreeText(event.target.value)} disabled={busy || switching} />
+      </div> : null}
+      <div className={styles.conversationEntry}>
+        <label className={styles.srOnly} htmlFor="guide-research-idea">{copy.placeholder}</label>
+        <textarea id="guide-research-idea" value={idea} placeholder={copy.placeholder} rows={3} maxLength={2000}
+          onChange={(event) => setIdea(event.target.value)} disabled={busy || switching} />
+        <div className={styles.prompts}>{copy.prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setIdea(prompt)}>{prompt}</button>)}</div>
+      </div>
+      {owner && workspaces.length > 1 ? <div className={styles.controls}><label>{copy.workspaces}<select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} disabled={busy || switching}>{workspaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label></div> : null}
       <div className={styles.actions}><button type="submit" disabled={busy || switching}>{owner ? busy ? copy.saving : copy.send : copy.signIn}</button></div>
       {!owner ? <p className={styles.hint}>{copy.local}</p> : null}
     </form>
@@ -412,7 +434,7 @@ export function GuideResearchWorkspace() {
         coreRef.current = next; setCore(next); setDirty(true); saveGuideDraft(window.localStorage, owner, selectedId, version, next); lastHermesEdit.current = null;
       }} docked embedded pageOwnedAnchor /> : null}
 
-    {!switching && (selectedId || directMode) ? <div className={styles.editor}>
+    {!switching && selectedId ? <div className={styles.editor}>
       <div className={styles.editorHead}><p>{copy.research} · {title || currentResearch?.title || copy.newResearch}</p><span>{copy.version} {latestVersion?.versionNo ?? version}</span></div>
       {published ? <p className={styles.hint}>{copy.published}</p> : null}
       <h3>{copy.editor}</h3>

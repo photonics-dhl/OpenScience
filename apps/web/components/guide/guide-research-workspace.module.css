@@ -6,10 +6,19 @@
 .intro :global(.hermes-avatar-entry[data-hermes-entry-open='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true']) { width: 64px; min-width: 64px; visibility: visible; border: 1px solid var(--os-rule-paper); border-radius: 50%; background: var(--os-paper-strong) url('/hermes/wanko-static-transparent.png') center / contain no-repeat; }
 .eyebrow { margin: 0; letter-spacing: .1em; text-transform: uppercase; font-size: 11px; color: var(--os-vermilion-ink); }
 .composer { padding: clamp(18px, 2vw, 28px); border: 1px solid var(--os-rule-paper); background: var(--os-paper, #fff); }
-.entryActions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.inputCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.inputCard { min-width: 0; height: 178px; padding: 18px; border: 1px solid var(--os-rule-paper); display: flex; flex-direction: column; gap: 12px; }
+.inputCard h3, .inputCard > label { margin: 0; color: var(--os-ink); font: 500 16px/1.4 var(--font-ui); }
+.inputCard p { margin: 0; color: var(--os-muted-paper); font: 13px/1.6 var(--font-ui); }
+.inputCard input { width: 100%; min-width: 0; border: 1px solid var(--os-rule-paper); border-radius: 2px; padding: 10px 12px; background: var(--os-paper, #fff); color: var(--os-ink); font: 14px var(--font-ui); }
+.inputCard ul { min-width: 0; max-height: 82px; margin: 0; padding-left: 18px; overflow: auto; color: var(--os-muted-paper); font: 13px/1.6 var(--font-ui); overflow-wrap: anywhere; }
+.entryActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .entryActions button { padding: 7px 11px; border: 1px solid var(--os-vermilion-ink); background: transparent; color: var(--os-vermilion-ink); font: 13px var(--font-ui); cursor: pointer; }
 .entryActions button:disabled { opacity: .5; cursor: not-allowed; }
-.composer > textarea { width: 100%; min-height: 95px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--os-rule-paper); outline-color: var(--os-vermilion-ink); resize: vertical; background: transparent; color: inherit; font: 15px/1.7 var(--font-ui); }
+.directEntry, .conversationEntry { display: grid; gap: 8px; margin-top: 18px; }
+.directEntry label, .conversationEntry label { color: var(--os-ink); font: 500 14px/1.5 var(--font-ui); }
+.directEntry textarea { box-sizing: border-box; width: 100%; min-height: 230px; padding: 12px; border: 1px solid var(--os-rule-paper); outline-color: var(--os-vermilion-ink); resize: vertical; background: transparent; color: inherit; font: 15px/1.7 var(--font-ui); }
+.conversationEntry textarea { box-sizing: border-box; width: 100%; min-height: 95px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--os-rule-paper); outline-color: var(--os-vermilion-ink); resize: vertical; background: transparent; color: inherit; font: 15px/1.7 var(--font-ui); }
 .prompts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
 .prompts button { border: 1px solid var(--os-rule-paper); background: var(--os-paper, #fff); border-radius: 999px; padding: 7px 12px; color: var(--os-muted-paper); cursor: pointer; font: 12px/1.4 var(--font-ui); }
 .prompts button:hover { border-color: var(--os-vermilion-ink); color: var(--os-ink); }
@@ -37,3 +46,4 @@
 .picker select { width: min(100%, 500px); }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 620px) { .intro { align-items: center; gap: 12px; } .intro > div:first-child { flex: 1; min-width: 0; } .intro :global(.hermes-avatar-entry-label) { display: none; } .intro :global(.hermes-avatar-entry) { flex-shrink: 0; } .composer, .editor { padding: 16px; } .actions button, .actions a { flex: 1 1 auto; text-align: center; } }
+@media (max-width: 620px) { .inputCards { grid-template-columns: minmax(0, 1fr); } .inputCard { min-height: 178px; } }

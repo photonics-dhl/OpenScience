@@ -48,7 +48,7 @@ test('guide workspace supports keyboard and small screens without business write
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/guide');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Turn papers into structured, verifiable, machine-readable research objects.');
-  const input = page.getByPlaceholder('上传论文，或告诉 Hermes 你想完成什么。');
+  const input = page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。');
   await expect(input).toBeVisible();
   const box = await input.boundingBox();
   expect(box && box.y + box.height <= 900).toBe(true);
@@ -73,7 +73,7 @@ test('English guide keeps the inline composer readable on phones', async ({ page
     await page.setViewportSize({ width, height: 812 });
     await page.goto('/guide');
     await expect(page.locator('article').getByRole('link', { name: 'Personal workspace', exact: true })).toHaveCount(1);
-    await expect(page.getByPlaceholder('Upload a paper, or tell Hermes what you want to do.')).toBeVisible();
+    await expect(page.getByPlaceholder('Upload your paper and other research files, and tell Hermes here what you want to accomplish.')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   expect(writes).toEqual([]);
@@ -87,7 +87,7 @@ test('guide remains independent of unavailable public preview data', async ({ pa
     return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } });
   });
   await page.goto('/guide');
-  await expect(page.getByPlaceholder('上传论文，或告诉 Hermes 你想完成什么。')).toBeVisible();
+  await expect(page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。')).toBeVisible();
   const example = page.locator('article a[href="/research/OSR-2026-000022/v/4"]');
   await expect(example).toHaveAttribute('target', '_blank');
   await expect(example).toHaveAttribute('rel', 'noopener noreferrer');
