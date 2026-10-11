@@ -353,6 +353,33 @@ describe('native video audio pre-charge selection', () => {
 });
 
 describe('native video parent audio contract authority', () => {
+  it('rejects a known image contract on an external video parent before every new paid child', async () => {
+    const f = await listFixture();
+    expect(f.parent.provenance.storyboardDocument.videoProduction!.audioPolicy).toBe('external-narration');
+    Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+    refreshChain(f, [{ asset: f.parent, task: f.parentTask }]);
+    const savedParent = structuredClone(f.parent), savedResult = structuredClone(f.parentTask.result);
+    await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never,
+      { ...f.input, sourceClaimIds: [claimId] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    const view = (await listPresentationAssets({ prisma: f.prisma } as never, f.input)).find(asset => asset.id === parentId);
+    expect(view).toMatchObject({ canGenerateSceneImage: false, canGenerateVideo: false, canGenerateAudioAudition: false });
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db);
+    const requests = [
+      { ...f.input, kind: 'image' as const, sourceClaimIds: [claimId], sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 }, idempotencyKey: 'image-contract-scene' },
+      { ...f.input, kind: 'video' as const, sourceClaimIds: [claimId], video: { profile: CONTENT_DRIVEN_PROFILE, storyboardAssetId: parentId,
+        sceneImageAssetIds: f.frames.map(frame => frame.id) }, idempotencyKey: 'image-contract-video' },
+      auditionRequest(f, 'image-contract-audition'),
+    ];
+    for (const request of requests) {
+      await expect(submitPresentationGeneration(ctx.deps as never, request)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(ctx.db).toEqual(before);
+      expect(ctx.db.agentTasks).toHaveLength(0);
+      expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(0);
+      expect(ctx.reads()).toEqual({ audioPolicyReads: 0, videoPolicyReads: 0 });
+    }
+    expect(f.parent).toEqual(savedParent); expect(f.parentTask.result).toEqual(savedResult);
+  });
+
   const invalid = ['unmarked-native', 'unmarked-mixed', 'marked-mixed', 'silent', 'hybrid', 'missing-policy',
     'missing-mode', 'malformed-direction', 'unknown-marker', 'null-marker', 'undefined-marker'] as const;
   it.each(invalid)('keeps %s visible but blocks every new paid child before policy or readiness', async change => {

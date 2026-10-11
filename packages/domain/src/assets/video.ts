@@ -163,7 +163,8 @@ export async function requireNativeVideoStoryboard(prisma: VideoParentDb, asset:
   let execution: ReturnType<typeof readNativeAgentExecution>;
   try { execution = readNativeAgentExecution(task.result); } catch (error) { nativeVideoProofFailure(error); }
   const audioMode = classifyNativeVideoAudio(view.document);
-  if (!audioMode || audioMode === 'native-first' && execution?.planningContract !== 'video-optional-audio-v1') {
+  if (!audioMode || execution?.planningContract !== undefined && execution.planningContract !== 'video-optional-audio-v1'
+    || audioMode === 'native-first' && execution?.planningContract !== 'video-optional-audio-v1') {
     throw new PresentationAssetError('VALIDATION_ERROR', 'Native video storyboard audio does not match its saved planning contract');
   }
   const cp = execution?.checkpoint;
