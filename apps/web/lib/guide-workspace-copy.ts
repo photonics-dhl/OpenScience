@@ -19,7 +19,7 @@ export function guideWorkspaceCopy(locale: string) {
     publish: 'Review and publish this version', published: 'The published version is preserved. Changes here become a new private version.',
     local: 'Sign in to submit. Your text is not stored with another account.',
     saveBeforeVersion: 'Save the private draft before creating a version.',
-    switchWarning: 'Send your source text or save your draft before switching research.', failure: 'The action failed. Retry without creating a duplicate.',
+    switchWarning: 'Some inputs are still unsubmitted. Submit them, or undo your changes before switching research.', failure: 'The action failed. Retry without creating a duplicate.',
   } : {
     heading: '与 Hermes 一起完善研究', placeholder: '上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。',
     upload: '上传论文', direct: '直接填写', send: '发送',
@@ -40,6 +40,6 @@ export function guideWorkspaceCopy(locale: string) {
     publish: '审核并发布此版本', published: '已公开的原版本会保留；这里的修改将成为新的私有版本。',
     local: '登录后可提交；当前文字不会带入其他账号。',
     saveBeforeVersion: '请先保存私有草稿，再创建研究版本。',
-    switchWarning: '切换研究前请先提交来源文字或保存草稿。', failure: '操作失败；重试会沿用本次请求，不会重复创建。',
+    switchWarning: '当前有未提交的输入。请先提交，或撤回本次修改后再切换研究。', failure: '操作失败；重试会沿用本次请求，不会重复创建。',
   };
 }

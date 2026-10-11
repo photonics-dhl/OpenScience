@@ -78,7 +78,7 @@ test.describe('Guide unsent input switching', () => {
         }
         const readsBefore = [...calls.targetReads];
         await picker.selectOption('ro-next');
-        await expect(page.locator('[data-guide-workspace]').getByRole('alert')).toContainText('切换研究前请先提交来源文字或保存草稿。');
+        await expect(page.locator('[data-guide-workspace]').getByRole('alert')).toContainText('当前有未提交的输入。请先提交，或撤回本次修改后再切换研究。');
         await expect(picker).toHaveValue(existing ? 'ro-old' : '');
         await expect(page.locator('#guide-research-title')).toHaveValue(inputKind === 'title' ? 'Keep this working title.' : existing ? 'Older study' : '');
         await expect(page.locator('#guide-research-idea')).toHaveValue(inputKind === 'idea' ? 'Keep this unsent processing request.' : '');
