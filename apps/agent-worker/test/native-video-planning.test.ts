@@ -740,7 +740,7 @@ const externalPrompt = [
 ].join('\n');
 
 describe('native Hermes complete video planning', () => {
-  it('keeps R1 fresh video on the historical external contract while reading exact optional saved tools', () => {
+  it('keeps unmarked R1 pending video on the historical external contract while reading exact optional saved tools', () => {
     const fresh = nativeIllustrationToolProfile(null, 'video');
     expect(fresh).toMatchObject({ nativeVideo: true, videoContext: true, nativeVideoAudio: false });
     expect(fresh.sourceTools.find(tool => tool.name === 'paper_illustration_science')).toMatchObject({ parameters: { properties: {
@@ -769,11 +769,31 @@ describe('native Hermes complete video planning', () => {
     expect(compileShotPrompt(planned.document, planned.document.scenes[0]!, settings.locale)).not.toBe(planned.prompts[0]!.videoPrompt);
   });
 
-  it('refuses optional-marked NULL-CP or mismatched saved contracts before selecting any fresh tools', () => {
-    expect(() => nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1')).toThrow(/blocked/u);
+  it('selects optional fresh tools only from the owned marker and refuses mismatched saved contracts', () => {
+    const fresh = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    expect(fresh).toMatchObject({ nativeVideo: true, videoContext: true, nativeVideoAudio: true });
+    expect(fresh.sourceTools).toEqual(OPTIONAL_SAVED_TOOL_INPUT);
     const profile = nativeIllustrationToolProfile(null, 'video');
     const old = { turns: [{ request: { options: { tools: profile.sourceTools.map(definition => ({ type: 'function', function: definition })) } } }] } as unknown as NativeAgentSessionState;
     expect(() => nativeIllustrationToolProfile(old, 'video', 'video-optional-audio-v1')).toThrow(/blocked/u);
+    expect(() => nativeIllustrationToolProfile(null, 'image', 'video-optional-audio-v1')).toThrow(/blocked/u);
+  });
+
+  it.each(['external-narration', 'native-first'])('materializes a marked new %s plan with its exact strict video prompt', policy => {
+    const profile = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    const candidate = structuredClone(science);
+    candidate.videoProduction.audioPolicy = policy;
+    candidate.scenes.forEach(scene => { scene.videoDirection.audioMode = policy === 'native-first' ? 'native' : 'external-narration'; });
+    const materializer = createNativeIllustrationMaterializer({ claims, settings, paperOriginals: new Map(), ...profile });
+    expect(materializer.call('paper_illustration_context', {}, 0, 'context-r2')).toMatchObject({ videoCapabilities: { audioModes: ['external-narration', 'native'] } });
+    expect(materializer.call('paper_illustration_science', candidate, 0, 'science-video')).toMatchObject({ status: 'science_ready' });
+    const planned = materializer.call('paper_illustration_art', art, 1, 'art-r2') as unknown as {
+      document: import('@openscience/domain').StoryboardDocument; prompts: Array<{ videoPrompt: string }>;
+    };
+    expect(planned.document.videoProduction!.audioPolicy).toBe(policy);
+    expect(planned.prompts[0]!.videoPrompt).toBe(compileShotPrompt(planned.document, planned.document.scenes[0]!, settings.locale));
+    if (policy === 'external-narration') expect(planned.prompts[0]!.videoPrompt).toBe(externalPrompt);
+    else expect(planned.prompts[0]!.videoPrompt).not.toBe(externalPrompt);
   });
 
   it.each(['unknown', null, false, {}])('refuses an invalid optional planning marker %s', marker => {

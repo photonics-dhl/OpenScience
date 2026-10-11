@@ -28,6 +28,7 @@ import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } fro
 import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, isNativeSourceCorrectionTaskKey, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
+import { isDirectNativeVideoStoryboard } from '../assets/presentation-asset';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
 import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, requireNativeIllustrationTerminalSource, supportsNativeIllustration, type NativeAgentRuntimeConfig } from './native-agent-execution';
@@ -641,12 +642,14 @@ async function persistAgentTaskCoreInTransaction(
   }
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
-  // R1 reserves fresh Native video tasks with the historical contract in this same credit transaction.
-  // A future compatible producer must opt in explicitly; server runtime fields never select a planning contract.
+  // Only a new direct first video plan opts in, atomically with its task and credit.
+  // Existing rows replay above; other Native entry points retain the historical contract.
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
-      ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
+      ? isDirectNativeVideoStoryboard(input.payload)
+        ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', 'video-optional-audio-v1')
+        : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
       : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
