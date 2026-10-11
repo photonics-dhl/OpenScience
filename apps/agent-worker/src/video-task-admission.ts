@@ -1,9 +1,9 @@
-import type { AgentTask } from '@prisma/client';
+import { Prisma, type AgentTask } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import {
   HermesVideoUnavailableError, PresentationAssetError, classifyNativeVideoAudio, isHermesVideoTask, isDirectNativeVideoStoryboard,
   parsePresentationGenerationPayload, readNativeAgentExecution, requireHermesVideoReady, requireSceneImageParent, requireVideoGenerationParents,
-  type AgentDeps, type HermesVideoReadinessDeps,
+  type AgentDeps, type HermesVideoReadinessDeps, type NativeAgentExecution,
 } from '@openscience/domain';
 
 export const VIDEO_READINESS_HOLD = new HermesVideoUnavailableError().message;
@@ -14,14 +14,31 @@ type PendingVideoAdmission = { expectedPendingTask: VideoTaskAdmissionSnapshot }
 const admissionFields = ['id', 'kind', 'status', 'sessionId', 'progress', 'error', 'retryCount', 'executionAttempt',
   'payload', 'result', 'interestContext', 'dispatchedAt', 'updatedAt'] as const;
 
-function firstNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
-  if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.error !== null || task.executionAttempt !== 0 || task.retryCount !== 0
+function firstNativePlan(task: VideoTaskAdmissionSnapshot, error: string | null = null): boolean {
+  if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.error !== error || task.executionAttempt !== 0 || task.retryCount !== 0
     || !isDirectNativeVideoStoryboard(task.payload) || !task.result || Array.isArray(task.result)
     || typeof task.result !== 'object' || Object.keys(task.result).length !== 1) return false;
   try {
     const marker = readNativeAgentExecution(task.result);
     return marker?.profile === 'paper-illustration' && !Object.hasOwn(marker, 'checkpoint');
   } catch { return false; }
+}
+
+/** NULL-CP future contracts have no saved tools to replay. Host readiness cannot supply those tools. */
+function planningContractHold(task: Pick<AgentTask, 'result'>): boolean {
+  try {
+    const marker = readNativeAgentExecution(task.result);
+    return marker?.planningContract !== undefined && (!marker.checkpoint || marker.checkpoint.state === 'started');
+  } catch { return true; }
+}
+
+function pendingSnapshotWhere(task: VideoTaskAdmissionSnapshot): Prisma.AgentTaskWhereInput {
+  return { id: task.id, kind: task.kind, status: 'pending', deletedAt: null, error: task.error,
+    sessionId: task.sessionId, progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
+    dispatchedAt: task.dispatchedAt, updatedAt: task.updatedAt,
+    payload: { equals: task.payload as Prisma.InputJsonValue },
+    result: { equals: task.result === null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue },
+    interestContext: { equals: task.interestContext === null ? Prisma.AnyNull : task.interestContext as Prisma.InputJsonValue } };
 }
 
 function audioAdmission(task: Pick<AgentTask, 'id' | 'kind' | 'payload' | 'result' | 'executionAttempt'>) {
@@ -81,19 +98,28 @@ function nextUpdatedAt(task: VideoTaskSnapshot): Date {
 }
 
 /** Park in the existing DB outbox without consuming an execution attempt. */
-export async function parkPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskSnapshot): Promise<boolean> {
+export async function parkPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean> {
   const updatedAt = nextUpdatedAt(task);
   const parked = await deps.prisma.agentTask.updateMany({
-    where: { id: task.id, status: 'pending', error: task.error, executionAttempt: task.executionAttempt, updatedAt: task.updatedAt },
+    where: pendingSnapshotWhere(task),
     data: { error: VIDEO_READINESS_HOLD, dispatchedAt: task.dispatchedAt ?? updatedAt, updatedAt },
   });
   return parked.count === 1;
 }
 
 /** A successful release is durable even if the worker exits before outbox dispatch. */
-export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskSnapshot): Promise<boolean> {
+export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot,
+  planningContract?: NativeAgentExecution['planningContract']): Promise<boolean> {
+  if (task.status !== 'pending' || task.error !== VIDEO_READINESS_HOLD) return false;
+  if (planningContract !== undefined) {
+    // Future R2 can release the original untouched row once. R1 callers never pass this argument.
+    try {
+      if (planningContract !== 'video-optional-audio-v1' || !firstNativePlan(task, VIDEO_READINESS_HOLD)
+        || readNativeAgentExecution(task.result)?.planningContract !== planningContract) return false;
+    } catch { return false; }
+  } else if (planningContractHold(task)) return false;
   const released = await deps.prisma.agentTask.updateMany({
-    where: { id: task.id, status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: task.executionAttempt, updatedAt: task.updatedAt },
+    where: pendingSnapshotWhere(task),
     data: { error: null, dispatchedAt: null, updatedAt: nextUpdatedAt(task) },
   });
   return released.count === 1;
@@ -106,9 +132,13 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
   // Intent lookup also awaits DB reads: a non-video result must not reopen an
   // unfenced claim of the poller's earlier payload.
-  if (!await isHermesVideoTask(deps.prisma, task.id)) return { expectedPendingTask: current };
-  if (firstNativePlan(current)) return { expectedPendingTask: current };
-  try { await requirePersistedVideoReady(deps, current); }
+  const contractHeld = planningContractHold(current);
+  if (!contractHeld && !await isHermesVideoTask(deps.prisma, task.id)) return { expectedPendingTask: current };
+  if (!contractHeld && firstNativePlan(current)) return { expectedPendingTask: current };
+  try {
+    if (contractHeld) throw new HermesVideoUnavailableError();
+    await requirePersistedVideoReady(deps, current);
+  }
   catch (error) {
     if (!(error instanceof HermesVideoUnavailableError)) throw error;
     if (await parkPendingVideoTask(deps, task)) return true;
@@ -120,7 +150,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
       || current.error !== task.error || current.sessionId !== task.sessionId
       || !isDeepStrictEqual(current.payload, task.payload) || !isDeepStrictEqual(current.result, task.result)
       || !isDeepStrictEqual(current.interestContext, task.interestContext)
-      || !await isHermesVideoTask(deps.prisma, current.id)) return false;
+      || !planningContractHold(current) && !await isHermesVideoTask(deps.prisma, current.id)) return false;
     return parkPendingVideoTask(deps, current);
   }
   return current.error === VIDEO_READINESS_HOLD ? releasePendingVideoTask(deps, current) : { expectedPendingTask: current };
@@ -133,6 +163,7 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
   });
   let released = 0;
   for (const task of tasks) {
+    if (planningContractHold(task)) continue;
     if (!await isHermesVideoTask(deps.prisma, task.id)) continue;
     try { await requirePersistedVideoReady(deps, task); }
     catch (error) { if (error instanceof HermesVideoUnavailableError) continue; throw error; }

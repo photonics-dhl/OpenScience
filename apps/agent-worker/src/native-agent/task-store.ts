@@ -18,7 +18,7 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
   async function marker(db: Pick<Prisma.TransactionClient, 'agentTask'>) {
     const task = await db.agentTask.findUnique({ where: { id: input.taskId } });
     const execution = readNativeAgentExecution(task?.result);
-    if (!task || task.deletedAt || !execution || ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model'].some(k =>
+    if (!task || task.deletedAt || !execution || ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', 'planningContract'].some(k =>
       execution[k as keyof NativeAgentExecution] !== input.execution[k as keyof NativeAgentExecution])) blocked();
     return execution;
   }
@@ -70,7 +70,7 @@ export function createNativeTaskStore(input: { prisma: AgentDeps['prisma']; stor
       await input.prisma.$transaction(async tx => {
         await lockTrashReferences(tx);
         if (!paidCompletion) await input.authorize(tx);
-        await compareNativeAgentCheckpoint(tx, { taskId: input.taskId, executionAttempt: input.executionAttempt, expected: old, next: preparedReference, paidCompletion });
+        await compareNativeAgentCheckpoint(tx, { taskId: input.taskId, executionAttempt: input.executionAttempt, expected: old, next: preparedReference, paidCompletion, expectedExecution: input.execution });
       }, { isolationLevel: 'Serializable' });
     } catch (error) {
       // A concurrent task deletion must also account for bytes written before its result-CAS failed.

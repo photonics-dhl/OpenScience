@@ -641,6 +641,8 @@ async function persistAgentTaskCoreInTransaction(
   }
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
+  // R1 reserves fresh Native video tasks with the historical contract in this same credit transaction.
+  // A future compatible producer must opt in explicitly; server runtime fields never select a planning contract.
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)

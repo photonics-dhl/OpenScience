@@ -507,7 +507,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false, nativeVideoAudio = true): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
   const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
@@ -591,7 +591,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
     sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   if (nativeVideo) {
-    if (!classifyNativeVideoAudio({ videoProduction: root.videoProduction, scenes })) throw new Error('native_video_audio_mode_unsupported');
+    if (nativeVideoAudio && !classifyNativeVideoAudio({ videoProduction: root.videoProduction, scenes })) throw new Error('native_video_audio_mode_unsupported');
     const candidate = parseStoryboardDocument({ schemaVersion: 1, title: root.title, narrative, videoProduction: root.videoProduction,
       scenes: scenes.map(scene => ({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) })) }, claimIds, 'video', { nativeNarrativeVideo: true });
     requireBoundNumericalResults([['videoProduction.visualContinuity', candidate.videoProduction!.visualContinuity]],

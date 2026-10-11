@@ -204,6 +204,62 @@ describe.skipIf(process.env.XGS_WORKER_TEST_REDIS_URL === undefined)('real Redis
 });
 
 describe('first Native video plan admission', () => {
+  it.each(['external-narration', 'native-first'])('parks marked NULL-CP %s before claim even with Host ready, preserving its credit and once key', async intent => {
+    const f = firstNativePlanFixture(); f.state.ready = true;
+    (f.task.payload.storyboard as Record<string, unknown>).instruction = `Use ${intent}`;
+    Object.assign(f.task.result!.nativeAgentExecution!, { planningContract: 'video-optional-audio-v1' });
+    Object.assign(f.task, { idempotencyKey: 'original-video-once-key' });
+    const ledger = [{ id: 'reserved-credit', taskId: f.task.id, delta: -1 }];
+    Object.assign(f.deps.prisma, { usageLedger: { findMany: vi.fn(async () => ledger), create: vi.fn() } });
+    const before = structuredClone(f.task), paid = structuredClone(ledger);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toEqual({ ...before, error: VIDEO_READINESS_HOLD, updatedAt: new Date(before.updatedAt.getTime() + 1) });
+    expect(f.task.executionAttempt).toBe(0); expect(ledger).toEqual(paid);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
+    expect(f.handler).not.toHaveBeenCalled(); expect(f.lists.get(processingKey)).toEqual([]);
+    const held = structuredClone(f.task);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(await releasePendingVideoTask(f.deps, held as never)).toBe(false);
+    expect(f.task).toEqual(held); expect(await f.outbox()).toBe(0);
+  });
+  it.each([null, undefined, 'unknown-contract', 1, {}, ['video-optional-audio-v1']])('never lets Host readiness unlock malformed contract %j', async planningContract => {
+    const f = firstNativePlanFixture(); f.state.ready = true;
+    Object.assign(f.task.result!.nativeAgentExecution!, { planningContract });
+    await f.poll(); const held = structuredClone(f.task);
+    expect(f.task).toMatchObject({ status: 'pending', error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+    expect(f.task).toEqual(held); expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+  });
+  it('allows only an explicit same-contract future release, once, to the original outbox', async () => {
+    const f = firstNativePlanFixture();
+    Object.assign(f.task.result!.nativeAgentExecution!, { planningContract: 'video-optional-audio-v1' });
+    f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+    const held = structuredClone(f.task);
+    const release = releasePendingVideoTask as (...args: unknown[]) => Promise<boolean>;
+    expect(await release(f.deps, held, 'other-contract')).toBe(false);
+    expect(await release(f.deps, held, 'video-optional-audio-v1')).toBe(true);
+    expect(await release(f.deps, held, 'video-optional-audio-v1')).toBe(false);
+    expect(f.task).toMatchObject({ id: held.id, status: 'pending', executionAttempt: 0, result: held.result, payload: held.payload,
+      error: null, dispatchedAt: null });
+    expect(await f.outbox()).toBe(1); expect(await f.outbox()).toBe(0); expect(f.lists.get(queueKey)).toEqual([held.id]);
+    // The restored producer owns eventual claim; this R1 poll must park it again.
+    await f.poll(); expect(f.task.error).toBe(VIDEO_READINESS_HOLD); expect(execution.claim).not.toHaveBeenCalled();
+  });
+  it.each(['running', 'succeeded', 'failed', 'deleted', 'attempt', 'retry', 'started', 'paid-unknown'] as const)(
+    'does not explicitly release %s marked work', async change => {
+      const f = firstNativePlanFixture(); f.task.error = VIDEO_READINESS_HOLD;
+      Object.assign(f.task.result!.nativeAgentExecution!, { planningContract: 'video-optional-audio-v1' });
+      if (['running', 'succeeded', 'failed'].includes(change)) f.task.status = change;
+      if (change === 'deleted') f.task.deletedAt = new Date();
+      if (change === 'attempt') f.task.executionAttempt = 1;
+      if (change === 'retry') f.task.retryCount = 1;
+      if (change === 'started') Object.assign(f.task.result!.nativeAgentExecution!, { checkpoint: { state: 'started' } });
+      if (change === 'paid-unknown') f.task.result!.providerOutcome = 'unknown';
+      const before = structuredClone(f.task);
+      const release = releasePendingVideoTask as (...args: unknown[]) => Promise<boolean>;
+      expect(await release(f.deps, before, 'video-optional-audio-v1')).toBe(false);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(f.task).toEqual(before);
+    });
   it('keeps video intent and dispatches fresh pending0 through the real claim as attempt1 with Host closed', async () => {
     const f = firstNativePlanFixture();
     expect(f.task.executionAttempt).toBe(0);

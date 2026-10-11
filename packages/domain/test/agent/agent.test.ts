@@ -4,6 +4,7 @@ import { createResearchObject } from '../../src/research-object/research-objects
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
+  persistAgentTaskInTransaction, type AgentDeps,
 } from '../../src/agent/agent';
 import { buildInterestContext } from '../../src/research-intelligence/interest-context';
 import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
@@ -293,6 +294,26 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('creates R1 first Native video tasks in the credit transaction without emitting a runtime-supplied contract', async () => {
+    const f = await makeDeps(1);
+    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
+    const runtime = { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3', planningContract: 'video-optional-audio-v1' };
+    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: runtime };
+    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'r1-first-video',
+      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: 'version', kind: 'interactive_html', sourceClaimIds: ['claim'],
+        storyboard: { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain the paper' } } };
+    const fresh = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
+    expect(fresh.task.result).toEqual({ nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
+      runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model } });
+    const ledger = structuredClone(f.db.usageLedger);
+    expect(ledger.filter(entry => entry.delta < 0)).toHaveLength(1);
+    Object.assign(f.db.agentTasks.find(row => row.id === fresh.task.id)!.result.nativeAgentExecution,
+      { planningContract: 'video-optional-audio-v1' });
+    const saved = structuredClone(f.db.agentTasks.find(row => row.id === fresh.task.id)!);
+    const replay = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
+    expect(replay).toEqual({ task: saved, replayed: true });
+    expect(f.db.usageLedger).toEqual(ledger); expect(f.redis.lists.size).toBe(0);
+  });
   it('snapshot dispatch cannot acknowledge an outbox reopened while its LPUSH was pending', async () => {
     const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
     const oldDispatch = dispatchAgentTask(deps, task.id);

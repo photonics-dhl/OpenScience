@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt } from '../src/presentation/synclip-video-spool';
+import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt, compileHistoricalNativeVideoShotPrompt } from '../src/presentation/synclip-video-spool';
 
 const TASK = '10000000-0000-4000-8000-000000000001';
 const CLAIM = '20000000-0000-4000-8000-000000000001';
@@ -11,7 +11,7 @@ const ownedFixtures: string[] = [];
 afterEach(async () => { for (const path of ownedFixtures.splice(0)) await rm(path, { recursive: true, force: true }); });
 const png = () => { const value = Buffer.alloc(33); Buffer.from('89504e470d0a1a0a', 'hex').copy(value); value.write('IHDR', 12); return value; };
 const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
-const direction = (index: number) => ({ shotType: index === 0 ? 'hook' : 'mechanism' as const, purpose: 'purpose ' + index, subjectLock: 'same approved subject', generatedElements: 'only the approved field and electron', motion: 'motion beat ' + index, camera: 'slow controlled push-in', reference: 'scene-artwork' as const, frameStrategy: 'start-reference' as const, audioMode: 'external-narration' as const, subtitleMode: 'sidecar' as const, negativeConstraints: ['no invented labels'], modelPolicy: 'commercial-primary' as const });
+const direction = (index: number) => ({ shotType: index === 0 ? 'hook' as const : 'mechanism' as const, purpose: 'purpose ' + index, subjectLock: 'same approved subject', generatedElements: 'only the approved field and electron', motion: 'motion beat ' + index, camera: 'slow controlled push-in', reference: 'scene-artwork' as const, frameStrategy: 'start-reference' as const, audioMode: 'external-narration' as const, subtitleMode: 'sidecar' as const, negativeConstraints: ['no invented labels'], modelPolicy: 'commercial-primary' as const });
 type Submitted = { id: string; inputHash: string; executionAttempt: number; audio: { provider: 'synclip'; voice: string; speed: number };
   files: Record<string, unknown>;
   scenes: Array<{ narration: string; durationSeconds: number }> };
@@ -69,6 +69,15 @@ describe('Native provider output without optional TTS', () => {
     const f = await nativeFixture();
     Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
     for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    await expect(f.spool.generate(f.input)).rejects.toThrow('NATIVE_VIDEO_PLAN_CHANGED');
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('keeps the original-contract compiler outside real spool admission', async () => {
+    const f = await nativeFixture();
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileHistoricalNativeVideoShotPrompt(f.input.storyboard, scene, 'zh'));
+    expect(f.input.videoPrompts.every(prompt => prompt.endsWith('Spoken narration is external; use only subtle non-verbal ambience if supplied.'))).toBe(true);
     await expect(f.spool.generate(f.input)).rejects.toThrow('NATIVE_VIDEO_PLAN_CHANGED');
     await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });

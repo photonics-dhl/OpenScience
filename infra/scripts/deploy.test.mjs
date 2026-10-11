@@ -1778,6 +1778,56 @@ test('candidate capability stays absent through prepublication and is exact-clea
   }
 });
 
+test('ordinary rollback preserves paid video plans created after candidate exposure before commit', async t => {
+  const base = fileURLToPath(new URL('../../tmp/synclip-optional-narration/r1/', import.meta.url));
+  await mkdir(base, { recursive: true });
+  const root = await mkdtemp(join(base, 'rollback-window-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+  for (const mode of ['historical', 'optional-null-cp']) {
+    const compatibleReader = mode === 'historical' ? 'ad99' : 'R1';
+    const directory = join(root, mode); await mkdir(directory);
+    const pending = { id: 'same-paid-plan', status: 'pending', executionAttempt: 0, retryCount: 0,
+      idempotencyKey: 'same-once-key', payload: { storyboard: { output: 'video', narrative: true,
+        instruction: 'Use native-first provider audio grounded in the source narration.' } },
+      result: { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
+        runtimeId: 'original-native393', skillCatalogueId: 'original-catalogue393', model: 'MiniMax-M3',
+        ...(mode === 'optional-null-cp' ? { planningContract: 'video-optional-audio-v1' } : {}) } },
+      ledger: [{ idempotencyKey: 'agent-task-reserve:same-paid-plan', aiCreditDelta: -1 }] };
+    const original = JSON.stringify(pending);
+    const seed = join(directory, 'seed.json'), row = join(directory, 'paid-row.json'), trace = join(directory, 'trace');
+    await writeFile(seed, original);
+    const shell = [
+      'set -eEuo pipefail', `source '${transactionStatePath.replaceAll('\\', '/')}'`,
+      `FIXTURE='${directory.replaceAll('\\', '/')}'`,
+      'transaction_assert_lock(){ :; }',
+      'transaction_journal_start(){ printf "prepared\\n" > "$FIXTURE/journal"; }',
+      'transaction_journal_update(){ printf "%s\\n" "$1" > "$FIXTURE/journal"; }',
+      'transaction_journal_clear(){ rm -f -- "$FIXTURE/journal"; }',
+      'transaction_journal_clear_after_rollback(){ rm -- "$FIXTURE/journal"; }',
+      'transaction_abort_rollback_intent(){ :; }',
+      'transaction_cleanup_candidate_capability(){ printf "cleanup\\n" >> "$FIXTURE/trace"; }',
+      `transaction_perform_application_rollback(){ test -f "$FIXTURE/paid-row.json"; printf "${compatibleReader}\\n" > "$FIXTURE/active"; printf "rollback\\n" >> "$FIXTURE/trace"; }`,
+      'transaction_initialize_state', 'transaction_install_traps', 'transaction_begin',
+      'transaction_mark_phase switching',
+      'printf "candidate-online\\n" >> "$FIXTURE/trace"',
+      // The row and its single debit appear after the candidate is exposed, while rollback is still armed.
+      'cp -- "$FIXTURE/seed.json" "$FIXTURE/paid-row.json"',
+      'printf "task-and-credit-committed-no-cp\\n" >> "$FIXTURE/trace"',
+      'false', 'transaction_commit',
+    ].join('\n');
+    const outcome = spawnSync(bash, ['-c', shell], { encoding: 'utf8' });
+    assert.notEqual(outcome.status, 0, outcome.stderr);
+    assert.deepEqual((await readFile(trace, 'utf8')).trim().split('\n'),
+      ['candidate-online', 'task-and-credit-committed-no-cp', 'rollback', 'cleanup']);
+    assert.equal(await readFile(row, 'utf8'), original, 'rollback must not replace the paid row, contract, key or ledger');
+    assert.equal((await readFile(join(directory, 'active'), 'utf8')).trim(), compatibleReader);
+    assert.equal(existsSync(join(directory, 'journal')), false);
+  }
+  // Reader/admission behavior is covered by the actual ad99/a0f2 cross-version driver and Worker fixtures.
+  // This exercises the real ordinary error/rollback state machine, with no Docker, DB, provider or model call.
+});
+
 test('protected rollback sidecar survives candidate rejection and cleanup byte-for-byte', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-protected-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));

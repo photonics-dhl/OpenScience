@@ -41,6 +41,7 @@ export interface NativeAgentImageCheckpointReference {
 export type NativeAgentCheckpointReference = NativeAgentPaperCheckpointReference | NativeAgentImageCheckpointReference;
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
   kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor' | 'image-review'; checkpoint?: NativeAgentCheckpointReference;
+  planningContract?: 'video-optional-audio-v1';
 }
 /** Paper authors may need a bounded continuation to finish source reading and the saved review in one lease. */
 export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 4 | 32 | 48 {
@@ -165,9 +166,14 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
 }
 
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */
-export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding'): { nativeAgentExecution: NativeAgentExecution } | undefined {
+export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding',
+  planningContract?: NativeAgentExecution['planningContract']): { nativeAgentExecution: NativeAgentExecution } | undefined {
+  // Only an explicit trusted producer can opt in; a runtime object must never carry the contract into a new R1 task.
+  const marked = arguments.length >= 3;
+  if (marked && (profile !== 'paper-illustration' || planningContract !== 'video-optional-audio-v1')) blocked();
   if (!runtime) return undefined;
-  const result = { nativeAgentExecution: { ...runtime, kind: 'hermes-agent' as const, profile } };
+  const result = { nativeAgentExecution: { runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model,
+    kind: 'hermes-agent' as const, profile, ...(marked ? { planningContract } : {}) } };
   readNativeAgentExecution(profile === 'image-review' ? { ...result, nativeImageReview: { mode: 'model-native', state: 'not_started' } } : result); return result;
 }
 
@@ -176,8 +182,10 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
   if (!record(result) || !Object.hasOwn(result, 'nativeAgentExecution')) return undefined;
   const marker = result.nativeAgentExecution;
   if (record(marker) && marker.profile === 'image-review') return readNativeImageAgentExecution(result);
-  if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
+  if (!record(marker) || !exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model',
+    ...(Object.hasOwn(marker, 'planningContract') ? ['planningContract'] : []), ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
     || marker.kind !== 'hermes-agent' || !['paper-understanding', 'paper-author', 'paper-source-review', 'paper-illustration', 'journal-editor'].includes(String(marker.profile))
+    || Object.hasOwn(marker, 'planningContract') && (marker.profile !== 'paper-illustration' || marker.planningContract !== 'video-optional-audio-v1')
     || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) blocked();
   if (Object.hasOwn(marker, 'checkpoint')) {
     const cp = marker.checkpoint;
@@ -200,12 +208,18 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
 /** Caller holds existing source/authority locks; this helper owns only the exact task-result CAS. */
 export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionClient, 'agentTask'>, input: {
   taskId: string; executionAttempt: number; expected: NativeAgentCheckpointReference | undefined;
-  next: NativeAgentCheckpointReference; paidCompletion: boolean;
+  next: NativeAgentCheckpointReference; paidCompletion: boolean; expectedExecution?: NativeAgentExecution;
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
   if (!task || task.deletedAt || !marker || task.kind !== (['paper-illustration', 'image-review'].includes(marker.profile) ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
     || !isDeepStrictEqual(marker.checkpoint, input.expected)) blocked();
+  if (input.expectedExecution !== undefined) {
+    // A store can bind the entire original marker across awaits; CP progression has its separate exact comparison above.
+    const identity = { ...marker }, expectedIdentity = { ...input.expectedExecution };
+    delete identity.checkpoint; delete expectedIdentity.checkpoint;
+    if (!isDeepStrictEqual(identity, expectedIdentity)) blocked();
+  }
   const priorObjects = record(task.result) && Array.isArray(task.result.nativeAgentObjects) ? task.result.nativeAgentObjects : [];
   const oldObject = marker.checkpoint?.objectKey;
   // Older private snapshots are retained as paid/recovery evidence and enter the existing task trash lifecycle.

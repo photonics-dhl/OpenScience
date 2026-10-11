@@ -26,8 +26,10 @@ function fixture() {
     return { key, size: bytes.length, etag: '' }; },
     async headObject(key: string) { const bytes = objects.get(key); return bytes ? { size: bytes.length, etag: '' } : null; },
     async getObject(key: string) { const bytes = objects.get(key)!; return { size: bytes.length, body: Readable.from([bytes]) }; }, async deleteObject(key: string) { objects.delete(key); } };
-  const create = () => createNativeTaskStore({ prisma: prisma as never, storage: storage as never, taskId: task.id, executionAttempt: 1,
-    execution: readNativeAgentExecution(task.result)!, authorize: async () => { if (!authorized || task.executionAttempt !== 1) throw new Error('authority revoked'); } });
+  const create = (afterAuthorize: () => void = () => undefined) => createNativeTaskStore({ prisma: prisma as never, storage: storage as never, taskId: task.id, executionAttempt: 1,
+    execution: readNativeAgentExecution(task.result)!, authorize: async () => {
+      if (!authorized || task.executionAttempt !== 1) throw new Error('authority revoked'); afterAuthorize();
+    } });
   const state: NativeAgentSessionState = { kind: 'hermes-native-agent', binding: { taskId: 'task', artifactId: 'paper', documentSha256: 'a'.repeat(64),
     sourceMapHash: 'b'.repeat(64), ...runtime, allowedTools: [], maxTurns: 3, maxOutputTokens: 100, maxTotalOutputTokens: 300,
     maxInputBytes: 9000, deadlineAt: 10000 }, initialMessages: [{ role: 'user', content: 'fixed' }], turns: [{ state: 'started',
@@ -38,6 +40,46 @@ function fixture() {
     loseWriteAfterDeletion: () => { loseWrite = true; }, get inTransaction() { return insideTransaction; } };
 }
 describe('native private task object store', () => {
+  it.each(['added', 'removed', 'illegal'] as const)('stops planning-contract %s on the actual store read', async change => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    f.task.result = { ...f.task.result, ...initialNativeAgentExecution(runtime, 'paper-illustration', ...(change === 'removed' ? ['video-optional-audio-v1'] as const : [])) };
+    const store = f.create();
+    const marker = { ...readNativeAgentExecution(f.task.result)! };
+    if (change === 'removed') Reflect.deleteProperty(marker, 'planningContract');
+    else Object.assign(marker, { planningContract: change === 'added' ? 'video-optional-audio-v1' : 'unrecognized' });
+    f.task.result = { ...f.task.result, nativeAgentExecution: marker };
+    await expect(store.read()).rejects.toThrow(/blocked/u);
+  });
+
+  it.each(['added', 'removed', 'illegal'] as const)('stops planning-contract %s before the store checkpoint CAS', async change => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    f.task.result = { ...f.task.result, ...initialNativeAgentExecution(runtime, 'paper-illustration', ...(change === 'removed' ? ['video-optional-audio-v1'] as const : [])) };
+    const store = f.create(() => {
+      const marker = { ...readNativeAgentExecution(f.task.result)! };
+      if (change === 'removed') Reflect.deleteProperty(marker, 'planningContract');
+      else Object.assign(marker, { planningContract: change === 'added' ? 'video-optional-audio-v1' : 'unrecognized' });
+      f.task.result = { ...f.task.result, nativeAgentExecution: marker };
+    });
+    await expect(store.compareAndSet(null, f.state)).rejects.toThrow(/blocked/u);
+    expect(f.task.result.nativeAgentExecution?.checkpoint).toBeUndefined();
+  });
+
+  it.each(['added', 'removed', 'illegal'] as const)('stops planning-contract %s immediately before actual provider submit', async change => {
+    const f = fixture(); f.task.kind = 'presentation.generate';
+    f.task.result = { ...f.task.result, ...initialNativeAgentExecution(runtime, 'paper-illustration', ...(change === 'removed' ? ['video-optional-audio-v1'] as const : [])) };
+    let drift = false; let sent = 0;
+    const store = f.create(() => {
+      if (!drift) return;
+      const marker = { ...readNativeAgentExecution(f.task.result)! };
+      if (change === 'removed') Reflect.deleteProperty(marker, 'planningContract');
+      else Object.assign(marker, { planningContract: change === 'added' ? 'video-optional-audio-v1' : 'unrecognized' });
+      f.task.result = { ...f.task.result, nativeAgentExecution: marker };
+    });
+    await store.compareAndSet(null, f.state); drift = true;
+    await expect(store.publish(f.state, async () => { sent++; return 'must not submit'; })).rejects.toThrow(/blocked/u);
+    expect(sent).toBe(0);
+  });
+
   it('uses existing deleted-task cleanup when storage wrote bytes but lost its acknowledgment after deletion', async () => {
     const f = fixture(); f.loseWriteAfterDeletion();
     await expect(f.create().compareAndSet(null, f.state)).rejects.toThrow('write acknowledgment');
