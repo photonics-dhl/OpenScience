@@ -3,7 +3,7 @@
 > 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
 ## 最近检查点
-- 2026-10-11 Guide按已确认反馈增加独立长文字框，完整原文走既有资料导入，三卡等尺寸及新提示文案完成；定向浏览器检查与独立High通过，桌面/手机截图已观察，候选用户已认可、未推送部署。状态和边界见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。 本轮收起 Hermes 标题区，研究标题输入铺满卡片，更新研究版本改为紧凑行；保留原有操作流程，用户已认可并授权推送及部署。
+- 2026-10-11 用户认可Guide布局，已正常推送现有frontend/nanqing并部署9a11c931，回滚3245，main未改。精确CI全通过、新双库备份及线上版本/服务健康核验正常；实际站内入口、直接填写、整卡标题输入与手机布局已观察。证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-10 Guide已替换为本页创建/上传/手填/任务对话与研究修订界面；定向交互和独立High检查通过，本地候选尚未推送部署，真实模型质量未重跑，线上主页发布保持。需求与状态见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
 - 2026-10-10 主页版式修正已按用户认可推送并上线：保留5eeb48ce，正常合并远端test-only/docs后发布c239；四CI成功、独立High GO、备份及精确公网版本/健康核验通过，main未改。旧版退出当前展示，仅留一个回滚版本；实际站内入口及登录返回已观察。精确身份和证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)，下方待发布状态为历史。
 - 2026-10-10 个人学术主页按用户反馈完成版式返工：空卡始终保留并灰字提示，恢复示例左右比例，移除返回个人资料。10项浏览器测试及类型/lint通过，root已看桌面/手机空账户；当前仅本地候选与预览，线上仍为下方043版本。证据与待办见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
