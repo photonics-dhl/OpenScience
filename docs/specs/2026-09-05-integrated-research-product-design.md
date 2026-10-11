@@ -511,8 +511,10 @@ AI内部详细制作材料与用户正文分别保存：视觉brief保留来源�
 
 用户要求先厘清全产品各页的功能、叙事、入口、页面关系与双方共享归属，再逐页讨论效果图；既有设计目标保留，候选导航与页面归并决定须明确为建议，不能据文档生成自行实施。生图与视频负责人提供领域事实，UI负责人维护唯一完整阅读稿，总控维护交付状态。
 
-阅读稿由 `research-product-craft` 工作树的 `tmp/ui-art-20261008/product-page-planning-20261011/` 维护：`OpenScience 完整产品设计与协作手册.pdf`、`openscience-product-design.html`、`product-design-data.json` 与原 `build_product_design.py`；`document-receipt.json` 保存覆盖、排版检查和未确认范围。主稿覆盖44个产品路由、页面状态、两条设计线优点、D01–D06待讨论决定及媒体能力边界；不是新的部署或任务状态库。原件仍有活跃生产者，不复制另一套可漂移主稿，也不随工作树清理删除。
+**D01 已决定，覆盖初稿建议：** 用户随后明确否定把Guide做成直接创建/上传的三卡操作页，要求恢复本线此前指南设计，仅吸收清晰入口等优点；“文字当然也需要，但是主要用图来说话”。Guide恢复引导与研究示例职责，创建研究回到既有研究桌面；原Figma `2138:2` 为本轮恢复方向的视觉参考。首张三卡效果图被替代并保留，不再是当前设计目标。新的指南效果图供用户审阅；后续源码调整须保留已交付的创建能力与输入保护，通过正确入口承接，不用整批Git回退删除新能力，也不因本条决定直接回滚生产。原始用户纠正为UI聊天 `01a1293f-b8b7-74e3-8250-0739bc92f9ea` 与 `01a12940-e5b6-7f90-b9df-adecfa64e8e1`；D02–D06仍分别按实际反馈处理。
 
-逐页视觉稿使用真实当前页面截图与既有品牌/角色资产，先Guide一张，按用户点评继续。用户提议image-2.5；当前内置工具可附参考图但不公开型号，不能将其结果标为已指定2.5，也不能为示意图改生产模型或重发历史未知请求。Guide首稿 `guide-review-concept-v1.png` 的参考为 `guide-current-ad993.png` 与 `apps/web/public/hermes/wanko-static-transparent.png`，原提示词为 `guide-mockup-prompt.txt`。这是待用户审阅的效果示意，不等于页面实现、审美认可或科学能力验收。
+阅读稿由 `research-product-craft` 工作树的 `tmp/ui-art-20261008/product-page-planning-20261011/` 维护：`OpenScience 完整产品设计与协作手册.pdf`、`openscience-product-design.html`、`product-design-data.json` 与原 `build_product_design.py`；`document-receipt.json` 保存覆盖、排版检查和未确认范围。主稿覆盖44个产品路由、页面状态、两条设计线优点、产品决定及媒体能力边界；初导出稿将D01–D06列为待讨论，其中D01已由上段用户纠正确定，原导出中的旧建议被替代，UI已同源修正D01/P03，不再将其列为未决方向。不是新的部署或任务状态库；原件仍有活跃生产者，不复制另一套可漂移主稿，也不随工作树清理删除。
+
+逐页视觉稿使用真实页面/已选设计参考与既有品牌/角色资产，按用户点评继续；当前Guide以原Figma指南方向为准，不把被否定的现网三卡布局保作硬约束。用户提议image-2.5；当前内置工具可附参考图但不公开型号，不能将其结果标为已指定2.5，也不能为示意图改生产模型或重发历史未知请求。历史首稿 `guide-review-concept-v1.png` 及其 `guide-current-ad993.png` / Hermes参考和 `guide-mockup-prompt.txt` 原样保留，状态为superseded。恢复方向参考图为 `guide-original-figma.png`、新稿为 `guide-restored-editorial-v2.png`，提示词 `guide-restored-editorial-prompt.txt` 和纠正说明 `guide-role-correction.txt` 保留于同目录。新稿的科研示例生成像素只供构图参考，实施时必须回用真实原资产；验收状态只见CURRENT，效果示意不等于页面实现、审美认可或科学能力验收。
 
 图像生成/视频规划/试听/成片/采用/公开的权限和费用分别描述；仅规划视频无需已有成片资格，已实现功能与真实端到端验收分别标注。不要在效果图中把音色商店、完整预算编辑器、原样复用试听MP3或已通过的科学审阅循环画成现成承诺。最新稿件验收及后续状态仅见 [Hermes CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)。
