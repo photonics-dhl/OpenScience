@@ -409,7 +409,7 @@ describe('Native planner locates quantity repairs without changing paid science'
     const old = fixture({ ...nativeIllustrationToolProfile(savedProfile(PAID_PROSE_SCIENCE_DESCRIPTION)), quote, input });
     const repaired = fresh.invoke('paper_illustration_science', value, 'failed');
     expect(repaired).toMatchObject({ status: 'invalid_illustration', error: expect.stringMatching(/^unbound_numeric_7_fs_description/u) });
-    expect(repaired.error).toContain('Fields: scenes[1].labels[0].');
+    expect(repaired.error).toBe('unbound_numeric_7_fs_description Fields: scenes[1].labels[0], scenes[1].subjects[0].description.');
     expect(old.invoke('paper_illustration_science', value, 'failed')).toEqual({ status: 'invalid_illustration',
       error: 'unbound_numeric_7_fs_description Fields: labels[0].' });
     value.scenes[1]!.subjects[0]!.description = 'The reported output duration is 7 fs.';
