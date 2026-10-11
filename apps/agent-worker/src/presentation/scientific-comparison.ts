@@ -16,7 +16,7 @@ function tokenize(value: string): Token[] {
       horizontalSpaceBefore: index > 0 && /^[ \t]+$/u.test(value.slice(matches[index - 1]!.index! + matches[index - 1]![0].length, match.index!)),
       kind: identifier.test(match[0]) ? 'identifier' : /^(?:\d|\.\d)/u.test(match[0]) ? 'number' : 'other' }));
 }
-function mathParser(tokens: Token[]) {
+function mathParser(tokens: Token[], sourceExplicitTrig = false) {
   const atom = (index: number): Expression | undefined => {
     const token = tokens[index];
     if (!token) return undefined;
@@ -37,6 +37,20 @@ function mathParser(tokens: Token[]) {
         const part = tokens[end]!;
         if (part.kind !== 'identifier' || end > index && !part.horizontalSpaceBefore) break;
         term += part.text;
+        // This separate capability must not change persisted source-notation
+        // profiles. Only complete finite calls preserve the compact rule's
+        // single Greek coefficient/argument; no inference or general functions.
+        const namedTrig = sourceExplicitTrig === true ? /^([\u0370-\u03ff])?(sin|cos|tan)$/u.exec(term) : null;
+        if (namedTrig && tokens[end + 1]?.text === '(') {
+          const argument = tokens[end + 2], closing = tokens[end + 3];
+          const callTokens = tokens.slice(end, end + 4);
+          if (!argument || !/^[\u0370-\u03ff]$/u.test(argument.text) || closing?.text !== ')'
+            || callTokens.slice(1).some((item, offset) => item.start !== callTokens[offset]!.end && !item.horizontalSpaceBefore))
+            return undefined;
+          const call = namedTrig[2] + '(' + normalizeIdentifier(argument.text) + ')';
+          return { key: namedTrig[1] ? '(' + normalizeIdentifier(namedTrig[1]) + '*' + call + ')' : call,
+            symbol: false, numeric: false, symbolic: true, next: end + 4, implicitProduct: !!namedTrig[1] };
+        }
         const trig = /^([\u0370-\u03ff])?(sin|cos|tan)([\u0370-\u03ff])$/u.exec(term);
         if (trig) {
           const call = `${trig[2]}(${normalizeIdentifier(trig[3]!)})`;
@@ -83,7 +97,7 @@ function mathParser(tokens: Token[]) {
 const representation = (value: Expression): ScientificRepresentation => ({ kind: value.symbol ? 'symbol' : 'expression', key: value.key });
 
 /** Comparison copies only. A small TeX subset must parse in full before it is used. */
-export function normalizeScientificSourceNotation(input: string): {
+export function normalizeScientificSourceNotation(input: string, sourceExplicitTrig = false): {
   text: string; unsupported: Array<{ start: number; end: number; key: string; unsupported: true }>;
 } {
   input = sourceComparisonSigns(input);
@@ -119,7 +133,7 @@ export function normalizeScientificSourceNotation(input: string): {
     body = body.replace(/\\([A-Za-z]+)/gu, (command: string, name: string) => commands[name] ?? command);
     const tokens = tokenize(body);
     valid &&= body.length <= 160 && tokens.length <= 80;
-    const parse = mathParser(tokens);
+    const parse = mathParser(tokens, sourceExplicitTrig);
     let parsed = valid ? parse(0) : undefined, ambiguous = parsed?.ambiguousDivision, hasRelation = false;
     while (parsed && ['=', '≈', '~'].includes(tokens[parsed.next]?.text ?? '')) {
       hasRelation = true;
@@ -195,11 +209,11 @@ function referenceBoundary(tokens: Token[], index: number, sourceNotation = fals
 }
 
 /** Only explicit local equality edges; no value-based or cross-passage inference. */
-export function scientificEqualityRelations(input: string): Array<[ScientificRepresentation, ScientificRepresentation]> {
+export function scientificEqualityRelations(input: string, sourceExplicitTrig = false): Array<[ScientificRepresentation, ScientificRepresentation]> {
   const tokens = tokenize(input), relations: Array<[ScientificRepresentation, ScientificRepresentation]> = [];
   for (let index = 0; index < tokens.length; index++) {
     if (!referenceBoundary(tokens, index)) continue;
-    const local = tokens.slice(index, index + 80), parse = mathParser(local), left = parse(0);
+    const local = tokens.slice(index, index + 80), parse = mathParser(local, sourceExplicitTrig), left = parse(0);
     if (!left?.symbolic || left.ambiguousDivision || local[left.next]?.text !== '=') continue;
     const right = parse(left.next + 1);
     if (!right?.symbolic || right.ambiguousDivision || local[right.next - 1]!.end - local[0]!.start > 160) continue;
@@ -211,7 +225,7 @@ export function scientificEqualityRelations(input: string): Array<[ScientificRep
 }
 
 /** Syntactic binding only: no evaluation, algebraic rewriting or inferred aliases. */
-export function scientificComparisonBinding(input: string, numberStart: number, sourceProseSymbols = false): {
+export function scientificComparisonBinding(input: string, numberStart: number, sourceProseSymbols = false, sourceExplicitTrig = false): {
   binding: ScientificBinding; start: number; end: number; prose?: boolean;
 } | undefined {
   const offset = Math.max(0, numberStart - 160);
@@ -258,7 +272,7 @@ export function scientificComparisonBinding(input: string, numberStart: number, 
     if (token.text === '(') openGroups.push(index);
     else if (token.text === ')') openGroups.pop();
   });
-  const expression = mathParser(tokens);
+  const expression = mathParser(tokens, sourceExplicitTrig);
   const completedQuantity = (end: number) => /\d\s*(?:as|fs|ps|ns|nm|μm|mm|MeV|keV|eV)\s*$/iu.test(lhs.slice(0, end));
   let unsupportedStart: number | undefined;
   for (let start = 0; start < tokens.length; start++) {
@@ -305,14 +319,14 @@ export function scientificComparisonBinding(input: string, numberStart: number, 
 }
 
 /** Whole symbolic references with constants (e.g. λ0/2), never bare constants. */
-export function scientificExpressionReferences(input: string, sourceNotation = false): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
+export function scientificExpressionReferences(input: string, sourceNotation = false, sourceExplicitTrig = false): Array<{ key: string; start: number; end: number; unsupported?: boolean }> {
   const tokens = tokenize(sourceNotation ? sourceComparisonSigns(input) : input), result: Array<{ key: string; start: number; end: number; unsupported?: boolean }> = [];
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (tokens[index - 1]?.kind === 'number') continue;
     if (!referenceBoundary(tokens, index, sourceNotation)) continue;
     const local = tokens.slice(index, index + 80);
-    const value = mathParser(local)(0);
+    const value = mathParser(local, sourceExplicitTrig)(0);
     // The existing local noun-phrase binding identifies a prose copula, not
     // a variable in "is -2.5 mV". Explicit mathematical symbols stay intact.
     const proseStart = Math.max(0, token.end - 160);
@@ -340,9 +354,9 @@ export function scientificExpressionReferences(input: string, sourceNotation = f
       // A complete standalone comparison is prose grouping, not a failed
       // arithmetic product. Scan its operands normally without dropping a
       // denominator or allowing a factor outside the closing parenthesis.
-      const left = mathParser(local)(1);
+      const left = mathParser(local, sourceExplicitTrig)(1);
       const right = left && !left.ambiguousDivision && ['<', '>', '≤', '≥', '≪'].includes(local[left.next]?.text ?? '')
-        ? mathParser(local)(left.next + 1) : undefined;
+        ? mathParser(local, sourceExplicitTrig)(left.next + 1) : undefined;
       const closing = right && local[right.next], following = right && tokens[index + right.next + 1];
       if (right && !right.ambiguousDivision && closing?.text === ')' && closing.end - token.start <= 160
         && (!following || proseBoundary.test(following.text))) continue;
@@ -366,7 +380,7 @@ export function scientificExpressionReferences(input: string, sourceNotation = f
     // A failed numerical math group must not be rescanned from its interior:
     // that would turn (1-β f(θ)) into the valid but unrelated prefix (1-β).
     if (!value && token.text === '(') {
-      const inner = mathParser(local)(1);
+      const inner = mathParser(local, sourceExplicitTrig)(1);
       const startsNumericMath = local[1]?.kind === 'number' && ['+', '-', '*', '×', '·', '/'].includes(local[2]?.text ?? '');
       if (inner?.numeric && inner.symbolic || startsNumericMath) {
         let endIndex = index, depth = 1;
@@ -385,7 +399,7 @@ export function scientificExpressionReferences(input: string, sourceNotation = f
     // constant and accidentally match an unrelated numeric result.
     const continuation = value && tokens[index + value.next];
     const last = value && local[value.next - 1];
-    const suffix = last?.text === ')' && continuation ? mathParser(tokens.slice(index + value!.next, index + value!.next + 80))(0) : undefined;
+    const suffix = last?.text === ')' && continuation ? mathParser(tokens.slice(index + value!.next, index + value!.next + 80), sourceExplicitTrig)(0) : undefined;
     // A separated prose label may follow a complete group. An attached token,
     // number, Greek/single-letter symbol or function term is an extra math factor.
     const extraFactor = last?.text === ')' && continuation && (

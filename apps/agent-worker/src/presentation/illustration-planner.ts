@@ -59,7 +59,7 @@ function stripStructuralReferences(value: string, nativeQuantitySyntax = false, 
 }
 // This is a new-plan guard, not a substitute for the scientific review of
 // geometry, conditions or causal meaning. Historical assets remain readable.
-function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): ScientificQuantity[] {
+function scientificQuantities(input: string, nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false, sourceExplicitTrig = false): ScientificQuantity[] {
   const formatted = stripStructuralReferences(input.replace(/[\u2460-\u2473]/gu, '').normalize('NFKC').replaceAll('µ', 'μ').replaceAll('−', '-')
     // Compare displayed symbols (*V*e, 2*c*, **FWHM_T**) without changing the
     // exact quote. Unpaired/escaped stars and multiplication in 2*c*x stay intact.
@@ -71,7 +71,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     .replaceAll('微米', 'μm').replaceAll('兆电子伏特', 'MeV').replaceAll('兆电子伏', 'MeV')
     .replaceAll('皮库仑', 'pC')
     .replace(/μ\s+m/giu, 'μm'), nativeQuantitySyntax, sourceNotation);
-  const normalized = sourceNotation ? normalizeScientificSourceNotation(formatted) : { text: formatted, unsupported: [] };
+  const normalized = sourceNotation ? normalizeScientificSourceNotation(formatted, sourceExplicitTrig) : { text: formatted, unsupported: [] };
   // Unsupported TeX is opaque to the existing AST: no interior/prefix may
   // supply evidence for a different expression. Keep the failed range as a
   // rejected expression and preserve all positions in the comparison copy.
@@ -103,7 +103,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     const unit = sourceQuantityAnnotations ? SOURCE_HYPHENATED_UNIT.exec(after) : legacyHz;
     return unit ? [{ start: match.index!, end: match.index! + match[0].length + unit[0].length, legacyHz: !!legacyHz }] : [];
   }) : [];
-  const originalReferences = scientificExpressionReferences(scalarValue, sourceNotation);
+  const originalReferences = scientificExpressionReferences(scalarValue, sourceNotation, sourceExplicitTrig);
   // A hyphenated unit followed by a parenthetical variable assignment is source
   // prose, not subtraction followed by a function. Recognize only the complete
   // standalone prefix; enclosing arithmetic and operator continuations stay math.
@@ -150,7 +150,7 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
     // never bind the next sentence's result to the preceding variable.
     const abbreviationSafeBefore = fullBefore.replace(/\bi\.e\./giu, 'ie').replace(/\be\.g\./giu, 'eg');
     const namedFwhm = /(FWHM[_\s]*[ST])(?:(?!FWHM)[^。.;\n]){0,50}(?:of|=)\s*$/iu.exec(abbreviationSafeBefore)?.[1] ?? null;
-    const comparison = scientificComparisonBinding(comparisonValue, match.index!, sourceQuantityAnnotations);
+    const comparison = scientificComparisonBinding(comparisonValue, match.index!, sourceQuantityAnnotations, sourceExplicitTrig);
     // An explicit comparison followed by a complete predicate + article is
     // ordinary source prose. Retain unknown units and incomplete predicates;
     // this does not allow an asserted quantity to omit a source unit.
@@ -176,12 +176,12 @@ function scientificQuantities(input: string, nativeQuantitySyntax = false, sourc
   }
   // Denominators and coefficients inside a parsed LHS are structure, not
   // additional reported results (Tc1/2≈0.26 fs reports 0.26 fs, not bare 2).
-  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue, sourceNotation) : originalReferences)
+  const references = (annotatedUnits.length ? scientificExpressionReferences(comparisonValue, sourceNotation, sourceExplicitTrig) : originalReferences)
     .filter(reference => !hyphenatedUnits.some(range => range.legacyHz && reference.start === range.start && reference.end === range.end))
     .filter(reference => !expressionRanges.some(range => reference.start >= range.start
       && (reference.end <= range.end || reference.unsupported && reference.start < range.end)));
   const structuralRanges = [...expressionRanges, ...references];
-  const equalities = scientificEqualityRelations(comparisonValue).map(([left, right]) => [representationKey(left), representationKey(right)] as [string, string]);
+  const equalities = scientificEqualityRelations(comparisonValue, sourceExplicitTrig).map(([left, right]) => [representationKey(left), representationKey(right)] as [string, string]);
   return [...ratios, ...[...references, ...normalized.unsupported].map(reference => ({ value: reference.key, unit: '__expression__',
     binding: reference.unsupported ? { kind: 'unsupported-expression' as const } : null })),
     ...results.filter(item => !structuralRanges.some(range => item.index >= range.start && item.index < range.end))
@@ -212,12 +212,12 @@ function sameScientificQuantity(asserted: ScientificQuantity, supported: Scienti
   }
   return true;
 }
-function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false): void {
+function requireBoundNumericalResults(fields: readonly (readonly [string, string])[], subjects: readonly IllustrationBrief['subjects'][number][], nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceNotation = false, sourceExplicitTrig = false): void {
   const cache = new Map<string, ScientificQuantity[]>();
   const quantities = (text: string) => {
     const existing = cache.get(text);
     if (existing) return existing;
-    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+    const parsed = scientificQuantities(text, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation, sourceExplicitTrig);
     cache.set(text, parsed);
     return parsed;
   };
@@ -507,7 +507,7 @@ function buildPaperOriginalScene(figure: NonNullable<StoryboardRequest['figurePl
 }
 
 /** Existing deterministic scene checks, shared by static planning and native tool callbacks. */
-export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false, nativeVideoAudio = true): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
+export function materializeIllustrationScience(value: unknown, claims: readonly PresentationClaim[], settings: StoryboardRequest, paperOriginals: Map<string, PaperOriginalRef> = new Map(), nativeQuantitySyntax = false, sourceQuantityAnnotations = false, sourceQuantityProse = false, sourceQuantityLocations = false, sourceNotation = false, nativeVideoAudio = true, sourceExplicitTrig = false): { title: string; narrative?: StoryboardDocument['narrative']; scenes: ScientificScene[]; videoProduction?: StoryboardDocument['videoProduction'] } {
   const nativeVideo = settings.output === 'video' && settings.narrative === true;
   const sceneLimit = settings.narrative ? settings.narrativeSceneLimit ?? 6 : 6;
   const subjectLimit = 4;
@@ -578,7 +578,7 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
         typeof value === 'string' ? [[`videoDirection.${field}`, value]] : field === 'negativeConstraints' && Array.isArray(value)
           ? value.map((text, index) => [`videoDirection.negativeConstraints[${index}]`, String(text)] as const) : []) : [])];
     requireBoundNumericalResults(sourceQuantityLocations ? quantityFields.map(([field, value]) => [`scenes[${sceneIndex}].${field}`, value] as const) : quantityFields,
-    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+    illustration.subjects, nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation, sourceExplicitTrig);
     // The complete brief shares one budget; no fixed art allocation clips scientific meaning.
     compileIllustrationImagePrompt(illustration);
     return { title: text(scene.title, 120, 'scene_title'), narration: text(scene.narration, nativeVideo ? 120 : settings.narrative ? 600 : 120, 'narration'), illustration,
@@ -588,14 +588,14 @@ export function materializeIllustrationScience(value: unknown, claims: readonly 
   });
   requireBoundNumericalResults([['title', String(root.title)], ...(narrative ? [[sourceQuantityLocations ? 'narrative.mainMessage' : 'mainMessage', narrative.mainMessage] as const] : [])],
     [...scenes, ...paperOriginalScenes].flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax,
-    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+    sourceQuantityProse && sourceQuantityAnnotations, sourceQuantityProse, sourceNotation, sourceExplicitTrig);
   if (eligibleFigures) storyboardSceneStyles({ style: settings.style, figurePlan: { figures: eligibleFigures } }, scenes);
   if (nativeVideo) {
     if (nativeVideoAudio && !classifyNativeVideoAudio({ videoProduction: root.videoProduction, scenes })) throw new Error('native_video_audio_mode_unsupported');
     const candidate = parseStoryboardDocument({ schemaVersion: 1, title: root.title, narrative, videoProduction: root.videoProduction,
       scenes: scenes.map(scene => ({ ...scene, visualAction: describeIllustrationBrief(scene.illustration) })) }, claimIds, 'video', { nativeNarrativeVideo: true });
     requireBoundNumericalResults([['videoProduction.visualContinuity', candidate.videoProduction!.visualContinuity]],
-      scenes.flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation);
+      scenes.flatMap(scene => scene.illustration.subjects), nativeQuantitySyntax, sourceQuantityAnnotations, sourceQuantityProse, sourceNotation, sourceExplicitTrig);
     return { title: candidate.title, scenes, narrative, videoProduction: candidate.videoProduction };
   }
   return { title: text(root.title, 120), scenes, ...(narrative ? { narrative } : {}) };

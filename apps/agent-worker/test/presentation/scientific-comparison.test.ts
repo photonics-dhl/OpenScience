@@ -5,7 +5,7 @@ import type { PresentationClaim } from '../../src/presentation/chart-generator';
 
 const binding = (text: string) => scientificComparisonBinding(text, text.lastIndexOf('27'));
 
-const materializeQuantity = (source: string, mark: string, sourceId = 's0', fresh = true) => {
+const materializeQuantity = (source: string, mark: string, sourceId = 's0', fresh = true, sourceExplicitTrig?: boolean) => {
   const claims: PresentationClaim[] = [{ id: '10000000-0000-4000-8000-000000000001', kind: 'finding',
     statement: 'A quantity reported by the source.', assessment: 'supported', conditions: [], limitations: [], extractionStatus: 'succeeded',
     sourcePassages: [{ evidenceId: '20000000-0000-4000-8000-000000000001', relation: 'supports', text: source }] }];
@@ -15,8 +15,118 @@ const materializeQuantity = (source: string, mark: string, sourceId = 's0', fres
       constraints: ['Preserve the source quantity definition.'], paperOriginalAssetId: null }] };
   return materializeIllustrationScience(candidate, claims,
     { locale: 'en', style: 'auto', instruction: 'Explain the sourced quantity.', output: 'image', narrative: true, narrativeSceneLimit: 1 },
-    new Map(), fresh, fresh, fresh, fresh, fresh);
+    new Map(), fresh, fresh, fresh, fresh, fresh, true, sourceExplicitTrig);
 };
+
+describe('explicit source trig capability', () => {
+  const references = (text: string, enabled = true, sourceNotation = true) =>
+    scientificExpressionReferences(text, sourceNotation, enabled);
+  const tex = '$$\\tau_1 \\approx \\left(\\frac{FWHM_S}{V_e}\\right) \\cdot (1 - \\beta\\cos\\theta) \\quad (1)$$';
+  const displayed = 'τ₁ ≈ (FWHMs/Ve)*(1-(β*cos(θ)))';
+
+  it.each(['sin', 'cos', 'tan'])('requires a separate opt-in for a complete %s call', name => {
+    const compact = '(1-β*' + name + 'θ)', explicit = '(1-β*' + name + '(θ))';
+    const key = references(compact)[0]!.key;
+    expect(references(explicit)).toEqual([{ key, start: 0, end: explicit.length }]);
+    expect(scientificEqualityRelations('q=' + explicit, true))
+      .toEqual(scientificEqualityRelations('q=' + compact, true));
+    const numeric = explicit + '≈27';
+    expect(scientificComparisonBinding(numeric, numeric.lastIndexOf('27'), false, true)?.binding)
+      .toEqual(scientificComparisonBinding(compact + '≈27', (compact + '≈27').lastIndexOf('27'), false, true)?.binding);
+    for (const sourceNotation of [false, true]) {
+      expect(scientificExpressionReferences(explicit, sourceNotation).some(reference => reference.unsupported)).toBe(true);
+      expect(references(explicit, false, sourceNotation).some(reference => reference.unsupported)).toBe(true);
+      expect(references(explicit, true, sourceNotation)).toEqual([{ key, start: 0, end: explicit.length }]);
+    }
+    expect(scientificEqualityRelations('q=' + explicit)).toEqual([]);
+    expect(scientificEqualityRelations('q=' + explicit, false)).toEqual([]);
+    expect(scientificComparisonBinding(numeric, numeric.lastIndexOf('27'))?.binding).toEqual({ kind: 'unsupported-expression' });
+    expect(scientificComparisonBinding(numeric, numeric.lastIndexOf('27'), true, false)?.binding).toEqual({ kind: 'unsupported-expression' });
+  });
+
+  it.each(['(1-βcos(θ))', '(1-β cos(θ))', '(1-β cos ( θ ))', '(1-β\tcos(\tθ\t))'])(
+    'preserves the finite Greek coefficient in %s', expression => {
+      expect(references(expression)).toEqual([{ key: references('(1-βcosθ)')[0]!.key, start: 0, end: expression.length }]);
+    });
+
+  it('normalizes explicit source TeX only with the separate capability', () => {
+    const explicit = '$$q=\\sin(\\theta)$$', compact = '$$q=\\sin\\theta$$';
+    expect(normalizeScientificSourceNotation(explicit).unsupported).toMatchObject([{ unsupported: true }]);
+    expect(normalizeScientificSourceNotation(explicit, false)).toEqual(normalizeScientificSourceNotation(explicit));
+    expect(normalizeScientificSourceNotation(explicit, true).unsupported).toEqual([]);
+    expect(scientificEqualityRelations(normalizeScientificSourceNotation(explicit, true).text, true))
+      .toEqual(scientificEqualityRelations(normalizeScientificSourceNotation(compact, true).text, true));
+  });
+
+  it('matches the complete original formula while preserving the source text', () => {
+    const sourceKey = references(normalizeScientificSourceNotation(tex, true).text)[0]!.key;
+    expect(references(displayed.normalize('NFKC'))).toEqual([{ key: sourceKey, start: 5, end: displayed.length }]);
+    expect(tex).toContain('\\beta\\cos\\theta');
+    const scene = materializeQuantity(tex, displayed, 's0', true, true).scenes[0]!;
+    expect(scene.illustration.subjects[0]!.basis.quote).toBe(tex);
+  });
+
+  it('does not let the current sourceNotation profile enable explicit trig by default', () => {
+    expect(() => materializeQuantity(tex, displayed)).toThrow(/unbound_expression.*_syntax/u);
+    expect(() => materializeQuantity(tex, displayed, 's0', true, false)).toThrow(/unbound_expression.*_syntax/u);
+  });
+
+  it('preserves the older non-Native materializer behavior with the capability disabled', () => {
+    // The older all-false quantity profile did not apply the current notation
+    // refusals. Keep that historical behavior rather than upgrading it.
+    const old = materializeQuantity(tex, displayed, 's0', false);
+    expect(old.scenes).toHaveLength(1);
+    expect(materializeQuantity(tex, displayed, 's0', false, false)).toEqual(old);
+  });
+
+  it('passes the same capability into explicit source TeX and displayed notation', () => {
+    const source = '$$q=\\sin(\\theta)$$';
+    const result = materializeQuantity(source, 'q=sin(θ)', 's0', true, true);
+    expect(result.scenes[0]!.illustration.subjects[0]!.basis.quote).toBe(source);
+  });
+
+  it.each(['(1-β*f(θ))', '(1-β*cosh(θ))', '(1-β*cos(θ+φ))', '(1-β*cos(θ1))',
+    '(1-β*cos(theta))', '(1-β*cos((θ)))', '(1-β*cos(θ)', '(1-β*cos(θ,φ))',
+    '(1-β*cos\n(θ))', '(1-β*cos(\nθ))', '(1-β*cos(θ\n))'])(
+    'never recovers a supported shorter expression from %s', expression => {
+      const parsed = references(expression);
+      expect(parsed.some(reference => reference.unsupported)).toBe(true);
+      expect(parsed.filter(reference => !reference.unsupported).map(reference => reference.key))
+        .not.toContain(references('(1-β*cosθ)')[0]!.key);
+      expect(scientificEqualityRelations('q=' + expression, true)).toEqual([]);
+    });
+
+  it.each(['1/βcos(θ)', '1/β cos(θ)', '1/-βcos(θ)'])('keeps the implicit denominator ambiguous in %s', expression => {
+    expect(references(expression)).toMatchObject([{ unsupported: true }]);
+    expect(scientificEqualityRelations('q=' + expression, true)).toEqual([]);
+  });
+
+  it('keeps explicit multiplication and a grouped denominator distinct', () => {
+    expect(references('1/β*cos(θ)')[0]!.key).toBe(references('1/β*cosθ')[0]!.key);
+    expect(references('1/(β*cos(θ))')[0]!.key).toBe(references('1/(β*cosθ)')[0]!.key);
+    expect(references('1/β*cos(θ)')[0]!.key).not.toBe(references('1/(β*cos(θ))')[0]!.key);
+  });
+
+  it.each(['(1-β*cos(φ))', '(1+β*cos(θ))', '(1-β/cos(θ))', '(1-γ*cos(θ))',
+    '(1-β*sin(θ))', '(1-β*cos(θ))*2', '(1-β*cos(θ))*f(φ)', '(1-β*cos(θ)) β'])(
+    'retains or rejects every altered factor in %s', expression => {
+      expect(references(expression).filter(reference => !reference.unsupported).map(reference => reference.key))
+        .not.toContain(references('(1-β*cosθ)')[0]!.key);
+    });
+
+  it.each([
+    'τ₁ ≈ (FWHMs/c)*(1-(β*cos(θ)))', 'τ₁ ≈ (FWHMs/Ve)*(1-(β*sin(θ)))',
+    'τ₁ ≈ (FWHMs/Ve)*(1-(β*cos(φ)))', 'τ₁ ≈ (FWHMs/Ve)*(1-(β*cos(θ)))*2',
+  ])('refuses a changed sourced formula in the materializer: %s', expression => {
+    expect(() => materializeQuantity(tex, expression, 's0', true, true)).toThrow(/unbound_/u);
+  });
+
+  it('checks the source unit while using an explicit comparison and equality', () => {
+    const source = 'q=(1-βcosθ); q≈27 nm.';
+    expect(materializeQuantity(source, 'q=(1-β*cos(θ)); q≈27 nm', 's0', true, true).scenes).toHaveLength(1);
+    expect(() => materializeQuantity(source, 'q=(1-β*cos(θ)); q≈27 fs', 's0', true, true)).toThrow(/unbound_numeric.*_source/u);
+  });
+});
 
 describe('fresh source quantity annotations followed by prose and mathematics', () => {
   const original = 'As FWHM_T (19 as) is much shorter than *T*c₁/2 (i.e., 0.26 fs), such a pulse is a deep-sub-cycle pulse.';
