@@ -381,11 +381,6 @@ export function GuideResearchWorkspace() {
   }
 
   return <section className={styles.workspace} aria-label={copy.heading} data-guide-workspace="true">
-    <div className={styles.intro}>
-      <div><p className={styles.eyebrow}>Hermes · Research workspace</p><h2>{copy.heading}</h2></div>
-      <HermesDockAnchor floating={false} assistantOpen={conversationOpen} suggestion={suggestion}
-        state={busy ? 'scanning' : error ? 'failed' : 'idle'} onInvoke={() => owner ? setConversationOpen(true) : router.push(directMode ? directLoginHref : loginHref)} workspaceId={selectedId || 'guide'} />
-    </div>
     <form onSubmit={begin} className={styles.composer}>
       <div className={styles.inputCards}>
         <section className={styles.inputCard} data-guide-input-card="upload">
@@ -393,10 +388,9 @@ export function GuideResearchWorkspace() {
           <p>{copy.uploadHint}</p>
           <div className={styles.entryActions}><button type="button" onClick={() => setSourceOpen(true)} disabled={busy || switching}>{copy.upload}</button><button type="button" onClick={startDirect} disabled={busy || switching}>{copy.direct}</button></div>
         </section>
-        <section className={styles.inputCard} data-guide-input-card="title">
+        <section className={`${styles.inputCard} ${styles.titleCard}`} data-guide-input-card="title">
           <label htmlFor="guide-research-title">{copy.title}</label>
-          <input id="guide-research-title" value={title} placeholder={copy.titlePlaceholder} disabled={busy || switching} onChange={(event) => setTitle(event.target.value)} />
-          <p>{copy.titleHint}</p>
+          <textarea id="guide-research-title" value={title} placeholder={copy.titlePlaceholder} disabled={busy || switching} onChange={(event) => setTitle(event.target.value)} />
         </section>
         <section className={styles.inputCard} data-guide-input-card="sources">
           <h3>{copy.source}</h3>
@@ -418,7 +412,8 @@ export function GuideResearchWorkspace() {
         <div className={styles.prompts}>{copy.prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setIdea(prompt)}>{prompt}</button>)}</div>
       </div>
       {owner && workspaces.length > 1 ? <div className={styles.controls}><label>{copy.workspaces}<select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} disabled={busy || switching}>{workspaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label></div> : null}
-      <div className={styles.actions}><button type="submit" disabled={busy || switching}>{owner ? busy ? copy.saving : copy.send : copy.signIn}</button></div>
+      <div className={styles.composerActions}><div className={styles.companion}><HermesDockAnchor floating={false} assistantOpen={conversationOpen} suggestion={suggestion}
+        state={busy ? 'scanning' : error ? 'failed' : 'idle'} onInvoke={() => owner ? setConversationOpen(true) : router.push(directMode ? directLoginHref : loginHref)} workspaceId={selectedId || 'guide'} /></div><div className={styles.actions}><button type="submit" disabled={busy || switching}>{owner ? busy ? copy.saving : copy.send : copy.signIn}</button></div></div>
       {!owner ? <p className={styles.hint}>{copy.local}</p> : null}
     </form>
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
@@ -443,6 +438,6 @@ export function GuideResearchWorkspace() {
       {ingestionTaskIds.length ? <section className={styles.review}><h3>{copy.source}</h3>{ingestionTaskIds.length > 1 ? <select aria-label={copy.source} value={reviewTaskId} onChange={(event) => { reviewTaskRef.current = event.target.value; setReviewTaskId(event.target.value); setIngestionDetail(null); setProposal(null); }}>{ingestionTaskIds.map((id) => <option key={id} value={id}>{ingestionLabels[id] || id}{ingestionStates[id] ? ` · ${ingestionStatusT(ingestionStates[id])}` : ''}</option>)}</select> : null}<p>{ingestionDetail ? `${ingestionDetail.task.logicalPath} · ${ingestionStatusT(ingestionDetail.task.state)}` : copy.pending}</p><button type="button" onClick={() => void refreshExtraction()} disabled={busy}>{copy.refresh}</button>{proposal ? <div><h4>{copy.review}</h4>{SDF_FIELDS.map((field) => <div key={field}><label>{editorT(field)}<textarea value={proposal[field]} disabled={busy} onChange={(event) => setProposal((value) => value ? { ...value, [field]: event.target.value } : value)} /></label><HermesExtractionEvidence field={field} result={ingestionDetail?.task.result} /></div>)}<button type="button" onClick={() => void acceptExtraction()} disabled={busy || dirty || !SDF_FIELDS.some((field) => proposal[field].trim())}>{copy.accept}</button></div> : ingestionDetail ? <p>{copy.extractionUnavailable}</p> : null}</section> : null}
     </div> : null}
 
-    <div className={styles.picker}><h3>{copy.update}</h3><p>{copy.updateDescription}</p>{owner ? <select aria-label={copy.choose} value={selectedId} onChange={(event) => void selectResearch(event.target.value)} disabled={busy || switching}><option value="">{copy.newResearch}</option>{research.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select> : <Link href={directMode ? directLoginHref : loginHref}>{copy.signIn}</Link>}{owner && research.length === 0 ? <p>{copy.noResearch}</p> : null}</div>
+    <div className={styles.picker}><span>{copy.update}</span>{owner ? <select aria-label={copy.choose} value={selectedId} onChange={(event) => void selectResearch(event.target.value)} disabled={busy || switching}><option value="">{copy.newResearch}</option>{research.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select> : <Link href={directMode ? directLoginHref : loginHref}>{copy.choose} →</Link>}{owner && research.length === 0 ? <small>{copy.noResearch}</small> : null}</div>
   </section>;
 }
