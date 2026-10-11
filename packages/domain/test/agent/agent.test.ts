@@ -294,84 +294,26 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
-  it('creates R2 first Native video tasks with the owned contract and one credit in the same transaction', async () => {
+  it('creates R1 first Native video tasks in the credit transaction without emitting a runtime-supplied contract', async () => {
     const f = await makeDeps(1);
     const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
-    const runtime = { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3', planningContract: 'untrusted-runtime-value' };
+    const runtime = { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3', planningContract: 'video-optional-audio-v1' };
     const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: runtime };
-    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'r2-first-video',
-      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html', sourceClaimIds: ['10000000-0000-4000-8000-000000000002'],
+    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'r1-first-video',
+      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: 'version', kind: 'interactive_html', sourceClaimIds: ['claim'],
         storyboard: { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain the paper' } } };
     const fresh = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
     expect(fresh.task.result).toEqual({ nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
-      runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model, planningContract: 'video-optional-audio-v1' } });
+      runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model } });
     const ledger = structuredClone(f.db.usageLedger);
     expect(ledger.filter(entry => entry.delta < 0)).toHaveLength(1);
+    Object.assign(f.db.agentTasks.find(row => row.id === fresh.task.id)!.result.nativeAgentExecution,
+      { planningContract: 'video-optional-audio-v1' });
     const saved = structuredClone(f.db.agentTasks.find(row => row.id === fresh.task.id)!);
     const replay = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
     expect(replay).toEqual({ task: saved, replayed: true });
     expect(f.db.usageLedger).toEqual(ledger); expect(f.redis.lists.size).toBe(0);
   });
-  it('rolls back R2 task, owned marker and reserved credit together before dispatch on transaction failure', async () => {
-    const f = await makeDeps(1);
-    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
-    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
-    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'r2-rollback',
-      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html', sourceClaimIds: ['10000000-0000-4000-8000-000000000002'],
-        storyboard: { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain the paper' } } };
-    const before = structuredClone(f.db), create = deps.prisma.usageLedger.create.bind(deps.prisma.usageLedger);
-    let atReservation: unknown;
-    vi.spyOn(deps.prisma.usageLedger, 'create').mockImplementation(async args => {
-      await create(args); atReservation = structuredClone(f.db.agentTasks[0]!.result);
-      throw new Error('credit transaction interrupted');
-    });
-    await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input))).rejects.toThrow('credit transaction interrupted');
-    expect(atReservation).toMatchObject({ nativeAgentExecution: { planningContract: 'video-optional-audio-v1' } });
-    expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
-  });
-  it('replays an existing unmarked R1 first video row without tagging it or debiting again', async () => {
-    const f = await makeDeps(1);
-    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
-    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
-    const input = { userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'r1-existing-unmarked',
-      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html', sourceClaimIds: ['10000000-0000-4000-8000-000000000002'],
-        storyboard: { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Use native-first audio' } } };
-    const initial = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
-    // Seed the original R1 persisted form; replay must return it before any new initializer.
-    delete f.db.agentTasks.find(row => row.id === initial.task.id)!.result.nativeAgentExecution.planningContract;
-    const before = structuredClone(f.db), original = structuredClone(f.db.agentTasks[0]);
-    const replay = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, input));
-    expect(replay).toEqual({ task: original, replayed: true });
-    expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
-  });
-  it.each(['base', 'run', 'scene-limit', 'revision', 'art', 'image', 'non-narrative'] as const)(
-    'leaves %s outside the R2 direct-first-plan marker scope', async change => {
-      const f = await makeDeps(1);
-      const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
-      const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3', planningContract: 'video-optional-audio-v1' } };
-      const storyboard: Record<string, unknown> = { output: 'video', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain the paper' };
-      const payload: Record<string, unknown> = { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html', sourceClaimIds: ['10000000-0000-4000-8000-000000000002'], storyboard };
-      if (change === 'base') storyboard.baseAssetId = '10000000-0000-4000-8000-000000000003';
-      if (change === 'run') payload.hermesRunAuthority = { runId: '10000000-0000-4000-8000-000000000003', stage: 'storyboard', ordinal: 0, profile: 'content-driven-v1' };
-      if (change === 'scene-limit') storyboard.narrativeSceneLimit = 3;
-      if (change === 'revision') Object.assign(storyboard, { baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 0 });
-      if (change === 'art') storyboard.artSceneIndex = 0;
-      if (change === 'image') storyboard.output = 'image';
-      if (change === 'non-narrative') storyboard.narrative = false;
-      if (change === 'art') {
-        // This existing non-Native art shape is already rejected; R2 must not widen it.
-        const before = structuredClone(f.db);
-        await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
-          userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'r2-outside-art',
-        }))).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
-        expect(f.db).toEqual(before); return;
-      }
-      const fresh = await deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
-        userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'r2-outside-' + change,
-      }));
-      expect((fresh.task.result as Record<string, { planningContract?: unknown }> | null)?.nativeAgentExecution?.planningContract).toBeUndefined();
-      expect(f.db.usageLedger.filter(entry => entry.delta < 0)).toHaveLength(1);
-    });
   it('snapshot dispatch cannot acknowledge an outbox reopened while its LPUSH was pending', async () => {
     const { deps, task, pushes, pushed, unblock } = makeSnapshotDispatch();
     const oldDispatch = dispatchAgentTask(deps, task.id);
