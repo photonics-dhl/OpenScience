@@ -15,8 +15,8 @@
 - 总控`01a1197c-7a1e-7631-b1c1-2d09b587be9a`负责集成、CI、CURRENT/progress/index和串行发布；openscience ACTIVE。idle不等于完成，不用重复检查填充工作；已交付且被真实依赖阻塞时明确下一位owner。
 | Session / ID | 当前责任与依赖 | 工作树 / branch |
 |---|---|---|
-| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 90739→a710反馈修复已随9a上线并由ad99继承，原High/TC及193/193、686/686闭合；8d5旧断言失败与root同效6ddf历史保留，采用remote严格断言。原43d真实科学错绑不放行，当前无新模型任务 | 原illustration-chain-repair树 / codex/native-subject-feedback@90739；原1ea与全证据保留，0模型/生产写 |
-| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无自动新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
+| 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 90739→a710反馈修复已随9a上线并由ad99继承，原High/TC及193/193、686/686闭合；8d5旧断言失败与root同效6ddf历史保留，采用remote严格断言。原43d真实科学错绑不放行；生图用户流程/能力事实短稿已完成并交UI主稿，原tree tmp/product-design-input-20261011/image-workflow.md，仅复用原证据 | 原illustration-chain-repair树 / codex/native-subject-feedback@90739；原1ea与全证据保留，0模型/生产写 |
+| 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；视频用户流程/API能力事实短稿已完成并交UI主稿，原tree tmp/product-design-input-20261011/video-workflow.md。仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
 | UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 按human最新要求交付供双方协作的完整产品设计文档，明确逐页职责/内容序/操作/关系和共享归属，暂停新增设计实现。Guide636→f35与dec→753三文件全等随ad99上线，新增10例包含在CI浏览器54/54；正常首页→Guide一次输入切换已观察：提示出现、原选择/文字保留，随后清空自有临时输入并关闭tab，未提交；原PNG/JSON位于UI tmp/ui-art-20261008/product-page-planning-20261011，root已看图。头像姿态/指针实见，原生产close仍未确认/本地2/2未复现 | 原research-product-craft树 / codex/guide-unsent-inputs；原ffad/五帧/关闭轨迹与输入保护回执保留，页面文档在owned tmp，业务写0 |
 - 本聊天三线生产操作由总控串行排程；ad99发布及post只读已完成，writer关闭，输入保护的正常入口观察已闭合，UI继续完整产品设计文档。43d提交窗口仍关闭，旧b261/e5/ce968/8d5/9a部署包装不再跑。当前权限正常，协调与受控命令实际成功；后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
