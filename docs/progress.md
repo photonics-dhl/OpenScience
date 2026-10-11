@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-11 后端续作：Task4原96b/d357的69分块/69向量恢复已完成且不再apply；两条有据全文查询已交UI，正常站内只读验收进行中。生图对43d原23候选区分了论据条件错配与标准cos(θ)被拒的格式缺口，原owner已接现有parser/原test的最小修复，无新模型任务。视频a0f2五精确CI全过、实际codec零skip，新增操作High却发现普通自动回滚可能把新optional-profile计划交旧Worker，当前发布NO-GO；原High进一步发现已记账NULL-CP任务没有新旧合同标识的P1，已安排修正R1实施：在既有任务结果识别但不生产optional标识，复用preclaim hold/outbox，保留所有原receipt；跨版本证明和新High完成前不发布。生图新parser独立，不混R1/R2；root负责集成与后续串行发布。线上ad993、Native393/M3和关闭的Host59未动。UI稿件/页面继续冻结待用户审阅；代码通过与真实科学计划/完整影片质量分别判断，详见Hermes CURRENT。
+- 2026-10-11 后端续作：Task4原96b/d357的69分块/69向量恢复已完成且不再apply；两条有据全文查询已交UI，正常站内只读验收进行中。生图对43d原23候选区分了论据条件错配与cos(θ)误拒；4文件候选已有328项定向通过，原terminal单例失败待定位，完整TC因owner缺依赖未跑，saved profile兼容待High，不作全绿声明或搭新环境。视频a0f2五精确CI全过、实际codec零skip，新增操作High却发现普通自动回滚可能把新optional-profile计划交旧Worker，当前发布NO-GO；原High进一步发现已记账NULL-CP任务没有新旧合同标识的P1，已安排修正R1实施：在既有任务结果识别但不生产optional标识，复用preclaim hold/outbox，保留所有原receipt；跨版本证明和新High完成前不发布。生图新parser独立，不混R1/R2；root负责集成与后续串行发布。线上ad993、Native393/M3和关闭的Host59未动。UI稿件/页面继续冻结待用户审阅；代码通过与真实科学计划/完整影片质量分别判断，详见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
