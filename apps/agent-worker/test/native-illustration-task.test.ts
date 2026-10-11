@@ -14,6 +14,78 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
 
+describe('fresh native description-binding feedback', () => {
+  const sourceClaims = [{ ...claims[0]!, sourcePassages: [claims[0]!.sourcePassages[0]!,
+    { evidenceId: '20000000-0000-4000-8000-000000000002', relation: 'supports', text: 'The spatial bound is FWHM_S ≥ λ0/2.' }] }];
+  const rejectedScene = () => ({ ...structuredClone(science.scenes[0]!),
+    subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } },
+      { description: 'FWHM_S ≥ λ0/2 (source note)', basis: { sourceId: 's1' } }],
+    encoding: 'FWHM_S ≥ λ0/2', labels: ['FWHM_S ≥ λ0/2'] });
+
+  it('reports the related subject in the second scene alongside its original usage fields', () => {
+    const value = { ...structuredClone(science), scenes: [structuredClone(science.scenes[0]!), rejectedScene()] };
+    const before = structuredClone(value);
+    const f = fixture({ ...nativeIllustrationToolProfile(null), input: { claims: sourceClaims as never,
+      settings: { ...settings, narrativeSceneLimit: 2 } } });
+    const result = f.invoke('paper_illustration_science', value, 'description-location');
+    expect(result).toMatchObject({ status: 'invalid_illustration', scienceToolCallId: 'description-location' });
+    expect(result.error).toContain('unbound_expression_(λ0/2)_description');
+    expect(result.error).toContain('scenes[1].encoding');
+    expect(result.error).toContain('scenes[1].labels[0]');
+    expect(result.error).toContain('scenes[1].subjects[1].description');
+    expect(result.error).not.toContain('scenes[0].subjects');
+    expect(result.error).not.toContain('scenes[1].subjects[0]');
+    expect(value).toEqual(before);
+  });
+
+  it('does not identify another source as the rejected subject\'s evidence', () => {
+    const value = { ...structuredClone(science), scenes: [rejectedScene()] };
+    value.scenes[0]!.subjects[1]!.basis.sourceId = 's0';
+    const f = fixture({ ...nativeIllustrationToolProfile(null), input: { claims: sourceClaims as never } });
+    const result = f.invoke('paper_illustration_science', value, 'wrong-own-source');
+    expect(result).toMatchObject({ status: 'invalid_illustration' });
+    expect(result.error).toContain('unbound_expression_(λ0/2)_description');
+    expect(result.error).not.toContain('.subjects[');
+  });
+
+  it('retains the subject location when the description error is an additional diagnostic', () => {
+    const value = { ...structuredClone(science), scenes: [rejectedScene()] };
+    value.scenes[0]!.narration = 'The temporal width is FWHM_T = 20 as.';
+    const f = fixture({ ...nativeIllustrationToolProfile(null), input: { claims: sourceClaims as never } });
+    const result = f.invoke('paper_illustration_science', value, 'additional-description');
+    expect(result).toMatchObject({ status: 'invalid_illustration' });
+    expect(result.error).toContain('unbound_numeric_20_as_description Fields: scenes[0].narration.');
+    expect(result.error).toContain('Also: unbound_expression_(λ0/2)_description: scenes[0].encoding, scenes[0].labels[0], scenes[0].subjects[1].description.');
+  });
+
+  it('does not borrow a reported 20 as value from another subject\'s quote', () => {
+    const value = { ...structuredClone(science), scenes: [{ ...structuredClone(science.scenes[0]!),
+      subjects: [{ description: 'FWHM_T = 20 as', basis: { sourceId: 's0' } },
+        { description: 'An independent control', basis: { sourceId: 's1' } }],
+      encoding: 'FWHM_T = 20 as', labels: ['FWHM_T = 20 as'] }] };
+    const ownSources = [{ ...claims[0]!, sourcePassages: [
+      { ...claims[0]!.sourcePassages[0]!, text: 'The temporal width is FWHM_T = 19 as.' },
+      { ...sourceClaims[0]!.sourcePassages[1]!, text: 'The independent control has FWHM_T = 20 as.' },
+    ] }];
+    const f = fixture({ ...nativeIllustrationToolProfile(null), input: { claims: ownSources as never } });
+    const result = f.invoke('paper_illustration_science', value, 'wrong20');
+    expect(result).toMatchObject({ status: 'invalid_illustration' });
+    expect(result.error).toContain('unbound_numeric_20_as_source');
+  });
+
+  it.each(['notation', 'locations'] as const)('preserves the old error fields without fresh %s', mode => {
+    const value = { ...structuredClone(science), scenes: [rejectedScene()] };
+    const f = fixture({ ...nativeIllustrationToolProfile(null),
+      ...(mode === 'notation' ? { sourceNotation: false } : { sourceQuantityLocations: false }),
+      input: { claims: sourceClaims as never } });
+    const result = f.invoke('paper_illustration_science', value, 'legacy-fields');
+    expect(result).toEqual({ status: 'invalid_illustration', scienceToolCallId: 'legacy-fields',
+      error: mode === 'notation'
+        ? 'unbound_expression_(λ0/2)_description Fields: scenes[0].encoding, scenes[0].labels[0].'
+        : 'unbound_expression_(λ0/2)_description Fields: encoding, labels[0].' });
+  });
+});
+
 describe('native source notation compatibility', () => {
   const tex = String.raw`The model gives $$\tau_1 \approx \left(\frac{FWHM_S}{V_e}\right) \cdot (1 - \beta\cos\theta) \quad (1)$$.`;
   const displayed = 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).';
