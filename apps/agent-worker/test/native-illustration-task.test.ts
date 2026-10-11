@@ -14,6 +14,100 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
   subjects: [{ description: 'Connected regions', basis: { sourceId: 's0' } }], encoding: 'A link represents the relationship of subject 0.',
   labels: ['Connected regions'], constraints: ['Not to scale'], paperOriginalAssetId: null }] };
 
+describe('saved image explicit trig reader', () => {
+  const contract = 'image-source-explicit-trig-v1';
+  const suffix = ' Image source explicit-trig contract: complete sin/cos/tan calls with one Greek argument are equivalent to their compact source notation only under this exact saved image contract. Retain every coefficient, function, argument and denominator; unknown or incomplete syntax stays unsupported.';
+  const tex = 'The model gives $$\\tau_1 \\approx \\left(\\frac{FWHM_S}{V_e}\\right) \\cdot (1 - \\beta\\cos\\theta) \\quad (1)$$.';
+  const explicit = 'τ₁ ≈ (FWHMs/Ve)*(1-(β*cos(θ)))';
+  const compact = 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).';
+  const saved = (newTools: boolean, messages: ChatMessage[] = []) => ({
+    turns: [{ request: { messages, options: { tools: nativeIllustrationToolProfile(null).sourceTools.map(tool => ({
+      type: 'function', function: { ...structuredClone(tool),
+        ...(newTools && tool.name === 'paper_illustration_science' ? { description: tool.description + suffix } : {}) },
+    })) } } }],
+  }) as unknown as NativeAgentSessionState;
+  const candidate = (expression: string) => {
+    const value = structuredClone(science);
+    value.scenes[0]!.encoding = expression;
+    value.scenes[0]!.subjects[0]!.description = expression;
+    return value;
+  };
+  const build = (newTools: boolean) => {
+    const profile = nativeIllustrationToolProfile(saved(newTools), 'image', newTools ? contract : undefined);
+    return fixture({ ...profile, quote: tex, input: { sourceExplicitTrig: profile.sourceExplicitTrig } });
+  };
+
+  it('requires the exact saved image tools, marker and output without changing the saved request', () => {
+    const state = saved(true), before = JSON.stringify(state);
+    const profile = nativeIllustrationToolProfile(state, 'image', contract);
+    expect(profile).toMatchObject({ sourceExplicitTrig: true, sourceNotation: true, nativeVideo: false });
+    expect(profile.sourceTools).toEqual(state.turns[0]!.request.options.tools!.map(tool => tool.function));
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it.each([false, true])('reconstructs the full %s-profile saved successful transcript exactly', newTools => {
+    const f = build(newTools);
+    f.complete(candidate(newTools ? explicit : compact));
+    const before = JSON.stringify(f.messages), state = saved(newTools, f.messages);
+    const profile = nativeIllustrationToolProfile(state, 'image', newTools ? contract : undefined);
+    const reader = createNativeIllustrationMaterializer({ ...f.input, ...profile, savedState: state });
+    expect(reader.finish(f.messages, '{"reviewToolCallId":"review-call"}').review.decision).toBe('accepted');
+    expect(JSON.stringify(f.messages)).toBe(before);
+    expect(profile.sourceExplicitTrig).toBe(newTools);
+  });
+
+  it.each([false, true])('reconstructs the exact %s-profile saved scientific error', newTools => {
+    const f = build(newTools), args = candidate(newTools ? explicit.replace('/Ve', '/c') : explicit);
+    const error = f.invoke('paper_illustration_science', args, 'science-error');
+    expect(error).toMatchObject({ status: 'invalid_illustration', error: expect.stringContaining(newTools ? '_source' : '_syntax') });
+    const before = JSON.stringify(f.messages), state = saved(newTools, f.messages);
+    const reader = createNativeIllustrationMaterializer({ ...f.input,
+      ...nativeIllustrationToolProfile(state, 'image', newTools ? contract : undefined), savedState: state });
+    expect(reader.call('paper_illustration_science', args, 0, 'science-error')).toEqual(error);
+    expect(JSON.stringify(f.messages)).toBe(before);
+  });
+
+  it.each(['success', 'error'] as const)('refuses a changed saved %s receipt', mode => {
+    const f = build(true), args = candidate(mode === 'error' ? explicit.replace('/Ve', '/c') : explicit);
+    f.invoke('paper_illustration_science', args, 'science-call');
+    const messages = structuredClone(f.messages);
+    const receipt = messages.find(message => message.role === 'tool')!;
+    receipt.content = JSON.stringify({ ...JSON.parse(receipt.content), changedReceipt: true });
+    const state = saved(true, messages);
+    const reader = createNativeIllustrationMaterializer({ ...f.input,
+      ...nativeIllustrationToolProfile(state, 'image', contract), savedState: state });
+    expect(() => reader.call('paper_illustration_science', args, 0, 'science-call')).toThrow();
+  });
+
+  it.each(['missing-marker', 'video-marker', 'unknown-marker', 'video-output', 'old-tools', 'science-schema',
+    'context-description', 'duplicate-science', 'missing-tools'] as const)('blocks mismatched %s before materialization', failure => {
+      const state = saved(failure !== 'old-tools');
+      const tools = state.turns[0]!.request.options.tools!;
+      if (failure === 'science-schema') Reflect.set(tools.find(tool => tool.function.name === 'paper_illustration_science')!.function, 'parameters', {});
+      if (failure === 'context-description') tools.find(tool => tool.function.name === 'paper_illustration_context')!.function.description = 'Changed context';
+      if (failure === 'duplicate-science') tools.push(structuredClone(tools.find(tool => tool.function.name === 'paper_illustration_science')!));
+      if (failure === 'missing-tools') delete state.turns[0]!.request.options.tools;
+      const marker = failure === 'missing-marker' ? undefined : failure === 'video-marker' ? 'video-optional-audio-v1'
+        : failure === 'unknown-marker' ? 'image-source-explicit-trig-v2' : contract;
+      expect(() => nativeIllustrationToolProfile(state, failure === 'video-output' ? 'video' : 'image', marker as never)).toThrow();
+    });
+
+  it('keeps fresh unmarked image tools historical and rejects a fresh marked NULL checkpoint', () => {
+    const profile = nativeIllustrationToolProfile(null);
+    expect(profile.sourceExplicitTrig).toBe(false);
+    expect(profile.sourceTools).toEqual(saved(false).turns[0]!.request.options.tools!.map(tool => tool.function));
+    expect(profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description).not.toContain(suffix);
+    expect(() => nativeIllustrationToolProfile(null, 'image', contract)).toThrow();
+  });
+
+  it.each([undefined, 'video-optional-audio-v1'] as const)('keeps video %s and its saved reader trig-disabled', marker => {
+    const profile = nativeIllustrationToolProfile(null, 'video', marker);
+    const state = { turns: [{ request: { options: { tools: profile.sourceTools.map(tool => ({ type: 'function', function: tool })) } } }] } as unknown as NativeAgentSessionState;
+    expect(profile.sourceExplicitTrig).toBe(false);
+    expect(nativeIllustrationToolProfile(state, 'video', marker).sourceExplicitTrig).toBe(false);
+  });
+});
+
 describe('fresh native description-binding feedback', () => {
   const sourceClaims = [{ ...claims[0]!, sourcePassages: [claims[0]!.sourcePassages[0]!,
     { evidenceId: '20000000-0000-4000-8000-000000000002', relation: 'supports', text: 'The spatial bound is FWHM_S ≥ λ0/2.' }] }];
