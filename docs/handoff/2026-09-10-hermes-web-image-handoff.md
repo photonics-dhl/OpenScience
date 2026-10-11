@@ -6,7 +6,7 @@
 - 依据[开发规格](../OpenScience_Kimi_Development_Spec.md)：真实 NousResearch Hermes Agent 理解全文、提炼六维/Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不做额外同行评议，不以 Codex 手稿替代自动科学能力。
 - 10-09用户明确纠正过度复杂化并同意继续：复用已有理解→按需回读关键原文/图页→简洁分镜、风格与提示词→出图→核对实际图片。只修涉及画面含义/定义和工具阻力，不再把UI收尾算作生图进度。
 - 10-11视频会话human明确要求先摸清商用API可控制项，避免冗余/无用设计。先区分官方字段、当前代码消费、prompt软引导和未核能力，再判断TTS/后期合成是否必要；不把现有替换声轨路径当唯一方案，试听原样复用于成片尚未验收。真实短片比较需原费用授权，问答不新增调用。
-- UI human已选“默认头像，点击展开”（原回复`01a11f96-9a15-7fb0-a144-e771eb3859e0`已核）；10-09追加头像稍大、框内精灵互动，64px已落地。10-11 11:03在UI聊天直接要求暂停新设计实现，先清点全产品每页功能/入口/叙事、两设计线优点与已有skills/Figma能力，交完整页面文档，再逐页讨论/示意图由human判断；root已核原文`01a128ea-09ec-7261-984d-9d3dfe6cc738`。旧头像证据保留；该阶段不取消已审输入防丢修复，也不扩科研费用或生产写。
+- UI human已选“默认头像，点击展开”（原回复`01a11f96-9a15-7fb0-a144-e771eb3859e0`已核）；10-09追加头像稍大、框内精灵互动，64px已落地。10-11 11:03在UI聊天直接要求暂停新设计实现，先清点全产品每页功能/入口/叙事、两设计线优点与已有skills/Figma能力，交完整页面文档，再逐页讨论/示意图由human判断；root已核原文`01a128ea-09ec-7261-984d-9d3dfe6cc738`。随后human允许逐页用image-2.5结合当前产品页出审阅示意图；root已核现有Synclip固定2/text-only、内置生图可附截图但不公开型号，已说明并安排内置通道先做Guide一页，不能标称2.5/重放旧unknown。先完整文档，再逐页视觉审阅；不新增页面实现或科研生产写。
 - 2–3篇真实论文的凝练、用户确认、配图与公开展示仍是目标；三篇整体验收、普通用户旅程、完整视频、整站审美均未完成。单图认可、单测、CI或部署不代替质量认可，不批量冷启动。
 - 图片已验证gpt-image-2；新图片/视频按既有Synclip授权、视频目标LTX。旧gpt-image-2.5无receipt那次仍UNCERTAIN，不盲重试/自动换供应商。原生独立像素核验未通用验收，现Worker→Gateway单次vision不冒称Nous审阅loop。
 - 保留原PDF/SourceMap、认可图片、公开标识、sealed记录、原失败/费用/receipt/oncekey。日常结果私有，公开沿原确认流程；主Gateway/Native M3不全局切换，未知paid/started CP不重放，不因idle扩预算/安装/重启。
@@ -17,7 +17,7 @@
 |---|---|---|
 | 生图系统开发 / `01a0e831-be19-7813-8379-58313178ff26` | 90739→a710反馈修复已随9a上线并由ad99继承，原High/TC及193/193、686/686闭合；8d5旧断言失败与root同效6ddf历史保留，采用remote严格断言。原43d真实科学错绑不放行；生图用户流程/能力事实短稿已完成并交UI主稿，原tree tmp/product-design-input-20261011/image-workflow.md，仅复用原证据 | 原illustration-chain-repair树 / codex/native-subject-feedback@90739；原1ea与全证据保留，0模型/生产写 |
 | 视频系统开发 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 2af/02bf/fa8→93763b87/fcac62b2/7034bd72已随3245发布。全新Native视频规划与snapshot claim/安全重排已闭合，同一High代码及应用审通过；真实Redis四例零skip、Worker95/95、五CI全绿。商业控制矩阵已同步台账；视频用户流程/API能力事实短稿已完成并交UI主稿，原tree tmp/product-design-input-20261011/video-workflow.md。仍缺合格Native父/完整帧、human声音/费用和真实成片验收，无新付费任务 | 原synclip-video-delivery树 / codex/native-video-plan-admission-tests@fa8；原回执全部保留，无新模型/资产写 |
-| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 按human最新要求交付供双方协作的完整产品设计文档，明确逐页职责/内容序/操作/关系和共享归属，暂停新增设计实现。Guide636→f35与dec→753三文件全等随ad99上线，新增10例包含在CI浏览器54/54；正常首页→Guide一次输入切换已观察：提示出现、原选择/文字保留，随后清空自有临时输入并关闭tab，未提交；原PNG/JSON位于UI tmp/ui-art-20261008/product-page-planning-20261011，root已看图。头像姿态/指针实见，原生产close仍未确认/本地2/2未复现 | 原research-product-craft树 / codex/guide-unsent-inputs；原ffad/五帧/关闭轨迹与输入保护回执保留，页面文档在owned tmp，业务写0 |
+| UI优化 / `01a0f118-e09d-7671-af09-0592d6062a6c` | 按human最新要求交付供双方协作的完整产品设计文档，明确逐页职责/内容序/操作/关系和共享归属，暂停新增设计实现。Guide636→f35与dec→753三文件全等随ad99上线，新增10例包含在CI浏览器54/54；正常首页→Guide一次输入切换已观察：提示出现、原选择/文字保留，随后清空自有临时输入并关闭tab，未提交；原PNG/JSON位于UI tmp/ui-art-20261008/product-page-planning-20261011，root已看图。头像姿态/指针实见，原生产close仍未确认/本地2/2未复现 | 原research-product-craft树 / codex/guide-unsent-inputs；原ffad/五帧/关闭轨迹与输入保护回执保留，37页/44路由候选与最终检查在owned tmp，先并入领域边界后出Guide参考图示意，业务写0 |
 - 本聊天三线生产操作由总控串行排程；ad99发布及post只读已完成，writer关闭，输入保护的正常入口观察已闭合，UI继续完整产品设计文档。43d提交窗口仍关闭，旧b261/e5/ce968/8d5/9a部署包装不再跑。当前权限正常，协调与受控命令实际成功；后续新科研任务、声音/费用与Host启用仍按原边界，心跳不扩权。
 
 ## Git / CI / 运行事实
