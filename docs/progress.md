@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-11 后端续作：生图接线核对已收，未发现错降vision、无需补丁；已转接Task4索引恢复的fresh只读准备。视频RED f40d2c7c的方案获独立High有条件GO，须扩Domain扣费前分类、Worker admission及Native producer/materializer才能闭合；已给必要文件写权并恢复实施，旧external默认/paid/unknown及音轨保持。UI页面冻结、能力整理继续；真实科学计划/完整影片仍未验收，精确证据与边界见Hermes CURRENT。
+- 2026-10-11 后端续作：生图接线已核、科学质量未验；Task4 fresh只读确认原current仍69有效分块/0向量，原源/模型/预算满足，同owner单次恢复获独立High有条件GO；已交生图唯一窗口，先默认plan再一次apply，结果待回执，未知只对账不重发。视频RED方案High有条件GO，Domain扣费前分类/admission/Native producer最小扩展已授权实施；必要统一分类函数导出一并纳入，不改API/Worker index或UI。UI页面冻结，6份既有Skill/能力文档已交待集入；真实科学计划/完整影片未验收，精确证据与边界见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
