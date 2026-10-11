@@ -9,8 +9,9 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
-async function fixture(page: Page, options: { delayedSelection?: boolean; publishedSource?: boolean } = {}) {
-  const calls = { create: 0, guide: 0, confirm: 0, publish: 0, ingestionBodies: [] as string[], ingestionKeys: [] as string[] };
+async function fixture(page: Page, options: { delayedSelection?: boolean; publishedSource?: boolean; uploadedPaper?: boolean; guideResearchId?: string } = {}) {
+  const calls = { create: 0, guide: 0, confirm: 0, publish: 0, ingestionBodies: [] as string[], ingestionKeys: [] as string[], writes: [] as string[], targetReads: [] as string[] };
+  const guideTask = { ...task, researchObjectId: options.guideResearchId ?? task.researchObjectId };
   let confirmed = false;
   const sourceTask = { id: 'source-1', artifactId: 'artifact-1', logicalPath: 'paper.pdf', state: confirmed ? 'confirmed' : 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-source-1', result: { core: core('Hermes finding grounded in paper'), evidence: { problem: { quote: 'The paper states its research problem.' } } } };
   const publishedVersion = { versionId: 'version-public-1', versionNo: 1, publicationNo: 1, status: 'published', commitId: 'commit-1', createdAt: '2026-10-01T00:00:00.000Z' };
@@ -18,20 +19,21 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: 'http://127.0.0.1:3010' }]);
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
+    if (method !== 'GET') calls.writes.push(method + ' ' + path);
     if (path === '/api/auth/me') return json(route, { userId: 'owner-1', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' });
     if (path === '/api/csrf-token') return json(route, { csrfToken: 'fixture-token' });
     if (path === '/api/workspaces') return json(route, { workspaces: [{ id: 'personal-1', name: 'Personal', type: 'personal', role: 'owner' }] });
     if (path === '/api/research-objects' && method === 'GET') return json(route, { researchObjects: [research('ro-old', 'Older study'), research('ro-next', 'Next study')] });
     if (path === '/api/research-objects' && method === 'POST') { calls.create++; return json(route, { researchObject: { id: 'ro-new', workspaceId: 'personal-1', version: 1 } }); }
-    if (path === '/api/research-objects/ro-new/ingest' && method === 'POST') {
+    if ((path === '/api/research-objects/ro-new/ingest' || (options.uploadedPaper && path === '/api/research-objects/ro-old/ingest')) && method === 'POST') {
       calls.ingestionBodies.push(route.request().postDataBuffer()?.toString('utf8') ?? '');
       calls.ingestionKeys.push(route.request().headers()['idempotency-key']);
-      return json(route, { batchId: 'text-batch-1', researchObjectId: 'ro-new', tasks: [{ id: 'text-source-1', artifactId: 'text-artifact-1', logicalPath: '研究内容.md', state: 'queued', retryCount: 0, error: null }], artifacts: [] });
+      return json(route, { batchId: 'text-batch-1', researchObjectId: path.split('/')[3], tasks: [{ id: 'text-source-1', artifactId: 'text-artifact-1', logicalPath: options.uploadedPaper ? 'pending-paper.pdf' : '研究内容.md', state: 'queued', retryCount: 0, error: null }], artifacts: [] });
     }
     if (path === '/api/agent/sessions' && method === 'POST') return json(route, { session: { id: 'session-1' } });
-    if (path === '/api/agent/tasks' && method === 'POST') { calls.guide++; return json(route, { task }); }
-    if (path === '/api/agent/tasks' && method === 'GET') return json(route, { tasks: [task] });
-    if (path === '/api/agent/tasks/guide-task-1') return json(route, { task });
+    if (path === '/api/agent/tasks' && method === 'POST') { calls.guide++; return json(route, { task: guideTask }); }
+    if (path === '/api/agent/tasks' && method === 'GET') return json(route, { tasks: [guideTask] });
+    if (path === '/api/agent/tasks/guide-task-1') return json(route, { task: guideTask });
     if (options.publishedSource && path === '/api/ingestion/tasks/source-1') return json(route, { task: { ...sourceTask, state: confirmed ? 'confirmed' : 'needs_review' }, batchId: 'batch-1', researchObjectId: 'ro-old', version: confirmed ? 2 : 1 });
     if (options.publishedSource && path === '/api/ingestion/source-1/confirm' && method === 'POST') {
       calls.confirm++; confirmed = true;
@@ -41,6 +43,7 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
     if (options.publishedSource && path.startsWith('/api/versions/')) return json(route, { version: { versionId: path.split('/').at(-1), snapshot: { artifacts: [] } } });
     const match = path.match(/^\/api\/research-objects\/(ro-old|ro-next)(?:\/(versions|ingestion))?$/u);
     if (match) {
+      calls.targetReads.push(path);
       if (options.delayedSelection && match[1] === 'ro-next') await new Promise((resolve) => setTimeout(resolve, 350));
       if (match[2] === 'versions') return json(route, { versions: options.publishedSource && match[1] === 'ro-old' ? confirmed ? [privateVersion, publishedVersion] : [publishedVersion] : [] });
       if (match[2] === 'ingestion') return json(route, { researchObjectId: match[1], version: confirmed ? 2 : 1, tasks: options.publishedSource && match[1] === 'ro-old' && !confirmed ? [{ ...sourceTask, result: undefined, confirmation: null }] : [], latestConfirmation: null });
@@ -52,6 +55,71 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
   });
   return calls;
 }
+
+test.describe('Guide unsent input switching', () => {
+  const pendingFile = { name: 'pending-paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 local fixture') };
+  for (const existing of [false, true]) {
+    for (const inputKind of ['idea', 'file', 'title', 'source text'] as const) {
+      test(`retains an unsent ${inputKind} in ${existing ? 'existing' : 'new'} research`, async ({ page }) => {
+        const calls = await fixture(page);
+        await page.goto('/guide');
+        const picker = page.getByRole('combobox', { name: '选择研究' });
+        await expect(picker.locator('option')).toHaveCount(3);
+        if (existing) { await picker.selectOption('ro-old'); await expect(page.locator('#guide-research-title')).toHaveValue('Older study'); }
+        if (inputKind === 'idea') await page.locator('#guide-research-idea').fill('Keep this unsent processing request.');
+        if (inputKind === 'title') await page.locator('#guide-research-title').fill('Keep this working title.');
+        if (inputKind === 'file') {
+          await page.getByRole('button', { name: '上传论文', exact: true }).click();
+          await page.locator('[data-evidence-intake] input[type="file"]').setInputFiles(pendingFile);
+        }
+        if (inputKind === 'source text') {
+          await page.getByRole('button', { name: '直接填写', exact: true }).click();
+          await page.locator('#guide-research-text').fill('Keep this unsubmitted source passage.');
+        }
+        const readsBefore = [...calls.targetReads];
+        await picker.selectOption('ro-next');
+        await expect(page.locator('[data-guide-workspace]').getByRole('alert')).toContainText('切换研究前请先提交来源文字或保存草稿。');
+        await expect(picker).toHaveValue(existing ? 'ro-old' : '');
+        await expect(page.locator('#guide-research-title')).toHaveValue(inputKind === 'title' ? 'Keep this working title.' : existing ? 'Older study' : '');
+        await expect(page.locator('#guide-research-idea')).toHaveValue(inputKind === 'idea' ? 'Keep this unsent processing request.' : '');
+        if (inputKind === 'file') await expect(page.locator('[data-evidence-intake]')).toContainText(pendingFile.name);
+        if (inputKind === 'source text') await expect(page.locator('#guide-research-text')).toHaveValue('Keep this unsubmitted source passage.');
+        if (existing) await expect(page.locator('#sdf-field-problem')).toHaveValue('ro-old');
+        expect(calls.targetReads).toEqual(readsBefore);
+        expect(calls.writes).toEqual([]);
+      });
+    }
+    test(`allows switching after successfully submitting inputs in ${existing ? 'existing' : 'new'} research`, async ({ page }) => {
+      const calls = await fixture(page, { uploadedPaper: true, guideResearchId: existing ? 'ro-old' : 'ro-new' });
+      await page.goto('/guide');
+      const picker = page.getByRole('combobox', { name: '选择研究' });
+      await expect(picker.locator('option')).toHaveCount(3);
+      if (existing) { await picker.selectOption('ro-old'); await expect(page.locator('#guide-research-title')).toHaveValue('Older study'); }
+      else await page.locator('#guide-research-title').fill('Submitted working title.');
+      await page.locator('#guide-research-idea').fill('Use this uploaded paper to explain the research.');
+      await page.getByRole('button', { name: '上传论文', exact: true }).click();
+      await page.locator('[data-evidence-intake] input[type="file"]').setInputFiles(pendingFile);
+      await page.getByRole('button', { name: '发送', exact: true }).click();
+      await expect(page.getByRole('status')).toContainText('私有草稿已保存');
+      await expect(page.locator('#guide-research-idea')).toHaveValue('');
+      await expect(page.locator('[data-evidence-intake]')).toContainText(pendingFile.name);
+      const writesBefore = [...calls.writes];
+      expect(writesBefore).toEqual([
+        ...(existing ? [] : ['POST /api/research-objects']),
+        `POST /api/research-objects/${existing ? 'ro-old' : 'ro-new'}/ingest`,
+        'POST /api/agent/sessions', 'POST /api/agent/tasks',
+      ]);
+      await picker.selectOption('ro-next');
+      await expect(picker).toHaveValue('ro-next');
+      await expect(page.locator('#guide-research-title')).toHaveValue('Next study');
+      await expect(page.locator('#sdf-field-problem')).toHaveValue('ro-next');
+      expect(calls.create).toBe(existing ? 0 : 1);
+      expect(calls.guide).toBe(1);
+      expect(calls.ingestionBodies).toHaveLength(1);
+      expect(calls.writes).toEqual(writesBefore);
+    });
+  }
+});
 
 test('Guide sends the entered idea once and keeps the restored Hermes conversation in the page', async ({ page }) => {
   const calls = await fixture(page);

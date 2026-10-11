@@ -66,6 +66,7 @@ export function GuideResearchWorkspace() {
   const [research, setResearch] = useState<DashboardResearchApi[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [title, setTitle] = useState('');
+  const originalTitle = useRef('');
   const [idea, setIdea] = useState('');
   const [freeText, setFreeText] = useState('');
   const freeTextFile = useRef<{ text: string; file: File } | null>(null);
@@ -120,6 +121,7 @@ export function GuideResearchWorkspace() {
     epoch.current++;
     busyRef.current = false; setBusy(false); switchingRef.current = false; setSwitching(false);
     setWorkspaces([]); setWorkspaceId(''); setResearch([]); setSelectedId('');
+    originalTitle.current = '';
     if (!preserveInitialIdea) { setTitle(''); setIdea(''); setMaterials([]); setDirectMode(false); setSourceOpen(false); }
     setFreeText(''); freeTextFile.current = null; setExistingSources([]);
     setCore(emptyCore()); setVersion(1); setVersions([]);
@@ -153,10 +155,13 @@ export function GuideResearchWorkspace() {
   const selectResearch = useCallback(async (id: string) => {
     if (!owner || busyRef.current || switchingRef.current) return;
     const pendingText = Boolean(freeText.trim() && (freeTextFile.current?.text !== freeText || !uploadedFiles.current.has(freeTextFile.current.file)));
-    if ((dirtyRef.current || pendingText) && id !== chosenId.current) { setError(copy.switchWarning); return; }
+    const pendingFiles = materials.some((item) => !uploadedFiles.current.has(item.file));
+    const pendingTitle = chosenId.current ? title !== originalTitle.current : Boolean(title.trim());
+    if ((dirtyRef.current || pendingText || idea.trim() || pendingFiles || pendingTitle) && id !== chosenId.current) { setError(copy.switchWarning); return; }
     const current = ++epoch.current;
     switchingRef.current = true; setSwitching(true); setError(''); setStatus('');
     if (!id) {
+      originalTitle.current = '';
       setSelectedId(''); setTitle(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setExistingSources([]); setCore(emptyCore()); setVersion(1); setDirty(false); setDirectMode(false); setSourceOpen(false);
       setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId(''); setIngestionDetail(null); setProposal(null); setVersions([]);
       createKey.current = ''; createIntent.current = null; uploadKey.current = ''; uploadSignature.current = '';
@@ -171,6 +176,7 @@ export function GuideResearchWorkspace() {
       if (!isCurrent(owner, current)) return;
       setSelectedId(id); setConversationOpen(false); setInitialTaskId(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setDirectMode(false); setSourceOpen(false);
       setExistingSources([...source.artifacts.map((item) => item.logicalPath), ...source.ingestion.tasks.map((task) => task.logicalPath)]);
+      originalTitle.current = found.researchObject.title;
       setTitle(found.researchObject.title); setVersion(found.researchObject.version);
       setVersions(history.versions);
       const browserDraft = loadGuideDraft(window.localStorage, owner, id, found.researchObject.version);
@@ -185,7 +191,7 @@ export function GuideResearchWorkspace() {
       uploadedFiles.current = new WeakSet<File>(); fileIdentities.current = new WeakMap<File, string>();
     } catch (cause) { if (isCurrent(owner, current)) setError(errorText(cause, copy.failure)); }
     finally { if (isCurrent(owner, current)) { switchingRef.current = false; setSwitching(false); } }
-  }, [copy.failure, copy.switchWarning, freeText, isCurrent, owner]);
+  }, [copy.failure, copy.switchWarning, freeText, idea, isCurrent, materials, owner, title]);
 
   function editField(field: SdfField, value: string) {
     if (busyRef.current || switchingRef.current) return;
@@ -213,6 +219,7 @@ export function GuideResearchWorkspace() {
         const intent = createIntent.current;
         id = (await createResearchObject({ workspaceId: intent.workspaceId, title: intent.title, ...(intent.core ? { sdf: { core: intent.core } } : {}) }, createKey.current)).researchObject.id;
         if (!isCurrent(owner, current)) return;
+        originalTitle.current = intent.title;
         setSelectedId(id); setTitle(intent.title); setDirty(false);
         createKey.current = ''; createIntent.current = null;
       }
