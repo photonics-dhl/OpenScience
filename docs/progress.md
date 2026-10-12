@@ -15,6 +15,7 @@
 - 2026-10-13：用户明确图片模型策略：2.5 返回明确不可用时自动切换 image-2 并提示实际模型；超时、网络错误或状态未知先恢复原任务，不直接二次提交。生图 session 已接手定位路由符号与定向测试，尚未调用 Provider。
 - 2026-10-13：视频 queue-recovery 两失败确认是过时夹具；`af42e5e2` 仅更新 marker/result fixture，定向 45/45、Worker typecheck、diff-check 通过，独立 High 待回，未部署。
 - 2026-10-13：`af42e5e2` 独立 High GO 后已合入 canonical `2e1a28de`；精确 Media CI `38280757897` 正在运行，未部署。
+- 2026-10-13：精确 Media CI `38280757897` 已通过：skill-path 与 4 个 browser-entry 全部 success；`af42e5e2` 的两个 queue-recovery 过时夹具阻塞已闭合。无部署、Provider 或付费任务；视频真实短片/试听质量仍未验收。
 - 2026-10-13：生图首图最小 brief/普通 writer beta gate `2ae3133d` 已通过 Domain 114/114、API 140/140、build/typecheck/diff-check；独立 High 待回，未调用 Provider、未部署。
 - 2026-10-13：独立 High 对 `2ae3133d` P1 NO-GO：scene spend 检查在事务外且只查 approved child，普通 writer 可用不同幂等键并发双扣；生图 session 正在修复原子 guard 并补并发回归，未合入/未部署。
 - 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
