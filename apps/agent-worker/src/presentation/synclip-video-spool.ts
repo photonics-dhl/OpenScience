@@ -225,7 +225,7 @@ export class SynclipVideoSpool {
           if (audio && result.status === 'failed' && result.errorCode === 'AUDIO_TIMING_REVISION_REQUIRED')
             throw new SynclipVideoTimingError(timingDiagnostic(result.audioTiming, inputHash, audio, scenes));
           throw new Error(result.status === 'uncertain' ? 'UNCERTAIN'
-            : audio && typeof result.errorCode === 'string' && /^(?:AUDIO|VIDEO|SYNCLIP_VIDEO)_[A-Z0-9_]{1,80}$/u.test(result.errorCode)
+            : typeof result.errorCode === 'string' && /^(?:AUDIO|VIDEO|SYNCLIP_VIDEO)_[A-Z0-9_]{1,80}$/u.test(result.errorCode)
               ? result.errorCode : 'SYNCLIP_VIDEO_EXECUTION_FAILED');
         }
         if (result.contentType !== 'video/mp4' || typeof result.outputSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(result.outputSha256)

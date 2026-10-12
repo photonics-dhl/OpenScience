@@ -51,6 +51,14 @@ describe('Native provider output without optional TTS', () => {
     await expect(f.spool.generate(f.input)).rejects.toThrow('SYNCLIP_VIDEO_MODEL_MISMATCH');
   });
 
+  it('preserves a Broker model mismatch error for Native video', async () => {
+    const f = await nativeFixture(() => ({ narration: undefined, status: 'failed', errorCode: 'SYNCLIP_VIDEO_MODEL_MISMATCH' }));
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    await expect(f.spool.generate(f.input)).rejects.toThrow('SYNCLIP_VIDEO_MODEL_MISMATCH');
+  });
+
   it('rejects metrics that claim a different video model', async () => {
     const f = await nativeFixture(() => ({ narration: undefined }));
     Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
