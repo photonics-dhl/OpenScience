@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { PrismaClient as CorePrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { SearchStorage, createSearchPrismaClient, lexicalSearch } from '../src';
@@ -28,9 +29,9 @@ const INDEX_HASH_A = createHash('sha256').update(`${WORKSPACE_INDEX}:generation-
 const INDEX_CHUNK_A = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-a`).digest('hex');
 const INDEX_CHUNK_B = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-b`).digest('hex');
 const INDEX_CHUNK_C = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-c`).digest('hex');
-const INDEX_TASK_A = randomUUID();
-const INDEX_TASK_B = randomUUID();
-const INDEX_TASK_C = randomUUID();
+const CORE_OWNER_TASK_A = randomUUID();
+const CORE_OWNER_TASK_B = randomUUID();
+const CORE_OWNER_TASK_C = randomUUID();
 const INDEX_LEASE_A = '4'.repeat(64);
 const INDEX_LEASE_B = '5'.repeat(64);
 const INDEX_LEASE_C = '9'.repeat(64);
@@ -69,9 +70,63 @@ function expectedDisposableDatabaseName(): string {
   return databaseName;
 }
 
+function coreFixture(input: {
+  workspaces: string[];
+  objects: Array<{ id: string; workspaceId: string; deletedAt?: Date }>;
+  artifacts: Array<{ id: string; workspaceId: string; contentHash: string }>;
+}) {
+  const url = process.env.JOURNAL_TEST_DATABASE_URL;
+  const client = new CorePrismaClient({ datasources: { db: { url: url ?? 'postgresql://invalid' } } });
+  const userId = randomUUID();
+  const hashes = [...new Set(input.artifacts.map((artifact) => artifact.contentHash))];
+  let mutationAllowed = false;
+  return {
+    client,
+    async seed() {
+      if (!url) throw new Error('isolated core test database URL is absent');
+      const parsed = new URL(url);
+      if (!['postgres:', 'postgresql:'].includes(parsed.protocol)
+        || !['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname) || parsed.pathname !== '/journal_test') {
+        throw new Error('core fixture requires loopback journal_test');
+      }
+      const rows = await client.$queryRaw<Array<{ name: string }>>`SELECT current_database() AS name`;
+      if (rows[0]?.name !== 'journal_test') throw new Error('core database identity mismatch');
+      mutationAllowed = true;
+      await client.user.create({ data: { id: userId, email: `search-${userId}@example.test`,
+        displayName: 'Synthetic search fixture', passwordHash: 'unusable-test-only' } });
+      await client.workspace.createMany({ data: input.workspaces.map((id) => ({ id, ownerId: userId,
+        type: 'team', name: 'Synthetic search fixture' })) });
+      await client.researchObject.createMany({ data: input.objects.map((row) => ({ ...row,
+        createdBy: userId, title: 'Synthetic search source' })) });
+      await client.blob.createMany({ data: hashes.map((sha256) => ({ sha256,
+        storageKey: `test-only/${sha256}`, size: 1n })) });
+      await client.artifact.createMany({ data: input.artifacts.map(({ contentHash, ...row }) => ({ ...row,
+        blobSha256: contentHash, logicalPath: 'synthetic.txt', size: 1n, uploadedBy: userId })) });
+    },
+    async dispose() {
+      try {
+        if (mutationAllowed) {
+          await client.researchObject.deleteMany({ where: { id: { in: input.objects.map(({ id }) => id) } } });
+          await client.artifact.deleteMany({ where: { id: { in: input.artifacts.map(({ id }) => id) } } });
+          await client.blob.deleteMany({ where: { sha256: { in: hashes } } });
+          await client.workspace.deleteMany({ where: { id: { in: input.workspaces } } });
+          await client.user.deleteMany({ where: { id: userId } });
+        }
+      } finally {
+        await client.$disconnect();
+      }
+    },
+  };
+}
+
 describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () => {
   const client = createSearchPrismaClient({ datasourceUrl: DATABASE_URL ?? 'postgresql://invalid' });
-  const storage = new SearchStorage(client);
+  const deletedRo = randomUUID();
+  const deletedChunk = createHash('sha256').update(deletedRo).digest('hex');
+  const core = coreFixture({ workspaces: [WORKSPACE_A, WORKSPACE_B],
+    objects: [{ id: RESEARCH_OBJECT, workspaceId: WORKSPACE_A }, { id: deletedRo, workspaceId: WORKSPACE_A, deletedAt: new Date() }],
+    artifacts: [{ id: ARTIFACT_A, workspaceId: WORKSPACE_A, contentHash: HASH_A }, { id: ARTIFACT_B, workspaceId: WORKSPACE_B, contentHash: HASH_B }] });
+  const storage = new SearchStorage(client, core.client);
   let mutationAllowed = false;
 
   beforeAll(async () => {
@@ -79,6 +134,7 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     const rows = await client.$queryRaw<Array<{ name: string }>>(Prisma.sql`SELECT current_database() AS name`);
     if (rows[0]?.name !== expectedName) throw new Error('connected database identity does not match disposable URL');
     mutationAllowed = true;
+    await core.seed();
     await storage.upsertChunks({
       tenantId: WORKSPACE_A,
       researchObjectId: RESEARCH_OBJECT,
@@ -124,13 +180,28 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
   });
 
   afterAll(async () => {
-    if (mutationAllowed) {
-      await client.searchIndexTask.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
-      await client.searchChunk.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
-      await client.searchQueryMetric.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
-      await client.searchModelVersion.deleteMany({ where: { id: MODEL_IDENTITY.modelVersionId } });
+    try {
+      if (mutationAllowed) {
+        await client.searchIndexTask.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
+        await client.searchChunk.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
+        await client.searchQueryMetric.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
+        await client.searchModelVersion.deleteMany({ where: { id: MODEL_IDENTITY.modelVersionId } });
+      }
+    } finally {
+      await Promise.all([client.$disconnect(), core.dispose()]);
     }
-    await client.$disconnect();
+  });
+
+  it('filters a deleted core source without changing the live source', async () => {
+    await storage.upsertChunks({ tenantId: WORKSPACE_A, researchObjectId: deletedRo, chunks: [{
+      id: deletedChunk, artifactId: ARTIFACT_A, contentHash: HASH_A, ordinal: 0, language: 'en', text: 'deleted', tokenCount: 1,
+      locators: [{ artifactId: ARTIFACT_A, contentHash: HASH_A, blockId: 'deleted', page: 1 }], claimIds: [],
+      lexicalTerms: ['deleted'], termFrequencies: { deleted: 1 },
+    }] });
+    expect(await storage.hydrateCandidates({ tenantId: WORKSPACE_A, ids: [deletedChunk] }))
+      .toMatchObject({ status: 'ok', candidates: [] });
+    expect(await storage.hydrateCandidates({ tenantId: WORKSPACE_A, ids: [CHUNK_A] }))
+      .toMatchObject({ status: 'ok', candidates: [{ id: CHUNK_A }] });
   });
 
   it('keeps candidates tenant-scoped and deterministically ranked', async () => {
@@ -196,8 +267,8 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       norm: 1,
     });
 
-    await expect(storage.beginIndexTask({
-      taskId: INDEX_TASK_A,
+    const begunA = await storage.beginIndexTask({
+      taskId: CORE_OWNER_TASK_A,
       tenantId: WORKSPACE_INDEX,
       researchObjectId: RESEARCH_OBJECT_INDEX,
       artifactId: ARTIFACT_INDEX,
@@ -209,9 +280,14 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       leaseToken: INDEX_LEASE_A,
       executionAttempt: 1,
       modelIdentity: MODEL_IDENTITY,
-    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_A, leaseToken: INDEX_LEASE_A });
+    });
+    expect(begunA).toMatchObject({ action: 'run', leaseToken: INDEX_LEASE_A });
+    const searchTaskA = begunA.taskId;
+    expect(searchTaskA).not.toBe(CORE_OWNER_TASK_A);
+    await expect(client.searchIndexTask.findUnique({ where: { id: searchTaskA } }))
+      .resolves.toMatchObject({ fenceOwnerTaskId: CORE_OWNER_TASK_A });
     await expect(storage.beginIndexTask({
-      taskId: INDEX_TASK_A,
+      taskId: CORE_OWNER_TASK_A,
       tenantId: WORKSPACE_INDEX,
       researchObjectId: RESEARCH_OBJECT_INDEX,
       artifactId: ARTIFACT_INDEX,
@@ -223,21 +299,21 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       leaseToken: INDEX_RECOVERY_LEASE,
       executionAttempt: 2,
       modelIdentity: MODEL_IDENTITY,
-    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_A, leaseToken: INDEX_RECOVERY_LEASE });
+    })).resolves.toEqual({ action: 'run', taskId: searchTaskA, leaseToken: INDEX_RECOVERY_LEASE });
     await storage.stageIndexGeneration({
-      taskId: INDEX_TASK_A,
+      taskId: searchTaskA,
       leaseToken: INDEX_RECOVERY_LEASE,
       chunks: [draft(INDEX_CHUNK_A, INDEX_HASH_A, 'alpha pulse')],
     });
     await expect(storage.finalizeIndexGeneration({
-      taskId: INDEX_TASK_A,
+      taskId: searchTaskA,
       leaseToken: INDEX_RECOVERY_LEASE,
       status: 'succeeded',
       embeddings: [embedding(INDEX_CHUNK_A)],
     })).resolves.toEqual({ activated: true });
 
-    await expect(storage.beginIndexTask({
-      taskId: INDEX_TASK_B,
+    const begunB = await storage.beginIndexTask({
+      taskId: CORE_OWNER_TASK_B,
       tenantId: WORKSPACE_INDEX,
       researchObjectId: RESEARCH_OBJECT_INDEX,
       artifactId: ARTIFACT_INDEX,
@@ -249,9 +325,14 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       leaseToken: INDEX_LEASE_B,
       executionAttempt: 1,
       modelIdentity: MODEL_IDENTITY,
-    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_B, leaseToken: INDEX_LEASE_B });
+    });
+    expect(begunB).toMatchObject({ action: 'run', leaseToken: INDEX_LEASE_B });
+    const searchTaskB = begunB.taskId;
+    expect(searchTaskB).not.toBe(CORE_OWNER_TASK_B);
+    await expect(client.searchIndexTask.findUnique({ where: { id: searchTaskB } }))
+      .resolves.toMatchObject({ fenceOwnerTaskId: CORE_OWNER_TASK_B });
     await storage.stageIndexGeneration({
-      taskId: INDEX_TASK_B,
+      taskId: searchTaskB,
       leaseToken: INDEX_LEASE_B,
       chunks: [draft(INDEX_CHUNK_B, INDEX_HASH_A, 'beta pulse')],
     });
@@ -262,7 +343,7 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_B } }))
       .resolves.toMatchObject({ active: false });
     await expect(storage.finalizeIndexGeneration({
-      taskId: INDEX_TASK_B,
+      taskId: searchTaskB,
       leaseToken: INDEX_LEASE_B,
       status: 'needs_review',
       errorCode: 'embedding_unavailable',
@@ -281,7 +362,7 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     // Reclaiming needs_review keeps the current lexical rows active until dense succeeds.
     const retryLease = '8'.repeat(64);
     await expect(storage.beginIndexTask({
-      taskId: INDEX_TASK_B,
+      taskId: CORE_OWNER_TASK_B,
       tenantId: WORKSPACE_INDEX,
       researchObjectId: RESEARCH_OBJECT_INDEX,
       artifactId: ARTIFACT_INDEX,
@@ -293,19 +374,19 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       leaseToken: retryLease,
       executionAttempt: 2,
       modelIdentity: MODEL_IDENTITY,
-    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_B, leaseToken: retryLease });
+    })).resolves.toEqual({ action: 'run', taskId: searchTaskB, leaseToken: retryLease });
     await storage.stageIndexGeneration({
-      taskId: INDEX_TASK_B,
+      taskId: searchTaskB,
       leaseToken: retryLease,
       chunks: [draft(INDEX_CHUNK_B, INDEX_HASH_A, 'beta pulse')],
     });
     await expect(storage.finalizeIndexGeneration({
-      taskId: INDEX_TASK_B,
+      taskId: searchTaskB,
       leaseToken: retryLease,
       status: 'succeeded',
       embeddings: [embedding(INDEX_CHUNK_B)],
     })).resolves.toEqual({ activated: true });
-    await expect(client.searchIndexTask.findUnique({ where: { id: INDEX_TASK_B } }))
+    await expect(client.searchIndexTask.findUnique({ where: { id: searchTaskB } }))
       .resolves.toMatchObject({ status: 'succeeded', attemptCount: 2, errorCode: null, isCurrent: true });
     const dense = await storage.denseCandidates({ tenantId: WORKSPACE_INDEX, modelIdentity: MODEL_IDENTITY });
     expect(dense).toMatchObject({ status: 'ok', needsReviewCount: 0 });
@@ -313,8 +394,8 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     expect(dense.candidates.map(({ id }) => id)).toEqual([INDEX_CHUNK_B]);
 
     // A delayed older source can finish successfully, but it cannot replace the current generation.
-    await expect(storage.beginIndexTask({
-      taskId: INDEX_TASK_C,
+    const begunC = await storage.beginIndexTask({
+      taskId: CORE_OWNER_TASK_C,
       tenantId: WORKSPACE_INDEX,
       researchObjectId: RESEARCH_OBJECT_INDEX,
       artifactId: ARTIFACT_INDEX,
@@ -326,14 +407,19 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       leaseToken: INDEX_LEASE_C,
       executionAttempt: 1,
       modelIdentity: MODEL_IDENTITY,
-    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_C, leaseToken: INDEX_LEASE_C });
+    });
+    expect(begunC).toMatchObject({ action: 'run', leaseToken: INDEX_LEASE_C });
+    const searchTaskC = begunC.taskId;
+    expect(searchTaskC).not.toBe(CORE_OWNER_TASK_C);
+    await expect(client.searchIndexTask.findUnique({ where: { id: searchTaskC } }))
+      .resolves.toMatchObject({ fenceOwnerTaskId: CORE_OWNER_TASK_C });
     await storage.stageIndexGeneration({
-      taskId: INDEX_TASK_C,
+      taskId: searchTaskC,
       leaseToken: INDEX_LEASE_C,
       chunks: [draft(INDEX_CHUNK_C, INDEX_HASH_A, 'stale pulse')],
     });
     await expect(storage.finalizeIndexGeneration({
-      taskId: INDEX_TASK_C,
+      taskId: searchTaskC,
       leaseToken: INDEX_LEASE_C,
       status: 'succeeded',
       embeddings: [embedding(INDEX_CHUNK_C)],

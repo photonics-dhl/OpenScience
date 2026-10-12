@@ -177,9 +177,15 @@ describe('SearchStorage', () => {
         }];
       },
     };
-    const storage = new SearchStorage({
+    const searchClient = {
       $transaction: async (run: (value: typeof transaction) => Promise<unknown>) => run(transaction),
-    } as never);
+    };
+    const coreClient = {
+      $transaction: async (run: (value: { $executeRaw: () => Promise<number> }) => Promise<unknown>) => run({
+        $executeRaw: async () => 1,
+      }),
+    };
+    const storage = new SearchStorage(searchClient as never, coreClient as never);
 
     await expect(storage.hydrateCandidates({ tenantId: WORKSPACE_A, ids: ['a'.repeat(64)] }))
       .resolves.toEqual({
