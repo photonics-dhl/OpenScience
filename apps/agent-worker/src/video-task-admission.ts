@@ -2,11 +2,13 @@ import { Prisma, type AgentTask } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import {
   HermesVideoUnavailableError, PresentationAssetError, classifyNativeVideoAudio, isHermesVideoTask, isDirectNativeVideoStoryboard, isOrdinaryNativeVideoSceneRevision,
+  isNativeImagePlanningContractTask,
   parsePresentationGenerationPayload, readNativeAgentExecution, requireHermesVideoReady, requireSceneImageParent, requireStoryboardBase, requireVideoGenerationParents,
   type AgentDeps, type HermesVideoReadinessDeps, type NativeAgentExecution,
 } from '@openscience/domain';
 
 export const VIDEO_READINESS_HOLD = new HermesVideoUnavailableError().message;
+export const NATIVE_IMAGE_CONTRACT_HOLD = '[blocked] Native image planning contract held for compatible reader';
 type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma'> & HermesVideoReadinessDeps;
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt' | 'deletedAt'>;
 type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'progress' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
@@ -147,6 +149,37 @@ export async function parkPendingVideoTask(deps: VideoTaskAdmissionDeps, task: V
   return parked.count === 1;
 }
 
+/** Reader-stage image parking; no video readiness or release path is allowed here. */
+async function parkPendingNativeImageTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean> {
+  const updatedAt = nextUpdatedAt(task);
+  const parked = await deps.prisma.agentTask.updateMany({
+    where: pendingSnapshotWhere(task),
+    data: { error: NATIVE_IMAGE_CONTRACT_HOLD, dispatchedAt: task.dispatchedAt ?? updatedAt, updatedAt },
+  });
+  return parked.count === 1;
+}
+
+async function admitNativeImageContractTask(
+  deps: VideoTaskAdmissionDeps,
+  snapshot: VideoTaskAdmissionSnapshot,
+  current: VideoTaskAdmissionSnapshot,
+): Promise<boolean> {
+  if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) return true;
+  if (await parkPendingNativeImageTask(deps, snapshot)) return true;
+
+  // Only an acknowledgement timestamp may change between the failed CAS and
+  // this one bounded reread. A changed payload/result/attempt is reclassified
+  // by the normal poll and is never claimed through this path.
+  const latest = await deps.prisma.agentTask.findUnique({ where: { id: snapshot.id } });
+  if (!latest || latest.deletedAt || latest.status !== 'pending'
+    || !isNativeImagePlanningContractTask(latest)
+    || admissionFields.some(field => !['error', 'dispatchedAt', 'updatedAt'].includes(field)
+      && !isDeepStrictEqual(latest[field], current[field]))) return false;
+  const latestTask = latest as unknown as VideoTaskAdmissionSnapshot;
+  if (latestTask.error === NATIVE_IMAGE_CONTRACT_HOLD) return true;
+  return parkPendingNativeImageTask(deps, latestTask);
+}
+
 /** A successful release is durable even if the worker exits before outbox dispatch. */
 export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot,
   planningContract?: NativeAgentExecution['planningContract']): Promise<boolean> {
@@ -174,6 +207,9 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
+  if (isNativeImagePlanningContractTask(current)) {
+    return admitNativeImageContractTask(deps, task, current as unknown as VideoTaskAdmissionSnapshot);
+  }
   if (optionalFirstNativePlan(current)) {
     if (!await isHermesVideoTask(deps.prisma, current.id)) return false;
     return current.error === VIDEO_READINESS_HOLD

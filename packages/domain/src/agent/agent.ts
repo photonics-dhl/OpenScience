@@ -874,6 +874,7 @@ export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50)
 export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
   if (!task || task.deletedAt) return false;
+  if (isNativeImagePlanningContractTask(task)) return false;
   if (task.status === 'pending') return true;
   if (task.status !== 'running' && !(task.status === 'failed' && task.error === '[retryable] worker interrupted')) return false;
   const reset = await deps.prisma.agentTask.updateMany({
@@ -1333,6 +1334,19 @@ type JsonRecord = Record<string, unknown>;
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const NATIVE_IMAGE_PLANNING_CONTRACT = 'image-source-explicit-trig-v1';
+
+/** Routing only: marked image rows must reach their compatible reader before recovery or claim. */
+export function isNativeImagePlanningContractTask(task: Pick<AgentTask, 'kind' | 'payload' | 'result'>): boolean {
+  const result = isJsonRecord(task.result) ? task.result : undefined;
+  const execution = result && isJsonRecord(result.nativeAgentExecution) ? result.nativeAgentExecution : undefined;
+  if (execution?.planningContract === NATIVE_IMAGE_PLANNING_CONTRACT) return true;
+  if (task.kind !== 'presentation.generate' || !isJsonRecord(task.payload) || task.payload.kind !== 'interactive_html'
+    || !isJsonRecord(task.payload.storyboard) || task.payload.storyboard.output !== 'image'
+    || task.payload.storyboard.narrative !== true || !supportsNativeIllustration(task.payload)) return false;
+  return execution !== undefined && Object.hasOwn(execution, 'planningContract');
 }
 
 function hasExactKeys(value: JsonRecord, keys: readonly string[]): boolean {

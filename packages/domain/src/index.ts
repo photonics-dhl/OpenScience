@@ -190,6 +190,7 @@ export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, enqueueSourceMapSearchIndex,
+  isNativeImagePlanningContractTask,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
   type CreateAgentSessionInput, type SubmitAgentTaskInput,

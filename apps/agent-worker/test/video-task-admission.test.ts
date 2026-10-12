@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createRedisClient, type Redis } from '@openscience/database';
 import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/index';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
-  recoverHeldVideoTasks, VIDEO_READINESS_HOLD } from '../src/video-task-admission';
+  recoverHeldVideoTasks, VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD } from '../src/video-task-admission';
 import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
 import { initialNativeAgentExecution, readNativeAgentExecution, type NativeAgentCheckpointReference } from '../../../packages/domain/src/agent/native-agent-execution';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../../packages/domain/src/assets/illustration-brief';
@@ -140,6 +140,16 @@ function firstNativePlanFixture() {
   return f;
 }
 
+function imageContractFixture() {
+  const f = queueFixture();
+  f.task.payload = { schemaVersion: 1, researchObjectId: 'ro', versionId: 'version', kind: 'interactive_html', sourceClaimIds: ['claim'],
+    storyboard: { output: 'image', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain this finding' } };
+  f.task.result = { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
+    runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3',
+    planningContract: 'image-source-explicit-trig-v1' } };
+  return f;
+}
+
 /** Execute the poller's actual script with isolated keys on the CI-only Redis. */
 async function withRealRedisMove(
   check: (redis: Redis, move: () => Promise<unknown>, queue: string, processing: string, id: string) => Promise<void>,
@@ -202,6 +212,67 @@ describe.skipIf(process.env.XGS_WORKER_TEST_REDIS_URL === undefined)('real Redis
       expect(await redis.lrange(queue, 0, -1)).toEqual([id, 'other']);
       expect(await redis.lrange(processing, 0, -1)).toEqual([]);
     });
+  });
+});
+
+describe('image planning-contract admission hold', () => {
+  it('parks a marked image before claim without changing its attempt or receipt', async () => {
+    const f = imageContractFixture();
+    const before = structuredClone(f.task);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: NATIVE_IMAGE_CONTRACT_HOLD, executionAttempt: 0,
+      retryCount: 0, result: before.result, payload: before.payload });
+    expect(f.task.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+    expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it('keeps an already held image out of video readiness and removes only its processing entry at startup', async () => {
+    const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD; f.lists.set(processingKey, [f.task.id]);
+    const before = structuredClone(f.task);
+    expect(await recoverProcessingQueue(f.deps)).toBe(0);
+    expect(f.task).toEqual(before);
+    expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it('parks a pristine pending image before generic startup recovery can claim it', async () => {
+    const f = imageContractFixture(); f.lists.set(processingKey, [f.task.id]);
+    expect(await recoverProcessingQueue(f.deps)).toBe(0);
+    expect(f.task.error).toBe(NATIVE_IMAGE_CONTRACT_HOLD);
+    expect(f.task.executionAttempt).toBe(0);
+    expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it('retries image parking after only an outbox timestamp race', async () => {
+    const f = imageContractFixture();
+    f.state.beforeUpdate = () => { f.task.updatedAt = new Date(f.task.updatedAt.getTime() + 1); };
+    expect(await admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).toBe(true);
+    expect(f.task.error).toBe(NATIVE_IMAGE_CONTRACT_HOLD);
+    expect(f.task.executionAttempt).toBe(0);
+  });
+
+  it('refuses image parking after the payload changes during the first CAS', async () => {
+    const f = imageContractFixture();
+    f.state.beforeUpdate = () => { f.task.payload = { ...f.task.payload, versionId: 'changed-version' }; };
+    expect(await admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).toBe(false);
+    expect(f.task.error).toBeNull();
+    expect(f.task.executionAttempt).toBe(0);
+  });
+
+  it('does not reset a started marked image task during generic startup recovery', async () => {
+    const f = imageContractFixture();
+    Object.assign(f.task, { status: 'running', executionAttempt: 1, result: {
+      ...f.task.result, nativeAgentExecution: { ...(f.task.result!.nativeAgentExecution as Record<string, unknown>),
+        checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
+    } });
+    f.lists.set(processingKey, [f.task.id]);
+    const before = structuredClone(f.task);
+    expect(await recoverProcessingQueue(f.deps)).toBe(0);
+    expect(f.task).toEqual(before);
+    expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.lists.get(queueKey)).toEqual([f.task.id]);
   });
 });
 

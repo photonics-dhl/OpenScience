@@ -98,6 +98,32 @@ describe('agent-worker durable queue recovery', () => {
     expect(new Set(lists.get('agent:queue'))).toEqual(new Set(['pending-task', 'running-task']));
     expect(tasks.get('running-task')).toMatchObject({ status: 'pending', error: null });
   });
+
+  it('drops only the volatile processing entry for a running marked image task', async () => {
+    const task = {
+      id: 'image-running-task', kind: 'presentation.generate', status: 'running', error: null,
+      executionAttempt: 1, retryCount: 0, payload: { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } },
+      result: { nativeAgentExecution: { planningContract: 'image-source-explicit-trig-v1' }, providerReceipt: 'paid',
+        nativeAgentCheckpoint: { state: 'completed' } },
+    };
+    const lists = new Map<string, string[]>([['agent:queue', []], ['agent:queue:processing', [task.id]]]);
+    const redis = {
+      lrange: async (key: string) => [...(lists.get(key) ?? [])],
+      lrem: async (key: string, _count: number, value: string) => {
+        const entries = lists.get(key) ?? [], index = entries.indexOf(value);
+        if (index < 0) return 0; entries.splice(index, 1); lists.set(key, entries); return 1;
+      },
+    };
+    const before = structuredClone(task);
+    const prisma = { agentTask: {
+      findUnique: async () => task,
+      updateMany: async () => { throw new Error('marked image must not be reset'); },
+    } };
+    expect(await recoverProcessingQueue({ prisma, redis } as never)).toBe(0);
+    expect(task).toEqual(before);
+    expect(lists.get('agent:queue:processing')).toEqual([]);
+    expect(lists.get('agent:queue')).toEqual([]);
+  });
 });
 
 // Exercise the current public Domain implementation and claim path, not stale dist or permission mocks.

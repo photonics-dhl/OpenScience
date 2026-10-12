@@ -4,12 +4,48 @@ import { createResearchObject } from '../../src/research-object/research-objects
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
+  isNativeImagePlanningContractTask,
   persistAgentTaskInTransaction, type AgentDeps,
 } from '../../src/agent/agent';
 import { buildInterestContext } from '../../src/research-intelligence/interest-context';
 import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
 import { requireSceneImageParent } from '../../src/assets/scene-image';
 import { presentationEvidenceIdentity, readReviewedPresentationEvidence } from '../../src/assets/illustration-source';
+
+describe('Native image planning-contract recovery routing', () => {
+  const imagePayload = { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } };
+  const videoPayload = { kind: 'interactive_html', storyboard: { output: 'video', narrative: true } };
+  const marker = (planningContract: unknown, profile?: unknown) => ({ nativeAgentExecution: {
+    ...(profile === undefined ? {} : { profile }), planningContract,
+  } });
+
+  it.each([
+    ['exact image marker with malformed payload', 'sdf.extract', {}, marker('image-source-explicit-trig-v1'), true],
+    ['unknown marker on image storyboard', 'presentation.generate', imagePayload, marker('future-image-contract-v9', 'wrong-profile'), true],
+    ['video marker on image storyboard', 'presentation.generate', imagePayload, marker('video-optional-audio-v1', 'paper-illustration'), true],
+    ['unmarked image storyboard', 'presentation.generate', imagePayload, {}, false],
+    ['valid video marker on video storyboard', 'presentation.generate', videoPayload, marker('video-optional-audio-v1', 'paper-illustration'), false],
+    ['scene image task', 'presentation.generate', { kind: 'image', sceneImage: { storyboardAssetId: 'asset' } }, marker('future-image-contract-v9'), false],
+    ['SDF task with image-shaped payload', 'sdf.extract', imagePayload, marker('future-image-contract-v9'), false],
+  ] as const)('routes %s as %s', (_label, kind, payload, result, expected) => {
+    expect(isNativeImagePlanningContractTask({ kind, payload, result } as never)).toBe(expected);
+  });
+
+  it('excludes a marked image task from generic crash reset without mutating the row', async () => {
+    const task = {
+      id: 'image-contract-task', kind: 'presentation.generate', status: 'running', deletedAt: null,
+      error: null, executionAttempt: 2, retryCount: 1, payload: imagePayload,
+      result: { ...marker('image-source-explicit-trig-v1', 'paper-illustration'), checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
+    };
+    let updates = 0;
+    const deps = { prisma: { agentTask: {
+      findUnique: async () => structuredClone(task),
+      updateMany: async () => { updates += 1; return { count: 1 }; },
+    } } } as never;
+    expect(await prepareAgentTaskForCrashRecovery(deps, task.id)).toBe(false);
+    expect(updates).toBe(0);
+  });
+});
 
 async function nativeImageTerminalFixture(decision: 'accepted' | 'blocked' = 'accepted') {
   const { prisma, db } = createFakePrisma();
