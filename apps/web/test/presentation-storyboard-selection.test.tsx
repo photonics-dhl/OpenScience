@@ -86,6 +86,8 @@ it('offers a single scene choice outside collapsed approved-plan details without
   const detailsEnd = markup.indexOf('</details>', markup.indexOf('data-current-storyboard-details="true"'));
   expect(markup.indexOf('data-scene-image=')).toBeGreaterThan(detailsEnd);
   expect(markup).toContain('selectScene');
+  expect(markup.match(/data-scene-image-action=/g)).toHaveLength(4);
+  expect(markup).toContain('Scene current 2');
 });
 
 it('shows a pending plan in the embedded writable workbench, with readonly media staying concise', () => {

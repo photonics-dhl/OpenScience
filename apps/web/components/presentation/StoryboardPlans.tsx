@@ -158,6 +158,18 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
             {active.storyboard!.document.scenes.map((scene, index) => <option key={index} value={index}>{ts('scene', { number: index + 1 })} · {scene.title}</option>)}
           </select>
         </label> : null}
+        {active.storyboard!.document.scenes.length > 1 ? <div className="flex flex-wrap gap-2" role="group" aria-label={ts('selectScene')} data-scene-image-actions={active.id}>
+          {active.storyboard!.document.scenes.map((scene, index) => {
+            const key = `${active.id}:${index}`;
+            const state = sceneImageStates[key];
+            return <React.Fragment key={index}><button type="button" data-scene-image-action={index} data-image-storyboard={active.id}
+              disabled={state === 'working'} aria-busy={state === 'working'}
+              aria-label={`${ts('generateImage')} · ${scene.title}`}
+              className="min-h-11 rounded-control border border-os-vermilion-ink px-3 text-sm font-semibold text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink disabled:opacity-40"
+              onClick={() => submitSceneImage(active, index)}>{ts('scene', { number: index + 1 })}: {scene.title}</button>
+              {state && state !== 'idle' ? <span className="basis-full text-sm leading-5 text-os-muted-paper" role={state === 'error' ? 'alert' : 'status'} data-scene-image-action-feedback={index} data-write-state={state}>{feedbackText(state, 'generation')}</span> : null}</React.Fragment>;
+          })}
+        </div> : null}
         <button type="button" data-scene-image={sceneIndex} data-image-storyboard={active.id}
           disabled={sceneImageStates[`${active.id}:${sceneIndex}`] === 'working'} aria-busy={sceneImageStates[`${active.id}:${sceneIndex}`] === 'working'}
           className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink disabled:opacity-40"

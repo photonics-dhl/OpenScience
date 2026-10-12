@@ -185,7 +185,7 @@ it('shows a failure and releases the storyboard lock when generation rejects or 
 
 it('locks approved scene-image and draft transition writes independently', async () => {
   const scene = { title: 'Light', narration: 'Wave spreads', visualAction: 'Show wavefronts', sourceClaimIds: ['claim'] };
-  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene] }, locale: 'en' as const, style: 'ink' as const };
+  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene, { ...scene, title: 'Matter' }] }, locale: 'en' as const, style: 'ink' as const };
   const asset = { id: 'plan', researchObjectId: 'ro', versionId: 'v', kind: 'interactive_html' as const, contentHash: 'a'.repeat(64),
     generator: 'Hermes', generatorVersion: 'v1', status: 'approved' as const, label: 'Plan', sourceClaimIds: ['claim'],
     createdAt: '2026-01-01', updatedAt: '2026-01-01', storyboard, canGenerateSceneImage: true };
@@ -194,9 +194,14 @@ it('locks approved scene-image and draft transition writes independently', async
   const common = { assets: [asset], claims: [claim], canWrite: true, unavailable: false, onGenerateSceneImage, onTransition: transition };
   const plans = () => { stateIndex = 0; refIndex = 0; return StoryboardPlans(common); };
   const image = () => find(plans(), element => element.props['data-scene-image'] === 0 && element.props['data-image-storyboard'] === 'plan');
+  const sceneActions = () => find(plans(), element => element.props['data-scene-image-action'] === 1 && element.props['data-image-storyboard'] === 'plan');
   image().props.onClick(); image().props.onClick();
   expect(onGenerateSceneImage).toHaveBeenCalledTimes(1);
   await Promise.resolve();
+  expect(sceneActions().props['aria-label']).toContain('Matter');
+  sceneActions().props.onClick();
+  await Promise.resolve();
+  expect(find(plans(), element => element.props['data-scene-image-action-feedback'] === 1).props['data-write-state']).toBe('success');
   const draft = { ...asset, status: 'draft' as const, canApprove: true, canTransition: true };
   const transitionPlans = () => { stateIndex = 0; refIndex = 0; return StoryboardPlans({ ...common, assets: [draft] }); };
   const approve = () => find(transitionPlans(), element => element.props.children === 'approvePlan');
