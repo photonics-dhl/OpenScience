@@ -12,6 +12,7 @@
 - 2026-10-13：UI 入口修复提交 `43d0923d`：在 approved + canGenerateSceneImage 守卫内为每个 scene 增加显式 action group，保留 selector/主按钮、锁与失败反馈；25/25、Web typecheck、diff-check 通过，未调用 Provider/部署，独立 High 复审待回。
 - 2026-10-13：独立 High 对 `43d0923d` GO（无 P0/P1）；已 cherry-pick/push 为 canonical `b06a8fab`。精确 push workflow 待回执；下一步是观察真实 approved storyboard route，不重试 Hermes/Synclip、不扩预算。
 - 2026-10-13：`38277069403` 已完成：browser-entry/Web build 通过；skill-path 仅复现 queue-recovery 两项非 UI 断言失败，后续 UI typecheck/storyboard 步骤因 fail-fast 跳过。已交视频 session 做最小兼容修复；部署继续等待 High、精确 CI 与真实路由证据。
+- 2026-10-13：用户明确图片模型策略：2.5 返回明确不可用时自动切换 image-2 并提示实际模型；超时、网络错误或状态未知先恢复原任务，不直接二次提交。生图 session 已接手定位路由符号与定向测试，尚未调用 Provider。
 - 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
 - UI push workflow `38268914069`：四组 browser-entry 与 web build 通过；`agent-worker queue-recovery.test.ts` 两个既有非 UI 断言失败，导致 UI typecheck 与 `storyboard-panel.test.tsx` CI 步骤跳过。未重跑、未部署、未安装；不能称 workflow 全绿。
 - 生图：admission/floor/reader 与 adapter/worker 代码均已独立 High GO 并合入；admission 191/195（4 skip），Worker typecheck/diff-check 通过，journal 缺 RO/version 身份保持 fail-closed。当前真实阻塞是已审批无图场景未接入提交入口；唯一 Hermes art-only draft 保留，Synclip=0，不重试、不扩预算。
