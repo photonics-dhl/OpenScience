@@ -1,4 +1,5 @@
 import type { DocumentSourceMap, SourceLocator } from '@openscience/domain';
+import type { SearchGenerationScope } from '@openscience/search';
 import { isDeepStrictEqual } from 'node:util';
 import { canonicalPassages } from '../extractor';
 
@@ -18,6 +19,14 @@ export const LEGACY_NATIVE_PAPER_TOOLS = NATIVE_PAPER_TOOLS.map(tool => tool.nam
 export type NativePaperImage = { pageNumber: number; mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; bytesBase64: string };
 type Arguments = Record<string, unknown>;
 const record = (value: unknown): value is Arguments => !!value && typeof value === 'object' && !Array.isArray(value);
+
+export interface NativeSemanticSearch {
+  tenantId: string;
+  generation: SearchGenerationScope;
+  searchGeneration(input: { tenantId: string; query: string; limit: number; generation: SearchGenerationScope }): Promise<{
+    status: 'ok'; candidates: readonly { locators: readonly SourceLocator[] }[];
+  } | { status: 'unavailable'; code: string }>;
+}
 
 /** Location only: the caller has already verified generation scope. Only paper_read observes evidence. */
 export function mapNativePaperSearchHits(sourceMap: DocumentSourceMap,
@@ -63,7 +72,8 @@ export function mapNativePaperSearchHits(sourceMap: DocumentSourceMap,
 
 /** Bound to the already parsed map. No provider, OCR, filesystem path or URL is exposed to the Agent. */
 export function createNativePaperTools(sourceMap: DocumentSourceMap, renderPages: (pages: number[]) => Promise<NativePaperImage[]>,
-  definitions?: readonly { name: string; description?: string; parameters?: unknown }[]) {
+  definitions?: readonly { name: string; description?: string; parameters?: unknown }[],
+  semanticSearch?: NativeSemanticSearch) {
   const search = definitions?.find(tool => tool.name === 'paper_search');
   const currentSearch = NATIVE_PAPER_TOOLS.find(tool => tool.name === 'paper_search')!;
   const focusedSearch = search?.description === currentSearch.description && isDeepStrictEqual(search.parameters, currentSearch.parameters);
@@ -92,6 +102,12 @@ export function createNativePaperTools(sourceMap: DocumentSourceMap, renderPages
           guidance: 'Understand the contribution and its scope first; then read full evidence and view relevant plots/equations. A parsing or tool failure does not mean the paper omits the information.' };
       }
       if (name === 'paper_search' && Object.keys(args).join(',') === 'query' && typeof args.query === 'string' && args.query.trim() && args.query.length <= 300) {
+        if (semanticSearch) {
+          const result = await semanticSearch.searchGeneration({ tenantId: semanticSearch.tenantId, query: args.query.trim(), limit: 12,
+            generation: semanticSearch.generation });
+          if (result.status !== 'ok') return { source, matches: [], error: `semantic_search_${result.code}` };
+          return { source, matches: mapNativePaperSearchHits(map, result.candidates) };
+        }
         const words = [...new Set(args.query.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])];
         const terms = focusedSearch ? words.map(word => ({ literal: new RegExp(word, 'iu'),
           boundary: new RegExp('(?<![\\p{L}\\p{N}])' + word + (/\p{N}$/u.test(word) ? '(?![\\p{L}\\p{N}])' : '(?!\\p{L})'), 'iu') })) : [];

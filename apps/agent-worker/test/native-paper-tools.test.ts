@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS, mapNativePaperSearchHits } from '../src/native-agent/paper-tools';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, mapNativePaperSearchHits, type NativeSemanticSearch } from '../src/native-agent/paper-tools';
 import { canonicalPassages } from '../src/extractor';
 import type { DocumentSourceMap, SourceLocator } from '@openscience/domain';
 const parser = { name: 'fixture', version: '1' };
@@ -193,5 +193,44 @@ describe('Native literal search shows the actual term rather than a prefix or wo
     const args = { query: 'TE mode waveguide slit' };
     expect(await restored.call('paper_search', args)).toEqual(await old.call('paper_search', args));
     expect(old.observedPassageIds).toEqual([]);
+  });
+});
+
+describe('Native semantic search adapter', () => {
+  const generation = { researchObjectId: '11111111-1111-4111-8111-111111111111', artifactId: 'paper',
+    sourceVersionId: '22222222-2222-4222-8222-222222222222', contentHash: 'a'.repeat(64),
+    fenceOwnerTaskId: '33333333-3333-4333-8333-333333333333' } as const;
+  const source = (scope: typeof generation, locator: SourceLocator): NativeSemanticSearch => ({
+    tenantId: 'workspace-tenant', generation: scope,
+    searchGeneration: async input => {
+      expect(input.tenantId).toBe('workspace-tenant');
+      expect(input.generation).toEqual(scope);
+      return { status: 'ok', candidates: [{ locators: [locator] }] };
+    },
+  });
+
+  it('uses the server-owned generation scope and maps hits to current P IDs', async () => {
+    const tools = createNativePaperTools(map, async () => [], NATIVE_PAPER_TOOLS,
+      source(generation, { artifactId: map.artifactId, contentHash: map.contentHash, page: 2, blockId: 'block-2' }));
+    const result = await tools.call('paper_search', { query: 'field orientation' });
+    expect(result.error).toBeUndefined();
+    expect((result.matches as Array<{ id: string; text: string }>).map(hit => hit.id)).toEqual(['P00001']);
+    expect((result.matches as Array<{ id: string; text: string }>)[0]!.text).toContain('field varies along x');
+    expect(tools.observedPassageIds).toEqual([]);
+  });
+
+  it('does not admit a search hit from a foreign artifact even when the search service returns it', async () => {
+    const tools = createNativePaperTools(map, async () => [], NATIVE_PAPER_TOOLS,
+      source(generation, { artifactId: 'foreign', contentHash: map.contentHash, page: 2, blockId: 'block-2' }));
+    expect((await tools.call('paper_search', { query: 'field orientation' })).matches).toEqual([]);
+  });
+
+  it('surfaces scoped search unavailability without falling back to lexical lookup', async () => {
+    const semantic: NativeSemanticSearch = { tenantId: 'workspace-tenant', generation,
+      searchGeneration: async () => ({ status: 'unavailable', code: 'search_storage_unavailable' }) };
+    const result = await createNativePaperTools(map, async () => [], NATIVE_PAPER_TOOLS, semantic)
+      .call('paper_search', { query: 'homogeneous' });
+    expect(result.matches).toEqual([]);
+    expect(result.error).toBe('semantic_search_search_storage_unavailable');
   });
 });
