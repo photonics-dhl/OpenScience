@@ -81,9 +81,13 @@ function isRecoverableTaskRead(error: unknown): boolean {
     || error.status >= 500;
 }
 
+export type PresentationGenerationOutcome =
+  | { status: 'submitted'; taskId: string }
+  | { status: 'failed'; message?: string; silent?: boolean };
+
 export function createPresentationStoryboardHandlers(generate: (
   sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest,
-) => void | Promise<unknown>) {
+) => void | Promise<PresentationGenerationOutcome>) {
   return {
     onGenerateStoryboard: (sourceClaimIds: string[], request: StoryboardRequest) => generate(sourceClaimIds, request),
     onGenerateSceneImage: (sourceClaimIds: string[], request: SceneImageRequest) => generate(sourceClaimIds, undefined, request),
@@ -522,10 +526,10 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     }
   }
 
-  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest) {
-    if (!version || !canWrite || !scopeReady) return;
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest): Promise<PresentationGenerationOutcome> {
+    if (!version || !canWrite || !scopeReady) return { status: 'failed', silent: true };
     const scope = scopeRef.current;
-    if (!scopeIsCurrent(scope)) return;
+    if (!scopeIsCurrent(scope)) return { status: 'failed', silent: true };
     const signature = JSON.stringify([scope.key, [...sourceClaimIds].sort(), storyboard ?? null, sceneImage ?? null, video ?? null]);
     if (generationIntent.current?.signature !== signature) generationIntent.current = { signature, key: crypto.randomUUID() };
     const intent = generationIntent.current;
@@ -539,15 +543,18 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
         : storyboard
         ? await generatePresentationStoryboard(params.id, version.versionId, sourceClaimIds, storyboard, intent.key, scope.controller.signal)
         : await generatePresentationChart(params.id, version.versionId, sourceClaimIds, intent.key, scope.controller.signal);
-      if (!scopeIsCurrent(scope)) return;
+      if (!scopeIsCurrent(scope)) return { status: 'failed', silent: true };
       generationIntent.current = null;
       setTaskState({ status: task.status, progress: task.progress, paused: false });
       router.push(scopedUrl(params.id, version.versionId, task.id));
+      return { status: 'submitted', taskId: task.id };
     } catch (cause) {
-      if (!scopeIsCurrent(scope) || isAbort(cause)) return;
+      if (!scopeIsCurrent(scope) || isAbort(cause)) return { status: 'failed', silent: true };
       if (!hasAmbiguousWriteOutcome(cause)) generationIntent.current = null;
-      setError(cause instanceof ApiClientError ? cause.message : t('generationStartFailed'));
+      const message = cause instanceof ApiClientError ? cause.message : t('generationStartFailed');
+      setError(message);
       setWorking(false);
+      return { status: 'failed', message };
     }
   }
 

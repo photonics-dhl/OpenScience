@@ -54,7 +54,7 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
   const latestId = choices[0]?.id;
   const feedbackText = (state: WriteState, kind: 'generation' | 'transition', status?: 'approved' | 'rejected') => {
     if (state === 'working') return t('taskStatus.running');
-    if (state === 'success') return kind === 'transition' ? t(status === 'approved' ? 'assetStatus.approved' : 'assetStatus.rejected') : t('taskStatus.pending');
+    if (state === 'success') return kind === 'transition' ? t(status === 'approved' ? 'assetStatus.approved' : 'assetStatus.rejected') : t('taskSubmitted');
     if (state === 'error') return t(kind === 'transition' ? 'transitionFailed' : 'generationStartFailed');
     return '';
   };

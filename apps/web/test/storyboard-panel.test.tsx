@@ -9,7 +9,7 @@ vi.mock('react', async importOriginal => {
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 import { buildStoryboardRequest, StoryboardPanel } from '../components/presentation/StoryboardPanel';
 import { StoryboardPlans } from '../components/presentation/StoryboardPlans';
-import { createPresentationStoryboardHandlers } from '../components/presentation/ResearchPresentation';
+import { createPresentationStoryboardHandlers, type PresentationGenerationOutcome } from '../components/presentation/ResearchPresentation';
 
 const hookStates: unknown[] = [];
 const hookRefs: Array<{ current: unknown }> = [];
@@ -144,14 +144,22 @@ it('locks storyboard submission on the first click and exposes processing then s
 });
 
 it('keeps the real generation promise in both storyboard wrappers', async () => {
-  const generate = vi.fn((_ids: string[], storyboard?: unknown, sceneImage?: unknown) => Promise.resolve({ storyboard, sceneImage }));
+  const submitted: Promise<PresentationGenerationOutcome> = Promise.resolve({ status: 'submitted', taskId: 'task-1' });
+  const generate = vi.fn((_ids: string[], _storyboard?: unknown, _sceneImage?: unknown) => submitted);
   const handlers = createPresentationStoryboardHandlers(generate);
   const storyboard = { locale: 'en' as const, style: 'auto' as const, output: 'image' as const, instruction: 'Explain it' };
   const sceneImage = { storyboardAssetId: 'plan', sceneIndex: 2 };
-  await expect(handlers.onGenerateStoryboard(['claim'], storyboard)).resolves.toMatchObject({ storyboard });
-  await expect(handlers.onGenerateSceneImage(['claim'], sceneImage)).resolves.toMatchObject({ sceneImage });
+  expect(handlers.onGenerateStoryboard(['claim'], storyboard)).toBe(submitted);
+  expect(handlers.onGenerateSceneImage(['claim'], sceneImage)).toBe(submitted);
   expect(generate).toHaveBeenNthCalledWith(1, ['claim'], storyboard);
   expect(generate).toHaveBeenNthCalledWith(2, ['claim'], undefined, sceneImage);
+
+  const failed: Promise<PresentationGenerationOutcome> = Promise.resolve({ status: 'failed', message: 'start failed' });
+  const rejected = Promise.reject(new Error('transport'));
+  const failedHandlers = createPresentationStoryboardHandlers(vi.fn(() => failed));
+  const rejectedHandlers = createPresentationStoryboardHandlers(vi.fn(() => rejected));
+  expect(failedHandlers.onGenerateStoryboard(['claim'], storyboard)).toBe(failed);
+  await expect(rejectedHandlers.onGenerateSceneImage(['claim'], sceneImage)).rejects.toThrow('transport');
 });
 
 it('shows a failure and releases the storyboard lock when generation rejects or reports failure', async () => {

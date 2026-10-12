@@ -71,7 +71,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     && hasSingleReviewedPaperSource(selectedClaimIds, claims);
   const feedbackText = (state: WriteState, failureKey: 'generationStartFailed' | 'transitionFailed' = 'generationStartFailed') => {
     if (state === 'working') return tp('taskStatus.running');
-    if (state === 'success') return tp('taskStatus.pending');
+    if (state === 'success') return tp('taskSubmitted');
     if (state === 'error') return tp(failureKey);
     return '';
   };

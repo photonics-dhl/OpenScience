@@ -2304,6 +2304,7 @@
     },
     "version": "版本",
     "versionNumber": "版本 {number}",
+    "taskSubmitted": "任务已提交，后续处理将在演示任务中继续。",
     "versionOption": "v{number} · {status}",
     "invalidVersion": "链接中的版本不属于这个 Research Object，或已不可用。",
     "selectAvailableVersion": "可用版本",

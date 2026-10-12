@@ -2302,6 +2302,7 @@
       "running": "Preparing presentation content",
       "failed": "Generation failed"
     },
+    "taskSubmitted": "Task submitted. Processing will continue in the presentation task.",
     "version": "Version",
     "versionNumber": "Version {number}",
     "versionOption": "v{number} · {status}",
