@@ -70,6 +70,7 @@ function expectedDisposableDatabaseName(): string {
   return databaseName;
 }
 
+// Search rows are validated against this isolated core lifecycle fixture; their index IDs remain independent from core task IDs.
 function coreFixture(input: {
   workspaces: string[];
   objects: Array<{ id: string; workspaceId: string; deletedAt?: Date }>;
