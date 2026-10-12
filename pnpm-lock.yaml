@@ -62,6 +62,9 @@ importers:
       '@openscience/ai-gateway':
         specifier: workspace:^
         version: link:../../packages/ai-gateway
+      '@openscience/config':
+        specifier: workspace:^
+        version: link:../../packages/config
       '@openscience/database':
         specifier: workspace:^
         version: link:../../packages/database

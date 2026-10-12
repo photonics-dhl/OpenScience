@@ -146,19 +146,9 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
 
   // P1D-1：AI Gateway 配置（§24 待确认：MiniMax-M3 及回退模型具体 API/ID，先占位）
   const aiEnabled = env.AI_ENABLED === 'true';
-  // Parsed exactly like the worker's provider factory (`?.trim() || 'minimax'`), so an
-  // accidental space or an empty value cannot make the API and the worker disagree
-  // about which provider actually pays for an image.
-  const sceneImageProvider = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
   const ai = {
     enabled: aiEnabled,
-    sceneImageEnabled: sceneImageProvider === 'synclip'
-      ? aiEnabled && env.SYNCLIP_IMAGE_ENABLED === 'true' && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim()) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('synclip')
-      : sceneImageProvider === 'chatgpt-web'
-      ? aiEnabled && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('chatgpt-web')
-      : sceneImageProvider === 'codex'
-        ? aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('codex-image')
-        : sceneImageProvider === 'minimax' && aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true' && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(s => s.trim()).includes('minimax-image'),
+    sceneImageEnabled: sceneImageEnabledFromEnv(env),
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
     baseUrl: env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1',
     apiKey: env.MINIMAX_API_KEY ?? '',
@@ -193,4 +183,17 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     downloadSigningKeyId,
     ai,
   };
+}
+
+/** Shared provider readiness used by API admission and the Worker execution gate. */
+export function sceneImageEnabledFromEnv(env: NodeJS.ProcessEnv): boolean {
+  const aiEnabled = env.AI_ENABLED === 'true';
+  const provider = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
+  const disabled = (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim());
+  if (provider === 'synclip') return aiEnabled && env.SYNCLIP_IMAGE_ENABLED === 'true'
+    && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('synclip');
+  if (provider === 'chatgpt-web') return aiEnabled && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && !disabled.includes('chatgpt-web');
+  if (provider === 'codex') return aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('codex-image');
+  return provider === 'minimax' && aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true'
+    && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !disabled.includes('minimax-image');
 }

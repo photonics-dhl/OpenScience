@@ -4,6 +4,7 @@ import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceRe
 import { runNativePaperTask } from './native-agent/paper-task';
 import { runNativeSourceReviewTask } from './native-agent/source-review-task';
 import { isDeepStrictEqual } from 'node:util';
+import { sceneImageEnabledFromEnv } from '@openscience/config';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma, type AgentTask } from '@prisma/client';
@@ -327,7 +328,7 @@ export interface WorkerVideoReadinessDeps extends HermesVideoReadinessDeps {
   videoEnabled?: boolean;
   readVideoReadiness?: NativeVideoReadinessReader;
 }
-export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; nativeImageReaderReady?: boolean };
+export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; sceneImageEnabled?: boolean; nativeImageReaderReady?: boolean };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -1250,7 +1251,7 @@ export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 's
   const nativeAgentRuntime = nativeAgentRuntimeFromEnv(env);
   const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env);
   return { ...input,
-    nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled: nativeSceneImageEnabled,
+    nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled: sceneImageEnabledFromEnv(env),
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
     readVideoReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }),
     readAudioAuditionReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }, 'audio-audition'),

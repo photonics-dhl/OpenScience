@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { sceneImageEnabledFromEnv } from '@openscience/config';
 import { createWorkerDeps } from '../src/index';
 
 const probe = vi.hoisted(() => ({ available: false, reads: 0, audioReads: 0,
@@ -21,6 +22,18 @@ const fullEnv = { AI_ENABLED: 'true', HERMES_NATIVE_AGENT_ENABLED: 'true', HERME
 const input = { prisma: {}, redis: {} } as Parameters<typeof createWorkerDeps>[0];
 
 describe('Worker native video readiness dependency assembly', () => {
+  it.each([
+    { name: 'minimax', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'minimax', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'key' } },
+    { name: 'chatgpt-web', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'chatgpt-web', CHATGPT_WEB_IMAGE_ENABLED: 'true' } },
+    { name: 'codex', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'codex', CODEX_IMAGE_INBOX_DIR: '/image/inbox', CODEX_IMAGE_RESULTS_DIR: '/image/results' } },
+    { name: 'synclip', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true', SYNCLIP_IMAGE_INBOX_DIR: '/image/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/image/results' } },
+  ])('uses the same scene-image readiness as API config for $name', ({ env }) => {
+    const merged = { ...env, HERMES_NATIVE_AGENT_ENABLED: 'false' };
+    const deps = createWorkerDeps(input, merged);
+    expect(deps.sceneImageEnabled).toBe(sceneImageEnabledFromEnv(merged));
+    expect(deps.sceneImageEnabled).toBe(true);
+  });
+
   it('carries a dynamically sampled callback into worker dependencies instead of a startup snapshot', async () => {
     const deps = createWorkerDeps(input, fullEnv);
     expect(typeof deps.readVideoReadiness).toBe('function'); expect(deps.videoEnabled).toBe(true); expect(probe.reads).toBe(0);

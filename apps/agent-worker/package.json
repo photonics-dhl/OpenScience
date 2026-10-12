@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@openscience/ai-gateway": "workspace:^",
+    "@openscience/config": "workspace:^",
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
     "@openscience/search": "workspace:^",
