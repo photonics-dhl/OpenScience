@@ -4,6 +4,7 @@
 
 - 2026-10-13：生图提交 `22674ce5` 的独立 High 复审仍为 P1 NO-GO：API/config 可因 Minimax/Codex/ChatGPT Web 开启 `sceneImageEnabled`，但 Worker 仅在 Synclip 原生配置时传 `nativeSceneImageEnabled=true`，造成普通作者先扣费后被 Worker 拒绝；需统一 config/API/Worker gate 并补真实 deps 回归，未合入/未部署。
 - 2026-10-13：`d17e8d8d` 的新 High 复审继续为 P1 NO-GO：共享 helper 的 `chatgpt-web` readiness 漏检 `CHATGPT_WEB_IMAGE_INBOX_DIR/RESULTS_DIR`，Worker provider 无 `generateImage` 时 API 仍可能先扣费；生图 session 正在补 spool 路径对齐与拒绝回归。
+- 2026-10-13：独立 High 对 `22674ce5+d17e8d8d+1a3f548e` GO（P0/P1=0）；API/Worker 共享 readiness 已覆盖四 provider 与 ChatGPT Web 缺 inbox/results 拒绝。P2 为本地无 node_modules、Vitest 未复现及未单测 disabled-provider 分支；生图 session 正在按序合入并跑精确 CI，未调用 Provider/部署。
 - 2026-10-13：视频只读核对确认 broker 关闭视频准入且 Synclip 音色目录返回 `SYNCLIP_AUDIO_CATALOG_FAILED`；已停止商业 Provider、付费任务与服务启用，不盲选音色、不重试，保留 Hermes 任务与失败证据。
 - 2026-10-13：视频线上根因进一步确认：Synclip broker timer 为 disabled/inactive 且无 `.ready` 心跳，`adminModelsEnabled=false`、音频配置缺失；系统按设计关闭视频准入。未产生视频/音频任务、扣费或 receipt；代码工作树保持干净。
 - 2026-10-12 15:26：UI 替代 session 完成剩余 P2 类型契约修复 `5e1c4831`：PresentationWorkbenchProps 与 ResearchPresentation/StoryboardPanel/StoryboardPlans 统一为 `void | Promise<StoryboardWriteOutcome>`；13/13、Web typecheck、diff-check 通过，canonical 未改，独立 High 复审待回。
