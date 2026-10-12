@@ -214,6 +214,16 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
   return released.count === 1;
 }
 
+async function releasePendingNativeImageTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean> {
+  if (!deps.nativeImageReaderReady || task.status !== 'pending' || task.error !== NATIVE_IMAGE_CONTRACT_HOLD
+    || !isValidNativeImagePlanningContractTask(task)) return false;
+  const released = await deps.prisma.agentTask.updateMany({
+    where: pendingSnapshotWhere(task),
+    data: { error: null, dispatchedAt: null, updatedAt: nextUpdatedAt(task) },
+  });
+  return released.count === 1;
+}
+
 /** null allows a normal claim; false requires current-state recovery before removing processing. */
 export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean | PendingVideoAdmission | null> {
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
@@ -263,10 +273,15 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
 /** Only pending held rows are released; Redis is owned by the existing outbox dispatcher. */
 export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { status: 'pending', error: VIDEO_READINESS_HOLD, deletedAt: null }, orderBy: { updatedAt: 'asc' }, take: limit,
+    where: { status: 'pending', deletedAt: null, error: { in: [VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD] } },
+    orderBy: { updatedAt: 'asc' }, take: limit,
   });
   let released = 0;
   for (const task of tasks) {
+    if (task.error === NATIVE_IMAGE_CONTRACT_HOLD) {
+      if (await releasePendingNativeImageTask(deps, task as unknown as VideoTaskAdmissionSnapshot)) released++;
+      continue;
+    }
     if (optionalFirstNativePlan(task)) {
       if (await isHermesVideoTask(deps.prisma, task.id)
         && await releasePendingVideoTask(deps, task, 'video-optional-audio-v1')) released++;

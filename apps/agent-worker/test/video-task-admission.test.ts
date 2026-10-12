@@ -253,6 +253,20 @@ describe('image planning-contract admission hold', () => {
     expect(f.handler).not.toHaveBeenCalled();
   });
 
+  it('releases an image hold after reader readiness and reclaims it through the existing outbox', async () => {
+    const f = imageContractFixture();
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: NATIVE_IMAGE_CONTRACT_HOLD, executionAttempt: 0 });
+    (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    (f.deps as WorkerDeps).nativeImageReaderReady = true;
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1);
+    expect(f.task).toMatchObject({ status: 'pending', error: null, dispatchedAt: null, executionAttempt: 0 });
+    expect(await f.outbox()).toBe(1);
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, error: null });
+    expect(f.handler).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps an already held image out of video readiness and removes only its processing entry at startup', async () => {
     const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD; f.lists.set(processingKey, [f.task.id]);
     const before = structuredClone(f.task);
