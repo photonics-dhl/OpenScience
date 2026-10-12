@@ -220,6 +220,7 @@ export class SynclipVideoSpool {
         await directory(resultDir);
         const result = JSON.parse((await boundedRead(join(resultDir, 'result.json'), MAX_JSON)).toString()) as Record<string, unknown>;
         if (result.schemaVersion !== 1 || result.id !== input.taskId || result.inputHash !== inputHash || result.executionAttempt !== input.executionAttempt) fail('UNCERTAIN');
+        if (result.provider !== 'synclip' || result.model !== model) fail('SYNCLIP_VIDEO_MODEL_MISMATCH');
         if (result.status !== 'succeeded') {
           if (audio && result.status === 'failed' && result.errorCode === 'AUDIO_TIMING_REVISION_REQUIRED')
             throw new SynclipVideoTimingError(timingDiagnostic(result.audioTiming, inputHash, audio, scenes));
@@ -244,6 +245,7 @@ export class SynclipVideoSpool {
           narration = { provider: 'synclip', speaker: audio.voice, speed: audio.speed, timingStatus: 'measured_aligned' };
         }
         const metrics = JSON.parse((await boundedRead(join(resultDir, 'metrics.json'), MAX_JSON)).toString()) as Record<string, unknown>;
+        if (metrics.provider !== 'synclip' || metrics.model !== model) fail('SYNCLIP_VIDEO_MODEL_MISMATCH');
         if (mode === 'native-first' && (metrics.audioMode !== 'provider-output-unverified'
           || !Number.isInteger(metrics.audioStreamCount) || Number(metrics.audioStreamCount) < 0 || Number(metrics.audioStreamCount) > 7
           || typeof metrics.durationSeconds !== 'number' || !Number.isFinite(metrics.durationSeconds)
