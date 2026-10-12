@@ -1,77 +1,12 @@
 # CURRENT Progress Window
 
-> 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
+> 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
-- 2026-10-12 22:20：canonical `86782d86` 已通过独立 gpt-6.1-sol High delta 复审（GO、无 P0-P2），并保持干净已推送；生图会话正在执行一次已授权真实论文私有 Hermes→Synclip 验收，尚无新 PNG/质量结论。视频当前代码/fixture 交付已收束，Media CI 仅复现既有 queue-recovery 两断言失败；UI 接替会话正在 `StoryboardPanel`/`StoryboardPlans` 实作写操作一次点击锁与处理中/成功/失败反馈，定向测试 11/11 通过，等待 typecheck/diff-check 与后续 High。三线均不部署、不新增 Provider/费用；未知任务不重放。
-
-- 2026-10-12 22:49：UI 接替提交 `1f10671e` 独立 High 复审为 **NO-GO/P1**：ResearchPresentation 用 `void generate` 丢弃 Promise，局部状态会在真实请求完成前误报 success，且 `readyToAdoptStatus` 语义过早；已退回同一 session 修复并补 reject/wrapper 测试。生图真实任务已完成唯一 Hermes 提交，Synclip 读取阶段连续遇到模型容量错误，已切换可用模型做一次有界恢复；不重复提交、不扩预算。
-
-- 2026-10-12 22:54：UI 修复已提交 `ba252f19`（Promise 透传、锁覆盖真实生命周期、reject/failed 收敛、pending 文案），定向 Vitest 13/13、Web typecheck、diff-check 通过；第二轮独立 High 复审待回。生图在 sol/astra 均遇模型容量错误，未取得 PNG 或质量结论，已停止循环重试并保留原任务/回执。
-
-- 2026-10-12 22:59：UI 第二轮独立 High 仍 **NO-GO/P1**：`generate` 的 catch/早退仍 fulfilled `undefined`，真实启动失败会被局部状态误判为 pending/success；已退回同一 session 修复返回契约并补真实 generate catch 测试。任务轮询最终失败尚未回写局部状态，要求文案保持“任务已提交”语义。
-
-- 2026-10-12 23:09：UI 第三轮修复提交 `798749f4` 已完成：generate 早退/成功/catch/abort 返回明确 outcome，wrapper 原样透传，pending 文案明确为“任务已提交”，13/13、typecheck、diff-check 通过；第三轮独立 High 复审待回。生图模型容量错误仍未恢复，未取得 PNG/质量结论。
-
-- 2026-10-12 23:14：UI 第三轮独立 High **GO**（无 P0/P1；P2 为 silent outcome 提示、回调 void 类型契约及轮询失败时局部 submitted 并存），提交已按序合入并推送 canonical：`035efaac`、`06fb102e`、`9e837b93`。测试/typecheck/diff-check 使用 owner 提供证据并已区分本地缺依赖无法复跑；未部署。
-
-- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor vertical slice `6b9c9173` 已独立 High GO并合入 canonical（`2ac63e73`），reader-ready 切片 `9e0f71b9` 已获独立 gpt-6.1-sol High GO并合入 canonical（`2561da1f`），admission 191/195（4 skip），完整floor/producer仍未就绪。视频 `a01a87ab` 已经独立 High GO并按祖先链合入 canonical（`fb7362fe`、`de643253`、`d1ade094`、`faa2d376`、`387d5c1a`），readiness 证据已完成但 Journal/Media CI 失败，未部署；UI 接替 session 已产出固定版本包（2,118文件、ZIP/manifest/scan/architecture齐全，扫描与完整性通过），未改共享源码。
-
-- 2026-10-12 22:02：视频搜索夹具修复链已收至 canonical 本地 `c11f90a3`，源 `dabea6cf` 独立 High GO；Journal CI 38258404187 24/24，Media 38258404168 仅复现既有 queue-recovery 两断言失败，browser-entry/native-video-planning 通过；搜索 typecheck 通过，本地 integration 因无隔离 DB 跳过，待推送后重跑精确 CI。
-
-## 最近检查点
-
-- 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper与image admission均已High GO并合入，scoped NativeSemanticSearch 接线亦已合入；完整floor/producer仍未就绪。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
-- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a+0ee68fe5` 已独立 High GO并合入 canonical；随后 `84047b56` 与 scoped Worker 接线已独立 High GO并按序合入，受影响定向测试 66/66、Worker typecheck/diff-check通过。queue-recovery 全套因缺失 fastify 无法收集，完整floor/producer仍未就绪。
-- 2026-10-12 视频 owner 已推进 `fe261f3f→eacb6269→6d1cb8d6→a6908459`，覆盖配置模型、ready/result/metrics 身份及 Native 错误码传播；独立 High 发现 Worker 未知模型回退、audition 身份校验与错误码传播缺口，尚未合入，已退回修复；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
-- 2026-10-12 UI 原 session 连续 configuration_update/容量错误后，已新建接替 session `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`，使用 gpt-6.1-sol→gpt-6-astra/high；固定版本代码包与 secret/config/log 扫描执行中，不写共享后端、不安装/重启/外发。
-
-- 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
-
-- 2026-10-11 用户纠正D01：指南不承担直接创建/上传，恢复本线原指南方向，仅吸收清晰入口等优点；文字保留但主要用图审阅。原三卡效果v1保留为superseded，UI已以原Figma2138:2出guide-restored-editorial-v2.png并同步D01/P03，37页受影响7页重渲染复核，root已核原话与新图。线上ad99及输入保护保持，未执行源码/生产回滚；此前三卡认可与首稿待审仅是历史。
-
-- 历史初稿：37页/44路由文字设计与首Guide三卡图已被上方完整图文交付和D01纠正取代，原媒体边界、检查及浏览器失败回执保留。内置生图工具不公开型号，未标称image-2.5；初稿、原图和提示词仍在原目录，不另开主稿。
-
-- 2026-10-11：生图/视频两条独立领域短稿已完成，root已核对并将原路径交UI主稿消费，覆盖用户流程、付费点、失败恢复和能力实证边界。UI继续完整产品设计与双方协作归属，主稿唯一writer；无新源码、测试、生产查询或模型任务。精确产物位置在原总控checkpoint。
-
-- 2026-10-11 11:10：Guide输入防丢修复已随ad993串行发布，rollback9a11；五CI全成功、包含新增10例的浏览器组54/54、独立High/备份/公网身份/服务健康与原任务保护均闭合，正常首页→Guide输入保护已实见：提示出现且原选择/文字保留，临时输入清空、未提交。生图反馈修复已上线，43d科学质量仍失败，视频真实成片仍未验收。UI human最新要求先交全产品页面功能与叙事文档、再逐页讨论示意图，owner已开始只读清点，暂停新增设计实现；头像原生产关闭未确认仍保留。
-- 2026-10-11 用户认可Guide布局，已正常推送现有frontend/nanqing并部署9a11c931，回滚3245，main未改。精确CI全通过、新双库备份及线上版本/服务健康核验正常；实际站内入口、直接填写、整卡标题输入与手机布局已观察。证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
-- 2026-10-10 Guide已替换为本页创建/上传/手填/任务对话与研究修订界面；定向交互和独立High检查通过，本地候选尚未推送部署，真实模型质量未重跑，线上主页发布保持。需求与状态见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
-- 2026-10-10 主页版式修正已按用户认可推送并上线：保留5eeb48ce，正常合并远端test-only/docs后发布c239；四CI成功、独立High GO、备份及精确公网版本/健康核验通过，main未改。旧版退出当前展示，仅留一个回滚版本；实际站内入口及登录返回已观察。精确身份和证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)，下方待发布状态为历史。
-- 2026-10-10 个人学术主页按用户反馈完成版式返工：空卡始终保留并灰字提示，恢复示例左右比例，移除返回个人资料。10项浏览器测试及类型/lint通过，root已看桌面/手机空账户；当前仅本地候选与预览，线上仍为下方043版本。证据与待办见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
-- 2026-10-10 个人学术主页已按用户授权推至既有 nanqing 并部署：精确候选三项 CI 全通过、双库备份校验完成、新表迁移成功、服务健康、实际站内入口及登录返回已观察。真实账户保存/发布与外部 ORCID 未操作；精确版本、证据与存储边界见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。下方原应用发布与当时待推状态为历史。
-- 以下并行开发检查点记录当时状态；其中“生产未变／尚未迁移”已由上方个人主页发布更新，后续Hermes候选仍未随该次发布上线。
-- 2026-10-10 19:19：另一会话已完成学术主页043发布，本总控fresh只读确认三主容器健康、Native393/M3不变、无事务或锁。原生产59记录降为历史，既有备份/迁移及个人主页入口证据保留；后续发布采用新实际基线，所有未执行e5命令弃用。
-- 生图/短窗口候选未随043上线；研究续作test-only修复已RED2→Green2/独立High GO并全等收取1946，待新组合CI。真实PG1与原profile5在e5已通过。video继续后端，UI已得明确DTO并继续音频结果入口，本聊天目标不被另一发布取消。
-- 2026-10-10 19:02：生图入口联合High GO并全等集入；推送前发现另一条学术主页已推进共享分支，现已正常合并保留双方。原CI实际迁移新表成功；真实profile存储/并发/公开快照用例已补入同一PG job并获High源码GO，等待组合CI，生产未变。视频继续后端持久试听，UI已开独立GET播放器任务，生图已完成下一真实产物的本地来源准备。
-- 2026-10-10 18:47：HTTP单幕字段与短窗口修复已审并集入本地，真实路由51项/短窗口4例通过；旧准备包“字段不支持”及旧UI待修状态已纠正。生图两个可见入口候选已交付，19单测/13个不同页面用例通过，正在联合High；视频API写锁释放并继续持久试听恢复，UI接下一项私有音频入口。新批尚未CI或发布，生产仍原版、POST0。
-- 18:15：已审批次六CI全成功，未部署新版本。真实Native首幕计划的操作审查发现当前正常UI漏narrative，且单幕sceneLimit已获后端支持；原准备包判断已纠正，0提交。生图owner立即转做既有可见入口/精确请求接线，与UI短窗口三文件、视频后端范围分开；保留原错误材料，修复发布后再安排真实制作。
-- 2026-10-10 18:01：已审SDK/内部试听独立推送，不继续等未闭合UI；六CI中视频/期刊四条成功，Linux broker/引用合组136通过、零跳过，两条media尚运行。视频backend消费者写权已划，原High要求持久grant与跨attempt恢复防重复扣费。生图核到当前工作稿及真实管理员自动fund/debit语义，Settings零余额不是该正常入口阻断；供应商额度/真实科学质量另验。
-- 2026-10-10 个人学术主页：按确认方案完成已有 ORCID 连接、自定义个人链接、工作成果／本人贡献／能力与经验、意向开关及团队／求学经历／新闻/报道/会议... 三入口。原增量 High、类型/lint、API 5/5 与浏览器 7/7 通过；043已推且CI真实隔离PG16迁移52成功，尚未生产迁移。总控保留双方源码合并，补真实持久化/版本冲突/公开快照生命周期后统一CI；原产品证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。
-- 2026-10-10 17:36：内部短试听已独立High审查并集入，复用原旁白/回执，未知提交不重发；19定向通过，模块61通过、2项待LinuxCI。视频继续正常任务/权限/额度/MP3消费接线；UI首轮三视口通过，但审查发现临界切换和焦点两项P2，仍在修正，未发布。生图仍准备合法真实科学任务，不重放旧unknown。
-- 17:06：真实已安装SDK离线图像循环一次通过，原科学工具控制与新增PNG运输/身份校验通过，外部模型0；80行回归已审全等收取，待UI修复同批CI。生图准备下一正常任务的当前来源/原额度，视频开发复用原语音阶段的私有试听消费者，UI已取得短窗口预期RED；三条线都有明确下一项工作，真实成片/科学质量尚未完成。
-- 2026-10-10 16:59：独立视频执行器已完成实际升级和保持关闭的验收，受保护API首次只读返回77个音色；没有生成请求，声音选择/真实成片仍待处理。生图真实SDK离线图片运输用例已获独立High，已派一次执行，结果不代替科学质量。
-- 16:22发布后的真实短窗口观察发现新视觉缺口：头像/焦点/开闭与编辑布局正常，但展开后的完整精灵被裁切，已派UI按1536×681修复，不能宣称界面全绿。生图证实原失败任务已实际收到完整来源与Skill，继续真实SDK图片工具循环验证，不把来源齐全当科学错绑已修。
-- 2026-10-10 16:22：新版应用正式发布完成，五条精确CI全部成功，原头像互动32例与工作区25例通过；网页/API/Worker健康，原生Hermes运行时及M3保持原配对。UI正在正常可见入口做最小生产观察；视频owner准备独立执行器升级/音色读取，生图owner已转回来源错绑与真实SDK审图循环修复。
-- Fig2授权五项软回收全部对账完成，原对象、任务、捕获来源与封存记录保留，公开页面和选定图片实际GET成功；人类三项额外回收/一次采用原样保留。正常管理/回收站/搜索阅读已观察；旧成员直链被浏览器工具拦截，准确保留该验证缺口。精确回执及边界只见CURRENT。
-
-- 2026-10-11 09:55：生图错误定位修复两文件已集入，9项定向测试及Worker类型通过、独立High通过，待本组合CI；保留真实错绑拒收。UI正常入口恢复并实际观察框内姿态/指针反馈；关闭后弹窗仍开的新观察正在核原点击目标，未认定源码缺陷，眨眼/呼吸未确认。视频仍缺真实父/帧、声音/有限费用，不新付费试片。
-- 2026-10-11 03:42历史阻塞：头像动态验收被浏览器超时阻断，必要源站只读未定位对应应用故障。原记录和待答的日常浏览器问句保留，不能据服务健康宣称页面或动效通过；此次恢复来自新human指令，不循环重试或改网络/重启。
-- 2026-10-11 02:56：首个Native视频分镜准入、任务恢复和附件/Explore提示已通过五条实际CI并发布；API/Web/Worker健康、双库迁移no-op、回退身份及原未知任务保持均实核。Native/M3和视频Host关闭状态不变。具体运行/回退身份与日志只见Hermes CURRENT；软件上线不代表真实视频或三篇科学质量通过。
-- 本批媒体CI实际Worker95/95，包含四项真实Redis执行且零skip；所选媒体工作台browser19/19与四browser-entry全部通过。原文档同步、首计划本机1/1和未变Domain/类型证据复用，旧失败与High闭合记录保留。
-- 生图线通用记号修复已发布；Explore提示已上线且排序/分页保持。新增定位修复只改善错误字段提示，不放宽解析或来源要求。原唯一新图计划预算终态失败仍无新图，真实错绑不放行、不重放；未通过整篇科学质量验收。
-- 视频首计划与恢复修复已发布；队列先确保目标ID，再移处理中记录，避免写入失败丢任务。商业API矩阵已同步能力台账，参数快照、代码消费与未验效果分开。真实输入父/完整帧、声音与有限费用仍是业务缺口，不自动新付费试片。
-- UI正常个人中心→研究编辑→Hermes、Explore与公开附件提示已观察并保留回执；首份计划提交未执行。头像恢复观察只补真实动作及当前reduced-motion，静态和开关证据复用，0新任务/模型/资产写。
-- 三线当前没有生产 writer。已完成块由总控接入、CI和串行发布；无独立可推进工作时记录具体依赖，不以重复测试、付费调用或额外环境操作制造忙碌。
-
-## 保留的业务目标与边界
-
-- 真实 NousResearch Hermes Agent 理解全文、凝练六维与来源，按研究含义规划并生成准确、易懂、美观的图像；2–3篇论文仍需用户确认与正常公开展示。局部图获赞、测试或部署成功不代表整篇质量认可。
-- 私有试听、完整视频及普通用户使用旅程仍未全部完成。已认可图片、公开标识、sealed记录、费用与原回执保留；未知任务不自动重发，主Gateway/Native M3不全局切换。
-- Fig2 exact5已按授权移入回收站并持久化核验，原对象/任务/Claims/封存记录保留；人类另行手动采用/回收的媒体不恢复。77/929债务不扩本轮授权；BGE真实恢复未执行，crypto仍暂停。
-- 个人学术主页已独立发布，版式与真实入口证据见 [服务对象 CURRENT](handoff/2026-10-09-researchers-services-handoff.md)。期刊真实PDF→共用Hermes试用与公司上线目标继续，执行状态见 [期刊 CURRENT](handoff/2026-10-08-journal-workbench-handoff.md) 和 Hermes CURRENT。
-- 运维、缓存退役的既有审批阻断及外部工具限制保留原收据，不绕过、不将零删除写成清理完成。
-
-## 历史定位
-
-- 压缩前的本页完整历史见 Git `ce968707fd32856e185627b99289464927fe4f8f:docs/progress.md`；旧发布、回退、CI、原失败与所有原始收据仍保留。
-- 更早长交接见 Git `d8a02e26a2ca5225c7977370584a7181fbc9a0b6:docs/handoff/2026-09-10-hermes-web-image-handoff.md`，再前为 bebe897c/748e33a4。历史 next action 不作为当前指令。
+- 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
+- UI push workflow `38268914069`：四组 browser-entry 与 web build 通过；`agent-worker queue-recovery.test.ts` 两个既有非 UI 断言失败，导致 UI typecheck 与 `storyboard-panel.test.tsx` CI 步骤跳过。未重跑、未部署、未安装；不能称 workflow 全绿。
+- 生图：admission/floor/reader 与 adapter/worker 代码均已独立 High GO 并合入；admission 191/195（4 skip），Worker typecheck/diff-check 通过，journal 缺 RO/version 身份保持 fail-closed。唯一真实论文私有提交后的 Synclip 受控读取遇模型容量错误，未得 PNG/SHA/科学质量；禁止重提、换论文或扩预算。
+- 视频：native-only/fixture 交付与 browser-entry/native-video-planning 已收并合入；Media/Journal 的已知 CI 阻塞均定位为 queue-recovery/旧夹具前提，未观察到本次视频代码回归。无真实短片/试听质量认可，未部署。
+- 三篇真实论文的整体验收、普通用户旅程、完整视频、整站审美仍未完成；单测、CI、部署或单图认可不代替科学/产品质量确认。
+- 当前可执行下一步：图像仅在确认可用的 >=gpt-6.1-sol 容量路径后复用现有单次提交做一次受控私有验收；视频等待具体授权的能力缺口或真实短片/语音比较；UI 写反馈范围完成，若明确授权才处理共享 queue-recovery 非 UI 问题。无关检查不填充 idle。
+- 保护边界：不重放未知 paid/started CP，不切换主 Gateway/Native M3，不新增预算/安装/重启；保留原 PDF、SourceMap、图片、公开标识、sealed、失败与 receipt/oncekey。
+- 2026-10-12 docs-sync：`docs:lint` 272 files/0 issues，`audit:docs-sync` 7/8（唯一失败为历史 progress 文件超过 16 KiB，已压缩本窗口后待复跑）。
