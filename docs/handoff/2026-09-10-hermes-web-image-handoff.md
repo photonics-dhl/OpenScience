@@ -17,14 +17,14 @@
 
 ## 当前 Git / CI / 运行事实
 - canonical branch `release/onchip-production-line`, HEAD `b06a8fabf573ada62bcc3f6429e2d385d5e35d1d`, worktree clean and pushed; latest code commit adds the approved-scene image entry.
-- UI runs `38268914069` and `38270923462`: browser-entry (hermes-dashboard/auth-dashboard/research-continuation/hermes-workspace-stage) and each web build passed; `skill-path` failed only at `agent-worker queue-recovery.test.ts` two non-UI assertions. `storyboard-panel.test.tsx` and web typecheck were skipped because the job stopped early. No rerun, deploy, install or model call; the later `c258da85` run has the same non-UI queue-recovery outcome and remains a CI limitation.
+- UI runs `38268914069`, `38270923462`, `38274577962` and `38277069403`: browser-entry (hermes-dashboard/auth-dashboard/research-continuation/hermes-workspace-stage) and each web build passed; `skill-path` failed only at `agent-worker queue-recovery.test.ts` two non-UI assertions (`[]` vs `['image-running-task']`; `SYNCLIP_VIDEO_MODEL_MISMATCH` vs `lost acknowledgment`). `storyboard-panel.test.tsx` and web typecheck were skipped because the job stopped early. No deploy, install or model call; this remains a release gate and is assigned to the video session for minimal repair.
 - Video current exact CI has the same two queue-recovery failures; browser-entry and native-video-planning pass. Journal/search evidence remains as previously recorded; no new failure is attributed to the merged UI/video code.
 - Image admission/floor/reader code and High reviews are merged and preserved; complete producer/floor and real PNG quality remain open. The approved-scene UI submission entry is now merged; no Synclip task has been created and real route observation remains open.
 
 ## Open deliverables and gates
 - Image/UI: observe the merged per-scene entry on the real approved storyboard route, preserving the one completed Hermes draft and fail-closed quality gates; do not resubmit Hermes, create Synclip work, switch paper, or increase budget until the route is confirmed usable.
 - Video: keep native-only readiness and exact CI evidence; next code work requires a concrete capability gap or authorized real short-video/voice comparison. Do not invent filler checks.
-- UI: write-feedback、`5e1c4831`、`d9afe946` 与 `43d0923d` 已 High GO 并合入 canonical（`c258da85`、`b82594d8`、`b06a8fab`）。共享 queue-recovery 仍是 CI 限制，不把它冒充 UI 回归；`b06a8fab` 精确 workflow 待回执。 Overall visual/real-route and user-quality acceptance remains open.
+- UI: write-feedback、`5e1c4831`、`d9afe946` 与 `43d0923d` 已 High GO 并合入 canonical（`c258da85`、`b82594d8`、`b06a8fab`）。`38277069403` 已回执：仅共享 queue-recovery 两断言失败，未证明 UI 回归；视频 session 正在做最小修复，修复需独立 High 与精确 CI。Overall visual/real-route and user-quality acceptance remains open.
 - No deployment until the relevant code, exact CI, High review, and real-product/media quality gates close. Human review of paper visuals remains a separate acceptance gate.
 
 ## Historical pointers
