@@ -29,3 +29,4 @@
 - 2026-10-13：生图 session 提交 `ad812d38` 修复 scene spend 原子事务与不同幂等键并发回归，Domain 115/115、API 140/140、build/typecheck/diff-check 通过；独立 High 待回，未合入/未部署。
 - 2026-10-13：独立 gpt-6.1-sol High 对 `63a3fc00` 发现 P1：beforePersist 先于 exact idempotency replay，导致相同幂等键并发后者被 pending/running guard 拒绝而非 coalesce/replay；不同键双扣风险已修复，生图 session 继续补同键并发回归。
 - 2026-10-13：18dbd19c 后续 High 发现同 key 的 approved-child 窄竞态：外层 replay 读空后，后请求拿 parent lock 时 approved guard 无 idempotencyKey，可能返回 VALIDATION_ERROR 而非 coalesce；生图 session 继续修复。
+- 2026-10-13：High 复审继续发现生图 Worker 执行阶段仍要求 platform_admin/Hermes authority；普通 beta writer 会先扣费再被 Worker 拒绝（P1）。生图 session 正在统一 Worker gate 并补普通 writer→Worker 回归，未合入。
