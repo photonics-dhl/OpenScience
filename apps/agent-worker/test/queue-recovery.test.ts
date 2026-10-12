@@ -103,8 +103,8 @@ describe('agent-worker durable queue recovery', () => {
     const task = {
       id: 'image-running-task', kind: 'presentation.generate', status: 'running', error: null,
       executionAttempt: 1, retryCount: 0, payload: { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } },
-      result: { nativeAgentExecution: { planningContract: 'image-source-explicit-trig-v1' }, providerReceipt: 'paid',
-        nativeAgentCheckpoint: { state: 'completed' } },
+      result: { ...initialNativeAgentExecution({ runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' },
+        'paper-illustration', 'image-source-explicit-trig-v1'), providerReceipt: 'paid' },
     };
     const lists = new Map<string, string[]>([['agent:queue', []], ['agent:queue:processing', [task.id]]]);
     const redis = {
@@ -527,6 +527,7 @@ describe('private audition handler and current-attempt recovery', () => {
           await writeFile(join(out, 'audition.mp3'), f.mp3);
           const characters = [...f.parent.provenance.storyboardDocument.scenes[1]!.narration].length;
           await writeFile(join(out, 'result.json'), JSON.stringify({ schemaVersion: 1, purpose: 'audio-audition', id: f.owner.id,
+            provider: 'synclip', model: 'ltx23',
             status: 'succeeded', inputHash: request.inputHash, executionAttempt: request.executionAttempt,
             audio: { sceneIndex: 1, locale: 'zh', voice: f.proposal.audio.voice, speed: 1, audioTaskId: 'original-known-tts',
               contentType: 'audio/mpeg', outputSha256: createHash('sha256').update(f.mp3).digest('hex'), outputSize: f.mp3.length,
