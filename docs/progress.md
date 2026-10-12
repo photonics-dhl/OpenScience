@@ -16,6 +16,7 @@
 - 2026-10-13：视频 queue-recovery 两失败确认是过时夹具；`af42e5e2` 仅更新 marker/result fixture，定向 45/45、Worker typecheck、diff-check 通过，独立 High 待回，未部署。
 - 2026-10-13：`af42e5e2` 独立 High GO 后已合入 canonical `2e1a28de`；精确 Media CI `38280757897` 正在运行，未部署。
 - 2026-10-13：生图首图最小 brief/普通 writer beta gate `2ae3133d` 已通过 Domain 114/114、API 140/140、build/typecheck/diff-check；独立 High 待回，未调用 Provider、未部署。
+- 2026-10-13：独立 High 对 `2ae3133d` P1 NO-GO：scene spend 检查在事务外且只查 approved child，普通 writer 可用不同幂等键并发双扣；生图 session 正在修复原子 guard 并补并发回归，未合入/未部署。
 - 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
 - UI push workflow `38268914069`：四组 browser-entry 与 web build 通过；`agent-worker queue-recovery.test.ts` 两个既有非 UI 断言失败，导致 UI typecheck 与 `storyboard-panel.test.tsx` CI 步骤跳过。未重跑、未部署、未安装；不能称 workflow 全绿。
 - 生图：admission/floor/reader 与 adapter/worker 代码均已独立 High GO 并合入；admission 191/195（4 skip），Worker typecheck/diff-check 通过，journal 缺 RO/version 身份保持 fail-closed。当前真实阻塞是已审批无图场景未接入提交入口；唯一 Hermes art-only draft 保留，Synclip=0，不重试、不扩预算。
