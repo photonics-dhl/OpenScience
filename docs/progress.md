@@ -2,7 +2,7 @@
 
 > 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
-- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor/producer 候选 `6b9c9173` 已完成 owner 定向验证，等待独立 High 结论。视频 `a01a87ab` 已修复 High 指出的 P1，等待独立 High 结论后合入；UI 接替 session 二次回合仍因模型容量错误失败，固定版本包尚未产出，保留容量阻塞。
+- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor vertical slice `6b9c9173` 已独立 High GO并合入 canonical（`2ac63e73`），完整floor/producer仍未就绪。视频 `a01a87ab` 已修复 High 指出的 P1，等待独立 High 结论后合入；UI 接替 session 二次回合仍因模型容量错误失败，固定版本包尚未产出，保留容量阻塞。
 
 ## 最近检查点
 
