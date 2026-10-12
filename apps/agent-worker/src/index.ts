@@ -57,14 +57,16 @@ import {
   setSearchContentVisibility,
   EmbeddingClient,
   SearchStorage,
+  createHybridSearchService,
   loadSearchIndexRuntimeConfig,
 } from '@openscience/search';
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createPrivateJobCopyCleanup } from './trash-job-copies';
 import type { Readable } from 'node:stream';
+import type { NativeSemanticSearch } from './native-agent/paper-tools';
 
 import { extractHandler, SCIENCE_REVIEW_CONTRACT_VERSION, sourceMapToManuscriptText, type NativeSourceReviewContext } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
@@ -73,7 +75,7 @@ import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
 import { createParserRasterJobClient, createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
-import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
+import { authorizeSearchIndexJob, createSearchIndexer, resolveSearchGenerationScope, type SearchIndexer } from './search-indexer';
 import {
   runParserCascade,
   type ParserCascadeFeatureFlags,
@@ -284,6 +286,27 @@ export function buildSearchIndexerFromEnv(
   });
 }
 
+type NativeSemanticSearchScope = { researchObjectId: string; artifactId: string; sourceVersionId?: string; contentHash: string };
+
+export function buildNativeSemanticSearchFactory(
+  core: AgentDeps['prisma'], searchClient: ReturnType<typeof createSearchPrismaClient> | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): ((scope: NativeSemanticSearchScope) => Promise<NativeSemanticSearch | undefined>) | undefined {
+  const config = loadSearchIndexRuntimeConfig(env);
+  if (!config.enabled || !searchClient) return undefined;
+  const service = createHybridSearchService({
+    storage: new SearchStorage(searchClient, core),
+    embedder: new EmbeddingClient({ baseUrl: config.endpoint, maxAttempts: 1 }),
+    modelIdentity: config.modelIdentity,
+    telemetryKey: randomBytes(32),
+  });
+  return async scope => {
+    const resolved = await resolveSearchGenerationScope({ prisma: core }, scope);
+    if (!resolved) return undefined;
+    return { ...resolved, searchGeneration: input => service.searchGeneration(input) };
+  };
+}
+
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
 export interface ParserCascadeAuthorization {
   trustedAuthorizationContext: Readonly<OcrAuthorizationContext>;
@@ -419,6 +442,7 @@ export function createHandlers(
     sourceRetrieveHandler?: TaskHandler;
     videoSpool?: PresentationVideoSpool;
     nativeAgentInboxRoot?: string;
+    nativeSemanticSearch?: (scope: NativeSemanticSearchScope) => Promise<NativeSemanticSearch | undefined>;
   } = {},
 ): Record<string, TaskHandler> {
   // BGE serves one CPU inference at a time. Keep indexing jobs serial in this
@@ -839,6 +863,9 @@ export function createHandlers(
             },
             renderPages: async pages => (await options.parserCascade!.renderPages({ artifactId: artifact.id,
               contentHash: artifact.blobSha256, content: bytes, mediaType: parserMediaType }, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages,
+            semanticSearch: options.nativeSemanticSearch ? await options.nativeSemanticSearch({
+              researchObjectId: ownerResearchObject.id, artifactId: artifact.id, contentHash: sourceMapRef!.contentHash,
+            }) : undefined,
           });
           await enqueueFigureAuditFromResult(deps, task, result); return result;
         }
@@ -852,6 +879,9 @@ export function createHandlers(
           },
           renderPages: async pages => (await options.parserCascade!.renderPages({ artifactId: artifact.id,
             contentHash: artifact.blobSha256, content: bytes, mediaType: parserMediaType }, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages,
+          semanticSearch: options.nativeSemanticSearch ? await options.nativeSemanticSearch({
+            researchObjectId: ownerResearchObject.id, artifactId: artifact.id, contentHash: sourceMapRef!.contentHash,
+          }) : undefined,
         });
         await enqueueFigureAuditFromResult(deps, task, result); return result;
       }
@@ -897,6 +927,7 @@ export function createHandlers(
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
         runtime: nativeAgentRuntimeFromEnv(process.env),
+        semanticSearchFor: options.nativeSemanticSearch,
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
     'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
@@ -1255,6 +1286,7 @@ async function main(): Promise<void> {
     const trashSearchClient = ownedSearch = process.env.SEARCH_DATABASE_URL || loadSearchIndexRuntimeConfig(process.env).enabled
       ? createSearchPrismaClient({ env: process.env }) : undefined;
     const deps = createWorkerDeps({ prisma, redis, storage, audit });
+    const nativeSemanticSearch = buildNativeSemanticSearchFactory(prisma, trashSearchClient, process.env);
     // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
     const ingestionExternalPolicy = buildIngestionExternalProcessingPolicy(prisma);
     const externalProcessingPolicy: ExternalProcessingPolicy = async context => {
@@ -1315,6 +1347,7 @@ async function main(): Promise<void> {
       externalProcessingPolicy,
       searchIndexer: buildSearchIndexerFromEnv(process.env, globalThis.fetch, trashSearchClient),
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
+      nativeSemanticSearch,
       ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
         && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
           videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,

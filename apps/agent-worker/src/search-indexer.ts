@@ -94,7 +94,7 @@ export interface SearchIndexer {
 /** Resolve only an already succeeded, uniquely matching core search.index owner. */
 export async function resolveSearchGenerationScope(
   deps: Pick<AgentDeps, 'prisma'>,
-  input: { researchObjectId: string; artifactId: string; sourceVersionId: string; contentHash: string },
+  input: { researchObjectId: string; artifactId: string; sourceVersionId?: string; contentHash: string },
 ): Promise<{ tenantId: string; generation: SearchGenerationScope } | undefined> {
   const tasks = await deps.prisma.agentTask.findMany({
     where: { kind: 'search.index', status: 'succeeded', deletedAt: null, session: { researchObjectId: input.researchObjectId } },
@@ -103,16 +103,18 @@ export async function resolveSearchGenerationScope(
   const matches = tasks.filter(task => {
     const payload = isPlainRecord(task.payload) ? task.payload : undefined;
     const sourceMapRef = payload && isPlainRecord(payload.sourceMapRef) ? payload.sourceMapRef : undefined;
-    return payload?.artifactId === input.artifactId && payload.versionId === input.sourceVersionId
+    return payload?.artifactId === input.artifactId && typeof payload.versionId === 'string'
+      && (input.sourceVersionId === undefined || payload.versionId === input.sourceVersionId)
       && sourceMapRef?.artifactId === input.artifactId && sourceMapRef.contentHash === input.contentHash
       && sourceMapRef.parserStatus === 'succeeded' && task.session.researchObject?.workspaceId;
   });
   if (matches.length !== 1) return undefined;
   const owner = matches[0]!;
   const tenantId = owner.session.researchObject!.workspaceId;
+  const sourceVersionId = (owner.payload as Record<string, unknown>).versionId as string;
   return { tenantId, generation: {
     researchObjectId: input.researchObjectId, artifactId: input.artifactId,
-    sourceVersionId: input.sourceVersionId, contentHash: input.contentHash, fenceOwnerTaskId: owner.id,
+    sourceVersionId, contentHash: input.contentHash, fenceOwnerTaskId: owner.id,
   } };
 }
 

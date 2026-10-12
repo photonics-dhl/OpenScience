@@ -3,7 +3,7 @@ import { planSceneImagePrompt } from './scene-image';
 import { getBlobStorageKey } from '@openscience/storage';
 import { readNativeAgentExecution, requireNativeAgentExecutionAuthority, supportsNativeIllustration, requireNativeVideoStoryboard } from '@openscience/domain';
 import { runNativeIllustrationTask, replayNativeVideoPlan, type VerifiedNativeVideoBase } from '../native-agent/illustration-task';
-import type { NativePaperImage } from '../native-agent/paper-tools';
+import type { NativePaperImage, NativeSemanticSearch } from '../native-agent/paper-tools';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, generatedSceneImageRequiresPixelReview, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
@@ -634,7 +634,7 @@ async function resolveStoryboardOriginals(deps: Parameters<TaskHandler>[0], payl
 }
 
 export function createPresentationGenerationHandler(options: { gateway?: Pick<AiGateway, 'completeStructured'> & Partial<Pick<AiGateway, 'reviewScientific' | 'resumeScientificReviewFromCompletedResult' | 'generateImage' | 'canResumeImageBeforeSubmission' | 'canResumeImageFromCompletedResult' | 'resumeImageFromCompletedResult'>>; mediaGenerator?: PresentationMediaGenerator; videoSpool?: PresentationVideoSpool;
-  nativeAgent?: { gateway: AiGateway; inboxRoot: string; runtime?: NativeAgentRuntimeConfig; renderPages(input: { artifactId: string; contentHash: string; content: Buffer; mediaType: 'application/pdf' }, pages: number[]): Promise<NativePaperImage[]> } } = {}): TaskHandler {
+  nativeAgent?: { gateway: AiGateway; inboxRoot: string; runtime?: NativeAgentRuntimeConfig; renderPages(input: { artifactId: string; contentHash: string; content: Buffer; mediaType: 'application/pdf' }, pages: number[]): Promise<NativePaperImage[]>; semanticSearchFor?: (scope: { researchObjectId: string; artifactId: string; sourceVersionId?: string; contentHash: string }) => Promise<NativeSemanticSearch | undefined> } } = {}): TaskHandler {
   return async (deps, task) => {
     if (!deps.storage) throw new Error('[blocked] presentation object storage unavailable');
     const payload = parsePresentationGenerationPayload(task.payload);
@@ -1017,6 +1017,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap: narrativeSource.sourceMap,
         sourceMapRef: narrativeSource.reference, sourceEvidenceIdentity, claims, settings: payload.storyboard, paperOriginals,
         narrativeSource: narrativeSource.context, base, inboxRoot: options.nativeAgent.inboxRoot, authorize: requireNativeIllustrationUnchanged,
+        semanticSearch: options.nativeAgent.semanticSearchFor ? await options.nativeAgent.semanticSearchFor({ researchObjectId: researchObject.id,
+          artifactId: narrativeSource.reference.artifactId, sourceVersionId: payload.versionId, contentHash: narrativeSource.reference.contentHash }) : undefined,
         renderPages: async pages => {
           sourceBytes ??= await readPresentationInput(deps.storage!, getBlobStorageKey(narrativeSource.reference.contentHash), narrativeSource.reference.contentHash, 100 * 1024 * 1024);
           return options.nativeAgent!.renderPages({ artifactId: narrativeSource.reference.artifactId, contentHash: narrativeSource.reference.contentHash,
