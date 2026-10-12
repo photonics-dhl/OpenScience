@@ -481,6 +481,10 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       const lockTimestamp = new Date();
       const locked = await tx.presentationAsset.updateMany({ where: { id: lockedParent.id, updatedAt: lockedParent.updatedAt }, data: { updatedAt: lockTimestamp } });
       if (locked.count !== 1) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      const lockedExistingTask = input.idempotencyKey
+        ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
+        : null;
+      if (lockedExistingTask && !lockedExistingTask.deletedAt) return;
       const currentParent = await requireSceneImageParent(tx, payload);
       if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       await requireSceneImageSpendIsNew(tx, currentParent, payload);

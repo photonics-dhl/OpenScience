@@ -682,6 +682,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
         throw new Error('[blocked] Narrative technical recovery changed');
     };
     const actualImageReview = needsGeneratedImageReview(payload);
+    const betaSceneImageAccess = payload.kind === 'image' && Boolean(payload.sceneImage) && deps.sceneImageEnabled === true;
     if (audioAudition && existing) throw new Error('[blocked] Audio audition cannot adopt a presentation asset');
     if (existing && !actualImageReview) return { ...privateStoryboardResult(owner.result), assetId: existing.id, kind: existing.kind,
       status: existing.status, contentHash: existing.contentHash, sourceClaimIds: payload.sourceClaimIds };
@@ -1191,12 +1192,12 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       };
     } else if (payload.sceneImage && sceneParent) {
       const user = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (user?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media generation requires a platform administrator');
+      if (user?.platformRole !== 'platform_admin' && !betaSceneImageAccess && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media generation requires a platform administrator');
       // Shared media-generation invariants: workspace write scope, authority re-check,
       // parent plan / claims / evidence unchanged. Style reference is LLM-flow only.
       await requirePresentationWriteScope(deps.prisma, scope);
       const currentUser = await deps.prisma.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-      if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
+      if (currentUser?.platformRole !== 'platform_admin' && !betaSceneImageAccess && !await requireHermesAuthority(deps.prisma)) throw new Error('[blocked] presentation media authority changed');
       if ((await requireSceneImageParent(deps.prisma, payload))?.identity !== sceneParent.identity) throw new Error('[blocked] approved storyboard changed before image generation');
       const currentClaims = await deps.prisma.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds }, researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
       if (presentationClaimContent(currentClaims as PresentationClaim[]) !== presentationClaimContent(claims)) throw new Error('[blocked] source Claims changed before image generation');
@@ -1784,7 +1785,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       }
       if (payload.kind === 'image' || payload.kind === 'video') {
         const currentUser = await tx.user.findUnique({ where: { id: scope.userId }, select: { platformRole: true } });
-        if (currentUser?.platformRole !== 'platform_admin' && !await requireHermesAuthority(tx)) {
+        if (currentUser?.platformRole !== 'platform_admin' && !betaSceneImageAccess && !await requireHermesAuthority(tx)) {
           throw new Error('[blocked] presentation media generation requires a platform administrator or active Hermes run grant');
         }
       }

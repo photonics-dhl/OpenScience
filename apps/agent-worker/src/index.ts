@@ -1250,7 +1250,7 @@ export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 's
   const nativeAgentRuntime = nativeAgentRuntimeFromEnv(env);
   const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env);
   return { ...input,
-    nativeAgentRuntime, nativeSceneImageEnabled,
+    nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled: nativeSceneImageEnabled,
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
     readVideoReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }),
     readAudioAuditionReadiness: createNativeVideoReadinessReader(env, { nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled }, 'audio-audition'),
