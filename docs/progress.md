@@ -2,7 +2,7 @@
 
 > 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
-- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor vertical slice `6b9c9173` 已独立 High GO并合入 canonical（`2ac63e73`），完整floor/producer仍未就绪。视频 `a01a87ab` 已经独立 High GO并按祖先链合入 canonical（`fb7362fe`、`de643253`、`d1ade094`、`faa2d376`、`387d5c1a`），spool 32/32、typecheck/diff-check通过；UI 接替 session 二次回合仍因模型容量错误失败，固定版本包尚未产出，保留容量阻塞。
+- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor vertical slice `6b9c9173` 已独立 High GO并合入 canonical（`2ac63e73`），完整floor/producer仍未就绪。视频 `a01a87ab` 已经独立 High GO并按祖先链合入 canonical（`fb7362fe`、`de643253`、`d1ade094`、`faa2d376`、`387d5c1a`），spool 32/32、typecheck/diff-check通过，部署仍待串行发布；UI 接替 session 二次回合仍因模型容量错误失败，固定版本包尚未产出，保留容量阻塞。
 
 ## 最近检查点
 
@@ -44,7 +44,6 @@
 - 2026-10-11 03:42历史阻塞：头像动态验收被浏览器超时阻断，必要源站只读未定位对应应用故障。原记录和待答的日常浏览器问句保留，不能据服务健康宣称页面或动效通过；此次恢复来自新human指令，不循环重试或改网络/重启。
 - 2026-10-11 02:56：首个Native视频分镜准入、任务恢复和附件/Explore提示已通过五条实际CI并发布；API/Web/Worker健康、双库迁移no-op、回退身份及原未知任务保持均实核。Native/M3和视频Host关闭状态不变。具体运行/回退身份与日志只见Hermes CURRENT；软件上线不代表真实视频或三篇科学质量通过。
 - 本批媒体CI实际Worker95/95，包含四项真实Redis执行且零skip；所选媒体工作台browser19/19与四browser-entry全部通过。原文档同步、首计划本机1/1和未变Domain/类型证据复用，旧失败与High闭合记录保留。
-- 同一独立High应用审、fresh零工作状态及双库备份条件满足，发布窗口已关闭。回退旧应用前不得有新未完成Native首计划；running/started/unknown或native-bound pending须保留候选并前向恢复，不强退/重派。无模型、素材、声音配置或预算操作。
 - 生图线通用记号修复已发布；Explore提示已上线且排序/分页保持。新增定位修复只改善错误字段提示，不放宽解析或来源要求。原唯一新图计划预算终态失败仍无新图，真实错绑不放行、不重放；未通过整篇科学质量验收。
 - 视频首计划与恢复修复已发布；队列先确保目标ID，再移处理中记录，避免写入失败丢任务。商业API矩阵已同步能力台账，参数快照、代码消费与未验效果分开。真实输入父/完整帧、声音与有限费用仍是业务缺口，不自动新付费试片。
 - UI正常个人中心→研究编辑→Hermes、Explore与公开附件提示已观察并保留回执；首份计划提交未执行。头像恢复观察只补真实动作及当前reduced-motion，静态和开关证据复用，0新任务/模型/资产写。
