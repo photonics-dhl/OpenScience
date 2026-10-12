@@ -305,7 +305,9 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
       where: { status: 'pending', deletedAt: null, error: NATIVE_IMAGE_CONTRACT_HOLD }, orderBy: { updatedAt: 'asc' }, take: scanLimit,
     }),
   ]);
-  const tasks = [...videoTasks, ...imageTasks].sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime()).slice(0, scanLimit);
+  // Keep the two bounded scans independent. A large malformed image prefix
+  // must not consume the shared slice and starve ordinary video holds.
+  const tasks = [...videoTasks, ...imageTasks];
   let released = 0;
   for (const task of tasks) {
     if (task.error === NATIVE_IMAGE_CONTRACT_HOLD) {

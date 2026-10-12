@@ -280,6 +280,19 @@ describe('image planning-contract admission hold', () => {
     expect(f.task).toMatchObject({ error: null, dispatchedAt: null, executionAttempt: 0 });
   });
 
+  it('does not let malformed image holds starve a valid video hold', async () => {
+    const f = queueFixture(); f.task.error = VIDEO_READINESS_HOLD; f.state.ready = true;
+    const imagePayload = { schemaVersion: 1, researchObjectId: 'ro', versionId: 'version', kind: 'interactive_html', sourceClaimIds: ['claim'],
+      storyboard: { output: 'image', narrative: true, locale: 'en', style: 'technical', instruction: 'Explain this finding' } };
+    const imageResult = { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration', planningContract: 'image-source-explicit-trig-v1' } };
+    for (let index = 0; index < 500; index++) f.tasks.set(`old-image-${index}`, {
+      ...structuredClone(f.task), id: `old-image-${index}`, error: NATIVE_IMAGE_CONTRACT_HOLD, payload: imagePayload, result: imageResult,
+      updatedAt: new Date(f.task.updatedAt.getTime() - index - 1),
+    });
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1);
+    expect(f.task).toMatchObject({ error: null, dispatchedAt: null, executionAttempt: 0 });
+  });
+
   it.each(['video-kind', 'started', 'retry', 'checkpoint', 'paid-receipt', 'sdf-kind'] as const)(
     'does not release an image hold with a non-pristine %s state', async change => {
       const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;
