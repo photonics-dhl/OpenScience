@@ -99,7 +99,7 @@ async function fixture(t) {
     await rm(base, { recursive: true, force: true });
   });
   const cfg = { inbox: join(base, 'inbox'), results: join(base, 'results'), privateRoot: join(base, 'private'),
-    keyPath: join(base, 'unused-key'), rendererImage: `sha256:${'a'.repeat(64)}`, adminModelsEnabled: true };
+    keyPath: join(base, 'unused-key'), rendererImage: `sha256:${'a'.repeat(64)}`, model: 'ltx23', adminModelsEnabled: true };
   for (const path of [cfg.inbox, cfg.results, cfg.privateRoot]) await mkdir(path);
   const calls = [], audioCalls = [], order = [], renderCalls = [];
   let now = Date.now();
@@ -154,7 +154,7 @@ async function fixture(t) {
     const files = { storyboard: { name: 'storyboard.json', size: story.length, sha256: hash(story) },
       scenes: scenes.map(s => s.image) };
     const request = { schemaVersion: 1, id: taskId, taskId, executionAttempt: 1, profile: 'content-driven-v1',
-      provider: 'synclip', model: 'ltx23', resolution: '720p', deadlineAt: now + (expired ? -1 : 600_000),
+      provider: 'synclip', model: cfg.model, resolution: '720p', deadlineAt: now + (expired ? -1 : 600_000),
       scenes, files, ...(audio ? { audio: narration } : {}), inputHash: hash(JSON.stringify(audio ? { files, audio: narration, scenes } : providerOutput ? { files, scenes } : files)) };
     await writeFile(join(d, 'request.json'), JSON.stringify(request));
     await writeFile(join(d, 'storyboard.json'), story);
@@ -173,6 +173,14 @@ test('a Native provider-output sequence can run without requiring or posting opt
   const result = await json(join(f.resultDir, 'result.json'));
   assert.equal(result.narration, undefined);
   assert.equal((await json(join(f.resultDir, 'metrics.json'))).audioMode, 'provider-output-unverified');
+});
+
+test('the supported LTX fast model is selected end-to-end and recorded in the result', async t => {
+  const f = await fixture(t); f.cfg.model = 'ltx23fast'; await f.job(id, { providerOutput: true });
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  assert.equal(f.calls.find(call => call.method === 'POST').body.model, 'ltx23fast');
+  assert.equal((await json(join(f.resultDir, 'result.json'))).model, 'ltx23fast');
+  assert.equal((await json(join(f.resultDir, 'metrics.json'))).model, 'ltx23fast');
 });
 
 for (const change of ['files-only', 'mixed', 'tts-on-native', 'native-on-external'])

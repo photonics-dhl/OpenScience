@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import {
   SynclipVideoClient, SynclipVideoError, downloadSynclipVideo,
-  validateSynclipVideoRequest, validateSynclipVideoTask,
+  SYNCLIP_VIDEO_MODELS, validateSynclipVideoRequest, validateSynclipVideoTask,
 } from '../../packages/ai-gateway/dist/synclip-video-api.js';
 import { SynclipAudioClient, SynclipAudioError, downloadSynclipAudio, validateSynclipAudioRequest,
   validateSynclipAudioTask, validateSynclipAudioTaskId, validateSynclipAudioBytes,
@@ -65,7 +65,7 @@ async function key(path) {
   return value;
 }
 function config(value) {
-  if (!value || value.model !== 'ltx23' || value.resolution !== '720p' || value.referenceMode !== 'synclip-receipt'
+  if (!value || !SYNCLIP_VIDEO_MODELS.includes(value.model) || value.resolution !== '720p' || value.referenceMode !== 'synclip-receipt'
     || typeof value.adminModelsEnabled !== 'boolean'
     || value.adapterRevision !== REV || !/^sha256:[a-f0-9]{64}$/u.test(value.rendererImage)
     || [value.inbox, value.results, value.privateRoot, value.keyPath].some(path => typeof path !== 'string' || !path.startsWith('/opt/'))) fail('VIDEO_CONFIG');
@@ -98,7 +98,7 @@ function requireAuditionGrant(value) {
 async function request(directory, id) {
   const value = await json(join(directory, 'request.json'));
   if (value.schemaVersion !== 1 || value.id !== id || value.taskId !== id || value.profile !== 'content-driven-v1'
-    || value.provider !== 'synclip' || value.model !== 'ltx23' || value.resolution !== '720p' || !UUID.test(id)
+    || value.provider !== 'synclip' || !SYNCLIP_VIDEO_MODELS.includes(value.model) || value.resolution !== '720p' || !UUID.test(id)
     || !Number.isSafeInteger(value.deadlineAt) || !Array.isArray(value.scenes) || value.scenes.length < 3 || value.scenes.length > 6
     || !value.files || !Array.isArray(value.files.scenes)) fail('VIDEO_REQUEST');
   const story = await read(join(directory, 'storyboard.json'), MAX_JSON);
@@ -185,7 +185,7 @@ async function prepareRequests(directory, request, apiKey, deps) {
     const reference = await (deps.resolveReference ?? resolveSynclipImageReference)({
       requestId: scene.image?.requestId, approvedPng, apiKey, deadlineAt: request.deadlineAt,
     });
-    prepared.push(validateSynclipVideoRequest({ prompt: scene.prompt, model: 'ltx23', duration: scene.durationSeconds,
+    prepared.push(validateSynclipVideoRequest({ prompt: scene.prompt, model: request.model, duration: scene.durationSeconds,
       resolution: '720p', first_frame_url: reference }));
   }
   return prepared;
@@ -488,7 +488,7 @@ async function publish(cfg, request, status, error, output, diagnostics) {
   await chown(directory, parent.uid, parent.gid);
   await chmod(directory, 0o2750);
   const result = { schemaVersion: 1, id: request.id, inputHash: request.inputHash, executionAttempt: request.executionAttempt,
-    provider: 'synclip', model: 'ltx23', adapterRevision: REV, status,
+    provider: 'synclip', model: request.model, adapterRevision: REV, status,
     ...(request.purpose === 'audio-audition' ? { purpose: request.purpose } : {}),
     ...(error ? { errorCode: error } : {}), ...(output ? output.result : {}), ...(diagnostics ?? {}) };
   if (output) {
@@ -561,7 +561,7 @@ async function execute(cfg, directory, request, client, prepared, deps, audioTim
     narration = { provider: 'synclip', speaker: request.audio.voice, speed: request.audio.speed, timingStatus: 'measured_aligned' };
   }
   await publish(cfg, request, 'succeeded', undefined, { bytes,
-    metrics: { provider: 'synclip', model: 'ltx23', shotCount: request.scenes.length,
+    metrics: { provider: 'synclip', model: request.model, shotCount: request.scenes.length,
       audioMode: request.audio ? 'external-narration' : 'provider-output-unverified',
       ...(!request.audio && request.storyboard.narrative ? providerOutput : {}),
       ...(request.audio ? { audioTiming, durationSeconds: measuredOutput.durationSeconds, narration } : {}) },
@@ -641,6 +641,7 @@ async function runPending(cfg, deps) {
       return { id, status: 'uncertain' };
     }
     try {
+      if (value.model !== cfg.model) fail('VIDEO_MODEL_CONFIG_CHANGED');
       checkDeadline(value, now);
       requireSupportedPlan(value, cfg);
       await requireKnownVideoOutcome(directory, value);
@@ -667,10 +668,13 @@ async function runPending(cfg, deps) {
   return null;
 }
 export async function runSynclipVideoBrokerOnce(cfg, deps = {}) {
+  // Keep the in-process fixture and pre-v2 callers backward compatible; installed
+  // protected configs are always validated with an explicit model.
+  cfg = { ...cfg, model: cfg.model ?? 'ltx23' };
   for (const path of [cfg.inbox, cfg.results, cfg.privateRoot]) await dir(path);
   const parent = await dir(cfg.results), ready = join(cfg.results, '.ready');
   const beat = async accepting => {
-    await write(ready, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23', adapterRevision: REV,
+    await write(ready, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: cfg.model, adapterRevision: REV,
       updatedAt: (deps.now ?? Date.now)(), accepting: accepting && cfg.adminModelsEnabled === true,
       audioAccepting: accepting && auditionBudget(cfg) !== null,
       ...(auditionBudget(cfg) === null ? {} : { audioAuditionBudget: { maxEstimatedCoins: auditionBudget(cfg) } }),

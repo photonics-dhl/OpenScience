@@ -4,18 +4,19 @@ import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import type { StoryboardDocument, StoryboardView, VideoSceneDirection } from '@openscience/domain';
 import { classifyNativeVideoAudio } from '@openscience/domain';
+import { SYNCLIP_VIDEO_MODEL, SYNCLIP_VIDEO_MODELS, type SynclipVideoModel } from '@openscience/ai-gateway';
 import type { HostVideoInput, AudioAuditionInput, AudioAuditionProposal, AudioAuditionGrant, AudioAuditionResult } from './host-video-spool';
 
 const MAX_JSON = 512 * 1024; const MAX_PNG = 10 * 1024 * 1024; const MAX_MP4 = 256 * 1024 * 1024;
 const MAX_DEADLINE = 30 * 60_000; const READY_MAX_AGE = 60_000; const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export interface SynclipVideoSpoolConfig { inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (milliseconds: number) => Promise<void>; withSubmission?: <T>(owner: { taskId: string; executionAttempt?: number }, publish: () => Promise<T>) => Promise<T>;
+export interface SynclipVideoSpoolConfig { inboxDir: string; resultsDir: string; model?: SynclipVideoModel; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (milliseconds: number) => Promise<void>; withSubmission?: <T>(owner: { taskId: string; executionAttempt?: number }, publish: () => Promise<T>) => Promise<T>;
   authorizeAudioAudition?: (proposal: AudioAuditionProposal) => Promise<AudioAuditionGrant>;
 }
 export interface SynclipVideoInput { taskId: string; executionAttempt: number; profile: 'content-driven-v1'; sourceClaimIds: string[]; storyboard: StoryboardDocument; locale?: StoryboardView['locale']; style?: StoryboardView['style']; sceneImages: Buffer[]; sceneImageTaskIds?: string[]; videoPrompts?: string[]; }
 type SynclipNarration = { provider: 'synclip'; speaker: string; speed: number; timingStatus: 'measured_aligned' }
   | { provider: 'synclip-provider-output'; speaker: 'unverified'; timingStatus: 'not_available' }
   | { provider: 'synclip-audio-pending'; speaker: 'none'; timingStatus: 'not_available' };
-export interface SynclipVideoResult { filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: 'Synclip commercial video'; generatorVersion: 'ltx23'; inputHash: string; narration: SynclipNarration; metrics: Record<string, unknown>; runtime: { provider: 'synclip'; model: 'ltx23'; adapterRevision: string }; }
+export interface SynclipVideoResult { filePath: string; size: number; contentHash: string; contentType: 'video/mp4'; generator: 'Synclip commercial video'; generatorVersion: SynclipVideoModel; inputHash: string; narration: SynclipNarration; metrics: Record<string, unknown>; runtime: { provider: 'synclip'; model: SynclipVideoModel; adapterRevision: string }; }
 export interface VideoAudioTimingDiagnostic {
   inputHash: string; voice: string; speed: number; noVideoSubmissions: true;
   scenes: Array<{ sceneIndex: number; narration: string; plannedDurationSeconds: number; durationSeconds: number;
@@ -73,7 +74,7 @@ function shotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['s
 export class SynclipVideoSpool {
   readonly provider = 'synclip' as const;
   private readonly now: () => number; private readonly sleep: (milliseconds: number) => Promise<void>; private readonly timeout: number;
-  constructor(private readonly config: SynclipVideoSpoolConfig) { if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir) || config.inboxDir === config.resultsDir) fail(); this.timeout = config.timeoutMs ?? MAX_DEADLINE; if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > MAX_DEADLINE || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60_000))) fail(); this.now = config.now ?? Date.now; this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))); }
+  constructor(private readonly config: SynclipVideoSpoolConfig) { if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir) || config.inboxDir === config.resultsDir || (config.model !== undefined && !SYNCLIP_VIDEO_MODELS.includes(config.model))) fail(); this.timeout = config.timeoutMs ?? MAX_DEADLINE; if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > MAX_DEADLINE || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60_000))) fail(); this.now = config.now ?? Date.now; this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))); }
   async audition(input: AudioAuditionInput): Promise<AudioAuditionResult> {
     if (!this.config.authorizeAudioAudition) fail('AUDIO_AUDITION_AUTHORITY_REQUIRED');
     await directory(this.config.inboxDir); await directory(this.config.resultsDir);
@@ -161,7 +162,7 @@ export class SynclipVideoSpool {
       if (this.now() >= grant.deadlineAt) fail('AUDIO_AUDITION_DEADLINE');
       const request = { schemaVersion: 1, id: input.taskId, taskId: input.taskId, executionAttempt: grant.executionAttempt,
         profile: input.profile, sourceClaimIds: input.sourceClaimIds, inputHash, createdAt: grant.createdAt, deadlineAt: grant.deadlineAt,
-        provider: 'synclip', model: 'ltx23', resolution: '720p', files, scenes, audio, purpose: 'audio-audition',
+        provider: 'synclip', model: this.config.model ?? SYNCLIP_VIDEO_MODEL, resolution: '720p', files, scenes, audio, purpose: 'audio-audition',
         sceneIndex: input.sceneIndex, locale: input.locale, audioAuditionGrant: grant };
       const stage = join(this.config.inboxDir, '.' + input.taskId + '.' + Math.random().toString(36).slice(2) + '.tmp'), target = join(this.config.inboxDir, input.taskId);
       await mkdir(stage, { mode: 0o700 });
@@ -185,9 +186,10 @@ export class SynclipVideoSpool {
     fail('UNCERTAIN');
   }
   async generate(input: SynclipVideoInput | HostVideoInput): Promise<SynclipVideoResult> {
+    const model = this.config.model ?? SYNCLIP_VIDEO_MODEL;
     await directory(this.config.inboxDir); await directory(this.config.resultsDir);
     const readyPath = join(this.config.resultsDir, '.ready'); const ready = JSON.parse((await boundedRead(readyPath, MAX_JSON)).toString()) as Record<string, unknown>; const readyStat = await lstat(readyPath);
-    if (ready.schemaVersion !== 1 || ready.provider !== 'synclip' || ready.accepting !== true || ready.model !== 'ltx23' || typeof ready.updatedAt !== 'number' || this.now() - ready.updatedAt > READY_MAX_AGE || readyStat.mtimeMs < this.now() - READY_MAX_AGE) fail('SYNCLIP_VIDEO_UNAVAILABLE');
+    if (ready.schemaVersion !== 1 || ready.provider !== 'synclip' || ready.accepting !== true || ready.model !== model || typeof ready.updatedAt !== 'number' || this.now() - ready.updatedAt > READY_MAX_AGE || readyStat.mtimeMs < this.now() - READY_MAX_AGE) fail('SYNCLIP_VIDEO_UNAVAILABLE');
     if (input.profile !== 'content-driven-v1' || !UUID.test(input.taskId) || !Number.isInteger(input.executionAttempt) || input.executionAttempt < 1 || input.sourceClaimIds.length < 1 || input.sourceClaimIds.length > 12 || input.sceneImages.length !== input.storyboard.scenes.length || input.storyboard.scenes.length < 3 || input.storyboard.scenes.length > 6) fail('INVALID_VIDEO_INPUT');
     input.sceneImages.forEach(bytes => { if (bytes.length < 33 || bytes.length > MAX_PNG || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') fail('INVALID_VIDEO_INPUT'); });
     if (!input.sceneImageTaskIds || input.sceneImageTaskIds.length !== input.sceneImages.length
@@ -208,7 +210,7 @@ export class SynclipVideoSpool {
     });
     const storyboardBytes = Buffer.from(JSON.stringify({ ...input.storyboard, locale, style })); if (storyboardBytes.length > MAX_JSON) fail('INVALID_VIDEO_INPUT');
     const files = { storyboard: { name: 'storyboard.json', size: storyboardBytes.length, sha256: createHash('sha256').update(storyboardBytes).digest('hex') }, scenes: scenes.map(scene => scene.image) }; const inputHash = createHash('sha256').update(JSON.stringify(audio ? { files, audio, scenes } : nativeVideo ? { files, scenes } : files)).digest('hex');
-    const request = { schemaVersion: 1, id: input.taskId, taskId: input.taskId, executionAttempt: input.executionAttempt, profile: input.profile, sourceClaimIds: input.sourceClaimIds, inputHash, createdAt: this.now(), deadlineAt: this.now() + this.timeout, provider: 'synclip', model: 'ltx23', resolution: '720p', files, scenes, ...(audio ? { audio } : {}) };
+    const request = { schemaVersion: 1, id: input.taskId, taskId: input.taskId, executionAttempt: input.executionAttempt, profile: input.profile, sourceClaimIds: input.sourceClaimIds, inputHash, createdAt: this.now(), deadlineAt: this.now() + this.timeout, provider: 'synclip', model, resolution: '720p', files, scenes, ...(audio ? { audio } : {}) };
     const stage = join(this.config.inboxDir, '.' + input.taskId + '.' + Math.random().toString(36).slice(2) + '.tmp'); const target = join(this.config.inboxDir, input.taskId);
     const submit = async () => { await mkdir(stage, { mode: 0o700 }); try { await exclusiveWrite(join(stage, 'storyboard.json'), storyboardBytes); for (const [index, bytes] of input.sceneImages.entries()) await exclusiveWrite(join(stage, 'scene-' + index + '.png'), bytes); await exclusiveWrite(join(stage, 'request.json'), Buffer.from(JSON.stringify(request))); try { await rename(stage, target); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST' && (error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error; const existing = JSON.parse((await boundedRead(join(target, 'request.json'), MAX_JSON)).toString()) as Record<string, unknown>; if (existing.inputHash !== inputHash || existing.taskId !== input.taskId || existing.executionAttempt !== input.executionAttempt) fail('UNCERTAIN'); } } finally { await rm(stage, { recursive: true, force: true }).catch(() => undefined); } };
     if (this.config.withSubmission) await this.config.withSubmission({ taskId: input.taskId, executionAttempt: input.executionAttempt }, submit); else await submit();
@@ -247,8 +249,8 @@ export class SynclipVideoSpool {
           || typeof metrics.durationSeconds !== 'number' || !Number.isFinite(metrics.durationSeconds)
           || Math.abs(metrics.durationSeconds - scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)) > 0.5)) fail('SYNCLIP_PROVIDER_OUTPUT_INVALID');
         return { filePath, size: bytes.length, contentHash: hash, contentType: 'video/mp4', generator: 'Synclip commercial video',
-          generatorVersion: 'ltx23', inputHash, narration, metrics,
-          runtime: { provider: 'synclip', model: 'ltx23', adapterRevision: String(result.adapterRevision ?? 'synclip-video-v1') } };
+          generatorVersion: model, inputHash, narration, metrics,
+          runtime: { provider: 'synclip', model, adapterRevision: String(result.adapterRevision ?? 'synclip-video-v1') } };
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       await this.sleep(Math.min(this.config.pollIntervalMs ?? 1000, request.deadlineAt - this.now()));
     }
