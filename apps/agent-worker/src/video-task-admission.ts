@@ -171,7 +171,9 @@ async function admitNativeImageContractTask(
   // this one bounded reread. A changed payload/result/attempt is reclassified
   // by the normal poll and is never claimed through this path.
   const latest = await deps.prisma.agentTask.findUnique({ where: { id: snapshot.id } });
-  if (!latest || latest.deletedAt || latest.status !== 'pending'
+  const errorStable = latest?.error === current.error
+    || current.error === VIDEO_READINESS_HOLD && latest?.error === NATIVE_IMAGE_CONTRACT_HOLD;
+  if (!latest || latest.deletedAt || latest.status !== 'pending' || !errorStable
     || !isNativeImagePlanningContractTask(latest)
     || admissionFields.some(field => !['error', 'dispatchedAt', 'updatedAt'].includes(field)
       && !isDeepStrictEqual(latest[field], current[field]))) return false;
@@ -207,6 +209,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   if (task.status !== 'pending' || !['presentation.generate', 'sdf.extract'].includes(task.kind)) return null;
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
+  if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) return true;
   if (isNativeImagePlanningContractTask(current)) {
     return admitNativeImageContractTask(deps, task, current as unknown as VideoTaskAdmissionSnapshot);
   }

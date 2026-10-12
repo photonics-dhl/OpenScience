@@ -6,7 +6,7 @@ import { createRedisClient, type Redis } from '@openscience/database';
 import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../src/index';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, parkPendingVideoTask, releasePendingVideoTask,
   recoverHeldVideoTasks, VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD } from '../src/video-task-admission';
-import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks } from '../../../packages/domain/src/agent/agent';
+import { claimAgentTask as realClaimAgentTask, dispatchAgentTask, recoverUndispatchedAgentTasks, prepareAgentTaskForCrashRecovery } from '../../../packages/domain/src/agent/agent';
 import { initialNativeAgentExecution, readNativeAgentExecution, type NativeAgentCheckpointReference } from '../../../packages/domain/src/agent/native-agent-execution';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../../packages/domain/src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../../packages/domain/src/assets/illustration-source';
@@ -259,6 +259,34 @@ describe('image planning-contract admission hold', () => {
     expect(await admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).toBe(false);
     expect(f.task.error).toBeNull();
     expect(f.task.executionAttempt).toBe(0);
+  });
+
+  it('refuses image parking after a concurrent error mutation', async () => {
+    const f = imageContractFixture();
+    f.state.beforeUpdate = () => { f.task.error = 'concurrent-error'; };
+    expect(await admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).toBe(false);
+    expect(f.task.error).toBe('concurrent-error');
+    expect(f.task.executionAttempt).toBe(0);
+  });
+
+  it.each(['missing-marker', 'corrupt-marker'] as const)('fails closed for an already held image with %s marker', failure => {
+    const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;
+    if (failure === 'missing-marker') delete f.task.result!.nativeAgentExecution;
+    else f.task.result!.nativeAgentExecution = { planningContract: 'video-optional-audio-v1' };
+    const before = structuredClone(f.task);
+    return expect(admitPendingVideoTask(f.deps, structuredClone(f.task) as never)).resolves.toBe(true)
+      .then(() => expect(f.task).toEqual(before));
+  });
+
+  it('preserves a marked image row through the P2034 recovery decision', async () => {
+    const f = imageContractFixture();
+    Object.assign(f.task, { status: 'running', executionAttempt: 1, result: {
+      ...f.task.result, nativeAgentExecution: { ...(f.task.result!.nativeAgentExecution as Record<string, unknown>),
+        checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
+    } });
+    const before = structuredClone(f.task);
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, f.task.id)).toBe(false);
+    expect(f.task).toEqual(before);
   });
 
   it('does not reset a started marked image task during generic startup recovery', async () => {
