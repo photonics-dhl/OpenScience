@@ -2,6 +2,7 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-12 15:26：UI 替代 session 完成剩余 P2 类型契约修复 `5e1c4831`：PresentationWorkbenchProps 与 ResearchPresentation/StoryboardPanel/StoryboardPlans 统一为 `void | Promise<StoryboardWriteOutcome>`；13/13、Web typecheck、diff-check 通过，canonical 未改，独立 High 复审待回。
 - 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
 - UI push workflow `38268914069`：四组 browser-entry 与 web build 通过；`agent-worker queue-recovery.test.ts` 两个既有非 UI 断言失败，导致 UI typecheck 与 `storyboard-panel.test.tsx` CI 步骤跳过。未重跑、未部署、未安装；不能称 workflow 全绿。
 - 生图：admission/floor/reader 与 adapter/worker 代码均已独立 High GO 并合入；admission 191/195（4 skip），Worker typecheck/diff-check 通过，journal 缺 RO/version 身份保持 fail-closed。唯一真实论文私有提交后的 Synclip 受控读取遇模型容量错误，未得 PNG/SHA/科学质量；禁止重提、换论文或扩预算。
