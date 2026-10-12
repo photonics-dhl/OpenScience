@@ -3,8 +3,8 @@
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
 - 2026-10-13：历史 beta-gate NO-GO (`22674ce5`/`d17e8d8d`) 已由完整依赖链修复并替代；旧结论保留在 Git 历史，不再作为当前实施入口。
-- 2026-10-13：完整 image beta-gate 链 `0e6e8440→b7bd1e08→d55eba8c→9799196c→c9030710→624b147c→5ca05a74→51fbe596` 已合入 canonical；独立 High GO（P0/P1=0），Config 18/18、Domain 117/117、API 140/140、Worker 15/15，build/typecheck/diff-check 通过；精确 CI `38288353198`/`38288353255` 运行中，未调用 Provider/部署。
-- 2026-10-13：Media CI `38288353198` 已失败：`native-video-parents.test.ts` 4 项在 `beforePersist` 报 `Scene image parent changed before task booking`，其余 browser-entry 全绿；根因为 image-only lock 条件误覆盖 video/native-audio parent 路径，image session 正在收窄到 `payload.kind === 'image'` 并申请 High，未重跑/未部署/未调用 Provider。
+- 2026-10-13：完整 image beta-gate 链已合入；最终修复 `7b1f8466` 经独立 High GO（P0/P1=0）后合入 canonical `1a22f83c`，统一 sceneImage parent CAS 与 spend/pending guard，并补不同幂等键并发回归；Config 18/18、Domain 117/117、API 140/140、Worker 15/15、typecheck/diff-check 通过；精确 Media `38291046457` 运行中，未调用 Provider/部署。
+- 2026-10-13：Media `38288353198` 的 4 项 `native-video-parents` 失败已定位为 fake transaction 父资产/Claims 未共享；`613db2c8` 经独立 High GO 修复夹具，`1a22f83c` 经独立 High GO 修复生产 sceneImage parent CAS 并发序列化；精确 Media `38291046457` 正在验证，未部署/未调用 Provider。
 - 2026-10-13：视频只读核对确认 broker 关闭视频准入且 Synclip 音色目录返回 `SYNCLIP_AUDIO_CATALOG_FAILED`；已停止商业 Provider、付费任务与服务启用，不盲选音色、不重试，保留 Hermes 任务与失败证据。
 - 2026-10-13：视频线上根因进一步确认：Synclip broker timer 为 disabled/inactive 且无 `.ready` 心跳，`adminModelsEnabled=false`、音频配置缺失；系统按设计关闭视频准入。未产生视频/音频任务、扣费或 receipt；代码工作树保持干净。
 - 2026-10-12 15:26：UI 替代 session 完成剩余 P2 类型契约修复 `5e1c4831`：PresentationWorkbenchProps 与 ResearchPresentation/StoryboardPanel/StoryboardPlans 统一为 `void | Promise<StoryboardWriteOutcome>`；13/13、Web typecheck、diff-check 通过，canonical 未改，独立 High 复审待回。
