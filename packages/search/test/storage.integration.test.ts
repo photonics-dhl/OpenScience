@@ -97,7 +97,21 @@ function coreFixture(input: {
       await client.user.create({ data: { id: userId, email: `search-${userId}@example.test`,
         displayName: 'Synthetic search fixture', passwordHash: 'unusable-test-only' } });
       await client.workspace.createMany({ data: input.workspaces.map(id => ({ id, ownerId: userId, type: 'team', name: 'Synthetic search fixture' })) });
-      await client.researchObject.createMany({ data: input.objects.map(row => ({ ...row, createdBy: userId, title: 'Synthetic search source' })) });
+      const deletedObjects = input.objects.filter((row): row is typeof row & { deletedAt: Date } => row.deletedAt !== undefined);
+      await client.researchObject.createMany({ data: input.objects.map(({ deletedAt: _deletedAt, ...row }) => ({ ...row,
+        createdBy: userId, title: 'Synthetic search source' })) });
+      if (deletedObjects.length > 0) {
+        await client.$transaction(async tx => {
+          await tx.$executeRaw`SELECT set_config('openscience.trash_mutation', 'on', true)`;
+          for (const row of deletedObjects) {
+            const entry = await tx.trashEntry.create({ data: { kind: 'research_object', resourceId: row.id,
+              ownerId: userId, workspaceId: row.workspaceId, researchObjectId: row.id,
+              label: 'Synthetic search source', deletedAt: row.deletedAt,
+              purgeAfter: new Date(row.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000) } });
+            await tx.$executeRaw`UPDATE research_objects SET deleted_at = ${row.deletedAt}, trash_entry_id = ${entry.id}::uuid WHERE id = ${row.id}::uuid`;
+          }
+        });
+      }
       await client.blob.createMany({ data: hashes.map(sha256 => ({ sha256, storageKey: `test-only/${sha256}`, size: 1n })) });
       await client.artifact.createMany({ data: input.artifacts.map(({ contentHash, ...row }) => ({ ...row,
         blobSha256: contentHash, logicalPath: 'synthetic.txt', size: 1n, uploadedBy: userId })) });
@@ -110,13 +124,17 @@ function coreFixture(input: {
     async dispose() {
       try {
         if (mutationAllowed) {
-          await client.agentTask.deleteMany({ where: { id: { in: sessions.map(s => s.id) } } });
-          await client.agentSession.deleteMany({ where: { id: { in: sessions.map(s => s.sessionId) } } });
-          await client.researchObject.deleteMany({ where: { id: { in: input.objects.map(r => r.id) } } });
-          await client.artifact.deleteMany({ where: { id: { in: input.artifacts.map(a => a.id) } } });
-          await client.blob.deleteMany({ where: { sha256: { in: hashes } } });
-          await client.workspace.deleteMany({ where: { id: { in: input.workspaces } } });
-          await client.user.deleteMany({ where: { id: userId } });
+          await client.$transaction(async tx => {
+            await tx.$executeRaw`SELECT set_config('openscience.trash_mutation', 'on', true)`;
+            await tx.agentTask.deleteMany({ where: { id: { in: sessions.map(s => s.id) } } });
+            await tx.agentSession.deleteMany({ where: { id: { in: sessions.map(s => s.sessionId) } } });
+            await tx.trashEntry.deleteMany({ where: { kind: 'research_object', resourceId: { in: input.objects.map(r => r.id) } } });
+            await tx.researchObject.deleteMany({ where: { id: { in: input.objects.map(r => r.id) } } });
+            await tx.artifact.deleteMany({ where: { id: { in: input.artifacts.map(a => a.id) } } });
+            await tx.blob.deleteMany({ where: { sha256: { in: hashes } } });
+            await tx.workspace.deleteMany({ where: { id: { in: input.workspaces } } });
+            await tx.user.deleteMany({ where: { id: userId } });
+          });
         }
       } finally { await client.$disconnect(); }
     },
@@ -598,11 +616,13 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
       revision: model.modelRevision, dimension: 1024, sourceSha256: model.sourceSha256,
       packageFreezeSha256: model.packageFreezeSha256, modelManifestSha256: model.modelManifestSha256, status: 'active' } });
     for (const [scope, id, chunk, strength] of [[generation, taskId, chunkId, 1], [foreign, foreignTaskId, foreignChunkId, 8]] as const) {
+      const fenceOwnerCreatedAt = new Date();
       await client.searchIndexTask.create({ data: {
         id, workspaceId: workspace, researchObjectId: scope.researchObjectId, artifactId: scope.artifactId,
         sourceVersionId: scope.sourceVersionId, sourceVersionNo: 1, contentHash: scope.contentHash,
         sourceGenerationSha256: createHash('sha256').update(id).digest('hex'), sourceCreatedAt: new Date(),
-        modelVersionId: model.modelVersionId, fenceOwnerTaskId: scope.fenceOwnerTaskId, status: 'succeeded', isCurrent: true,
+        modelVersionId: model.modelVersionId, fenceOwnerTaskId: scope.fenceOwnerTaskId, fenceOwnerCreatedAt, fenceOwnerAttempt: 1,
+        status: 'succeeded', isCurrent: true,
       } });
       await client.searchChunk.create({ data: {
         id: chunk, workspaceId: workspace, researchObjectId: scope.researchObjectId, artifactId: scope.artifactId,
