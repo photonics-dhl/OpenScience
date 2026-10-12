@@ -517,7 +517,7 @@ describe('ordinary Native video revision parent contract', () => {
         : initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1');
       expect(child.result).toEqual(expected); expect(child.result.nativeAgentExecution).not.toHaveProperty('checkpoint');
       expect(f.db.agentTasks).toHaveLength(beforeTasks + 1); expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(beforeDebits + 1);
-      expect(f.readVideoReadiness.mock.calls).toEqual([[]]); expect(f.parentTask).toEqual(parent);
+      expect(f.readVideoReadiness.mock.calls).toEqual([mode === 'marked-native' ? ['native-first'] : []]); expect(f.parentTask).toEqual(parent);
       const paid = structuredClone(f.db); f.readVideoReadiness.mockClear().mockResolvedValue(false);
       expect((await submitPresentationGeneration(f as never, f.input)).id).toBe(task.id);
       expect(f.db).toEqual(paid); expect(f.readVideoReadiness).not.toHaveBeenCalled();
@@ -545,11 +545,11 @@ describe('ordinary Native video revision parent contract', () => {
     await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(debits);
   });
-  it('keeps native-first local revisions blocked when complete default-TTS readiness is absent', async () => {
+  it('keeps native-first local revisions blocked when complete Host readiness is absent', async () => {
     const f = await nativeLocalFixture('marked-native'); f.readVideoReadiness.mockResolvedValue(false);
     const before = structuredClone(f.db);
     await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
-    expect(f.db).toEqual(before); expect(f.readVideoReadiness.mock.calls).toEqual([[]]);
+    expect(f.db).toEqual(before); expect(f.readVideoReadiness.mock.calls).toEqual([['native-first']]);
   });
   it.each(['deleted-parent', 'contract-drift', 'claim-drift', 'temporarily-unreadable-parent'] as const)(
     'publicly replays the exact paid child after %s without parent/Claim/Host reads or any write', async change => {
