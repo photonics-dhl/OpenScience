@@ -713,13 +713,13 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
     await client.$executeRaw(Prisma.sql`
       INSERT INTO "search_chunks" ("id", "workspace_id", "research_object_id", "artifact_id", "source_version_id", "index_task_id",
         "content_hash", "ordinal", "language", "text", "token_count", "locators", "claim_ids", "lexical_terms", "term_frequencies", "lexical_text", "active", "updated_at")
-      SELECT md5(${foreignTaskId} || ':capacity:' || series::text) || md5('search-capacity' || ${foreignTaskId} || ':' || series::text),
-        source."workspace_id", source."research_object_id", source."artifact_id", source."source_version_id", source."index_task_id", source."content_hash", 100 + series,
+      SELECT md5(${foreignTaskId} || ':capacity:' || batch_no::text) || md5('search-capacity' || ${foreignTaskId} || ':' || batch_no::text),
+        source."workspace_id", source."research_object_id", source."artifact_id", source."source_version_id", source."index_task_id", source."content_hash", 100 + batch_no,
         'en', repeat('x', 65536), 1,
         (SELECT jsonb_agg(jsonb_build_object('artifactId', source."artifact_id", 'contentHash', source."content_hash",
-          'blockId', repeat('b', 200), 'page', 1)) FROM generate_series(1, 1024) AS locator_index),
+          'blockId', repeat('b', 200), 'page', 1)) FROM generate_series(1, 1024) AS locator(locator_no)),
         '[]'::jsonb, '["pulse"]'::jsonb, '{"pulse":1}'::jsonb, 'pulse', true, NOW()
-      FROM "search_chunks" AS source CROSS JOIN generate_series(1, 98) AS series WHERE source."id" = ${foreignChunkId}
+      FROM "search_chunks" AS source CROSS JOIN generate_series(1, 98) AS batch(batch_no) WHERE source."id" = ${foreignChunkId}
     `);
     try {
       expect(await hydrate()).toMatchObject({ status: 'ok', candidates: [{ id: chunkId }] });
