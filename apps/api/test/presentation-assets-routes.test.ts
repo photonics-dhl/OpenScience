@@ -747,6 +747,22 @@ it.each([false,true])('gates scene capability and charges one exact replay only 
   await ctx.app.close();
 });
 
+it('allows an ordinary workspace writer to create a private scene image while beta imagery is enabled', async () => {
+  const ctx = await fixture('user', undefined, true, true);
+  const settings={locale:'en',style:'ink',instruction:'Explain'};
+  const document={schemaVersion:1,title:'Plan',scenes:[{title:'Scene',narration:'Finding',visualAction:'Wave',sourceClaimIds:[CLAIM]}]};
+  ctx.db.presentationAssets.push({id:ASSET,researchObjectId:RO,versionId:VERSION,kind:'interactive_html',status:'approved',label:'presentation_not_evidence',provenance:{subtype:'sourced_storyboard',storyboardDocument:document,storyboardSettings:{...settings,output:'image'},sourceEvidenceIdentity:'a'.repeat(64)}});
+  ctx.db.presentationAssetClaims.push({presentationAssetId:ASSET,claimId:CLAIM});
+  const listed=await ctx.app.inject({method:'GET',url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets`,cookies:{openscience_session:ctx.token}});
+  expect(listed.statusCode).toBe(200);
+  expect(listed.json().assets[0].canGenerateSceneImage).toBe(true);
+  const request={method:'POST' as const,url:`/research-objects/${RO}/versions/${VERSION}/presentation-assets/generations`,...writeAuth(ctx.token,ctx.csrfCookie,ctx.csrfToken,'ordinary-scene-api'),payload:{kind:'image',sourceClaimIds:[CLAIM],sceneImage:{storyboardAssetId:ASSET,sceneIndex:0}}};
+  const response=await ctx.app.inject(request);
+  expect(response.statusCode,response.body).toBe(202);
+  expect(ctx.db.usageLedger.filter(row=>row.delta<0)).toHaveLength(1);
+  await ctx.app.close();
+});
+
 it.each([false,true])('does not charge unavailable legacy media with scene feature flag %s',async enabled=>{
   const ctx=await fixture('platform_admin',undefined,enabled);
   for(const kind of ['image','video']) {

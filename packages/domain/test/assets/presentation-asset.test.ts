@@ -38,7 +38,7 @@ function fixture(platformRole = 'user') {
     assessment: 'supported', conditions: ['room temperature'], limitations: [], extractionStatus: 'succeeded',
   });
   db.usageLedger.push({ id: 'credit', userId: USER, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: new Date() });
-  return { prisma, db, redis: { lpush: async () => 1 }, videoEnabled: true, readVideoReadiness: vi.fn(async () => true) };
+  return { prisma, db, redis: { lpush: async () => 1 }, videoEnabled: true, sceneImageEnabled: false, readVideoReadiness: vi.fn(async () => true) };
 }
 
 describe('Presentation asset domain contract', () => {
@@ -426,8 +426,8 @@ it.each([undefined, 'legacy'])('blocks planner-owned assets with invalid subtype
   expect(ctx.db.presentationAssets[0].status).toBe('draft');
 });
 
-function sceneFixture(output: 'image' | 'video' = 'video') {
-  const ctx = fixture('platform_admin');
+function sceneFixture(output: 'image' | 'video' = 'video', platformRole: 'user' | 'platform_admin' = 'platform_admin') {
+  const ctx = fixture(platformRole);
   const document = { schemaVersion: 1, title: 'Plan', scenes: Array.from({ length: 3 }, () => ({ title: 'Scene', narration: 'Finding', visualAction: 'Wave', ...(output === 'video' ? { durationSeconds: 8 } : {}), sourceClaimIds: [CLAIM] })) };
   ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', label: 'presentation_not_evidence', updatedAt: new Date(), contentHash: 'parent', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain', ...(output === 'image' ? { output } : {}) } } });
   ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
@@ -952,6 +952,22 @@ it('submits one charged scene image with exact replay and narrow capability', as
   expect(ctx.db.agentTasks[0].payload.sceneImage).toEqual(ctx.input.sceneImage);
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
   expect((await listPresentationAssets(ctx as never, ctx.input))[0].canGenerateSceneImage).toBe(true);
+});
+it('allows an ordinary writer to generate a private scene image when the server beta gate is enabled', async () => {
+  const ctx = sceneFixture('image', 'user');
+  ctx.sceneImageEnabled = true;
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  const view = (await listPresentationAssets(ctx as never, ctx.input))[0];
+  expect(view).toMatchObject({ canGenerateSceneImage: true });
+  const task = await submitPresentationGeneration(ctx as never, ctx.input);
+  expect(task.status).toBe('pending');
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+});
+it('keeps ordinary writers blocked when the beta image gate is disabled', async () => {
+  const ctx = sceneFixture('image', 'user');
+  expect((await listPresentationAssets(ctx as never, ctx.input))[0].canGenerateSceneImage).toBe(false);
+  await expect(submitPresentationGeneration(ctx as never, ctx.input)).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
+  expect(ctx.db.agentTasks).toHaveLength(0);
 });
 it.each(['draft', 'rejected', 'foreign', 'version', 'claim-set', 'index'])('blocks invalid scene parent %s before charging', async reason => {
   const ctx = sceneFixture();

@@ -187,6 +187,11 @@ async function requirePlatformAdmin(deps: AgentDeps, userId: string): Promise<vo
   if (user?.platformRole !== 'platform_admin') throw new PresentationAssetError('ADMIN_REQUIRED', 'Generated image and video requests require a platform administrator');
 }
 
+async function requirePresentationGenerationAccess(deps: AgentDeps, userId: string, kind: PresentationGenerationKind): Promise<void> {
+  if (kind === 'image' && deps.sceneImageEnabled === true) return;
+  await requirePlatformAdmin(deps, userId);
+}
+
 /** Reuse a pixel review's rendering correction while preserving the approved scientific scene. */
 export async function readNarrativeImageRenderSource(prisma: Prisma.TransactionClient, input: {
   actorId: string; runId: string; researchObjectId: string; versionId: string; sourceClaimIds: string[]; imageAssetId: string;
@@ -385,7 +390,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   const payload = parsePresentationGenerationPayload({ schemaVersion: 1, researchObjectId: input.researchObjectId, versionId: input.versionId, kind: input.kind, sourceClaimIds: input.sourceClaimIds, ...(input.sceneImage !== undefined ? { sceneImage: input.sceneImage } : {}), ...(input.storyboard !== undefined ? { storyboard: input.storyboard } : {}), ...(input.video !== undefined ? { video: input.video } : {}) });
   const replay = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true } });
   if (replay) {
-    if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
+    if (input.kind === 'image' || input.kind === 'video') await requirePresentationGenerationAccess(deps, input.userId, input.kind);
     const task = await deps.prisma.$transaction(async tx => {
       const stored = await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
       if (!stored || stored.id !== replay.id || stored.deletedAt)
@@ -425,7 +430,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       });
     }
   }
-  if (input.kind === 'image' || input.kind === 'video') await requirePlatformAdmin(deps, input.userId);
+  if (input.kind === 'image' || input.kind === 'video') await requirePresentationGenerationAccess(deps, input.userId, input.kind);
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
     videoIntent ||= sceneParent?.view.output === 'video';
@@ -545,7 +550,7 @@ export async function listPresentationAssets(deps: AgentDeps & HermesVideoReadin
     }
     const storyboardForVideo = presentationStoryboardView(asset, ids);
     const nativeVideo = storyboardForVideo?.output === 'video' && storyboardForVideo.narrative === true;
-    const mayGenerate = claimsValid && canWrite && user?.platformRole === 'platform_admin';
+    const mayGenerate = claimsValid && canWrite && (user?.platformRole === 'platform_admin' || deps.sceneImageEnabled === true);
     let nativeProof: Awaited<ReturnType<typeof requireNativeVideoStoryboard>> | undefined;
     let videoFrameAssetIds: string[] | undefined;
     if (nativeVideo && claimsValid && canWrite) {

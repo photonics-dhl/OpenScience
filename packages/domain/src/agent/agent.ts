@@ -60,6 +60,8 @@ export interface AgentDeps extends WorkspaceDeps {
   redis: Redis;
   /** Installed immutable server runtime, never taken from a public task payload. */
   nativeAgentRuntime?: NativeAgentRuntimeConfig;
+  /** Server-owned beta gate for ordinary writer access to private scene images. */
+  sceneImageEnabled?: boolean;
 }
 
 export interface AgentTaskView {
