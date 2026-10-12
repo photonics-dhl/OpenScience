@@ -2,6 +2,8 @@
 
 > 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
+- 2026-10-12 当前调度：image admission 因 malformed-contract 回归仍未合入；video `fe261f3f` 已提交并等待独立 High；UI 三次固定包回合均遇模型容量错误，已改派不同模型继续输出实际包/adapter 清点，不以清单代替交付。
+
 ## 最近检查点
 
 - 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper仍High GO并入候选；image admission `8f817cbc` 已形成7文件候选但独立High仍NO-GO，见下一条。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
