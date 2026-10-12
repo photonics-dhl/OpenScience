@@ -238,8 +238,10 @@ function submissionFixture(f: ListFixture) {
   db.researchObjects.push({ ...f.version.researchObject, status: 'draft', visibility: 'private' });
   db.commits.push({ id: uuid(82), branchId: f.version.commit.branchId });
   db.versions.push({ ...f.version, commitId: uuid(82) });
+  db.presentationAssets.push(...f.assets.map(asset => structuredClone(asset)));
+  db.presentationAssetClaims.push(...f.assets.flatMap(asset => asset.sourceClaims.map(source => ({ presentationAssetId: asset.id, ...structuredClone(source) }))));
   db.usageLedger.push({ id: uuid(83), userId: f.input.userId, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: now });
-  for (const name of ['presentationAsset', 'claimNode', 'evidenceRecord', 'ingestionTask', 'version', 'researchObject', 'workspace', 'membership', 'hermesResearchStep'] as const)
+  for (const name of ['claimNode', 'evidenceRecord', 'ingestionTask', 'version', 'researchObject', 'workspace', 'membership', 'hermesResearchStep'] as const)
     Object.assign(prisma[name], f.prisma[name]);
   const findTask = prisma.agentTask.findUnique.bind(prisma.agentTask);
   prisma.agentTask.findUnique = (async args => args.where.id
@@ -354,11 +356,13 @@ describe('native video audio pre-charge selection', () => {
     const ctx = submissionFixture(f), readVideoReadiness = vi.fn(async (purpose?: 'native-first') => purpose === 'native-first');
     const deps = { ...ctx.deps, readVideoReadiness };
     const input = kind === 'video' ? videoRequest(f, 'native-video') : sceneRequest(f, 'native-scene');
+    const parentUpdatedAt = ctx.db.presentationAssets.find(asset => asset.id === parentId)!.updatedAt.getTime();
     const first = await submitPresentationGeneration(deps as never, input);
     expect(first.status).toBe('pending'); expect(ctx.db.agentTasks).toHaveLength(1);
     expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
     expect(ctx.db.usageLedger.find(row => row.kind === 'consume')).toMatchObject({ resource: 'ai_credit', delta: -1n,
       metadata: { taskId: first.id, policy: 'charged-on-submit' } });
+    if (kind === 'scene-image') expect(ctx.db.presentationAssets.find(asset => asset.id === parentId)!.updatedAt.getTime()).toBeGreaterThan(parentUpdatedAt);
     expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
     readVideoReadiness.mockClear().mockResolvedValue(false);
     const paid = structuredClone(ctx.db);
@@ -520,9 +524,7 @@ describe('native video parent audio contract authority', () => {
 describe('native video storyboard approval authority', () => {
   function transitionFixture(f: ListFixture) {
     Object.assign(f.version, { createdAt: now, versionNo: 1 });
-    const ctx = submissionFixture(f), parent = structuredClone(f.parent);
-    ctx.db.presentationAssets.push(parent);
-    ctx.db.presentationAssetClaims.push({ presentationAssetId: parentId, claimId });
+    const ctx = submissionFixture(f), parent = ctx.db.presentationAssets.find(asset => asset.id === parentId)!;
     ctx.deps.prisma.presentationAsset.findUnique = (async ({ where }: { where: { id: string } }) =>
       ctx.db.presentationAssets.find(asset => asset.id === where.id) ?? f.prisma.presentationAsset.findUnique({ where })) as typeof ctx.deps.prisma.presentationAsset.findUnique;
     ctx.deps.prisma.hermesResearchRun.findFirst = vi.fn(async () => null) as typeof ctx.deps.prisma.hermesResearchRun.findFirst;
