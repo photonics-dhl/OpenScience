@@ -3,12 +3,15 @@ import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt, compileHistoricalNativeVideoShotPrompt } from '../src/presentation/synclip-video-spool';
+import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt, compileHistoricalNativeVideoShotPrompt, resolveSynclipVideoModel } from '../src/presentation/synclip-video-spool';
 
 const TASK = '10000000-0000-4000-8000-000000000001';
 const CLAIM = '20000000-0000-4000-8000-000000000001';
 const ownedFixtures: string[] = [];
 afterEach(async () => { for (const path of ownedFixtures.splice(0)) await rm(path, { recursive: true, force: true }); });
+it('fails closed for an unknown configured Synclip video model', () => {
+  expect(() => resolveSynclipVideoModel('unknown-model')).toThrow('SYNCLIP_VIDEO_MODEL_INVALID');
+});
 const png = () => { const value = Buffer.alloc(33); Buffer.from('89504e470d0a1a0a', 'hex').copy(value); value.write('IHDR', 12); return value; };
 const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
 const direction = (index: number) => ({ shotType: index === 0 ? 'hook' as const : 'mechanism' as const, purpose: 'purpose ' + index, subjectLock: 'same approved subject', generatedElements: 'only the approved field and electron', motion: 'motion beat ' + index, camera: 'slow controlled push-in', reference: 'scene-artwork' as const, frameStrategy: 'start-reference' as const, audioMode: 'external-narration' as const, subtitleMode: 'sidecar' as const, negativeConstraints: ['no invented labels'], modelPolicy: 'commercial-primary' as const });
@@ -143,15 +146,36 @@ describe('private audio audition transport', () => {
       actorId: 'actor', workspaceId: 'workspace', researchObjectId: 'ro', versionId: 'version', parentIdentity: 'verified-parent' };
     return { ...f, input };
   }
-  async function output(f: Awaited<ReturnType<typeof fixture>>, grant: Record<string, unknown>) {
+  async function output(f: Awaited<ReturnType<typeof fixture>>, grant: Record<string, unknown>, resultPatch: Record<string, unknown> = {}) {
     const outDir = join(f.resultsDir, TASK); await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, 'audition.mp3'), audioBytes);
-    await writeFile(join(outDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, purpose: 'audio-audition', status: 'succeeded',
+    await writeFile(join(outDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, purpose: 'audio-audition', status: 'succeeded', provider: 'synclip', model: 'ltx23', ...resultPatch,
       inputHash: grant.inputHash, executionAttempt: grant.executionAttempt, audio: { sceneIndex: 1, locale: 'zh', voice: audio.voice, speed: 1,
         audioTaskId: 'known-tts', contentType: 'audio/mpeg', outputSha256: createHash('sha256').update(audioBytes).digest('hex'),
         outputSize: audioBytes.length, durationSeconds: 2.5, timingStatus: 'decoded',
         quote: { coinsPerCharacter: 2, characters: 11, estimatedCoins: 22, workerCeiling: 200, hostCeiling: 200 }, coinsUsed: 22 } }));
   }
+  it('rejects an audio audition when readiness advertises another model', async () => {
+    const f = await fixture(); let grants = 0;
+    await writeFile(f.readyPath, JSON.stringify({ schemaVersion: 1, provider: 'synclip', model: 'ltx23fast', adapterRevision: 'synclip-video-v2',
+      accepting: false, audioAccepting: true, updatedAt: f.now, narration: audio, audioAuditionBudget: { maxEstimatedCoins: 200 } }));
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => { grants++; return { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 } as never; } });
+    await expect(spool.audition(f.input)).rejects.toThrow('AUDIO_AUDITION_UNAVAILABLE');
+    expect(grants).toBe(1);
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('preserves a legal Broker video error in an audio audition result', async () => {
+    const f = await fixture(); let grant: Record<string, unknown>;
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        grant = { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        await output(f, grant, { status: 'failed', errorCode: 'SYNCLIP_VIDEO_MODEL_MISMATCH' });
+        return grant as never;
+      } });
+    await expect(spool.audition(f.input)).rejects.toThrow('SYNCLIP_VIDEO_MODEL_MISMATCH');
+  });
+
   it('awaits the committed grant before exposing a request and consumes only typed MP3', async () => {
     const f = await fixture(); let grant: Record<string, unknown>;
     const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
