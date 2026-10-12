@@ -2,6 +2,8 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-13：生图提交 `22674ce5` 的独立 High 复审仍为 P1 NO-GO：API/config 可因 Minimax/Codex/ChatGPT Web 开启 `sceneImageEnabled`，但 Worker 仅在 Synclip 原生配置时传 `nativeSceneImageEnabled=true`，造成普通作者先扣费后被 Worker 拒绝；需统一 config/API/Worker gate 并补真实 deps 回归，未合入/未部署。
+- 2026-10-13：视频只读核对确认 broker 关闭视频准入且 Synclip 音色目录返回 `SYNCLIP_AUDIO_CATALOG_FAILED`；已停止商业 Provider、付费任务与服务启用，不盲选音色、不重试，保留 Hermes 任务与失败证据。
 - 2026-10-12 15:26：UI 替代 session 完成剩余 P2 类型契约修复 `5e1c4831`：PresentationWorkbenchProps 与 ResearchPresentation/StoryboardPanel/StoryboardPlans 统一为 `void | Promise<StoryboardWriteOutcome>`；13/13、Web typecheck、diff-check 通过，canonical 未改，独立 High 复审待回。
 - 2026-10-12 15:31：独立 High 对 `5e1c4831` 正式 GO（无 P0/P1）；P2 为 void 可继续丢弃 outcome 与潜在 type-only 依赖审计边，现有路径无运行时回归。已 cherry-pick/push 为 canonical `c258da85`，等待该提交精确 workflow 回执，未部署。
 - 2026-10-12 15:41：canonical `c258da85` 的精确 push workflow `38270923462` 已回执：browser-entry/web build 全通过；相同两项非 UI queue-recovery 断言失败，UI typecheck 与 storyboard 定向 CI 被跳过。未重跑、未部署、未安装，canonical 工作树干净。
