@@ -706,12 +706,24 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
   });
 
   it('excludes unrelated payload bytes before hydration capacity and loads only this source', async () => {
-    await client.$executeRaw(Prisma.sql`UPDATE "search_chunks" SET "text" = repeat('x', 9 * 1024 * 1024) WHERE "id" = ${foreignChunkId}`);
+    const capacityChunkIds = Array.from({ length: 130 }, (_, index) => {
+      const suffix = String(index + 1);
+      return createHash('md5').update(`${foreignTaskId}:capacity:${suffix}`).digest('hex')
+        + createHash('md5').update(`search-capacity${foreignTaskId}:${suffix}`).digest('hex');
+    });
+    await client.$executeRaw(Prisma.sql`
+      INSERT INTO "search_chunks" ("id", "workspace_id", "research_object_id", "artifact_id", "source_version_id", "index_task_id",
+        "content_hash", "ordinal", "language", "text", "token_count", "locators", "claim_ids", "lexical_terms", "term_frequencies", "lexical_text", "active", "updated_at")
+      SELECT md5(${foreignTaskId} || ':capacity:' || series::text) || md5('search-capacity' || ${foreignTaskId} || ':' || series::text),
+        "workspace_id", "research_object_id", "artifact_id", "source_version_id", "index_task_id", "content_hash", 100 + series,
+        'en', repeat('x', 65536), 1, "locators", '[]'::jsonb, '["pulse"]'::jsonb, '{"pulse":1}'::jsonb, 'pulse', true, NOW()
+      FROM "search_chunks" CROSS JOIN generate_series(1, 130) AS series WHERE "id" = ${foreignChunkId}
+    `);
     try {
       expect(await hydrate()).toMatchObject({ status: 'ok', candidates: [{ id: chunkId }] });
-      expect(await storage.hydrateCandidates({ tenantId: workspace, ids: [chunkId, foreignChunkId] }))
+      expect(await storage.hydrateCandidates({ tenantId: workspace, ids: [chunkId, foreignChunkId, ...capacityChunkIds] }))
         .toEqual({ status: 'unavailable', code: 'lexical_capacity_exceeded' });
-    } finally { await client.searchChunk.update({ where: { id: foreignChunkId }, data: { text: 'pulse '.repeat(8) } }); }
+    } finally { await client.searchChunk.deleteMany({ where: { id: { in: capacityChunkIds } } }); }
   });
 
   it('excludes unrelated rows before lexical and dense corpus capacity', async () => {
@@ -730,6 +742,8 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
         FROM "search_chunks" chunk CROSS JOIN "search_embeddings" embedding
         WHERE chunk."index_task_id" = ${foreignTaskId}::uuid AND chunk."ordinal" > 0 AND embedding."chunk_id" = ${foreignChunkId}
       `);
+      await client.$executeRaw(Prisma.sql`ANALYZE "search_chunks"`);
+      await client.$executeRaw(Prisma.sql`ANALYZE "search_embeddings"`);
       expect(await lexical()).toMatchObject({ status: 'ok', corpus: { documentCount: 1 }, candidates: [{ id: chunkId }] });
       expect(await dense()).toMatchObject({ status: 'ok', candidates: [{ id: chunkId }] });
       expect(await storage.lexicalCandidates({ tenantId: workspace, query: 'pulse', terms: ['pulse'], limit: 1 }))
