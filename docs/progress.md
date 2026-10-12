@@ -2,14 +2,14 @@
 
 > 本页仅汇总业务状态；精确版本、CI、资产、写权和下一步统一见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。需求有效性不随局部修复或部署改变。
 
-- 2026-10-12 当前调度：image admission 因 malformed-contract 回归仍未合入；video `fe261f3f` 已提交并等待独立 High；UI 三次固定包回合均遇模型容量错误，已改派不同模型继续输出实际包/adapter 清点，不以清单代替交付。
+- 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；视频链已推进至 `a6908459`，High 复审发现未知模型回退等 P1，已退回修复；UI 原 session 配置错误，已新建接替 session继续生成固定版本包与扫描。
 
 ## 最近检查点
 
-- 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper仍High GO并入候选；image admission `8f817cbc` 已形成7文件候选但独立High仍NO-GO，见下一条。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
-- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a+0ee68fe5` 已独立 High GO并合入 canonical（`0088fce9→834e9c41→93424326→b4d83486→dc630afc`）；canonical admission 189/189通过、4 skip，focused 31/31，Worker typecheck/diff-check通过。queue-recovery 全套因缺失 fastify 无法收集，未冒称通过；完整floor/producer仍未就绪。Native paper-tools adapter `84047b56` 已交付（39/39及typecheck/build/diff-check通过）。
-- 2026-10-12 视频 owner 已提交 `fe261f3f`，定向复核确认 `SYNCLIP_VIDEO_MODEL`→Worker→ready/request→Broker→Gateway→result/metrics/runtime receipt 链路实际贯通；Broker 定向 102 项 97 通过、5 项因本机无 ffmpeg/ffprobe 跳过，新增快速模型端到端、Gateway API/readiness 115项与 Worker typecheck 通过，等待独立 High review；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
-- 2026-10-12 UI owner 已重新派发固定版本代码包与 Native adapter 清点的实际回合，执行中；不写共享后端、不安装/重启/外发。三线均保持 canonical 写权与生产边界。
+- 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper与image admission均已High GO并合入，scoped NativeSemanticSearch 接线亦已合入；完整floor/producer仍未就绪。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
+- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a+0ee68fe5` 已独立 High GO并合入 canonical；随后 `84047b56` 与 scoped Worker 接线已独立 High GO并按序合入，受影响定向测试 66/66、Worker typecheck/diff-check通过。queue-recovery 全套因缺失 fastify 无法收集，完整floor/producer仍未就绪。
+- 2026-10-12 视频 owner 已推进 `fe261f3f→eacb6269→6d1cb8d6→a6908459`，覆盖配置模型、ready/result/metrics 身份及 Native 错误码传播；独立 High 发现 Worker 未知模型回退、audition 身份校验与错误码传播缺口，尚未合入，已退回修复；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
+- 2026-10-12 UI 原 session 连续 configuration_update/容量错误后，已新建接替 session `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`，使用 gpt-6.1-sol→gpt-6-astra/high；固定版本代码包与 secret/config/log 扫描执行中，不写共享后端、不安装/重启/外发。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
