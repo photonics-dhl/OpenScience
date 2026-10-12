@@ -14,6 +14,7 @@ import {
   rankLexicalCandidates,
 } from './lexical';
 import { tokenizeSearchText } from './tokenizer';
+import { parseSearchGenerationScope, type SearchGenerationScope } from './types';
 
 const MAX_RESULT_LIMIT = 100;
 const MAX_QUERY_CHARACTERS = 4_096;
@@ -119,12 +120,13 @@ export function createHybridSearchService(dependencies: {
   const telemetryKey = Uint8Array.from(dependencies.telemetryKey);
   const modelIdentity = copyModelIdentity(dependencies.modelIdentity);
   const now = dependencies.now ?? (() => performance.now());
-  return {
-    async search(input: { tenantId: string; query: string; limit: number }): Promise<HybridSearchResponse> {
+  async function search(input: { tenantId: string; query: string; limit: number }, generation?: SearchGenerationScope): Promise<HybridSearchResponse> {
+      const scope = generation === undefined ? {} : { generation };
       validateHybridInput(input);
       const totalStarted = now();
       const lexicalStarted = now();
       const lexicalPromise = rankLexicalCandidates({
+        ...scope,
         storage: dependencies.storage,
         tenantId: input.tenantId,
         query: input.query,
@@ -149,6 +151,7 @@ export function createHybridSearchService(dependencies: {
         try {
           const queryVector = new Float32Array(embedding.vectors[0] ?? []);
           const result = await denseSearch({
+            ...scope,
             storage: dependencies.storage,
             tenantId: input.tenantId,
             modelIdentity,
@@ -204,6 +207,7 @@ export function createHybridSearchService(dependencies: {
         k: 60,
       });
       const hydrated = await dependencies.storage.hydrateCandidates({
+        ...scope,
         tenantId: input.tenantId,
         ids: fused.map((candidate) => candidate.id),
       });
@@ -255,6 +259,13 @@ export function createHybridSearchService(dependencies: {
         candidates,
         needsReviewCount,
       };
+  }
+  return {
+    search(input: { tenantId: string; query: string; limit: number }) {
+      return search(input);
+    },
+    async searchGeneration(input: { tenantId: string; query: string; limit: number; generation: SearchGenerationScope }) {
+      return search(input, parseSearchGenerationScope(input.generation));
     },
   };
 }

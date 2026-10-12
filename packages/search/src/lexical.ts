@@ -1,6 +1,7 @@
 import type { SourceLocator } from '@openscience/domain';
 
 import { tokenizeSearchText } from './tokenizer';
+import { parseSearchGenerationScope, type SearchGenerationScope } from './types';
 
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
@@ -67,12 +68,14 @@ export type LexicalCandidateStorageResult = LexicalCandidateSet | SearchStorageF
 
 export interface LexicalCandidateStorage {
   lexicalCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     query: string;
     terms: string[];
     limit: number;
   }): Promise<LexicalCandidateStorageResult>;
   hydrateCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     ids: string[];
   }): Promise<LexicalHydrationSet | SearchStorageFailure>;
@@ -97,6 +100,7 @@ export type LexicalSearchResult =
   | { status: 'unavailable'; code: SearchStorageFailure['code']; candidates: [] };
 
 export interface LexicalSearchInput {
+  generation?: SearchGenerationScope;
   storage: LexicalCandidateStorage;
   tenantId: string;
   query: string;
@@ -143,9 +147,12 @@ function validateSearchInput(input: LexicalSearchInput): { query: string; terms:
 }
 
 export async function lexicalSearch(input: LexicalSearchInput): Promise<LexicalSearchResult> {
+  const scope = input.generation === undefined ? {} : { generation: parseSearchGenerationScope(input.generation) };
+  input = { ...input, ...scope };
   const rankedResult = await rankLexicalCandidates(input);
   if (rankedResult.status === 'unavailable') return rankedResult;
   const hydrated = await input.storage.hydrateCandidates({
+    ...scope,
     tenantId: input.tenantId,
     ids: rankedResult.candidates.map((candidate) => candidate.id),
   });
@@ -167,8 +174,10 @@ export async function lexicalSearch(input: LexicalSearchInput): Promise<LexicalS
 }
 
 export async function rankLexicalCandidates(input: LexicalSearchInput): Promise<LexicalRankResult> {
+  if (input.generation !== undefined) parseSearchGenerationScope(input.generation);
   const { query, terms, limit } = validateSearchInput(input);
   const stored = await input.storage.lexicalCandidates({
+    ...(input.generation === undefined ? {} : { generation: input.generation }),
     tenantId: input.tenantId,
     query,
     terms,

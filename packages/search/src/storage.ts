@@ -14,7 +14,7 @@ import type {
 import type { DenseCandidateSet, DenseModelIdentity, DenseStorageFailure } from './dense';
 import type { QueryMetricInput } from './service';
 import { tokenizeSearchText } from './tokenizer';
-import { MAX_SEARCH_CHUNKS_PER_DOCUMENT, type SearchChunkDraft } from './types';
+import { MAX_SEARCH_CHUNKS_PER_DOCUMENT, parseSearchGenerationScope, type SearchChunkDraft, type SearchGenerationScope } from './types';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
@@ -400,7 +400,32 @@ function validateMetric(metric: QueryMetricInput): void {
     ].includes(metric.errorCode))) throw new Error('query metric is outside storage bounds');
 }
 
+/** Applied before statistics, capacity checks and ranking, never as a top-N post-filter. */
+function generationPredicate(generation?: SearchGenerationScope): Prisma.Sql {
+  if (generation === undefined) return Prisma.empty;
+  const scope = parseSearchGenerationScope(generation);
+  return Prisma.sql`
+    AND chunk."research_object_id" = ${scope.researchObjectId}::uuid
+    AND chunk."artifact_id" = ${scope.artifactId}::uuid
+    AND chunk."source_version_id" = ${scope.sourceVersionId}::uuid
+    AND chunk."content_hash" = ${scope.contentHash}
+    AND EXISTS (
+      SELECT 1 FROM "search_index_tasks" generation
+      WHERE generation."id" = chunk."index_task_id"
+        AND generation."workspace_id" = chunk."workspace_id"
+        AND generation."research_object_id" = chunk."research_object_id"
+        AND generation."artifact_id" = chunk."artifact_id"
+        AND generation."source_version_id" = chunk."source_version_id"
+        AND generation."content_hash" = chunk."content_hash"
+        AND generation."fence_owner_task_id" = ${scope.fenceOwnerTaskId}::uuid
+        AND generation."is_current" = true
+        AND generation."status" = 'succeeded'
+    )
+  `;
+}
+
 export function buildLexicalCandidateQuery(input: {
+  generation?: SearchGenerationScope;
   tenantId: string;
   query: string;
   terms: readonly string[];
@@ -431,6 +456,7 @@ export function buildLexicalCandidateQuery(input: {
     FROM "search_chunks" AS chunk
     WHERE chunk."workspace_id" = ${input.tenantId}::uuid
       AND chunk."active" = true
+      ${generationPredicate(input.generation)}
       AND (
         chunk."search_vector" @@ websearch_to_tsquery('simple'::regconfig, ${input.query})
         OR chunk."search_vector" @@ to_tsquery('simple'::regconfig, ${termQuery})
@@ -441,6 +467,7 @@ export function buildLexicalCandidateQuery(input: {
 }
 
 function buildLexicalMatchCountQuery(input: {
+  generation?: SearchGenerationScope;
   tenantId: string;
   query: string;
   terms: readonly string[];
@@ -452,6 +479,7 @@ function buildLexicalMatchCountQuery(input: {
     FROM "search_chunks" AS chunk
     WHERE chunk."workspace_id" = ${input.tenantId}::uuid
       AND chunk."active" = true
+      ${generationPredicate(input.generation)}
       AND (
         chunk."search_vector" @@ websearch_to_tsquery('simple'::regconfig, ${input.query})
         OR chunk."search_vector" @@ to_tsquery('simple'::regconfig, ${termQuery})
@@ -788,12 +816,14 @@ export class SearchStorage {
   }
 
   async lexicalCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     query: string;
     terms: string[];
     limit: number;
   }): Promise<LexicalCandidateStorageResult> {
     validateStorageQuery(input);
+    if (input.generation !== undefined) input = { ...input, generation: parseSearchGenerationScope(input.generation) };
     try {
       return await this.client.$transaction(async (transaction) => {
         await transaction.$executeRaw(Prisma.sql`
@@ -802,8 +832,9 @@ export class SearchStorage {
         const corpusRows = await transaction.$queryRaw<CorpusRow[]>(Prisma.sql`
           SELECT COUNT(*)::bigint AS document_count,
                  COALESCE(AVG("token_count"), 0)::double precision AS average_length
-          FROM "search_chunks"
-          WHERE "workspace_id" = ${input.tenantId}::uuid AND "active" = true
+          FROM "search_chunks" AS chunk
+          WHERE chunk."workspace_id" = ${input.tenantId}::uuid AND chunk."active" = true
+            ${generationPredicate(input.generation)}
         `);
         const corpus = corpusRows[0];
         const documentCount = boundedCount(corpus?.document_count);
@@ -872,10 +903,12 @@ export class SearchStorage {
   }
 
   async hydrateCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     ids: string[];
   }): Promise<LexicalHydrationSet | { status: 'unavailable'; code: 'search_storage_unavailable' | 'lexical_capacity_exceeded' }> {
     assertUuid(input.tenantId, 'tenantId');
+    if (input.generation !== undefined) input = { ...input, generation: parseSearchGenerationScope(input.generation) };
     if (input.ids.length > MAX_RESULT_LIMIT || new Set(input.ids).size !== input.ids.length
       || input.ids.some((id) => !HASH_PATTERN.test(id))) throw new Error('candidate IDs are outside hydration bounds');
     if (input.ids.length === 0) return { status: 'ok', candidates: [], needsReviewCount: 0 };
@@ -890,10 +923,11 @@ export class SearchStorage {
           SELECT COALESCE(SUM(
             octet_length("text") + octet_length("locators"::text) + octet_length("claim_ids"::text) + 128
           ), 0)::bigint AS payload_bytes
-          FROM "search_chunks"
-          WHERE "workspace_id" = ${input.tenantId}::uuid
-            AND "active" = true
-            AND "id"::text = ANY(${idArray})
+          FROM "search_chunks" AS chunk
+          WHERE chunk."workspace_id" = ${input.tenantId}::uuid
+            AND chunk."active" = true
+            AND chunk."id"::text = ANY(${idArray})
+            ${generationPredicate(input.generation)}
         `);
         if (boundedCount(sizeRows[0]?.payload_bytes) > MAX_HYDRATED_PAYLOAD_BYTES) {
           return { status: 'unavailable', code: 'lexical_capacity_exceeded' } as const;
@@ -907,6 +941,7 @@ export class SearchStorage {
           WHERE chunk."workspace_id" = ${input.tenantId}::uuid
             AND chunk."active" = true
             AND chunk."id"::text = ANY(${idArray})
+            ${generationPredicate(input.generation)}
           ORDER BY chunk."id" ASC
         `);
         const candidates: LexicalCandidatePayload[] = [];
@@ -950,11 +985,13 @@ export class SearchStorage {
   }
 
   async denseCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     modelIdentity: DenseModelIdentity;
   }): Promise<DenseCandidateSet | DenseStorageFailure> {
     assertUuid(input.tenantId, 'tenantId');
     validateModelIdentity(input.modelIdentity);
+    if (input.generation !== undefined) input = { ...input, generation: parseSearchGenerationScope(input.generation) };
     try {
       return await this.client.$transaction(async (transaction) => {
         await transaction.$executeRaw(Prisma.sql`
@@ -987,6 +1024,7 @@ export class SearchStorage {
             ON model."id" = embedding."model_version_id"
           WHERE chunk."workspace_id" = ${input.tenantId}::uuid
             AND chunk."active" = true
+            ${generationPredicate(input.generation)}
             AND model."id" = ${input.modelIdentity.modelVersionId}::uuid
             AND model."provider" = 'BAAI'
             AND model."model" = 'bge-m3'

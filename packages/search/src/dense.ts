@@ -1,3 +1,5 @@
+import { parseSearchGenerationScope, type SearchGenerationScope } from './types';
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const MAX_DENSE_CANDIDATES = 10_000;
@@ -30,6 +32,7 @@ export interface DenseModelIdentity {
 
 export interface DenseCandidateStorage {
   denseCandidates(input: {
+    generation?: SearchGenerationScope;
     tenantId: string;
     modelIdentity: DenseModelIdentity;
   }): Promise<DenseCandidateSet | DenseStorageFailure>;
@@ -115,13 +118,16 @@ export function rankDenseCandidates(input: {
 }
 
 export async function denseSearch(input: {
+  generation?: SearchGenerationScope;
   storage: DenseCandidateStorage;
   tenantId: string;
   modelIdentity: DenseModelIdentity;
   queryVector: Float32Array;
   limit: number;
 }): Promise<DenseSearchResult> {
+  if (input.generation !== undefined) parseSearchGenerationScope(input.generation);
   const stored = await input.storage.denseCandidates({
+    ...(input.generation === undefined ? {} : { generation: input.generation }),
     tenantId: input.tenantId,
     modelIdentity: input.modelIdentity,
   });

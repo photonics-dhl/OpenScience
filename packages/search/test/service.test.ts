@@ -17,6 +17,13 @@ const MODEL_IDENTITY = {
   modelManifestSha256: '3'.repeat(64),
 };
 const TELEMETRY_KEY = new Uint8Array(32).fill(7);
+const GENERATION = {
+  researchObjectId: '55555555-5555-4555-8555-555555555555',
+  artifactId: ARTIFACT,
+  sourceVersionId: '66666666-6666-4666-8666-666666666666',
+  contentHash: CONTENT_HASH,
+  fenceOwnerTaskId: '77777777-7777-4777-8777-777777777777',
+};
 
 function unitVector(index: number): number[] {
   const vector = Array.from({ length: 1024 }, () => 0);
@@ -72,6 +79,58 @@ function createStorage() {
 }
 
 describe('hybrid search service', () => {
+  it('keeps one immutable generation scope across retrieval and final hydration', async () => {
+    const storage = createStorage();
+    const generation = { ...GENERATION };
+    const embedder = { embed: vi.fn(async () => {
+      generation.artifactId = OTHER_TENANT;
+      return embeddingResult();
+    }) };
+    const service = createHybridSearchService({ storage, embedder, modelIdentity: MODEL_IDENTITY, telemetryKey: TELEMETRY_KEY });
+    const result = await service.searchGeneration({ tenantId: TENANT, query: 'pulse', limit: 1, generation });
+    expect(result).toMatchObject({ status: 'ok', mode: 'hybrid', candidates: [{ id: CHUNK_A }] });
+    const received = storage.lexicalCandidates.mock.calls[0]![0].generation;
+    expect(received).toEqual(GENERATION);
+    expect(Object.isFrozen(received)).toBe(true);
+    expect(storage.denseCandidates.mock.calls[0]![0].generation).toBe(received);
+    expect(storage.hydrateCandidates.mock.calls[0]![0].generation).toBe(received);
+    expect(JSON.stringify(result)).not.toContain(GENERATION.fenceOwnerTaskId);
+  });
+
+  it.each([undefined, null, {}, { ...GENERATION, artifactId: '' },
+    { ...GENERATION, contentHash: 'D'.repeat(64) }, { ...GENERATION, fenceOwnerTaskId: undefined },
+    { ...GENERATION, sourceGenerationSha256: 'e'.repeat(64) },
+  ])('rejects incomplete or malformed generation before retrieval: %j', async generation => {
+    const storage = createStorage();
+    const embedder = { embed: vi.fn(async () => embeddingResult()) };
+    const service = createHybridSearchService({ storage, embedder, modelIdentity: MODEL_IDENTITY, telemetryKey: TELEMETRY_KEY });
+    await expect(service.searchGeneration({ tenantId: TENANT, query: 'pulse', limit: 1, generation: generation as typeof GENERATION }))
+      .rejects.toThrow('generation');
+    expect(storage.lexicalCandidates).not.toHaveBeenCalled();
+    expect(embedder.embed).not.toHaveBeenCalled();
+  });
+
+  it('retains the scope during honest lexical degradation without retrying BGE', async () => {
+    const storage = createStorage();
+    const embedder = { embed: vi.fn(async () => { throw new Error('unavailable'); }) };
+    const service = createHybridSearchService({ storage, embedder, modelIdentity: MODEL_IDENTITY, telemetryKey: TELEMETRY_KEY });
+    await expect(service.searchGeneration({ tenantId: TENANT, query: 'pulse', limit: 1, generation: GENERATION }))
+      .resolves.toMatchObject({ status: 'ok', mode: 'lexical_only', degradationCode: 'embedding_unavailable', candidates: [{ id: CHUNK_A }] });
+    expect(embedder.embed).toHaveBeenCalledOnce();
+    expect(storage.denseCandidates).not.toHaveBeenCalled();
+    expect(storage.hydrateCandidates).toHaveBeenCalledWith(expect.objectContaining({ generation: GENERATION }));
+  });
+
+  it('does not pass scope or new fields through the existing public search', async () => {
+    const storage = createStorage();
+    const service = createHybridSearchService({ storage, embedder: { embed: vi.fn(async () => embeddingResult()) },
+      modelIdentity: MODEL_IDENTITY, telemetryKey: TELEMETRY_KEY });
+    await service.search({ tenantId: TENANT, query: 'pulse', limit: 1 });
+    expect(storage.lexicalCandidates.mock.calls[0]![0]).not.toHaveProperty('generation');
+    expect(storage.denseCandidates.mock.calls[0]![0]).not.toHaveProperty('generation');
+    expect(storage.hydrateCandidates.mock.calls[0]![0]).not.toHaveProperty('generation');
+  });
+
   it('rejects invalid queries before invoking either retrieval channel', async () => {
     const storage = createStorage();
     const embedder = { embed: vi.fn(async () => { throw new Error('must not run'); }) };

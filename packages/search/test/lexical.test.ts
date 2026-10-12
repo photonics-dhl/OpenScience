@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SearchStorage, lexicalSearch, scoreBm25 } from '../src';
 
@@ -22,6 +22,20 @@ describe('scoreBm25', () => {
 });
 
 describe('lexicalSearch', () => {
+  it('preserves generation through lexical ranking and its own hydration', async () => {
+    const generation = { researchObjectId: WORKSPACE_A, artifactId: WORKSPACE_A, sourceVersionId: WORKSPACE_A,
+      contentHash: '1'.repeat(64), fenceOwnerTaskId: WORKSPACE_A };
+    const storage = {
+      lexicalCandidates: vi.fn(async () => ({ status: 'ok' as const, corpus: { documentCount: 1, averageLength: 1 },
+        documentFrequencies: { pulse: 1 }, candidates: [{ id: 'a'.repeat(64), tenantId: WORKSPACE_A, tokenCount: 1,
+          termFrequencies: { pulse: 1 } }], needsReviewCount: 0 })),
+      hydrateCandidates: vi.fn(async () => ({ status: 'ok' as const, candidates: [], needsReviewCount: 0 })),
+    };
+    await lexicalSearch({ storage, tenantId: WORKSPACE_A, query: 'pulse', limit: 1, generation });
+    expect(storage.lexicalCandidates).toHaveBeenCalledWith(expect.objectContaining({ generation }));
+    expect(storage.hydrateCandidates).toHaveBeenCalledWith(expect.objectContaining({ generation, ids: ['a'.repeat(64)] }));
+  });
+
   it('rejects empty and oversized queries before storage access', async () => {
     const storage = { lexicalCandidates: async () => { throw new Error('must not run'); } };
 
@@ -138,6 +152,20 @@ describe('SearchStorage', () => {
       .rejects.toThrow(/limit/);
   });
 
+  it.each([null, {}, { researchObjectId: WORKSPACE_A }])('rejects malformed direct storage scope before any transaction: %j', async generation => {
+    const client = { $transaction: vi.fn() };
+    const storage = new SearchStorage(client as never);
+    await expect(storage.lexicalCandidates({ tenantId: WORKSPACE_A, query: 'pulse', terms: ['pulse'], limit: 1,
+      generation: generation as never })).rejects.toThrow('generation');
+    await expect(storage.hydrateCandidates({ tenantId: WORKSPACE_A, ids: [], generation: generation as never }))
+      .rejects.toThrow('generation');
+    await expect(storage.denseCandidates({ tenantId: WORKSPACE_A, generation: generation as never,
+      modelIdentity: { modelVersionId: WORKSPACE_A, modelRevision: '5617a9f61b028005a4858fdac845db406aefb181',
+        sourceSha256: '1'.repeat(64), packageFreezeSha256: '2'.repeat(64), modelManifestSha256: '3'.repeat(64) } }))
+      .rejects.toThrow('generation');
+    expect(client.$transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects oversized write batches and non-canonical lexical metadata before a transaction', async () => {
     const storage = new SearchStorage({ $transaction: async () => { throw new Error('must not run'); } } as never);
     const chunk = {
@@ -179,6 +207,9 @@ describe('SearchStorage', () => {
     };
     const storage = new SearchStorage({
       $transaction: async (run: (value: typeof transaction) => Promise<unknown>) => run(transaction),
+    } as never, {
+      // This unit has no valid sources: lifecycle takes its lock, then returns the empty set.
+      $transaction: async (run: (value: unknown) => Promise<unknown>) => run({ $executeRaw: async () => 1 }),
     } as never);
 
     await expect(storage.hydrateCandidates({ tenantId: WORKSPACE_A, ids: ['a'.repeat(64)] }))

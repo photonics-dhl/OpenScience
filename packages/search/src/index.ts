@@ -62,5 +62,5 @@ export {
   type QueryMetricInput,
 } from './service';
 export { tokenizeSearchText, tokenizeSearchTextWithOffsets, type SearchToken } from './tokenizer';
-export { SEARCH_CHUNK_SCHEMA_VERSION, type ChunkDocumentInput, type SearchChunkDraft, type SearchChunkTokenCounter } from './types';
+export { SEARCH_CHUNK_SCHEMA_VERSION, parseSearchGenerationScope, type SearchGenerationScope, type ChunkDocumentInput, type SearchChunkDraft, type SearchChunkTokenCounter } from './types';
 export { loadSearchIndexRuntimeConfig, type SearchIndexRuntimeConfig } from './runtime-config';
