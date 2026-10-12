@@ -998,6 +998,12 @@ export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => b
         continue;
       }
     }
+    // A started image contract may contain a paid provider checkpoint. Its
+    // recovery helper intentionally refuses to reset that row. Keep the
+    // processing entry as the durable handoff until a compatible reader can
+    // resume it; removing it would orphan the only worker recovery reference.
+    if (task && task.status !== 'pending'
+      && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isNativeImagePlanningContractTask(task))) continue;
     const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
     if (retryable) {
       if (await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1) === taskId) {

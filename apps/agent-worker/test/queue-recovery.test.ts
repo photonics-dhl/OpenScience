@@ -99,7 +99,7 @@ describe('agent-worker durable queue recovery', () => {
     expect(tasks.get('running-task')).toMatchObject({ status: 'pending', error: null });
   });
 
-  it('drops only the volatile processing entry for a running marked image task', async () => {
+  it('retains the processing entry for a running marked image task until a compatible reader resumes it', async () => {
     const task = {
       id: 'image-running-task', kind: 'presentation.generate', status: 'running', error: null,
       executionAttempt: 1, retryCount: 0, payload: { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } },
@@ -121,7 +121,7 @@ describe('agent-worker durable queue recovery', () => {
     } };
     expect(await recoverProcessingQueue({ prisma, redis } as never)).toBe(0);
     expect(task).toEqual(before);
-    expect(lists.get('agent:queue:processing')).toEqual([]);
+    expect(lists.get('agent:queue:processing')).toEqual([task.id]);
     expect(lists.get('agent:queue')).toEqual([]);
   });
 });

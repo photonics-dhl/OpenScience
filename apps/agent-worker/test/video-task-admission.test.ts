@@ -295,12 +295,13 @@ describe('image planning-contract admission hold', () => {
       ...f.task.result, nativeAgentExecution: { ...(f.task.result!.nativeAgentExecution as Record<string, unknown>),
         checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
     } });
+    f.lists.set(queueKey, []);
     f.lists.set(processingKey, [f.task.id]);
     const before = structuredClone(f.task);
     expect(await recoverProcessingQueue(f.deps)).toBe(0);
     expect(f.task).toEqual(before);
-    expect(f.lists.get(processingKey)).toEqual([]);
-    expect(f.lists.get(queueKey)).toEqual([f.task.id]);
+    expect(f.lists.get(processingKey)).toEqual([f.task.id]);
+    expect(f.lists.get(queueKey)).toEqual([]);
   });
 });
 
