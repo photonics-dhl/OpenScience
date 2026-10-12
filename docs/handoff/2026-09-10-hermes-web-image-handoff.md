@@ -24,7 +24,7 @@
 ## Open deliverables and gates
 - Image: resume one controlled real-paper private acceptance only after an available >= gpt-6.1-sol capacity path is confirmed; reuse the existing single submission, do not resubmit, switch paper, or increase budget. If capacity remains unavailable, report blocked and preserve receipts.
 - Video: keep native-only readiness and exact CI evidence; next code work requires a concrete capability gap or authorized real short-video/voice comparison. Do not invent filler checks.
-- UI: write-feedback 主范围与 `5e1c4831` Promise outcome 类型契约修复均已 High GO 并合入 canonical `c258da85`。共享 queue-recovery 仍是 CI 限制；不把它冒充 UI 回归。 Overall visual/real-route and user-quality acceptance remains open.
+- UI: write-feedback 与 `5e1c4831` 已合入 canonical；替代 session 继续修复 silent abort/stale-scope 反馈，`d9afe946` 已产出并待独立 High，canonical 未改。共享 queue-recovery 仍是 CI 限制；不把它冒充 UI 回归。 Overall visual/real-route and user-quality acceptance remains open.
 - No deployment until the relevant code, exact CI, High review, and real-product/media quality gates close. Human review of paper visuals remains a separate acceptance gate.
 
 ## Historical pointers
