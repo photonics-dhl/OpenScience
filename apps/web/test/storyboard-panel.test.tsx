@@ -1,8 +1,53 @@
+import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
+vi.mock('react', async importOriginal => {
+  const actual = await importOriginal<typeof React>();
+  return { ...actual, useState: vi.fn(), useRef: vi.fn(), useEffect: vi.fn(), useId: vi.fn(() => 'storyboard-test') };
+});
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 import { buildStoryboardRequest, StoryboardPanel } from '../components/presentation/StoryboardPanel';
+import { StoryboardPlans } from '../components/presentation/StoryboardPlans';
+
+const hookStates: unknown[] = [];
+const hookRefs: Array<{ current: unknown }> = [];
+let stateIndex = 0;
+let refIndex = 0;
+vi.mocked(React.useState).mockImplementation((<T,>(initial: T | (() => T)) => {
+  const index = stateIndex++;
+  if (!(index in hookStates)) hookStates[index] = typeof initial === 'function' ? (initial as () => T)() : initial;
+  return [hookStates[index] as T, (next: T | ((value: T) => T)) => {
+    hookStates[index] = typeof next === 'function' ? (next as (value: T) => T)(hookStates[index] as T) : next;
+  }];
+}) as typeof React.useState);
+vi.mocked(React.useRef).mockImplementation((<T,>(initial: T) => {
+  const index = refIndex++;
+  hookRefs[index] ??= { current: initial };
+  return hookRefs[index] as { current: T };
+}) as typeof React.useRef);
+vi.mocked(React.useEffect).mockImplementation(() => {});
+
+function resetHooks() { hookStates.length = 0; hookRefs.length = 0; stateIndex = 0; refIndex = 0; }
+function renderPanel(props: React.ComponentProps<typeof StoryboardPanel>) {
+  stateIndex = 0; refIndex = 0;
+  return StoryboardPanel(props);
+}
+function find(node: React.ReactNode, match: (element: React.ReactElement) => boolean): React.ReactElement {
+  if (React.isValidElement(node)) {
+    if (match(node)) return node;
+    for (const child of React.Children.toArray(node.props.children)) {
+      try { return find(child, match); } catch { /* Search the remaining siblings. */ }
+    }
+  }
+  throw new Error('Expected storyboard control was not rendered');
+}
+
+const claim = { id: 'claim', researchObjectId: 'ro', versionId: 'v', parentClaimId: null, kind: 'core' as const,
+  statement: 'A reviewed claim', assessment: 'supported' as const, conditions: [], limitations: [], provenance: {},
+  extractionStatus: 'succeeded' as const, createdAt: '2026-01-01', updatedAt: '2026-01-01' };
+
+beforeEach(() => resetHooks());
 
 it('shows separate spoken and visual plans with the parent comparison', () => {
   const scene = { title: 'Light', narration: 'Old narration', visualAction: 'Old visual', durationSeconds: 8, sourceClaimIds: ['claim'] };
@@ -81,4 +126,41 @@ it('does not replace existing revisions or video scope with the new image scene 
   expect(revision).not.toHaveProperty('narrativeSceneLimit');
   expect(buildStoryboardRequest({ locale: 'en', style: 'auto', output: 'video', instruction: 'Plan this video',
     artOnly: false, singlePaperImage: true })).not.toHaveProperty('narrativeSceneLimit');
+});
+
+it('locks storyboard submission on the first click and exposes processing then success feedback', async () => {
+  const onGenerate = vi.fn(() => Promise.resolve());
+  const props = { claims: [claim], selectedClaimIds: ['claim'], canGenerate: true, onGenerate };
+  const form = () => find(renderPanel(props), element => element.type === 'form');
+  form().props.onSubmit({ preventDefault: vi.fn() });
+  const during = form();
+  expect(onGenerate).toHaveBeenCalledTimes(1);
+  expect(find(during, element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('working');
+  form().props.onSubmit({ preventDefault: vi.fn() });
+  expect(onGenerate).toHaveBeenCalledTimes(1);
+  await Promise.resolve();
+  expect(find(form(), element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('success');
+});
+
+it('locks approved scene-image and draft transition writes independently', async () => {
+  const scene = { title: 'Light', narration: 'Wave spreads', visualAction: 'Show wavefronts', sourceClaimIds: ['claim'] };
+  const storyboard = { document: { schemaVersion: 1 as const, title: 'Plan', scenes: [scene] }, locale: 'en' as const, style: 'ink' as const };
+  const asset = { id: 'plan', researchObjectId: 'ro', versionId: 'v', kind: 'interactive_html' as const, contentHash: 'a'.repeat(64),
+    generator: 'Hermes', generatorVersion: 'v1', status: 'approved' as const, label: 'Plan', sourceClaimIds: ['claim'],
+    createdAt: '2026-01-01', updatedAt: '2026-01-01', storyboard, canGenerateSceneImage: true };
+  const onGenerateSceneImage = vi.fn(() => Promise.resolve());
+  const transition = vi.fn(() => Promise.resolve());
+  const common = { assets: [asset], claims: [claim], canWrite: true, unavailable: false, onGenerateSceneImage, onTransition: transition };
+  const plans = () => { stateIndex = 0; refIndex = 0; return StoryboardPlans(common); };
+  const image = () => find(plans(), element => element.props['data-scene-image'] === 0 && element.props['data-image-storyboard'] === 'plan');
+  image().props.onClick(); image().props.onClick();
+  expect(onGenerateSceneImage).toHaveBeenCalledTimes(1);
+  await Promise.resolve();
+  const draft = { ...asset, status: 'draft' as const, canApprove: true, canTransition: true };
+  const transitionPlans = () => { stateIndex = 0; refIndex = 0; return StoryboardPlans({ ...common, assets: [draft] }); };
+  const approve = () => find(transitionPlans(), element => element.props.children === 'approvePlan');
+  approve().props.onClick(); approve().props.onClick();
+  expect(transition).toHaveBeenCalledTimes(1);
+  await Promise.resolve();
+  expect(find(transitionPlans(), element => element.props['data-storyboard-transition-feedback'] === 'true').props['data-write-state']).toBe('success');
 });

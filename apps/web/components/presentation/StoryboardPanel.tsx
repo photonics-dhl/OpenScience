@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { visibleStoryboardAction } from '@openscience/domain/storyboard-visible-action';
 import type { PresentationClaim, StoryboardRequest, StoryboardView, SceneImageRequest } from '@/lib/api';
@@ -15,9 +15,15 @@ interface Props {
   selectedClaimIds?: string[];
   canGenerate: boolean;
   canGenerateImage?: boolean;
-  onGenerateImage?: (claimIds: string[], request: SceneImageRequest) => void;
-  onGenerate?: (claimIds: string[], request: StoryboardRequest) => void;
+  onGenerateImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<unknown>;
+  onGenerate?: (claimIds: string[], request: StoryboardRequest) => void | Promise<unknown>;
 }
+type WriteState = 'idle' | 'working' | 'success' | 'error';
+
+function failedWriteResult(result: unknown): boolean {
+  return result === null || (typeof result === 'object' && 'status' in result && (result as { status?: unknown }).status === 'failed');
+}
+
 const control = 'min-h-11 w-full rounded-control border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
 
 export function buildStoryboardRequest(input: {
@@ -47,17 +53,62 @@ export function buildStoryboardRequest(input: {
 
 export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selectedClaimIds = [], canGenerate, onGenerate, canGenerateImage = false, onGenerateImage }: Props) {
   const t = useTranslations('presentation.storyboard');
+  const tp = useTranslations('presentation');
   const tw = useTranslations('workbench');
   const currentLocale = useLocale();
   const [locale, setLocale] = useState<'zh' | 'en'>(storyboard?.locale ?? (currentLocale === 'zh' ? 'zh' : 'en'));
   const [style, setStyle] = useState<StoryboardRequest['style']>(storyboard?.style ?? 'auto');
   const [artOnly, setArtOnly] = useState(false);
+  const [generationState, setGenerationState] = useState<WriteState>('idle');
+  const generationLock = useRef(false);
+  const [sceneImageStates, setSceneImageStates] = useState<Record<number, WriteState>>({});
+  const sceneImageLocks = useRef(new Set<number>());
   const output: StoryboardRequest['output'] = storyboard?.output ?? 'image';
   const [instruction, setInstruction] = useState(baseAssetId ? '' : tw('coreImageInstruction'));
   const names = new Map(claims.map((claim) => [claim.id, claim.statement]));
   const sourcesCurrent = hasCurrentPresentationSources(selectedClaimIds, claims);
   const singlePaperImage = !storyboard && !baseAssetId && output === 'image'
     && hasSingleReviewedPaperSource(selectedClaimIds, claims);
+  const feedbackText = (state: WriteState, failureKey: 'generationStartFailed' | 'transitionFailed' = 'generationStartFailed') => {
+    if (state === 'working') return tp('taskStatus.running');
+    if (state === 'success') return tp('readyToAdoptStatus');
+    if (state === 'error') return tp(failureKey);
+    return '';
+  };
+  function submitGeneration(request: StoryboardRequest) {
+    if (!onGenerate || generationLock.current) return;
+    generationLock.current = true;
+    setGenerationState('working');
+    try {
+      Promise.resolve(onGenerate(selectedClaimIds, request)).then((result) => {
+        generationLock.current = false;
+        setGenerationState(failedWriteResult(result) ? 'error' : 'success');
+      }, () => {
+        generationLock.current = false;
+        setGenerationState('error');
+      });
+    } catch {
+      generationLock.current = false;
+      setGenerationState('error');
+    }
+  }
+  function submitSceneImage(index: number) {
+    if (!onGenerateImage || !baseAssetId || sceneImageLocks.current.has(index)) return;
+    sceneImageLocks.current.add(index);
+    setSceneImageStates((current) => ({ ...current, [index]: 'working' }));
+    try {
+      Promise.resolve(onGenerateImage(selectedClaimIds, { storyboardAssetId: baseAssetId, sceneIndex: index })).then((result) => {
+        sceneImageLocks.current.delete(index);
+        setSceneImageStates((current) => ({ ...current, [index]: failedWriteResult(result) ? 'error' : 'success' }));
+      }, () => {
+        sceneImageLocks.current.delete(index);
+        setSceneImageStates((current) => ({ ...current, [index]: 'error' }));
+      });
+    } catch {
+      sceneImageLocks.current.delete(index);
+      setSceneImageStates((current) => ({ ...current, [index]: 'error' }));
+    }
+  }
   function sceneContent(scene: StoryboardView['document']['scenes'][number] | undefined) {
     return scene ? <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">
       <h4 className="m-0 font-semibold">{scene.title}</h4>
@@ -78,8 +129,9 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
         <div className="min-w-0">{parent ? <p className="m-0 mb-3 text-xs font-semibold text-os-vermilion-ink">{t('current')}</p> : null}{sceneContent(storyboard.document.scenes[index])}</div>
       </div>
       {canGenerateImage && onGenerateImage && baseAssetId && storyboard.document.scenes[index] ? <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" data-scene-image={index} className="min-h-11 rounded-control border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink motion-reduce:transform-none" onClick={() => onGenerateImage(selectedClaimIds, { storyboardAssetId: baseAssetId, sceneIndex: index })}>{t('generateImage')}</button>
+        <button type="button" data-scene-image={index} disabled={sceneImageStates[index] === 'working'} aria-busy={sceneImageStates[index] === 'working'} className="min-h-11 rounded-control border border-os-vermilion-ink px-4 text-sm font-semibold text-os-vermilion-ink transition-transform active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink disabled:opacity-40 motion-reduce:transform-none" onClick={() => submitSceneImage(index)}>{t('generateImage')}</button>
         <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('imageCharge')}</p>
+        {sceneImageStates[index] && sceneImageStates[index] !== 'idle' ? <p className="m-0 text-sm leading-5 text-os-muted-paper" role={sceneImageStates[index] === 'error' ? 'alert' : 'status'} data-scene-image-feedback={index} data-write-state={sceneImageStates[index]}>{feedbackText(sceneImageStates[index])}</p> : null}
       </div> : null}
     </li>)}</ol> : null}
     {storyboard?.baseAssetId && !parent ? <p className="text-sm text-os-muted-paper">{t('parentUnavailable')}</p> : null}
@@ -87,7 +139,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
       event.preventDefault();
       if (!selectedClaimIds.length || !instruction.trim()) return;
       if (!sourcesCurrent) return;
-      onGenerate(selectedClaimIds, buildStoryboardRequest({ locale, style, output, instruction, baseAssetId, artOnly, storyboard, singlePaperImage }));
+      submitGeneration(buildStoryboardRequest({ locale, style, output, instruction, baseAssetId, artOnly, storyboard, singlePaperImage }));
     }}>
       <p className="m-0 text-sm font-semibold">{t(baseAssetId ? 'reviseTitle' : 'createTitle')}</p>
       <fieldset className="border-0 p-0">
@@ -105,7 +157,8 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
       <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('charge')}</p>
       {!sourcesCurrent ? <p className="m-0 text-sm leading-6 text-os-muted-paper" role="status">{t('needsSources')}</p> : null}
       {baseAssetId ? <p className="m-0 text-xs leading-5 text-os-muted-paper">{t('retained')}</p> : null}
-      <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!sourcesCurrent || !instruction.trim()}>{t(baseAssetId ? 'revise' : singlePaperImage ? 'planOneImage' : 'generate')}</button>
+      <button className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold transition-transform active:scale-[0.96] disabled:opacity-40 motion-reduce:transform-none" type="submit" disabled={!sourcesCurrent || !instruction.trim() || generationState === 'working'} aria-busy={generationState === 'working'}>{t(baseAssetId ? 'revise' : singlePaperImage ? 'planOneImage' : 'generate')}</button>
+      {generationState !== 'idle' ? <p className="m-0 text-sm leading-5 text-os-muted-paper" role={generationState === 'error' ? 'alert' : 'status'} data-storyboard-feedback="true" data-write-state={generationState}>{feedbackText(generationState)}</p> : null}
     </form> : null}
   </section>;
 }
