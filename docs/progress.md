@@ -5,7 +5,7 @@
 ## 最近检查点
 
 - 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper仍High GO并入候选；image admission `8f817cbc` 已形成7文件候选但独立High仍NO-GO，见下一条。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
-- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a+0ee68fe5` 已修复终态 marker 泄漏与 P2034 paid-checkpoint 丢 processing 两处回归；定向 admission 6/6、Worker typecheck、diff-check通过，替代模型独立 High 复审中，尚未合入 canonical。Native paper-tools adapter `84047b56` 已交付（39/39及typecheck/build/diff-check通过）。
+- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a+0ee68fe5` 复审仍 NO-GO：malformed marked nonvideo presentation.generate 被过宽 predicate 错误 hold，现有 admission 回归 193 项中 1 项失败；owner 正收窄到 exact valid image contract 后再复审。running-only retention、终态清理与 P2034 paid-checkpoint 保留路径的结构检查通过。Native paper-tools adapter `84047b56` 已交付（39/39及typecheck/build/diff-check通过）。
 - 2026-10-12 视频 owner 已提交 `fe261f3f`，实际贯通 `ltx23`/`ltx23fast` 配置与 receipt 模型记录；Broker 定向 102 项 97 通过、5 项因本机无 ffmpeg/ffprobe 跳过，新增快速模型端到端、Gateway API/readiness 115项与 Worker typecheck 通过，等待独立 High review；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
 - 2026-10-12 UI owner 已重新派发固定版本代码包与 Native adapter 清点的实际回合，执行中；不写共享后端、不安装/重启/外发。三线均保持 canonical 写权与生产边界。
 
