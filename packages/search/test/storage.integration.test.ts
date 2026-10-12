@@ -706,7 +706,7 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
   });
 
   it('excludes unrelated payload bytes before hydration capacity and loads only this source', async () => {
-    const capacityChunkIds = Array.from({ length: 130 }, (_, index) => {
+    const capacityChunkIds = Array.from({ length: 98 }, (_, index) => {
       const suffix = String(index + 1);
       return createHash('md5').update(`${foreignTaskId}:capacity:${suffix}`).digest('hex')
         + createHash('md5').update(`search-capacity${foreignTaskId}:${suffix}`).digest('hex');
@@ -716,8 +716,11 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage exact generation inte
         "content_hash", "ordinal", "language", "text", "token_count", "locators", "claim_ids", "lexical_terms", "term_frequencies", "lexical_text", "active", "updated_at")
       SELECT md5(${foreignTaskId} || ':capacity:' || series::text) || md5('search-capacity' || ${foreignTaskId} || ':' || series::text),
         "workspace_id", "research_object_id", "artifact_id", "source_version_id", "index_task_id", "content_hash", 100 + series,
-        'en', repeat('x', 65536), 1, "locators", '[]'::jsonb, '["pulse"]'::jsonb, '{"pulse":1}'::jsonb, 'pulse', true, NOW()
-      FROM "search_chunks" CROSS JOIN generate_series(1, 130) AS series WHERE "id" = ${foreignChunkId}
+        'en', repeat('x', 65536), 1,
+        jsonb_build_array(jsonb_build_object('artifactId', "artifact_id", 'contentHash', "content_hash",
+          'blockId', repeat('b', 24 * 1024), 'page', 1)),
+        '[]'::jsonb, '["pulse"]'::jsonb, '{"pulse":1}'::jsonb, 'pulse', true, NOW()
+      FROM "search_chunks" CROSS JOIN generate_series(1, 98) AS series WHERE "id" = ${foreignChunkId}
     `);
     try {
       expect(await hydrate()).toMatchObject({ status: 'ok', candidates: [{ id: chunkId }] });
