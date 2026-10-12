@@ -25,3 +25,4 @@
 - 当前可执行下一步：图像仅在确认可用的 >=gpt-6.1-sol 容量路径后复用现有单次提交做一次受控私有验收；视频等待具体授权的能力缺口或真实短片/语音比较；UI 写反馈范围完成，若明确授权才处理共享 queue-recovery 非 UI 问题。无关检查不填充 idle。
 - 保护边界：不重放未知 paid/started CP，不切换主 Gateway/Native M3，不新增预算/安装/重启；保留原 PDF、SourceMap、图片、公开标识、sealed、失败与 receipt/oncekey。
 - 2026-10-12 docs-sync：`docs:lint` 272 files/0 issues，`audit:docs-sync` 7/8（唯一失败为历史 progress 文件超过 16 KiB，已压缩本窗口后待复跑）。
+- 2026-10-13：生图 session 提交 `ad812d38` 修复 scene spend 原子事务与不同幂等键并发回归，Domain 115/115、API 140/140、build/typecheck/diff-check 通过；独立 High 待回，未合入/未部署。
