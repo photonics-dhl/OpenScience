@@ -431,8 +431,10 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     }
   }
   if (input.kind === 'image' || input.kind === 'video') await requirePresentationGenerationAccess(deps, input.userId, input.kind);
+  let sceneParentForTask: Awaited<ReturnType<typeof requireSceneImageParent>> | undefined;
   if (payload.sceneImage) {
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    sceneParentForTask = sceneParent;
     videoIntent ||= sceneParent?.view.output === 'video';
     if (!replay && sceneParent?.view.output === 'video' && sceneParent.view.narrative === true)
       selectNativeAudio(sceneParent.view.document, sceneParent.identity, async () => {
@@ -442,7 +444,6 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       });
     if (generatedSceneImageRequiresPixelReview(payload) && !/^[a-f0-9]{64}$/u.test(sceneParent?.sourceEvidenceIdentity ?? ''))
       throw new PresentationAssetError('SOURCE_CLAIM_INVALID', 'Reviewed scene image requires a source-bound storyboard; revise the plan before generating');
-    if (sceneParent && !replay) await requireSceneImageSpendIsNew(deps.prisma, sceneParent, payload);
     await requireStyleReferenceImage(deps.prisma, { ...payload, styleReferenceAssetId: payload.sceneImage.styleReferenceAssetId });
   }
   if (payload.video) {
@@ -469,7 +470,24 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       throw new PresentationAssetError('VALIDATION_ERROR', 'Native video parent changed before task booking');
   }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
-  const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey };
+  const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey,
+    ...(payload.sceneImage && sceneParentForTask ? { beforePersist: async (tx: Prisma.TransactionClient) => {
+      const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true } });
+      if (!lockedParent) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      const locked = await tx.presentationAsset.updateMany({ where: { id: lockedParent.id, updatedAt: lockedParent.updatedAt }, data: { updatedAt: lockedParent.updatedAt } });
+      if (locked.count !== 1) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      const currentParent = await requireSceneImageParent(tx, payload);
+      if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      await requireSceneImageSpendIsNew(tx, currentParent, payload);
+      const pending = await tx.agentTask.findMany({ where: { kind: 'presentation.generate', deletedAt: null, status: { in: ['pending', 'running'] }, session: { researchObjectId: input.researchObjectId } }, select: { payload: true } });
+      if (pending.some((row) => {
+        try {
+          const candidate = parsePresentationGenerationPayload(row.payload);
+          return candidate.kind === 'image' && candidate.sceneImage?.storyboardAssetId === payload.sceneImage!.storyboardAssetId
+            && candidate.sceneImage.sceneIndex === payload.sceneImage!.sceneIndex;
+        } catch { return false; }
+      })) throw new PresentationAssetError('VALIDATION_ERROR', 'A scene image task is already in progress');
+    } } : {}) };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
     ? submitDeterministicPresentationTask(deps, taskInput, ctx)
     : submitAgentTask(deps, taskInput, ctx);

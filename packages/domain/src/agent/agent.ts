@@ -375,6 +375,8 @@ export interface SubmitAgentTaskInput {
   interestContext?: InterestContext;
   idempotencyKey?: string;
   dispatch?: boolean;
+  /** Package-internal preflight that must run inside the task/ledger Serializable transaction. */
+  beforePersist?: (tx: Prisma.TransactionClient) => Promise<void>;
 }
 
 const AGENT_SESSION_IDEMPOTENCY_CONSTRAINT = {
@@ -791,12 +793,15 @@ export async function submitAgentTask(
   input: SubmitAgentTaskInput,
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
-  const { dispatch, ...persistenceInput } = input;
+  const { dispatch, beforePersist, ...persistenceInput } = input;
   let task: AgentTask | undefined;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       ({ task } = await deps.prisma.$transaction(
-        (tx) => persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx),
+        async (tx) => {
+          await beforePersist?.(tx);
+          return persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx);
+        },
         { isolationLevel: 'Serializable' },
       ));
       break;

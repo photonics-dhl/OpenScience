@@ -969,6 +969,19 @@ it('keeps ordinary writers blocked when the beta image gate is disabled', async 
   await expect(submitPresentationGeneration(ctx as never, ctx.input)).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
   expect(ctx.db.agentTasks).toHaveLength(0);
 });
+it('rejects a second scene image key while the first task is still pending', async () => {
+  const ctx = sceneFixture('image', 'user');
+  ctx.sceneImageEnabled = true;
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  const outcomes = await Promise.allSettled([
+    submitPresentationGeneration(ctx as never, ctx.input),
+    submitPresentationGeneration(ctx as never, { ...ctx.input, idempotencyKey: 'scene-different-key' }),
+  ]);
+  expect(outcomes.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(outcomes.filter(result => result.status === 'rejected' && (result.reason as { code?: string }).code === 'VALIDATION_ERROR')).toHaveLength(1);
+  expect(ctx.db.agentTasks).toHaveLength(1);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+});
 it.each(['draft', 'rejected', 'foreign', 'version', 'claim-set', 'index'])('blocks invalid scene parent %s before charging', async reason => {
   const ctx = sceneFixture();
   const parent = ctx.db.presentationAssets[0];
