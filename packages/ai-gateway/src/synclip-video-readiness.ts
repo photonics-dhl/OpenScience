@@ -55,6 +55,12 @@ function auditionBudget(value: unknown): { maxEstimatedCoins: number } | null {
   return { maxEstimatedCoins: value.maxEstimatedCoins };
 }
 
+function configuredModel(env: Readonly<Record<string, string | undefined>>): SynclipVideoModel | null {
+  const value = env.SYNCLIP_VIDEO_MODEL?.trim();
+  if (!value) return 'ltx23';
+  return SYNCLIP_VIDEO_MODELS.includes(value as SynclipVideoModel) ? value as SynclipVideoModel : null;
+}
+
 /** Read a single root-owned heartbeat snapshot. This never reads credentials or submits work. */
 export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Promise<SynclipVideoReady | null> {
   const now = (config.now ?? Date.now)();
@@ -100,14 +106,16 @@ export function createNativeVideoReadinessReader(env: Readonly<Record<string, st
   prerequisites: NativeVideoPrerequisites, purpose?: 'audio-audition'): (requestedPurpose?: 'native-first') => Promise<boolean | NativeAudioAuditionPolicy | null> {
   return async (requestedPurpose) => {
     const inbox = env.SYNCLIP_VIDEO_INBOX_DIR?.trim(); const results = env.SYNCLIP_VIDEO_RESULTS_DIR?.trim();
+    const model = configuredModel(env);
     if (!prerequisites.nativeAgentConfigured || !prerequisites.nativeSceneImageEnabled
       || env.AI_ENABLED !== 'true' || env.HERMES_NATIVE_AGENT_ENABLED !== 'true' || env.HERMES_VIDEO_ENABLED !== 'true'
       || env.HERMES_VIDEO_PROVIDER?.trim() !== 'synclip' || env.SYNCLIP_VIDEO_ENABLED !== 'true'
       || !inbox || !results || !isAbsolute(inbox) || !isAbsolute(results) || resolve(inbox) === resolve(results)
-      || (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip')) return purpose === 'audio-audition' ? null : false;
+      || (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip') || !model) return purpose === 'audio-audition' ? null : false;
     const ready = await readSynclipVideoReady({ resultsDir: results });
+    if (!ready || ready.model !== model) return purpose === 'audio-audition' ? null : false;
     if (purpose === 'audio-audition') {
-      if (!ready || ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true || !ready.narration || !ready.audioAuditionBudget) return null;
+      if (ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true || !ready.narration || !ready.audioAuditionBudget) return null;
       return { audio: ready.narration, maxEstimatedCoins: ready.audioAuditionBudget.maxEstimatedCoins };
     }
     return Boolean(ready?.accepting && ready.adapterRevision === 'synclip-video-v2'

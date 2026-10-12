@@ -68,6 +68,15 @@ describe('Synclip video readiness from the existing heartbeat', () => {
   it('reads a fresh native heartbeat from a real file and enables the fully configured callback', async () => {
     const f = await fixture(); expect(await f.read()).toEqual(f.value); expect(await f.capable()).toBe(true);
   });
+  it('requires the configured LTX fast model to match the heartbeat model', async () => {
+    const f = await fixture(); await f.write({ model: 'ltx23fast' });
+    f.env.SYNCLIP_VIDEO_MODEL = 'ltx23fast'; expect(await f.capable()).toBe(true);
+    f.env.SYNCLIP_VIDEO_MODEL = 'ltx23'; expect(await f.capable()).toBe(false);
+  });
+  it('fails closed for an unknown configured video model', async () => {
+    const f = await fixture(); f.env.SYNCLIP_VIDEO_MODEL = 'unknown-model';
+    expect(await f.capable()).toBe(false); expect(await f.audition()).toBeNull();
+  });
   it('accepts the explicitly supported LTX fast model in the heartbeat', async () => {
     const f = await fixture(); await f.write({ model: 'ltx23fast' });
     expect(await f.read()).toMatchObject({ model: 'ltx23fast', accepting: true });
