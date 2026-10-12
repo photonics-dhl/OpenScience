@@ -24,6 +24,10 @@ export interface PresentationTaskState {
   canRetry?: boolean;
 }
 
+export type StoryboardWriteOutcome =
+  | { status: 'submitted'; taskId: string }
+  | { status: 'failed'; message?: string; silent?: boolean };
+
 export interface PresentationWorkbenchProps {
   researchObjectId?: string;
   researchTitle?: string;
@@ -39,9 +43,9 @@ export interface PresentationWorkbenchProps {
   onUploadPaperFigure?: (input: PaperFigureSelection) => Promise<PaperFigureUploadOutcome | null>;
   onGenerate: (claimIds: string[]) => void;
   onAskHermes?: (kind: 'image' | 'video') => void;
-  onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void;
+  onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<StoryboardWriteOutcome>;
   onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
-  onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void;
+  onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void | Promise<StoryboardWriteOutcome>;
   onResumeTask?: () => void;
   onRetryTask?: () => void;
   onRetryData?: () => void;

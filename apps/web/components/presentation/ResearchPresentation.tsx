@@ -11,7 +11,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { PresentationWorkbench, type PresentationTaskState } from '@/components/presentation/PresentationWorkbench';
+import { PresentationWorkbench, type PresentationTaskState, type StoryboardWriteOutcome } from '@/components/presentation/PresentationWorkbench';
 import { ExistingSceneImageReview, canRequestExistingImageReview, isSavedSceneReviewCandidate, type ExistingImageReviewState } from './ExistingSceneImageReview';
 import { IllustrationStyleChoices } from './IllustrationStyleChoices';
 import { ManagedIllustrationStyleChoices } from './ManagedIllustrationStyleChoices';
@@ -81,13 +81,11 @@ function isRecoverableTaskRead(error: unknown): boolean {
     || error.status >= 500;
 }
 
-export type PresentationGenerationOutcome =
-  | { status: 'submitted'; taskId: string }
-  | { status: 'failed'; message?: string; silent?: boolean };
+export type { StoryboardWriteOutcome } from '@/components/presentation/PresentationWorkbench';
 
 export function createPresentationStoryboardHandlers(generate: (
   sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest,
-) => void | Promise<PresentationGenerationOutcome>) {
+) => void | Promise<StoryboardWriteOutcome>) {
   return {
     onGenerateStoryboard: (sourceClaimIds: string[], request: StoryboardRequest) => generate(sourceClaimIds, request),
     onGenerateSceneImage: (sourceClaimIds: string[], request: SceneImageRequest) => generate(sourceClaimIds, undefined, request),
@@ -526,7 +524,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     }
   }
 
-  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest): Promise<PresentationGenerationOutcome> {
+  async function generate(sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest, video?: PresentationVideoRequest): Promise<StoryboardWriteOutcome> {
     if (!version || !canWrite || !scopeReady) return { status: 'failed', silent: true };
     const scope = scopeRef.current;
     if (!scopeIsCurrent(scope)) return { status: 'failed', silent: true };

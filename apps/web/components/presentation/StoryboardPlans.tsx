@@ -6,14 +6,15 @@ import { useTranslations } from 'next-intl';
 import type { PresentationAsset, PresentationClaim, PresentationVideoRequest, SceneImageRequest, StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 import { MechanismVideoPanel } from './MechanismVideoPanel';
+import type { StoryboardWriteOutcome } from './PresentationWorkbench';
 
 interface Props {
   assets: PresentationAsset[];
   claims: PresentationClaim[];
   canWrite: boolean;
   unavailable: boolean;
-  onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void | Promise<unknown>;
-  onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<unknown>;
+  onGenerateStoryboard?: (claimIds: string[], request: StoryboardRequest) => void | Promise<StoryboardWriteOutcome>;
+  onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<StoryboardWriteOutcome>;
   onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => unknown | Promise<unknown>;
 }

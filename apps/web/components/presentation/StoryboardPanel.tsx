@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { visibleStoryboardAction } from '@openscience/domain/storyboard-visible-action';
 import type { PresentationClaim, StoryboardRequest, StoryboardView, SceneImageRequest } from '@/lib/api';
 import { hasCurrentPresentationSources, hasSingleReviewedPaperSource } from '@/lib/hermes/presentation-action';
+import type { StoryboardWriteOutcome } from './PresentationWorkbench';
 
 interface Props {
   storyboard?: StoryboardView;
@@ -15,8 +16,8 @@ interface Props {
   selectedClaimIds?: string[];
   canGenerate: boolean;
   canGenerateImage?: boolean;
-  onGenerateImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<unknown>;
-  onGenerate?: (claimIds: string[], request: StoryboardRequest) => void | Promise<unknown>;
+  onGenerateImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<StoryboardWriteOutcome>;
+  onGenerate?: (claimIds: string[], request: StoryboardRequest) => void | Promise<StoryboardWriteOutcome>;
 }
 type WriteState = 'idle' | 'working' | 'success' | 'error';
 

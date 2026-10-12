@@ -9,7 +9,8 @@ vi.mock('react', async importOriginal => {
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 import { buildStoryboardRequest, StoryboardPanel } from '../components/presentation/StoryboardPanel';
 import { StoryboardPlans } from '../components/presentation/StoryboardPlans';
-import { createPresentationStoryboardHandlers, type PresentationGenerationOutcome } from '../components/presentation/ResearchPresentation';
+import { createPresentationStoryboardHandlers } from '../components/presentation/ResearchPresentation';
+import type { StoryboardWriteOutcome } from '../components/presentation/PresentationWorkbench';
 
 const hookStates: unknown[] = [];
 const hookRefs: Array<{ current: unknown }> = [];
@@ -144,7 +145,7 @@ it('locks storyboard submission on the first click and exposes processing then s
 });
 
 it('keeps the real generation promise in both storyboard wrappers', async () => {
-  const submitted: Promise<PresentationGenerationOutcome> = Promise.resolve({ status: 'submitted', taskId: 'task-1' });
+  const submitted: Promise<StoryboardWriteOutcome> = Promise.resolve({ status: 'submitted', taskId: 'task-1' });
   const generate = vi.fn((_ids: string[], _storyboard?: unknown, _sceneImage?: unknown) => submitted);
   const handlers = createPresentationStoryboardHandlers(generate);
   const storyboard = { locale: 'en' as const, style: 'auto' as const, output: 'image' as const, instruction: 'Explain it' };
@@ -154,7 +155,7 @@ it('keeps the real generation promise in both storyboard wrappers', async () => 
   expect(generate).toHaveBeenNthCalledWith(1, ['claim'], storyboard);
   expect(generate).toHaveBeenNthCalledWith(2, ['claim'], undefined, sceneImage);
 
-  const failed: Promise<PresentationGenerationOutcome> = Promise.resolve({ status: 'failed', message: 'start failed' });
+  const failed: Promise<StoryboardWriteOutcome> = Promise.resolve({ status: 'failed', message: 'start failed' });
   const rejected = Promise.reject(new Error('transport'));
   const failedHandlers = createPresentationStoryboardHandlers(vi.fn(() => failed));
   const rejectedHandlers = createPresentationStoryboardHandlers(vi.fn(() => rejected));
