@@ -293,6 +293,42 @@ describe('image planning-contract admission hold', () => {
     expect(f.task).toMatchObject({ error: null, dispatchedAt: null, executionAttempt: 0 });
   });
 
+  it('advances the image recovery cursor beyond a malformed prefix', async () => {
+    const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;
+    (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    (f.deps as WorkerDeps).nativeImageReaderReady = true;
+    f.tasks.clear();
+    const baseTime = f.task.updatedAt.getTime();
+    for (let index = 0; index < 500; index++) f.tasks.set(`malformed-page-${index}`, {
+      ...structuredClone(f.task), id: `malformed-page-${index}`, result: { nativeAgentExecution: { planningContract: 'unknown-contract' } },
+      updatedAt: new Date(baseTime - 500 - index),
+    });
+    f.tasks.set(f.task.id, f.task);
+    f.agentTask.findMany.mockImplementation(async ({ where, take }: { where: Record<string, unknown>; take?: number }) => {
+      let rows = [...f.tasks.values()].filter(row => row.error === where.error && row.status === 'pending');
+      const after = (where.OR as Array<Record<string, unknown>> | undefined)?.[0]?.updatedAt as { gt?: Date } | undefined;
+      const same = (where.OR as Array<Record<string, unknown>> | undefined)?.[1];
+      if (after?.gt && same) {
+        const sameTime = same.updatedAt as Date;
+        const afterId = (same.id as { gt: string }).gt;
+        rows = rows.filter(row => row.updatedAt > after.gt! || row.updatedAt.getTime() === sameTime.getTime() && row.id > afterId);
+      }
+      return rows.sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime() || left.id.localeCompare(right.id))
+        .slice(0, take).map(row => structuredClone(row));
+    });
+    let current = 0; const tick = createVideoReadinessResumeScheduler({ now: () => current });
+    expect(await tick(f.deps)).toBe(0);
+    current = 60_000;
+    expect(await tick(f.deps)).toBe(1);
+    expect(f.task.error).toBeNull();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('fails closed for invalid hold recovery limit %s', async limit => {
+    const f = imageContractFixture();
+    expect(await recoverHeldVideoTasks(f.deps, limit)).toBe(0);
+    expect(f.agentTask.findMany).not.toHaveBeenCalled();
+  });
+
   it.each(['video-kind', 'started', 'retry', 'checkpoint', 'paid-receipt', 'sdf-kind'] as const)(
     'does not release an image hold with a non-pristine %s state', async change => {
       const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;

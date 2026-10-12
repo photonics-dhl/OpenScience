@@ -13,6 +13,9 @@ type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma' | 'nativeAgentRuntime'> &
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt' | 'deletedAt'>;
 type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'progress' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
 type PendingVideoAdmission = { expectedPendingTask: VideoTaskAdmissionSnapshot };
+type ImageRecoveryCursor = Pick<AgentTask, 'id' | 'updatedAt'>;
+type HeldRecoveryPage = { released: number; nextImageCursor: ImageRecoveryCursor | null };
+const MAX_HELD_RECOVERY_LIMIT = 100;
 
 /** Only a fully readable image contract may bypass the generic video path. */
 export function isValidNativeImagePlanningContractTask(task: Pick<AgentTask, 'kind' | 'payload' | 'result'>): boolean {
@@ -294,15 +297,31 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   return current.error === VIDEO_READINESS_HOLD ? releasePendingVideoTask(deps, current) : { expectedPendingTask: current };
 }
 
+function normalizeHeldRecoveryLimit(limit: number): number {
+  return Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, MAX_HELD_RECOVERY_LIMIT) : 0;
+}
+
+function imageRecoveryWhere(cursor: ImageRecoveryCursor | null): Prisma.AgentTaskWhereInput {
+  const where: Prisma.AgentTaskWhereInput = { status: 'pending', deletedAt: null, error: NATIVE_IMAGE_CONTRACT_HOLD };
+  return cursor ? { ...where, OR: [
+    { updatedAt: { gt: cursor.updatedAt } },
+    { updatedAt: cursor.updatedAt, id: { gt: cursor.id } },
+  ] } : where;
+}
+
 /** Only pending held rows are released; Redis is owned by the existing outbox dispatcher. */
-export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit = 50): Promise<number> {
-  const scanLimit = Math.max(limit, 1) * 10;
+async function recoverHeldVideoTasksPage(
+  deps: VideoTaskAdmissionDeps, limit: number, imageCursor: ImageRecoveryCursor | null,
+): Promise<HeldRecoveryPage> {
+  const boundedLimit = normalizeHeldRecoveryLimit(limit);
+  if (boundedLimit === 0) return { released: 0, nextImageCursor: null };
+  const scanLimit = boundedLimit * 10;
   const [videoTasks, imageTasks] = await Promise.all([
     deps.prisma.agentTask.findMany({
-      where: { status: 'pending', deletedAt: null, error: VIDEO_READINESS_HOLD }, orderBy: { updatedAt: 'asc' }, take: limit,
+      where: { status: 'pending', deletedAt: null, error: VIDEO_READINESS_HOLD }, orderBy: { updatedAt: 'asc' }, take: boundedLimit,
     }),
     deps.prisma.agentTask.findMany({
-      where: { status: 'pending', deletedAt: null, error: NATIVE_IMAGE_CONTRACT_HOLD }, orderBy: { updatedAt: 'asc' }, take: scanLimit,
+      where: imageRecoveryWhere(imageCursor), orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: scanLimit,
     }),
   ]);
   // Keep the two bounded scans independent. A large malformed image prefix
@@ -330,15 +349,23 @@ export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit 
     catch (error) { if (error instanceof HermesVideoUnavailableError) continue; throw error; }
     if (await releasePendingVideoTask(deps, task)) released++;
   }
-  return released;
+  const lastImage = imageTasks.at(-1);
+  return { released, nextImageCursor: imageTasks.length === scanLimit && lastImage
+    ? { id: lastImage.id, updatedAt: lastImage.updatedAt } : null };
+}
+
+export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit = 50): Promise<number> {
+  return (await recoverHeldVideoTasksPage(deps, limit, null)).released;
 }
 
 export function createVideoReadinessResumeScheduler(options: { intervalMs?: number; now?: () => number } = {}) {
   const clock = options.now ?? (() => performance.now()); const intervalMs = options.intervalMs ?? 60_000;
-  let nextAt = Number.NEGATIVE_INFINITY;
+  let nextAt = Number.NEGATIVE_INFINITY; let imageCursor: ImageRecoveryCursor | null = null;
   return async (deps: VideoTaskAdmissionDeps): Promise<number> => {
     const current = clock(); if (current < nextAt) return 0;
     nextAt = current + intervalMs;
-    return recoverHeldVideoTasks(deps);
+    const page = await recoverHeldVideoTasksPage(deps, 50, imageCursor);
+    imageCursor = page.nextImageCursor;
+    return page.released;
   };
 }
