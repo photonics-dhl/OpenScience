@@ -474,7 +474,8 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     ...(payload.sceneImage && sceneParentForTask ? { beforePersist: async (tx: Prisma.TransactionClient) => {
       const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true } });
       if (!lockedParent) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
-      const locked = await tx.presentationAsset.updateMany({ where: { id: lockedParent.id, updatedAt: lockedParent.updatedAt }, data: { updatedAt: lockedParent.updatedAt } });
+      const lockTimestamp = new Date();
+      const locked = await tx.presentationAsset.updateMany({ where: { id: lockedParent.id, updatedAt: lockedParent.updatedAt }, data: { updatedAt: lockTimestamp } });
       if (locked.count !== 1) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       const currentParent = await requireSceneImageParent(tx, payload);
       if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
