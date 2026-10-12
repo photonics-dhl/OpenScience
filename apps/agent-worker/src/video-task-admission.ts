@@ -272,10 +272,16 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
 
 /** Only pending held rows are released; Redis is owned by the existing outbox dispatcher. */
 export async function recoverHeldVideoTasks(deps: VideoTaskAdmissionDeps, limit = 50): Promise<number> {
-  const tasks = await deps.prisma.agentTask.findMany({
-    where: { status: 'pending', deletedAt: null, error: { in: [VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD] } },
-    orderBy: { updatedAt: 'asc' }, take: limit,
-  });
+  const scanLimit = Math.max(limit, 1) * 10;
+  const [videoTasks, imageTasks] = await Promise.all([
+    deps.prisma.agentTask.findMany({
+      where: { status: 'pending', deletedAt: null, error: VIDEO_READINESS_HOLD }, orderBy: { updatedAt: 'asc' }, take: limit,
+    }),
+    deps.prisma.agentTask.findMany({
+      where: { status: 'pending', deletedAt: null, error: NATIVE_IMAGE_CONTRACT_HOLD }, orderBy: { updatedAt: 'asc' }, take: scanLimit,
+    }),
+  ]);
+  const tasks = [...videoTasks, ...imageTasks].sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime()).slice(0, scanLimit);
   let released = 0;
   for (const task of tasks) {
     if (task.error === NATIVE_IMAGE_CONTRACT_HOLD) {

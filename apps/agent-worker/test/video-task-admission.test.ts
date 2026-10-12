@@ -267,6 +267,19 @@ describe('image planning-contract admission hold', () => {
     expect(f.handler).toHaveBeenCalledTimes(1);
   });
 
+  it('finds a valid image hold after a bounded batch of malformed image holds', async () => {
+    const f = imageContractFixture();
+    f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;
+    (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    (f.deps as WorkerDeps).nativeImageReaderReady = true;
+    const malformed = Array.from({ length: 60 }, (_, index) => ({ ...structuredClone(f.task), id: `malformed-${index}`,
+      result: { nativeAgentExecution: { planningContract: 'unknown-contract' } } }));
+    f.agentTask.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
+      where.error === NATIVE_IMAGE_CONTRACT_HOLD ? [...malformed, structuredClone(f.task)] : []);
+    expect(await recoverHeldVideoTasks(f.deps)).toBe(1);
+    expect(f.task).toMatchObject({ error: null, dispatchedAt: null, executionAttempt: 0 });
+  });
+
   it('keeps an already held image out of video readiness and removes only its processing entry at startup', async () => {
     const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD; f.lists.set(processingKey, [f.task.id]);
     const before = structuredClone(f.task);
