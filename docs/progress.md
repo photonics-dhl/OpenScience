@@ -4,7 +4,7 @@
 
 ## 最近检查点
 
-- 2026-10-12 后端持续交付：视频paid replay与组合合同问题已修，1e298五CI全成功；生图新指导和当前段落mapper也已High通过并集入候选。新接入的真实PG与搜索单元CI暴露旧fixture的core前提/双ID语义缺口，已核根因、原失败保留，UI同一writer正随限域搜索修正；video继续native-only的4处补接，image两块已交等待admission写权，root负责收依赖后续派。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
+- 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），搜索73单测/typecheck通过，真实PG integration待CI。生图指导/mapper仍High GO并入候选，image admission待视频CI交回。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
 
