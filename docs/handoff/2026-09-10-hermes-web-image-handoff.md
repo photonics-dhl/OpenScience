@@ -5,7 +5,7 @@
 - 依据开发规格：真实 NousResearch Hermes 先理解全文、提炼 Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不以 Codex 手稿代替科学能力。
 - 目标仍是 2–3 篇真实论文的凝练、用户确认、配图与公开展示；三篇整体验收、普通用户旅程、完整视频、整站审美尚未完成。
 - 用户已要求继续有价值的并行开发；idle 不等于完成，但不得用无关检查填充。保留 PDF/SourceMap、认可图片、公开标识、sealed 记录、原失败/费用/receipt/oncekey；未知 paid/started CP 不重放，不因容量或 idle 扩预算、安装、重启或切换主 Gateway/Native M3。
-- 生图真实图片质量仍需来源明确的实际 PNG 与科学审阅；本轮私有任务失败/容量阻塞不等于后端代码完成。视频真实试听/完整影片与声音选择仍未验收。UI 单项代码合并不等于整站审美完成。
+- 生图真实图片质量仍需来源明确的实际 PNG 与科学审阅；本轮私有任务失败/容量阻塞不等于后端代码完成。视频真实试听/完整影片与声音选择仍未验收；最新只读线上观察返回“视频制作暂不可用”，视频 session 正在定位能力注册/版本根因。UI 单项代码合并不等于整站审美完成。
 
 ## 总控与并行分工
 - 总控 `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 负责集成、CI、CURRENT/progress/index 与串行发布；openscience ACTIVE。
@@ -16,7 +16,7 @@
 | UI / 原 `01a0f118-e09d-7671-af09-0592d6062a6c` 已由替代 `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8` 接替 | StoryboardPanel/StoryboardPlans 写操作锁与处理中/成功/失败反馈经三轮 High GO，已合入 canonical：`035efaac`、`06fb102e`、`9e837b93`。定向证据 13/13、owner typecheck/diff-check 通过。真实 push workflow `38268914069` 的 browser-entry/web build 全通过；随后因既有 queue-recovery 2 用例失败而提前结束，UI typecheck 与 storyboard-panel CI 步骤被跳过。UI 写反馈、Promise 类型契约、silent outcome 与逐场景提交入口均已 High GO 并按序合入 canonical：`c258da85`、`b82594d8`、`b06a8fab`；`38277069403` 已回执，仅共享 queue-recovery 两断言失败，无 UI 回归证据。 | `E:\...\research-product-craft` |
 
 ## 当前 Git / CI / 运行事实
-- canonical branch `release/onchip-production-line`, HEAD `f6604cbf906746347c070e05a44bc57b442b3f8c`, worktree clean and pushed; latest commit records the green Media CI closure.
+- canonical branch `release/onchip-production-line`, HEAD `9c4efaa2e9525dce4ffebccc6e011d2973f7daf6`, worktree clean and pushed; latest commit records the green Media CI closure.
 - UI runs `38268914069`, `38270923462`, `38274577962` and `38277069403`: browser-entry (hermes-dashboard/auth-dashboard/research-continuation/hermes-workspace-stage) and each web build passed; `skill-path` failed only at the two stale non-UI queue-recovery assertions. Those fixtures were refreshed in `af42e5e2`, and the subsequent exact Media run `38280757897` passed all jobs. No deploy, install or model call.
 - Video exact CI `38280757897` for merge head `2e1a28de` completed successfully: skill-path and all four browser-entry jobs passed. The two stale queue-recovery fixture failures are closed; Journal/search evidence remains as previously recorded, with no production-code failure attributed to the merged UI/video code.
 - Image admission/floor/reader code and High reviews are merged and preserved; complete producer/floor and real PNG quality remain open. The approved-scene UI submission entry is now merged; no Synclip task has been created and real route observation remains open.
