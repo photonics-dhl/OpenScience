@@ -192,7 +192,8 @@ export function sceneImageEnabledFromEnv(env: NodeJS.ProcessEnv): boolean {
   const disabled = (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim());
   if (provider === 'synclip') return aiEnabled && env.SYNCLIP_IMAGE_ENABLED === 'true'
     && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('synclip');
-  if (provider === 'chatgpt-web') return aiEnabled && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && !disabled.includes('chatgpt-web');
+  if (provider === 'chatgpt-web') return aiEnabled && env.CHATGPT_WEB_IMAGE_ENABLED === 'true'
+    && Boolean(env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('chatgpt-web');
   if (provider === 'codex') return aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('codex-image');
   return provider === 'minimax' && aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true'
     && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !disabled.includes('minimax-image');

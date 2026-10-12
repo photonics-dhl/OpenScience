@@ -24,7 +24,7 @@ const input = { prisma: {}, redis: {} } as Parameters<typeof createWorkerDeps>[0
 describe('Worker native video readiness dependency assembly', () => {
   it.each([
     { name: 'minimax', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'minimax', MINIMAX_IMAGE_ENABLED: 'true', MINIMAX_API_KEY: 'key' } },
-    { name: 'chatgpt-web', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'chatgpt-web', CHATGPT_WEB_IMAGE_ENABLED: 'true' } },
+    { name: 'chatgpt-web', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'chatgpt-web', CHATGPT_WEB_IMAGE_ENABLED: 'true', CHATGPT_WEB_IMAGE_INBOX_DIR: '/image/inbox', CHATGPT_WEB_IMAGE_RESULTS_DIR: '/image/results' } },
     { name: 'codex', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'codex', CODEX_IMAGE_INBOX_DIR: '/image/inbox', CODEX_IMAGE_RESULTS_DIR: '/image/results' } },
     { name: 'synclip', env: { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true', SYNCLIP_IMAGE_INBOX_DIR: '/image/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/image/results' } },
   ])('uses the same scene-image readiness as API config for $name', ({ env }) => {
@@ -32,6 +32,13 @@ describe('Worker native video readiness dependency assembly', () => {
     const deps = createWorkerDeps(input, merged);
     expect(deps.sceneImageEnabled).toBe(sceneImageEnabledFromEnv(merged));
     expect(deps.sceneImageEnabled).toBe(true);
+  });
+  it.each(['CHATGPT_WEB_IMAGE_INBOX_DIR', 'CHATGPT_WEB_IMAGE_RESULTS_DIR'])('rejects chatgpt-web when %s is absent', missing => {
+    const env = { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'chatgpt-web', CHATGPT_WEB_IMAGE_ENABLED: 'true',
+      CHATGPT_WEB_IMAGE_INBOX_DIR: '/image/inbox', CHATGPT_WEB_IMAGE_RESULTS_DIR: '/image/results', [missing]: '' };
+    const deps = createWorkerDeps(input, { ...env, HERMES_NATIVE_AGENT_ENABLED: 'false' });
+    expect(sceneImageEnabledFromEnv(env)).toBe(false);
+    expect(deps.sceneImageEnabled).toBe(false);
   });
 
   it('carries a dynamically sampled callback into worker dependencies instead of a startup snapshot', async () => {
