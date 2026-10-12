@@ -5,8 +5,8 @@
 ## 最近检查点
 
 - 2026-10-12 后端持续交付：视频native-only实现`86a1f2ca`+兼容测试`d1e6e1f5`、搜索限域/SQL夹具`3b179749`已收；本地视频定向通过（Domain361、Worker176/4skip、API139、Web50），Hermes video CI 38217739869 SUCCESS；搜索73单测/typecheck通过，真实PG integration随media CI 38217740034仍待结果。生图指导/mapper仍High GO并入候选；image admission `8f817cbc` 已形成7文件候选但独立High仍NO-GO，见下一条。生产保持ca23，未带失败发布；图文稿待human与软件/科学/影片验收分别记录。精确CI、候选、证据与依赖统一见Hermes CURRENT。
-- 2026-10-12 image admission `8f817cbc+b0d7f82e` 已完成替代模型独立 High，但结论 NO-GO：startup recovery 丢失 marked running+paid+checkpoint image ID，且两套队列回归对同一路径期望矛盾；`vitest`仍不可执行，未合入canonical。Native paper-tools adapter 已交付 `84047b56`（39/39及typecheck/build/diff-check通过），尚待真实入口注入 scope/runtime。
-- 2026-10-12 视频 owner 已开始实际贯通 `ltx23`/`ltx23fast` 服务器配置与 receipt 模型记录，源代码与定向验证进行中；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
+- 2026-10-12 image admission `8f817cbc+b0d7f82e+2e9fa92a` 经替代模型独立 High 仍 NO-GO：terminal marker 残留会造成 processing 泄漏，poller P2034 catch 仍缺保留 processing 线索的回归；owner 正修正并准备再次复审。Native paper-tools adapter `84047b56` 已交付（39/39及typecheck/build/diff-check通过）。
+- 2026-10-12 视频 owner 已实际贯通 `ltx23`/`ltx23fast` 配置与 receipt 模型记录；Broker 定向 102 项 97 通过、5 项因本机无 ffmpeg/ffprobe 跳过，新增快速模型端到端、Gateway API/readiness 与 Worker typecheck 通过，正在提交收尾；H3/Seedance/Veo无真实合同不接入，不新增Provider/Host/费用/部署。
 - 2026-10-12 UI owner 已重新派发固定版本代码包与 Native adapter 清点的实际回合，执行中；不写共享后端、不安装/重启/外发。三线均保持 canonical 写权与生产边界。
 
 - 2026-10-11 整站图文稿已交付：同名84页PDF（47页图册+37页文字附录）、44图可检索HTML和离线网页ZIP，含四类服务受众与3别名去向。owner全图/47页排版及检索、ZIP检查已完成；root实核页数、唯一图页和46图片引用齐全并查看代表图册页。Guide v2方向获认可，其余页面为待用户点评候选，无产品改码或部署；后续归属、材料路径与未完成业务统一见Hermes CURRENT及产品设计10-11节。
