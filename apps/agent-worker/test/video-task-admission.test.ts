@@ -303,6 +303,36 @@ describe('image planning-contract admission hold', () => {
     expect(f.lists.get(processingKey)).toEqual([f.task.id]);
     expect(f.lists.get(queueKey)).toEqual([]);
   });
+
+  it('keeps a paid image checkpoint in processing when the final task write hits P2034', async () => {
+    const f = imageContractFixture();
+    f.task.result = null;
+    execution.progress.mockImplementationOnce(async () => {
+      f.task.result = { nativeAgentExecution: {
+        kind: 'hermes-agent', profile: 'paper-illustration', runtimeId: 'native-installed',
+        skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3', planningContract: 'image-source-explicit-trig-v1',
+        checkpoint: { state: 'completed' }, providerReceipt: 'paid',
+      } };
+      throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+    });
+    expect(await f.poll()).toBe(true);
+    expect(f.task.status).toBe('running');
+    expect(f.task.result).toMatchObject({ nativeAgentExecution: { checkpoint: { state: 'completed' }, providerReceipt: 'paid' } });
+    expect(f.lists.get(processingKey)).toEqual([f.task.id]);
+    expect(f.lists.get(queueKey)).toEqual([]);
+    expect(f.redis.lrem).not.toHaveBeenCalled();
+  });
+
+  it.each(['succeeded', 'failed'] as const)('cleans a terminal marked image processing residue for %s', async status => {
+    const f = imageContractFixture();
+    f.task.status = status;
+    f.lists.set(queueKey, []); f.lists.set(processingKey, [f.task.id]);
+    const before = structuredClone(f.task);
+    expect(await recoverProcessingQueue(f.deps)).toBe(0);
+    expect(f.task).toEqual(before);
+    expect(f.lists.get(processingKey)).toEqual([]);
+    expect(f.lists.get(queueKey)).toEqual([]);
+  });
 });
 
 describe('ordinary local Native video planning compatibility floor', () => {

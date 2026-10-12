@@ -6,7 +6,7 @@ import { runNativeSourceReviewTask } from './native-agent/source-review-task';
 import { isDeepStrictEqual } from 'node:util';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { Prisma } from '@prisma/client';
+import { Prisma, type AgentTask } from '@prisma/client';
 import {
   AiGateway,
   AnthropicCompatProvider,
@@ -94,6 +94,11 @@ import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
 import { admitPendingVideoTask, createVideoReadinessResumeScheduler, VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD } from './video-task-admission';
+
+function isRecoverableNativeImageProcessingTask(task: Pick<AgentTask, 'status' | 'error' | 'kind' | 'payload' | 'result'>): boolean {
+  return task.status === 'running'
+    && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isNativeImagePlanningContractTask(task));
+}
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
   sourceReview?: {
@@ -1002,8 +1007,7 @@ export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => b
     // recovery helper intentionally refuses to reset that row. Keep the
     // processing entry as the durable handoff until a compatible reader can
     // resume it; removing it would orphan the only worker recovery reference.
-    if (task && task.status !== 'pending'
-      && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isNativeImagePlanningContractTask(task))) continue;
+    if (task && isRecoverableNativeImageProcessingTask(task)) continue;
     const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
     if (retryable) {
       if (await deps.redis.lindex(AGENT_TASK_PROCESSING_QUEUE, -1) === taskId) {
@@ -1135,6 +1139,14 @@ export async function createPollOnce(
     } catch (e) {
       if (!claimed && processingEntryDeferred) throw e;
       if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
+        const current = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+        if (current && isRecoverableNativeImageProcessingTask(current)) {
+          // The handler may have persisted a paid image checkpoint before the
+          // final task write hit a serialization conflict. Keep the processing
+          // entry as the durable handoff until a compatible reader resumes it.
+          processingEntryDeferred = true;
+          return true;
+        }
         const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
         if (!retryable) throw e;
         processingEntryRequeued = true;
