@@ -5,6 +5,8 @@ import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile } f
 import { materializeIllustrationScience } from '../src/presentation/illustration-planner';
 import { compileShotPrompt } from '../src/presentation/synclip-video-spool';
 
+// Temporary CI verification marker; this test remains behaviorally unchanged.
+
 // Exact saved tool input from reviewed a0f2, captured before changing the fresh producer.
 // It must remain independent of the R1 fresh factory. This is input, not an expected implementation string.
 const OPTIONAL_SAVED_TOOL_INPUT = [
