@@ -280,6 +280,25 @@ describe('image planning-contract admission hold', () => {
     expect(f.task).toMatchObject({ error: null, dispatchedAt: null, executionAttempt: 0 });
   });
 
+  it.each(['video-kind', 'started', 'retry', 'checkpoint', 'paid-receipt', 'sdf-kind'] as const)(
+    'does not release an image hold with a non-pristine %s state', async change => {
+      const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD;
+      (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+      (f.deps as WorkerDeps).nativeImageReaderReady = true;
+      if (change === 'video-kind') f.task.payload = { ...f.task.payload, kind: 'video' };
+      if (change === 'started') f.task.status = 'running';
+      if (change === 'retry') f.task.retryCount = 1;
+      if (change === 'checkpoint') f.task.result!.nativeAgentExecution = {
+        ...(f.task.result!.nativeAgentExecution as Record<string, unknown>), checkpoint: { state: 'started' },
+      };
+      if (change === 'paid-receipt') f.task.result!.providerReceipt = 'paid';
+      if (change === 'sdf-kind') f.task.kind = 'sdf.extract';
+      const before = structuredClone(f.task);
+      expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+      expect(f.task).toEqual(before);
+      expect(f.handler).not.toHaveBeenCalled();
+    });
+
   it('keeps an already held image out of video readiness and removes only its processing entry at startup', async () => {
     const f = imageContractFixture(); f.task.error = NATIVE_IMAGE_CONTRACT_HOLD; f.lists.set(processingKey, [f.task.id]);
     const before = structuredClone(f.task);
@@ -1077,8 +1096,11 @@ describe('existing outbox release of native video holds', () => {
     f.state.ready = true; f.task.payload = { ...f.task.payload, kind: 'interactive_html', storyboard: { output: 'image' } };
     expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
     expect(f.task).toEqual({ ...before, payload: f.task.payload }); expect(f.redis.lpush).not.toHaveBeenCalled();
-    expect(f.agentTask.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(f.agentTask.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { status: 'pending', error: VIDEO_READINESS_HOLD, deletedAt: null }, take: 50,
+    }));
+    expect(f.agentTask.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { status: 'pending', error: NATIVE_IMAGE_CONTRACT_HOLD, deletedAt: null }, take: 500,
     }));
   });
   it('allows existing outbox recovery after a release crash and rechecks freshness before claim', async () => {
@@ -1095,8 +1117,8 @@ describe('existing outbox release of native video holds', () => {
     const f = queueFixture(); await admitPendingVideoTask(f.deps, structuredClone(f.task) as never);
     let current = 0; const tick = createVideoReadinessResumeScheduler({ now: () => current });
     expect(await tick(f.deps)).toBe(0); current = 59_999; f.state.ready = true;
-    expect(await tick(f.deps)).toBe(0); expect(f.agentTask.findMany).toHaveBeenCalledTimes(1);
-    current = 60_000; expect(await tick(f.deps)).toBe(1); expect(f.agentTask.findMany).toHaveBeenCalledTimes(2);
+    expect(await tick(f.deps)).toBe(0); expect(f.agentTask.findMany).toHaveBeenCalledTimes(2);
+    current = 60_000; expect(await tick(f.deps)).toBe(1); expect(f.agentTask.findMany).toHaveBeenCalledTimes(4);
     expect(f.redis.lpush).not.toHaveBeenCalled();
   });
 });

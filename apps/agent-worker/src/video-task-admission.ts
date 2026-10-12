@@ -22,6 +22,30 @@ export function isValidNativeImagePlanningContractTask(task: Pick<AgentTask, 'ki
     return marker?.profile === 'paper-illustration' && marker.planningContract === 'image-source-explicit-trig-v1';
   } catch { return false; }
 }
+
+/**
+ * Only a pristine, unpaid image plan may cross the reader-ready boundary.
+ * A valid marker alone is intentionally insufficient: a later checkpoint or
+ * receipt belongs to an already-started operation and must stay in recovery.
+ */
+function isPristineNativeImagePlanningTask(task: Pick<AgentTask,
+  'kind' | 'status' | 'error' | 'deletedAt' | 'executionAttempt' | 'retryCount' | 'payload' | 'result'>): boolean {
+  if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.deletedAt !== null
+    || (task.error !== null && task.error !== NATIVE_IMAGE_CONTRACT_HOLD)
+    || task.executionAttempt !== 0 || task.retryCount !== 0
+    || !isValidNativeImagePlanningContractTask(task)
+    || !task.result || typeof task.result !== 'object' || Array.isArray(task.result)
+    || Object.keys(task.result).length !== 1 || !Object.hasOwn(task.result, 'nativeAgentExecution')) return false;
+  const payload = task.payload as Record<string, unknown> | null;
+  const storyboard = payload?.storyboard as Record<string, unknown> | null;
+  if (payload?.kind !== 'interactive_html' || storyboard?.output !== 'image' || storyboard.narrative !== true) return false;
+  try {
+    const marker = readNativeAgentExecution(task.result);
+    return marker?.profile === 'paper-illustration'
+      && marker.planningContract === 'image-source-explicit-trig-v1'
+      && !Object.hasOwn(marker, 'checkpoint');
+  } catch { return false; }
+}
 const admissionFields = ['id', 'kind', 'status', 'sessionId', 'progress', 'error', 'retryCount', 'executionAttempt',
   'payload', 'result', 'interestContext', 'dispatchedAt', 'updatedAt'] as const;
 
@@ -184,7 +208,7 @@ async function admitNativeImageContractTask(
   const errorStable = latest?.error === current.error
     || current.error === VIDEO_READINESS_HOLD && latest?.error === NATIVE_IMAGE_CONTRACT_HOLD;
   if (!latest || latest.deletedAt || latest.status !== 'pending' || !errorStable
-    || !isValidNativeImagePlanningContractTask(latest)
+    || !isPristineNativeImagePlanningTask(latest)
     || admissionFields.some(field => !['error', 'dispatchedAt', 'updatedAt'].includes(field)
       && !isDeepStrictEqual(latest[field], current[field]))) return false;
   const latestTask = latest as unknown as VideoTaskAdmissionSnapshot;
@@ -216,7 +240,7 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
 
 async function releasePendingNativeImageTask(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<boolean> {
   if (!deps.nativeImageReaderReady || task.status !== 'pending' || task.error !== NATIVE_IMAGE_CONTRACT_HOLD
-    || !isValidNativeImagePlanningContractTask(task)) return false;
+    || !isPristineNativeImagePlanningTask(task)) return false;
   const released = await deps.prisma.agentTask.updateMany({
     where: pendingSnapshotWhere(task),
     data: { error: null, dispatchedAt: null, updatedAt: nextUpdatedAt(task) },
@@ -230,10 +254,10 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
   if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) {
-    return isValidNativeImagePlanningContractTask(current) && deps.nativeImageReaderReady
+    return isPristineNativeImagePlanningTask(current) && deps.nativeImageReaderReady
       ? { expectedPendingTask: current } : true;
   }
-  if (isValidNativeImagePlanningContractTask(current)) {
+  if (isPristineNativeImagePlanningTask(current)) {
     return admitNativeImageContractTask(deps, task, current as unknown as VideoTaskAdmissionSnapshot);
   }
   if (optionalFirstNativePlan(current)) {
