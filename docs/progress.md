@@ -10,6 +10,8 @@
 
 - 2026-10-12 22:59：UI 第二轮独立 High 仍 **NO-GO/P1**：`generate` 的 catch/早退仍 fulfilled `undefined`，真实启动失败会被局部状态误判为 pending/success；已退回同一 session 修复返回契约并补真实 generate catch 测试。任务轮询最终失败尚未回写局部状态，要求文案保持“任务已提交”语义。
 
+- 2026-10-12 23:09：UI 第三轮修复提交 `798749f4` 已完成：generate 早退/成功/catch/abort 返回明确 outcome，wrapper 原样透传，pending 文案明确为“任务已提交”，13/13、typecheck、diff-check 通过；第三轮独立 High 复审待回。生图模型容量错误仍未恢复，未取得 PNG/质量结论。
+
 - 2026-10-12 当前调度：生图 scoped NativeSemanticSearch 接线已独立 High GO并合入 canonical（`0605376a`、`67a344d5`、`1f9daeee`、`ba5fff11`、`00e241fa`），journal 缺 RO/version 身份故保持 fail-closed；image floor vertical slice `6b9c9173` 已独立 High GO并合入 canonical（`2ac63e73`），reader-ready 切片 `9e0f71b9` 已获独立 gpt-6.1-sol High GO并合入 canonical（`2561da1f`），admission 191/195（4 skip），完整floor/producer仍未就绪。视频 `a01a87ab` 已经独立 High GO并按祖先链合入 canonical（`fb7362fe`、`de643253`、`d1ade094`、`faa2d376`、`387d5c1a`），readiness 证据已完成但 Journal/Media CI 失败，未部署；UI 接替 session 已产出固定版本包（2,118文件、ZIP/manifest/scan/architecture齐全，扫描与完整性通过），未改共享源码。
 
 - 2026-10-12 22:02：视频搜索夹具修复链已收至 canonical 本地 `c11f90a3`，源 `dabea6cf` 独立 High GO；Journal CI 38258404187 24/24，Media 38258404168 仅复现既有 queue-recovery 两断言失败，browser-entry/native-video-planning 通过；搜索 typecheck 通过，本地 integration 因无隔离 DB 跳过，待推送后重跑精确 CI。
