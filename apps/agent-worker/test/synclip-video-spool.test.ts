@@ -33,9 +33,9 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
   const complete = async () => {
     const request = JSON.parse(await readFile(join(inboxDir, TASK, 'request.json'), 'utf8')) as Submitted;
     const resultDir = join(resultsDir, TASK); await mkdir(resultDir);
-    await writeFile(join(resultDir, 'result.mp4'), mp4); await writeFile(join(resultDir, 'metrics.json'), '{}');
+    await writeFile(join(resultDir, 'result.mp4'), mp4); await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ provider: 'synclip', model: 'ltx23' }));
     await writeFile(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, inputHash: request.inputHash,
-      executionAttempt: 1, status: 'succeeded', contentType: 'video/mp4', outputSha256: createHash('sha256').update(mp4).digest('hex'),
+      executionAttempt: 1, status: 'succeeded', provider: 'synclip', model: 'ltx23', contentType: 'video/mp4', outputSha256: createHash('sha256').update(mp4).digest('hex'),
       outputSize: mp4.length, narration: { provider: 'synclip', speaker: audio.voice, speed: audio.speed, timingStatus: 'measured_aligned' }, ...reply(request) }));
   };
   const spool = new SynclipVideoSpool({ inboxDir, resultsDir, now: () => now, sleep: complete });
@@ -43,6 +43,26 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
 }
 
 describe('Native provider output without optional TTS', () => {
+  it('rejects a result that claims a different video model', async () => {
+    const f = await nativeFixture(() => ({ narration: undefined, model: 'ltx23fast' }));
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    await expect(f.spool.generate(f.input)).rejects.toThrow('SYNCLIP_VIDEO_MODEL_MISMATCH');
+  });
+
+  it('rejects metrics that claim a different video model', async () => {
+    const f = await nativeFixture(() => ({ narration: undefined }));
+    Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
+    for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    const resultDir = join(f.resultsDir, TASK);
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now, sleep: async () => {
+      await f.complete(); await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ provider: 'synclip', model: 'ltx23fast' }));
+    } });
+    await expect(spool.generate(f.input)).rejects.toThrow('SYNCLIP_VIDEO_MODEL_MISMATCH');
+  });
+
   it('uses the explicit Native audio strategy and publishes no TTS request or voice when none was selected', async () => {
     const f = await nativeFixture(() => ({ narration: undefined }));
     Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
@@ -55,7 +75,7 @@ describe('Native provider output without optional TTS', () => {
     // The producer result uses the provider-output metrics, never a selected TTS speaker.
     const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now, sleep: async () => {
       await f.complete();
-      await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ audioMode: 'provider-output-unverified', audioStreamCount: 1, durationSeconds: 30 }));
+      await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ provider: 'synclip', model: 'ltx23', audioMode: 'provider-output-unverified', audioStreamCount: 1, durationSeconds: 30 }));
     } });
     const result = await spool.generate(f.input);
     const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
@@ -262,7 +282,7 @@ describe('Synclip commercial video spool', () => {
       expect(request.files.scenes.map((image: { requestId: string }) => image.requestId)).toEqual([TASK, TASK, TASK]);
       const resultDir = join(resultsDir, TASK); await mkdir(resultDir); const outputSha256 = createHash('sha256').update(mp4).digest('hex');
       await writeFile(join(resultDir, 'result.mp4'), mp4); await writeFile(join(resultDir, 'metrics.json'), JSON.stringify({ provider: 'synclip', model: 'ltx23', shotCount: 3 }));
-      await writeFile(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, inputHash: request.inputHash, executionAttempt: 1, status: 'succeeded', contentType: 'video/mp4', outputSha256, outputSize: mp4.length, adapterRevision: 'synclip-video-v1' }));
+      await writeFile(join(resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, inputHash: request.inputHash, executionAttempt: 1, status: 'succeeded', provider: 'synclip', model: 'ltx23', contentType: 'video/mp4', outputSha256, outputSize: mp4.length, adapterRevision: 'synclip-video-v1' }));
     } });
     const storyboard = { schemaVersion: 1 as const, title: 'Paper', videoProduction: { schemaVersion: 1 as const, narrativeArc: 'question-mechanism-takeaway' as const, visualContinuity: 'stable field identity', audioPolicy: 'external-narration' as const, modelPolicy: 'commercial-primary' as const }, scenes: Array.from({ length: 3 }, (_, index) => ({ title: 'Scene ' + index, narration: 'Narration ' + index, visualAction: 'Action ' + index, durationSeconds: index === 0 ? 4 : index === 1 ? 8 : 14, sourceClaimIds: [CLAIM], videoDirection: direction(index) })) };
     const input = { taskId: TASK, executionAttempt: 1, profile: 'content-driven-v1' as const, sourceClaimIds: [CLAIM], storyboard, sceneImages: Array.from({ length: 3 }, png) };
