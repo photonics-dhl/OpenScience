@@ -9,7 +9,7 @@ import {
 
 export const VIDEO_READINESS_HOLD = new HermesVideoUnavailableError().message;
 export const NATIVE_IMAGE_CONTRACT_HOLD = '[blocked] Native image planning contract held for compatible reader';
-type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma' | 'nativeAgentRuntime'> & HermesVideoReadinessDeps;
+type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma' | 'nativeAgentRuntime'> & HermesVideoReadinessDeps & { nativeImageReaderReady?: boolean };
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt' | 'deletedAt'>;
 type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'progress' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
 type PendingVideoAdmission = { expectedPendingTask: VideoTaskAdmissionSnapshot };
@@ -173,8 +173,8 @@ async function admitNativeImageContractTask(
   snapshot: VideoTaskAdmissionSnapshot,
   current: VideoTaskAdmissionSnapshot,
 ): Promise<boolean | PendingVideoAdmission> {
-  if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) return deps.nativeAgentRuntime ? { expectedPendingTask: current } : true;
-  if (deps.nativeAgentRuntime) return { expectedPendingTask: current };
+  if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) return deps.nativeImageReaderReady ? { expectedPendingTask: current } : true;
+  if (deps.nativeImageReaderReady) return { expectedPendingTask: current };
   if (await parkPendingNativeImageTask(deps, snapshot)) return true;
 
   // Only an acknowledgement timestamp may change between the failed CAS and
@@ -188,7 +188,7 @@ async function admitNativeImageContractTask(
     || admissionFields.some(field => !['error', 'dispatchedAt', 'updatedAt'].includes(field)
       && !isDeepStrictEqual(latest[field], current[field]))) return false;
   const latestTask = latest as unknown as VideoTaskAdmissionSnapshot;
-  if (latestTask.error === NATIVE_IMAGE_CONTRACT_HOLD) return deps.nativeAgentRuntime ? { expectedPendingTask: latestTask } : true;
+  if (latestTask.error === NATIVE_IMAGE_CONTRACT_HOLD) return deps.nativeImageReaderReady ? { expectedPendingTask: latestTask } : true;
   return parkPendingNativeImageTask(deps, latestTask);
 }
 
@@ -220,7 +220,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
   if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) {
-    return isValidNativeImagePlanningContractTask(current) && deps.nativeAgentRuntime
+    return isValidNativeImagePlanningContractTask(current) && deps.nativeImageReaderReady
       ? { expectedPendingTask: current } : true;
   }
   if (isValidNativeImagePlanningContractTask(current)) {

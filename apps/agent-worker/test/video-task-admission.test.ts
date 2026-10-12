@@ -238,10 +238,19 @@ describe('image planning-contract admission hold', () => {
   it('admits a valid marked image to the Native reader when Hermes runtime is configured', async () => {
     const f = imageContractFixture();
     (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    (f.deps as WorkerDeps).nativeImageReaderReady = true;
     expect(await f.poll()).toBe(true);
     expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, error: null });
     expect(f.handler).toHaveBeenCalledTimes(1);
     expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+  });
+
+  it('holds a valid marked image when the Native reader is not fully assembled', async () => {
+    const f = imageContractFixture();
+    (f.deps as WorkerDeps).nativeAgentRuntime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    expect(await f.poll()).toBe(true);
+    expect(f.task).toMatchObject({ status: 'pending', error: NATIVE_IMAGE_CONTRACT_HOLD, executionAttempt: 0 });
+    expect(f.handler).not.toHaveBeenCalled();
   });
 
   it('keeps an already held image out of video readiness and removes only its processing entry at startup', async () => {

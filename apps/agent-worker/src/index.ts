@@ -327,7 +327,7 @@ export interface WorkerVideoReadinessDeps extends HermesVideoReadinessDeps {
   videoEnabled?: boolean;
   readVideoReadiness?: NativeVideoReadinessReader;
 }
-export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean };
+export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; nativeImageReaderReady?: boolean };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -1341,6 +1341,7 @@ async function main(): Promise<void> {
       gateway, parserJobAdapter, rasterJobAdapter,
       process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
     );
+    deps.nativeImageReaderReady = Boolean(deps.nativeAgentRuntime && process.env.HERMES_NATIVE_AGENT_INBOX?.trim() && parserCascade);
     const handlers = createHandlers(gateway, {
       nativeAgentInboxRoot: process.env.HERMES_NATIVE_AGENT_INBOX,
       parserCascade,
