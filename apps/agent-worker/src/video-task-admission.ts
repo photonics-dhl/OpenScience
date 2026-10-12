@@ -13,6 +13,15 @@ type VideoTaskAdmissionDeps = Pick<AgentDeps, 'prisma'> & HermesVideoReadinessDe
 type VideoTaskSnapshot = Pick<AgentTask, 'id' | 'kind' | 'status' | 'error' | 'executionAttempt' | 'updatedAt' | 'dispatchedAt' | 'deletedAt'>;
 type VideoTaskAdmissionSnapshot = VideoTaskSnapshot & Pick<AgentTask, 'sessionId' | 'progress' | 'payload' | 'result' | 'interestContext' | 'retryCount'>;
 type PendingVideoAdmission = { expectedPendingTask: VideoTaskAdmissionSnapshot };
+
+/** Only a fully readable image contract may bypass the generic video path. */
+export function isValidNativeImagePlanningContractTask(task: Pick<AgentTask, 'kind' | 'payload' | 'result'>): boolean {
+  if (!isNativeImagePlanningContractTask(task)) return false;
+  try {
+    const marker = readNativeAgentExecution(task.result);
+    return marker?.profile === 'paper-illustration' && marker.planningContract === 'image-source-explicit-trig-v1';
+  } catch { return false; }
+}
 const admissionFields = ['id', 'kind', 'status', 'sessionId', 'progress', 'error', 'retryCount', 'executionAttempt',
   'payload', 'result', 'interestContext', 'dispatchedAt', 'updatedAt'] as const;
 
@@ -174,7 +183,7 @@ async function admitNativeImageContractTask(
   const errorStable = latest?.error === current.error
     || current.error === VIDEO_READINESS_HOLD && latest?.error === NATIVE_IMAGE_CONTRACT_HOLD;
   if (!latest || latest.deletedAt || latest.status !== 'pending' || !errorStable
-    || !isNativeImagePlanningContractTask(latest)
+    || !isValidNativeImagePlanningContractTask(latest)
     || admissionFields.some(field => !['error', 'dispatchedAt', 'updatedAt'].includes(field)
       && !isDeepStrictEqual(latest[field], current[field]))) return false;
   const latestTask = latest as unknown as VideoTaskAdmissionSnapshot;
@@ -210,7 +219,7 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   const current = await deps.prisma.agentTask.findUnique({ where: { id: task.id } });
   if (!current || current.deletedAt || admissionFields.some(field => !isDeepStrictEqual(current[field], task[field]))) return false;
   if (current.error === NATIVE_IMAGE_CONTRACT_HOLD) return true;
-  if (isNativeImagePlanningContractTask(current)) {
+  if (isValidNativeImagePlanningContractTask(current)) {
     return admitNativeImageContractTask(deps, task, current as unknown as VideoTaskAdmissionSnapshot);
   }
   if (optionalFirstNativePlan(current)) {

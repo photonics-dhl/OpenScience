@@ -48,7 +48,6 @@ import {
   journalSourceProcessingAllowed,
   journalDigest,
   requirePresentationWriteScope, parsePresentationGenerationPayload, requireVideoGenerationParents,
-  isNativeImagePlanningContractTask,
   type HermesVideoReadinessDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
@@ -93,11 +92,12 @@ import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector'
 import { startJournalWorker } from './journal-worker';
 import { createPresentationGenerationHandler, requireIllustrationReviewAuthority, requireIllustrationReviewSubmission } from './presentation/handler';
 import { createPresentationFigureAuditHandler, enqueueFigureAuditFromResult } from './presentation/figure-audit';
-import { admitPendingVideoTask, createVideoReadinessResumeScheduler, VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD } from './video-task-admission';
+import { admitPendingVideoTask, createVideoReadinessResumeScheduler, isValidNativeImagePlanningContractTask,
+  VIDEO_READINESS_HOLD, NATIVE_IMAGE_CONTRACT_HOLD } from './video-task-admission';
 
 function isRecoverableNativeImageProcessingTask(task: Pick<AgentTask, 'status' | 'error' | 'kind' | 'payload' | 'result'>): boolean {
   return task.status === 'running'
-    && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isNativeImagePlanningContractTask(task));
+    && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isValidNativeImagePlanningContractTask(task));
 }
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
@@ -991,7 +991,7 @@ export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => b
     if (stopping()) break;
     const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
     if (task?.status === 'pending' && (task.error === VIDEO_READINESS_HOLD
-      || task.error === NATIVE_IMAGE_CONTRACT_HOLD || isNativeImagePlanningContractTask(task))) {
+      || task.error === NATIVE_IMAGE_CONTRACT_HOLD || isValidNativeImagePlanningContractTask(task))) {
       const admission = await admitPendingVideoTask(deps, task);
       if (admission !== null) {
         if (admission !== true) {

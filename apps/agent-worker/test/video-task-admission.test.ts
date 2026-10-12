@@ -150,6 +150,14 @@ function imageContractFixture() {
   return f;
 }
 
+function completedPaperCheckpoint(taskId = 'video-task') {
+  const serializedSha256 = 'a'.repeat(64);
+  return { taskId, objectKey: `derived/native-agent/${serializedSha256}.json`, serializedSha256, size: 1,
+    artifactId: 'artifact', documentSha256: 'b'.repeat(64), sourceMapHash: 'c'.repeat(64), executionAttempt: 1,
+    turnCount: 1, state: 'completed' as const, target: { provider: 'synclip', model: 'MiniMax-M3', promptHash: 'd'.repeat(64) },
+    responseHash: 'e'.repeat(64), finishReason: 'stop' as const, hasToolCalls: false };
+}
+
 /** Execute the poller's actual script with isolated keys on the CI-only Redis. */
 async function withRealRedisMove(
   check: (redis: Redis, move: () => Promise<unknown>, queue: string, processing: string, id: string) => Promise<void>,
@@ -282,7 +290,7 @@ describe('image planning-contract admission hold', () => {
     const f = imageContractFixture();
     Object.assign(f.task, { status: 'running', executionAttempt: 1, result: {
       ...f.task.result, nativeAgentExecution: { ...(f.task.result!.nativeAgentExecution as Record<string, unknown>),
-        checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
+        checkpoint: completedPaperCheckpoint() }, providerReceipt: 'paid',
     } });
     const before = structuredClone(f.task);
     expect(await prepareAgentTaskForCrashRecovery(f.deps, f.task.id)).toBe(false);
@@ -293,7 +301,7 @@ describe('image planning-contract admission hold', () => {
     const f = imageContractFixture();
     Object.assign(f.task, { status: 'running', executionAttempt: 1, result: {
       ...f.task.result, nativeAgentExecution: { ...(f.task.result!.nativeAgentExecution as Record<string, unknown>),
-        checkpoint: { state: 'completed' }, providerReceipt: 'paid' },
+        checkpoint: completedPaperCheckpoint() }, providerReceipt: 'paid',
     } });
     f.lists.set(queueKey, []);
     f.lists.set(processingKey, [f.task.id]);
@@ -311,13 +319,13 @@ describe('image planning-contract admission hold', () => {
       f.task.result = { nativeAgentExecution: {
         kind: 'hermes-agent', profile: 'paper-illustration', runtimeId: 'native-installed',
         skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3', planningContract: 'image-source-explicit-trig-v1',
-        checkpoint: { state: 'completed' }, providerReceipt: 'paid',
-      } };
+        checkpoint: completedPaperCheckpoint(),
+      }, providerReceipt: 'paid' };
       throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
     });
     expect(await f.poll()).toBe(true);
     expect(f.task.status).toBe('running');
-    expect(f.task.result).toMatchObject({ nativeAgentExecution: { checkpoint: { state: 'completed' }, providerReceipt: 'paid' } });
+    expect(f.task.result).toMatchObject({ nativeAgentExecution: { checkpoint: { state: 'completed' } }, providerReceipt: 'paid' });
     expect(f.lists.get(processingKey)).toEqual([f.task.id]);
     expect(f.lists.get(queueKey)).toEqual([]);
     expect(f.redis.lrem).not.toHaveBeenCalled();
