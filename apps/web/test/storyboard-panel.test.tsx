@@ -175,6 +175,12 @@ it('shows a failure and releases the storyboard lock when generation rejects or 
   find(renderPanel(failedProps), element => element.type === 'form').props.onSubmit({ preventDefault: vi.fn() });
   await Promise.resolve();
   expect(find(renderPanel(failedProps), element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('error');
+
+  const silent = vi.fn(() => Promise.resolve({ status: 'failed', silent: true } satisfies StoryboardWriteOutcome));
+  const silentProps = { claims: [claim], selectedClaimIds: ['claim'], canGenerate: true, onGenerate: silent };
+  find(renderPanel(silentProps), element => element.type === 'form').props.onSubmit({ preventDefault: vi.fn() });
+  await Promise.resolve();
+  expect(() => find(renderPanel(silentProps), element => element.props['data-storyboard-feedback'] === 'true')).toThrow();
 });
 
 it('locks approved scene-image and draft transition writes independently', async () => {

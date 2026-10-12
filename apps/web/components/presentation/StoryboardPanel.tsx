@@ -21,8 +21,12 @@ interface Props {
 }
 type WriteState = 'idle' | 'working' | 'success' | 'error';
 
-function failedWriteResult(result: unknown): boolean {
-  return result === null || (typeof result === 'object' && 'status' in result && (result as { status?: unknown }).status === 'failed');
+function writeStateFromResult(result: unknown): WriteState {
+  if (result === null) return 'error';
+  if (typeof result === 'object' && 'status' in result && (result as { status?: unknown }).status === 'failed') {
+    return (result as { silent?: unknown }).silent === true ? 'idle' : 'error';
+  }
+  return 'success';
 }
 
 const control = 'min-h-11 w-full rounded-control border border-os-rule-paper bg-os-paper px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink';
@@ -83,7 +87,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     try {
       Promise.resolve(onGenerate(selectedClaimIds, request)).then((result) => {
         generationLock.current = false;
-        setGenerationState(failedWriteResult(result) ? 'error' : 'success');
+        setGenerationState(writeStateFromResult(result));
       }, () => {
         generationLock.current = false;
         setGenerationState('error');
@@ -100,7 +104,7 @@ export function StoryboardPanel({ storyboard, parent, baseAssetId, claims, selec
     try {
       Promise.resolve(onGenerateImage(selectedClaimIds, { storyboardAssetId: baseAssetId, sceneIndex: index })).then((result) => {
         sceneImageLocks.current.delete(index);
-        setSceneImageStates((current) => ({ ...current, [index]: failedWriteResult(result) ? 'error' : 'success' }));
+        setSceneImageStates((current) => ({ ...current, [index]: writeStateFromResult(result) }));
       }, () => {
         sceneImageLocks.current.delete(index);
         setSceneImageStates((current) => ({ ...current, [index]: 'error' }));

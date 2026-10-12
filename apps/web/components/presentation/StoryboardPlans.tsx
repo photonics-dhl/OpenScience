@@ -22,8 +22,12 @@ interface Props {
 type Selection = { latestId: string; assetId: string } | null;
 type WriteState = 'idle' | 'working' | 'success' | 'error';
 
-function failedWriteResult(result: unknown): boolean {
-  return result === null || (typeof result === 'object' && result !== null && 'status' in result && (result as { status?: unknown }).status === 'failed');
+function writeStateFromResult(result: unknown): WriteState {
+  if (result === null) return 'error';
+  if (typeof result === 'object' && result !== null && 'status' in result && (result as { status?: unknown }).status === 'failed') {
+    return (result as { silent?: unknown }).silent === true ? 'idle' : 'error';
+  }
+  return 'success';
 }
 
 /** New results take focus; a deliberate older selection lasts until the next new result. */
@@ -68,7 +72,7 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
     try {
       Promise.resolve(onGenerateSceneImage(asset.sourceClaimIds, { storyboardAssetId: asset.id, sceneIndex: index })).then((result) => {
         sceneImageLocks.current.delete(key);
-        setSceneImageStates((current) => ({ ...current, [key]: failedWriteResult(result) ? 'error' : 'success' }));
+        setSceneImageStates((current) => ({ ...current, [key]: writeStateFromResult(result) }));
       }, () => {
         sceneImageLocks.current.delete(key);
         setSceneImageStates((current) => ({ ...current, [key]: 'error' }));
@@ -85,7 +89,7 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
     try {
       Promise.resolve(onTransition(asset, status)).then((result) => {
         transitionLocks.current.delete(asset.id);
-        setTransitionStates((current) => ({ ...current, [asset.id]: { state: failedWriteResult(result) ? 'error' : 'success', status } }));
+        setTransitionStates((current) => ({ ...current, [asset.id]: { state: writeStateFromResult(result), status } }));
       }, () => {
         transitionLocks.current.delete(asset.id);
         setTransitionStates((current) => ({ ...current, [asset.id]: { state: 'error', status } }));
