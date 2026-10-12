@@ -139,7 +139,8 @@ try {
     value = JSON.parse(bytes.toString('utf8'));
     if (!value || typeof value !== 'object' || Array.isArray(value)
       || Object.keys(value).some(name => !Object.hasOwn(defaults, name) && !['audio', 'audioAuditionEnabled', 'audioAuditionBudget'].includes(name))
-      || ['inbox', 'results', 'privateRoot', 'keyPath', 'model', 'resolution'].some(name => value[name] !== defaults[name])
+      || ['inbox', 'results', 'privateRoot', 'keyPath', 'resolution'].some(name => value[name] !== defaults[name])
+      || !['ltx23', 'ltx23fast'].includes(value.model)
       || typeof value.rendererImage !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(value.rendererImage)) throw Error();
     const budget = value.audioAuditionBudget;
     if ((Object.hasOwn(value, 'audioAuditionEnabled') && typeof value.audioAuditionEnabled !== 'boolean')

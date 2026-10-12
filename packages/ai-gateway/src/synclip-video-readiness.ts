@@ -2,6 +2,7 @@ import { constants, type Stats } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
 import { SynclipAudioError, validateSynclipAudioRequest } from './synclip-audio-api';
+import { SYNCLIP_VIDEO_MODELS, type SynclipVideoModel } from './synclip-video-api';
 
 const MAX_JSON = 512 * 1024;
 const READY_MAX_AGE = 60_000;
@@ -9,7 +10,7 @@ const CLOCK_SKEW = 5000;
 
 export interface SynclipVideoNarrationConfig { provider: 'synclip'; voice: string; speed: number }
 export interface SynclipVideoReady {
-  schemaVersion: 1; provider: 'synclip'; model: 'ltx23'; adapterRevision?: string;
+  schemaVersion: 1; provider: 'synclip'; model: SynclipVideoModel; adapterRevision?: string;
   accepting: boolean; updatedAt: number; narration?: SynclipVideoNarrationConfig;
   audioAccepting?: boolean; audioAuditionBudget?: { maxEstimatedCoins: number };
 }
@@ -70,7 +71,7 @@ export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Pr
       const after = await file.stat();
       if (bytesRead !== stat.size || after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) return null;
       const value: unknown = JSON.parse(buffer.subarray(0, bytesRead).toString('utf8'));
-      if (!record(value) || value.schemaVersion !== 1 || value.provider !== 'synclip' || value.model !== 'ltx23'
+      if (!record(value) || value.schemaVersion !== 1 || value.provider !== 'synclip' || !SYNCLIP_VIDEO_MODELS.includes(value.model as SynclipVideoModel)
         || typeof value.accepting !== 'boolean' || typeof value.updatedAt !== 'number' || !fresh(value.updatedAt, now)
         || (value.adapterRevision !== undefined && (typeof value.adapterRevision !== 'string'
           || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(value.adapterRevision)))) return null;
@@ -78,7 +79,7 @@ export async function readSynclipVideoReady(config: SynclipVideoReadyConfig): Pr
       const budget = value.audioAuditionBudget === undefined ? undefined : auditionBudget(value.audioAuditionBudget);
       if (audio === null || budget === null || (value.audioAccepting !== undefined && typeof value.audioAccepting !== 'boolean')
         || (value.audioAccepting === true && (!audio || !budget))) return null;
-      return { schemaVersion: 1, provider: 'synclip', model: 'ltx23', accepting: value.accepting, updatedAt: value.updatedAt,
+      return { schemaVersion: 1, provider: 'synclip', model: value.model as SynclipVideoModel, accepting: value.accepting, updatedAt: value.updatedAt,
         ...(value.adapterRevision === undefined ? {} : { adapterRevision: value.adapterRevision as string }),
         ...(audio ? { narration: audio } : {}),
         ...(value.audioAccepting === undefined ? {} : { audioAccepting: value.audioAccepting as boolean }),

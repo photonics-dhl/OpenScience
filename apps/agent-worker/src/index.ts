@@ -16,6 +16,8 @@ import {
   ChatGptWebSpoolImageProvider,
   SynclipSpoolImageProvider,
   createNativeVideoReadinessReader,
+  SYNCLIP_VIDEO_MODELS,
+  type SynclipVideoModel,
   type NativeVideoReadinessReader,
   ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
@@ -1297,7 +1299,7 @@ async function main(): Promise<void> {
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
       ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
         && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
-          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
+          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), model: (() => { const value = process.env.SYNCLIP_VIDEO_MODEL?.trim(); return value && SYNCLIP_VIDEO_MODELS.includes(value as SynclipVideoModel) ? value as SynclipVideoModel : 'ltx23'; })(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
             authorizeAudioAudition: createAudioAuditionAuthorization(deps) }),
         } : process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'local'
           && process.env.HOST_VIDEO_INBOX_DIR?.trim() && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {

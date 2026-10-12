@@ -68,6 +68,10 @@ describe('Synclip video readiness from the existing heartbeat', () => {
   it('reads a fresh native heartbeat from a real file and enables the fully configured callback', async () => {
     const f = await fixture(); expect(await f.read()).toEqual(f.value); expect(await f.capable()).toBe(true);
   });
+  it('accepts the explicitly supported LTX fast model in the heartbeat', async () => {
+    const f = await fixture(); await f.write({ model: 'ltx23fast' });
+    expect(await f.read()).toMatchObject({ model: 'ltx23fast', accepting: true });
+  });
   it('reads closed metadata but never advertises native generation, and missing readiness remains unavailable', async () => {
     const f = await fixture(); await f.write({ accepting: false });
     expect(await f.read()).toMatchObject({ accepting: false }); expect(await f.capable()).toBe(false);
@@ -81,7 +85,7 @@ describe('Synclip video readiness from the existing heartbeat', () => {
       if (change === 'json-future') await f.write({ updatedAt: f.now + 5001 });
       if (change === 'mtime-future') await fs.utimes(f.readyPath, (f.now + 5001) / 1000, (f.now + 5001) / 1000);
       if (change === 'nonfinite') await fs.writeFile(f.readyPath, JSON.stringify(f.value).replace(String(f.now), '1e309'));
-      if (change === 'wrong-model') await f.write({ model: 'ltx23fast' });
+      if (change === 'wrong-model') await f.write({ model: 'unknown-model' });
       if (change === 'wrong-provider') await f.write({ provider: 'other' });
       if (change === 'wrong-schema') await f.write({ schemaVersion: 2 });
       if (change === 'bad-json') await fs.writeFile(f.readyPath, '{"private":"do-not-print",bad}');
