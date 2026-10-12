@@ -480,12 +480,12 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       const currentParent = await requireSceneImageParent(tx, payload);
       if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       await requireSceneImageSpendIsNew(tx, currentParent, payload);
-      const pending = await tx.agentTask.findMany({ where: { kind: 'presentation.generate', deletedAt: null, status: { in: ['pending', 'running'] }, session: { researchObjectId: input.researchObjectId } }, select: { payload: true } });
+      const pending = await tx.agentTask.findMany({ where: { kind: 'presentation.generate', deletedAt: null, status: { in: ['pending', 'running'] }, session: { researchObjectId: input.researchObjectId } }, select: { payload: true, idempotencyKey: true } });
       if (pending.some((row) => {
         try {
           const candidate = parsePresentationGenerationPayload(row.payload);
           return candidate.kind === 'image' && candidate.sceneImage?.storyboardAssetId === payload.sceneImage!.storyboardAssetId
-            && candidate.sceneImage.sceneIndex === payload.sceneImage!.sceneIndex;
+            && candidate.sceneImage.sceneIndex === payload.sceneImage!.sceneIndex && row.idempotencyKey !== input.idempotencyKey;
         } catch { return false; }
       })) throw new PresentationAssetError('VALIDATION_ERROR', 'A scene image task is already in progress');
     } } : {}) };

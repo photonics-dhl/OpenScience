@@ -982,6 +982,18 @@ it('rejects a second scene image key while the first task is still pending', asy
   expect(ctx.db.agentTasks).toHaveLength(1);
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
 });
+it('coalesces concurrent identical scene image keys without a second debit', async () => {
+  const ctx = sceneFixture('image', 'user');
+  ctx.sceneImageEnabled = true;
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  const outcomes = await Promise.all([
+    submitPresentationGeneration(ctx as never, ctx.input),
+    submitPresentationGeneration(ctx as never, ctx.input),
+  ]);
+  expect(outcomes[0]!.id).toBe(outcomes[1]!.id);
+  expect(ctx.db.agentTasks).toHaveLength(1);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+});
 it.each(['draft', 'rejected', 'foreign', 'version', 'claim-set', 'index'])('blocks invalid scene parent %s before charging', async reason => {
   const ctx = sceneFixture();
   const parent = ctx.db.presentationAssets[0];
