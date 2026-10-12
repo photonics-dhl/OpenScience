@@ -476,6 +476,16 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
         ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
         : null;
       if (existingTask && !existingTask.deletedAt) return;
+      const rejectPending = async () => {
+        const pending = await tx.agentTask.findMany({ where: { kind: 'presentation.generate', deletedAt: null, status: { in: ['pending', 'running'] }, session: { researchObjectId: input.researchObjectId } }, select: { payload: true, idempotencyKey: true } });
+        if (pending.some((row) => {
+          try {
+            const candidate = parsePresentationGenerationPayload(row.payload);
+            return candidate.kind === 'image' && candidate.sceneImage?.storyboardAssetId === payload.sceneImage!.storyboardAssetId
+              && candidate.sceneImage.sceneIndex === payload.sceneImage!.sceneIndex && row.idempotencyKey !== input.idempotencyKey;
+          } catch { return false; }
+        })) throw new PresentationAssetError('VALIDATION_ERROR', 'A scene image task is already in progress');
+      };
       const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true } });
       if (!lockedParent) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       const lockTimestamp = new Date();
@@ -487,15 +497,13 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       if (lockedExistingTask && !lockedExistingTask.deletedAt) return;
       const currentParent = await requireSceneImageParent(tx, payload);
       if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      if (videoIntent) {
+        await requireSceneImageSpendIsNew(tx, currentParent, payload);
+        await rejectPending();
+        return;
+      }
       await requireSceneImageSpendIsNew(tx, currentParent, payload);
-      const pending = await tx.agentTask.findMany({ where: { kind: 'presentation.generate', deletedAt: null, status: { in: ['pending', 'running'] }, session: { researchObjectId: input.researchObjectId } }, select: { payload: true, idempotencyKey: true } });
-      if (pending.some((row) => {
-        try {
-          const candidate = parsePresentationGenerationPayload(row.payload);
-          return candidate.kind === 'image' && candidate.sceneImage?.storyboardAssetId === payload.sceneImage!.storyboardAssetId
-            && candidate.sceneImage.sceneIndex === payload.sceneImage!.sceneIndex && row.idempotencyKey !== input.idempotencyKey;
-        } catch { return false; }
-      })) throw new PresentationAssetError('VALIDATION_ERROR', 'A scene image task is already in progress');
+      await rejectPending();
     } } : {}) };
   return !payload.storyboard && (input.kind === 'chart' || input.kind === 'interactive_html')
     ? submitDeterministicPresentationTask(deps, taskInput, ctx)

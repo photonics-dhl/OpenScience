@@ -243,6 +243,12 @@ function submissionFixture(f: ListFixture) {
   db.usageLedger.push({ id: uuid(83), userId: f.input.userId, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: now });
   for (const name of ['claimNode', 'evidenceRecord', 'ingestionTask', 'version', 'researchObject', 'workspace', 'membership', 'hermesResearchStep'] as const)
     Object.assign(prisma[name], f.prisma[name]);
+  prisma.presentationAsset.updateMany = async ({ where, data }: any) => {
+    const asset = db.presentationAssets.find(candidate => candidate.id === where.id) ?? f.assets.find(candidate => candidate.id === where.id);
+    if (!asset || where.updatedAt && asset.updatedAt?.getTime() !== where.updatedAt.getTime()) return { count: 0 };
+    Object.assign(asset, data, { updatedAt: new Date((asset.updatedAt?.getTime?.() ?? Date.now()) + 1) });
+    return { count: 1 };
+  };
   const findTask = prisma.agentTask.findUnique.bind(prisma.agentTask);
   prisma.agentTask.findUnique = (async args => args.where.id
     ? await f.prisma.agentTask.findUnique({ where: { id: args.where.id } }) ?? await findTask(args) : findTask(args)) as typeof prisma.agentTask.findUnique;
@@ -518,6 +524,20 @@ describe('native video parent audio contract authority', () => {
     expect(ctx.db.agentTasks).toHaveLength(3);
     expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(3);
     expect(ctx.reads()).toEqual({ audioPolicyReads: 1, videoPolicyReads: 2 });
+  });
+
+  it('keeps the video parent scene-image pay-once and pending guards for a different idempotency key', async () => {
+    const f = await listFixture(), ctx = submissionFixture(f);
+    const scene = { ...f.input, kind: 'image' as const, sourceClaimIds: [claimId],
+      sceneImage: { storyboardAssetId: parentId, sceneIndex: 1 }, idempotencyKey: 'video-parent-scene-first' };
+    const results = await Promise.allSettled([
+      submitPresentationGeneration(ctx.deps as never, scene),
+      submitPresentationGeneration(ctx.deps as never, { ...scene, idempotencyKey: 'video-parent-scene-second' }),
+    ]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    expect(ctx.db.agentTasks).toHaveLength(1);
+    expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
   });
 });
 
