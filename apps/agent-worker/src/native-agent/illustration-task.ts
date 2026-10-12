@@ -20,7 +20,7 @@ import { createNativeTaskStore } from './task-store';
 import { createNativeAgentSession, type NativeAgentSessionState } from './session';
 import { runHostedNativeTask } from './host-task';
 import { nativeSkillReads } from './paper-task';
-import { NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, createNativePaperTools, type NativePaperImage } from './paper-tools';
+import { NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, createNativePaperTools, type NativePaperImage, type NativeSemanticSearch } from './paper-tools';
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const str = { type: 'string' };
@@ -567,6 +567,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
   gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter }; task: { id: string; executionAttempt: number; result: unknown };
   sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference; sourceEvidenceIdentity: string;
   inboxRoot: string; renderPages: (pages: number[]) => Promise<NativePaperImage[]>; authorize: (tx: Prisma.TransactionClient) => Promise<void>;
+  semanticSearch?: NativeSemanticSearch;
 }) {
   const execution = readNativeAgentExecution(input.task.result);
   if (execution?.profile !== 'paper-illustration') stopped();
@@ -583,7 +584,7 @@ export async function runNativeIllustrationTask(input: MaterializerInput & {
     generation: { thinking: 'adaptive' as const, temperature: 0.3 }, deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
-  const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
+  const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch);
   const materializer = createNativeIllustrationMaterializer({ ...input, savedState: saved, nativeVideo, videoContext, nativeVideoAudio, sourceExplicitTrig, sourceNotation, scienceFeedback, deferDesignGuidance, sourceQuantityAnnotations, sourceQuantityProse, sourceQuantityLocations, defaultPaperOriginalRef, scienceRepairCallIdFeedback });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name.startsWith('paper_illustration_')

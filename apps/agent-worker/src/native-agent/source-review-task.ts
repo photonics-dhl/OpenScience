@@ -9,7 +9,7 @@ import { canonicalPassages, createNativeScientificMaterializer, createNativeScie
   scientificReviewFieldGuard, scientificReviewFieldIssue, validateNativeScientificClaim } from '../extractor';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from '../scientific-generation-options';
 import { SCIENTIFIC_READER_ORGANIZATION } from '../skills/scientific-summary';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage, type NativeSemanticSearch } from './paper-tools';
 import { nativeSkillReads, NATIVE_PAPER_CLAIM_TOOL, NATIVE_PAPER_COMMITTED_REVIEW_TOOL, NATIVE_PAPER_DRAFT_TOOL,
   NATIVE_PAPER_SELECTED_DRAFT_TOOL } from './paper-task';
 import { createNativeAgentSession, type NativeAgentSessionState } from './session';
@@ -92,7 +92,7 @@ export function nativeSourceReviewToolProfile(saved: NativeAgentSessionState | n
 /** Reuse the existing scientific materializer with the actual final author fields as its immutable input. */
 export function createNativeSourceReviewTools(input: { sourceMap: DocumentSourceMap; sourceAgentTaskId: string; sourceResult: unknown;
   renderPages: (pages: number[]) => Promise<NativePaperImage[]>; legacyClaimsReview?: boolean; reviewMode?: SourceReviewMode; fieldFeedback?: boolean;
-  scopedCandidate?: boolean; paperToolDefinitions?: Parameters<typeof createNativePaperTools>[2] }) {
+  scopedCandidate?: boolean; paperToolDefinitions?: Parameters<typeof createNativePaperTools>[2]; semanticSearch?: NativeSemanticSearch }) {
   const reviewMode = input.reviewMode ?? (input.legacyClaimsReview ? 'legacy' : 'split');
   const staged = reviewMode === 'staged';
   const legacy = reviewMode === 'legacy';
@@ -134,7 +134,7 @@ export function createNativeSourceReviewTools(input: { sourceMap: DocumentSource
   };
   for (const key of ['core', 'evidence', 'evidenceLocation', 'evidenceSegments', 'reviewedClaimSuggestions', 'needsMoreInformation', 'canonicalExtractionContract'])
     if (!isDeepStrictEqual(sourceStable(key, restored[key]), sourceStable(key, original[key]))) throw new Error('[blocked] Native author science/source data changed');
-  const source = createNativePaperTools(input.sourceMap, input.renderPages, input.paperToolDefinitions);
+  const source = createNativePaperTools(input.sourceMap, input.renderPages, input.paperToolDefinitions, input.semanticSearch);
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { boundDraft, reviewToolCompletion: true });
   const passageIds = [...new Set(Object.values(fields).flatMap(field => field.sourcePassageIds as string[]))];
   let candidateResult: Record<string, unknown> | undefined;
@@ -400,7 +400,7 @@ const SOURCE_CORRECTION_TOOL_GUIDANCE: Readonly<Record<string, string>> = {
 export async function runNativeSourceReviewTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };
   task: { id: string; executionAttempt: number; result: unknown }; sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference;
   sourceAgentTaskId: string; authorCheckpointSha256: string; sourceResult: unknown; inboxRoot: string; renderPages: (pages: number[]) => Promise<NativePaperImage[]>;
-  authorize: (tx: Prisma.TransactionClient) => Promise<void>; sourceCorrection?: boolean }) {
+  authorize: (tx: Prisma.TransactionClient) => Promise<void>; sourceCorrection?: boolean; semanticSearch?: NativeSemanticSearch }) {
   const execution = readNativeAgentExecution(input.task.result);
   const sourceCorrection = input.sourceCorrection === true;
   if (!execution || execution.profile !== (sourceCorrection ? 'paper-author' : 'paper-source-review')
@@ -413,7 +413,7 @@ export async function runNativeSourceReviewTask(input: { gateway: AiGateway; dep
   const profile = nativeSourceReviewToolProfile(saved);
   const scopedCandidate = !saved || (sourceCorrection ? profile.scopedCandidate : profile.independentScopedCandidate);
   const paper = createNativeSourceReviewTools({ ...input, reviewMode: profile.reviewMode, fieldFeedback: profile.fieldFeedback, scopedCandidate,
-    paperToolDefinitions: profile.sourceTools });
+    paperToolDefinitions: profile.sourceTools, semanticSearch: input.semanticSearch });
   const sourceTools = !saved ? profile.sourceTools.map(tool => tool.name === 'paper_candidate' ? {
     ...tool, description: sourceCorrection ? SCOPED_CANDIDATE_DESCRIPTION : INDEPENDENT_SCOPED_CANDIDATE_DESCRIPTION,
     parameters: SCOPED_CANDIDATE_PARAMETERS,

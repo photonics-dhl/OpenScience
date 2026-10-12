@@ -12,7 +12,7 @@ import { createNativeAgentSession } from './session';
 import type { NativeAgentSessionState } from './session';
 import { createNativeTaskStore } from './task-store';
 import { runHostedNativeTask } from './host-task';
-import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage } from './paper-tools';
+import { createNativePaperTools, NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, type NativePaperImage, type NativeSemanticSearch } from './paper-tools';
 
 const ids = { type: 'array', items: { type: 'string' }, maxItems: 12 };
 export const NATIVE_PAPER_DRAFT_TOOL = { name: 'paper_draft',
@@ -225,7 +225,7 @@ export function nativePaperToolProfile(saved: NativeAgentSessionState | null) {
 export async function runNativePaperTask(input: { gateway: AiGateway; deps: AgentDeps & { storage: StorageAdapter };
   task: { id: string; executionAttempt: number; result: unknown }; sourceMap: DocumentSourceMap; sourceMapRef: DocumentSourceMapReference;
   inboxRoot: string; renderPages: (pages: number[]) => Promise<NativePaperImage[]>;
-  authorize: (tx: Prisma.TransactionClient) => Promise<void> }) {
+  authorize: (tx: Prisma.TransactionClient) => Promise<void>; semanticSearch?: NativeSemanticSearch }) {
   const execution = readNativeAgentExecution(input.task.result);
   if (!execution) throw new Error('[blocked] Actual native Agent execution marker is absent');
   const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize });
@@ -243,7 +243,7 @@ export async function runNativePaperTask(input: { gateway: AiGateway; deps: Agen
     deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
   const authorize = () => input.deps.prisma.$transaction(input.authorize, { isolationLevel: 'Serializable' });
   const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
-  const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools);
+  const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch);
   const materializer = createNativeScientificMaterializer(input.sourceMap, () => source.observedPassageIds, { reviewContext, reviewCandidate, reviewToolCompletion, claimFeedback, draftFeedback, claimSizeFeedback, savedClaimsReview });
   const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
     call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)

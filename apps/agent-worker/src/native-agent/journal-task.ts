@@ -14,7 +14,7 @@ import { runHostedNativeTask } from './host-task';
 import { createJournalNativeTaskStore } from './journal-task-store';
 import { createNativeJournalTextTools, NATIVE_JOURNAL_TEXT_TOOLS } from './journal-text-tools';
 import { finishNativePaperReview, nativePaperToolProfile, nativeSkillReads } from './paper-task';
-import { createNativePaperTools, type NativePaperImage } from './paper-tools';
+import { createNativePaperTools, type NativePaperImage, type NativeSemanticSearch } from './paper-tools';
 import { projectReviewedPaperToJournalDraft } from './journal-paper-projection';
 
 const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -23,7 +23,7 @@ const stripJson = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/giu, 
 /** One installed AIAgent run, bound to a journal job and its original source text. */
 export async function runNativeJournalTask(input: { deps: WorkspaceDeps & { storage: StorageAdapter }; gateway: AiGateway;
   jobId: string; leaseToken: string; source: JournalSource; language: 'zh' | 'en'; inboxRoot: string;
-  renderPages?: (pages: number[]) => Promise<NativePaperImage[]> }) {
+  renderPages?: (pages: number[]) => Promise<NativePaperImage[]>; semanticSearch?: NativeSemanticSearch }) {
   const task = await input.deps.prisma.agentTask.findUnique({ where: { idempotencyKey: `journal-native-task:${input.jobId}` } });
   const marker = readNativeAgentExecution(task?.result);
   if (!task || marker?.profile !== 'journal-editor') throw new Error('[blocked] Journal native task is unavailable');
@@ -59,7 +59,7 @@ export async function runNativeJournalTask(input: { deps: WorkspaceDeps & { stor
       generation: { thinking: SCIENTIFIC_SYNTHESIS_OPTIONS.thinking, temperature: SCIENTIFIC_SYNTHESIS_OPTIONS.temperature,
         topP: SCIENTIFIC_SYNTHESIS_OPTIONS.topP }, deadlineAt: saved?.binding.deadlineAt ?? Date.now() + 1_800_000 };
     const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });
-    const source = createNativePaperTools(sourceMap, input.renderPages, profile.sourceTools);
+    const source = createNativePaperTools(sourceMap, input.renderPages, profile.sourceTools, input.semanticSearch);
     const materializer = createNativeScientificMaterializer(sourceMap, () => source.observedPassageIds, profile);
     const paper = { ...source, get observedPassageIds() { return source.observedPassageIds; },
       call: async (name: string, args: unknown, sequence?: number, callId?: string) => name === 'paper_field' ? materializer.field(args, sequence!, callId!)
