@@ -81,6 +81,15 @@ function isRecoverableTaskRead(error: unknown): boolean {
     || error.status >= 500;
 }
 
+export function createPresentationStoryboardHandlers(generate: (
+  sourceClaimIds: string[], storyboard?: StoryboardRequest, sceneImage?: SceneImageRequest,
+) => void | Promise<unknown>) {
+  return {
+    onGenerateStoryboard: (sourceClaimIds: string[], request: StoryboardRequest) => generate(sourceClaimIds, request),
+    onGenerateSceneImage: (sourceClaimIds: string[], request: SceneImageRequest) => generate(sourceClaimIds, undefined, request),
+  };
+}
+
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -594,6 +603,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     return <DashboardShell activeRoute="create" navigationLabel={t('navigation')} skipLabel={t('skip')}><p className="p-8 text-os-muted-paper" role="status">{t('loading')}</p></DashboardShell>;
   }
 
+  const storyboardHandlers = createPresentationStoryboardHandlers(generate);
   const content = (<>
       {!embedded && <div className={styles.navigation}><ResearchWorkspaceNav active="presentation" objectId={params.id} /></div>}
       <div className={embedded ? undefined : styles.layout}><div className={styles.content}>
@@ -641,8 +651,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             onCreateClaim={createClaim}
             onUploadPaperFigure={uploadOriginal}
             onGenerate={(ids) => void generate(ids)}
-            onGenerateStoryboard={(ids, request) => void generate(ids, request)}
-            onGenerateSceneImage={(ids, request) => void generate(ids, undefined, request)}
+            onGenerateStoryboard={storyboardHandlers.onGenerateStoryboard}
+            onGenerateSceneImage={storyboardHandlers.onGenerateSceneImage}
             onGenerateVideo={(ids, request) => void generate(ids, undefined, undefined, request)}
             onResumeTask={() => setResumeNonce((current) => current + 1)}
             onRetryTask={() => void retryTask()}

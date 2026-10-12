@@ -9,6 +9,7 @@ vi.mock('react', async importOriginal => {
 vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key: string) => key }));
 import { buildStoryboardRequest, StoryboardPanel } from '../components/presentation/StoryboardPanel';
 import { StoryboardPlans } from '../components/presentation/StoryboardPlans';
+import { createPresentationStoryboardHandlers } from '../components/presentation/ResearchPresentation';
 
 const hookStates: unknown[] = [];
 const hookRefs: Array<{ current: unknown }> = [];
@@ -140,6 +141,31 @@ it('locks storyboard submission on the first click and exposes processing then s
   expect(onGenerate).toHaveBeenCalledTimes(1);
   await Promise.resolve();
   expect(find(form(), element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('success');
+});
+
+it('keeps the real generation promise in both storyboard wrappers', async () => {
+  const generate = vi.fn((_ids: string[], storyboard?: unknown, sceneImage?: unknown) => Promise.resolve({ storyboard, sceneImage }));
+  const handlers = createPresentationStoryboardHandlers(generate);
+  const storyboard = { locale: 'en' as const, style: 'auto' as const, output: 'image' as const, instruction: 'Explain it' };
+  const sceneImage = { storyboardAssetId: 'plan', sceneIndex: 2 };
+  await expect(handlers.onGenerateStoryboard(['claim'], storyboard)).resolves.toMatchObject({ storyboard });
+  await expect(handlers.onGenerateSceneImage(['claim'], sceneImage)).resolves.toMatchObject({ sceneImage });
+  expect(generate).toHaveBeenNthCalledWith(1, ['claim'], storyboard);
+  expect(generate).toHaveBeenNthCalledWith(2, ['claim'], undefined, sceneImage);
+});
+
+it('shows a failure and releases the storyboard lock when generation rejects or reports failure', async () => {
+  const rejected = vi.fn(() => Promise.reject(new Error('network')));
+  const rejectedProps = { claims: [claim], selectedClaimIds: ['claim'], canGenerate: true, onGenerate: rejected };
+  find(renderPanel(rejectedProps), element => element.type === 'form').props.onSubmit({ preventDefault: vi.fn() });
+  await Promise.resolve();
+  expect(find(renderPanel(rejectedProps), element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('error');
+
+  const failed = vi.fn(() => Promise.resolve({ status: 'failed' }));
+  const failedProps = { claims: [claim], selectedClaimIds: ['claim'], canGenerate: true, onGenerate: failed };
+  find(renderPanel(failedProps), element => element.type === 'form').props.onSubmit({ preventDefault: vi.fn() });
+  await Promise.resolve();
+  expect(find(renderPanel(failedProps), element => element.props['data-storyboard-feedback'] === 'true').props['data-write-state']).toBe('error');
 });
 
 it('locks approved scene-image and draft transition writes independently', async () => {
