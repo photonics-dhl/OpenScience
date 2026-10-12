@@ -9,6 +9,7 @@
 - 2026-10-13：生图真实验收更新：RO `aa450f1e-fafc-46d8-a072-d935e01b0544` 唯一 Hermes 提交完成，产出私有 art-only draft `writing-draft-4237cbcf-8371-4222-bc53-4f6eb45b2111`（部分待核对）；已审批无图场景未接入提交入口，故 Synclip=0、无 receipt/oncekey/PNG/SHA/质量。High GO；Worker 210/206通过/4跳过、TC/ESLint通过；不重试、不扩预算。
 - 2026-10-13：UI silent abort/stale-scope 修复 `d9afe946` 获独立 High GO 后已合入 canonical `b82594d8`；普通失败反馈、静默回 idle 与锁释放保持，13/13/typecheck/diff-check owner 证据已记录。等待该提交精确 workflow，未部署。
 - 2026-10-13：生图阻塞根因已定位：`StoryboardPlans` 只暴露当前 scene 按钮并依赖 native select，多 scene 的无图 scene 没有稳定独立入口。UI session 正在补按 scene 展开的显式 action group（AX/键盘/坐标可触发），复用现有守卫与失败反馈，不自动调用 Synclip。
+- 2026-10-13：UI 入口修复提交 `43d0923d`：在 approved + canGenerateSceneImage 守卫内为每个 scene 增加显式 action group，保留 selector/主按钮、锁与失败反馈；25/25、Web typecheck、diff-check 通过，未调用 Provider/部署，独立 High 复审待回。
 - 2026-10-12 15:20：canonical `eb4adf021600c21f0812de1582d7759d435da446` 干净已推送。UI 写反馈三轮 High GO 后已合入 `035efaac`、`06fb102e`、`9e837b93`；定向 13/13、owner typecheck/diff-check 通过。
 - UI push workflow `38268914069`：四组 browser-entry 与 web build 通过；`agent-worker queue-recovery.test.ts` 两个既有非 UI 断言失败，导致 UI typecheck 与 `storyboard-panel.test.tsx` CI 步骤跳过。未重跑、未部署、未安装；不能称 workflow 全绿。
 - 生图：admission/floor/reader 与 adapter/worker 代码均已独立 High GO 并合入；admission 191/195（4 skip），Worker typecheck/diff-check 通过，journal 缺 RO/version 身份保持 fail-closed。当前真实阻塞是已审批无图场景未接入提交入口；唯一 Hermes art-only draft 保留，Synclip=0，不重试、不扩预算。

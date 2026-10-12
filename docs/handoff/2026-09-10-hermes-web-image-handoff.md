@@ -22,9 +22,9 @@
 - Image admission/floor/reader code and High reviews are merged and preserved; complete producer/floor and real PNG quality remain open. Current concrete blocker is the missing UI submission entry for an approved no-image scene; no Synclip task was created.
 
 ## Open deliverables and gates
-- Image: connect the approved no-image scene to the existing submission entry, preserving the one completed Hermes draft and fail-closed quality gates; do not resubmit Hermes, create Synclip work, switch paper, or increase budget until the UI path is real.
+- Image/UI: connect the approved no-image scene to the existing submission entry (UI commit `43d0923d` pending High), preserving the one completed Hermes draft and fail-closed quality gates; do not resubmit Hermes, create Synclip work, switch paper, or increase budget until the UI path is real.
 - Video: keep native-only readiness and exact CI evidence; next code work requires a concrete capability gap or authorized real short-video/voice comparison. Do not invent filler checks.
-- UI: write-feedback、`5e1c4831` 与 `d9afe946` 均已 High GO 并合入 canonical（`c258da85`、`b82594d8`）；共享 queue-recovery 仍是 CI 限制，不把它冒充 UI 回归。 Overall visual/real-route and user-quality acceptance remains open.
+- UI: write-feedback、`5e1c4831` 与 `d9afe946` 已 High GO 并合入 canonical（`c258da85`、`b82594d8`）；`43d0923d` 已产出并待独立 High，canonical 未改。共享 queue-recovery 仍是 CI 限制，不把它冒充 UI 回归。 Overall visual/real-route and user-quality acceptance remains open.
 - No deployment until the relevant code, exact CI, High review, and real-product/media quality gates close. Human review of paper visuals remains a separate acceptance gate.
 
 ## Historical pointers
