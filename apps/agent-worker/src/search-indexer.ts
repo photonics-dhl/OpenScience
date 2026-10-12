@@ -8,6 +8,7 @@ import {
   type EmbeddingClient,
   type EmbeddingResult,
   type SearchChunkDraft,
+  type SearchGenerationScope,
 } from '@openscience/search';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -88,6 +89,31 @@ type SearchIndexResult =
 
 export interface SearchIndexer {
   index(job: SearchIndexJob, withWriteAuthority?: <T>(operation: () => Promise<T>) => Promise<T>): Promise<SearchIndexResult>;
+}
+
+/** Resolve only an already succeeded, uniquely matching core search.index owner. */
+export async function resolveSearchGenerationScope(
+  deps: Pick<AgentDeps, 'prisma'>,
+  input: { researchObjectId: string; artifactId: string; sourceVersionId: string; contentHash: string },
+): Promise<{ tenantId: string; generation: SearchGenerationScope } | undefined> {
+  const tasks = await deps.prisma.agentTask.findMany({
+    where: { kind: 'search.index', status: 'succeeded', deletedAt: null, session: { researchObjectId: input.researchObjectId } },
+    select: { id: true, payload: true, session: { select: { researchObject: { select: { workspaceId: true } } } } },
+  });
+  const matches = tasks.filter(task => {
+    const payload = isPlainRecord(task.payload) ? task.payload : undefined;
+    const sourceMapRef = payload && isPlainRecord(payload.sourceMapRef) ? payload.sourceMapRef : undefined;
+    return payload?.artifactId === input.artifactId && payload.versionId === input.sourceVersionId
+      && sourceMapRef?.artifactId === input.artifactId && sourceMapRef.contentHash === input.contentHash
+      && sourceMapRef.parserStatus === 'succeeded' && task.session.researchObject?.workspaceId;
+  });
+  if (matches.length !== 1) return undefined;
+  const owner = matches[0]!;
+  const tenantId = owner.session.researchObject!.workspaceId;
+  return { tenantId, generation: {
+    researchObjectId: input.researchObjectId, artifactId: input.artifactId,
+    sourceVersionId: input.sourceVersionId, contentHash: input.contentHash, fenceOwnerTaskId: owner.id,
+  } };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

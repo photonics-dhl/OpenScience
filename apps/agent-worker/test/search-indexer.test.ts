@@ -8,7 +8,7 @@ import { EmbeddingClient, tokenizeSearchText } from '@openscience/search';
 import type { AiGateway } from '@openscience/ai-gateway';
 
 import { createHandlers } from '../src/index';
-import { authorizeSearchIndexJob, createSearchIndexer, parseSearchIndexPayload } from '../src/search-indexer';
+import { authorizeSearchIndexJob, createSearchIndexer, parseSearchIndexPayload, resolveSearchGenerationScope } from '../src/search-indexer';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const TASK = '55555555-5555-4555-8555-555555555555';
@@ -98,6 +98,33 @@ function dependencies() {
 }
 
 describe('search indexer', () => {
+  it('resolves the unique succeeded search.index owner into a scoped native generation', async () => {
+    const prisma = { agentTask: { findMany: vi.fn(async () => [{ id: TASK, payload: {
+      artifactId: ARTIFACT, versionId: SOURCE_VERSION,
+      sourceMapRef: { artifactId: ARTIFACT, contentHash: CONTENT_HASH, parserStatus: 'succeeded' },
+    }, session: { researchObject: { workspaceId: TENANT } } }]) } };
+    await expect(resolveSearchGenerationScope({ prisma } as never, {
+      researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT, sourceVersionId: SOURCE_VERSION, contentHash: CONTENT_HASH,
+    })).resolves.toEqual({ tenantId: TENANT, generation: {
+      researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT, sourceVersionId: SOURCE_VERSION,
+      contentHash: CONTENT_HASH, fenceOwnerTaskId: TASK,
+    } });
+  });
+
+  it('fails closed when the source has zero or multiple succeeded search.index owners', async () => {
+    const base = { id: TASK, payload: { artifactId: ARTIFACT, versionId: SOURCE_VERSION,
+      sourceMapRef: { artifactId: ARTIFACT, contentHash: CONTENT_HASH, parserStatus: 'succeeded' } },
+      session: { researchObject: { workspaceId: TENANT } } };
+    const prisma = { agentTask: { findMany: vi.fn(async () => [base, { ...base, id: '66666666-6666-4666-8666-666666666666' }]) } };
+    await expect(resolveSearchGenerationScope({ prisma } as never, {
+      researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT, sourceVersionId: SOURCE_VERSION, contentHash: CONTENT_HASH,
+    })).resolves.toBeUndefined();
+    prisma.agentTask.findMany.mockResolvedValueOnce([]);
+    await expect(resolveSearchGenerationScope({ prisma } as never, {
+      researchObjectId: RESEARCH_OBJECT, artifactId: ARTIFACT, sourceVersionId: SOURCE_VERSION, contentHash: CONTENT_HASH,
+    })).resolves.toBeUndefined();
+  });
+
   function windowedTable(rows = 3) {
     const text = Array.from({ length: rows }, (_, i) => `[row ${i + 1}, column 1] symbol\n[row ${i + 1}, column 2] definition`).join('\n');
     const map = sourceMap(text); map.pages[0]!.blocks[0]!.kind = 'table';
