@@ -994,6 +994,16 @@ it('coalesces concurrent identical scene image keys without a second debit', asy
   expect(ctx.db.agentTasks).toHaveLength(1);
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
 });
+it('replays an identical key after the original scene is already covered', async () => {
+  const ctx = sceneFixture('image', 'user');
+  ctx.sceneImageEnabled = true;
+  ctx.db.presentationAssets[0].provenance.sourceEvidenceIdentity = 'a'.repeat(64);
+  const first = await submitPresentationGeneration(ctx as never, ctx.input);
+  ctx.db.presentationAssets.push({ id: '70000000-0000-4000-8000-000000000001', researchObjectId: RO, versionId: VERSION, kind: 'image', status: 'approved', label: 'Scene', updatedAt: new Date(), provenance: { subtype: 'storyboard_scene_image', sceneImage: ctx.input.sceneImage, parentIdentity: JSON.stringify({ contentHash: 'parent', provenance: ctx.db.presentationAssets[0]!.provenance, ids: [CLAIM] }) } });
+  ctx.db.presentationAssetClaims.push({ presentationAssetId: '70000000-0000-4000-8000-000000000001', claimId: CLAIM });
+  expect((await submitPresentationGeneration(ctx as never, ctx.input)).id).toBe(first.id);
+  expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+});
 it.each(['draft', 'rejected', 'foreign', 'version', 'claim-set', 'index'])('blocks invalid scene parent %s before charging', async reason => {
   const ctx = sceneFixture();
   const parent = ctx.db.presentationAssets[0];

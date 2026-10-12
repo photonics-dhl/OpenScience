@@ -472,6 +472,10 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey,
     ...(payload.sceneImage && sceneParentForTask ? { beforePersist: async (tx: Prisma.TransactionClient) => {
+      const existingTask = input.idempotencyKey
+        ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
+        : null;
+      if (existingTask && !existingTask.deletedAt) return;
       const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true } });
       if (!lockedParent) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       const lockTimestamp = new Date();
