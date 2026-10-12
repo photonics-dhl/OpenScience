@@ -26,6 +26,12 @@ export class SynclipVideoTimingError extends Error {
   constructor(readonly diagnostic: VideoAudioTimingDiagnostic) { super('AUDIO_TIMING_REVISION_REQUIRED'); }
 }
 function fail(message = 'INVALID_SYNCLIP_VIDEO_SPOOL_OUTPUT'): never { throw new Error(message); }
+export function resolveSynclipVideoModel(value: string | undefined): SynclipVideoModel {
+  const model = value?.trim();
+  if (!model) return SYNCLIP_VIDEO_MODEL;
+  if (!SYNCLIP_VIDEO_MODELS.includes(model as SynclipVideoModel)) fail('SYNCLIP_VIDEO_MODEL_INVALID');
+  return model as SynclipVideoModel;
+}
 async function directory(path: string): Promise<void> { if (!isAbsolute(path)) fail(); let current = path; for (;;) { const info = await lstat(current); if (!info.isDirectory() || info.isSymbolicLink()) fail(); if (current === parse(current).root) return; current = dirname(current); } }
 async function boundedRead(path: string, maximum: number): Promise<Buffer> { const before = await lstat(path); if (!before.isFile() || before.isSymbolicLink() || before.size <= 0 || before.size > maximum) fail(); const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)); try { const after = await file.stat(); if (!after.isFile() || after.ino !== before.ino || after.dev !== before.dev || after.size !== before.size) fail(); return await file.readFile(); } finally { await file.close(); } }
 async function exclusiveWrite(path: string, bytes: Buffer): Promise<void> { const file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600); try { await file.writeFile(bytes); await file.sync(); } finally { await file.close(); } }
@@ -76,6 +82,7 @@ export class SynclipVideoSpool {
   private readonly now: () => number; private readonly sleep: (milliseconds: number) => Promise<void>; private readonly timeout: number;
   constructor(private readonly config: SynclipVideoSpoolConfig) { if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir) || config.inboxDir === config.resultsDir || (config.model !== undefined && !SYNCLIP_VIDEO_MODELS.includes(config.model))) fail(); this.timeout = config.timeoutMs ?? MAX_DEADLINE; if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > MAX_DEADLINE || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60_000))) fail(); this.now = config.now ?? Date.now; this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))); }
   async audition(input: AudioAuditionInput): Promise<AudioAuditionResult> {
+    const model = this.config.model ?? SYNCLIP_VIDEO_MODEL;
     if (!this.config.authorizeAudioAudition) fail('AUDIO_AUDITION_AUTHORITY_REQUIRED');
     await directory(this.config.inboxDir); await directory(this.config.resultsDir);
     if (input.purpose !== 'audio-audition' || input.profile !== 'content-driven-v1' || !UUID.test(input.taskId)
@@ -128,7 +135,8 @@ export class SynclipVideoSpool {
       if (result.schemaVersion !== 1 || result.id !== input.taskId || result.purpose !== 'audio-audition'
         || result.inputHash !== inputHash || result.executionAttempt !== grant.executionAttempt) fail('UNCERTAIN');
       if (result.status !== 'succeeded') throw new Error(result.status === 'uncertain' ? 'UNCERTAIN'
-        : typeof result.errorCode === 'string' && /^AUDIO_[A-Z0-9_]{1,80}$/u.test(result.errorCode) ? result.errorCode : 'AUDIO_AUDITION_EXECUTION_FAILED');
+        : typeof result.errorCode === 'string' && /^(?:AUDIO|VIDEO|SYNCLIP_VIDEO)_[A-Z0-9_]{1,80}$/u.test(result.errorCode) ? result.errorCode : 'AUDIO_AUDITION_EXECUTION_FAILED');
+      if (result.provider !== 'synclip' || result.model !== model) fail('SYNCLIP_VIDEO_MODEL_MISMATCH');
       const saved = result.audio as Record<string, unknown> | undefined, quote = saved?.quote as AudioAuditionResult['quote'] | undefined;
       if (!saved || saved.sceneIndex !== input.sceneIndex || saved.locale !== input.locale || saved.voice !== audio.voice || saved.speed !== audio.speed
         || saved.contentType !== 'audio/mpeg' || typeof saved.audioTaskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/u.test(saved.audioTaskId)
@@ -155,7 +163,7 @@ export class SynclipVideoSpool {
     if (grant.executionAttempt === input.executionAttempt) {
       const ready = JSON.parse((await boundedRead(join(this.config.resultsDir, '.ready'), MAX_JSON)).toString()) as Record<string, unknown>;
       const stat = await lstat(join(this.config.resultsDir, '.ready')), budget = ready.audioAuditionBudget as Record<string, unknown> | undefined;
-      if (ready.schemaVersion !== 1 || ready.provider !== 'synclip' || ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true
+      if (ready.schemaVersion !== 1 || ready.provider !== 'synclip' || ready.model !== model || ready.adapterRevision !== 'synclip-video-v2' || ready.audioAccepting !== true
         || typeof ready.updatedAt !== 'number' || this.now() - ready.updatedAt > READY_MAX_AGE || stat.mtimeMs < this.now() - READY_MAX_AGE
         || JSON.stringify(narrationConfig(ready.narration)) !== JSON.stringify(audio) || !budget
         || typeof budget.maxEstimatedCoins !== 'number' || !Number.isFinite(budget.maxEstimatedCoins) || budget.maxEstimatedCoins <= 0) fail('AUDIO_AUDITION_UNAVAILABLE');

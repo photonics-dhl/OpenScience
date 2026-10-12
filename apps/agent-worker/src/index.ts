@@ -16,8 +16,6 @@ import {
   ChatGptWebSpoolImageProvider,
   SynclipSpoolImageProvider,
   createNativeVideoReadinessReader,
-  SYNCLIP_VIDEO_MODELS,
-  type SynclipVideoModel,
   type NativeVideoReadinessReader,
   ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
@@ -85,7 +83,7 @@ import type { ParserInput } from './parsers/types';
 import type { ParserRasterResult } from './parsers/job-protocol';
 import { canonicalParserMediaType } from './parser-media-type';
 import { HostVideoSpool, type PresentationVideoSpool, type AudioAuditionProposal, type AudioAuditionGrant } from './presentation/host-video-spool';
-import { SynclipVideoSpool } from './presentation/synclip-video-spool';
+import { resolveSynclipVideoModel, SynclipVideoSpool } from './presentation/synclip-video-spool';
 import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
@@ -1299,7 +1297,7 @@ async function main(): Promise<void> {
       sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
       ...(process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'synclip'
         && process.env.SYNCLIP_VIDEO_ENABLED === 'true' && process.env.SYNCLIP_VIDEO_INBOX_DIR?.trim() && process.env.SYNCLIP_VIDEO_RESULTS_DIR?.trim() ? {
-          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), model: (() => { const value = process.env.SYNCLIP_VIDEO_MODEL?.trim(); return value && SYNCLIP_VIDEO_MODELS.includes(value as SynclipVideoModel) ? value as SynclipVideoModel : 'ltx23'; })(), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
+          videoSpool: new SynclipVideoSpool({ inboxDir: process.env.SYNCLIP_VIDEO_INBOX_DIR.trim(), resultsDir: process.env.SYNCLIP_VIDEO_RESULTS_DIR.trim(), model: resolveSynclipVideoModel(process.env.SYNCLIP_VIDEO_MODEL), timeoutMs: 30 * 60_000, withSubmission: imageSubmission,
             authorizeAudioAudition: createAudioAuditionAuthorization(deps) }),
         } : process.env.HERMES_VIDEO_ENABLED === 'true' && process.env.HERMES_VIDEO_PROVIDER?.trim() === 'local'
           && process.env.HOST_VIDEO_INBOX_DIR?.trim() && process.env.HOST_VIDEO_RESULTS_DIR?.trim() ? {
