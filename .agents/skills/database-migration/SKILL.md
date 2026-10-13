@@ -14,6 +14,8 @@ description: "Use when writing, reviewing, or applying any database schema migra
 
 ## 检查清单
 
+Schema、SQL、索引、锁及连接池设计或审查，读取项目原版 [supabase-postgres-best-practices](../supabase-postgres-best-practices/SKILL.md) 的匹配规则，并按实际 PostgreSQL 版本和本项目双库/迁移 CLI 筛选。供应商专属设置不自动适用，不因 Skill 更换数据库、认证或对象存储。
+
 1. **向前可部署**：迁移必须与旧版应用代码兼容（先加后删：先 expand 后 contract），部署中途新旧代码共存不炸（Spec §15 末段）。
 2. **可回滚或有补偿步骤**：每个迁移必须有明确回滚脚本，或写明不可逆时的补偿步骤（Spec §15："数据库迁移必须向前可部署、可回滚或有明确补偿步骤"）。
 3. **生产禁自动破坏性迁移**：删列、改类型、删表等破坏性迁移禁止在生产自动执行；必须人工确认 + 备份验证后运行（Spec §15："生产环境禁止自动执行破坏性迁移"；权限分级见 §20.5：数据库迁移属"询问"级）。

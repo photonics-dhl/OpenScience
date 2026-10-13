@@ -13,6 +13,7 @@ OpenScience 是科研基础设施平台：Research Object / SDF / 公开出版�
 - 修改能力前定向读 docs/runbooks/hermes-capability-registry.md，核对入口、调用方、上游产物和真实效果，再决定复用、补接或替换。安装、本机读取、Hermes 注入、结果合格是不同事实。
 - Backstage 定位职责/依赖；Serena 定位指定源版本的符号/引用；dependency-cruiser 定位跨包影响；Langfuse 查既有模型调用；Portainer/Netdata 查资源。按问题选工具，不每轮全跑；生产快照不能证明候选代码。
 - 发现重复规则、未消费能力或状态冲突，先修当前改动依赖的断点；不再叠模板、模型步骤、任务库或门禁。未解决债务写回现有能力台账，附位置、后果、下一步。
+- 架构维护：每次开发先查能力台账当前技术债中本次涉及的模块；新增差异明确职责、调用方与旧路径退役条件，整改后补关闭证据。官方开发 Skills 由项目 frontend-design/database-migration/infra-runbook 按需引用，原版来源见各 SOURCE.md；它们不自动注入科研 Hermes 或触发生产操作。
 
 ## 产品落地与执行约束
 

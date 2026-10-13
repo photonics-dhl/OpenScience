@@ -88,7 +88,7 @@ ast-grep、Semgrep、lychee、Vale、TypeDoc、Changesets、CodeScene/Sourcegrap
 | 架构审查与维护 | `requesting-code-review`、`security-review`、`database-migration`、`verification-before-completion`、`docs-sync` | 高风险新增差异独立 High 审查；复用未变实现的有效证据 |
 | 服务器运维 | `infra-runbook`；故障时用 `systematic-debugging` | 既有 server-capabilities、deployment、backup-restore、monitoring / incident 手册 |
 
-通过 `find-skills` 流程、skills.sh 公共搜索与上游仓库读取完成本轮候选发现；以下均为**本轮只调研、未安装的补充候选**，不代表已接入 Codex 或 Hermes。市场安装量和仓库星数只辅助发现，采用仍须有具体缺口并核对版本与项目边界。
+通过 `find-skills` 流程、skills.sh 公共搜索与上游仓库读取完成候选发现。2026-10-13 用户随后明确授权项目级安装：四项官方 Skill 已原文安装到交付树 `.agents/skills/`，完整来源版本与许可说明见各 `SOURCE.md`；项目 frontend-design/database-migration/infra-runbook 按需引用，供 Codex 开发和审查，未注入产品 Hermes。社区 architecture-patterns 仍为未安装参考。市场安装量和仓库星数只辅助发现，采用须核对版本与项目边界。
 
 | 来源与候选 | 适用缺口 | 本项目采用条件 |
 |---|---|---|
@@ -97,7 +97,7 @@ ast-grep、Semgrep、lychee、Vale、TypeDoc、Changesets、CodeScene/Sourcegrap
 | Docker 官方 [docker-build-strategies](https://github.com/docker/skills/blob/main/skills/docker-build-strategies/SKILL.md) / [docker-compose-patterns](https://github.com/docker/skills/blob/main/skills/docker-compose-patterns/SKILL.md) | 镜像构建、Compose 服务依赖、网络与卷配置 | 新官方条目使用量仍较少；手册记录的 legacy builder 不证明支持 BuildKit/buildx，先核具体功能；不得套用排除所有 Markdown 的示例而漏掉 Hermes Skill/科学参考；复用现有隔离网络、SSH 入口与发布/回退脚本 |
 | 社区 [wshobson/agents 的 architecture-patterns](https://skills.sh/wshobson/agents/architecture-patterns) / [原始 Skill](https://github.com/wshobson/agents/blob/main/plugins/backend-development/skills/architecture-patterns/SKILL.md) | 领域边界、依赖循环、端口/适配器的局部设计 | Python 示例需转换为实际 TS/现有领域结构；不为匹配模板搬目录、拆微服务或替代项目 `architecture-guard` |
 
-已有 Backstage、Serena、dependency-cruiser、Langfuse 和 Portainer/Netdata 按具体问题复用，入口及运行边界见 [服务器能力清单](../runbooks/server-capabilities.md)。本轮未新增工具、门禁、任务库或生产变更；候选安装须另获明确授权。
+已有 Backstage、Serena、dependency-cruiser、Langfuse 和 Portainer/Netdata 按具体问题复用，入口及运行边界见 [服务器能力清单](../runbooks/server-capabilities.md)。本次只新增上述四项官方开发 Skill，不新增工具平台、门禁、任务库或生产变更。后续架构债务沿 [既有台账](../runbooks/hermes-capability-registry.md#当前技术债与处理) 在相关开发前读取并原地闭合，安装成功不等于产品运行或科学质量合格。
 
 ## Consequences
 
@@ -138,6 +138,8 @@ ast-grep、Semgrep、lychee、Vale、TypeDoc、Changesets、CodeScene/Sourcegrap
 - Changesets：https://github.com/changesets/changesets
 
 ## 2026-07-28 落地记录
+
+本节仅是当时的工具与检查记录；Serena等后续安装和今日依赖图/运行事实查能力台账，不据旧“未安装/零命中”安排重复安装或认定当前架构合格。
 
 基线提交 `ce9da28` 后按本 ADR §4/§5 落地最小工具集（均为 root devDependencies，lockfile 入库）：
 

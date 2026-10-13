@@ -7,6 +7,8 @@ description: "Use when building or modifying any UI page, component, or layout �
 
 页面叙事、入口职能或整体审美需要重新设计时，同时读 [product-story-design](../product-story-design/SKILL.md)，以真实研究者任务、产品内容和既有用户决定确定构图。已有清楚规格的样式修复继续用本清单，不重复定位访谈。
 
+React/Next.js 请求瀑布、包体、服务端渲染或重渲染问题，按需读取项目原版 [vercel-react-best-practices](../vercel-react-best-practices/SKILL.md) 的对应规则。先核 `apps/web/package.json` 的实际版本；不直接套用 React 19 / Next 15+ 专属 API，也不为该 Skill 改现有视觉设计或升级框架。
+
 ## 当前工作边界
 
 用户审阅整站图文稿并暂停页面时，仅整理能力/Skill文档和必要的只读证据；不改页面、文案、交互、Figma稿或部署。选定页面后按其P编号和认可图稿实施，能力选择见[既有台账](../openscience-aesthetic-design/references/aesthetic-capability-ledger.md)。以下早期清单服从最新用户决定。

@@ -14,6 +14,8 @@ description: "Use when writing deployment/backup/restore runbooks, changing Dock
 
 ## 检查清单
 
+审查 Dockerfile 时按需读项目原版 [docker-build-strategies](../docker-build-strategies/SKILL.md)，审查服务接线时读 [docker-compose-patterns](../docker-compose-patterns/SKILL.md)。项目实际构建器、现有文件名、隔离网络、生产挂载与发布/回退脚本优先；不能仅因示例重命名 Compose、加 healthcheck sidecar、使用默认网络或禁止必要的生产 bind mounts。先核 BuildKit/buildx/Compose 功能；不得照 `.dockerignore` 示例排除 Hermes 运行时需要的 Markdown Skill/科学参考。附带 build/verify 脚本不因加载 Skill 自动执行，按本次任务授权和必要验收调用。
+
 ### 拓扑与网络（Spec §14.2）
 
 1. **单 ECS 组件齐全**：Nginx/Caddy（TLS、静态、反代）、Web、API、Agent Worker、PostgreSQL、Redis、对象存储、Sandbox Controller、临时 Python Sandbox——变更拓扑时逐件核对影响面。

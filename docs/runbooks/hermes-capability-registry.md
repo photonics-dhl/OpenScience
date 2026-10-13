@@ -181,6 +181,35 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+#### 2026-10-13 架构与服务器运维只读审查
+
+本次源码审查固定在 `ea529de3a20c0177c2bc5d0fc4276616f8e51796`，由独立 High 架构/运维审查及主会话核对；服务器采样为北京时间 18:38、18:47。生产观测源码为 `ca23b7fc0bd37706b12194a483f17e15caa815a5`，本地可解析且 release/source 一致；这是有日期的审查证据，不是新发布或新的 CURRENT。没有部署、服务启停、备份/恢复执行、清理、数据库写入或 Provider 请求。以下 P1/P2 均未在本轮实施整改；P1 是优先于相关发布处理，P2 随涉及模块开发处理。本轮未证实 P0，也未执行入侵复现。
+
+证据保存在 ignored `tmp/architecture-review-20261013/`：`server-snapshot.json`、`server-followup.json`、`dependency-graph.json` 与读取/验证日志。运行态输出仅含选定容器/网络/权限/容量和备份文件元数据，不含 Env、Secret、论文正文或 dump 内容。首次 `docker ps -a` 在 45 秒超时，后续有界 running inventory 成功，不能据此判断持续控制面故障。
+
+| 优先级 / 项 | 症状与来源 | 后果与触发条件 | 最小整改、保留与关闭依据 |
+|---|---|---|---|
+| P1 / R01 Native 调用方身份 | `apps/agent-worker/src/native-agent/host-task.ts:47,70–100,147` 目录可遍历、socket 为 0666，每次只重核业务 task authority；`session.ts:70–74` 首轮不绑定 Worker 生成的 user/system 目标。实际 host 父目录/bridges 为 0755，观测时活动 socket 为 0。 | 任务运行时，同机低权限进程可连接通道读取 config、提交 completion 消耗额度，并诱导获授权工具调用；现有业务权限校验不能认证连接进程。没有在线利用或当前内容外泄证据。 | 在现有 task bridge 加仅交给对应执行单元的短期调用凭据，并由服务端绑定/核对首轮目标；保留 DynamicUser、网络隔离、live authority、CAS 和 paid 记录。以未获凭据的本机 UID 无法读 config/调模型/调工具的定向验证关闭；不通过真实付费请求复现。 |
+| P1 / R02 新任务静默 legacy | `packages/domain/src/agent/native-agent-execution.ts:170–178` 缺 runtime 返回 undefined；`agent.ts:653–674` 新 paper/image 可创建无 marker 任务，只有 direct video fail closed；Worker `index.ts:848–918` 将无 marker paper 走 legacy。API/Worker 独立读可选 runtime.env。 | 仅 API 配置漂移即可使新任务创建/扣费后改走固定旧流水线，与真实 Hermes 产品要求不符；marker absence 同时承担历史身份和新任务配置失败两种含义。 | 复用现有 Native marker，在所有 fresh Native-only producer 创建/扣费前拒绝缺失 runtime；历史任务仅走现有显式历史生产/恢复入口。验证 paper/image/source-review fresh 失败路径及旧 paid/unknown 恢复后关闭；不新增一套 engine 合同或任务库。 |
+| P1 / R03 完整灾难恢复覆盖 | `docs/runbooks/backup-restore.md:9,19–24,130–132` 日常只备 DB，对象/隔离恢复/离机副本证据未闭合；`infra/scripts/backup.sh:140` 对象需显式选项。运行有 7 套 DB 备份，最新 10-13 03:00；对象集合最新为 10-03。 | 同机损失时 DB、PDF/图片对象和 host bind 中的付费/未知收据可能不一致；只有 SQL 不能证明论文可读或安全恢复未知付费任务。当前没有可核验的完整异机恢复证据。 | 沿既有脚本设计 DB＋对象＋最小必需 receipt/恢复状态的离机备份；后续获准才安装/调度。先在隔离环境验证双库、对象引用/读取和 receipt 恢复，再轮转旧集。保留全部用户资产、spool/receipt 和回滚材料。 |
+| P1 / R04 普通应用回退兼容 | `infra/scripts/production-deploy-transaction.sh:605–660,692–705` 普通回退只检查身份/镜像；Native work 分类、quiesce/checkpoint 仅在 refresh-native 分支。持久 profile/contract 的严格 reader 位于 `native-agent-execution.ts:42,181`。 | 新版本保存旧版本不理解的 profile/contract 后，普通发布健康失败自动回退可能使未完成任务/结果不可读；release SHA 相符不能证明持久状态兼容。 | 复用原事务锁、Native work 查询和已有分类/暂停/恢复，在普通回退中核兼容；不兼容则 repair-forward 或保持能读旧新状态的应用。用隔离的旧 reader/新持久状态回放关闭；不删记录放行、不新增第二套发布守卫。 |
+| P1 / R05 监控权限过大 | `infra/compose/docker-compose.monitor.yml:18–43` 和运行态均确认 Netdata 为 root、host PID、SYS_PTRACE/SYS_ADMIN、unconfined，挂 host root 与 docker.sock:ro；端口仅 loopback。 | 若监控进程被控制，其权限接近主机控制级。只读 socket 挂载不实施 Docker API 方法授权；反代认证及外部利用未验证，不能称已暴露公网漏洞。 | 核现有 charts 所需权限后移除不用的 capability/host root/socket；确需 Docker 指标再复用受限访问方案。现有 release 身份不能固定独立 monitor 的 `stable` 镜像升级，须使用可追溯版本并保留原镜像回退。按必要图表、权限和认证路径验证关闭，保留基础监控。 |
+| P2 / R06 数据网横向范围 | `infra/compose/docker-compose.prod.yml:521` data_net 为 internal:false，ClamAV 与 Postgres/Redis/对象存储/API/Worker 共网；运行态确认，无 DB/Redis 公网 listener。 | 扫描器或其他共网服务失陷会扩大横向访问；没有当前公网暴露证据。 | 将扫描链与数据网分离，数据网内部化；先确认病毒库更新及现有代理路径，不断开必要更新或模型出口。保持 parser/science 沙箱隔离；仅在后续授权维护窗口实施。 |
+| P2 / R07 Gateway 配置双归属 | Worker `apps/agent-worker/src/index.ts:1462–1602` 仍直接解析 Provider key、模型/回退并构造 provider，`packages/config/src/api-env.ts:154,199` 另有 API 解释。 | Worker/API 的可用性、payer 与恢复身份容易漂移，Provider 变更会波及业务入口；本轮没有发现 key 外泄。 | 把 typed provider/config factory 收口到既有 ai-gateway/config，Worker 只注入权限、提交与审计 callbacks；保留 uncertain-outcome 与禁止未知重放语义。按未提交/started/completed 的原恢复用例验证，不重写稳定领域模块。 |
+| P2 / R08 内部 journal DTO | `packages/domain/src/journal/processing.ts:132–134` 创建 internal session/task；`agent.ts:467–482,1166–1177,1454–1499` 通用 list 和 denylist projector 不隐藏 `journalNativeCheckpoint`。`journal-task-store.ts:80–89` 写内部 objectKey、hash、model/paid state。 | 授权用户可经通用 Agent API 获得自己 journal 控制任务内部元数据；objectKey 不等于可下载正文，未证实跨用户内容外泄。新增 checkpoint 字段易继续漏出。 | 立即屏蔽内部 checkpoint，再用既有 per-kind public DTO 的 allowlist 限定 kind/字段；保留私有 checkpoint。以公共 API 不出站未知内部字段及权限回归关闭。 |
+| P2 / R09 UI 装配环 | High 确认真实 value-import：Drawer↔WorkspaceStage；Drawer→ResearchPublication→ResearchSurfaceShell→Drawer；DockAnchor 经上述链回到自身。对应 `HermesAssistantDrawer.tsx:33,38`、Stage `:55`、Publication `:6`、Shell `:7–8`、Dock `:11`。 | 没有当前初始化/HMR/生产故障证据；环使入口、嵌入 panel 与 page wrapper 难以独立装配，未来顶层初始化/拆 chunk 更脆弱。 | 两个局部切点：context/hook 下沉无 UI leaf；embedded publication panel 与 SurfaceShell page wrapper 分开。保留现有 context API、embedded 行为和确认 callbacks，验证入口/嵌入路径后关闭，不整站重写。 |
+| P2 / R10 历史执行器退役未闭合 | 候选 Compose `:205,222,237` 保留 browser 开关/RW inbox，旧 image/review timer 已 disabled/inactive且无浏览器容器；Synclip primary 的 `index.ts:1520` 清空 image fallback，新来源走 Native，web mode 仍供旧 receipt/continuation。 | 目前未证实 fresh 请求进入已停 browser 队列；残留开关与 RW 路径提高误启用、配置理解和维护成本。 | 盘点旧 pending/started/paid/unknown 与实际调用方，先关闭新生产入口，保留只读 completed 恢复；归零和必要回退范围明确后再退役 timer/bundle/RW inbox。保护历史结果、未知费用和仍需的 Codex 回退材料。 |
+| P2 / R11 诊断栈按需优化 | 23 个 running 容器中，Langfuse 6 项约 3.74 GiB，加 Catalog/Serena/telemetry 约 3.97 GiB；ClickHouse 单点 2.591/3 GiB、146.33% CPU。16 逻辑 CPU，available 18.59 GB≈17.32 GiB，后两次 vmstat idle 77/83%、wa/so=0，根盘55%。 | 是可恢复的运维/资源优化机会，未证实主机饱和或持续换页压力。低 idle 使用量本身不证明组件冗余。 | 无当前调用方才考虑 Catalog/Serena 按需停；Langfuse 先确认审计需求、备份和 connector pending/checkpoint，再先停 telemetry、沿原 manage.sh stop 停后端。保留 volumes/state，禁止 down -v；排查 ClickHouse 查询/TTL 与采集负载后决定常驻范围。 |
+| P2 / R12 非破坏式终止欠缺 | `packages/domain/src/agent/agent.ts:48–56` 与 Agent/research-run routes 没有一般任务安全 cancel；journal 有局部 cancel，trash 可将在途任务 failed/递增 attempt；Native unit 上限1800秒。 | 用户发现来源或目标错误后，一般流程缺保留研究内容的停止动作；直接 trash 与 journal 各自终止语义增加状态/费用推理成本。这是能力债务，不是“任务完全无法停止”。 | 复用现有 Domain authority/CAS 和停止 hosted unit 机制设计 owned cancel，保留 started/completed/unknown receipt，分别验证 pending、running、中途和重启恢复。产品/API范围需按原合同明确，不另建任务平台。 |
+
+现有依赖图分析覆盖1430模块，报告108个 error-rule hit与5个warn，命令退出0；80个cycle、26个跨包相对导入均需按真实路径核对。跨包命中主要在集成测试，2个dev-dependency命中来自 ignored `apps/web/tmp/` 脚本；不能把113个命中当作113个缺陷，也不能以exit0称架构通过。R09已单独核实；其余未逐项认定，不扩充删除清单。
+
+R05的权限判断依据 [Docker官方 daemon attack surface](https://docs.docker.com/engine/security/#docker-daemon-attack-surface)：能控制daemon的调用方须受信任；从socket只读挂载推导API只读没有方法级授权依据。本轮没有调用任何写API或验证外部利用。
+
+组件处置原则：Web/API/Worker、Postgres、Redis、对象存储、PDF/parser、Docling paper-analysis、BGE/检索和ClamAV承担产品职责，保留；paper-analysis是 document-parser 的 Docling 上游（prod Compose:344–404），不是凭名字可删的第二个模型服务。Backstage定位 owner/依赖，Serena定位符号，Langfuse关联模型调用，Netdata看资源，Portainer管理容器，vnStat记流量，职责不同；诊断项可按实际需要按需停，管理权限不下放给科研 Hermes。镜像22.97GB中Docker标记可回收4.939GB，37卷合计20.17GB、报告可回收0B，两release目录合计3.92GB；这些数值不授权删除卷、回滚目录或按需 renderer。
+
+先处理R01/R02及R03/R04所涉发布/恢复风险，再收紧R05权限；R06–R10随对应模块的局部开发消债，R11在单独获准的维护窗口按需停，R12先明确终止合同。所有执行沿用户“先不改生产”边界，台账列出的是整改顺序，不是部署/删除授权。开发前只读本次涉及行，新增变更附唯一 owner、现有调用方和退役条件；整改后回填真实关闭证据，未验证者保留 open，不复制新的任务库。
+
 Native资源同步：应用loader与Native skill_view的不可变目录分别核对；SDK相同、资源版本号相同均不证明科学正文/引用已同步。原installer从确切Worker dist重建新配对，保留旧paid目录和完整回放；当前实物缺口及证据见CURRENT，执行顺序见deployment.md。源码新规则不等于模型已消费。
 
 Fig.2历史占位残留：旧plan与d508 copy已进入公开版本的sealed history，`publicationIncluded=false`也受`trash.ts`的`publicAssetReferences`保护，旧私有归属结论不能沿用。已审soft-trash方案保留对象/封存，成员直链恢复前404，初始30天恢复有权限/状态条件；禁止purge/补造源/改封存。实际操作另遇`ResearchContentManager`管理行缺资源身份，重复标题无法对应exact UUID；由UI复用原DTO补行标识，不改权限/回收语义，最新授权/写权/证据只见CURRENT。
@@ -205,7 +234,7 @@ Worker关闭（2026-09-21）：旧信号仅停journal计时器而主poller继续
 
 同一论文流程入口（2026-09-21真实路径发现，已修复部署并观察）：普通站内Hermes链接不含run，旧UI只读URL而提供新建；公共refresh能换掉失败自动run的source指针。原Domain/API补actor/RO/source范围只读找回，原Serializable创建拒绝新key重复自动run，公共refresh在replacement及replay路径拒绝所有visual-narrative绑定；UI先找回、材料页隐藏该refresh并链接进度。无新增审批/恢复槽/额度重置。独立High及上线观察状态见CURRENT；旧固定一次恢复当时已用尽；现已由上段显式有界恢复替代。41c旧provider_error仍无可追溯分类，不纳入自动重试；新真实结果见CURRENT。
 
-生产退出路径（2026-09-21已复现，未修复）：正常部署两次等待旧API/Worker退出，确认无running AgentTask后按精确旧ID/StartedAt停止才完成。静态High定位 `apps/agent-worker/src/index.ts` 的SIGTERM只调用journal停timer函数，主消费器仍 `while(true)`，没有停止claim/排空/连接释放；API入口亦无显式关闭流程，但PID1信号行为仍属推断。下一步应在现有生命周期中统一停止新claim、排空在途任务后关资源，保持队列恢复语义；缩短Docker超时不能当根治。本轮未在活跃模型任务期间重启服务。
+生产退出路径（2026-09-21历史初次诊断，已由上文“Worker关闭”修复记录取代）：当时两次等待退出，只停journal而主消费器继续。2026-10-13 High按源码 `apps/agent-worker/src/index.ts:1278–1425` 核实 stopAccepting、等待pollers/journal drained再断Redis/DB已实现；原“未修复/下一步统一生命周期”不是当前待办。保留当时观察和本轮未验证在途真实退出的边界，不以压缩Docker超时当根治。
 
 论文视觉叙事（2026-09-21已部署，运行事实见CURRENT）：用户已批准HTML方案，要求未读论文者也能理解核心思想，六维内容与整组图片一起交付。`illustration-planner.ts`原地增强既有science/art，同次组织mainMessage、受众与1–6个有序场景，再按需混排可用原图和生图；原图复用也经科学叙事审阅。`scientific-writing-source.ts`绑定同版本SDF、科学审校、Claim和受控SourceMap，不新造全文分析器。v2原样Fig.1的审美/独立解释仍未获接受，保留原件与公开历史。
 
@@ -324,6 +353,17 @@ Worker关闭（2026-09-21）：旧信号仅停journal计时器而主poller继续
 | Skill发现/安装管理 | [Vercel Skills](https://github.com/vercel-labs/skills)1.5.26已隔离安装，list实际发现31项目技能，find返回科学插画候选；只暴露list/find。既有技能和Hermes加载器保持，官方CLI登记状态不等于实际消费。新包仍须授权与审阅；不自动update/add |
 
 ### 已安装入口（按需使用）
+
+2026-10-13用户明确授权的官方开发 Skills 已项目级原文安装，供 Codex 开发/审查；包来源提交与许可记录在各 `SOURCE.md`，上游有许可文件的保留 `LICENSE.upstream`。Vercel 原包仅在frontmatter声明MIT、该源提交无独立LICENSE，未伪造许可文件。以下包不进入 Native installer 的固定 ART_SKILLS/科学 catalogue，不自动注入科研 Hermes，也不执行附带脚本。
+
+| 项目包 | 来源 / 开发用途 | 按需入口与适配 |
+|---|---|---|
+| `.agents/skills/vercel-react-best-practices/` | Vercel官方；请求瀑布、包体、渲染性能 | frontend-design引用对应规则，按apps/web实际React/Next版本；不套React19/Next15+ API |
+| `.agents/skills/supabase-postgres-best-practices/` | Supabase官方；SQL、索引、连接、锁与Schema | database-migration引用通用PostgreSQL规则，保留双库、现有迁移CLI和存储边界 |
+| `.agents/skills/docker-build-strategies/` | Docker官方；分层构建、镜像与上下文 | infra-runbook引用；当前服务器无buildx，不自动安装；保留Hermes Markdown运行资源 |
+| `.agents/skills/docker-compose-patterns/` | Docker官方；依赖、健康检查、网络与卷 | infra-runbook引用；已有文件名、隔离网络、生产bind和发布机制优先，不照示例增组件 |
+
+本轮安装验收5/5：四份SKILL.md与所记源提交原文一致，YAML名称/许可/description、项目入口读取路径、代表性资源和来源记录有效；Compose引用目录另验在位。既有台账检查2/2、注册表/索引检查及本轮16文件Markdown检查通过。全量Git空白检查exit2的144项均在上游原包，本次自写文件/来源记录检查通过；保留原文，不为格式检查改写第三方指导。日志位于上述ignored证据目录；这是开发Skill/文档验收，不是模型消费、完整产品测试或生产整改完成证明。
 
 服务器统一经过`infra/scripts/ssh-run.sh`。具体命令与限制在各工具README；不用另找市场、搭索引或创建任务库。
 
