@@ -141,8 +141,7 @@ function useDashboardVersions(ownerId: string, research: readonly DashboardResea
   return states;
 }
 
-function VersionLabels({ state, locale }: { state?: VersionState; locale: string }) {
-  const t = useTranslations('dashboard');
+export function VersionLabels({ state, locale }: { state?: VersionState; locale: string }) {
   const copy = getDashboardPageCopy(locale);
   if (state?.failed) return <span>{copy.versionUnavailable}</span>;
   if (!state?.metadata) return <span aria-busy="true">{copy.versionLoading}</span>;
@@ -150,10 +149,10 @@ function VersionLabels({ state, locale }: { state?: VersionState; locale: string
   return <>
     {privateDraft ? <span data-private-draft="true">{publication ? copy.workingDraft : copy.privateDraft}</span> : null}
     {published ? <span>{copy.publishedVersion.replace('{version}', String(published.publicationNo))}</span> : null}
-    {publication && !published ? <span>{['withdrawn', 'restricted'].includes(publication.status) ? t(`research.status.${publication.status}`) : copy.versionUnavailable}</span> : null}
+    {publication && !published ? <span>{publication.status === 'withdrawn' ? copy.withdrawn : publication.status === 'restricted' ? copy.restricted : copy.versionUnavailable}</span> : null}
     {latest && !privateDraft && !['published', 'revised'].includes(latest.status)
       && latest.versionId !== publication?.versionId
-      ? <span>{['withdrawn', 'restricted'].includes(latest.status) ? t(`research.status.${latest.status}`) : copy.versionUnavailable}</span> : null}
+      ? <span>{latest.status === 'withdrawn' ? copy.withdrawn : latest.status === 'restricted' ? copy.restricted : copy.versionUnavailable}</span> : null}
     {!latest ? <span>{copy.noSavedVersion}</span> : null}
     {latest && ['published', 'revised'].includes(latest.status) && !published ? <span>{copy.versionUnavailable}</span> : null}
   </>;

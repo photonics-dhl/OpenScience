@@ -93,7 +93,7 @@ import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { ResearchWorkspaceNav } from '../components/research/ResearchWorkspaceNav';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
 import { ImportStage } from '../components/dashboard/ImportStage';
-import { CurrentResearchCard, ResearchList, summarizeDashboardVersions, dashboardPublicationHref, filterDashboardResearch, formatDashboardUpdate, loadDashboardVersionMetadata } from '../components/dashboard/ResearchList';
+import { CurrentResearchCard, ResearchList, VersionLabels, summarizeDashboardVersions, dashboardPublicationHref, filterDashboardResearch, formatDashboardUpdate, loadDashboardVersionMetadata } from '../components/dashboard/ResearchList';
 import * as SessionHooks from '../components/auth/SessionProvider';
 import NewResearchObjectPage from '../app/research-objects/new/page';
 
@@ -552,6 +552,16 @@ describe('P04 current research metadata', () => {
     expect(dashboardPublicationHref(research, metadata)).toBeUndefined();
     expect(filterDashboardResearch([research], 'private', { 'ro-a': metadata })).toHaveLength(1);
     expect(filterDashboardResearch([research], 'published', { 'ro-a': metadata })).toHaveLength(0);
+  });
+  it.each([
+    ['en', 'withdrawn', 'Withdrawn'], ['en', 'restricted', 'Public content restricted'],
+    ['zh', 'withdrawn', '已撤回'], ['zh', 'restricted', '公开内容受限'],
+  ])('renders the actual %s copy for %s beside the working draft', (locale, status, expected) => {
+    const metadata = summarizeDashboardVersions([version(5, 'draft'), version(4, status, 3)]);
+    const markup = renderToStaticMarkup(createElement(VersionLabels, { state: { scope: 'current', metadata }, locale }));
+    expect(markup).toContain(expected);
+    expect(markup).toContain(locale === 'zh' ? '私有修订草稿' : 'Private revision draft');
+    expect(markup).not.toContain('research.status.');
   });
   it('allows a research object in both filters and leaves unknown rows only in all research', () => {
     const rows = [research, { ...research, id: 'unknown' }, { ...research, id: 'private' }];
