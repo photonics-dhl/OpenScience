@@ -1298,9 +1298,9 @@ export async function requireHermesSourceReviewExecution(tx: Prisma.TransactionC
     ...(first?.savedCompositionCandidate ? { savedCompositionCandidate: first.savedCompositionCandidate } : {}),
     ...nativeSourceRole(owner, proof.composition, proof.source.id, proof.source.artifact, savedOutput ? 1 : 2) };
   if (readNativeSourceReview(owner.result)) throw new Error('[blocked] Native source role cannot use historical Web review');
-  return { mode: 'web', provider: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewProvider, model: HERMES_INDEPENDENT_SOURCE_REVIEW.reviewModel,
-    runId: proof.run.id, taskId: owner.id, ...(savedOutput ? { savedOutput } : {}),
-    ...(continuation?.technicalRecovery ? { notSubmittedRecovery: continuation.technicalRecovery.input } : {}) };
+  // History readers retain exact Web provenance and saved paid output. Execution
+  // cannot reinterpret those records as a new Native, model or Sol request.
+  throw new Error('[blocked] Historical Web source review is retired; preserve the original task and paid result');
 }
 
 async function requireUnmanagedInitialReview(tx: Prisma.TransactionClient, input: SourceReviewBindingInput): Promise<HermesSourceReviewExecution> {

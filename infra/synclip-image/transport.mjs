@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { safeRead, atomicWrite } from '../codex-image-runner/core.mjs';
-import { normalizeImage } from '../chatgpt-browser/broker.mjs';
+import { normalizeImage } from './normalize.mjs';
 import { validateCodexImageRequest } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
 import { SynclipImageClient, SYNCLIP_IMAGE_PRIMARY_MODEL, SYNCLIP_IMAGE_FALLBACK_MODEL, SYNCLIP_IMAGE_MAX_BYTES,

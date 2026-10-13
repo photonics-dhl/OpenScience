@@ -109,20 +109,18 @@ describe('server-owned independent source review role', () => {
       expect(f.redis.lpush).toHaveBeenCalledTimes(1);
     }
   });
-  it('resolves initial web intent and historical model intent from exact durable receipts', async () => {
+  it('refuses initial retired Web execution while retaining historical model intent', async () => {
     const f = initial();
-    expect(await requireHermesSourceReviewExecution(f.prisma, f.binding)).toEqual({ mode: 'web',
-      provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro', runId: f.ids.run, taskId: f.ids.failed });
+    await expect(requireHermesSourceReviewExecution(f.prisma, f.binding)).rejects.toThrow('retired');
     const old = initial(false);
     expect(await requireHermesSourceReviewExecution(old.prisma, old.binding)).toEqual({ mode: 'model' });
     expect(f.redis.lpush).not.toHaveBeenCalled();
   });
 
-  it('retains the same web intent across claim recovery and rejects the stale lease', async () => {
+  it('rejects retired Web execution across claim recovery without switching provider', async () => {
     const f = initial(); f.db.agentTasks[1].executionAttempt = 2;
     await expect(requireHermesSourceReviewExecution(f.prisma, f.binding)).rejects.toThrow('binding changed');
-    expect(await requireHermesSourceReviewExecution(f.prisma, { ...f.binding, executionAttempt: 2 }))
-      .toMatchObject({ mode: 'web', taskId: f.ids.failed });
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ...f.binding, executionAttempt: 2 })).rejects.toThrow('retired');
   });
 
   it('keeps a model saved-output correction on Hermes and replays without redispatch', async () => {
@@ -145,7 +143,7 @@ describe('server-owned independent source review role', () => {
     expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
   });
 
-  it.each([false, true])('uses the latest one-call historical saved output after fresh=%s, never an older body', async fresh => {
+  it.each([false, true])('preserves the latest historical paid output after fresh=%s without executing retired Web', async fresh => {
     const f = fixture(); let prior = f.db.agentTasks[1];
     if (fresh) { await retryHermesGeneration(f.deps, f.input); prior = f.db.agentTasks.at(-1)!; }
     rejected(f, prior); await retryHermesGeneration(f.deps, { ...f.input, expectedVersion: fresh ? 8 : 7, idempotencyKey: 'historical-saved' });
@@ -157,9 +155,12 @@ describe('server-owned independent source review role', () => {
     expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run)).toBeNull();
     const independent = seedHistoricalIndependentSourceReview(f);
     Object.assign(independent, { status: 'running', executionAttempt: 1 });
-    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: independent.id, ingestionTaskId: f.ids.source,
-      failedTaskId: historical.id, compositionTaskId: f.ids.anchor, executionAttempt: 1 })).toMatchObject({ mode: 'web',
-      savedOutput: { text, sourceTaskId: historical.id, structuredAttempt: 1 } });
+    expect(await inspectHermesSourceReviewRecovery(f.prisma, f.ids.run, independent.id)).toMatchObject({
+      reviewMode: 'web', savedOutput: { text, sourceTaskId: historical.id, structuredAttempt: 1 } });
+    const before = structuredClone(f.db.usageLedger);
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: independent.id, ingestionTaskId: f.ids.source,
+      failedTaskId: historical.id, compositionTaskId: f.ids.anchor, executionAttempt: 1 })).rejects.toThrow('retired');
+    expect(f.db.usageLedger).toEqual(before);
     expect(f.redis.lpush).toHaveBeenCalledTimes(fresh ? 2 : 1);
   });
 

@@ -43,9 +43,8 @@ if ! getent group 1000 >/dev/null 2>&1; then groupadd --system --gid 1000 opensc
 install -d -o root -g root -m 0700 "$root/releases" "$root/spool" "$root/private"
 install -d -o 1000 -g 1000 -m 0700 "$root/spool/inbox"
 install -d -o root -g 1000 -m 2750 "$root/spool/results"
-install -d -m 0755 "$bundle/infra/synclip-image" "$bundle/infra/chatgpt-browser" "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gateway/dist"
-for file in broker.mjs transport.mjs; do install -m 0444 "$source_root/infra/synclip-image/$file" "$bundle/infra/synclip-image/$file"; done
-install -m 0444 "$source_root/infra/chatgpt-browser/broker.mjs" "$bundle/infra/chatgpt-browser/broker.mjs"
+install -d -m 0755 "$bundle/infra/synclip-image" "$bundle/infra/codex-image-runner" "$bundle/packages/ai-gateway/dist"
+for file in broker.mjs transport.mjs normalize.mjs; do install -m 0444 "$source_root/infra/synclip-image/$file" "$bundle/infra/synclip-image/$file"; done
 install -m 0444 "$source_root/infra/codex-image-runner/core.mjs" "$bundle/infra/codex-image-runner/core.mjs"
 find "$source_root/packages/ai-gateway/dist" -maxdepth 1 -type f -name '*.js' -exec install -m 0444 -t "$bundle/packages/ai-gateway/dist" {} +
 # This imports only; it cannot run the guarded broker or read the host key.

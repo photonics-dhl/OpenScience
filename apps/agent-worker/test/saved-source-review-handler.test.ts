@@ -37,7 +37,7 @@ vi.mock('@openscience/domain', async load => ({
   requireNativeAgentExecutionAuthority: seam.nativeAuthority,
 }));
 
-import { createHandlers, createPollOnce, createSpoolSubmission } from '../src/index';
+import { createHandlers, createPollOnce } from '../src/index';
 beforeEach(() => { seam.resolveCorrection.mockReset().mockResolvedValue(null); });
 
 describe('new Hermes model review authorization', () => {
@@ -458,96 +458,18 @@ describe('saved source-review handler seam', () => {
     seam.lock.mockReset().mockResolvedValue(undefined);
   });
 
-  it.each(['unchanged', 'downgraded', 'revoked', 'run', 'receipt', 'proof', 'task-key', 'legacy'] as const)(
-    'rechecks bound authority in the actual final spool transaction (%s)', async change => {
-      const f = fixture();
-      const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
-        taskId: ids.owner, runId: 'run', savedOutput: f.saved };
-      seam.requireExecution.mockResolvedValue(change === 'legacy' ? { mode: 'model', savedOutput: f.saved } : execution);
-      Object.assign(f.tx.agentTask, { findUnique: f.prisma.agentTask.findUnique });
-      const membership = { findUnique: vi.fn().mockResolvedValue({ userId: 'actor', workspaceId: 'workspace', role: 'author' }) };
-      Object.assign(f.tx, {
-        artifact: { ...f.tx.artifact, ...f.prisma.artifact },
-        membership,
-        ingestionTask: { findUnique: vi.fn(async () => ({ agentTask: f.owner, artifactId: 'artifact',
-          artifact: { workspaceId: 'workspace' }, batch: { userId: 'actor', researchObjectId: 'ro',
-            researchObject: { workspaceId: 'workspace', workspace: { status: 'active' } } } })) },
-      });
-      const publish = vi.fn(async () => 'published');
-      const submission = createSpoolSubmission(f.prisma as never, 'sdf.extract');
-      seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
-        await context.scientificReview.beforeReviewProviderCall();
-        // This is the readiness/disk-await gap after successful early binding and policy.
-        await Promise.resolve();
-        if (change === 'downgraded' || change === 'revoked')
-          membership.findUnique.mockResolvedValue(change === 'revoked' ? null : {
-            userId: 'actor', workspaceId: 'workspace', role: 'reader' });
-        if (change === 'run') seam.requireExecution.mockRejectedValue(new Error('[blocked] run cancelled'));
-        if (change === 'receipt') seam.requireExecution.mockResolvedValue({ ...execution, savedOutput: { ...f.saved, text: 'changed' } });
-        if (change === 'proof') seam.requireExecution.mockResolvedValue({ ...execution, notSubmittedRecovery: {
-          requestId: 'different', promptHash: 'a'.repeat(64), artifactId: 'artifact',
-          documentSha256: 'b'.repeat(64), candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) } });
-        if (change === 'task-key') f.owner.idempotencyKey = f.owner.idempotencyKey.replace(ids.failed, ids.source);
-        await submission({ taskId: ids.owner, artifactId: 'artifact' }, publish);
-        return { core: { method: 'reviewed' }, needsMoreInformation: [] };
-      });
-      const poll = await createPollOnce(f.handlers, { runMaintenance: false });
-      await poll(f.deps as never);
-      expect(f.policy, JSON.stringify(seam.progress.mock.calls.map(call => call[1]))).toHaveBeenCalledTimes(2);
-      expect(seam.lock).toHaveBeenCalledTimes(2); // Existing parser checkpoint, then final spool publication.
-      if (change === 'unchanged' || change === 'legacy') {
-        expect(publish).toHaveBeenCalledOnce();
-        expect(seam.progress).toHaveBeenLastCalledWith(f.deps, expect.objectContaining({ status: 'succeeded' }));
-        expect(seam.requireExecution).toHaveBeenCalledTimes(change === 'legacy' ? 2 : 3);
-      } else {
-        // The provider puts attachments, reservation and queue file exclusively inside publish.
-        expect(publish).not.toHaveBeenCalled();
-        expect(seam.progress).toHaveBeenLastCalledWith(f.deps, expect.objectContaining({ status: 'failed', error: expect.stringContaining('[blocked]') }));
-      }
-    });
-
-  it.each(['initial', 'saved', 'technical'] as const)('binds the server-owned %s independent role and the original execution lease at submit', async kind => {
+  it.each(['initial', 'saved', 'technical'] as const)('rejects the retired %s Web execution role before extraction or any provider submission', async kind => {
     const f = fixture(2);
     if (kind === 'initial') f.owner.idempotencyKey = `ingestion-analysis-compose:${ids.ingestion}:${ids.source}:${ids.source}:scientific-review-v4`;
-    const proof = { requestId: 'original-request', promptHash: 'a'.repeat(64), artifactId: 'artifact',
-      documentSha256: f.sourceMap.contentHash, candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) };
     const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
       taskId: ids.owner, runId: 'run', ...(kind !== 'initial' ? { savedOutput: f.saved } : {}),
-      ...(kind === 'technical' ? { notSubmittedRecovery: proof } : {}) };
+      ...(kind === 'technical' ? { notSubmittedRecovery: { requestId: 'original-request', promptHash: 'a'.repeat(64),
+        artifactId: 'artifact', documentSha256: f.sourceMap.contentHash, candidateHash: 'c'.repeat(64), sourceMapHash: 'd'.repeat(64) } } : {}) };
     seam.requireExecution.mockResolvedValue(execution);
-    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
-      expect(context).toMatchObject({ requireReusableSemanticStage: true, reviewExistingSourceTaskId: ids.source,
-        scientificReview: { mode: 'web', requestId: ids.owner, requireReviewedClaims: true,
-          sourceDocument: { sha256: f.sourceMap.contentHash, mediaType: 'application/pdf' } } });
-      expect(context.scientificReview.savedReviewOutput).toBe(kind !== 'initial' ? f.saved : undefined);
-      expect(context.scientificReview.sourceReviewRecovery).toEqual(kind === 'technical' ? proof : undefined);
-      await context.scientificReview.beforeReviewProviderCall();
-      f.providerSubmit(); return { core: { method: 'independently reviewed' }, needsMoreInformation: [] };
-    });
-    await expect(f.execute()).resolves.toMatchObject({ core: { method: 'independently reviewed' } });
-    expect(seam.requireExecution).toHaveBeenCalledTimes(2);
-    for (const [tx, input] of seam.requireExecution.mock.calls) {
-      expect(tx).toBe(f.tx);
-      expect(input).toEqual({ ownerTaskId: ids.owner, ingestionTaskId: ids.ingestion, compositionTaskId: ids.source,
-        failedTaskId: kind === 'initial' ? ids.source : ids.failed, executionAttempt: 2 });
-    }
-    expect(f.parserCascade).not.toHaveBeenCalled(); expect(f.providerSubmit).toHaveBeenCalledOnce();
-  });
-
-  it.each(['mode', 'saved-body', 'lease', 'authorization'] as const)('rejects a changed independent %s before submit', async change => {
-    const f = fixture();
-    const execution = { mode: 'web', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/6-pro',
-      taskId: ids.owner, runId: 'run', savedOutput: f.saved };
-    seam.requireExecution.mockResolvedValueOnce(execution);
-    if (change === 'lease') seam.requireExecution.mockRejectedValue(new Error('[blocked] execution lease changed'));
-    else seam.requireExecution.mockResolvedValue(change === 'mode' ? { mode: 'model' }
-      : change === 'saved-body' ? { ...execution, savedOutput: { ...f.saved, text: 'changed' } } : execution);
-    f.policy.mockResolvedValueOnce(true).mockResolvedValue(change !== 'authorization');
-    seam.extractHandler.mockImplementation(async (_gateway, _task, context) => {
-      await context.scientificReview.beforeReviewProviderCall(); f.providerSubmit();
-    });
-    await expect(f.execute()).rejects.toThrow('[blocked]');
-    expect(f.providerSubmit).not.toHaveBeenCalled();
+    const before = structuredClone(f.saved);
+    await expect(f.execute()).rejects.toThrow('Historical Web source review is retired');
+    expect(f.parserCascade).not.toHaveBeenCalled(); expect(seam.extractHandler).not.toHaveBeenCalled();
+    expect(f.providerSubmit).not.toHaveBeenCalled(); expect(f.saved).toEqual(before);
   });
 
   it('passes the exact saved body and trusted context to extraction without rerunning parser or composition', async () => {

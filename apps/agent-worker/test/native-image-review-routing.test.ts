@@ -29,7 +29,7 @@ function fixture(patch: NodeJS.ProcessEnv = {}, enabled = true, failVision = fal
   const owner = vi.fn(async (_input, _target, submit) => submit());
   const gateway = buildGateway({ ...env, ...patch }, fetcher as typeof fetch, undefined, async () => true,
     { isEnabled: async () => ({ enabled }) }, { image: async () => { throw new Error('Unexpected image publication'); },
-      review: async () => { throw new Error('Unexpected web review publication'); }, illustration: async (_input, submit) => submit(), nativeImageReview: owner }, async () => true);
+      illustration: async (_input, submit) => submit(), nativeImageReview: owner }, async () => true);
   let state: NativeAgentSessionState | null = null;
   const writes = vi.fn();
   const binding = { taskId: 'native-task', artifactId: 'artifact', documentSha256: 'document', sourceMapHash: 'map',

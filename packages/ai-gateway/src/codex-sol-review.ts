@@ -1,24 +1,24 @@
 import { constants } from 'node:fs';
-import { createHash, randomUUID } from 'node:crypto';
-import { lstat, open, link, unlink } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import { encodedImageDimensions, sha256Text } from './ocr';
 import { CODEX_SOL_REVIEW_MODEL, CODEX_SOL_REVIEW_PROVIDER, CODEX_SOL_REVIEW_EFFORT,
   validateCodexSolReviewRequest, validateCodexSolReviewResult, type CodexSolReviewRequest } from './codex-sol-review-protocol';
 import { ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, SCIENCE_REVIEW_ID_PATTERN, SCIENCE_REVIEW_MAX_DEADLINE_MS,
   SCIENCE_REVIEW_MAX_JSON_BYTES, SCIENCE_REVIEW_MAX_RESPONSE_BYTES, SCIENCE_REVIEW_MAX_PROMPT_CHARS,
-  SCIENCE_REVIEW_READY_MAX_AGE_MS, type ScienceReviewInput, type ScienceReviewProvider,
+  type ScienceReviewInput, type ScienceReviewProvider,
   type ScienceReviewProviderResult } from './science-review-protocol';
 
 export interface CodexSolReviewConfig {
   inboxDir: string;
   resultsDir: string;
-  legacyInboxDir: string;
   timeoutMs?: number;
   pollIntervalMs?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
-  withIllustrationSubmission: <T>(input: ScienceReviewInput, publish: () => Promise<T>) => Promise<T>;
+  /** Required for Worker consumption; API may only inspect completed-result evidence. */
+  withIllustrationSubmission?: <T>(input: ScienceReviewInput, publish: () => Promise<T>) => Promise<T>;
 }
 
 const fail = (): never => { throw new Error('INVALID_OUTPUT'); };
@@ -51,23 +51,6 @@ async function boundedRead(path: string, limit: number): Promise<Buffer> {
     return data.subarray(0, count);
   } finally { await file.close(); }
 }
-async function publish(path: string, data: string | Uint8Array): Promise<boolean> {
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  const file = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
-  try { await file.writeFile(data); await file.sync(); } finally { await file.close(); }
-  try {
-    await link(temporary, path);
-    if (process.platform !== 'win32') {
-      const parent = await open(dirname(path), constants.O_RDONLY);
-      try { await parent.sync(); } finally { await parent.close(); }
-    }
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
-    throw error;
-  } finally { await unlink(temporary); }
-}
-
 function sameRequest(left: CodexSolReviewRequest, right: CodexSolReviewRequest): boolean {
   return left.id === right.id && left.model === right.model && left.reasoningEffort === right.reasoningEffort
     && left.prompt === right.prompt && left.promptHash === right.promptHash
@@ -82,8 +65,8 @@ export class CodexSolImageReviewProvider implements ScienceReviewProvider {
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
   constructor(private readonly config: CodexSolReviewConfig) {
-    if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir) || !isAbsolute(config.legacyInboxDir)
-      || new Set([config.inboxDir, config.resultsDir, config.legacyInboxDir]).size !== 3) fail();
+    if (!isAbsolute(config.inboxDir) || !isAbsolute(config.resultsDir)
+      || config.inboxDir === config.resultsDir) fail();
     this.timeout = config.timeoutMs ?? SCIENCE_REVIEW_MAX_DEADLINE_MS;
     if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > SCIENCE_REVIEW_MAX_DEADLINE_MS
       || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs)
@@ -92,24 +75,24 @@ export class CodexSolImageReviewProvider implements ScienceReviewProvider {
     this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
   }
 
-  async hasImageReviewReservation(id: string): Promise<boolean> {
-    if (!SCIENCE_REVIEW_ID_PATTERN.test(id)) return false;
-    await directory(this.config.inboxDir); await directory(this.config.resultsDir);
-    for (const path of [join(this.config.inboxDir, `${id}.submitted.json`),
-      join(this.config.inboxDir, `${id}.json`), join(this.config.resultsDir, id)]) {
-      try { await lstat(path); return true; } catch (error) { if (!missing(error)) throw error; }
-    }
-    return false;
+  private async reservedRequest(id: string): Promise<CodexSolReviewRequest> {
+    try {
+      if (!SCIENCE_REVIEW_ID_PATTERN.test(id)) fail();
+      await directory(this.config.inboxDir); await directory(this.config.resultsDir);
+      const raw = await boundedRead(join(this.config.inboxDir, `${id}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES);
+      const request = validateCodexSolReviewRequest(JSON.parse(raw.toString('utf8')));
+      if (request.id !== id) fail();
+      return request;
+    } catch { throw new Error('RETIRED_IMAGE_REVIEW'); }
   }
 
-  async ownsLegacyImageReviewReservation(id: string): Promise<boolean> {
-    if (!SCIENCE_REVIEW_ID_PATTERN.test(id)) return false;
-    await directory(this.config.legacyInboxDir);
-    try {
-      const raw = await boundedRead(join(this.config.legacyInboxDir, `${id}.submitted.json`), SCIENCE_REVIEW_MAX_JSON_BYTES);
-      const value = JSON.parse(raw.toString('utf8')) as Record<string, unknown>;
-      return value.id === id && value.provider === this.name && value.model === this.model;
-    } catch (error) { if (missing(error)) return false; throw error; }
+  async hasImageReviewReservation(id: string): Promise<boolean> {
+    try { await this.reservedRequest(id); return true; } catch { return false; }
+  }
+
+  /** API admission evidence only; the Worker still compares the complete original request. */
+  async canResumeFromCompletedResult(id: string): Promise<boolean> {
+    try { return await this.output(await this.reservedRequest(id)) !== null; } catch { return false; }
   }
 
   private async output(request: CodexSolReviewRequest): Promise<ScienceReviewProviderResult | null> {
@@ -137,66 +120,33 @@ export class CodexSolImageReviewProvider implements ScienceReviewProvider {
       || !input.prompt.trim() || input.prompt.length > SCIENCE_REVIEW_MAX_PROMPT_CHARS) fail();
     const attachment = input.attachments?.[0];
     if (!attachment || attachment.mediaType === 'application/pdf') throw new Error('INVALID_OUTPUT');
-    if (!(attachment.bytes instanceof Uint8Array) || attachment.bytes.byteLength < 1
-      || attachment.bytes.byteLength > ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES
-      || createHash('sha256').update(attachment.bytes).digest('hex') !== attachment.sha256
+    const { bytes, ...record } = attachment;
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1
+      || bytes.byteLength > ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES
+      || createHash('sha256').update(bytes).digest('hex') !== attachment.sha256
       || (attachment.mediaType !== 'image/png' && attachment.mediaType !== 'image/jpeg' && attachment.mediaType !== 'image/webp')) fail();
-    const dimensions = encodedImageDimensions(attachment.mediaType, attachment.bytes);
+    const dimensions = encodedImageDimensions(attachment.mediaType, bytes);
     if (dimensions.width !== attachment.width || dimensions.height !== attachment.height) fail();
-    const { bytes: _bytes, ...record } = attachment;
-    await directory(this.config.inboxDir); await directory(this.config.resultsDir); await directory(this.config.legacyInboxDir);
+    const withAuthority = this.config.withIllustrationSubmission;
+    if (!withAuthority) return fail();
     const createdAt = this.now();
-    let request = validateCodexSolReviewRequest({ schemaVersion: 1, provider: this.name, model: this.model,
+    const intended = validateCodexSolReviewRequest({ schemaVersion: 1, provider: this.name, model: this.model,
       reasoningEffort: CODEX_SOL_REVIEW_EFFORT, id: input.requestId, prompt: input.prompt,
       promptHash: sha256Text(input.prompt), source: input.source, attachments: [record], createdAt,
       deadlineAt: createdAt + this.timeout });
-    const intended = request;
-    const submit = async (): Promise<ScienceReviewProviderResult | null> => {
-      const reservation = join(this.config.inboxDir, `${request.id}.submitted.json`);
-      let existing: Buffer | undefined;
-      try { existing = await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES); }
-      catch (error) { if (!missing(error)) throw error; }
-      if (existing) {
-        request = validateCodexSolReviewRequest(JSON.parse(existing.toString('utf8')));
-        if (!sameRequest(request, intended)) fail();
-        const completed = await this.output(request);
-        if (completed) return completed;
-        if (completedOnly) fail();
-        validateCodexSolReviewRequest(request, this.now());
-        return null;
-      }
-      if (completedOnly) fail();
-      await boundedRead(join(this.config.resultsDir, '.ready'), SCIENCE_REVIEW_MAX_JSON_BYTES);
-      const ready = await lstat(join(this.config.resultsDir, '.ready'));
-      if (this.now() - ready.mtimeMs > SCIENCE_REVIEW_READY_MAX_AGE_MS || ready.mtimeMs > this.now() + 5000) fail();
-      const sidecar = join(this.config.inboxDir, `${request.id}.${record.fileName}`);
-      if (!await publish(sidecar, attachment.bytes)) {
-        const saved = await boundedRead(sidecar, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
-        if (createHash('sha256').update(saved).digest('hex') !== attachment.sha256) fail();
-      }
-      // Share the old provider's durable reservation name so a rollback worker
-      // fails closed instead of sending this task to Chat as a second provider.
-      const legacyReservation = join(this.config.legacyInboxDir, `${request.id}.submitted.json`);
-      if (!await publish(legacyReservation, JSON.stringify(request))) {
-        const saved = validateCodexSolReviewRequest(JSON.parse((await boundedRead(legacyReservation, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-        if (!sameRequest(saved, request)) fail();
-      }
-      if (!await publish(reservation, JSON.stringify(request))) {
-        request = validateCodexSolReviewRequest(JSON.parse((await boundedRead(reservation, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-        if (!sameRequest(request, intended)) fail();
-      }
-      const completed = await this.output(request);
-      if (completed) return completed;
-      validateCodexSolReviewRequest(request, this.now());
-      const queued = join(this.config.inboxDir, `${request.id}.json`);
-      if (!await publish(queued, JSON.stringify(request))) {
-        const saved = validateCodexSolReviewRequest(JSON.parse((await boundedRead(queued, SCIENCE_REVIEW_MAX_JSON_BYTES)).toString('utf8')));
-        if (!sameRequest(saved, request)) fail();
-      }
-      return null;
-    };
-    const result = await this.config.withIllustrationSubmission(input, submit);
-    if (result) return result;
+    // The original immutable reservation is the only positive payer identity.
+    // Queue files, results directories, absent Web state and missing SQL audits
+    // never authorize a new attempt. This retired adapter performs no writes.
+    const saved = await withAuthority(input, async () => {
+      const request = await this.reservedRequest(input.requestId);
+      if (!sameRequest(request, intended)) throw new Error('RETIRED_IMAGE_REVIEW');
+      return { request, completed: await this.output(request) };
+    });
+    if (saved.completed) return saved.completed;
+    if (completedOnly) throw new Error('COMPLETED_REVIEW_UNAVAILABLE');
+    const request = saved.request;
+    // Waiting is outside the authority transaction and uses only the original deadline.
+    validateCodexSolReviewRequest(request, this.now());
     while (this.now() < request.deadlineAt) {
       const completed = await this.output(request);
       if (completed) return completed;

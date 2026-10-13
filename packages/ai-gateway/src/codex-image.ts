@@ -3,7 +3,7 @@ import { lstat, open, link, unlink } from 'node:fs/promises';
 import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ImageUsageLimitError, validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
-import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
+import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
 import { SYNCLIP_IMAGE_MODEL, validateSynclipImageModel } from './synclip-image-api';
 export interface CodexSpoolImageConfig {
   inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>;
@@ -97,14 +97,8 @@ abstract class SpoolImageProvider implements ImageProvider {
       )).toString('utf8')), undefined, this.spoolProvider);
       const result = this.validateResult(JSON.parse(resultBytes.toString('utf8')));
       if (request.id !== id || result.id !== id || result.promptHash !== request.promptHash) return 'unsafe';
-      if (hasNotSubmitted) {
-        const evidence = JSON.parse((await boundedRead(notSubmittedPath, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')) as Record<string, unknown>;
-        if (this.spoolProvider !== 'chatgpt-web' || result.status !== 'failed' || !evidence || typeof evidence !== 'object' || Array.isArray(evidence)
-          || Object.keys(evidence).sort().join(',') !== 'id,promptHash,provider,state'
-          || evidence.id !== id || evidence.provider !== this.spoolProvider
-          || evidence.promptHash !== request.promptHash || evidence.state !== 'not_submitted') return 'unsafe';
-        return 'not_submitted';
-      }
+      // Retired Web non-submission proofs cannot authorize a new active-provider attempt.
+      if (hasNotSubmitted) return 'unsafe';
       if (result.status === 'uncertain') return 'uncertain';
       if (result.status === 'failed') return result.errorCode === 'USAGE_LIMIT' ? 'usage_limited' : 'failed';
       const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
@@ -208,15 +202,6 @@ export class CodexSpoolImageProvider extends SpoolImageProvider {
   readonly name = 'codex-image';
   readonly model = 'codex-cli-0.153.0/imagegen';
   protected readonly spoolProvider = 'codex' as const;
-}
-
-/** ChatGPT subscription UI transport; this identity does not claim a webpage model label. */
-export class ChatGptWebSpoolImageProvider extends SpoolImageProvider {
-  constructor(config: CodexSpoolImageConfig) { super(config, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS); }
-  readonly name = 'chatgpt-web';
-  readonly model = 'chatgpt-web/6-pro-image-generation-tool';
-  readonly supportsReferenceImage = true;
-  protected readonly spoolProvider = 'chatgpt-web' as const;
 }
 
 /** Synclip's explicitly selected API model; the host owns credentials and HTTP submission. */

@@ -85,13 +85,10 @@ on:
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
+      - 'apps/agent-worker/test/historical-image-review-payer.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
-      - 'infra/chatgpt-browser/review-broker.mjs'
-      - 'infra/chatgpt-browser/runner.cjs'
-      - 'infra/chatgpt-browser/review-runner.cjs'
-      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
@@ -106,7 +103,7 @@ on:
       - 'packages/ai-gateway/test/native-agent-bridge.test.ts'
       - 'infra/hermes-agent/**'
       - 'infra/synclip-image/**'
-      - 'infra/chatgpt-browser/broker.mjs'
+      - 'infra/private-cleanup/**'
       - 'packages/ai-gateway/src/synclip-image-api.ts'
       - 'packages/ai-gateway/src/codex-image*.ts'
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
@@ -130,9 +127,6 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
-      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
-      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
-      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
@@ -350,13 +344,10 @@ on:
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
+      - 'apps/agent-worker/test/historical-image-review-payer.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
-      - 'infra/chatgpt-browser/review-broker.mjs'
-      - 'infra/chatgpt-browser/runner.cjs'
-      - 'infra/chatgpt-browser/review-runner.cjs'
-      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
@@ -371,7 +362,7 @@ on:
       - 'packages/ai-gateway/test/native-agent-bridge.test.ts'
       - 'infra/hermes-agent/**'
       - 'infra/synclip-image/**'
-      - 'infra/chatgpt-browser/broker.mjs'
+      - 'infra/private-cleanup/**'
       - 'packages/ai-gateway/src/synclip-image-api.ts'
       - 'packages/ai-gateway/src/codex-image*.ts'
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
@@ -395,9 +386,6 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
-      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
-      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
-      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
@@ -565,13 +553,14 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Check image host operations with their production privileges
         run: |
           mkdir -p tmp/hermes-cleanup-20261003
           sudo "$(command -v node)" --test infra/synclip-image/transport.test.mjs infra/synclip-image/broker.test.mjs infra/synclip-image/install.test.mjs
       - run: python3 -m unittest discover -s infra/synclip-image -p configure_key_test.py
+      - run: sudo "$(command -v node)" --test infra/private-cleanup/runner.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts
       - run: python3 -m unittest discover -s infra/hermes-agent -p "test_*.py"
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_host_broker.py
@@ -615,7 +604,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts test/presentation-assets-routes.test.ts test/search-runtime.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts test/historical-image-review-payer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts test/presentation/style-recommendations.test.ts test/presentation/selected-scene-art.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
@@ -642,10 +631,6 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "review-only preflight recovery"
       - run: node --check infra/codex-sol-review/runner.mjs
-      - run: node --check infra/chatgpt-browser/review-broker.mjs
-      - run: node --check infra/chatgpt-browser/runner.cjs
-      - run: node --check infra/chatgpt-browser/review-runner.cjs
-      - run: node --test infra/chatgpt-browser/review-runner-selector.test.cjs
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
