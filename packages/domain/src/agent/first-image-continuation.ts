@@ -9,7 +9,7 @@ import { nativeAgentTerminalResult, readNativeAgentExecution, requireNativeIllus
 import { parsePresentationGenerationPayload, requirePresentationWriteScope, type PresentationGenerationPayload } from '../assets/presentation-asset';
 import { presentationStoryboardView } from '../assets/storyboard';
 import { requireSceneImageParent, requireAcceptedSceneImageReview } from '../assets/scene-image';
-import { readNativeImageAgentExecution } from '../assets/native-image-review';
+import { imageReviewHasNoSubmission, readNativeImageAgentExecution } from '../assets/native-image-review';
 import { VISUAL_NARRATIVE_PROFILE } from '../assets/video';
 import { readVisualNarrativeSource, readReviewedPresentationEvidence, presentationClaimContent, presentationEvidenceIdentity, type FirstImageSourceContext } from '../assets/illustration-source';
 
@@ -222,7 +222,15 @@ export async function advanceFirstImageContinuation(deps: HermesResearchRunDeps,
   const task = slot.agentTaskId ? await tx.agentTask.findUnique({ where: { id: slot.agentTaskId }, include: { session: true } }) : null;
   if (!task || task.deletedAt || task.kind !== 'presentation.generate' || task.session.deletedAt || task.session.status !== 'active'
     || task.session.userId !== run.actorId || task.session.researchObjectId !== run.researchObjectId) return 'stopped';
-  if (task.status === 'failed') return task.error?.startsWith('[blocked]') ? 'stopped' : 'failed';
+  if (task.status === 'failed') {
+    // A startup reclaim can reach the existing paid-no-result refusal before the vendor finishes.
+    // Preserve only that exact technical state for completed-only recovery of this same paid task.
+    if (!planning && task.executionAttempt === 2 && task.retryCount === 0 && task.result !== null
+      && task.error === '[blocked] Previous paid image attempt has no saved result; explicit new generation is required') {
+      try { if (imageReviewHasNoSubmission(task.result)) return 'failed'; } catch { /* Malformed proof stays blocked. */ }
+    }
+    return task.error?.startsWith('[blocked]') ? 'stopped' : 'failed';
+  }
   if (task.status !== 'succeeded') return null;
   const asset = await tx.presentationAsset.findUnique({ where: { id: task.id } });
   if (!asset || asset.deletedAt || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId) return 'failed';

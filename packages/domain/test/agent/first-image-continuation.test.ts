@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { seedUser } from '../helpers/fakes';
 import { createHermesFirstImageContinuation, findFirstImageContinuation, FIRST_IMAGE_CONTINUATION, readFirstImageContinuationAuthority } from '../../src/agent/first-image-continuation';
 import { reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, requireHermesPresentationTaskAuthority } from '../../src/agent/research-run';
+import { claimAgentTask, prepareAgentTaskForCrashRecovery } from '../../src/agent/agent';
 import { readVisualNarrativeSource } from '../../src/assets/illustration-source';
 
 import { completeImage, fixture, id, plannedFixture, renderingFixture } from './first-image-continuation-fixture';
@@ -68,6 +69,38 @@ describe('current Hermes first-image continuation', () => {
       expect((await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState: async () => state })).resumed).toBe(0);
     }
   });
+  it('keeps an actual startup-reclaimed paid image recoverable through reconciliation and returns the same draft', async () => {
+    const f = await renderingFixture();
+    expect(await claimAgentTask(f.deps, f.image.id)).toMatchObject({ executionAttempt: 1 });
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, f.image.id)).toBe(true);
+    expect(await claimAgentTask(f.deps, f.image.id)).toMatchObject({ executionAttempt: 2 });
+    Object.assign(f.image, { status: 'failed', error: '[blocked] Previous paid image attempt has no saved result; explicit new generation is required' });
+    const ledger = structuredClone(f.db.usageLedger), taskIds = f.db.agentTasks.map(t => t.id);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.db.hermesResearchRuns[0].status).toBe('failed');
+    expect((await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState: async () => 'uncertain' })).resumed).toBe(0);
+    expect((await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState: async () => 'completed' })).resumed).toBe(1);
+    expect(await claimAgentTask(f.deps, f.image.id)).toMatchObject({ executionAttempt: 3 });
+    await completeImage(f);
+    await reconcileHermesResearchRuns(f.deps);
+    expect(f.db.hermesResearchRuns[0].status).toBe('succeeded');
+    expect(f.db.presentationAssets.find(a => a.id === f.image.id)?.status).toBe('draft');
+    expect(f.db.agentTasks.map(t => t.id)).toEqual(taskIds); expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['unrelated-error', 'used-retry', 'review-submitted'])(
+    'does not reopen a stopped first-image run for %s', async reason => {
+      const f = await renderingFixture();
+      Object.assign(f.image, { status: 'failed', executionAttempt: 2, retryCount: 0,
+        error: '[blocked] Previous paid image attempt has no saved result; explicit new generation is required' });
+      if (reason === 'unrelated-error') f.image.error = '[blocked] source binding changed';
+      if (reason === 'used-retry') f.image.retryCount = 1;
+      if (reason === 'review-submitted') f.image.result.nativeImageReview = { mode: 'model-native', state: 'started' };
+      const ledger = structuredClone(f.db.usageLedger);
+      await reconcileHermesResearchRuns(f.deps);
+      expect(f.db.hermesResearchRuns[0].status).toBe('stopped');
+      expect((await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState: async () => 'completed' })).resumed).toBe(0);
+      expect(f.db.usageLedger).toEqual(ledger);
+    });
   it('keeps collaborator task ownership while retaining the original source producer', async () => {
     const f = fixture();
     seedUser(f.db, { id: id(18) });

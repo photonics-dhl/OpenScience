@@ -739,7 +739,8 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope, sourceEvidence, firstImageSource) : undefined;
     if (narrativeSource && narrativeSource.identity !== sourceMetadata?.identity)
       throw new Error('[blocked] Reviewed paper source changed during illustration planning');
-    const requireUnchangedEvidence = async (prisma: Pick<Prisma.TransactionClient, 'evidenceRecord' | 'version' | 'claimNode' | 'ingestionTask' | 'presentationAsset'>) => {
+    const requireUnchangedEvidence = async (prisma: Parameters<typeof readVisualNarrativeSource>[0]
+      & Pick<Prisma.TransactionClient, 'evidenceRecord' | 'presentationAsset'>) => {
       if (scientificMedia && presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload, lineageByClaim)) !== sourceEvidenceIdentity) {
         throw new Error('[blocked] Reviewed source evidence changed during media generation');
       }

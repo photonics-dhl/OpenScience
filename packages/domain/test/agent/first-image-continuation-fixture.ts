@@ -10,6 +10,7 @@ import { describeIllustrationBrief, type IllustrationBrief } from '../../src/ass
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { requireSceneImageParent } from '../../src/assets/scene-image';
+import { claimAgentTask } from '../../src/agent/agent';
 
 export const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 export const hash = 'a'.repeat(64);
@@ -129,6 +130,8 @@ export async function renderingFixture() {
 }
 
 export async function completeImage(f: Awaited<ReturnType<typeof renderingFixture>>) {
+  if (f.image.executionAttempt === 0) await claimAgentTask(f.deps, f.image.id);
+  const executionAttempt = f.image.executionAttempt;
   const parent = await requireSceneImageParent(f.prisma, f.image.payload);
   if (!parent) throw new Error('Image parent missing');
   const identity = { requestId: f.image.id, contentHash: hash, sourceEvidenceIdentity: f.sourceEvidenceIdentity, parentIdentity: parent.identity };
@@ -137,11 +140,11 @@ export async function completeImage(f: Awaited<ReturnType<typeof renderingFixtur
     ...identity, ...target, responseHash: hash };
   Object.assign(f.image, { status: 'succeeded', result: { assetId: f.image.id, contentHash: hash,
     nativeImageReview: { ...identity, provider: target.provider, model: target.model, mode: 'agent-native', state: 'completed',
-      preparedAt: 1, deadlineAt: 300001, executionAttempt: 1, runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills',
+      preparedAt: 1, deadlineAt: 300001, executionAttempt, runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills',
       reservationLedgerId: 'existing-reservation', maxTurns: 4, maxOutputTokens: 32768, maxTotalOutputTokens: 32768, maxInputBytes: 100, review },
     nativeAgentExecution: { kind: 'hermes-agent', profile: 'image-review', runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills',
       model: target.model, checkpoint: { taskId: f.image.id, objectKey: `derived/native-agent/${hash}.json`, serializedSha256: hash, size: 100,
-        sourceKind: 'illustration-image', imageIdentity: identity, executionAttempt: 1, turnCount: 2, state: 'completed', target,
+        sourceKind: 'illustration-image', imageIdentity: identity, executionAttempt, turnCount: 2, state: 'completed', target,
         responseHash: hash, finishReason: 'stop', hasToolCalls: false } } } });
   f.db.presentationAssets.push({ id: f.image.id, researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', deletedAt: null,
     contentHash: hash, objectKey: `derived/images/${hash}.png`, provenance: { source: 'approved_storyboard_scene', taskId: f.image.id,
