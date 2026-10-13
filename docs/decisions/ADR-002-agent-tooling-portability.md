@@ -78,6 +78,27 @@ ast-grep、Semgrep、lychee、Vale、TypeDoc、Changesets、CodeScene/Sourcegrap
 - 回退/兜底策略：由 `packages/ai-gateway` 的运行配置管理；任何文档、skill、task 不得把未确认的回退模型写死。
 - Provider SDK 只允许存在于 `packages/ai-gateway`；业务代码不得散落 Provider SDK 或密钥调用。
 
+### 7. 架构工程职责与 Skill 选型（2026-10-13）
+
+用户指定本会话承担本项目的架构搭建、审查与维护。架构工程工作从实际产品目标出发：明确模块、接口、数据与服务边界；审查权限、并发、迁移和应用/原生 Hermes/媒体执行器的兼容及回退；维护既有 ADR、能力台账和运维手册。执行状态仍由总控单写 CURRENT/progress/index，具体安装、生产操作和模型请求沿已有授权范围。
+
+| 工作 | 优先复用的项目 Skill | 交付依据 |
+|---|---|---|
+| 产品开发与架构搭建 | `repo-map`、`architecture-guard`、`api-contract`、`frontend-design`；有设计分歧时才用 `brainstorming` / `writing-plans` | 当前需求、源码入口与真实调用方；UI 沿已有产品设计 |
+| 架构审查与维护 | `requesting-code-review`、`security-review`、`database-migration`、`verification-before-completion`、`docs-sync` | 高风险新增差异独立 High 审查；复用未变实现的有效证据 |
+| 服务器运维 | `infra-runbook`；故障时用 `systematic-debugging` | 既有 server-capabilities、deployment、backup-restore、monitoring / incident 手册 |
+
+通过 `find-skills` 流程、skills.sh 公共搜索与上游仓库读取完成本轮候选发现；以下均为**本轮只调研、未安装的补充候选**，不代表已接入 Codex 或 Hermes。市场安装量和仓库星数只辅助发现，采用仍须有具体缺口并核对版本与项目边界。
+
+| 来源与候选 | 适用缺口 | 本项目采用条件 |
+|---|---|---|
+| Vercel 官方 [vercel-react-best-practices](https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices) / [原始 Skill](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/SKILL.md) | React/Next.js 数据请求瀑布、包体和渲染性能 | 当前 manifest 为 React 18.3.1 / Next 14.2.35；React 19、Next 15+ 专属 API 不直接套用，也不因 Skill 升级框架 |
+| Supabase 官方 [supabase-postgres-best-practices](https://skills.sh/supabase/agent-skills/supabase-postgres-best-practices) / [原始 Skill](https://github.com/supabase/agent-skills/blob/main/skills/supabase-postgres-best-practices/SKILL.md) | PostgreSQL 查询、索引、连接、锁与 Schema 性能 | 适配项目 PostgreSQL 16 和既有迁移 CLI；按需选通用规则，供应商专属项另核，不更换现有数据库/认证方案 |
+| Docker 官方 [docker-build-strategies](https://github.com/docker/skills/blob/main/skills/docker-build-strategies/SKILL.md) / [docker-compose-patterns](https://github.com/docker/skills/blob/main/skills/docker-compose-patterns/SKILL.md) | 镜像构建、Compose 服务依赖、网络与卷配置 | 新官方条目使用量仍较少；手册记录的 legacy builder 不证明支持 BuildKit/buildx，先核具体功能；不得套用排除所有 Markdown 的示例而漏掉 Hermes Skill/科学参考；复用现有隔离网络、SSH 入口与发布/回退脚本 |
+| 社区 [wshobson/agents 的 architecture-patterns](https://skills.sh/wshobson/agents/architecture-patterns) / [原始 Skill](https://github.com/wshobson/agents/blob/main/plugins/backend-development/skills/architecture-patterns/SKILL.md) | 领域边界、依赖循环、端口/适配器的局部设计 | Python 示例需转换为实际 TS/现有领域结构；不为匹配模板搬目录、拆微服务或替代项目 `architecture-guard` |
+
+已有 Backstage、Serena、dependency-cruiser、Langfuse 和 Portainer/Netdata 按具体问题复用，入口及运行边界见 [服务器能力清单](../runbooks/server-capabilities.md)。本轮未新增工具、门禁、任务库或生产变更；候选安装须另获明确授权。
+
 ## Consequences
 
 正面影响：
