@@ -7,12 +7,14 @@ import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
 
 const ROOT = '/opt/openscience-private-cleanup';
+// Fixed cleanup-only locations. Never enumerate the surrounding backup or unit archives.
+const WEB_ROOTS = ['/opt/openscience-chatgpt-browser', '/var/backups/openscience/retired-chatgpt-web/20261013/runtime'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROVIDERS = [
   { name: 'codex', base: '/opt/openscience-codex', inbox: 'inbox', results: 'results', private: 'private' },
   { name: 'video', base: '/opt/openscience-video', inbox: 'inbox', results: 'results', private: 'private', directoryInbox: true },
-  { name: 'image', base: '/opt/openscience-chatgpt-browser', inbox: 'spool/inbox', results: 'spool/results', private: 'private', jobs: 'jobs' },
-  { name: 'review', base: '/opt/openscience-chatgpt-browser', inbox: 'review-spool/inbox', results: 'review-spool/results', private: 'review-private', jobs: 'jobs/review' },
+  { name: 'image', bases: WEB_ROOTS, inbox: 'spool/inbox', results: 'spool/results', private: 'private', jobs: 'jobs' },
+  { name: 'review', bases: WEB_ROOTS, inbox: 'review-spool/inbox', results: 'review-spool/results', private: 'review-private', jobs: 'jobs/review' },
 ];
 const SIGNAL_UNITS = {
   'openscience-codex-image.service': { base: '/opt/openscience-codex', script: 'runner.mjs' },
@@ -111,16 +113,18 @@ function flatFile(name, id) {
 }
 async function catalog(provider) {
   const groups = [];
-  for (const [key, relative] of Object.entries(provider).filter(([key]) => ['inbox', 'results', 'private', 'jobs'].includes(key))) {
-    const root = `${provider.base}/${relative}`;
-    for (const name of await entries(root)) {
-      budget(); const flat = key === 'inbox' && !provider.directoryInbox;
-      const id = group(name, flat ? 'flat' : 'directory');
-      if (id) groups.push({ root, name, id, flat, request: flat ? (name === `${id}.json` || name === `${id}.submitted.json` ? name : null) : 'request.json' });
+  for (const base of provider.bases ?? [provider.base]) {
+    for (const [key, relative] of Object.entries(provider).filter(([key]) => ['inbox', 'results', 'private', 'jobs'].includes(key))) {
+      const root = `${base}/${relative}`;
+      for (const name of await entries(root)) {
+        budget(); const flat = key === 'inbox' && !provider.directoryInbox;
+        const id = group(name, flat ? 'flat' : 'directory');
+        if (id) groups.push({ root, name, id, flat, request: flat ? (name === `${id}.json` || name === `${id}.submitted.json` ? name : null) : 'request.json' });
+      }
     }
+    const quarantine = `${base}/${provider.private}/quarantine`;
+    for (const name of await entries(quarantine)) { budget(); const id = group(name, 'quarantine'); if (id) groups.push({ root: quarantine, name, id, flat: false, request: 'request.json' }); }
   }
-  const quarantine = `${provider.base}/${provider.private}/quarantine`;
-  for (const name of await entries(quarantine)) { budget(); const id = group(name, 'quarantine'); if (id) groups.push({ root: quarantine, name, id, flat: false, request: 'request.json' }); }
   return groups;
 }
 async function sourceArtifact(candidate) {
