@@ -15,7 +15,7 @@ const response = (data: unknown, status = 200) => new Response(JSON.stringify({ 
 });
 
 describe('Synclip fixed image API', () => {
-  it('submits exactly one text-only gpt-image-2 request to the fixed origin', async () => {
+  it('submits exactly one text-only gpt-image-2.5 request to the fixed origin', async () => {
     const fetcher = vi.fn(async () => response({ task_id: taskId, status: 'processing' }));
     const client = new SynclipImageClient({ apiKey, fetch: fetcher });
     await expect(client.create('Preserve the exact scientific labels.')).resolves.toEqual({ task_id: taskId, status: 'processing' });
@@ -24,7 +24,21 @@ describe('Synclip fixed image API', () => {
     expect(url).toBe('https://api.synclip.ai/v1/image');
     expect(init.method).toBe('POST'); expect(init.redirect).toBe('error');
     expect(init.headers).toMatchObject({ Authorization: `Bearer ${apiKey}` });
-    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Preserve the exact scientific labels.', model: 'gpt-image-2', aspectRatio: '16:9' });
+    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Preserve the exact scientific labels.', model: 'gpt-image-2.5', aspectRatio: '16:9' });
+  });
+  it('recognizes only an explicit model-unavailable error as a fallback signal', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'MODEL_UNAVAILABLE' } }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(response({ task_id: taskId, status: 'processing' }));
+    const client = new SynclipImageClient({ apiKey, fetch: fetcher });
+    await expect(client.create('Bound prompt', 'gpt-image-2.5')).rejects.toMatchObject({ code: 'SYNCLIP_MODEL_UNAVAILABLE', outcome: 'invalid' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toMatchObject({ model: 'gpt-image-2.5' });
+  });
+  it('also recognizes the same explicit error in a successful HTTP envelope without broadening fallback', async () => {
+    const fetcher = vi.fn(async () => response({ error: { code: 'MODEL_UNAVAILABLE' } }));
+    await expect(new SynclipImageClient({ apiKey, fetch: fetcher }).create('Bound prompt')).rejects.toMatchObject({ code: 'SYNCLIP_MODEL_UNAVAILABLE' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('queries only the saved ID and checks the response identity', async () => {
     const fetcher = vi.fn(async () => response(completed()));

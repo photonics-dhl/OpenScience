@@ -51,7 +51,7 @@ async function fixture(taskId = id) {
       query: async task_id => { calls.push(['GET', task_id]); return { task_id, status: 'completed', output: { type: 'image', url: 'https://cdn.synclip.ai/original?private' }, url_expires_at: '2099-01-01T00:00:00Z' }; },
     }, download: async () => png, normalize: async (_config, _id, _raw, normalized) => { await mkdir(normalized, { recursive: true }); await writeFile(join(normalized, 'result.png'), png); return png; } },
   };
-  const identity = { schemaVersion: 1, requestId: taskId, promptHash: request.promptHash, model: 'gpt-image-2', aspectRatio: '16:9' };
+  const identity = { schemaVersion: 1, requestId: taskId, promptHash: request.promptHash, model: 'gpt-image-2.5', aspectRatio: '16:9' };
   async function claimed({ known = true, result = 'uncertain' } = {}) {
     await mkdir(privateDir); await writeFile(join(privateDir, 'request.json'), JSON.stringify(request));
     await writeFile(join(privateDir, 'started'), String(now - 1000));
@@ -77,7 +77,7 @@ test('fresh submission uses actual runOne and transport and publishes only the o
   assert.deepEqual(await runSynclipBrokerOnce(f.config, f.deps), { id, status: 'succeeded' });
   assert.deepEqual(f.calls.filter(Array.isArray).map(call => call[0]), ['POST', 'GET']);
   const result = JSON.parse(await readFile(join(f.resultDir, 'result.json'), 'utf8'));
-  assert.deepEqual(result, { schemaVersion: 1, provider: 'synclip', id, promptHash: f.request.promptHash, status: 'succeeded' });
+  assert.deepEqual(result, { schemaVersion: 1, provider: 'synclip', id, promptHash: f.request.promptHash, status: 'succeeded', model: 'gpt-image-2.5' });
   assert.deepEqual(await readFile(join(f.resultDir, 'result.png')), png);
   assert.ok(!JSON.stringify(result).includes('host-only-test-key')); assert.ok(!JSON.stringify(result).includes('remote-original'));
 });
@@ -86,7 +86,9 @@ test('known-ID recovery runs before core, performs GET only and preserves the pr
   assert.deepEqual(await runSynclipBrokerOnce(f.config, f.deps), { id, status: 'reconciled' });
   assert.deepEqual(f.calls.filter(Array.isArray), [['GET', 'remote-original']]);
   assert.deepEqual(await readFile(join(f.resultDir, 'result.before-synclip-recovery.json')), previous);
-  assert.equal(JSON.parse(await readFile(join(f.resultDir, 'result.json'), 'utf8')).status, 'succeeded');
+  assert.deepEqual(JSON.parse(await readFile(join(f.resultDir, 'result.json'), 'utf8')), {
+    schemaVersion: 1, provider: 'synclip', id, promptHash: f.request.promptHash, status: 'succeeded', model: 'gpt-image-2.5',
+  });
   f.calls.length = 0; assert.equal(await runSynclipBrokerOnce(f.config, f.deps), null); assert.deepEqual(f.calls, []);
 });
 test('saved remote ID recovers a crash before any public result without going through POST', async () => {

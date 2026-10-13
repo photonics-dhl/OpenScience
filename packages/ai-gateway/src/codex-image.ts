@@ -122,7 +122,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       || result.promptHash !== request.promptHash) fail();
     const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
     if (image.contentType !== 'image/png') fail();
-    return { ...image, promptHash: result.promptHash };
+    return { ...image, ...(result.model ? { model: result.model } : {}), promptHash: result.promptHash };
   }
   async generate(input: ImageRequest): Promise<ImageProviderResult> {
     const prompt = validateImageRequest(input); const id = input.requestId;
@@ -143,7 +143,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       if (existingResult.status === 'succeeded') {
         const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
         if (image.contentType !== 'image/png') fail();
-        return image;
+        return { ...image, ...(existingResult.model ? { model: existingResult.model } : {}) };
       }
     } catch (error) {
       if (!missing(error)) throw error;
@@ -186,7 +186,7 @@ abstract class SpoolImageProvider implements ImageProvider {
           throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
         }
         const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
-        if (image.contentType !== 'image/png') fail(); return image;
+        if (image.contentType !== 'image/png') fail(); return { ...image, ...(result.model ? { model: result.model } : {}) };
       }
       await this.sleep(Math.min(this.config.pollIntervalMs ?? 1000, request.deadlineAt - this.now()));
     }

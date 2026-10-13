@@ -5,7 +5,7 @@ import { AiGatewayError } from './errors';
 import { encodedImageDimensions, type OcrMediaType } from './ocr';
 
 export interface ImageRequest { prompt: string; requestId?: string; referenceImage?: { bytes: Buffer; contentHash: string } }
-export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType }
+export interface ImageProviderResult { bytes: Buffer; contentType: OcrMediaType; model?: string }
 export interface CompletedImageProviderResult extends ImageProviderResult { promptHash: string }
 export interface ImageResult extends ImageProviderResult { model: string; provider: string; promptHash: string }
 export type ImageRecoveryState = 'before_submission' | 'completed' | 'failed' | 'not_submitted' | 'usage_limited' | 'uncertain' | 'submitted_without_result' | 'unsafe';

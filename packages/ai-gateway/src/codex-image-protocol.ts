@@ -15,7 +15,7 @@ export function imageSpoolRequestByteUpperBound(prompt: string): number {
 export interface ImageReferenceMetadata { contentHash: string; role: 'style' }
 export interface CodexImageRequest { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; prompt: string; promptHash: string; reference?: ImageReferenceMetadata; createdAt: number; deadlineAt: number }
 export type CodexImageErrorCode = 'EXECUTION_FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'INVALID_OUTPUT' | 'USAGE_LIMIT';
-export interface CodexImageResult { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; promptHash: string; status: 'succeeded' | 'failed' | 'uncertain'; errorCode?: CodexImageErrorCode }
+export interface CodexImageResult { schemaVersion: 1; provider?: ImageSpoolProvider; id: string; promptHash: string; status: 'succeeded' | 'failed' | 'uncertain'; errorCode?: CodexImageErrorCode; model?: string }
 const invalid = (): never => { throw new Error('INVALID_OUTPUT'); };
 function referenceMetadata(value: unknown): ImageReferenceMetadata {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
@@ -46,6 +46,6 @@ export function validateCodexImageRequest(value: unknown, now?: number, expected
 export function validateCodexImageResult(value: unknown, expectedProvider?: ImageSpoolProvider): CodexImageResult {
   const v = record(value);
   const provider = v.provider === undefined ? 'codex' : v.provider;
-  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'promptHash', 'status', 'errorCode'].includes(k)) || !['codex', 'chatgpt-web', 'synclip'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider !== undefined && expectedProvider !== 'codex' && v.provider === undefined) || !['succeeded', 'failed', 'uncertain'].includes(v.status as string) || (v.errorCode !== undefined && !['EXECUTION_FAILED', 'UNCERTAIN', 'EXPIRED', 'INVALID_OUTPUT', 'USAGE_LIMIT'].includes(v.errorCode as string)) || (v.status === 'succeeded' && v.errorCode !== undefined)) return invalid();
+  if (Object.keys(v).some(k => !['schemaVersion', 'provider', 'id', 'promptHash', 'status', 'errorCode', 'model'].includes(k)) || !['codex', 'chatgpt-web', 'synclip'].includes(provider as string) || (expectedProvider !== undefined && provider !== expectedProvider) || (expectedProvider !== undefined && expectedProvider !== 'codex' && v.provider === undefined) || !['succeeded', 'failed', 'uncertain'].includes(v.status as string) || (v.errorCode !== undefined && !['EXECUTION_FAILED', 'UNCERTAIN', 'EXPIRED', 'INVALID_OUTPUT', 'USAGE_LIMIT'].includes(v.errorCode as string)) || (v.model !== undefined && (typeof v.model !== 'string' || !v.model.trim())) || (v.status === 'succeeded' && v.errorCode !== undefined)) return invalid();
   return v as unknown as CodexImageResult;
 }

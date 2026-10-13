@@ -19,11 +19,11 @@ export async function atomicWrite(path,bytes,mode=0o644){
  await syncDirectory(dirname(path));
 }
 async function directory(path){const s=await lstat(path);if(!s.isDirectory()||s.isSymbolicLink())throw Error('UNSAFE_DIRECTORY');}
-async function publish(results,request,status,errorCode,bytes){
+async function publish(results,request,status,errorCode,bytes,model){
  const dir=join(results,request.id);await mkdir(dir,{recursive:true,mode:0o755});await directory(dir);
  if(await exists(join(dir,'result.json')))return;
  if(bytes)await atomicWrite(join(dir,'result.png'),bytes);
- await atomicWrite(join(dir,'result.json'),JSON.stringify({schemaVersion:1,...(request.provider?{provider:request.provider}:{}),id:request.id,promptHash:request.promptHash,status,...(errorCode?{errorCode}:{})}));
+ await atomicWrite(join(dir,'result.json'),JSON.stringify({schemaVersion:1,...(request.provider?{provider:request.provider}:{}),id:request.id,promptHash:request.promptHash,status,...(errorCode?{errorCode}:{}),...(model?{model}:{})}));
 }
 /** Caller holds the host flock for the entire runner lifetime. Private ledger is never mounted in Worker. */
 export async function runOne({inbox,results,privateRoot,provider,execute,now=Date.now}){
@@ -71,7 +71,9 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
   await syncDirectory(privateDir);
   const operationDeadlineAt=Math.min(request.deadlineAt,startedAt+600000);
   try{
-   const bytes=await execute(request,privateDir,operationDeadlineAt);
+   const output=await execute(request,privateDir,operationDeadlineAt);
+   const bytes=Buffer.isBuffer(output)?output:output.bytes;
+   const model=Buffer.isBuffer(output)?undefined:output.model;
    if(operationDeadlineAt<=now()){
     const error=Error('EXPIRED');
     // Web execution has already downloaded and normalized the original image.
@@ -79,7 +81,7 @@ export async function runOne({inbox,results,privateRoot,provider,execute,now=Dat
     if(provider==='chatgpt-web')error.code='UNCERTAIN';
     throw error;
    }
-   await publish(results,request,'succeeded',undefined,bytes);
+   await publish(results,request,'succeeded',undefined,bytes,model);
    return {id,status:'succeeded'};
   }catch(error){
    const uncertain=error?.code==='UNCERTAIN';

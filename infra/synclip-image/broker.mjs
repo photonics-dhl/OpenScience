@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { runOne, safeRead, atomicWrite, UUID } from '../codex-image-runner/core.mjs';
 import { validateCodexImageRequest, validateCodexImageResult } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
-import { SYNCLIP_IMAGE_MODEL, validateSynclipTaskId } from '../../packages/ai-gateway/dist/synclip-image-api.js';
-import { executeSynclipImage, resumeSynclipImage } from './transport.mjs';
+import { validateSynclipImageModel, validateSynclipTaskId } from '../../packages/ai-gateway/dist/synclip-image-api.js';
+import { executeSynclipImage, readSynclipImageModel, resumeSynclipImage } from './transport.mjs';
 
 export const SYNCLIP_ROOT = '/opt/openscience-synclip';
 const KEY_PATH = `${SYNCLIP_ROOT}/api-key`;
@@ -57,8 +57,9 @@ async function recoveryCandidate(config, id, now) {
     || startedAt < request.createdAt || startedAt > now || startedAt >= request.deadlineAt) throw uncertain();
   const graceUntil = Math.min(request.deadlineAt, startedAt + 600000) + RECOVERY_GRACE_MS;
   if (now >= graceUntil) return null;
-  const identity = { schemaVersion: 1, requestId: id, promptHash: request.promptHash, model: SYNCLIP_IMAGE_MODEL, aspectRatio: '16:9' };
   const attempt = JSON.parse((await safeRead(join(privateDir, 'synclip-attempt.json'), 2048)).toString('utf8'));
+  const model = validateSynclipImageModel(attempt.model);
+  const identity = { schemaVersion: 1, requestId: id, promptHash: request.promptHash, model, aspectRatio: '16:9' };
   const receipt = JSON.parse((await safeRead(join(privateDir, 'synclip-receipt.json'), 4096)).toString('utf8'));
   if (!isDeepStrictEqual(attempt, identity) || !isDeepStrictEqual(receipt, { ...identity, taskId: validateSynclipTaskId(receipt.taskId) })) throw uncertain();
   const resultDir = join(config.results, id);
@@ -70,7 +71,7 @@ async function recoveryCandidate(config, id, now) {
     if (result.status === 'succeeded') return null;
     if (result.status !== 'uncertain' && !(result.status === 'failed' && ['EXPIRED', 'EXECUTION_FAILED'].includes(result.errorCode))) throw uncertain();
   }
-  return { request, taskId: receipt.taskId, privateDir, resultDir, previous, graceUntil };
+  return { request, taskId: receipt.taskId, privateDir, resultDir, previous, graceUntil, identity };
 }
 async function publishRecovery(candidate, bytes) {
   validateImageBytes(bytes);
@@ -83,7 +84,7 @@ async function publishRecovery(candidate, bytes) {
   await exclusive(join(candidate.resultDir, 'result.png'), bytes);
   if (candidate.previous) await exclusive(join(candidate.resultDir, 'result.before-synclip-recovery.json'), candidate.previous);
   await atomicWrite(join(candidate.resultDir, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'synclip',
-    id: candidate.request.id, promptHash: candidate.request.promptHash, status: 'succeeded' }));
+    id: candidate.request.id, promptHash: candidate.request.promptHash, status: 'succeeded', model: candidate.identity.model }));
 }
 async function readPrivateKey() {
   if (process.getuid?.() !== 0) throw Error('SYNCLIP_ROOT_REQUIRED');
@@ -114,14 +115,14 @@ export async function runSynclipBrokerOnce(config, dependencies = {}) {
     try { candidate = await recoveryCandidate(config, id, now()); } catch { continue; }
     if (!candidate) continue;
     try {
-      const bytes = await (dependencies.resume ?? resumeSynclipImage)(candidate.request, candidate.privateDir,
+      const output = await (dependencies.resume ?? resumeSynclipImage)(candidate.request, candidate.privateDir,
         await transportConfig(Math.min(candidate.graceUntil, recoveryDeadlineAt)), dependencies.transportDependencies);
-      if (bytes) {
+      if (output) {
         if (now() >= candidate.graceUntil) throw uncertain();
         // Re-read the immutable reservation and result immediately before adoption.
         const current = await recoveryCandidate(config, id, now());
         if (!current || !isDeepStrictEqual(current, candidate)) throw uncertain();
-        await publishRecovery(candidate, bytes); return { id, status: 'reconciled' };
+        await publishRecovery(candidate, output.bytes ?? output); return { id, status: 'reconciled' };
       }
     } catch { /* Unknown remains unknown. Never turn a failed GET into permission to POST. */ }
     pending ??= { id, status: 'recovery_pending' };
@@ -131,7 +132,8 @@ export async function runSynclipBrokerOnce(config, dependencies = {}) {
   const result = await runOne({ ...config, provider: 'synclip', now, execute: async (request, privateDir, deadlineAt) => {
     const original = await boundRequest(config, request.id);
     if (!isDeepStrictEqual(request, original)) throw uncertain();
-    return (dependencies.execute ?? executeSynclipImage)(request, privateDir, await transportConfig(deadlineAt), dependencies.transportDependencies);
+    const bytes = await (dependencies.execute ?? executeSynclipImage)(request, privateDir, await transportConfig(deadlineAt), dependencies.transportDependencies);
+    return { bytes: bytes.bytes ?? bytes, model: bytes.model ?? (await readSynclipImageModel(privateDir)) };
   } });
   return result ?? pending;
 }

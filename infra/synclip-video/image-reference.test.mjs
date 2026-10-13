@@ -51,7 +51,7 @@ async function fixture(t) {
   await mkdir(join(directory, 'normalized'), { recursive: true });
   const request = { schemaVersion: 1, provider: 'synclip', id: requestId, prompt: 'An already approved scientific illustration.',
     promptHash: hash('An already approved scientific illustration.'), createdAt: now - 900000, deadlineAt: now - 300000 };
-  const identity = { schemaVersion: 1, requestId, promptHash: request.promptHash, model: 'gpt-image-2', aspectRatio: '16:9' };
+  const identity = { schemaVersion: 1, requestId, promptHash: request.promptHash, model: 'gpt-image-2.5', aspectRatio: '16:9' };
   const task = { task_id: taskId, status: 'completed', output: { type: 'image', url: signedUrl, watermarked: false },
     url_expires_at: new Date(now + 900000).toISOString() };
   const put = (name, value) => writeFile(join(directory, name), Buffer.isBuffer(value) ? value : JSON.stringify(value));
@@ -96,6 +96,15 @@ test('approved PNG above 500 KiB resolves a paid HTTPS URL with GET only and no 
   assert.equal(await resolveSynclipImageReference(f.options, f.deps), signedUrl);
   assert.deepEqual(f.calls, [['GET', taskId], ['download', taskId, 45000]]);
   assert.deepEqual(await snapshot(f.root), before);
+});
+
+test('fallback gpt-image-2 receipt remains usable as a video reference', async t => {
+  const f = await fixture(t);
+  const identity = { ...f.identity, model: 'gpt-image-2' };
+  await f.put('synclip-attempt.json', identity);
+  await f.put('synclip-receipt.json', { ...identity, taskId });
+  assert.equal(await resolveSynclipImageReference(f.options, f.deps), signedUrl);
+  assert.deepEqual(f.calls, [['GET', taskId], ['download', taskId, 45000]]);
 });
 
 test('expired saved URL is refreshed from the same paid task without rewriting status or receipt', async t => {
@@ -167,7 +176,7 @@ test('source request, attempt, receipt and saved task identity must agree before
     ['request.json', 'provider', 'codex'],
     ...['synclip-attempt.json', 'synclip-receipt.json'].flatMap(name => [
       [name, 'requestId', '88888888-8888-4888-8888-888888888888'], [name, 'promptHash', 'a'.repeat(64)],
-      [name, 'model', 'gpt-image-2.5'], [name, 'aspectRatio', '1:1'],
+      [name, 'model', 'gpt-image-3'], [name, 'aspectRatio', '1:1'],
     ]),
     ['synclip-receipt.json', 'taskId', 'other-paid-task'], ['synclip-receipt.json', 'taskId', '../../private'],
     ['synclip-status.json', 'task_id', 'other-paid-task'], ['synclip-status.json', 'status', 'processing'],

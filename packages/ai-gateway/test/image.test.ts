@@ -65,6 +65,26 @@ describe('bounded scene image provider', () => {
     expect(generate).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain('secret-key');
   });
+  it('audits the actual fallback model returned by the provider', async () => {
+    const record = vi.fn(async () => {});
+    const gateway = new AiGateway({
+      providers: [{ name: 'text', model: 'text', complete: vi.fn() }],
+      imageProviders: [{ name: 'synclip', model: 'gpt-image-2.5', generate: async () => ({ bytes: png, contentType: 'image/png' as const, model: 'gpt-image-2' }) }],
+      killSwitch: { isEnabled: () => ({ enabled: true }) }, audit: { record },
+    });
+    await expect(gateway.generateImage({ prompt: 'fallback scene' })).resolves.toMatchObject({ provider: 'synclip', model: 'gpt-image-2' });
+    expect(record.mock.calls.at(-1)?.[0].metadata).toMatchObject({ operation: 'image', provider: 'synclip', model: 'gpt-image-2', outcome: 'succeeded' });
+  });
+  it('uses the configured provider model when a provider returns an empty model identity', async () => {
+    const record = vi.fn(async () => {});
+    const gateway = new AiGateway({
+      providers: [{ name: 'text', model: 'text', complete: vi.fn() }],
+      imageProviders: [{ name: 'synclip', model: 'gpt-image-2.5', generate: async () => ({ bytes: png, contentType: 'image/png' as const, model: '   ' }) }],
+      killSwitch: { isEnabled: () => ({ enabled: true }) }, audit: { record },
+    });
+    await expect(gateway.generateImage({ prompt: 'empty model scene' })).resolves.toMatchObject({ model: 'gpt-image-2.5' });
+    expect(record.mock.calls.at(-1)?.[0].metadata).toMatchObject({ model: 'gpt-image-2.5', outcome: 'succeeded' });
+  });
   it('sends one exact base64 request and returns validated bytes', async () => {
     const fetcher = vi.fn(async () => response());
     const provider = new MiniMaxImageProvider('minimax-image', config, fetcher);

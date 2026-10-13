@@ -50,8 +50,8 @@ async function fixture() {
   const calls = []; const config = { apiKey: 'test-only-host-key', rendererImage: `sha256:${'a'.repeat(64)}` };
   const deps = {
     client: {
-      create: async prompt => {
-        calls.push(['POST', prompt]);
+      create: async (prompt, model) => {
+        calls.push(['POST', prompt, model]);
         const attempt = JSON.parse(await readFile(join(privateDir, 'synclip-attempt.json'), 'utf8'));
         assert.equal(attempt.requestId, id); assert.equal(attempt.promptHash, request.promptHash);
         return { task_id: remote.task_id, status: 'processing' };
@@ -75,7 +75,7 @@ test('durably binds attempt and task ID before polling, saves originals and retu
   assert.deepEqual(f.calls.map(row => row[0]), ['POST', 'GET', 'download', 'normalize']);
   assert.deepEqual(await readFile(join(f.privateDir, 'synclip-original')), png);
   const receipt = JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8'));
-  assert.equal(receipt.model, 'gpt-image-2'); assert.equal(receipt.aspectRatio, '16:9'); assert.equal(receipt.promptHash, f.request.promptHash);
+  assert.equal(receipt.model, 'gpt-image-2.5'); assert.equal(receipt.aspectRatio, '16:9'); assert.equal(receipt.promptHash, f.request.promptHash);
   for (const name of await readdir(f.privateDir)) {
     if (name.endsWith('.json')) assert.ok(!(await readFile(join(f.privateDir, name), 'utf8')).includes(f.config.apiKey));
   }
@@ -89,6 +89,19 @@ test('lost POST response cannot resend through either execute or resume', async 
     await assert.rejects(method(f.request, f.privateDir, f.config, f.deps), error => error.code === 'UNCERTAIN' && !String(error).includes(f.config.apiKey));
   }
   assert.deepEqual(f.calls, [['POST']]);
+});
+test('falls back once only after an explicit model-unavailable response and binds the fallback model', async () => {
+  const f = await fixture(); let first = true;
+  f.deps.client.create = async (prompt, model) => {
+    f.calls.push(['POST', prompt, model]);
+    if (first) { first = false; throw Object.assign(Error('SYNCLIP_MODEL_UNAVAILABLE'), { code: 'SYNCLIP_MODEL_UNAVAILABLE' }); }
+    return { task_id: remote.task_id, status: 'processing' };
+  };
+  const result = await executeSynclipImage(f.request, f.privateDir, f.config, f.deps);
+  assert.deepEqual(result, png);
+  assert.deepEqual(f.calls.filter(row => row[0] === 'POST').map(row => row[2]), ['gpt-image-2.5', 'gpt-image-2']);
+  assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-attempt.json'), 'utf8')).model, 'gpt-image-2');
+  assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).model, 'gpt-image-2');
 });
 test('concurrent executors consume one exclusive POST opportunity', async () => {
   const f = await fixture(); const first = f.deps.client.create;
@@ -198,7 +211,7 @@ test('real Gateway client and host transport preserve the exact private wire pro
   } });
   assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
   assert.deepEqual(wire.map(call => call.options.method), ['POST', 'GET']);
-  assert.deepEqual(JSON.parse(wire[0].options.body), { prompt: f.request.prompt, model: 'gpt-image-2', aspectRatio: '16:9' });
+  assert.deepEqual(JSON.parse(wire[0].options.body), { prompt: f.request.prompt, model: 'gpt-image-2.5', aspectRatio: '16:9' });
 });
 test('execute polls the same saved task at bounded intervals and stops without resubmission at its deadline', async () => {
   const f = await fixture(); let clock = Date.now(); const start = clock;

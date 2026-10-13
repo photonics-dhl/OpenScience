@@ -393,6 +393,7 @@ export class AiGateway {
     const start = Date.now();
     const promptHash = imagePromptHash(prompt, input.referenceImage ? { contentHash: input.referenceImage.contentHash, role: 'style' } : undefined);
     let servedBy = this.imageProviders[0];
+    let actualModel: string | null = null;
     let succeeded = false;
     let fallbackReason: string | null = null;
     try {
@@ -412,8 +413,9 @@ export class AiGateway {
         try {
           const generated = await provider.generate(input);
           const result = validateImageBytes(generated.bytes);
+          actualModel = typeof generated.model === 'string' && generated.model.trim() ? generated.model : provider.model;
           succeeded = true;
-          return { ...result, model: provider.model, provider: provider.name, promptHash };
+          return { ...result, model: actualModel, provider: provider.name, promptHash };
         } catch (error) {
           const usageLimited = isImageUsageLimit(error);
           // Only a definitive non-submission may move on; an uncertain outcome must not double-spend.
@@ -429,7 +431,7 @@ export class AiGateway {
       // Separate metadata-only audit: an audit sink exception may contain credentials.
       try {
         await this.audit?.record({ actorId: null, action: 'ai.gateway.call', targetType: 'ai_gateway', metadata: {
-          operation: 'image', provider: servedBy?.name ?? null, model: servedBy?.model ?? null, promptHash,
+          operation: 'image', provider: servedBy?.name ?? null, model: actualModel ?? servedBy?.model ?? null, promptHash,
           inputTokens: null, outputTokens: null, estimatedInputTokens: null, estimatedOutputTokens: null,
           estimatedCostUsdMicros: null, actualCostUsdMicros: null, currency: 'USD', pricingVersion: null,
           pricingEffectiveDate: null, serviceTier: null, latencyMs: Date.now() - start, totalLatencyMs: Date.now() - start,
@@ -478,7 +480,7 @@ export class AiGateway {
       }
       try {
         const result = await provider.resumeFromCompletedResult(requestId);
-        return { ...result, model: provider.model, provider: provider.name };
+        return { ...result, model: result.model ?? provider.model, provider: provider.name };
       } catch { /* try the next provider */ }
     }
     throw new AiGatewayError('IMAGE_PROVIDER_FAILED', capable ? 'image recovery failed' : 'image provider unavailable');

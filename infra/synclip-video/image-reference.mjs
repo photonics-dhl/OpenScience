@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES,
   validateCodexImageRequest } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
-import { SynclipImageClient, SYNCLIP_IMAGE_MODEL, SYNCLIP_IMAGE_MAX_BYTES,
+import { SynclipImageClient, validateSynclipImageModel, SYNCLIP_IMAGE_MAX_BYTES,
   validateSynclipTaskId, validateSynclipImageTask, validateSynclipOriginal,
   downloadSynclipImage } from '../../packages/ai-gateway/dist/synclip-image-api.js';
 
@@ -100,8 +100,9 @@ export async function resolveSynclipImageReference(input = {}, dependencies = {}
     // remains the source of the already paid task, not permission for a new POST.
     const request = validateCodexImageRequest(await json(join(directory, 'request.json'), CODEX_IMAGE_MAX_JSON_BYTES), undefined, 'synclip');
     requireValid(request.id === requestId);
-    const identity = { schemaVersion: 1, requestId, promptHash: request.promptHash, model: SYNCLIP_IMAGE_MODEL, aspectRatio: '16:9' };
     const attempt = await json(join(directory, 'synclip-attempt.json'), 2048);
+    const model = validateSynclipImageModel(attempt.model);
+    const identity = { schemaVersion: 1, requestId, promptHash: request.promptHash, model, aspectRatio: '16:9' };
     const receipt = await json(join(directory, 'synclip-receipt.json'), 4096);
     const taskId = validateSynclipTaskId(receipt.taskId);
     requireValid(isDeepStrictEqual(attempt, identity) && isDeepStrictEqual(receipt, { ...identity, taskId }));

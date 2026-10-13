@@ -6,7 +6,8 @@ import { safeRead, atomicWrite } from '../codex-image-runner/core.mjs';
 import { normalizeImage } from '../chatgpt-browser/broker.mjs';
 import { validateCodexImageRequest } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
-import { SynclipImageClient, SYNCLIP_IMAGE_MODEL, SYNCLIP_IMAGE_MAX_BYTES,
+import { SynclipImageClient, SYNCLIP_IMAGE_PRIMARY_MODEL, SYNCLIP_IMAGE_FALLBACK_MODEL, SYNCLIP_IMAGE_MAX_BYTES,
+  validateSynclipImageModel,
   validateSynclipTaskId, validateSynclipImageTask, validateSynclipOriginal, downloadSynclipImage } from '../../packages/ai-gateway/dist/synclip-image-api.js';
 
 function uncertain() { return Object.assign(Error('UNCERTAIN'), { code: 'UNCERTAIN' }); }
@@ -54,11 +55,23 @@ async function context(request, privateDir, config, dependencies) {
   const now = dependencies.now ?? Date.now;
   const deadlineAt = config.deadlineAt ?? now() + 90000;
   if (!Number.isSafeInteger(deadlineAt) || deadlineAt <= now() || deadlineAt - now() > 600000) throw uncertain();
-  const identity = { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash,
-    model: SYNCLIP_IMAGE_MODEL, aspectRatio: '16:9' };
+  const savedAttempt = await optional(join(privateDir, 'synclip-attempt.json'), 2048);
+  let model = SYNCLIP_IMAGE_PRIMARY_MODEL;
+  if (savedAttempt) {
+    const value = JSON.parse(savedAttempt.toString('utf8'));
+    model = validateSynclipImageModel(value.model);
+    if (!isDeepStrictEqual(value, { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash, model, aspectRatio: '16:9' })) throw uncertain();
+  }
+  const identity = { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash, model, aspectRatio: '16:9' };
   const client = () => dependencies.client ?? new SynclipImageClient({ apiKey: config.apiKey,
     timeoutMs: Math.max(1, Math.min(15000, deadlineAt - now())) });
   return { request, privateDir, config, dependencies, now, deadlineAt, identity, client };
+}
+export async function readSynclipImageModel(privateDir) {
+  const bytes = await safeRead(join(privateDir, 'synclip-attempt.json'), 2048);
+  const value = JSON.parse(bytes.toString('utf8'));
+  if (!isDeepStrictEqual(Object.keys(value).sort(), ['aspectRatio', 'model', 'promptHash', 'requestId', 'schemaVersion'].sort())) throw uncertain();
+  return validateSynclipImageModel(value.model);
 }
 async function receipt(ctx) {
   const attemptBytes = await optional(join(ctx.privateDir, 'synclip-attempt.json'), 2048);
@@ -119,7 +132,16 @@ export async function executeSynclipImage(request, privateDir, config, dependenc
     const path = join(privateDir, 'synclip-attempt.json');
     if (!await optional(path, 2048) && await exclusive(path, JSON.stringify(ctx.identity))) {
       if (ctx.now() >= ctx.deadlineAt) throw uncertain();
-      const created = await client.create(request.prompt);
+      let created;
+      try {
+        created = await client.create(request.prompt, ctx.identity.model);
+      } catch (error) {
+        if (error?.code !== 'SYNCLIP_MODEL_UNAVAILABLE' || ctx.identity.model !== SYNCLIP_IMAGE_PRIMARY_MODEL) throw error;
+        const fallbackIdentity = { ...ctx.identity, model: SYNCLIP_IMAGE_FALLBACK_MODEL };
+        await atomicWrite(path, JSON.stringify(fallbackIdentity), 0o600);
+        ctx.identity = fallbackIdentity;
+        created = await client.create(request.prompt, fallbackIdentity.model);
+      }
       const taskId = validateSynclipTaskId(created.task_id);
       if (!await exclusive(join(privateDir, 'synclip-receipt.json'), JSON.stringify({ ...ctx.identity, taskId }))) throw uncertain();
     }

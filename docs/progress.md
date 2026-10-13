@@ -3,6 +3,8 @@
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
 - 2026-10-13：历史 beta-gate NO-GO (`22674ce5`/`d17e8d8d`) 已由完整依赖链修复并替代；旧结论保留在 Git 历史，不再作为当前实施入口。
+- 2026-10-13：用户提供 Synclip `POST /v1/image` 合同截图，明确 `gpt-image-2.5` 可用（价格标注 6）；API-only 适配器改为 2.5 主模型，仅显式结构化模型不可用时一次降级到 2，并把实际模型绑定到 attempt/receipt/spool result/生成器版本。定向 API/transport/broker 测试与 ai-gateway typecheck 通过；未调用 Provider、未部署。
+- 2026-10-13：独立 High 复核发现并修复两处接线：fallback `gpt-image-2` 的已付图片引用现在按持久化 attempt 模型校验；Gateway 审计记录跟随实际返回模型且空模型回退到 provider 配置。补回归测试；AI Gateway 57/57、transport/broker 31/31、image-reference 73/73（Windows 文件 symlink 1 项跳过）、docs lint/sync 全绿。最终 High GO；独立 reviewer 报告全链无材料正确性/安全问题，未调用 Provider、未部署。
 - 2026-10-13：完整 image beta-gate 链已合入；最终修复 `7b1f8466` 经独立 High GO（P0/P1=0）后合入 canonical `1a22f83c`，统一 sceneImage parent CAS 与 spend/pending guard，并补不同幂等键并发回归；Config 18/18、Domain 117/117、API 140/140、Worker 15/15、typecheck/diff-check 通过；精确 Media `38291046457` 全部通过，未调用 Provider/部署。
 - 2026-10-13：Media `38288353198` 的 4 项 `native-video-parents` 失败已定位为 fake transaction 父资产/Claims 未共享；`613db2c8` 经独立 High GO 修复夹具，`1a22f83c` 经独立 High GO 修复生产 sceneImage parent CAS 并发序列化；精确 Media `38291046457` 已全绿（skill-path、native-video-parents/native-video-storyboard、Agent Worker、4 个 browser-entry），未部署/未调用 Provider。
 - 2026-10-13：生图 session 完成只读验收准备：入口为 `/research-objects/:ro/presentation?version=:version`（统一入口 `edit?stage=media`），组件链 `ResearchPresentation→PresentationWorkbench→StoryboardPlans`；已明确 approved 分镜/scene button 选择器与需记录的 RO/version/parent/sourceClaim/task-ledger 字段，未点击生成、未调用 Provider、未部署。

@@ -38,7 +38,7 @@ describe('Synclip uses the existing image spool', () => {
     const provider = new SynclipSpoolImageProvider({ ...dirs, withSubmission: async () => { throw Error('authority revoked'); } });
     await expect(provider.generate({ requestId: id, prompt })).rejects.toThrow('authority revoked');
     await expect(readFile(join(dirs.inboxDir, id + '.submitted.json'))).rejects.toThrow();
-    expect(provider.name).toBe('synclip'); expect(provider.model).toBe('gpt-image-2');
+    expect(provider.name).toBe('synclip'); expect(provider.model).toBe('gpt-image-2.5');
     expect(provider.supportsReferenceImage).toBe(false);
   });
   it('returns only a complete matching local result; pending and foreign receipts never become completed', async () => {

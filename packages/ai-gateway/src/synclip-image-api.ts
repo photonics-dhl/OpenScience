@@ -7,10 +7,12 @@ import { CODEX_IMAGE_MAX_JSON_BYTES } from './codex-image-protocol';
 import { encodedImageDimensions } from './ocr';
 
 export const SYNCLIP_IMAGE_ORIGIN = 'https://api.synclip.ai/v1';
-// Synclip's current public image API has been verified with this model. Keep
-// the unverified 2.5 aliases out of the production path until Synclip exposes
-// an exact accepted model value through its API contract.
-export const SYNCLIP_IMAGE_MODEL = 'gpt-image-2';
+export const SYNCLIP_IMAGE_PRIMARY_MODEL = 'gpt-image-2.5';
+export const SYNCLIP_IMAGE_FALLBACK_MODEL = 'gpt-image-2';
+export const SYNCLIP_IMAGE_MODELS = [SYNCLIP_IMAGE_PRIMARY_MODEL, SYNCLIP_IMAGE_FALLBACK_MODEL] as const;
+export type SynclipImageModel = (typeof SYNCLIP_IMAGE_MODELS)[number];
+/** Compatibility alias for callers that mean the default new-image model. */
+export const SYNCLIP_IMAGE_MODEL = SYNCLIP_IMAGE_PRIMARY_MODEL;
 export const SYNCLIP_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
 export interface SynclipImageTask {
   task_id: string;
@@ -19,7 +21,8 @@ export interface SynclipImageTask {
   url_expires_at?: string;
 }
 type ErrorCode = 'SYNCLIP_CONFIG_INVALID' | 'SYNCLIP_REQUEST_INVALID' | 'SYNCLIP_TASK_ID_INVALID'
-  | 'SYNCLIP_RESPONSE_INVALID' | 'SYNCLIP_RESPONSE_TOO_LARGE' | 'SYNCLIP_HTTP_FAILED' | 'SYNCLIP_TIMEOUT' | 'SYNCLIP_NETWORK_FAILED';
+  | 'SYNCLIP_RESPONSE_INVALID' | 'SYNCLIP_RESPONSE_TOO_LARGE' | 'SYNCLIP_HTTP_FAILED'
+  | 'SYNCLIP_MODEL_UNAVAILABLE' | 'SYNCLIP_TIMEOUT' | 'SYNCLIP_NETWORK_FAILED';
 /** Never carries upstream bodies, signed URLs, credentials, or a raw cause. */
 export class SynclipImageError extends Error {
   constructor(readonly code: ErrorCode, readonly outcome: 'invalid' | 'uncertain' = 'uncertain', readonly httpStatus?: number) {
@@ -28,6 +31,19 @@ export class SynclipImageError extends Error {
 }
 const invalid = () => new SynclipImageError('SYNCLIP_RESPONSE_INVALID');
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const MODEL_UNAVAILABLE_CODES = new Set(['model_unavailable', 'model_not_available', 'model_not_found', 'unsupported_model']);
+function explicitModelUnavailable(value: unknown): boolean {
+  if (!record(value)) return false;
+  const candidates = [value, value.error, value.data, record(value.data) ? value.data.error : undefined].filter(record);
+  return candidates.some(candidate => {
+    const code = candidate.code ?? candidate.error_code ?? candidate.type;
+    return typeof code === 'string' && MODEL_UNAVAILABLE_CODES.has(code.trim().toLowerCase().replaceAll('-', '_'));
+  });
+}
+export function validateSynclipImageModel(value: unknown): SynclipImageModel {
+  if (typeof value !== 'string' || !SYNCLIP_IMAGE_MODELS.includes(value as SynclipImageModel)) throw invalid();
+  return value as SynclipImageModel;
+}
 export function validateSynclipTaskId(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}$/u.test(value))
     throw new SynclipImageError('SYNCLIP_TASK_ID_INVALID', 'invalid');
@@ -92,8 +108,14 @@ export class SynclipImageClient {
         headers: { Authorization: `Bearer ${this.#apiKey}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
         ...(body ? { body } : {}) });
       if (response.redirected || (response.url && new URL(response.url).origin !== 'https://api.synclip.ai')) throw invalid();
-      if (!response.ok) { void response.body?.cancel().catch(() => {}); throw new SynclipImageError('SYNCLIP_HTTP_FAILED', 'uncertain', response.status); }
+      if (!response.ok) {
+        let body: unknown;
+        try { body = await boundedJson(response); } catch { /* Preserve ordinary HTTP failures as uncertain. */ }
+        if (explicitModelUnavailable(body)) throw new SynclipImageError('SYNCLIP_MODEL_UNAVAILABLE', 'invalid', response.status);
+        throw new SynclipImageError('SYNCLIP_HTTP_FAILED', 'uncertain', response.status);
+      }
       const envelope = await boundedJson(response);
+      if (explicitModelUnavailable(envelope)) throw new SynclipImageError('SYNCLIP_MODEL_UNAVAILABLE', 'invalid', response.status);
       if (!record(envelope) || envelope.success !== true || !record(envelope.data)) throw invalid();
       return envelope.data;
     };
@@ -106,9 +128,10 @@ export class SynclipImageClient {
       throw new SynclipImageError('SYNCLIP_NETWORK_FAILED');
     } finally { if (timer !== undefined) clearTimeout(timer); }
   }
-  async create(prompt: string): Promise<Pick<SynclipImageTask, 'task_id' | 'status'>> {
+  async create(prompt: string, model: SynclipImageModel = SYNCLIP_IMAGE_PRIMARY_MODEL): Promise<Pick<SynclipImageTask, 'task_id' | 'status'>> {
     if (typeof prompt !== 'string' || !prompt.trim()) throw new SynclipImageError('SYNCLIP_REQUEST_INVALID', 'invalid');
-    const body = JSON.stringify({ prompt, model: SYNCLIP_IMAGE_MODEL, aspectRatio: '16:9' });
+    validateSynclipImageModel(model);
+    const body = JSON.stringify({ prompt, model, aspectRatio: '16:9' });
     if (Buffer.byteLength(body) > CODEX_IMAGE_MAX_JSON_BYTES) throw new SynclipImageError('SYNCLIP_REQUEST_INVALID', 'invalid');
     const data = await this.#request('POST', '/image', body);
     try {
