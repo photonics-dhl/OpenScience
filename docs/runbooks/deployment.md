@@ -18,6 +18,26 @@
 
 2026-10-04用户明确正常应用发布只保留当前发布版和一个回滚版。源修复恢复在公开验收成功后、同一FD9事务内以`prepare --prune-unused 1`准备精确旧版计划，再提交并执行`complete`；准备失败仍回滚候选，提交后清理失败保留pending，不把已接受应用回滚。Host执行器使用自己的完整运行包，模型、浏览器状态、上传数据与备份独立存放；不得用保留整份旧应用源解决运行依赖。该改动已定向验证/High GO，下一正常发版验证；当前清盘进度只见CURRENT。
 
+### 旧网页生图与审阅通道退役
+
+2026-10-13用户已授权完全退役旧生产ChatGPT网页生图/审阅通道。此授权不扩大为其他组件清理或P2应用发布。先移除新派发入口并解除共享依赖，保留历史SQL/S3来源、有效paid收据和未知外部结果；不能把旧spool缺失当成before-submission、换Provider重发或新扣费。
+
+- 源码候选移除`infra/chatgpt-browser/`和应用旧RW挂载；Synclip图像标准化沿独立`infra/synclip-image/normalize.mjs`，现役Codex-Sol仅可读取身份全等的自有submitted/result恢复。保留ScanSci、原生Hermes、Codex图像执行器、独立开发浏览器桥与历史协议读取。
+- 已完成的主机操作：5个旧bridge/image/review unit在inactive、无drop-in、cleanup service空闲和原runner lock独占后归档并移除，daemon-reload后全部not-found。根私有归档为`/var/backups/openscience/retired-chatgpt-web/20261013/`，receipt记录原权限/uid/gid；本机收据在ignored `tmp/server-health-20261013/units-*.json`。未启动旧执行器，未停止产品服务，未删旧root。
+- 2026-10-14两次应用切换均沿现有单FD9发布/回退流程完成：R1为597a2715、回退f804348c；R2为ec2eb951、回退597a2715，完整身份见当次receipt与CURRENT。必要精确CI/High通过，未混入未发布UI、科学Skill或R08修复；`--no-tests`仅跳过无关Parser/ScanSci等canary和公网auth/admin探针，不把它们称本次已验收。R2的CI38432057695五jobs全部success，其中Linux sudo private-cleanup14/14pass、0skip；两次driver均exit0，健康、公共入口和精确release验收成功。
+- 2026-10-14 01:26旧root在active/rollback两版、实际挂载、Synclip独立安装包及清理条件全部闭合后，同设备原子移至`/var/backups/openscience/retired-chatgpt-web/20261013/runtime`；原`/opt/openscience-chatgpt-browser`不存在。归档父目录0700，receipt0600记录phase=verified；旧root、jobs及三锁的dev/inode/uid/gid/mode不变，移动前后3核心容器ID不变且healthy。归档保留约1.2 GiB历史材料，未声称释放空间；SQL/S3、paid/unknown和用户内容未删除。双位置清理器保留原timer，不能将未消费副本误记complete；归档不可公开，也不自动授权清盘。
+- 首次切换若须回退到旧应用，先按归档receipt恢复准确unit文件及drop-in、owner/mode，再daemon-reload，保持disabled/inactive；确认原root/挂载可用后才执行原应用回退。不得恢复已删除登录态或启用网页派发。第二次切换后的回退版本也须使用独立Synclip helper。
+
+归档后禁止用标准deploy主动安装R1或任何仅识别旧root的cleaner：原事务每次都会安装candidate清理器，不能等发布后再补装新reader。R2同次失败的自动回退不重装旧cleaner，且归档尚未执行；这与日后主动回退不同。主动恢复旧cleaner必须先以当时实际active/rollback定锚，在原FD9、cleanup和归档三把provider锁下把runtime原子恢复至旧root，核实目录、receipt及锁身份，再准备符合既有源祖先守卫的恢复候选并发布。可继续保留能读双路径的新cleaner；不创造未实现的app-only发布入口。旧unit仍保持不存在或disabled/inactive，不恢复登录态。
+
+服务器恢复工具为`/var/backups/openscience/retired-chatgpt-web/20261013/archive-runtime.py`（root0500）；调用`python3 <该工具> --restore --apply --active <当时实际完整SHA> --rollback <当时实际完整SHA>`，只在工具当次条件通过后恢复，读回restored才可安装旧cleaner。历史jobs明确为11040:11040/0700，原三锁为0600/0600/0644，不误改为root；root控制目录、receipt和部署锁仍严格root。工具扫描该UID无进程、持既有FD9/cleanup/三provider锁且无pending，前后核真实只读release挂载与目录/锁身份，fsync两端父目录后才记录完成；中断恢复同样验证完整嵌套身份，缺字段或变化即拒绝。独立High与27个函数/真实rename测试通过，新增8恢复例对前版8RED→8GREEN；Linux实际dry/apply及移动后只读重入成功，未实际演练restore或删除历史资料。本机原收据和失败诊断位于canonical ignored `tmp/server-health-20261013/`。
+
+### R08内部Journal边界修复的切换约束
+
+候选`e4fd4a6b`屏蔽内部journal通用接口及Trash旁路。历史purge可在删task事务提交后、删对象前崩溃；live task/session已不存在，原检查不足以区分同命名空间的Journal checkpoint。因此仅在原private purgeScope保存同事务kind身份，缺可信身份的旧Native对象保持pending；不删CP/Job/grant，不另建表或迁移。私有身份从公开响应与外部清理参数剥离，保护项不占原列表/处理配额。
+
+独立High对代码GO，但生产不得滚动重叠：先停止/排空全部旧Worker并确认无旧storage delete在途，再排空替换全部旧API，所有API均新版本后才启动新Worker。旧二进制不认识隔离状态，不能直接回退后恢复cleanup。故障时先停Worker和Trash写入口并前向修复；只有确认无pending/deleting Native cleanup及已解决私有purgeScope兼容，才能运行旧版本。真实PG16/遗留队列及切换检查尚未执行，本修复没有生产发布授权。
+
 下列按日期记录的固定阅读、GPT来源审阅及恢复操作是历史兼容说明，不能当作新论文的步骤，也不能据旧“下一步”重发任务。保留历史paid回答、原文、收据和回滚依赖，按CURRENT选择实际适用的恢复路径。
 
 ## 2026-09-30 私有来源耗尽后的新分析
