@@ -50,17 +50,29 @@ test('guide workspace supports keyboard and small screens without business write
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Turn papers into structured, verifiable, machine-readable research objects.');
   const input = page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。');
   await expect(input).toBeVisible();
+  await expect(page.locator('#guide-lifecycle-title')).toBeVisible();
+  const beforeFocus = await input.boundingBox();
+  // The lifecycle introduction precedes the workspace. Tab navigation must
+  // reveal its composer without activating links or submitting the form.
+  await page.locator('article').getByRole('link', { name: '个人工作空间', exact: true }).focus();
+  for (let step = 0; step < 12 && !await input.evaluate(element => element === document.activeElement); step++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(input).toBeFocused();
   const box = await input.boundingBox();
-  expect(box && box.y + box.height <= 900).toBe(true);
+  await test.info().attach('guide-composer-keyboard-position', {
+    body: JSON.stringify({ beforeFocus, afterFocus: box }), contentType: 'application/json',
+  });
+  expect(box && box.y >= 0 && box.y + box.height <= 900).toBe(true);
   await expect(page.getByRole('tablist')).toHaveCount(0);
   await page.getByText('“可核验”具体指什么？', { exact: true }).press('Enter');
   await expect(page.getByText('研究页面通过关联原文、材料和相关依据，让读者能够核对整理后的内容。它不表示平台已经证明研究结论正确。', { exact: true })).toBeVisible();
-  await page.screenshot({ path: 'test/visual/out/product-craft/guide-desktop.png', fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: test.info().outputPath('guide-desktop.png'), fullPage: true, animations: 'disabled' });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(input).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test/visual/out/product-craft/guide-mobile-zh.png', fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: test.info().outputPath('guide-mobile-zh.png'), fullPage: true, animations: 'disabled' });
   expect(writes).toEqual([]);
 });
 
