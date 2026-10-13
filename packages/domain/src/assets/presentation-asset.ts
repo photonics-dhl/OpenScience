@@ -1,6 +1,7 @@
 import { requireStyleReferenceImage } from './scene-image';
 import { imageReviewHasNoSubmission } from './native-image-review';
 import { requireArtStyleContinuationTaskAuthority } from '../agent/art-style-continuation';
+import { requireFirstImageContinuationTaskAuthority } from '../agent/first-image-continuation';
 import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageReviewTaskResult, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -717,12 +718,15 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
-      const styleAuthority = run?.maxAgentTasks === 2 && task && taskPayload
+      const firstImageAuthority = run?.maxAgentTasks === 2 && task && taskPayload
+        ? await requireFirstImageContinuationTaskAuthority(tx, { runId: run.id, actorId: input.userId, taskId: task.id, payload: taskPayload, review: true }) : false;
+      const styleAuthority = !firstImageAuthority && run?.maxAgentTasks === 2 && task && taskPayload
         ? await requireArtStyleContinuationTaskAuthority(tx, { runId: run.id, actorId: input.userId, taskId: task.id, payload: taskPayload, review: true }) : false;
       const renderAuthority = run && task && ![9, 11, 13].includes(run.maxAgentTasks ?? 0) && stage === 'scene_image'
         ? await requireHermesImageRenderRecoveryAuthority(tx, { runId: run.id, actorId: input.userId,
           taskId: task.id, phase: 'review' }).catch(() => null) : null;
-      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel && !styleAuthority) || run.status !== expectedStatus
+      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel && !styleAuthority && !firstImageAuthority) || run.status !== expectedStatus
+        || (firstImageAuthority && stage !== 'storyboard')
         || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId || run.versionId !== input.versionId
         || !step || step.status !== 'awaiting_approval' || task?.status !== 'succeeded' || task.deletedAt
         || taskPayload?.hermesRunAuthority?.runId !== run.id || taskPayload.hermesRunAuthority.stage !== stage
@@ -735,7 +739,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
           || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
         || (pixel && (stage === 'storyboard' ? task.id !== pixel.task.id
           : taskPayload.sceneImage?.storyboardAssetId !== pixel.task.id || step.ordinal >= pixel.sceneLimit))
-        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || styleAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
+        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || styleAuthority || firstImageAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes internal review does not match the current candidate and grant');
       }
       // Source-support authority was replayed above; its receipt preserves all historical image decisions.

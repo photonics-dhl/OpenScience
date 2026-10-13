@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AiGateway } from '@openscience/ai-gateway';
 import { buildInterestContext } from '@openscience/domain';
+import { fixture as firstImageFixture } from '../../../packages/domain/test/agent/first-image-continuation-fixture';
 
 import { createHandlers } from '../src/index';
 import {
@@ -64,6 +65,31 @@ function trustedDeps(overrides: { taskUserId?: string; researchObjectIds?: strin
 }
 
 describe('workspace.guide handler', () => {
+  it('starts the bounded native continuation without a guide routing model and replays its original run', async () => {
+    const f = firstImageFixture();
+    const gateway = { completeStructured: vi.fn() } as unknown as AiGateway;
+    const current = { id: f.input.guideTaskId, executionAttempt: f.input.executionAttempt, payload: f.input.payload };
+    const response = await workspaceGuideHandler(gateway, f.deps, current);
+    expect(response).toMatchObject({ firstImageRun: { runId: f.db.hermesResearchRuns[0].id }, nextSteps: [], needsMoreInformation: false });
+    expect(response).not.toHaveProperty('presentationDraft');
+    expect(gateway.completeStructured).not.toHaveBeenCalled();
+    const ledger = structuredClone(f.db.usageLedger);
+    expect(await workspaceGuideHandler(gateway, f.deps, current)).toEqual(response);
+    expect(f.db.usageLedger).toEqual(ledger);
+    expect(f.db.agentTasks.filter(task => task.kind === 'presentation.generate')).toHaveLength(1);
+  });
+  it('does not accept a model-provided first-image run as execution authority', () => {
+    expect(workspaceGuideResultGuard({ ...result, firstImageRun: {
+      runId: '10000000-0000-4000-8000-000000000001', versionId: '10000000-0000-4000-8000-000000000002',
+    } })).toBe(false);
+  });
+  it('does not fall back to a routing model when current execution authority is missing', async () => {
+    const gateway = { completeStructured: vi.fn() } as unknown as AiGateway;
+    const marked = { ...payload, goal: 'Generate one image explaining this paper.', route: 'research-object-edit', executionIntent: 'first-image',
+      context: { tasks: [], researchObjects: [], presentation: { researchObjectId: 'ro-1', versionId: 'version-1' } } };
+    await expect(workspaceGuideHandler(gateway, trustedDeps() as never, { id: 'guide-1', payload: marked })).rejects.toThrow('Current first-image execution');
+    expect(gateway.completeStructured).not.toHaveBeenCalled();
+  });
   const runSource = '30000000-0000-4000-8000-000000000001';
   const runGoal = '请理解整篇论文，制作有自然旁白的讲解视频。';
   const runPayload = { ...payload, goal: runGoal, route: 'research-object-edit', context: {

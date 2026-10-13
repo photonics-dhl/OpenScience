@@ -2,6 +2,8 @@ import type { SourceLocator } from '../research-intelligence/types';
 
 export interface WorkspaceGuidePayload extends Record<string, unknown> {
   goal: string;
+  /** Only a current user submission may authorize the bounded server continuation. */
+  executionIntent?: 'first-image';
   locale: 'zh' | 'en';
   route: 'dashboard' | 'research-object-new' | 'research-object-edit';
   target: WorkspaceGuideTarget;
@@ -62,11 +64,22 @@ const uuid = (value: unknown): value is string => typeof value === 'string'
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
 
+/** This is an execution boundary, not a general natural-language router. */
+export function isExplicitFirstImageRequest(goal: string): boolean {
+  const text = goal.trim();
+  if (!text
+    || /[?？\n\r"“”「」]|(?:不要|不需要|别生成|暂不|仅规划|只规划|先规划|如何|怎么|为什么|是否|能否|助手|论文说|视频|公开|发布|每[张幅个]|多张|一组|[二三四五六七八九十2-9]张)|\b(?:not|don't|only|plan|how|why|whether|assistant|said|video|publish|each|multiple|several|images)\b/iu.test(text)) return false;
+  return /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?生图(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:请\s*)?(?:帮我\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?(?:生成|画|绘制|制作)(?:一张|一幅|首张|第一张|个|张|幅)?(?:解释性|概念|科学)?(?:图片|配图|插图|图解|图)(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:请\s*)?(?:帮我\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?配(?:一张|一幅|张|幅)图(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:please\s+)?(?:generate|create|draw|make)\s+(?:(?:one|an?|the first)\s+)?(?:image|illustration|diagram)\b/iu.test(text);
+}
+
 /** Shared API/worker trust-boundary parser. Keep persistence and execution on one exact contract. */
 export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('workspace.guide payload 无效');
   const payload = value as Record<string, unknown>;
-  if (!hasOnlyKeys(payload, ['goal', 'locale', 'route', 'target', 'context'])) throw new Error('workspace.guide payload 包含未知字段');
+  if (!hasOnlyKeys(payload, ['goal', 'executionIntent', 'locale', 'route', 'target', 'context'])) throw new Error('workspace.guide payload 包含未知字段');
   const goal = typeof payload.goal === 'string' ? payload.goal.trim() : '';
   if (!goal || goal.length > 2_000) throw new Error('workspace.guide 缺少有效 goal');
   if (payload.locale !== 'zh' && payload.locale !== 'en') throw new Error('workspace.guide locale 无效');
@@ -155,8 +168,12 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
       || payload.route !== 'research-object-edit') throw new Error('Invalid workspace research run source');
     researchRunSource = { ingestionTaskId: source.ingestionTaskId };
   }
+  if (payload.executionIntent !== undefined && (payload.executionIntent !== 'first-image'
+    || payload.route !== 'research-object-edit' || !presentation?.versionId
+    || writingDraft || goal.length > 1000 || !isExplicitFirstImageRequest(goal))) throw new Error('Invalid current first-image execution request');
   return {
     goal,
+    ...(payload.executionIntent === 'first-image' ? { executionIntent: 'first-image' as const } : {}),
     locale: payload.locale,
     route: payload.route,
     target: payload.target as WorkspaceGuideTarget,

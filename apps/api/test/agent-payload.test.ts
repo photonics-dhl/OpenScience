@@ -15,6 +15,15 @@ const validGuide = {
 };
 
 describe('agent task payload boundary', () => {
+  it('preserves explicit first-image intent only on an exact saved research scope', () => {
+    const request = { ...validGuide, payload: { ...validGuide.payload, goal: 'Generate one image explaining this paper.',
+      route: 'research-object-edit', executionIntent: 'first-image', context: { tasks: [], researchObjects: [],
+        presentation: { researchObjectId: validGuide.sessionId, versionId: '00000000-0000-4000-8000-000000000002' } } } };
+    expect(agentTaskBodySchema.parse(request)).toEqual(request);
+    for (const goal of ['Do not generate an image', 'How can I generate an image?', 'Only plan an image'])
+      expect(() => agentTaskBodySchema.parse({ ...request, payload: { ...request.payload, goal } })).toThrow();
+    expect(() => agentTaskBodySchema.parse({ ...request, payload: { ...request.payload, firstImageRun: { runId: 'forged' } } })).toThrow();
+  });
   it('reserves internal task names from public session creation', () => {
     expect(() => agentSessionBodySchema.parse({ kind: 'search.index' })).toThrow();
     expect(agentSessionBodySchema.parse({ kind: 'extract' })).toEqual({ kind: 'extract' });

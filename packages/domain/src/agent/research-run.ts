@@ -27,6 +27,7 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
 import { recoverHermesSourceCompositionInTransaction } from '../ingestion/ingestion-service';
 import { advanceArtStyleContinuation, createHermesArtStyleContinuation as createArtStyleContinuation, getHermesArtStyleContinuationCapability, requireArtStyleContinuationTaskAuthority } from './art-style-continuation';
+import { FIRST_IMAGE_CONTINUATION, advanceFirstImageContinuation, readFirstImageContinuationAuthority, requireFirstImageContinuationTaskAuthority } from './first-image-continuation';
 import { nativeAgentTerminalResult, readNativeAgentExecution, requireNativeIllustrationTerminalSource } from './native-agent-execution';
 export { getHermesImageArtStyleCapability } from './art-style-continuation';
 
@@ -473,6 +474,9 @@ export async function getHermesResearchRun(
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
   const projectReadinessHold = (view: HermesResearchRunView) => projectHermesVideoReadinessHold(deps, run, view);
+  if (run.maxAgentTasks === 2 && await deps.prisma.auditLog.findFirst({ where: {
+    action: FIRST_IMAGE_CONTINUATION, targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId,
+  } })) return projectReadinessHold({ ...toView(run), canRetryGeneration: false });
   if (WRITE_ROLES.has(authority.membership.role) && await inspectNativeSourceReviewInitializationRecovery(deps.prisma, run.id))
     return projectReadinessHold({ ...toView(run), canRetryGeneration: true, chargeableAttempts: 1, generationRecovery: 'source-review-fresh' });
   const preflightTaskId = run.error === NATIVE_REVIEW_PREFLIGHT_ERROR
@@ -2193,11 +2197,12 @@ async function inspectGenerationRecovery(
   inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'],
   completedTaskId?: string,
 ): Promise<(GenerationRecoveryPlan & { chargeableAttempts: number }) | null> {
-  const native = run.profile === VISUAL_NARRATIVE_PROFILE && run.maxAgentTasks === 9;
+  const firstImage = completedTaskId ? await readFirstImageContinuationAuthority(tx, { runId: run.id, actorId: run.actorId }).catch(() => null) : null;
+  const native = run.profile === VISUAL_NARRATIVE_PROFILE && (run.maxAgentTasks === 9 || Boolean(firstImage));
   if ((run.status !== 'failed' && !(completedTaskId && run.status === 'generating_scene_images'))
     || (completedTaskId && !native) || !(native || (run.profile === CONTENT_DRIVEN_PROFILE && run.maxAgentTasks === 8) || (run.profile === CONTENT_DRIVEN_IMAGE_PROFILE && run.maxAgentTasks === 7))
     || !run.versionId || run.sourceClaimIds.length === 0) return null;
-  if (await validateReviewedSources(tx, run) !== 'ready') return null;
+  if (!firstImage && await validateReviewedSources(tx, run) !== 'ready') return null;
   const storyboardStep = run.steps.find(step => step.stage === 'storyboard');
   const storyboard = storyboardStep?.presentationAssetId ? await tx.presentationAsset.findUnique({
     where: { id: storyboardStep.presentationAssetId }, include: { sourceClaims: { select: { claimId: true } } },
@@ -2324,7 +2329,7 @@ export async function recoverCompletedHermesSceneImageResults(
   const requestedLimit = input.limit ?? 20;
   const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : 20, 1), 20);
   const candidates = await deps.prisma.hermesResearchRun.findMany({ where: {
-    profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9, status: { in: ['failed', 'generating_scene_images'] },
+    profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: { in: [2, 9] }, status: { in: ['failed', 'generating_scene_images'] },
     ...(input.afterRunId ? { id: { gt: input.afterRunId } } : {}),
     steps: { some: { stage: 'scene_image', agentTask: { status: 'failed', retryCount: 0, deletedAt: null } } },
   }, include: RUN_INCLUDE, orderBy: { id: 'asc' }, take: limit });
@@ -2335,8 +2340,9 @@ export async function recoverCompletedHermesSceneImageResults(
       counts.resumed += await deps.prisma.$transaction(async tx => {
         await lockTrashReferences(tx);
         const run = await tx.hermesResearchRun.findUnique({ where: { id: candidate.id }, include: RUN_INCLUDE });
-        if (!run || run.version !== candidate.version || run.profile !== VISUAL_NARRATIVE_PROFILE || run.maxAgentTasks !== 9
+        if (!run || run.version !== candidate.version || run.profile !== VISUAL_NARRATIVE_PROFILE
           || !['failed', 'generating_scene_images'].includes(run.status) || !run.versionId) return 0;
+        if (run.maxAgentTasks !== 9 && !await readFirstImageContinuationAuthority(tx, { runId: run.id, actorId: run.actorId })) return 0;
         const version = await requirePresentationWriteScope(tx, { userId: run.actorId, researchObjectId: run.researchObjectId, versionId: run.versionId });
         const pending: GenerationRecoveryPlan['resume'] = [];
         for (const step of run.steps.filter(item => item.stage === 'scene_image' && item.agentTaskId
@@ -2504,6 +2510,9 @@ async function advanceAutomaticAssetReviews(deps: HermesResearchRunDeps, run: Ru
   // It must not turn intermediate technical review into user adoption/approval.
   if (narrativeVideoRun(run)) return;
   const stage = run.status === 'awaiting_storyboard_review' ? 'storyboard' : 'scene_image';
+  if (stage === 'scene_image' && await deps.prisma.auditLog.findFirst({ where: {
+    action: FIRST_IMAGE_CONTINUATION, targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId,
+  } })) return; // Technical pixel acceptance preserves a private draft; it is never user adoption.
   for (const step of run.steps.filter(item => item.stage === stage && item.status === 'awaiting_approval')) {
     const task = stage === 'storyboard' && step.agentTaskId
       ? await deps.prisma.agentTask.findUnique({ where: { id: step.agentTaskId } }) : null;
@@ -3362,6 +3371,7 @@ export async function requireHermesPresentationTaskAuthority(
   prisma: Prisma.TransactionClient,
   input: { taskId: string; actorId: string; payload: PresentationGenerationPayload; authority: HermesPresentationAuthority },
 ): Promise<void> {
+  if (await requireFirstImageContinuationTaskAuthority(prisma, { ...input, runId: input.authority.runId })) return;
   if (await requireArtStyleContinuationTaskAuthority(prisma, { ...input, runId: input.authority.runId })) return;
   const expectedStatus = input.authority.stage === 'storyboard' ? 'generating_storyboard'
     : input.authority.stage === 'scene_image' ? 'generating_scene_images' : 'generating_video';
@@ -3862,9 +3872,10 @@ export async function reconcileHermesResearchRuns(
           if (narrativeVideoRun(run) && run.maxAgentTasks !== 9)
             return moveRun(deps, tx, run, 'failed', ro.workspaceId, 'Native video requires its original nine-task grant');
           if (run.maxAgentTasks === 2) {
-            const next = await advanceArtStyleContinuation(deps, tx, run);
+            const firstImage = await readFirstImageContinuationAuthority(tx, { runId: run.id, actorId: run.actorId });
+            const next = firstImage ? await advanceFirstImageContinuation(deps, tx, run) : await advanceArtStyleContinuation(deps, tx, run);
             if (next) return moveRun(deps, tx, run, next as HermesResearchRunStatus, ro.workspaceId,
-              ['failed', 'stopped'].includes(next) ? 'Style continuation could not complete; original images retained' : undefined);
+              ['failed', 'stopped'].includes(next) ? (firstImage ? 'First image could not complete; original task and images retained' : 'Style continuation could not complete; original images retained') : undefined);
             await tx.hermesResearchRun.updateMany({ where: { id: run.id, status: run.status, version: run.version }, data: { lastReconciledAt: now(deps) } });
             return null;
           }
