@@ -172,6 +172,8 @@ async function failedNativeImage() {
 describe('automatic original paid Native image admission through the existing Worker', () => {
   it('reclaims startup attempt2, then admits one private original PNG through default maintenance, outbox and actual handler', async () => {
     const f = await failedNativeImage();
+    Object.assign(f.deps.prisma.usageLedger, { findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
+      f.db.usageLedger.find(row => row.idempotencyKey === where.idempotencyKey) ?? null });
     const original = { tasks: f.db.agentTasks.map(task => task.id), ledger: structuredClone(f.db.usageLedger), payload: structuredClone(f.image.payload) };
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
     let current = 0, complete = false, reviewCalls = 0;
