@@ -91,10 +91,10 @@ export async function plannedFixture() {
   const brief: IllustrationBrief = { schemaVersion: 2, message: 'Two regions share a relation.', domain: 'conceptual',
     encoding: 'Two linked regions.', subjects: [{ description: 'Two regions',
       basis: { claimId: id(6), evidenceId: id(7), quote: 'Two regions share a relation.' } }],
-    composition: 'One relationship at the center.', treatment: 'Editorial linework.', labels: ['Regions'], constraints: [] };
+    composition: 'One relationship at the center.', treatment: 'Editorial linework.', labels: ['Regions'], constraints: ['Conceptual relation, not measured geometry.'] };
   const document = parseStoryboardDocument({ schemaVersion: 1, title: 'Shared relation', narrative: { mainMessage: brief.message, audience: 'Researchers' },
     scenes: [{ title: 'Relation', narration: brief.message, visualAction: describeIllustrationBrief(brief), illustration: brief,
-      durationSeconds: 10, sourceClaimIds: [id(6)] }] }, [id(6)], 'image');
+      sourceClaimIds: [id(6)] }] }, [id(6)], 'image');
   const source = await readVisualNarrativeSource(f.prisma, { userId: id(1), workspaceId: id(2), researchObjectId: id(3),
     versionId: id(4), sourceClaimIds: [id(6)] }, { runId: started.runId, taskId: parent.id });
   const sourceEvidenceIdentity = presentationEvidenceIdentity(f.db.evidenceRecords);
