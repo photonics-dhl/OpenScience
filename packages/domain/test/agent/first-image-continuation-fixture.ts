@@ -11,6 +11,7 @@ import { parseStoryboardDocument } from '../../src/assets/storyboard';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { requireSceneImageParent } from '../../src/assets/scene-image';
 import { claimAgentTask } from '../../src/agent/agent';
+import { PRESENTATION_ASSET_LABEL } from '../../src/research-intelligence/types';
 
 export const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 export const hash = 'a'.repeat(64);
@@ -113,7 +114,7 @@ export async function plannedFixture() {
     storyboardCheckpoint: { ...context, executionAttempt: 1, planned: { document, promptHash: hash, reviewFormat: 2 } },
     storyboardReview: review, illustrationPrompts: [{ sceneIndex: 0, prompt: 'Draw the supported relation.' }] } });
   f.db.presentationAssets.push({ id: parent.id, researchObjectId: id(3), versionId: id(4), kind: 'interactive_html', status: 'draft',
-    deletedAt: null, contentHash, createdAt: new Date(), updatedAt: new Date(), provenance: {
+    label: PRESENTATION_ASSET_LABEL, deletedAt: null, contentHash, createdAt: new Date(), updatedAt: new Date(), provenance: {
       source: 'verified_claims', subtype: 'sourced_storyboard', taskId: parent.id, sourceEvidenceIdentity,
       storyboardSettings: structuredClone(parent.payload.storyboard), storyboardDocument: document, illustrationReview: review } });
   f.db.presentationAssetClaims.push({ presentationAssetId: parent.id, claimId: id(6) });
@@ -147,7 +148,7 @@ export async function completeImage(f: Awaited<ReturnType<typeof renderingFixtur
         sourceKind: 'illustration-image', imageIdentity: identity, executionAttempt, turnCount: 2, state: 'completed', target,
         responseHash: hash, finishReason: 'stop', hasToolCalls: false } } } });
   f.db.presentationAssets.push({ id: f.image.id, researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', deletedAt: null,
-    contentHash: hash, objectKey: `derived/images/${hash}.png`, provenance: { source: 'approved_storyboard_scene', taskId: f.image.id,
+    label: PRESENTATION_ASSET_LABEL, contentHash: hash, objectKey: `derived/images/${hash}.png`, provenance: { source: 'approved_storyboard_scene', taskId: f.image.id,
       contentType: 'image/png', parentIdentity: parent.identity, sourceEvidenceIdentity: f.sourceEvidenceIdentity,
       storyboardAssetId: f.parent.id, storyboardContentHash: f.parent.result.contentHash, sceneIndex: 0, imageReview: review } });
   f.db.presentationAssetClaims.push({ presentationAssetId: f.image.id, claimId: id(6) });
