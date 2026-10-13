@@ -49,6 +49,7 @@ import {
 
 const WRITER_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 const TASK_POLL_INTERVAL_MS = 2_000;
+const TASK_READ_RETRY_LIMIT = 3;
 
 interface ActiveScope {
   key: string;
@@ -310,43 +311,61 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
     setTaskState({ status: 'pending', progress: 0, paused: false });
 
     void (async () => {
+      let readFailures = 0;
       try {
         for (let attempt = 0; !controller.signal.aborted; attempt += 1) {
-          const current = (await getPresentationTask(params.id, versionId, taskId, controller.signal)).task;
-          if (!scopeIsCurrent(scope) || controller.signal.aborted || viewerRef.current !== viewerId) return;
-          loadedTaskId.current = taskId;
-          setTaskState({ status: current.status, progress: current.progress, paused: false });
-          if (current.status === 'succeeded') {
-            if (current.result?.purpose === 'audio-audition') {
-              const result = readPresentationAudioAudition(current);
-              setTaskState(null); setWorking(false);
-              if (!result) { setError(audioText('resultUnavailable')); return; }
-              setAudioAudition({ scope: scope.key, ownerId: viewerId, result });
+          try {
+            const current = (await getPresentationTask(params.id, versionId, taskId, controller.signal)).task;
+            if (!scopeIsCurrent(scope) || controller.signal.aborted || viewerRef.current !== viewerId) return;
+            loadedTaskId.current = taskId;
+            setTaskState(previous => ({ status: current.status, progress: current.progress,
+              paused: current.status === 'succeeded' && previous?.paused === true }));
+            if (current.status === 'succeeded') {
+              if (current.result?.purpose === 'audio-audition') {
+                const result = readPresentationAudioAudition(current);
+                setTaskState(null); setWorking(false); setError('');
+                if (!result) { setError(audioText('resultUnavailable')); return; }
+                setAudioAudition({ scope: scope.key, ownerId: viewerId, result });
+                return;
+              }
+              const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
+              if (!scopeIsCurrent(scope) || controller.signal.aborted || viewerRef.current !== viewerId) return;
+              setAssets(refreshed.assets);
+              setTaskState(null);
+              setWorking(false);
+              setError('');
+              router.replace(scopedUrl(params.id, versionId));
               return;
             }
-            const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
-            if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
-            setAssets(refreshed.assets);
-            setTaskState(null);
-            setWorking(false);
-            router.replace(scopedUrl(params.id, versionId));
-            return;
-          }
-          if (current.status === 'failed') {
-            setError(current.error ?? t('generationFailed'));
-            setTaskState({ status: 'failed', progress: current.progress, paused: false, canRetry: current.canRetry === true });
-            setWorking(false);
-            // Rendering may have persisted the PNG before review failed.
-            try {
-              const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
-              if (!scopeIsCurrent(scope) || controller.signal.aborted) return;
-              setAssets(refreshed.assets);
-            } catch (cause) {
-              if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause)) return;
-              setError(`${current.error ?? t('generationFailed')} ${t('existingImageReview.refreshFailed')}`);
-              setScopeLoad({ key: scope.key, status: 'failed' });
+            if (current.status === 'failed') {
+              setError(current.error ?? t('generationFailed'));
+              setTaskState({ status: 'failed', progress: current.progress, paused: false, canRetry: current.canRetry === true });
+              setWorking(false);
+              // Rendering may have persisted the PNG before review failed.
+              try {
+                const refreshed = await listPresentationAssets(params.id, versionId, controller.signal);
+                if (!scopeIsCurrent(scope) || controller.signal.aborted || viewerRef.current !== viewerId) return;
+                setAssets(refreshed.assets);
+              } catch (cause) {
+                if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause) || viewerRef.current !== viewerId) return;
+                setError(`${current.error ?? t('generationFailed')} ${t('existingImageReview.refreshFailed')}`);
+                setScopeLoad({ key: scope.key, status: 'failed' });
+              }
+              return;
             }
-            return;
+            // A successful task read alone must not reset failures while its result assets remain unreadable.
+            readFailures = 0;
+            setError('');
+          } catch (cause) {
+            if (!scopeIsCurrent(scope) || controller.signal.aborted || isAbort(cause) || viewerRef.current !== viewerId) return;
+            setError(cause instanceof ApiClientError ? cause.message : cause instanceof Error ? cause.message : t('generationFailed'));
+            const recoverable = isRecoverableTaskRead(cause);
+            setTaskState(current => ({ status: current?.status ?? 'running', progress: current?.progress ?? 0, paused: recoverable }));
+            if (!recoverable || readFailures >= TASK_READ_RETRY_LIMIT) { setWorking(false); return; }
+            readFailures += 1;
+            const interval = document.hidden ? 15_000 : TASK_POLL_INTERVAL_MS * readFailures;
+            await abortableDelay(Math.max(interval, cause instanceof ApiClientError ? cause.retryAfterMs ?? 0 : 0), controller.signal);
+            continue;
           }
           const interval = document.hidden ? 15_000 : attempt < 15 ? TASK_POLL_INTERVAL_MS : 5_000;
           await abortableDelay(interval, controller.signal);
