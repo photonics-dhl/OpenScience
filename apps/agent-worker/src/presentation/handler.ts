@@ -102,9 +102,12 @@ function privateStoryboardResult(result: unknown): Record<string, unknown> {
 
 function storyboardScience(document: StoryboardDocument) {
   return { ...document, scenes: document.scenes.map(scene => {
-    const { visualAction: _visualAction, illustration, ...rest } = scene;
+    const { illustration } = scene;
+    const rest: Record<string, unknown> = { ...scene };
+    delete rest.visualAction; delete rest.illustration;
     if (!illustration) return rest;
-    const { composition: _composition, treatment: _treatment, ...science } = illustration;
+    const science: Record<string, unknown> = { ...illustration };
+    delete science.composition; delete science.treatment;
     return { ...rest, illustration: science };
   }) };
 }
@@ -1583,7 +1586,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
                 id: { notIn: recovery.consumedAuditIds } } })) {
                 throw new Error('[blocked] Initial science recovery has an existing uncheckpointed provider attempt');
               }
-              revalidateInitialScienceRecovery = async (tx, beforePlanning) => {
+              revalidateInitialScienceRecovery = async (tx) => {
                 const current = await requireIllustrationReviewAuthority(tx, {
                   taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
                 });
