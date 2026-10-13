@@ -105,6 +105,89 @@ describe('workspace.guide handler', () => {
     }) } as unknown as AiGateway;
   }
 
+  function currentVersionDeps(plans: unknown[] = []) {
+    const deps = trustedDeps({ sessionResearchObjectId: 'ro-1', ingestionTaskIds: [runSource] });
+    return { ...deps, prisma: { ...deps.prisma,
+      agentTask: { ...deps.prisma.agentTask, findFirst: vi.fn().mockResolvedValue(null) },
+      version: { findFirst: vi.fn().mockResolvedValue({ id: 'version-1', researchObjectId: 'ro-1', manifest: { coreJson: { method: 'Saved reviewed mechanism.' } } }) },
+      presentationAsset: { findMany: vi.fn().mockResolvedValue(plans) },
+    } };
+  }
+  const currentVersionPayload = { ...runPayload, context: { ...runPayload.context,
+    presentation: { researchObjectId: 'ro-1', versionId: 'version-1' },
+  } };
+  function savedPlan(output: 'image' | 'video', status: 'draft' | 'approved' = 'approved') {
+    const claimId = '40000000-0000-4000-8000-000000000001';
+    return { id: `${output}-plan`, kind: 'interactive_html', status, updatedAt: new Date('2026-10-01'),
+      sourceClaims: [{ claimId, claim: { extractionStatus: 'succeeded' } }],
+      provenance: { subtype: 'sourced_storyboard', storyboardSettings: { locale: 'zh', style: 'auto', instruction: 'Explain.', output },
+        storyboardDocument: { schemaVersion: 1, title: 'Saved plan', scenes: Array.from({ length: 3 }, () => ({
+          title: 'Scene', narration: 'Saved finding.', visualAction: 'Show the saved relation.', sourceClaimIds: [claimId],
+          ...(output === 'video' ? { durationSeconds: 8 } : {}),
+        })) } },
+    };
+  }
+
+  it.each(['zh', 'en'] as const)('keeps current-version video planning separate from a whole-paper run in %s', async locale => {
+    const goal = locale === 'zh'
+      ? '基于当前已审版本只规划中文视频与自然旁白，不重新分析全文，不生成图片或视频。'
+      : 'Only plan a narrated video from this reviewed version; do not reanalyse the whole paper or render images or video.';
+    const answer = { summary: 'Video plan parameters prepared.', nextSteps: [], needsMoreInformation: false,
+      presentationDraft: { action: 'video.create', instruction: goal, researchObjectId: 'ro-1', versionId: 'version-1' } };
+    const gateway = runGateway(answer);
+    const deps = currentVersionDeps([savedPlan('image')]);
+    const actual = await workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload: { ...currentVersionPayload, goal, locale } });
+    expect(actual).toEqual(answer);
+    expect(actual).not.toHaveProperty('researchRunDraft');
+    expect(gateway.completeStructured).toHaveBeenCalledOnce();
+    expect(deps.prisma.version.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { researchObjectId: 'ro-1', id: 'version-1' } }));
+    const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Array<{ role: string; content: string }>;
+    const sent = JSON.parse(messages.find(message => message.role === 'user')!.content);
+    expect(sent.context.presentationContext).toMatchObject({ researchObjectId: 'ro-1', versionId: 'version-1', core: { method: 'Saved reviewed mechanism.' } });
+    expect(sent.context.presentationContext.planState).toEqual([expect.objectContaining({ id: 'image-plan', output: 'image', status: 'approved' })]);
+    const system = messages.find(message => message.role === 'system')!.content;
+    expect(system).toContain(locale === 'zh' ? '当前已审版本的视频规划' : 'video planning from the current reviewed version');
+  });
+
+  it.each(['draft', 'approved'] as const)('keeps %s video plan context and unchanged execution suggestions on the guide contract', async status => {
+    const answer = { summary: 'Use the qualified video plan.', nextSteps: [], needsMoreInformation: false,
+      presentationDraft: { action: 'video.create', instruction: '', researchObjectId: 'ro-1', versionId: 'version-1' } };
+    const gateway = runGateway(answer);
+    const actual = await workspaceGuideHandler(gateway, currentVersionDeps([savedPlan('video', status)]) as never,
+      { id: 'guide-1', payload: { ...currentVersionPayload, goal: 'Generate the qualified video unchanged.' } });
+    expect(actual).toEqual(answer);
+    const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Array<{ role: string; content: string }>;
+    expect(JSON.parse(messages.find(message => message.role === 'user')!.content).context.presentationContext.planState)
+      .toEqual([expect.objectContaining({ id: 'video-plan', output: 'video', status })]);
+  });
+
+  it.each([
+    '视频规划有什么用？先别规划或生成。',
+    'Do not plan or generate a video. Explain the available options.',
+  ])('does not add an action to a consultation or negated response: %s', async goal => {
+    const answer = { summary: 'You can discuss the available options.', nextSteps: [], needsMoreInformation: false };
+    const deps = currentVersionDeps();
+    deps.prisma.agentTask.findMany.mockResolvedValue([{ payload: { goal: runGoal }, result: { summary: 'Prepare a whole-paper video.' } }]);
+    const actual = await workspaceGuideHandler(runGateway(answer), deps as never,
+      { id: 'guide-1', payload: { ...currentVersionPayload, goal } });
+    expect(actual).toEqual(answer);
+    expect(actual).not.toHaveProperty('presentationDraft');
+    expect(actual).not.toHaveProperty('researchRunDraft');
+  });
+
+  it('still allows an explicitly requested whole-paper video with a current version present', async () => {
+    const answer = { ...runResult, researchRunDraft: { ...runDraft, output: 'video' } };
+    await expect(workspaceGuideHandler(runGateway(answer), currentVersionDeps() as never,
+      { id: 'guide-1', payload: currentVersionPayload })).resolves.toEqual(answer);
+  });
+
+  it.each([{ versionId: 'other-version' }, { researchObjectId: 'other-ro' }, { instruction: 'x'.repeat(1001) }])('rejects changed presentation scope or oversized video instructions %j', async altered => {
+    const answer = { summary: 'Prepare video.', nextSteps: [], needsMoreInformation: false,
+      presentationDraft: { action: 'video.create', instruction: 'Plan only.', researchObjectId: 'ro-1', versionId: 'version-1', ...altered } };
+    await expect(workspaceGuideHandler(runGateway(answer), currentVersionDeps() as never,
+      { id: 'guide-1', payload: { ...currentVersionPayload, goal: 'Plan video only.' } })).rejects.toThrow('actual boundary');
+  });
+
   it.each(['zh', 'en'] as const)('preserves the explicit video production intent through the %s guide boundary and normalization', async locale => {
     const goal = locale === 'zh' ? runGoal : 'Understand this paper and make a narrated explanatory video.';
     const answer = { ...runResult, researchRunDraft: { ...runDraft, locale, instruction: goal, output: 'video' } };
