@@ -95,7 +95,7 @@ async function reserveTask(deps: HermesResearchRunDeps, tx: Prisma.TransactionCl
   const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, { userId: run.actorId, researchObjectId: run.researchObjectId,
     kind: 'visualization', title: 'Hermes illustration', idempotencyKey: `hermes-run-session:${run.id}` });
   const { task } = await persistAgentTaskInTransaction(deps, tx, { sessionId: session.id, userId: run.actorId,
-    kind: 'presentation.generate', payload, idempotencyKey: `hermes-run:${run.id}:${step.stage}:0` });
+    kind: 'presentation.generate', payload: { ...payload }, idempotencyKey: `hermes-run:${run.id}:${step.stage}:0` });
   const changed = await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id, status: 'waiting', agentTaskId: null },
     data: { status: 'running', agentTaskId: task.id } });
   if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'First-image slot changed');
@@ -235,7 +235,7 @@ export async function advanceFirstImageContinuation(deps: HermesResearchRunDeps,
   const asset = await tx.presentationAsset.findUnique({ where: { id: task.id } });
   if (!asset || asset.deletedAt || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId) return 'failed';
   if (planning) {
-    const view = presentationStoryboardView(asset); const review = record(record(asset.provenance).illustrationReview);
+    const view = presentationStoryboardView(asset, run.sourceClaimIds); const review = record(record(asset.provenance).illustrationReview);
     const saved = record(task.result); const checkpoint = record(saved.storyboardCheckpoint);
     if (!view || view.output !== 'image' || view.document.scenes.length !== 1 || view.document.scenes[0]!.paperOriginal
       || readNativeAgentExecution(task.result)?.profile !== 'paper-illustration'
