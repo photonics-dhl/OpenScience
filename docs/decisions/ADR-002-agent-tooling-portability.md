@@ -101,6 +101,8 @@ ast-grep、Semgrep、lychee、Vale、TypeDoc、Changesets、CodeScene/Sourcegrap
 
 ## Consequences
 
+2026-10-13补充：跨项目可复用流程见[架构维护Prompt](../runbooks/architecture-maintenance-prompt.md)。每次只读取涉及模块的原债务行，修复、部署、运行观察和用户验收分别记录；服务器调查与说明图使用同一实测数据，原始临时收据保持私有。技术债继续进入既有能力台账，既有组件先核真实调用方再退役，不加另一套维护平台或自动任务。
+
 正面影响：
 
 - 迁移电脑时，只要 clone 仓库、配置本机 `.env`、安装项目依赖，即可恢复大部分 agent 工作上下文。
