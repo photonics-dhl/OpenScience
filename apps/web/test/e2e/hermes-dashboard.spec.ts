@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { expect, test, type Page, type Request, type Route } from 'playwright/test';
 
 import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
@@ -6,7 +6,83 @@ import { LIVE2D_ASSET_ROOT } from '../../lib/hermes/live2d-assets.mjs';
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
 
+// Failure-only receipts observe the original runtime gates without waking the actor.
+async function installP04RuntimeDiagnostics(page: Page) {
+  await page.addInitScript(() => {
+    const receipt = { events: [] as unknown[], dropped: 0 };
+    (window as unknown as { __p04RuntimeEvidence: typeof receipt }).__p04RuntimeEvidence = receipt;
+    const rigIds = new WeakMap<Element, number>();
+    let nextRig = 0;
+    const box = (rect: DOMRectReadOnly | null) => rect && ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+    const rig = (target: Element) => {
+      if (!rigIds.has(target)) rigIds.set(target, ++nextRig);
+      return { id: rigIds.get(target), connected: target.isConnected, bounds: box(target.getBoundingClientRect()),
+        phase: target.getAttribute('data-hermes-rig-status'), owner: target.getAttribute('data-hermes-runtime-owner'),
+        lastDraw: target.getAttribute('data-hermes-last-draw-at'), staticFrame: target.getAttribute('data-hermes-static-frame'),
+        stage: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-dashboard-seat'),
+        motion: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-motion-preference'),
+        state: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-presentation-state') };
+    };
+    const rigs = () => Array.from(document.querySelectorAll('[data-hermes-rig="live2d-wanko"]')).map(rig);
+    const record = (kind: string, details: object = {}) => {
+      if (receipt.events.length >= 256) { receipt.dropped += 1; return; }
+      receipt.events.push({ at: performance.now(), kind, readyState: document.readyState, hidden: document.hidden, ...details });
+    };
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super((entries, observer) => {
+          for (const entry of entries) {
+            if (entry.target.matches('[data-hermes-rig="live2d-wanko"]')) record('rig-intersection', {
+              rig: rig(entry.target), observedAt: entry.time, isIntersecting: entry.isIntersecting, ratio: entry.intersectionRatio,
+              bounds: box(entry.boundingClientRect), intersection: box(entry.intersectionRect), root: box(entry.rootBounds),
+            });
+          }
+          Reflect.apply(callback, observer, [entries, observer]);
+        }, options);
+      }
+    };
+    if (window.requestIdleCallback) {
+      const nativeIdle = window.requestIdleCallback.bind(window);
+      const nativeCancel = window.cancelIdleCallback.bind(window);
+      window.requestIdleCallback = (callback, options) => {
+        record('idle-scheduled', { options, rigs: rigs() });
+        return nativeIdle(deadline => { record('idle-fired', { didTimeout: deadline.didTimeout, rigs: rigs() }); callback(deadline); }, options);
+      };
+      window.cancelIdleCallback = handle => { record('idle-cancelled', { handle }); nativeCancel(handle); };
+    }
+    window.addEventListener('load', () => record('load', { rigs: rigs() }));
+    document.addEventListener('visibilitychange', () => record('visibility', { rigs: rigs() }));
+    document.addEventListener('readystatechange', () => record('ready-state', { rigs: rigs() }));
+    const connectionObserver = new MutationObserver(records => {
+      for (const change of records) {
+        if (change.type === 'attributes' && change.target instanceof Element && change.target.matches('[data-hermes-rig="live2d-wanko"]')) {
+          record('runtime-status', { attribute: change.attributeName, rig: rig(change.target) });
+        } else if (change.type === 'childList' && [...change.addedNodes, ...change.removedNodes].some(node => node instanceof Element &&
+          (node.matches('[data-hermes-portal-carrier]') || node.querySelector('[data-hermes-rig="live2d-wanko"]')))) {
+          record('connection-change', { rigs: rigs() });
+        }
+      }
+    });
+    connectionObserver.observe(document, { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['data-hermes-rig-status', 'data-hermes-runtime-owner'] });
+  });
+}
+
+async function attachP04RuntimeDiagnostics(page: Page) {
+  if (test.info().status === test.info().expectedStatus) return;
+  const evidence = await page.evaluate(() => ({
+    receipt: (window as unknown as { __p04RuntimeEvidence?: unknown }).__p04RuntimeEvidence,
+    final: Array.from(document.querySelectorAll('[data-hermes-rig="live2d-wanko"]')).map(target => {
+      const bounds = target.getBoundingClientRect();
+      return { connected: target.isConnected, bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+        attributes: Object.fromEntries(Array.from(target.attributes).filter(attribute => attribute.name.startsWith('data-hermes-')).map(attribute => [attribute.name, attribute.value])) };
+    }), readyState: document.readyState, hidden: document.hidden,
+  })).catch(error => ({ unavailable: String(error) }));
+  await test.info().attach('p04-runtime-gates', { body: Buffer.from(JSON.stringify(evidence, null, 2)), contentType: 'application/json' });
+}
 test.beforeEach(async ({ page }) => {
+  await installP04RuntimeDiagnostics(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
   // Page-specific failure fixtures take priority; clearing them keeps this isolation boundary.
   await page.context().route('**/api/**', (route) => {
@@ -28,6 +104,8 @@ test.beforeEach(async ({ page }) => {
     throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
   });
 });
+
+test.afterEach(async ({ page }) => { await attachP04RuntimeDiagnostics(page); });
 
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });

@@ -199,7 +199,7 @@ export function CurrentResearchCard({ research, ownerId, tasks = [], taskLoadSta
       <Link className={styles.currentContinue} href={href} data-action-priority="primary">{review ? t('continue.review') : failed ? t('continue.recover') : processing ? t('continue.progress') : copy.continueEditing}<ArrowRight size={18} aria-hidden="true" /></Link>
       <Link href={`/research-objects/${encodeURIComponent(research.id)}/overview`}>{copy.overview}</Link>
     </div>
-    {publicHref ? <Link className={styles.currentPublicLink} href={publicHref}>{copy.publicVersionLink.replace('{version}', String(state!.metadata!.published!.publicationNo))} ↗</Link> : null}
+    {publicHref ? <Link className={styles.currentPublicLink} href={publicHref}>{copy.publicVersionLink.replace('{version}', String(state!.metadata!.published!.publicationNo))}<span aria-hidden="true">↗</span></Link> : null}
   </article>;
 }
 

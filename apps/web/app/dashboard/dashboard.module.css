@@ -844,7 +844,7 @@
 .currentResearch { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; justify-content: center; gap: 16px; }
 .currentHeader { display: grid; gap: 12px; }
 .currentKicker { margin: 0; font: 500 20px/1.5 var(--font-reading-serif); }
-.currentTitle { margin: 0; color: var(--os-ink); font: 500 clamp(28px, 3vw, 40px)/1.25 var(--font-reading-serif); overflow-wrap: anywhere; }
+.desk .currentResearch h2.currentTitle { margin: 0; color: var(--os-ink); font: 500 clamp(28px, 3vw, 40px)/1.25 var(--font-reading-serif); overflow-wrap: anywhere; }
 .currentMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 13px; line-height: 1.7; color: var(--os-muted-paper); }
 .currentMeta button, .researchStatus button { min-height: 44px; padding: 6px 10px; border: 1px solid var(--os-rule-paper); border-radius: 4px; background: transparent; color: var(--os-vermilion-ink); font: inherit; cursor: pointer; }
 .currentSummary { margin: 0; font-size: 17px; line-height: 1.8; color: var(--os-muted-paper); }
@@ -855,7 +855,7 @@
 .desk .hermesConversation { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0 0 0 24px; border: 0; border-left: 1px solid var(--os-rule-paper); background: transparent; }
 .library { min-width: 0; }
 .libraryHeader, .libraryHeading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; }
-.library h2, .desk .researchLibrary h2.libraryTitle { margin: 0; font: 500 26px/1.5 var(--font-reading-serif); }
+.desk section.library h2, .desk .researchLibrary h2.libraryTitle { margin: 0; font: 500 26px/1.5 var(--font-reading-serif); }
 .libraryFilters { display: flex; flex-wrap: wrap; gap: 8px; }
 .libraryFilters button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--os-rule-paper); border-radius: 24px; background: transparent; color: var(--os-muted-paper); font: 400 14px/1.5 var(--font-ui); cursor: pointer; }
 .libraryFilters button[aria-pressed='true'] { border-color: var(--os-vermilion-ink); background: var(--os-vermilion-ink); color: #fff; }
@@ -906,7 +906,7 @@
  .createResearch { min-height: 44px; padding: 8px 12px; font-size: 13px; }
  .currentSurface { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 20px 16px; }
  .currentResearch { gap: 12px; }
- .currentTitle { font-size: 29px; }
+ .desk .currentResearch h2.currentTitle { font-size: 29px; }
  .currentSummary { font-size: 15px; }
  .currentActions { width: 100%; }
  .currentContinue { flex: 1 1 auto; }
