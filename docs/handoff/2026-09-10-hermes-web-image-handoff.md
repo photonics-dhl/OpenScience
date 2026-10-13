@@ -5,7 +5,7 @@
 - 依据开发规格：真实 NousResearch Hermes 先理解全文、提炼 Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不以 Codex 手稿代替科学能力。
 - 目标仍是 2–3 篇真实论文的凝练、用户确认、配图与公开展示；三篇整体验收、普通用户旅程、完整视频、整站审美尚未完成。
 - 用户已要求继续有价值的并行开发；idle 不等于完成，但不得用无关检查填充。保留 PDF/SourceMap、认可图片、公开标识、sealed 记录、原失败/费用/receipt/oncekey；未知 paid/started CP 不重放，不因容量或 idle 扩预算、安装、重启或切换主 Gateway/Native M3。
-- 用户当前只授权继续代码、测试、独立 High 与提交；Synclip Provider、真实论文图片/视频生成及部署仍待明确授权。API-only，`gpt-image-2.5` 为主，只有结构化明确模型不可用才能一次降级 `gpt-image-2`；截图已确认供应商列有2.5，真实 PNG/科学质量仍待受控执行验收。视频运行准入关闭，不能据通用错误断言供应商拒权。
+- 用户已授权代码、测试、独立High与提交，并明确答复“允许创建私有修订稿，仅做准备”：只可沿既有产品流程为指定RO新建一个私有修订、核对真实继承映射，保留公开版本/认可图片；Synclip Provider、真实论文图片/视频生成及部署仍待另行明确授权。API-only，`gpt-image-2.5` 为主，只有结构化明确模型不可用才能一次降级 `gpt-image-2`；截图已确认供应商列有2.5，真实 PNG/科学质量仍待受控执行验收。视频运行准入关闭，不能据通用错误断言供应商拒权。
 - UI 聊天另获用户直接授权先制作整页 Guide 设计效果图供审阅：沿研究生命周期、四类角色/入口、真实截图配2–3条说明，桌面左目录/手机顶部折叠目录；效果图认可前不实现新版 Guide。此设计产物授权不扩展到 Synclip 真实论文生成。
 
 ## 研究生命周期角色与入口
@@ -26,9 +26,9 @@
 - 总控 `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index，负责收取已审差异、集成与对应 CI；发布仍暂停。openscience ACTIVE，已改为实际 UI 聊天与最新授权边界。交接须含范围/基线/写权/完成证据/最小验收，发送成功不等于已执行；模型失败先保留续点再用≥gpt-6.1-sol接续，不重复已完成工作。
 | Session / ID | 当前责任、状态与下一动作 | 工作树 / branch |
 |---|---|---|
-| 生图 / `01a0e831-be19-7813-8379-58313178ff26` | API-only/c7d回归与20be2c62模型提示已High GO并提交，原检查有效。完成Guide测试修复的独立gpt-6.1-sol High GO（P0/P1/P2=0），交总控提交/CI。目标RO无draft且scene已有认可图；须由用户决定私有修订范围与执行预算，再绑定新版本。暂停真实提交，不能复用旧失败run或指南任务充作授权。 | canonical / `release/onchip-production-line` |
+| 生图 / `01a0e831-be19-7813-8379-58313178ff26` | API-only/c7d回归与20be2c62模型提示已High GO并提交，原检查有效。完成Guide测试修复的独立gpt-6.1-sol High GO（P0/P1/P2=0），交总控提交/CI。用户已明确授权一个私有修订稿、仅准备；正在核现有产品入口及重复创建防护，成功后按实际新version/parent/Claims映射回读，保留旧公开版本/认可图。无源码/共享文档写权；真实生成与预算仍待授权，不能复用旧失败run或指南任务充作授权。 | canonical / `release/onchip-production-line` |
 | 视频 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原视频与c7d/20be的High已完成。Guide CI断点已复现并修复为15601bb0，仅vendor-ux.spec.ts；产品布局/文案未改。3个生产模式用例通过，最终附件改动后1/1、ESLint通过，独立High GO。总控已推送并收取精确CI；真实视频仍按上节等待授权，不重审旧链或启服务。 | canonical / `release/onchip-production-line`；旧视频树保留证据 |
-| UI / `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`（替代旧01a0f118） | 按该聊天用户最新决定制作完整Guide概念图供审阅；固定左目录/移动折叠目录、生命周期与四角色入口。旧Guide代码已有High GO和23/23，不代表新版设计获认可；撤回旧代码收尾派单；首稿用户反馈同图重复、文字杂乱且无重点，已交精简候选P03-guide-focused-20261013.png：一张UI示意/一张案例图、一次展开一个阶段。新布局/文案仍待认可，不写产品代码。 | `E:/Miscellaneous/XGS/.worktrees/research-product-craft`，设计产物放ignored tmp |
+| UI / `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`（替代旧01a0f118） | 按该聊天用户最新决定制作完整Guide概念图供审阅；固定左目录/移动折叠目录、生命周期与四角色入口。旧Guide代码已有High GO和23/23，不代表新版设计获认可；撤回旧代码收尾派单；首稿用户反馈同图重复、文字杂乱且无重点，已交精简候选P03-guide-focused-20261013.png：一张UI示意/一张案例图、一次展开一个阶段。用户最新反馈“舒服一些，但还是有些拥挤”，UI正继续设计迭代；新布局/文案仍待认可，不写产品代码。 | `E:/Miscellaneous/XGS/.worktrees/research-product-craft`，设计产物放ignored tmp |
 
 ## 当前 Git / CI / 运行事实
 - canonical `release/onchip-production-line`：生产连续性修复 `d60d2ad1` 已独立 High GO（P0/P1/P2=0）；API回归提交 `c7d455d8542c2fb00ff024c59930c0f0ef2abb59` 无生产代码变更，36/36与54/54，日志 `tmp/synclip-admission-{node,gateway}-20261013.log`。视频线独立High已对该新增差异GO（P0/P1/P2=0）；旧 Media CI不证明后续新Web提示或新版Guide已验收。Web提示提交 `20be2c623bed33886a79935dd91a9356cf378f36` 已独立High GO（P0/P1/P2=0）；实际HEAD/status以Git为准。新增21/21、typecheck/ESLint通过，完整两文件38通过/10失败与c7d基线同名同错，日志 `tmp/synclip-model-notice-{focused,tests,baseline,typecheck,lint}.log`；实际浏览器刷新/布局未验收。无Synclip Provider/真实PNG/部署。
@@ -36,17 +36,17 @@
 - Video exact CI `38280757897` for merge head `2e1a28de` completed successfully: skill-path and all four browser-entry jobs passed. The two stale queue-recovery fixture failures are closed; Journal/search evidence remains as previously recorded, with no production-code failure attributed to the merged UI/video code.
 - Image admission/floor/reader and beta-gate alignment are merged and High-reviewed; complete producer/floor and real PNG quality remain open. The API submission contract is merged; no Synclip task has been created and API receipt/PNG/scientific review remain open. Media `38288353198`'s four shared native-video parent failures are addressed by `613db2c8` plus `1a22f83c`; exact Media `38291046457` is green. No deployment until the API result, human PNG/scientific gates and receipt evidence close.
 
-- GitHub协作目标仍为 `origin/frontend/nanqing`，正常快进、不推main/强推/部署。旧460c8bd0的Video38376163034、Journal38376163057成功；Media38376162983四browser-entry成功，但Guide初始首屏断言失败。修复15601bb008c295e64764e583a8d7f3c0b987958d已推送，精确Media38379928029与Journal38379928038运行中；本次仅测试/文档，不重复触发未变视频专用工作流。后续纯文档回执不代表新的生产发布。
+- GitHub协作目标仍为 `origin/frontend/nanqing`，正常快进、不推main/强推/部署。旧460c8bd0的Video38376163034、Journal38376163057成功；Media38376162983四browser-entry成功，但Guide初始首屏断言失败。修复15601bb008c295e64764e583a8d7f3c0b987958d已推送，精确Journal38379928038已成功，Media38379928029仍运行中；本次仅测试/文档，不重复触发未变视频专用工作流。后续纯文档回执不代表新的生产发布。
 - Guide修复依据：b34db919已将生命周期介绍置于输入区前，旧初始首屏断言与现有长页面不匹配；初始y=923.75/h=95，经实际Tab后y=429.75，仍要求焦点与完整900px视口内。单文件修复不保留“初始首屏输入”保证，也不证明整页从浏览器起点的完整Tab路径或新版设计获认可。独立gpt-6.1-sol High GO（P0/P1/P2=0）；生产build、红灯复现exit1、三用例3/3、最终附件后1/1、ESLint/diff-check exit0，证据`tmp/coordination/guide-ci-{production-build,red,green,keyboard-final,eslint}-20261013.log`与keyboard-final JSON/截图；没有真实业务POST。
 
 ## 生图受控提交的实际前置（10-13 17:26–17:28只读）
-- RO `aa450f1e-fafc-46d8-a072-d935e01b0544` 最新v2 `9f570ec9-f115-4d83-890d-08f978e4c5d6` 已published；draft=0、活动任务=0。approved parent `cd150093-2a59-45fb-a3dd-1be4dc9bb773` 的sceneIndex=0来源Claim `6fd965d7-77f9-478e-9075-32b010a8c607`，已有approved图片 `4e64c389-32ed-45b8-b9d0-0fa1dca96dfa`。不能在已发布版本重生成或改旧图；已向用户确认是否创建私有修订稿（仅准备，不生图）；答复前不新增业务版本。若选择私有修订，须沿既有产品流程并按真实继承结果重新绑定新version/parent/Claim。
+- RO `aa450f1e-fafc-46d8-a072-d935e01b0544` 最新v2 `9f570ec9-f115-4d83-890d-08f978e4c5d6` 已published；draft=0、活动任务=0。approved parent `cd150093-2a59-45fb-a3dd-1be4dc9bb773` 的sceneIndex=0来源Claim `6fd965d7-77f9-478e-9075-32b010a8c607`，已有approved图片 `4e64c389-32ed-45b8-b9d0-0fa1dca96dfa`。不能在已发布版本重生成或改旧图；用户已明确答复“允许创建私有修订稿，仅做准备”，生图owner获该RO一次私有修订的操作权；正先核是否已有draft与入口副作用。沿既有产品流程创建成功后，必须按真实继承结果重新绑定新version/parent/Claim，不能直接沿用旧published映射；不自动批准/生成/重做Hermes。尚无新版本创建回执。
 - 旧writing-draft `4237cbcf-8371-4222-bc53-4f6eb45b2111` 实为9-23 workspace.guide，grounded_with_unresolved_review且无versionId/assetId，不能作为新approved分镜证明。旧run `b3eee57a-8a08-4867-9281-cb5b950affbf` failed、maxAgentTasks=46不是剩余额度；ai_credit合计0/管理员规则不代表新付费授权，截图“6”计价单位仍未确定。原始脱敏回执 `tmp/synclip-aa450-{current-admission,parent}-read.json`；仅读应用元数据，无Provider/DB写/生成/部署。
 
 ## Open deliverables and gates
-- 生图：Web现已消费持久generatorVersion显示实际模型，原因字段不足时不臆测降级原因；总控收取对应精确CI，已通过后端回归无需重放。下一步确认一次私有gpt-image-2.5验证的既有来源/授权/费用/任务恢复前提，获得用户明确执行许可才提交。保留Hermes草稿、原论文/已认图片/未知paid CP；不重做Hermes、不换论文、不扩预算。真实PNG、科学质量与公开许可分别验收。
+- 生图：Web现已消费持久generatorVersion显示实际模型，原因字段不足时不臆测降级原因；总控收取对应精确CI，已通过后端回归无需重放。下一步完成已授权的一个私有修订准备，并核一次私有gpt-image-2.5验证的来源映射/费用/任务恢复前提；生成仍需用户另行明确执行许可。保留Hermes草稿、原论文/已认图片/未知paid CP；不重做Hermes、不换论文、不扩预算。真实PNG、科学质量与公开许可分别验收。
 - Video: CI `38280757897` / Media `38291046457` green; execution remains blocked. Follow the video prerequisites above: first resolve the catalogue command's local identity/phase and current account qualification, then obtain scoped server-operation authorization and verify application/broker pairing before private production. Do not treat the generic failure as a proven permission denial or bypass readiness; this documentation pass has made no server/Provider call.
-- UI：既有写反馈/逐场景入口已High GO合入c258da85/b82594d8/b06a8fab；共享旧queue-recovery夹具由af42e5e2修复，后续Media通过。Guide旧实现b34db919已有独立High与23/23，当前候选位于UI树 `tmp/ui-art-20261008/product-page-planning-20261011/review-candidates/P03-guide-focused-20261013.png`，已交用户审阅；同目录full-page旧稿因同图重复/文字杂乱被退回，不算认可。参考原A版/Figma/P04/P07/P15，局部界面和科研图均为设计示意，不是线上截图或科学资产。等用户认可再按已确定范围实现；实际站内旅程和整站审美验收仍开放。
+- UI：既有写反馈/逐场景入口已High GO合入c258da85/b82594d8/b06a8fab；共享旧queue-recovery夹具由af42e5e2修复，后续Media通过。Guide旧实现b34db919已有独立High与23/23，当前候选位于UI树 `tmp/ui-art-20261008/product-page-planning-20261011/review-candidates/P03-guide-focused-20261013.png`，已交用户审阅，最新反馈为有所改善但仍拥挤，UI正在精简；同目录full-page旧稿因同图重复/文字杂乱被退回，不算认可。参考原A版/Figma/P04/P07/P15，局部界面和科研图均为设计示意，不是线上截图或科学资产。等用户认可再按已确定范围实现；实际站内旅程和整站审美验收仍开放。
 - No deployment until the relevant code, exact CI, High review, and real-product/media quality gates close. Human review of paper visuals remains a separate acceptance gate.
 
 ## Historical pointers
