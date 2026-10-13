@@ -1,5 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
+架构工程新交付定位：`codex/architecture-maintenance` 候选中的 `codex/architecture-maintenance:docs/runbooks/architecture-maintenance-prompt.md`、`codex/architecture-maintenance:docs/runbooks/assets/2026-10-13-server-{health.png,resources.md}` 提供复用提示词与资源调查；R08/R13原地见同候选 `hermes-capability-registry.md`，旧网页退役源码/固定归档合同见 `codex/retire-web-archive` 的 `docs/runbooks/deployment.md` 和 `codex/retire-web-archive:infra/synclip-image/normalize.mjs`。这些分支尚未全部合入canonical，审查、当前生产/回退和待集成状态只见 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
+
 `docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录本对话功能向既有 `frontend/nanqing` 的整合、实际发布/回滚和后续范围。
 
 个人学术主页设计与示例边界：`docs/specs/2026-10-10-academic-profile-design.md`；本人 `/me/profile`、访客 `/researchers/[userId]`，`apps/web/components/profile/AcademicProfileView.tsx` 与编辑页消费 `apps/api/src/routes/academic-profile.ts`，模型/迁移在 `infra/schema.prisma` 与 `infra/migrations/20261010010000_academic_profiles/`。`apps/api/test/academic-profile-database.test.ts`由既有journal PostgreSQL job验证实际草稿/快照/CAS；原mock边界测试保留。存储/产品证据见 [服务对象 CURRENT](docs/handoff/2026-10-09-researchers-services-handoff.md)，统一发布见Hermes CURRENT。
