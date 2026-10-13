@@ -284,3 +284,20 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
 @media (prefers-reduced-motion: reduce) {
   [data-hermes-companion-surface='navigation'] .hermes-motion-enable { transition: none; }
 }
+/* P04 uses the existing companion portal, with a full-body seat only here. */
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'] { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true'] { width: 180px; height: 180px; min-width: 0; min-height: 180px; }
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'][data-hermes-entry-open='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true'] { width: 180px; min-width: 0; visibility: hidden; }
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-avatar-entry-label { align-items: center; text-align: center; gap: 6px; font: 600 24px/1.3 var(--font-reading-serif); }
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-avatar-entry-label small { font: 400 14px/1.6 var(--font-ui); }
+.hermes-dashboard-seat-action { display: grid; place-items: center; min-width: 164px; min-height: 44px; margin-top: 6px; padding: 8px 16px; border: 1px solid var(--os-vermilion-ink); border-radius: 4px; color: var(--os-vermilion-ink); font: 500 14px/1.5 var(--font-ui); }
+.hermes-compact-dock[data-hermes-dashboard-seat='true'] { display: contents; }
+.hermes-workspace-stage[data-hermes-dashboard-seat='true'][data-hermes-compact='true'] { position: relative; top: auto; right: auto; margin: 0; opacity: 1; }
+/* The seat stays in its frame when the legacy carried-sheet menu band opens. */
+.hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true']:has(.hermes-visual[data-hermes-menu-open='true']) .hermes-workspace-stage[data-hermes-dashboard-seat='true'] { margin: 0; }
+.hermes-workspace-stage[data-hermes-dashboard-seat='true'] .hermes-visual { width: 100%; height: 100%; min-height: 0; padding: 0; border: 0; background: transparent; border-radius: 0; }
+.hermes-workspace-stage[data-hermes-dashboard-seat='true'] .hermes-companion-actor { inset: 0; }
+@media (max-width: 599px) {
+  .hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-dock-anchor[data-hermes-avatar-anchor='true'] { width: 140px; height: 140px; min-height: 140px; }
+  .hermes-avatar-entry[data-hermes-dashboard-seat='true'] .hermes-avatar-entry-label { font-size: 21px; }
+}

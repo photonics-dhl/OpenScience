@@ -1,3 +1,15 @@
+/** A portal move can queue several stage positions in one IO delivery. */
+export function latestStageIntersection(
+  entries: readonly Pick<IntersectionObserverEntry, 'target' | 'time' | 'isIntersecting'>[],
+  stage: Element,
+) {
+  let latest: (typeof entries)[number] | undefined;
+  for (const entry of entries) {
+    if (entry.target === stage && (!latest || entry.time >= latest.time)) latest = entry;
+  }
+  return latest;
+}
+
 /** Defer optional animation until the page and visible UI have priority. */
 export function deferVisibleLive2DStart(start: () => void, isVisible: () => boolean) {
   let stopped = false;

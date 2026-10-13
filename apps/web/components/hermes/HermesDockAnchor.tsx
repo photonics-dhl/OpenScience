@@ -12,7 +12,7 @@ import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
 
-export function HermesDockAnchor({ assistantOpen = false, floating = true, usesFallbackAssistant = false, onInvoke, state, suggestion, workspaceId = 'workspace-current' }: {
+export function HermesDockAnchor({ assistantOpen = false, floating = true, usesFallbackAssistant = false, onInvoke, state, suggestion, workspaceId = 'workspace-current', presentation = 'default', entryLabel, entryHint }: {
   assistantOpen?: boolean;
   floating?: boolean;
   usesFallbackAssistant?: boolean;
@@ -20,12 +20,16 @@ export function HermesDockAnchor({ assistantOpen = false, floating = true, usesF
   state?: HermesVisualState;
   suggestion: HermesGuideSuggestion;
   workspaceId?: string;
+  presentation?: 'default' | 'dashboard-seat';
+  entryLabel?: string;
+  entryHint?: string;
 }) {
   const anchorRef = React.useRef<HTMLDivElement | null>(null);
   const invocationRef = React.useRef<HTMLElement | null>(null);
   const pathname = usePathname();
   const compactContext = hermesStartsCompact(pathname);
   const avatarEntry = hermesUsesAvatarEntry(pathname);
+  const dashboardSeat = presentation === 'dashboard-seat' && /^\/dashboard\/?$/.test(pathname);
   const t = useTranslations('hermesCompanion');
   const ts = useTranslations('dashboard.hermes.states');
   const entryState = state ?? 'idle';
@@ -33,13 +37,13 @@ export function HermesDockAnchor({ assistantOpen = false, floating = true, usesF
   useClientLayoutEffect(() => {
     const anchor = anchorRef.current;
     if (!anchor || !stage) return;
-    return stage.register({ anchor, assistantOpen, floating, usesFallbackAssistant, invocationRef, onInvoke, state, suggestion, workspaceId });
-  }, [assistantOpen, floating, usesFallbackAssistant, onInvoke, stage, state, suggestion, workspaceId]);
+    return stage.register({ anchor, assistantOpen, floating, usesFallbackAssistant, invocationRef, onInvoke, state, suggestion, workspaceId, presentation: dashboardSeat ? 'dashboard-seat' : 'default' });
+  }, [assistantOpen, floating, usesFallbackAssistant, onInvoke, stage, state, suggestion, workspaceId, dashboardSeat]);
   const anchor = <div className={floating && !avatarEntry ? 'hermes-dock-anchor hermes-dock-anchor--floating' : 'hermes-dock-anchor'} data-hermes-companion-margin={floating && !avatarEntry ? undefined : 'true'} data-hermes-dock-anchor="true" data-hermes-floating-owner={/\/edit\/?$/.test(pathname) ? 'editor' : floating ? 'true' : undefined} data-hermes-compact-context={compactContext ? 'true' : undefined} data-hermes-avatar-anchor={avatarEntry ? 'true' : undefined} ref={anchorRef} />;
-  if (avatarEntry) return <div className="hermes-avatar-entry" data-hermes-avatar-entry="true" data-hermes-entry-open={assistantOpen ? 'true' : 'false'} data-hermes-entry-state={entryState}>
+  if (avatarEntry) return <div className="hermes-avatar-entry" data-hermes-dashboard-seat={dashboardSeat ? 'true' : undefined} data-hermes-avatar-entry="true" data-hermes-entry-open={assistantOpen ? 'true' : 'false'} data-hermes-entry-state={entryState}>
     {anchor}
     <button className="hermes-avatar-entry-label" type="button" aria-haspopup="dialog" aria-expanded={assistantOpen} aria-label={`${t('openConversation')} · ${ts(entryState)}`} onClick={(event) => { invocationRef.current = event.currentTarget; onInvoke(); }}>
-      <span>Hermes</span><small>{entryState === 'idle' ? t('openConversation') : ts(entryState)}</small>
+      <span>Hermes</span><small>{entryHint ?? (entryState === 'idle' ? t('openConversation') : ts(entryState))}</small>{entryLabel ? <span className="hermes-dashboard-seat-action">{entryLabel}</span> : null}
     </button>
   </div>;
   if (floating || !compactContext) return anchor;

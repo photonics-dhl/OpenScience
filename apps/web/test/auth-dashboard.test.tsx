@@ -93,12 +93,14 @@ import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { ResearchWorkspaceNav } from '../components/research/ResearchWorkspaceNav';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
 import { ImportStage } from '../components/dashboard/ImportStage';
-import { ResearchList } from '../components/dashboard/ResearchList';
+import { CurrentResearchCard, ResearchList, VersionLabels, summarizeDashboardVersions, dashboardPublicationHref, filterDashboardResearch, formatDashboardUpdate, loadDashboardVersionMetadata } from '../components/dashboard/ResearchList';
+import * as SessionHooks from '../components/auth/SessionProvider';
 import NewResearchObjectPage from '../app/research-objects/new/page';
 
 afterEach(() => {
   vi.unstubAllGlobals();
   replace.mockReset();
+  vi.restoreAllMocks();
 });
 
 describe('research continuation', () => {
@@ -469,7 +471,7 @@ describe('dashboard product states', () => {
     expect(markup).not.toContain('hermes.retry');
   });
 
-  it('renders recent research as a semantic list with status text', () => {
+  it('renders recent research as a semantic list without guessing publication state', () => {
     const markup = renderToStaticMarkup(
       createElement(ResearchList, {
         researchObjects: [
@@ -480,6 +482,7 @@ describe('dashboard product states', () => {
             versionNo: 3,
             status: 'draft',
             pendingCount: 0,
+            updatedAt: '2026-10-12T10:00:00.000Z',
           },
         ],
       }),
@@ -487,6 +490,169 @@ describe('dashboard product states', () => {
 
     expect(markup).toContain('<ul');
     expect(markup).toContain('Transient-state spectroscopy');
-    expect(markup).toContain('Private draft');
+    expect(markup).toContain('Loading versions');
+    expect(markup).not.toContain('>Private draft<');
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('dateTime="2026-10-12T10:00:00.000Z"');
+  });
+});
+
+describe('P04 current research metadata', () => {
+  const research = { id: 'ro-a', publicId: 'OSR-A', title: 'Working research', versionNo: 12, status: 'draft', pendingCount: 0, updatedAt: '2026-10-12T10:00:00.000Z' };
+  function authorize() {
+    vi.spyOn(SessionHooks, 'useSession').mockReturnValue({ managed: true, status: 'authenticated', user: { userId: 'owner-a', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' }, refresh: vi.fn() });
+  }
+  it('keeps content and scientific media out of the current card while versions are loading', () => {
+    authorize();
+    const markup = renderToStaticMarkup(createElement(CurrentResearchCard, { research, ownerId: 'owner-a' }));
+    expect(markup).toContain('Working research');
+    expect(markup).toContain('Loading versions');
+    expect(markup).not.toContain('data-media-state');
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('/research/OSR-A/v/12');
+    expect(markup).toContain('/research-objects/ro-a/overview');
+  });
+  it('preserves the actual review task as the primary action ahead of failed and foreign tasks', () => {
+    authorize();
+    const task = (id: string, researchObjectId: string, state: string) => ({ id, researchObjectId, state, researchTitle: 'Research', logicalPath: 'paper.pdf', retryCount: 0, error: null });
+    const markup = renderToStaticMarkup(createElement(CurrentResearchCard, { research, ownerId: 'owner-a', tasks: [task('foreign', 'ro-b', 'needs_review'), task('failed', 'ro-a', 'failed_retryable'), task('review', 'ro-a', 'needs_review')] }));
+    expect(markup).toContain('/research-objects/ro-a/edit?ingestionTask=review');
+    expect(markup).not.toContain('ingestionTask=foreign');
+    expect(markup).not.toContain('ingestionTask=failed');
+  });
+  it('does not render another account current card', () => {
+    authorize();
+    expect(renderToStaticMarkup(createElement(CurrentResearchCard, { research, ownerId: 'owner-b' }))).toBe('');
+  });
+  const version = (versionNo: number, status: string, publicationNo: number | null = null) => ({
+    versionId: `version-${versionNo}`, versionNo, status, publicationNo, commitId: `commit-${versionNo}`, createdAt: '2026-10-01T00:00:00.000Z',
+  });
+  it('preserves public v4 while the latest saved snapshot is a private revision', () => {
+    const metadata = summarizeDashboardVersions([version(5, 'draft'), version(2, 'published', 4), version(1, 'published', 1)]);
+    expect(metadata.latest?.versionNo).toBe(5);
+    expect(metadata.privateDraft?.versionNo).toBe(5);
+    expect(metadata.published?.publicationNo).toBe(4);
+    expect(dashboardPublicationHref(research, metadata)).toBe('/research/OSR-A/v/4');
+    expect(dashboardPublicationHref({ publicId: 'DRAFT-ro-a' }, metadata)).toBeUndefined();
+    expect(dashboardPublicationHref(research)).toBeUndefined();
+  });
+  it('does not turn object revisions, withdrawn records or incomplete publication metadata into public links', () => {
+    for (const metadata of [summarizeDashboardVersions([version(12, 'draft')]),
+      summarizeDashboardVersions([version(12, 'published')]), summarizeDashboardVersions([version(12, 'withdrawn', 4)])]) {
+      expect(dashboardPublicationHref(research, metadata)).toBeUndefined();
+    }
+    expect(summarizeDashboardVersions([version(12, 'restricted', 4)]).privateDraft).toBeUndefined();
+  });
+  it.each(['withdrawn', 'restricted'])('keeps the newest publication %s state beside a private draft without substituting an older public version', status => {
+    const metadata = summarizeDashboardVersions([version(5, 'draft'), version(4, status, 3), version(1, 'published', 1)]);
+    expect(metadata.privateDraft?.versionNo).toBe(5);
+    expect(metadata.publication?.publicationNo).toBe(3);
+    expect(metadata.publication?.status).toBe(status);
+    expect(metadata.published).toBeUndefined();
+    expect(dashboardPublicationHref(research, metadata)).toBeUndefined();
+    expect(filterDashboardResearch([research], 'private', { 'ro-a': metadata })).toHaveLength(1);
+    expect(filterDashboardResearch([research], 'published', { 'ro-a': metadata })).toHaveLength(0);
+  });
+  it.each([
+    ['en', 'withdrawn', 'Withdrawn'], ['en', 'restricted', 'Public content restricted'],
+    ['zh', 'withdrawn', '已撤回'], ['zh', 'restricted', '公开内容受限'],
+  ])('renders the actual %s copy for %s beside the working draft', (locale, status, expected) => {
+    const metadata = summarizeDashboardVersions([version(5, 'draft'), version(4, status, 3)]);
+    const markup = renderToStaticMarkup(createElement(VersionLabels, { state: { scope: 'current', metadata }, locale }));
+    expect(markup).toContain(expected);
+    expect(markup).toContain(locale === 'zh' ? '私有修订草稿' : 'Private revision draft');
+    expect(markup).not.toContain('research.status.');
+  });
+  it('allows a research object in both filters and leaves unknown rows only in all research', () => {
+    const rows = [research, { ...research, id: 'unknown' }, { ...research, id: 'private' }];
+    const metadata = {
+      'ro-a': summarizeDashboardVersions([version(5, 'draft'), version(2, 'published', 4)]),
+      private: summarizeDashboardVersions([version(3, 'draft')]),
+    };
+    expect(filterDashboardResearch(rows, 'all', metadata).map(row => row.id)).toEqual(['ro-a', 'unknown', 'private']);
+    expect(filterDashboardResearch(rows, 'private', metadata).map(row => row.id)).toEqual(['ro-a', 'private']);
+    expect(filterDashboardResearch(rows, 'published', metadata).map(row => row.id)).toEqual(['ro-a']);
+  });
+  it('includes a real unsaved private draft only after an empty version read succeeds', () => {
+    const unsaved = { ...research, id: 'unsaved', publicId: 'DRAFT-unsaved', visibility: 'private', status: 'draft' };
+    const rows = [unsaved, { ...unsaved, id: 'unknown' }, { ...unsaved, id: 'failed' },
+      { ...unsaved, id: 'public', visibility: 'public' }, { ...unsaved, id: 'published', status: 'published' },
+      { ...unsaved, id: 'missing-visibility', visibility: undefined }];
+    const empty = summarizeDashboardVersions([]);
+    const metadata = { unsaved: empty, unknown: undefined, failed: undefined, public: empty, published: empty, 'missing-visibility': empty };
+    expect(filterDashboardResearch(rows, 'private', metadata).map(row => row.id)).toEqual(['unsaved']);
+    expect(filterDashboardResearch(rows, 'published', metadata)).toEqual([]);
+    expect(filterDashboardResearch(rows, 'all', metadata).map(row => row.id)).toEqual(rows.map(row => row.id));
+    expect(empty.latest).toBeUndefined();
+    expect(empty.privateDraft).toBeUndefined();
+  });
+  it('formats only a real parseable update time and never manufactures a date', () => {
+    expect(formatDashboardUpdate('2026-10-12T10:00:00.000Z', 'en')?.dateTime).toBe('2026-10-12T10:00:00.000Z');
+    expect(formatDashboardUpdate('2026-10-12T10:00:00.000Z', 'zh')?.label).toContain('2026');
+    expect(formatDashboardUpdate(undefined, 'en')).toBeNull();
+    expect(formatDashboardUpdate('', 'zh')).toBeNull();
+    expect(formatDashboardUpdate('not-a-date', 'en')).toBeNull();
+  });
+  it('does not render supplied research rows from a different authenticated owner', () => {
+    authorize();
+    const markup = renderToStaticMarkup(createElement(ResearchList, { researchObjects: [research], ownerId: 'owner-b' }));
+    expect(markup).not.toContain('Working research');
+    expect(markup).not.toContain('/research-objects/ro-a/edit');
+  });
+  it('loads only version metadata with at most two pending reads', async () => {
+    let finishFirst!: (response: Response) => void;
+    let finishSecond!: (response: Response) => void;
+    const first = new Promise<Response>(resolve => { finishFirst = resolve; });
+    const second = new Promise<Response>(resolve => { finishSecond = resolve; });
+    const fetch = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ versions: [version(3, 'draft')] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const results: string[] = [];
+    const loaded = loadDashboardVersionMetadata([{ id: 'one', scope: 'one:1' }, { id: 'two', scope: 'two:1' }, { id: 'three', scope: 'three:1' }], () => true, id => results.push(id));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/research-objects/one/versions', '/api/research-objects/two/versions']);
+    finishFirst(new Response(JSON.stringify({ versions: [version(5, 'draft')] }), { status: 200 }));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    finishSecond(new Response(JSON.stringify({ versions: [version(2, 'published', 4)] }), { status: 200 }));
+    await loaded;
+    expect(results.sort()).toEqual(['one', 'three', 'two']);
+    expect(fetch.mock.calls.map(call => call[0])).toEqual(['/api/research-objects/one/versions', '/api/research-objects/two/versions', '/api/research-objects/three/versions']);
+  });
+  it('reuses the original read cache for list metadata while an explicit retry reads fresh', async () => {
+    vi.stubGlobal('window', {});
+    const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ versions: [version(5, 'draft')] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const rows = [{ id: 'original-cache-reuse', scope: 'owner-a:original-cache-reuse:1' }];
+    const received = vi.fn();
+    await loadDashboardVersionMetadata(rows, () => true, received, { fresh: true });
+    await loadDashboardVersionMetadata(rows, () => true, received);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await loadDashboardVersionMetadata(rows, () => true, received, { fresh: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(received).toHaveBeenCalledTimes(3);
+  });
+  it('drops late metadata and stops queued reads when the owner or result scope changes', async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { finish = resolve; });
+    const fetch = vi.fn().mockReturnValue(pending);
+    vi.stubGlobal('fetch', fetch);
+    let active = true;
+    const received = vi.fn();
+    const loaded = loadDashboardVersionMetadata([{ id: 'one', scope: 'owner-a:one:1' }, { id: 'two', scope: 'owner-a:two:1' }, { id: 'three', scope: 'owner-a:three:1' }], () => active, received);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    active = false;
+    finish(new Response(JSON.stringify({ versions: [version(5, 'draft')] }), { status: 200 }));
+    await loaded;
+    expect(received).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('keeps other research metadata usable when one version read fails', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'TEMPORARY', message: 'Unavailable' } }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ versions: [version(5, 'draft')] }), { status: 200 })));
+    const received = vi.fn();
+    await loadDashboardVersionMetadata([{ id: 'failed', scope: 'failed:1' }, { id: 'ready', scope: 'ready:1' }], () => true, received);
+    expect(received).toHaveBeenCalledWith('failed', { scope: 'failed:1', failed: true });
+    expect(received).toHaveBeenCalledWith('ready', expect.objectContaining({ scope: 'ready:1', metadata: expect.objectContaining({ privateDraft: expect.objectContaining({ versionNo: 5 }) }) }));
   });
 });

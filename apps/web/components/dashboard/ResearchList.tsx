@@ -1,16 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, MoreHorizontal, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { ArrowRight, FileText, MoreHorizontal, Search } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { TrashActionButton } from '@/components/research/TrashActionButton';
-import { ScientificText } from '@/components/content/ScientificText';
 import { useSession } from '@/components/auth/SessionProvider';
-import { apiRequest, getResearchObject, getPublicResearchVersion, listVersions, listPresentationAssets, presentationAssetContentUrl, listMyWorkspaces, searchResearchObjects, type PresentationAsset, type ResearchObjectSearchApi, type SdfCore, type VersionSummary, type WorkspaceApi } from '@/lib/api';
+import type { HermesRailTask } from '@/components/hermes/HermesRail';
+import { hermesTaskHref, isActionableHermesTask, selectPriorityHermesTask } from '@/components/hermes/hermes-state';
+import { listVersions, listMyWorkspaces, searchResearchObjects, type ResearchObjectSearchApi, type VersionSummary, type WorkspaceApi } from '@/lib/api';
+import { getDashboardPageCopy } from '@/lib/dashboard-page-copy';
 import styles from '@/app/dashboard/dashboard.module.css';
 
 export interface DashboardResearch {
@@ -20,247 +22,305 @@ export interface DashboardResearch {
   versionNo: number;
   status: string;
   pendingCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+  visibility?: string;
+  workspaceId?: string;
 }
 
 export interface ResearchListProps {
   researchObjects: DashboardResearch[];
+  ownerId?: string;
   onChanged?(): void;
 }
 
-type CurrentMedia = { id: string; url: string; label?: string; identity: string };
-type CurrentSnapshot = { scope: string; title: string; core: SdfCore | Record<string, string>; version?: VersionSummary; media: CurrentMedia | null };
-type VersionRecord = {
-  objectId: string; versionId: string; citation?: { title?: string | null }; sdf: SdfCore;
-  publicationNo?: number | null;
-  media?: Array<{ id: string; kind: string; reader?: { order: number; title?: string; narration?: string } }>;
-};
+export interface DashboardVersionMetadata {
+  latest?: VersionSummary;
+  privateDraft?: VersionSummary;
+  publication?: VersionSummary;
+  published?: VersionSummary;
+}
+type VersionState = { scope: string; metadata?: DashboardVersionMetadata; failed?: boolean };
+export type DashboardResearchFilter = 'all' | 'private' | 'published';
 
-export function CurrentResearchCard({ research, ownerId }: { research: DashboardResearch; ownerId: string }) {
-  const t = useTranslations('dashboard');
-  const session = useSession();
-  const authorized = session.status === 'authenticated' && session.user?.userId === ownerId;
-  // This revision invalidates a read; it is never used as a committed/public version number.
-  const { id: researchId, versionNo: revision } = research;
-  const scope = JSON.stringify([ownerId, researchId, revision]);
-  const [retry, setRetry] = useState(0);
-  const [loaded, setLoaded] = useState<CurrentSnapshot | null>(null);
-  const [failedScope, setFailedScope] = useState('');
-  const [failedImage, setFailedImage] = useState('');
+export function summarizeDashboardVersions(versions: readonly VersionSummary[]): DashboardVersionMetadata {
+  const ordered = versions.filter(version => Number.isInteger(version.versionNo) && version.versionNo > 0)
+    .slice().sort((left, right) => right.versionNo - left.versionNo);
+  const latest = ordered[0];
+  const publication = ordered.filter(version => Number.isInteger(version.publicationNo) && (version.publicationNo ?? 0) > 0)
+    .sort((left, right) => right.publicationNo! - left.publicationNo!)[0];
+  return {
+    latest,
+    privateDraft: latest?.status === 'draft' && latest.publicationNo == null ? latest : undefined,
+    publication,
+    published: publication && ['published', 'revised'].includes(publication.status) ? publication : undefined,
+  };
+}
+
+export function dashboardPublicationHref(research: Pick<DashboardResearch, 'publicId'>, metadata?: DashboardVersionMetadata): string | undefined {
+  const publication = metadata?.published;
+  if (!research.publicId || research.publicId.startsWith('DRAFT-') || !publication) return;
+  return `/research/${encodeURIComponent(research.publicId)}/v/${publication.publicationNo}`;
+}
+
+export function filterDashboardResearch(research: readonly DashboardResearch[], filter: DashboardResearchFilter,
+  metadata: Readonly<Record<string, DashboardVersionMetadata | undefined>>): DashboardResearch[] {
+  return research.filter(item => {
+    if (filter === 'all') return true;
+    const version = metadata[item.id];
+    if (filter === 'published') return Boolean(version?.published);
+    return Boolean(version && (version.privateDraft
+      || (!version.latest && item.visibility === 'private' && item.status === 'draft')));
+  });
+}
+
+export function formatDashboardUpdate(value: string | undefined, locale: string): { dateTime: string; label: string } | null {
+  if (!value?.trim()) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return { dateTime: date.toISOString(), label: new Intl.DateTimeFormat(locale.startsWith('zh') ? 'zh-CN' : 'en',
+    { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date) };
+}
+
+function versionScope(ownerId: string, research: DashboardResearch) {
+  // Object revision invalidates metadata; it is never used as a publication number.
+  return JSON.stringify([ownerId, research.id, research.versionNo, research.updatedAt ?? '']);
+}
+
+export async function loadDashboardVersionMetadata(rows: readonly { id: string; scope: string }[],
+  isCurrent: () => boolean, onResult: (id: string, state: VersionState) => void, options: { fresh?: boolean } = {}): Promise<void> {
+  let next = 0;
+  async function loadNext() {
+    while (isCurrent() && next < rows.length) {
+      const row = rows[next++]!;
+      try {
+        const result = await listVersions(row.id, options);
+        if (!isCurrent()) return;
+        onResult(row.id, { scope: row.scope, metadata: summarizeDashboardVersions(result.versions) });
+      } catch {
+        if (!isCurrent()) return;
+        onResult(row.id, { scope: row.scope, failed: true });
+      }
+    }
+  }
+  await Promise.all([loadNext(), loadNext()]);
+}
+
+function useDashboardVersions(ownerId: string, research: readonly DashboardResearch[], contextKey: string, retry: number, delay = 0, fresh = false) {
+  const rowsKey = JSON.stringify(research.map(item => ({ id: item.id, scope: versionScope(ownerId, item) })));
+  const requestKey = JSON.stringify([ownerId, rowsKey, contextKey, retry]);
+  const currentRequest = useRef(requestKey); currentRequest.current = requestKey;
+  const [states, setStates] = useState<Record<string, VersionState>>({});
+  const stateRef = useRef(states); stateRef.current = states;
+  const lastRetry = useRef(retry);
 
   useEffect(() => {
-    if (!authorized) return;
+    if (!ownerId) return;
     let active = true;
-    const controller = new AbortController();
-    setLoaded(null);
-    setFailedScope('');
-    void (async () => {
-      try {
-        const [{ researchObject: object }, { versions }] = await Promise.all([
-          getResearchObject(researchId, { fresh: true }), listVersions(researchId, { fresh: true }),
-        ]);
-        if (!active) return;
-        if (object.id !== researchId) throw new Error('Research scope changed');
-        const version = [...versions].sort((left, right) => right.versionNo - left.versionNo)[0];
-        let title = object.title;
-        let core: SdfCore | Record<string, string> = object.sdf.core;
-        let media: CurrentMedia | null = null;
-        if (version && ['published', 'revised'].includes(version.status)) {
-          if (!object.publicId || !version.publicationNo) throw new Error('Publication unavailable');
-          const { research: publication } = await getPublicResearchVersion(object.publicId, version.publicationNo, controller.signal);
-          const recordUrl = `/api/research-objects/${encodeURIComponent(researchId)}/versions/${encodeURIComponent(version.versionId)}/record`;
-          if (publication.publicId !== object.publicId || publication.version.versionNo !== version.publicationNo || publication.recordUrl !== recordUrl
-            || !['published', 'revised'].includes(publication.version.status)) throw new Error('Publication scope changed');
-          title = publication.title;
-          core = publication.version.core;
-          const image = publication.presentationAssets.filter(asset => asset.kind === 'image' || asset.kind === 'chart')
-            .sort((left, right) => (left.reader?.order ?? Number.MAX_SAFE_INTEGER) - (right.reader?.order ?? Number.MAX_SAFE_INTEGER))[0];
-          if (image) media = { id: image.id, url: image.url, label: image.reader?.title, identity: `${version.versionId}:${image.id}:${image.contentHash}` };
-        } else if (version) {
-          const base = `/api/research-objects/${encodeURIComponent(researchId)}/versions/${encodeURIComponent(version.versionId)}`;
-          const [{ record }, { assets }] = await Promise.all([
-            apiRequest<{ record: VersionRecord }>(`${base}/record`, { signal: controller.signal }),
-            listPresentationAssets(researchId, version.versionId, controller.signal),
-          ]);
-          if (record.objectId !== researchId || record.versionId !== version.versionId) throw new Error('Version scope changed');
-          // Publication may settle between these reads; never turn its absent private projection into all approved media.
-          if (record.publicationNo != null) throw new Error('Version was published; refresh its projection');
-          title = record.citation?.title?.trim() || object.title;
-          core = record.sdf;
-          const recorded = record.media === undefined ? null : new Map(record.media.map(asset => [asset.id, asset]));
-          const images = assets.filter((asset: PresentationAsset) => asset.researchObjectId === researchId && asset.versionId === version.versionId
-            && asset.status === 'approved' && asset.kind === 'image' && !asset.paperOriginal
-            && asset.generator !== 'OpenScience paper-original figure' && (!recorded || recorded.has(asset.id)));
-          images.sort((left, right) => (recorded?.get(left.id)?.reader?.order ?? Number.MAX_SAFE_INTEGER)
-            - (recorded?.get(right.id)?.reader?.order ?? Number.MAX_SAFE_INTEGER));
-          const image = images[0];
-          if (image) media = { id: image.id, url: presentationAssetContentUrl(researchId, version.versionId, image.id),
-            label: recorded?.get(image.id)?.reader?.title, identity: `${version.versionId}:${image.id}:${image.contentHash}` };
-        }
-        if (active) setLoaded({ scope, title, core, version, media });
-      } catch {
-        if (active) setFailedScope(scope);
-      }
-    })();
-    return () => { active = false; controller.abort(); };
-  }, [authorized, ownerId, researchId, revision, scope, retry]);
+    const rows = JSON.parse(rowsKey) as Array<{ id: string; scope: string }>;
+    const retryFailed = lastRetry.current !== retry;
+    lastRetry.current = retry;
+    // View state only retains the current result set, bounded by the existing API's 20-row limit.
+    const retained: Record<string, VersionState> = {};
+    for (const row of rows) {
+      const existing = stateRef.current[row.id];
+      if (existing?.scope === row.scope && !(retryFailed && existing.failed)) retained[row.id] = existing;
+    }
+    stateRef.current = retained;
+    setStates(retained);
+    const pending = rows.filter(row => !retained[row.id]);
+    const stillCurrent = () => active && currentRequest.current === requestKey;
+    // The current card starts immediately; list enrichment is nonblocking and limited to two reads.
+    const timer = window.setTimeout(() => {
+      void loadDashboardVersionMetadata(pending, stillCurrent, (id, state) => {
+        setStates(current => ({ ...current, [id]: state }));
+      }, { fresh: fresh || retryFailed });
+    }, delay);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [ownerId, rowsKey, requestKey, retry, delay, fresh]);
+  return states;
+}
 
+export function VersionLabels({ state, locale }: { state?: VersionState; locale: string }) {
+  const copy = getDashboardPageCopy(locale);
+  if (state?.failed) return <span>{copy.versionUnavailable}</span>;
+  if (!state?.metadata) return <span aria-busy="true">{copy.versionLoading}</span>;
+  const { latest, privateDraft, published, publication } = state.metadata;
+  return <>
+    {privateDraft ? <span data-private-draft="true">{publication ? copy.workingDraft : copy.privateDraft}</span> : null}
+    {published ? <span>{copy.publishedVersion.replace('{version}', String(published.publicationNo))}</span> : null}
+    {publication && !published ? <span>{publication.status === 'withdrawn' ? copy.withdrawn : publication.status === 'restricted' ? copy.restricted : copy.versionUnavailable}</span> : null}
+    {latest && !privateDraft && !['published', 'revised'].includes(latest.status)
+      && latest.versionId !== publication?.versionId
+      ? <span>{latest.status === 'withdrawn' ? copy.withdrawn : latest.status === 'restricted' ? copy.restricted : copy.versionUnavailable}</span> : null}
+    {!latest ? <span>{copy.noSavedVersion}</span> : null}
+    {latest && ['published', 'revised'].includes(latest.status) && !published ? <span>{copy.versionUnavailable}</span> : null}
+  </>;
+}
+
+export function CurrentResearchCard({ research, ownerId, tasks = [], taskLoadState = 'ready' }: {
+  research: DashboardResearch;
+  ownerId: string;
+  tasks?: HermesRailTask[];
+  taskLoadState?: 'loading' | 'ready' | 'unavailable';
+}) {
+  const t = useTranslations('dashboard');
+  const locale = useLocale();
+  const copy = getDashboardPageCopy(locale);
+  const session = useSession();
+  const authorized = session.status === 'authenticated' && session.user?.userId === ownerId;
+  const [retry, setRetry] = useState(0);
+  const states = useDashboardVersions(authorized ? ownerId : '', [research], 'current', retry, 0, true);
   if (!authorized) return null;
-  const current = loaded?.scope === scope ? loaded : null;
-  const failed = failedScope === scope;
-  const media = current?.media;
-  const imageKey = media ? `${scope}:${media.identity}:${retry}` : '';
-  const imageFailed = Boolean(media && failedImage === imageKey);
-  const imageLabel = media?.label || t('current.imageTitle');
-  const imageUrl = media ? `${media.url}${retry ? `${media.url.includes('?') ? '&' : '?'}attempt=${retry}` : ''}` : '';
-  const summary = current?.core.insight?.trim() || current?.core.problem?.trim();
-  const isPublic = current?.version && ['published', 'revised'].includes(current.version.status);
+  const state = states[research.id]?.scope === versionScope(ownerId, research) ? states[research.id] : undefined;
+  const publicHref = dashboardPublicationHref(research, state?.metadata);
+  const update = formatDashboardUpdate(research.updatedAt, locale);
+  const task = selectPriorityHermesTask(tasks.filter(candidate => candidate.researchObjectId === research.id && isActionableHermesTask(candidate)));
+  const review = task?.state === 'needs_review';
+  const failed = task?.state.startsWith('failed_');
+  const processing = task && ['queued', 'uploading', 'parsing', 'stored'].includes(task.state);
+  const href = task ? hermesTaskHref(task) : `/research-objects/${encodeURIComponent(research.id)}/${research.pendingCount > 0 ? 'hermes' : 'edit'}`;
+  const taskStateKey = review ? 'needsReview' : task?.state === 'failed_retryable' ? 'failedRetryable' : failed ? 'failedBlocked' : task?.state;
 
-  return <article className={styles.currentResearch} aria-labelledby="current-research-title" data-current-research={researchId} data-hermes-protected="true" data-media-state={failed || imageFailed ? 'failed' : !current ? 'loading' : media ? 'ready' : 'empty'}>
-    <div className={styles.currentCopy}>
-      <p className={styles.currentKicker}>{t('continue.title')}</p>
-      <h2 id="current-research-title" className={styles.currentTitle}>{current?.title || research.title}</h2>
-      {summary ? <ScientificText as="p" className={styles.currentSummary} hideSourceMarkers>{summary}</ScientificText> : null}
-      {current ? <p className={styles.currentMeta}>{current.version ? t(isPublic ? 'current.publicationVersion' : 'current.savedVersion', { version: isPublic ? current.version.publicationNo! : current.version.versionNo }) : t('continue.draftRevision')}</p> : null}
+  return <article className={styles.currentResearch} aria-labelledby="current-research-title" data-current-research={research.id} data-hermes-protected="true">
+    <header className={styles.currentHeader}>
+      <p className={styles.currentKicker}>{copy.currentResearch}</p>
+      <h2 id="current-research-title" className={styles.currentTitle}>{research.title}</h2>
+      <div className={styles.currentMeta} data-version-state={state?.failed ? 'unavailable' : state?.metadata ? 'ready' : 'loading'}>
+        <VersionLabels state={state} locale={locale} />
+        {state?.failed ? <button type="button" onClick={() => setRetry(value => value + 1)}>{copy.retry}</button> : null}
+      </div>
+      <p className={styles.currentSummary}>{copy.currentDescription}</p>
+      {update ? <p className={styles.currentMeta}>{copy.updated} <time dateTime={update.dateTime}>{update.label}</time></p> : null}
+      {taskStateKey ? <p role="status" data-task-state={task?.state}>{t(`hermes.taskStates.${taskStateKey}`)}</p>
+        : taskLoadState !== 'ready' ? <p role="status">{t(`hermes.activity.${taskLoadState}`)}</p> : null}
+    </header>
+    <div className={styles.currentActions}>
+      <Link className={styles.currentContinue} href={href} data-action-priority="primary">{review ? t('continue.review') : failed ? t('continue.recover') : processing ? t('continue.progress') : copy.continueEditing}<ArrowRight size={18} aria-hidden="true" /></Link>
+      <Link href={`/research-objects/${encodeURIComponent(research.id)}/overview`}>{copy.overview}</Link>
     </div>
-    <Link className={styles.currentContinue} href={`/research-objects/${encodeURIComponent(researchId)}/edit`}>{t('current.open')}<ArrowRight size={18} aria-hidden="true" /></Link>
-    <div className={styles.currentMedia}>
-      {failed || imageFailed ? <div className={styles.currentMediaState} role="status"><p>{t('current.mediaFailed')}</p><button type="button" onClick={() => setRetry(value => value + 1)}>{t('current.retry')}</button></div>
-        : !current ? <div className={styles.currentMediaState} role="status" aria-busy="true"><span className={styles.currentMediaSkeleton} aria-hidden="true" /><p>{t('current.loading')}</p></div>
-          : media ? <figure className={styles.currentFigure}>
-            <a href={imageUrl} target="_blank" rel="noreferrer" aria-label={`${imageLabel} — ${t('current.openImage')}`}>
-              <img key={imageKey} src={imageUrl} alt={imageLabel} loading="eager" onError={() => setFailedImage(imageKey)} />
-              <span className={styles.currentImageLink}>{t('current.openImage')} ↗</span>
-            </a>
-          </figure> : <div className={styles.currentMediaState}><span className={styles.currentEmptyMark} aria-hidden="true">↗</span><p>{t('current.noImage')}</p></div>}
-    </div>
+    {publicHref ? <Link className={styles.currentPublicLink} href={publicHref}>{copy.publicVersionLink.replace('{version}', String(state!.metadata!.published!.publicationNo))}<span aria-hidden="true">↗</span></Link> : null}
   </article>;
 }
 
-export function ResearchList({ researchObjects, onChanged }: ResearchListProps) {
+export function ResearchList({ researchObjects, ownerId, onChanged }: ResearchListProps) {
   const t = useTranslations('dashboard');
+  const locale = useLocale();
+  const copy = getDashboardPageCopy(locale);
+  const session = useSession();
+  const authenticatedOwner = session.status === 'authenticated' ? session.user?.userId ?? '' : '';
+  const authorized = ownerId === undefined || authenticatedOwner === ownerId;
+  const owner = authorized ? authenticatedOwner : '';
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<DashboardResearchFilter>('all');
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
+  const [workspaceOwner, setWorkspaceOwner] = useState('');
   const [workspaceId, setWorkspaceId] = useState('');
   const [workspaceError, setWorkspaceError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [versionRetry, setVersionRetry] = useState(0);
   const [result, setResult] = useState<{ key: string; data?: ResearchObjectSearchApi; failed?: boolean }>();
   const normalizedQuery = query.trim();
-  const queryKey = JSON.stringify([workspaceId, normalizedQuery, retry]);
+  const currentWorkspaces = workspaceOwner === owner ? workspaces : [];
+  const currentWorkspaceId = workspaceOwner === owner ? workspaceId : '';
+  const queryKey = JSON.stringify([owner, currentWorkspaceId, normalizedQuery, retry]);
+  const currentQuery = useRef(queryKey); currentQuery.current = queryKey;
 
   useEffect(() => {
+    if (!owner) return;
     let active = true;
     setWorkspaceError(false);
+    setWorkspaces([]);
     void listMyWorkspaces().then(rows => {
       if (!active) return;
+      setWorkspaceOwner(owner);
       setWorkspaces(rows);
       setWorkspaceError(rows.length === 0);
       setWorkspaceId(current => rows.some(row => row.id === current)
         ? current : (rows.find(row => row.type === 'personal') ?? rows[0])?.id ?? '');
-    }).catch(() => { if (active) setWorkspaceError(true); });
+    }).catch(() => { if (active) { setWorkspaceOwner(owner); setWorkspaceError(true); } });
     return () => { active = false; };
-  }, [retry]);
+  }, [owner, retry]);
 
   useEffect(() => {
-    if (!normalizedQuery || !workspaceId) return;
+    if (!owner || !normalizedQuery || !currentWorkspaceId) return;
     setResult(undefined);
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchResearchObjects({ workspaceId, query: normalizedQuery }, controller.signal)
-        .then(data => { if (!controller.signal.aborted) setResult({ key: queryKey, data }); })
-        .catch(() => { if (!controller.signal.aborted) setResult({ key: queryKey, failed: true }); });
+      void searchResearchObjects({ workspaceId: currentWorkspaceId, query: normalizedQuery }, controller.signal)
+        .then(data => { if (!controller.signal.aborted && currentQuery.current === queryKey) setResult({ key: queryKey, data }); })
+        .catch(() => { if (!controller.signal.aborted && currentQuery.current === queryKey) setResult({ key: queryKey, failed: true }); });
     }, 500);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [normalizedQuery, workspaceId, queryKey]);
+  }, [owner, normalizedQuery, currentWorkspaceId, queryKey]);
 
   const currentResult = result?.key === queryKey ? result : undefined;
-  const searchFailed = Boolean(normalizedQuery && (workspaceError || currentResult?.failed));
+  const searchFailed = Boolean(normalizedQuery && ((workspaceOwner === owner && workspaceError) || currentResult?.failed));
   const searching = Boolean(normalizedQuery && !searchFailed && !currentResult?.data);
-  const visible: DashboardResearch[] = !normalizedQuery ? researchObjects
+  const rows: DashboardResearch[] = !authorized ? [] : !normalizedQuery ? researchObjects
     : (currentResult?.data?.researchObjects ?? []).map(item => ({
       id: item.id, publicId: item.publicId ?? `DRAFT-${item.id.slice(0, 8)}`, title: item.title,
       versionNo: item.version, status: item.status, pendingCount: 0,
+      createdAt: item.createdAt, updatedAt: item.updatedAt, workspaceId: item.workspaceId, visibility: item.visibility,
     }));
+  const states = useDashboardVersions(owner, rows, queryKey, versionRetry, 120);
+  const metadata: Record<string, DashboardVersionMetadata | undefined> = {};
+  for (const row of rows) {
+    const state = states[row.id];
+    if (state?.scope === versionScope(owner, row)) metadata[row.id] = state.metadata;
+  }
+  const visible = filterDashboardResearch(rows, filter, metadata);
+  const filterPending = filter !== 'all' && rows.some(row => states[row.id]?.scope !== versionScope(owner, row));
+  const filterUnavailable = filter !== 'all' && rows.some(row => states[row.id]?.scope === versionScope(owner, row) && states[row.id]?.failed);
 
-  return (
-    <section
-      className={styles.researchLibrary}
-      aria-labelledby="research-list-title"
-      data-hermes-protected="true"
-      data-surface-state={searchFailed ? 'error' : searching ? 'loading' : visible.length === 0 ? 'empty' : 'ready'}
-    >
-      <div className={styles.libraryHeading}>
-        <h2 id="research-list-title" className={styles.libraryTitle}>
-          {t('research.title')}
-        </h2>
-        <div className={styles.searchControls}>
-          {workspaces.length > 1 ? (
-            <label className={styles.searchScope}>
-              <span>{t('research.searchScope')}</span>
-              <select className={styles.scopeSelect}
-                value={workspaceId} onChange={event => setWorkspaceId(event.target.value)}>
-                {workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-              </select>
-            </label>
-          ) : null}
-          <label className={styles.searchField}>
-            <span className="sr-only">{t('research.search')}</span>
-            <Search className={styles.searchIcon} size={16} aria-hidden="true" />
-            <Input
-              className={styles.searchInput}
-              type="search"
-              placeholder={t('research.search')}
-              value={query}
-              maxLength={120}
-              aria-describedby={normalizedQuery ? 'research-search-status' : undefined}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
+  return <section className={styles.library} aria-labelledby="research-list-title" data-hermes-protected="true"
+    data-surface-state={searchFailed ? 'error' : searching ? 'loading' : visible.length === 0 ? 'empty' : 'ready'}>
+    <div className={styles.libraryHeader}>
+      <h2 id="research-list-title">{copy.myResearch}</h2>
+      <div className={styles.searchControls}>
+        {currentWorkspaces.length > 1 ? <label className={styles.searchScope}><span>{t('research.searchScope')}</span>
+          <select className={styles.scopeSelect} value={currentWorkspaceId} onChange={event => setWorkspaceId(event.target.value)}>
+            {currentWorkspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+          </select></label> : null}
+        <label className={styles.searchField}><span className="sr-only">{t('research.search')}</span>
+          <Search className={styles.searchIcon} size={16} aria-hidden="true" />
+          <Input className={styles.searchInput} type="search" placeholder={copy.searchPlaceholder} value={query} maxLength={120}
+            aria-describedby={normalizedQuery ? 'research-search-status' : undefined} onChange={event => setQuery(event.target.value)} />
+        </label>
+        <div className={styles.libraryFilters} role="group" aria-label={copy.filterLabel}>
+          {([['all', copy.filterAll], ['private', copy.filterPrivateDraft], ['published', copy.filterPublished]] as const).map(([value, label]) =>
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
         </div>
       </div>
-
-      {normalizedQuery ? (
-        <p id="research-search-status" role="status" className={styles.searchFeedback}>
-          {searchFailed ? t('research.searchUnavailable')
-            : searching ? t('research.searchLoading')
-              : t(`research.searchMode.${currentResult!.data!.search.mode}`)}
-          {searchFailed ? <button type="button" className={styles.textAction} onClick={() => setRetry(value => value + 1)}>{t('errors.retry')}</button> : null}
-        </p>
-      ) : null}
-      {!searching && !searchFailed && visible.length === 0 ? (
-        <p className={styles.libraryEmpty} role="status">
-          {researchObjects.length === 0 ? t('research.empty') : t('research.noResults')}
-        </p>
-      ) : visible.length > 0 ? (
-        <ul className={styles.researchEntries} aria-label={t('research.title')}>
-          {visible.map((research) => (
-            <li key={research.id} className={styles.researchEntry}>
-              <Link
-                href={`/research-objects/${encodeURIComponent(research.id)}/edit`}
-                className={styles.researchLink}
-              >
-                <span className={styles.researchEntryCopy}>
-                  <span className={styles.researchEntryTitle}>
-                    {research.title}
-                  </span>
-                </span>
-                <span data-reading-role="caption" className={styles.entryMeta}>
-                  <span>{research.status === 'draft' ? t('research.draftRevision') : t(`research.status.${research.status}`)}</span>
-                </span>
-                <ArrowRight className={styles.entryArrow} size={18} aria-hidden="true" />
-              </Link>
-              <details className={styles.researchEntryAction}>
-                <summary aria-label={t('research.actions', { title: research.title })}><MoreHorizontal size={18} aria-hidden="true" /></summary>
-                <div>
-                  <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
-                    setRetry(value => value + 1);
-                    onChanged?.();
-                  }} />
-                </div>
-              </details>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
-  );
+    </div>
+    {normalizedQuery ? <p id="research-search-status" role="status" className={styles.searchFeedback}>
+      {searchFailed ? t('research.searchUnavailable') : searching ? t('research.searchLoading') : t(`research.searchMode.${currentResult!.data!.search.mode}`)}
+      {searchFailed ? <button type="button" className={styles.textAction} onClick={() => setRetry(value => value + 1)}>{t('errors.retry')}</button> : null}
+    </p> : null}
+    {filterPending || filterUnavailable ? <p role="status" className={styles.searchFeedback}>{filterPending ? copy.versionLoading : copy.versionUnavailable}
+      {filterUnavailable ? <button type="button" onClick={() => setVersionRetry(value => value + 1)}>{copy.retry}</button> : null}
+    </p> : null}
+    {!searching && !searchFailed && visible.length === 0 && !filterPending && !filterUnavailable ? <p className={styles.libraryEmpty} role="status">
+      {filter !== 'all' ? copy.noFilterResults : researchObjects.length === 0 ? t('research.empty') : t('research.noResults')}
+    </p> : null}
+    {visible.length > 0 ? <>
+      <div className={styles.researchRow} aria-hidden="true"><span>{copy.researchColumn}</span><span>{copy.statusColumn}</span><span>{copy.updated}</span><span /></div>
+      <ul className={styles.researchList} aria-label={copy.myResearch}>{visible.map(research => {
+        const state = states[research.id]?.scope === versionScope(owner, research) ? states[research.id] : undefined;
+        const update = formatDashboardUpdate(research.updatedAt, locale);
+        return <li key={research.id} className={styles.researchRow}>
+          <Link className={styles.researchTitle} href={`/research-objects/${encodeURIComponent(research.id)}/edit`}><FileText size={20} aria-hidden="true" />{research.title}</Link>
+          <div className={styles.researchStatus}><VersionLabels state={state} locale={locale} />
+            {state?.failed ? <button type="button" onClick={() => setVersionRetry(value => value + 1)}>{copy.retry}</button> : null}
+          </div>
+          <span className={styles.researchDate}>{update ? <time dateTime={update.dateTime}>{update.label}</time> : copy.dateUnavailable}</span>
+          <details className={styles.researchEntryAction}><summary aria-label={t('research.actions', { title: research.title })}><MoreHorizontal size={18} aria-hidden="true" /></summary><div>
+            <TrashActionButton kind="research_object" resourceId={research.id} title={research.title} published={!research.publicId.startsWith('DRAFT-')} onDone={() => {
+              setRetry(value => value + 1); setVersionRetry(value => value + 1); onChanged?.();
+            }} />
+          </div></details>
+        </li>;
+      })}</ul>
+    </> : null}
+  </section>;
 }

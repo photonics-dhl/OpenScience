@@ -64,6 +64,7 @@ interface HermesStagePresentation {
   assistantOpen: boolean;
   floating?: boolean;
   usesFallbackAssistant?: boolean;
+  presentation?: 'default' | 'dashboard-seat';
   invocationRef?: React.MutableRefObject<HTMLElement | null>;
   onInvoke: () => void;
   state?: HermesVisualState;
@@ -396,9 +397,13 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   const hasUsableAnchor = anchorRect !== null && (hermesPresentationCanDock(presentation) || compactPresence);
   // Route and viewport select the initial presence; scrolling never changes it.
   const compact = !guideTarget && !conversationAnchor && compactPresence;
-  const avatar = avatarSurface && !conversationAnchor;
+  // The dashboard opts into a full-body seat; an open conversation still owns
+  // the same portal and renderer. Every other research route keeps its avatar.
+  const dashboardSeat = presentation?.presentation === 'dashboard-seat' && /^\/dashboard\/?$/.test(pathname) && !conversationAnchor;
+  const avatar = avatarSurface && !conversationAnchor && !dashboardSeat;
   const stageSize = conversationAnchor ? conversationPlacement!.size
-    : avatar ? 64 : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
+    : dashboardSeat ? Math.min(180, Math.max(120, Math.min(anchorRect?.width ?? 180, anchorRect?.height ?? 180)))
+      : avatar ? 64 : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
   const anchored = Boolean(conversationAnchor || (hasUsableAnchor && (!customDock || avatarSurface)));
   // Keep the portal in its original host until pointerup. Moving its DOM node
   // during a drag drops browser pointer capture and cancels the gesture.
@@ -1507,6 +1512,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
       data-hermes-anchored={anchored ? 'true' : 'false'}
       data-hermes-compact={compact ? 'true' : 'false'}
       data-hermes-avatar={avatar ? 'true' : undefined}
+      data-hermes-dashboard-seat={dashboardSeat ? 'true' : undefined}
       data-hermes-in-conversation={conversationAnchor ? 'true' : 'false'}
       data-hermes-bubble-horizontal={bubbleHorizontal}
       data-hermes-bubble-safe={speech.cue ? (anchored || bubblePlacement ? 'true' : 'false') : 'true'}
@@ -1560,7 +1566,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         actionStartedAtMs={actionStartedAtMs}
         assistantOpen={assistantOpen && !conversationAnchor}
         compactPresentation
-        avatarPresentation={avatar}
+        avatarPresentation={avatar || dashboardSeat}
+        dashboardSeat={dashboardSeat}
         inConversation={Boolean(conversationAnchor)}
         onInvoke={() => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
@@ -1670,6 +1677,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   // portal carrier moves between hosts; the actor and its WebGL canvas do not remount.
   const element = <div className={compact ? 'hermes-compact-dock' : undefined}
     data-hermes-avatar={avatar ? 'true' : undefined}
+    data-hermes-dashboard-seat={dashboardSeat ? 'true' : undefined}
     data-hermes-compact-placement={compact ? (anchored ? 'anchored' : 'fallback') : undefined}
     style={compact ? undefined : { display: 'contents' }}>
     {stageElement}

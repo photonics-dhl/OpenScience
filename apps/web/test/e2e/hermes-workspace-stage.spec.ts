@@ -12,7 +12,83 @@ const roPath = '/research-objects/ro-hermes';
 const researchTitle = 'Coherent transport at the attosecond frontier';
 const requests = new WeakMap<Page, { writes: string[]; unmocked: string[]; errors: string[] }>();
 
+// Failure-only receipts observe the original runtime gates without waking the actor.
+async function installP04RuntimeDiagnostics(page: Page) {
+  await page.addInitScript(() => {
+    const receipt = { events: [] as unknown[], dropped: 0 };
+    (window as unknown as { __p04RuntimeEvidence: typeof receipt }).__p04RuntimeEvidence = receipt;
+    const rigIds = new WeakMap<Element, number>();
+    let nextRig = 0;
+    const box = (rect: DOMRectReadOnly | null) => rect && ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+    const rig = (target: Element) => {
+      if (!rigIds.has(target)) rigIds.set(target, ++nextRig);
+      return { id: rigIds.get(target), connected: target.isConnected, bounds: box(target.getBoundingClientRect()),
+        phase: target.getAttribute('data-hermes-rig-status'), owner: target.getAttribute('data-hermes-runtime-owner'),
+        lastDraw: target.getAttribute('data-hermes-last-draw-at'), staticFrame: target.getAttribute('data-hermes-static-frame'),
+        stage: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-dashboard-seat'),
+        motion: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-motion-preference'),
+        state: target.closest('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-presentation-state') };
+    };
+    const rigs = () => Array.from(document.querySelectorAll('[data-hermes-rig="live2d-wanko"]')).map(rig);
+    const record = (kind: string, details: object = {}) => {
+      if (receipt.events.length >= 256) { receipt.dropped += 1; return; }
+      receipt.events.push({ at: performance.now(), kind, readyState: document.readyState, hidden: document.hidden, ...details });
+    };
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super((entries, observer) => {
+          for (const entry of entries) {
+            if (entry.target.matches('[data-hermes-rig="live2d-wanko"]')) record('rig-intersection', {
+              rig: rig(entry.target), observedAt: entry.time, isIntersecting: entry.isIntersecting, ratio: entry.intersectionRatio,
+              bounds: box(entry.boundingClientRect), intersection: box(entry.intersectionRect), root: box(entry.rootBounds),
+            });
+          }
+          Reflect.apply(callback, observer, [entries, observer]);
+        }, options);
+      }
+    };
+    if (window.requestIdleCallback) {
+      const nativeIdle = window.requestIdleCallback.bind(window);
+      const nativeCancel = window.cancelIdleCallback.bind(window);
+      window.requestIdleCallback = (callback, options) => {
+        record('idle-scheduled', { options, rigs: rigs() });
+        return nativeIdle(deadline => { record('idle-fired', { didTimeout: deadline.didTimeout, rigs: rigs() }); callback(deadline); }, options);
+      };
+      window.cancelIdleCallback = handle => { record('idle-cancelled', { handle }); nativeCancel(handle); };
+    }
+    window.addEventListener('load', () => record('load', { rigs: rigs() }));
+    document.addEventListener('visibilitychange', () => record('visibility', { rigs: rigs() }));
+    document.addEventListener('readystatechange', () => record('ready-state', { rigs: rigs() }));
+    const connectionObserver = new MutationObserver(records => {
+      for (const change of records) {
+        if (change.type === 'attributes' && change.target instanceof Element && change.target.matches('[data-hermes-rig="live2d-wanko"]')) {
+          record('runtime-status', { attribute: change.attributeName, rig: rig(change.target) });
+        } else if (change.type === 'childList' && [...change.addedNodes, ...change.removedNodes].some(node => node instanceof Element &&
+          (node.matches('[data-hermes-portal-carrier]') || node.querySelector('[data-hermes-rig="live2d-wanko"]')))) {
+          record('connection-change', { rigs: rigs() });
+        }
+      }
+    });
+    connectionObserver.observe(document, { childList: true, subtree: true, attributes: true,
+      attributeFilter: ['data-hermes-rig-status', 'data-hermes-runtime-owner'] });
+  });
+}
+
+async function attachP04RuntimeDiagnostics(page: Page) {
+  if (test.info().status === test.info().expectedStatus) return;
+  const evidence = await page.evaluate(() => ({
+    receipt: (window as unknown as { __p04RuntimeEvidence?: unknown }).__p04RuntimeEvidence,
+    final: Array.from(document.querySelectorAll('[data-hermes-rig="live2d-wanko"]')).map(target => {
+      const bounds = target.getBoundingClientRect();
+      return { connected: target.isConnected, bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+        attributes: Object.fromEntries(Array.from(target.attributes).filter(attribute => attribute.name.startsWith('data-hermes-')).map(attribute => [attribute.name, attribute.value])) };
+    }), readyState: document.readyState, hidden: document.hidden,
+  })).catch(error => ({ unavailable: String(error) }));
+  await test.info().attach('p04-runtime-gates', { body: Buffer.from(JSON.stringify(evidence, null, 2)), contentType: 'application/json' });
+}
 test.beforeEach(async ({ page }) => {
+  await installP04RuntimeDiagnostics(page);
   const observed = { writes: [] as string[], unmocked: [] as string[], errors: [] as string[] };
   requests.set(page, observed);
   page.on('request', (request) => {
@@ -46,6 +122,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
+  await attachP04RuntimeDiagnostics(page);
   const observed = requests.get(page)!;
   expect(observed.writes, 'Opening, moving and restoring Hermes must not write or start work').toEqual([]);
   expect(observed.unmocked, 'Only declared, scoped GET fixtures are allowed').toEqual([]);
@@ -155,9 +232,12 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(page.locator('[data-hermes-avatar-entry="true"]')).toHaveCount(1);
   await expect(host).toHaveCount(1);
   await expect(host.locator(stageSelector)).toHaveCount(1);
-  await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
+  const dashboardSeat = /^\/dashboard\/?$/.test(new URL(page.url()).pathname);
+  const expectedSize = dashboardSeat ? (page.viewportSize()!.width <= 599 ? 140 : 180) : 64;
+  if (dashboardSeat) await expect(stage).toHaveAttribute('data-hermes-dashboard-seat', 'true');
+  else await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '64');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', String(expectedSize));
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'false');
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'false');
@@ -170,20 +250,20 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(entryLabel).toHaveClass('hermes-avatar-entry-label');
   await expect(entryLabel).toContainText('Hermes');
   await expect(entryLabel).toHaveAttribute('aria-expanded', 'false');
-  for (const viewport of [host, stage, input, host.locator('[data-hermes-compact-placement]')]) {
+  for (const viewport of dashboardSeat ? [host, stage, input] : [host, stage, input, host.locator('[data-hermes-compact-placement]')]) {
     await expect(viewport).toBeVisible();
     await expect.poll(async () => {
       const bounds = await viewport.boundingBox();
       return bounds && { width: bounds.width, height: bounds.height };
-    }).toEqual({ width: 64, height: 64 });
+    }).toEqual({ width: expectedSize, height: expectedSize });
   }
-  await expect(input).toHaveCSS('overflow', 'hidden');
+  await expect(input).toHaveCSS('overflow', dashboardSeat ? 'visible' : 'hidden');
   // The 160px composition is clipped by the 64px button; its carrier AABB is not a work collision.
   const composition = input.locator('[data-hermes-companion-actor="true"]');
   await expect.poll(() => composition.evaluate((node) => {
     const { width, height } = node.getBoundingClientRect();
     return { width, height };
-  })).toEqual({ width: 160, height: 160 });
+  })).toEqual({ width: dashboardSeat ? expectedSize : 160, height: dashboardSeat ? expectedSize : 160 });
   // Read related boxes in one browser task while their shared page-entry animation runs.
   const { visible, frame, stageBounds } = await host.evaluate((anchor) => {
     const currentStage = anchor.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
@@ -339,7 +419,7 @@ test('only the primary left pointer invokes the toolbar avatar, without capture 
   await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
 });
 
-test('the 64px toolbar avatar stays in its page frame during pointer travel and menus', async ({ page }) => {
+test('the dashboard full-body seat stays in its page frame during pointer travel and menus', async ({ page }) => {
   await mockWorkspace(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'networkidle' });
@@ -352,7 +432,7 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
     const before = await host.boundingBox();
     await page.mouse.move(box.x + 32, box.y + 32);
     await page.mouse.down();
-    await page.mouse.move(box.x + 96, box.y + 48, { steps: 4 });
+    await page.mouse.move(box.x + box.width + 32, box.y + 48, { steps: 4 });
     await expect(page.locator(stageSelector)).toHaveAttribute('data-hermes-dragging', 'false');
     await page.mouse.up();
     await page.mouse.move(8, 8);
@@ -363,7 +443,8 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
     // the toolbar avatar remains fully visible throughout the actual menu interaction.
     await page.setViewportSize({ width, height: 450 });
     await page.evaluate(() => window.scrollTo(0, 8));
-    expect(await page.evaluate(() => window.scrollY)).toBe(8);
+    await input.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await assertAvatar(page);
     for (const openMenu of ['pointer', 'keyboard']) {
       if (openMenu === 'keyboard') {
@@ -453,7 +534,7 @@ for (const width of [1440, 800, 390]) {
   });
 }
 
-test('Hermes mounts and draws the real Wanko portrait in the clipped avatar and full original slot', async ({ page }) => {
+test('Hermes mounts and draws the real Wanko portrait in its dashboard seat and original conversation slot', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
   await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'networkidle' });

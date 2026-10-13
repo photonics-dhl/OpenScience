@@ -82,6 +82,29 @@ test('Guide lifecycle, media explanations and FAQ work on keyboard and mobile wi
     await expect(page.locator('aside summary')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+  // At 320px use the product's keyboard navigation, not test-only scrolling.
+  await lifecycle.getByRole('tab', { selected: true }).press('Home');
+  for (let index = 0; index < 5; index++) {
+    const tab = page.locator(`#guide-step-${index}`);
+    if (index > 0) await page.locator(`#guide-step-${index - 1}`).press('ArrowRight');
+    await expect(tab).toBeFocused();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator(`#guide-panel-${index}`)).toBeVisible();
+    await expect.poll(() => tab.evaluate(node => {
+      const rail = node.closest('[role="tablist"]')!;
+      const bounds = node.getBoundingClientRect();
+      const viewport = rail.getBoundingClientRect();
+      return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1
+        && bounds.top >= viewport.top - 1 && bounds.bottom <= viewport.bottom + 1;
+    })).toBe(true);
+  }
+  await page.locator('#guide-step-4').press('Home');
+  await expect(page.locator('#guide-step-0')).toBeFocused();
+  await expect(page.locator('#guide-panel-0')).toBeVisible();
+  await expect(page.locator('#guide-step-0')).toBeInViewport({ ratio: 1 });
+  // Return to the original illustrated panel for the existing screenshot.
+  await page.locator('#guide-step-0').press('ArrowRight');
+  await page.locator('#guide-step-1').press('ArrowRight');
   await page.locator('aside summary').click();
   await page.locator('aside details').getByRole('link', { name: '研究示例', exact: true }).click();
   await expect(page.locator('aside details')).not.toHaveAttribute('open', '');

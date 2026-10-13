@@ -269,10 +269,12 @@ test('dashboard keeps the real task reachable in history without duplicating the
 
   await page.goto(`${baseUrl}/dashboard`);
   const href = `/research-objects/${task.researchObjectId}/edit?ingestionTask=${task.id}`;
-  await expect(page.locator(`[href="${href}"]`)).toHaveCount(1);
-  await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
+  const current = page.locator('[data-current-research="ro-1"]');
+  const history = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Processing history' }) });
+  await expect(current.locator(`[href="${href}"]`)).toBeVisible();
+  await expect(history.locator(`[href="${href}"]`)).not.toBeVisible();
   await page.getByText('Processing history', { exact: true }).first().click();
-  await expect(page.locator(`[href="${href}"]`)).toBeVisible();
+  await expect(history.locator(`[href="${href}"]`)).toBeVisible();
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
   await expect(page.locator('[data-live2d-instance="wanko"]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
@@ -281,7 +283,8 @@ test('dashboard keeps the real task reachable in history without duplicating the
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.getByRole('heading', { name: /research desk/i })).toBeVisible({ timeout: 15000 });
-  await expect(page.locator(`[href="${href}"]`)).not.toBeVisible();
+  await expect(current.locator(`[href="${href}"]`)).toBeVisible();
+  await expect(history.locator(`[href="${href}"]`)).not.toBeVisible();
   await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-rig-status="ready"]')).toBeVisible({ timeout: 30000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -331,13 +334,13 @@ test('personal literature acquisition recovers a running server task after reloa
   await page.route('**/api/agent/tasks/literature-reload', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: runningTask }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
-  await page.getByText('Materials and management', { exact: true }).click();
+  await page.getByText('Materials and tools', { exact: true }).click();
   await page.locator('[data-literature-entry] > summary').click();
   await page.getByLabel(/title, doi, or arxiv id/i).fill('Reload recovery');
   await page.getByRole('button', { name: /search metadata/i }).click();
   await expect.poll(() => submissions).toBe(1);
   await page.reload();
-  await page.getByText('Materials and management', { exact: true }).click();
+  await page.getByText('Materials and tools', { exact: true }).click();
   await expect(page.getByText(/retrieving source/i)).toBeVisible();
   expect(submissions).toBe(1);
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('openscience:literature:')))).toEqual([]);
@@ -365,7 +368,7 @@ for (const status of [403, 404]) {
     });
 
     await page.goto(`${baseUrl}/dashboard`);
-    await page.getByText('Materials and management', { exact: true }).click();
+    await page.getByText('Materials and tools', { exact: true }).click();
     await expect(page.getByText(/task could no longer be recovered/i)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByLabel(/title, doi, or arxiv id/i)).toBeEnabled();
     await page.waitForTimeout(1_500);
@@ -393,7 +396,7 @@ test('a failed source retrieval retries the same task without a new acquisition 
   await page.route('**/api/agent/tasks/literature-failed', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: succeededTask }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
-  await page.getByText('Materials and management', { exact: true }).click();
+  await page.getByText('Materials and tools', { exact: true }).click();
   await page.getByRole('button', { name: /try again/i }).press('Enter');
   await expect(page.getByText(/source ready/i)).toBeVisible({ timeout: 4_000 });
   expect(retries).toBe(1);
@@ -419,7 +422,7 @@ test('concurrent retry activation sends one POST and reconciles a 409 through au
   });
 
   await page.goto(`${baseUrl}/dashboard`);
-  await page.getByText('Materials and management', { exact: true }).click();
+  await page.getByText('Materials and tools', { exact: true }).click();
   const retry = page.getByRole('button', { name: /try again/i });
   await retry.click();
   expect(await retry.isDisabled()).toBe(true);
@@ -466,7 +469,7 @@ test('metadata selection starts a second acquisition and finishes with one tempo
     return route.fulfill({ contentType: 'application/pdf', body: '%PDF-final' });
   });
   await page.goto(`${baseUrl}/dashboard`);
-  await page.getByText('Materials and management', { exact: true }).click();
+  await page.getByText('Materials and tools', { exact: true }).click();
   await page.locator('[data-literature-entry] > summary').click();
   const input = page.getByLabel(/title, doi, or arxiv id/i);
   await input.focus();

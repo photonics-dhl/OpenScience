@@ -5,7 +5,7 @@ import type { MutableRefObject, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { HermesPetMeshInput, HermesPetMeshRenderer } from '@/lib/hermes/pet-mesh-renderer';
-import { deferVisibleLive2DStart } from '@/lib/hermes/defer-live2d';
+import { deferVisibleLive2DStart, latestStageIntersection } from '@/lib/hermes/defer-live2d';
 import {
   createHermesRuntimeStatus,
   getHermesRuntimeFailureReason,
@@ -71,8 +71,10 @@ export function HermesRiggedPortrait({ fallback, inputRef, onRuntimeStatus, redu
       deferred?.notify();
     };
     const resizeObserver = new ResizeObserver(() => renderer?.resize());
-    const intersectionObserver = new IntersectionObserver(([entry]) => {
-      intersecting = Boolean(entry?.isIntersecting);
+    const intersectionObserver = new IntersectionObserver((entries) => {
+      const entry = latestStageIntersection(entries, stage);
+      if (!entry) return;
+      intersecting = entry.isIntersecting;
       applySuspension();
     }, { threshold: .01 });
     const syncVisibility = () => applySuspension();

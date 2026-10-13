@@ -61,6 +61,7 @@ export interface HermesVisualAdapterProps {
   assistantOpen?: boolean;
   compactPresentation?: boolean;
   avatarPresentation?: boolean;
+  dashboardSeat?: boolean;
   inConversation?: boolean;
   navigationOnly?: boolean;
   state: HermesVisualState;
@@ -93,7 +94,7 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, avatarPresentation = false, inConversation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, avatarPresentation = false, dashboardSeat = false, inConversation = false, navigationOnly = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, menuFeedbackStyle, menuFeedbackTailRatio, menuFeedbackVisible = true, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const tc = useTranslations('hermesCompanion');
   const tn = useTranslations('productNavigation');
@@ -461,7 +462,21 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     if (!trigger) return;
     if (avatarPresentation) {
       const bounds = trigger.getBoundingClientRect();
-      trigger.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2, clientX: bounds.left + bounds.width / 2, clientY: bounds.bottom }));
+      let clientX = bounds.left + bounds.width / 2;
+      if (dashboardSeat) {
+        // Match the existing menu's rem width. Radix flips left/right but does
+        // not shift horizontally when neither side of a centered seat fits.
+        const rootRem = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+        const menuWidth = Math.min((compactMenu ? 19 : 22.5) * rootRem, window.innerWidth - rootRem);
+        const viewportLeft = window.visualViewport?.offsetLeft ?? 0;
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        const rightAnchor = viewportLeft + viewportWidth - 8 - 2 - menuWidth;
+        const leftAnchor = viewportLeft + 8 + 2 + menuWidth;
+        if (menuWidth <= viewportWidth - 16 && clientX > rightAnchor && clientX < leftAnchor) {
+          clientX = clientX - rightAnchor <= leftAnchor - clientX ? rightAnchor : leftAnchor;
+        }
+      }
+      trigger.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2, clientX, clientY: bounds.bottom }));
       updateMenuOpen(true);
       return;
     }
@@ -747,6 +762,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         collisionPadding={8}
         data-compact={compactMenu ? 'true' : 'false'}
         data-hermes-action-menu="true"
+        data-hermes-dashboard-seat={dashboardSeat ? 'true' : undefined}
         data-hermes-menu-layout={avatarPresentation ? 'avatar' : 'carried-sheet'}
         data-hermes-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-locale={locale}

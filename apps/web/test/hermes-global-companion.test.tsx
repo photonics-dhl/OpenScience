@@ -115,6 +115,27 @@ describe('global companion SSR ownership', () => {
     expect(docked).not.toMatch(/<div\b[^>]*aria-hidden="true"/);
   });
 
+  it('opts the dashboard into one full-body seat without creating another portrait', () => {
+    navigation.pathname = '/dashboard';
+    const markup = renderToStaticMarkup(<HermesDockAnchor floating={false}
+      presentation="dashboard-seat" entryLabel="Open conversation" entryHint="Discuss this research together."
+      onInvoke={() => {}} state="idle" suggestion={suggestion} />);
+    expect(markup).toContain('data-hermes-dashboard-seat="true"');
+    expect(markup.match(/data-hermes-dock-anchor="true"/g)).toHaveLength(1);
+    expect(markup).toContain('Discuss this research together.');
+    expect(markup).toContain('hermes-dashboard-seat-action');
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('data-live2d-instance');
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it.each(['/research-objects/new', '/research-objects/object/edit', '/explore'])('ignores dashboard seating on %s', (pathname) => {
+    navigation.pathname = pathname;
+    const markup = renderToStaticMarkup(<HermesDockAnchor floating={false} presentation="dashboard-seat"
+      onInvoke={() => {}} state="idle" suggestion={suggestion} />);
+    expect(markup).not.toContain('data-hermes-dashboard-seat');
+  });
+
   it('retains the editor conversation as the owner while it is closed', () => {
     const markup = renderToStaticMarkup(<HermesAssistantDrawer
       docked open={false} onOpenChange={() => {}} locale="en" suggestion={suggestion}

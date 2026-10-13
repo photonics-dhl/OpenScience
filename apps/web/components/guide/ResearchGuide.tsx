@@ -52,7 +52,24 @@ export function ResearchGuide() {
     else return;
     event.preventDefault();
     select(next);
-    refs.current?.[next]?.focus();
+    const target = refs.current?.[next];
+    target?.focus();
+    // Focus alone can leave a partially visible lifecycle tab clipped on mobile.
+    // Move only this rail; centering agrees with its existing scroll-snap target.
+    if (refs === stepRefs && target) {
+      const rail = target.closest<HTMLElement>('[role="tablist"]');
+      if (rail && rail.scrollWidth > rail.clientWidth) {
+        const bounds = target.getBoundingClientRect();
+        const left = rail.getBoundingClientRect().left + rail.clientLeft;
+        const right = left + rail.clientWidth;
+        if (bounds.left < left || bounds.right > right) {
+          rail.scrollTo({
+            left: rail.scrollLeft + (bounds.left + bounds.right - left - right) / 2,
+            behavior: 'instant',
+          });
+        }
+      }
+    }
   };
 
   const contents = <nav aria-label={t.contents} className={styles.chapterLinks}>
