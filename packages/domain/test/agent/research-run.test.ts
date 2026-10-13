@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma } from '@prisma/client';
 import { prepareAgentTaskForCrashRecovery, claimAgentTask, recoverUndispatchedAgentTasks } from '../../src/agent/agent';
-import { VISUAL_NARRATIVE_PROFILE } from '../../src/assets/video';
+import { CONTENT_DRIVEN_PROFILE, VISUAL_NARRATIVE_PROFILE } from '../../src/assets/video';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
@@ -256,52 +256,72 @@ describe('Hermes durable research run', () => {
     db.agentTasks.push({ id: ids.ingestionAgent, status: 'succeeded' });
     db.ingestionTasks.push({ id: ids.ingestion, batchId: 'batch', artifactId: ids.artifact,
       agentTaskId: ids.ingestionAgent, state: 'confirmed', error: null });
-    db.claimNodes.push({ id: ids.claim, researchObjectId: ids.ro, versionId: ids.version, extractionStatus: 'succeeded',
+    const statement = 'The source-supported signal is present.';
+    db.claimNodes.push({ id: ids.claim, researchObjectId: ids.ro, versionId: ids.version, extractionStatus: 'succeeded', statement,
+      kind: 'finding', assessment: 'supported', conditions: [], limitations: [], updatedAt: new Date(),
       provenance: { source: 'reviewed_ingestion', sourceTaskId: ids.ingestion, sourceTaskLineage: ids.ingestion } });
     db.evidenceRecords.push({ id: 'evidence', claimId: ids.claim, researchObjectId: ids.ro, versionId: ids.version,
-      artifactId: ids.artifact, contentHash: ONCHIP_SOURCE_CONTENT_HASH, extractionStatus: 'succeeded',
+      artifactId: ids.artifact, contentHash: ONCHIP_SOURCE_CONTENT_HASH, extractionStatus: 'succeeded', exactQuote: statement,
+      relation: 'supports', locator: { page: 1 }, updatedAt: new Date(),
       provenance: { source: 'reviewed_ingestion', sourceTaskId: ids.ingestion } });
     db.hermesResearchRuns.push({ id: ids.run, actorId: ids.user, researchObjectId: ids.ro, versionId: ids.version,
       profile: 'onchip-field-sampling-v1', maxAgentTasks: 7, sourceClaimIds: [ids.claim], sourceReviewDigest: 'digest',
       status: 'awaiting_claim_review', version: 2, error: null, lastReconciledAt: null, createdAt: new Date(), updatedAt: new Date() });
     db.hermesResearchSteps.push({ id: 'source-step', runId: ids.run, stage: 'source_ingestion', ordinal: 0,
       status: 'succeeded', ingestionTaskId: ids.ingestion, artifactId: ids.artifact, agentTaskId: ids.ingestionAgent });
-    const deps = { prisma, redis: { lpush: async () => 1 } } as never;
+    let current = Date.now();
+    const deps = { prisma, redis: { lpush: async () => 1 }, videoEnabled: true, readVideoReadiness: async () => true,
+      now: () => new Date(current) } as never;
+    const tick = () => { current += 6_000; return reconcileHermesResearchRuns(deps); };
     const generationTasks = () => db.agentTasks.filter((task) => task.kind === 'presentation.generate');
     const finishStage = (stage: string, kind: string) => {
       const steps = db.hermesResearchSteps.filter((step) => step.stage === stage);
       for (const step of steps) {
         const task = db.agentTasks.find((candidate) => candidate.id === step.agentTaskId)!;
         task.status = 'succeeded';
+        const storyboard = db.presentationAssets.find(asset => asset.kind === 'interactive_html');
+        const provenance = stage === 'storyboard' ? { subtype: 'sourced_storyboard', storyboardSettings: task.payload.storyboard,
+          storyboardDocument: { schemaVersion: 1, title: 'Supported signal', scenes: Array.from({ length: 5 }, () => ({
+            title: 'Signal', narration: statement, visualAction: 'Highlight the supported signal.', durationSeconds: 8, sourceClaimIds: [ids.claim],
+            animation: { objects: [{ id: 'signal', kind: 'rect', x: 0.2, y: 0.2, width: 0.2, height: 0.2, color: 'blue', sourceClaimIds: [ids.claim] }],
+              actions: [{ kind: 'pulse', target: 'signal', start: 0, end: 1, meaning: 'Emphasize the stated signal.', basis: { claimId: ids.claim, quote: statement } }] },
+          })) } } : stage === 'scene_image' ? { subtype: 'storyboard_scene_image', sceneImage: task.payload.sceneImage,
+          parentIdentity: JSON.stringify({ contentHash: storyboard!.contentHash, provenance: storyboard!.provenance, ids: [ids.claim] }) } : {};
         db.presentationAssets.push({ id: task.id, researchObjectId: ids.ro, versionId: ids.version,
-          kind, status: 'draft', contentHash: `hash-${stage}-${step.ordinal}`, provenance: {}, createdAt: new Date(), updatedAt: new Date() });
+          kind, status: 'draft', contentHash: `hash-${stage}-${step.ordinal}`, provenance, createdAt: new Date(), updatedAt: new Date() });
         db.presentationAssetClaims.push({ presentationAssetId: task.id, claimId: ids.claim, researchObjectId: ids.ro, versionId: ids.version });
       }
     };
 
-    await reconcileHermesResearchRuns(deps);
+    await tick();
+    expect(generationTasks()).toHaveLength(0);
+    expect(db.hermesResearchRuns[0].error).toMatch(/Legacy template generation paused/);
+    expect(db.usageLedger.filter(entry => entry.kind === 'consume')).toHaveLength(0);
+    // The positive fixture represents an explicitly authorized supported plan; the retired template remains refused above.
+    Object.assign(db.hermesResearchRuns[0], { profile: CONTENT_DRIVEN_PROFILE, maxAgentTasks: 8, lastReconciledAt: null, error: null });
+    await tick();
     expect(generationTasks()).toHaveLength(0);
     expect(db.hermesResearchRuns[0].error).toMatch(/Credit/);
     db.usageLedger.push({ id: 'grant', userId: ids.user, resource: 'ai_credit', delta: 20, kind: 'grant' });
     db.hermesResearchRuns[0].lastReconciledAt = null;
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     expect(generationTasks()).toHaveLength(1);
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     expect(generationTasks()).toHaveLength(1);
     finishStage('storyboard', 'interactive_html');
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     db.presentationAssets.find((asset) => asset.id === generationTasks()[0].id)!.status = 'approved';
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     expect(generationTasks()).toHaveLength(6);
     finishStage('scene_image', 'image');
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     db.presentationAssets.filter((asset) => asset.kind === 'image').forEach((asset) => { asset.status = 'approved'; });
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     expect(generationTasks()).toHaveLength(7);
     finishStage('video', 'video');
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     db.presentationAssets.find((asset) => asset.kind === 'video')!.status = 'approved';
-    await reconcileHermesResearchRuns(deps);
+    await tick();
     expect(db.hermesResearchRuns[0]).toMatchObject({ status: 'succeeded', error: null });
     expect(db.usageLedger.filter((entry) => entry.kind === 'consume')).toHaveLength(7);
   });
@@ -377,6 +397,8 @@ function paidResultFixture(output: 'video' | null = null) {
     artifactId: paidIds.artifact, contentHash: 'a'.repeat(64), exactQuote: 'The source transfers energy to the receiver.', relation: 'supports', locator: { page: 1 },
     extractionStatus: 'succeeded', updatedAt: paidTime, provenance: { source: 'reviewed_ingestion', sourceTaskId: paidIds.ingestion } });
   db.usageLedger.push({ id: 'existing-credit', userId: paidIds.actor, resource: 'ai_credit', delta: 100, kind: 'grant' });
+  Object.assign(prisma.usageLedger, { findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
+    db.usageLedger.find(row => row.idempotencyKey === where.idempotencyKey) ?? null });
   db.hermesResearchRuns.push({ id: paidIds.run, actorId: paidIds.actor, researchObjectId: paidIds.ro, versionId: paidIds.version,
     profile: VISUAL_NARRATIVE_PROFILE, maxAgentTasks: 9, generationSettings: { ...paidSettings, ...(output === null ? {} : { output }) },
     sourceClaimIds: [paidIds.claim], sourceReviewDigest: 'existing-reviewed-source', status: 'awaiting_claim_review', version: 1,
@@ -431,7 +453,7 @@ async function failedPaidScenes(sceneCount = 1) {
   const document = parseStoryboardDocument({ schemaVersion: 1, title: 'Energy transfer',
     narrative: { mainMessage: 'Explain the supported transfer.', audience: 'Researchers' },
     scenes: Array.from({ length: sceneCount }, () => ({ title: 'Transfer', narration: 'The source transfers energy to the receiver.',
-      visualAction: describeIllustrationBrief(illustration), illustration: structuredClone(illustration), durationSeconds: 10, sourceClaimIds: [paidIds.claim] })) },
+      visualAction: describeIllustrationBrief(illustration), illustration: structuredClone(illustration), sourceClaimIds: [paidIds.claim] })) },
   [paidIds.claim], 'image');
   const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
   const source = await readVisualNarrativeSource(f.prisma, { userId: paidIds.actor, workspaceId: paidIds.workspace,
