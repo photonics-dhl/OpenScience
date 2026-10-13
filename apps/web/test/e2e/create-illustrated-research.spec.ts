@@ -45,10 +45,10 @@ async function setup(page: Page, loseResponse = false) {
     throw new Error(`Unexpected API read ${get}`);
   });
   await page.goto('/dashboard');
-  const createEntry = page.getByRole('main').getByRole('link', { name: '创建研究', exact: true });
+  const createEntry = page.getByRole('main').getByRole('link', { name: '新建研究', exact: true });
   await expect(createEntry).toHaveCount(1);
   await expect(createEntry).toBeVisible();
-  await expect(createEntry).toHaveAccessibleName('创建研究');
+  await expect(createEntry).toHaveAccessibleName('新建研究');
   await expect(createEntry).toHaveAttribute('href', '/research-objects/new?mode=import');
   await createEntry.click();
   await expect(page).toHaveURL(/research-objects\/new\?mode=import$/);
