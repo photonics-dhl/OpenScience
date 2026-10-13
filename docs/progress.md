@@ -2,8 +2,9 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-13：新Media回执在现有Guide首屏输入框断言失败，其余两个Guide用例未运行；四个browser-entry、Video和Journal成功。视频聊天获完整gpt-6.1-sol High定位/修复交接，限现有Guide和对应浏览器用例，冻结差异后独立审查；不落实尚待用户认可的新设计。精确CI、失败日志与写权见CURRENT。生图私有修订授权和UI精简候选反馈仍待用户决定。
 - 2026-10-13：只读前置发现指定RO的版本均published、draft=0，scene0已有approved图；旧workspace.guide不能冒称当前已批准分镜，旧failed run不能充作剩余预算。精确对象和脱敏回执见CURRENT受控提交前置段；没有创建私有版本/Provider/生成/部署，后续私有修订范围与真实执行需用户决定。
-- 2026-10-13：总控恢复完整交接：生图c7d455d8已提交36/36与54/54回归，结果页持久实际模型提示已提交20be2c62；新增21/21、typecheck/ESLint通过，完整两文件38通过/10失败与c7d基线同名同错。视频以gpt-6.1-sol High独立复核c7d回归及五文件Web差异均GO（P0/P1/P2=0）；真实浏览器展示未验收，已快进推送frontend/nanqing的460c8bd0，Video/Journal精确CI成功，Media四个browser-entry成功、skill-path仍运行，编号见CURRENT。UI首稿因同图重复/文字杂乱退回，精简候选focused已交用户审阅，尚未授权新版产品实现；旧Guide验收不等于新方案获认可。CURRENT/progress/index由总控单写，心跳已纠正替代UI聊天与执行边界。Synclip Provider/真实论文生成/部署仍待明确授权，UI概念图按该聊天独立授权执行。
+- 2026-10-13：总控恢复完整交接：生图c7d455d8已提交36/36与54/54回归，结果页持久实际模型提示已提交20be2c62；新增21/21、typecheck/ESLint通过，完整两文件38通过/10失败与c7d基线同名同错。视频以gpt-6.1-sol High独立复核c7d回归及五文件Web差异均GO（P0/P1/P2=0）；真实浏览器展示未验收，已快进推送frontend/nanqing的460c8bd0，Video/Journal精确CI成功，Media四个browser-entry成功，后续skill-path的Guide断言失败，最新处置见CURRENT。UI首稿因同图重复/文字杂乱退回，精简候选focused已交用户审阅，尚未授权新版产品实现；旧Guide验收不等于新方案获认可。CURRENT/progress/index由总控单写，心跳已纠正替代UI聊天与执行边界。Synclip Provider/真实论文生成/部署仍待明确授权，UI概念图按该聊天独立授权执行。
 - 2026-10-13：API-only admission 审计补充四种明确模型不可用码、非模型错误/纯消息文本不降级、降级请求失败或响应丢失后不再 POST 的可执行回归；未修改生产代码。broker/transport 36/36、Gateway API/spool/image 54/54、node syntax/diff-check 通过，日志 `tmp/synclip-admission-{node,gateway}-20261013.log`。私有审阅 checkpoint、来源绑定与批准守卫本轮仅静态核对已有用例，未重新执行 Domain/Worker 审阅套件。当时发现Web未消费generatorVersion的缺口，现由20be2c62补实际模型提示；提示不臆测降级原因，浏览器与真实产物验收仍开放。未读凭据、未调用 Provider/真实生成/部署，截图不作为运行时可用性证据。
 - 2026-10-13：历史 beta-gate NO-GO (`22674ce5`/`d17e8d8d`) 已由完整依赖链修复并替代；旧结论保留在 Git 历史，不再作为当前实施入口。
 - 2026-10-13：用户提供 Synclip `POST /v1/image` 合同截图，明确 `gpt-image-2.5` 可用（价格标注 6）；API-only 适配器改为 2.5 主模型，仅显式结构化模型不可用时一次降级到 2，并把实际模型绑定到 attempt/receipt/spool result/生成器版本。定向 API/transport/broker 测试与 ai-gateway typecheck 通过；未调用 Provider、未部署。

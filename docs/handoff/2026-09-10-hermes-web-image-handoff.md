@@ -27,7 +27,7 @@
 | Session / ID | 当前责任、状态与下一动作 | 工作树 / branch |
 |---|---|---|
 | 生图 / `01a0e831-be19-7813-8379-58313178ff26` | API-only主模型/回退/恢复及c7d回归已提交；结果页持久模型提示20be2c62已High GO并提交，21/21与typecheck/ESLint通过。只读前置已证实目标RO的版本均已发布且无draft、目标scene已有approved图片；须由用户决定后续私有修订范围与执行预算，再重新绑定新版本对象。暂停真实提交，不能复用旧失败run或旧指南任务充作授权。 | canonical / `release/onchip-production-line` |
-| 视频 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 视频代码/fixture已High GO并通过Media；纠正目录权限推断的证据交总控收口。c7d新增回归已由gpt-6.1-sol High独立复核GO（P0/P1/P2=0），五文件Web提示也已独立High GO（P0/P1/P2=0），交总控提交/CI；不重审旧链、不写共享文档、不启服务。真实视频阻塞见上节。 | canonical只读审查；旧视频树保留证据 |
+| 视频 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 原视频与c7d/20be的High已完成。新派单以gpt-6.1-sol High定位并修复Media38376162983的Guide首屏断言失败；唯一写权vendor-ux.spec.ts，证明确有现有布局回归才动ResearchGuide.tsx及globals.css的Guide局部。先核根因，再跑原3个Guide浏览器用例，冻结差异交独立High；不采用未认可的新设计、不写共享文档、不启服务。 | canonical / `release/onchip-production-line`；旧视频树保留证据 |
 | UI / `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`（替代旧01a0f118） | 按该聊天用户最新决定制作完整Guide概念图供审阅；固定左目录/移动折叠目录、生命周期与四角色入口。旧Guide代码已有High GO和23/23，不代表新版设计获认可；撤回旧代码收尾派单；首稿用户反馈同图重复、文字杂乱且无重点，已交精简候选P03-guide-focused-20261013.png：一张UI示意/一张案例图、一次展开一个阶段。新布局/文案仍待认可，不写产品代码。 | `E:/Miscellaneous/XGS/.worktrees/research-product-craft`，设计产物放ignored tmp |
 
 ## 当前 Git / CI / 运行事实
@@ -36,7 +36,7 @@
 - Video exact CI `38280757897` for merge head `2e1a28de` completed successfully: skill-path and all four browser-entry jobs passed. The two stale queue-recovery fixture failures are closed; Journal/search evidence remains as previously recorded, with no production-code failure attributed to the merged UI/video code.
 - Image admission/floor/reader and beta-gate alignment are merged and High-reviewed; complete producer/floor and real PNG quality remain open. The API submission contract is merged; no Synclip task has been created and API receipt/PNG/scientific review remain open. Media `38288353198`'s four shared native-video parent failures are addressed by `613db2c8` plus `1a22f83c`; exact Media `38291046457` is green. No deployment until the API result, human PNG/scientific gates and receipt evidence close.
 
-- GitHub协作目标仍为 `origin/frontend/nanqing`，从canonical提交正常快进推送；不推main、不强推、不部署。已正常快进推送460c8bd031869ad0890696ff3e534a097e57fe43；对应Video 38376163034、Journal 38376163057成功；Media 38376162983四个browser-entry成功，skill-path仍在执行（源码含20be2c62），旧CI成功不能代替新提交。后续纯文档回执不代表新的生产发布。
+- GitHub协作目标仍为 `origin/frontend/nanqing`，从canonical提交正常快进推送；不推main、不强推、不部署。已正常快进推送460c8bd031869ad0890696ff3e534a097e57fe43；对应Video 38376163034、Journal 38376163057成功；Media 38376162983四个browser-entry成功，skill-path在Guide浏览器检查失败：vendor-ux.spec.ts:54的1440×900输入框首屏断言不满足，另两用例因max-failures未运行。失败日志`tmp/coordination/media-ci-460c8bd0-failed.log`；已分配定位修复，未把旧CI或其他job成功冒称全绿。后续纯文档回执不代表新的生产发布。
 
 ## 生图受控提交的实际前置（10-13 17:26–17:28只读）
 - RO `aa450f1e-fafc-46d8-a072-d935e01b0544` 最新v2 `9f570ec9-f115-4d83-890d-08f978e4c5d6` 已published；draft=0、活动任务=0。approved parent `cd150093-2a59-45fb-a3dd-1be4dc9bb773` 的sceneIndex=0来源Claim `6fd965d7-77f9-478e-9075-32b010a8c607`，已有approved图片 `4e64c389-32ed-45b8-b9d0-0fa1dca96dfa`。不能在已发布版本重生成或改旧图；已向用户确认是否创建私有修订稿（仅准备，不生图）；答复前不新增业务版本。若选择私有修订，须沿既有产品流程并按真实继承结果重新绑定新version/parent/Claim。
