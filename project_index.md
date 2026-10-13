@@ -1,6 +1,8 @@
 # OpenScience (XGS) 项目文件索引
 
 架构工程新交付定位：`codex/architecture-maintenance` 候选中的 `codex/architecture-maintenance:docs/runbooks/architecture-maintenance-prompt.md`、`codex/architecture-maintenance:docs/runbooks/assets/2026-10-13-server-{health.png,resources.md}` 提供复用提示词与资源调查；R08/R13原地见同候选 `hermes-capability-registry.md`，旧网页退役源码/固定归档合同见 `codex/retire-web-archive` 的 `docs/runbooks/deployment.md` 和 `codex/retire-web-archive:infra/synclip-image/normalize.mjs`。这些分支尚未全部合入canonical，审查、当前生产/回退和待集成状态只见 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
+研究桌面P04候选定位：`codex/p04-research-desktop:apps/web/lib/dashboard-page-copy.ts` 与该分支原 `components/dashboard/ResearchList.tsx`、`components/hermes/{HermesDockAnchor,HermesWorkspaceStage}.tsx` 承接当前研究、真实私有/公开状态及单Hermes席位；按已认可图实现，源码、检查、集成与运行分别见CURRENT，未合入canonical前不当作其现有文件。
+首图/Guide融合候选定位：`codex/media-retirement-integration:packages/domain/src/agent/first-image-continuation.ts`、`apps/web/components/hermes/HermesFirstImageResult.tsx` 与原 `apps/web/test/e2e/hermes-first-image.spec.ts` 承接当前已审私有稿的单图运行及原任务读取恢复；同候选保留已退役 Web 的历史拒用与双位置私密清理。上述新文件尚未收进canonical，精确提交、验收与发布只见 [Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。
 
 `docs/handoff/2026-10-09-researchers-services-handoff.md`：导航与服务对象入口唯一 CURRENT；记录本对话功能向既有 `frontend/nanqing` 的整合、实际发布/回滚和后续范围。
 
