@@ -510,9 +510,8 @@ export async function getHermesResearchRun(
             ? inspectHermesSavedCompositionCandidate(deps.prisma, run.id) : Promise.resolve(null)).then(saved => saved && run.status === 'failed'
             && run.steps.length === 3 && saved.source.agentTaskId === saved.replacement?.id
             ? { chargeableAttempts: 1, generationRecovery: 'source-review-fresh' as const }
-            : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
+            : inspectHermesSourceReviewRecovery(deps.prisma, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission).then(proof => proof && proof.reviewMode !== 'web' ? { chargeableAttempts: proof.technicalRecovery ? 0 : 1,
           ...(proof.technicalRecovery ? { generationRecovery: 'source-review-not-submitted' as const }
-            : proof.reviewMode === 'web' ? { generationRecovery: 'source-review-independent' as const }
             : proof.savedOutputEvidence ? { generationRecovery: 'source-review-saved' as const }
             : proof.directCompositionEvidence ? { generationRecovery: 'source-review-fresh' as const } : {}) } : null))).catch(() => null)
       : await inspectGenerationRecovery(deps.prisma, run, deps.canResumeImageBeforeSubmission, deps.inspectImageRecoveryState).catch(() => null) : null;
@@ -626,7 +625,6 @@ export async function getHermesResearchRun(
   return projectReadinessHold(view);
 }
 
-const HERMES_AUTHORITY_ERROR = '[blocked] Hermes run authority is invalid';
 const NARRATIVE_CORRECTION_STOP = 'Internal review could not complete the narrative within the authorized correction budget';
 const NARRATIVE_CORRECTION = 'narrative_image_scientific_replan';
 const NARRATIVE_BLOCKED_REVISION = 'narrative_storyboard_scientific_revision';
@@ -2263,14 +2261,12 @@ async function inspectGenerationRecovery(
     if (inspectImageRecoveryState) {
       try { recoveryState = await inspectImageRecoveryState(task.id); } catch { return null; }
     }
-    // A claim transaction can fail before its first execution or provider submission.
-    if (task.executionAttempt === 0 && recoveryState !== 'before_submission') return null;
+    // An empty current spool cannot identify the payer of an unmarked historical task.
+    // Attempt counters and an authority error are not evidence of non-submission.
+    if (recoveryState === 'before_submission' || !inspectImageRecoveryState) return null;
     if (recoveryState === 'completed') {
       plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id });
-    } else if (recoveryState === 'before_submission'
-      || (!inspectImageRecoveryState && task.error === HERMES_AUTHORITY_ERROR)) {
-      plan.rearm.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, error: task.error!, executionAttempt: task.executionAttempt });
-    } else if ((recoveryState === 'failed' || recoveryState === 'not_submitted' || recoveryState === 'usage_limited' || !inspectImageRecoveryState)
+    } else if ((recoveryState === 'failed' || recoveryState === 'not_submitted' || recoveryState === 'usage_limited')
       && task.error && !task.error.startsWith('[blocked]')) {
       plan.chargeable.push({ stepId: step.id, ordinal: step.ordinal, oldTaskId: task.id, sessionId: task.sessionId, payload: payload as unknown as Record<string, unknown> });
     } else return null;
@@ -3094,6 +3090,9 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
           if (run.versionId === null) {
             if (run.version !== input.expectedVersion)
               throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before retrying source review');
+            const sourceReview = await inspectHermesSourceReviewRecovery(tx, run.id, undefined, deps.canRetrySourceReviewBeforeSubmission);
+            if (sourceReview?.reviewMode === 'web')
+              throw new HermesResearchRunError('SOURCE_NOT_READY', 'Historical Web source review is retired; preserve the original task and paid result');
             const taskId = await recoverHermesSourceReviewInTransaction(deps, tx, { ...input, requestDigest }, ctx);
             return { run: await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE }), dispatchIds: [taskId] };
           }
