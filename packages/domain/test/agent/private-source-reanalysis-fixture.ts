@@ -4,12 +4,12 @@ import { vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import type { Prisma } from '@prisma/client';
 import { fixture, fields } from './direct-source-review-fixture';
-import { seedHistoricalIndependentSourceReview } from './historical-source-review-fixture';
+import { seedHistoricalIndependentSourceReview, seedHistoricalSourceReviewRecovery } from './historical-source-review-fixture';
 import { createHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
 import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
 
-/** Real historical recovery producers, followed by the exhausted technical successor seen in LIVE. */
+/** Model recovery producers plus persisted, retired Web history seen in LIVE. */
 export async function privateSourceReanalysisFixture() {
   const f = fixture();
   f.ids.run = '3aaa6e8c-8168-4a12-9ccb-03e6c7b70c5c';
@@ -55,9 +55,8 @@ export async function privateSourceReanalysisFixture() {
       fallbackReason: null, retryCount: 0, error: 'scientific_review_failed' } });
   stop();
   const verifier = vi.fn(async () => true);
-  await retryHermesGeneration({ ...f.deps, canRetrySourceReviewBeforeSubmission: verifier }, {
-    ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'technical' });
-  const current = f.db.agentTasks.at(-1)!;
+  const current = await seedHistoricalSourceReviewRecovery(f, {
+    ...f.input, expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'technical' }, verifier);
   Object.assign(current, { status: 'succeeded', executionAttempt: 1, result: structuredClone(root.result) });
   stop(); f.db.hermesResearchRuns[0].version = 22;
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
 import { reconcileHermesResearchRuns } from '@openscience/domain';
 import { sourceCompositionRecoveryFixture, sourceReviewPacketFailureFixture, sourceSavedCompositionFixture } from '../../../packages/domain/test/agent/source-composition-recovery-fixture';
+import { seedHistoricalSourceReviewRecovery } from '../../../packages/domain/test/agent/historical-source-review-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
@@ -45,21 +46,25 @@ describe('existing retry-generation final composition HTTP contract', () => {
     expect(denied.statusCode).toBe(400); expect(denied.json().error.code).toBe('VALIDATION_ERROR');
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
   });
-  it('projects and replays one paid independent continuation for an exact initial local overflow', async () => {
+  it('rejects every new retired packet continuation while retaining only an existing receipt for read-only replay', async () => {
     const f = await fixture(true); const version = f.run.version;
     const read = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
-    expect(read.statusCode).toBe(200); expect(read.json().run).toMatchObject({
-      canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
+    expect(read.statusCode).toBe(200); expect(read.json().run.canRetryGeneration).not.toBe(true);
     expect(read.body).not.toMatch(/packetFailureEvidence|unverifiedSummaries|draftClaims|semanticStage/);
-    const debits = f.db.usageLedger.length; const tasks = f.db.agentTasks.length;
+    const before = structuredClone(f.db); const dispatches = f.redis.lpush.mock.calls.length;
     const [first, replay] = await Promise.all([f.post('packet-browser', { expectedVersion: version }), f.post('packet-browser', { expectedVersion: version })]);
-    expect(first.statusCode).toBe(202); expect(replay.statusCode).toBe(202); expect(first.json()).toEqual(replay.json());
-    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(debits + 1);
-    const dispatches = f.redis.lpush.mock.calls.length;
-    expect((await f.post('packet-browser', { expectedVersion: version })).statusCode).toBe(202);
-    expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    expect(first.statusCode).toBe(409); expect(replay.statusCode).toBe(409);
+    expect(replay.json().error).toMatchObject({ code: first.json().error.code, message: first.json().error.message });
+    expect(first.json().error).toMatchObject({ code: 'SOURCE_NOT_READY' }); expect(first.json().error.message).toContain('retired');
     expect((await f.post('different-packet-browser', { expectedVersion: version })).statusCode).toBe(409);
-    expect(f.db.usageLedger).toHaveLength(debits + 1);
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    await seedHistoricalSourceReviewRecovery(f, { ...f.recoveryInput, expectedVersion: version, idempotencyKey: 'packet-browser' });
+    const persisted = structuredClone(f.db);
+    expect((await f.post('packet-browser', { expectedVersion: version })).statusCode).toBe(202);
+    expect((await f.post('packet-browser', { expectedVersion: version })).statusCode).toBe(202);
+    expect(f.db).toEqual(persisted); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    expect((await f.post('different-packet-browser', { expectedVersion: version })).statusCode).toBe(409);
+    expect(f.db).toEqual(persisted); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
   });
 
   it('denies a locally marked packet failure if any provider call was already recorded', async () => {

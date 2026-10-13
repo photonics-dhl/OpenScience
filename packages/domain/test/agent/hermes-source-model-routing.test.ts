@@ -8,6 +8,8 @@ describe('Hermes owns new paper science reviews', () => {
   it('records model review and binds its original source without allocating a Web review', async () => {
     const f = await privateSourceReanalysisFixture();
     const historical = structuredClone(f.db.auditLogs);
+    const historicalTasks = structuredClone(f.db.agentTasks);
+    const historicalReservations = structuredClone(f.db.usageLedger);
     const created = await reanalyzeConfirmedIngestion(f.deps, f.input);
     const { original, successor } = await advancePrivateSourceReanalysisToReview(f, created.id);
     const receipt = f.db.auditLogs.find(row => row.action === 'ingestion.task.system_analysis_refresh'
@@ -21,6 +23,12 @@ describe('Hermes owns new paper science reviews', () => {
         compositionTaskId: original.id, artifactId: original.payload.artifactId,
         documentSha256: original.result.sourceMapRef.contentHash, sourceMapHash: original.result.sourceMapRef.serializedSha256, maxAttempts: 2 } });
     expect(f.db.auditLogs.filter(row => historical.some(old => old.id === row.id))).toEqual(historical);
+    expect(f.db.agentTasks.slice(0, historicalTasks.length)).toEqual(historicalTasks);
+    expect(f.db.usageLedger.slice(0, historicalReservations.length)).toEqual(historicalReservations);
+    // Only the explicitly requested new analysis and its model review reserve credit.
+    expect(f.db.agentTasks).toHaveLength(historicalTasks.length + 2);
+    expect(f.db.usageLedger).toHaveLength(historicalReservations.length + 2);
+    expect(f.verifier).not.toHaveBeenCalled();
   });
 
   it('keeps the same paid-operation replay handle after a model review succeeds and the run advances', async () => {
