@@ -145,6 +145,11 @@ type AgentTaskRetrySnapshot = Prisma.AgentTaskGetPayload<{
   include: { session: { include: { researchObject: { include: { workspace: { include: { members: true } } } } } } };
 }>;
 
+/** Journal Agent rows hold private workflow control state; journal APIs expose their products. */
+function isInternalJournalTask(task: { kind: string; session: { kind: string } }): boolean {
+  return task.kind === 'journal.generate' || task.session.kind === 'journal-editor';
+}
+
 function retryAuthorityInclude(userId: string) {
   return {
     session: {
@@ -195,7 +200,7 @@ function evaluateAgentTaskRetryEligibility(
   userId: string,
 ): { authorityValid: boolean; canRetry: boolean } {
   const session = task.session;
-  if (task.deletedAt || session.deletedAt || session.researchObject?.deletedAt || session.userId !== userId || session.status !== 'active') return { authorityValid: false, canRetry: false };
+  if (isInternalJournalTask(task) || task.deletedAt || session.deletedAt || session.researchObject?.deletedAt || session.userId !== userId || session.status !== 'active') return { authorityValid: false, canRetry: false };
   const researchObject = session.researchObject;
   if (session.researchObjectId) {
     if (!researchObject || researchObject.id !== session.researchObjectId
@@ -295,6 +300,7 @@ async function findNewestRetryableSourceTask(
     INNER JOIN "workspaces" AS workspace ON workspace."id" = research_object."workspace_id"
     WHERE session."user_id" = ${userId}::uuid
       AND session."status" = 'active'
+      AND session."kind" <> 'journal-editor'
       AND task.deleted_at IS NULL AND session.deleted_at IS NULL AND research_object.deleted_at IS NULL
       AND workspace."status" = 'active'
       AND EXISTS (
@@ -444,6 +450,7 @@ export async function listAgentTasks(
       payload: targetPayload,
       session: {
         userId: input.userId,
+        kind: { not: 'journal-editor' },
         deletedAt: null,
         status: 'active',
         researchObject: {
@@ -467,9 +474,9 @@ export async function listAgentTasks(
   const rows = await deps.prisma.agentTask.findMany({
     where: {
       deletedAt: null,
-      session: { userId: input.userId, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+      session: { userId: input.userId, kind: { not: 'journal-editor' }, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
       AND: [{ OR: [{ session: { deletedAt: null } }, { result: { path: ['writingDraft'], not: Prisma.AnyNull } }] }],
-      ...(input.kind ? { kind: input.kind } : {}),
+      kind: { not: 'journal.generate', ...(input.kind ? { equals: input.kind } : {}) },
       ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
     },
     include: retryAuthorityInclude(input.userId),
@@ -560,7 +567,7 @@ async function persistAgentTaskCoreInTransaction(
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   await lockTrashReferences(tx);
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
-  if (!session || session.deletedAt || session.status !== 'active' || session.userId !== input.userId) {
+  if (!session || session.kind === 'journal-editor' || session.deletedAt || session.status !== 'active' || session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
   }
   if (!(AGENT_TASK_KINDS as readonly string[]).includes(input.kind)) {
@@ -1025,7 +1032,7 @@ export async function getAgentTask(
   });
   const preservedProduct = task?.result && typeof task.result === 'object' && !Array.isArray(task.result)
     && (task.kind !== 'workspace.guide' || Boolean((task.result as Record<string, unknown>).writingDraft));
-  if (!task || task.deletedAt || (task.session.deletedAt && !preservedProduct) || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) {
+  if (!task || isInternalJournalTask(task) || task.deletedAt || (task.session.deletedAt && !preservedProduct) || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
   return { ...taskToView(task, await canRetryAgentTask(deps, task, input.userId)),
@@ -1045,7 +1052,7 @@ export async function retryAgentTask(
         const task = await tx.agentTask.findUnique({
           where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
         });
-        if (!task || task.deletedAt || task.session.deletedAt || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        if (!task || isInternalJournalTask(task) || task.deletedAt || task.session.deletedAt || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
         if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         // Internal operator recovery after the windowing fix; public canRetry and
@@ -1179,7 +1186,7 @@ export async function listAgentSessions(
   input: { userId: string },
 ): Promise<AgentSessionView[]> {
   const rows = await deps.prisma.agentSession.findMany({
-    where: { userId: input.userId, deletedAt: null, kind: { not: 'retained.products' }, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+    where: { userId: input.userId, deletedAt: null, kind: { notIn: ['retained.products', 'journal-editor'] }, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
     orderBy: { createdAt: 'desc' },
   });
   return rows.map((s) => ({
@@ -1463,7 +1470,7 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
 
 /** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
-  if (!isJsonRecord(rawResult)) return null;
+  if (kind === 'journal.generate' || !isJsonRecord(rawResult)) return null;
   if (kind === 'presentation.generate' && rawResult.purpose === 'audio-audition') {
     const audio = rawResult.audioAudition;
     return { purpose: 'audio-audition', ...(isJsonRecord(audio) && typeof audio.taskId === 'string'
@@ -1501,12 +1508,14 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.nativeImageReview;
   delete publicResult.nativeSourceReview;
   delete publicResult.nativeAgentExecution;
+  delete publicResult.journalNativeCheckpoint;
   delete publicResult.nativeIllustrationContext;
   delete publicResult.nativeIllustration;
   delete publicResult.illustrationPrompts;
   delete publicResult.nativeAgentObjects;
   if (sourceMapRef === undefined && Object.keys(publicResult).length === 0
-    && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview') || Object.hasOwn(rawResult, 'nativeAgentExecution'))) return null;
+    && (Object.hasOwn(rawResult, 'nativeImageReview') || Object.hasOwn(rawResult, 'nativeSourceReview')
+      || Object.hasOwn(rawResult, 'nativeAgentExecution') || Object.hasOwn(rawResult, 'journalNativeCheckpoint'))) return null;
   if (sourceMapRef === undefined) return publicResult;
   try {
     const reference = parseDocumentSourceMapReference(sourceMapRef);

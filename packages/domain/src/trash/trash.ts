@@ -1,4 +1,4 @@
-import { Prisma, type TrashEntry } from '@prisma/client';
+import { Prisma, type TrashEntry, type TrashObjectCleanup } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import type { WorkspaceDeps } from '../workspace/types';
@@ -19,6 +19,61 @@ export interface TrashDeps extends WorkspaceDeps {
 type Tx = Prisma.TransactionClient;
 const TABLES = { research_object: 'research_objects', session: 'agent_sessions', task: 'agent_tasks', asset: 'presentation_assets', artifact: 'artifacts' } as const;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const NATIVE_AGENT_OBJECT_PREFIX = 'derived/native-agent/';
+type TrashTaskIdentity = { taskId: string; kind: string; sessionKind: string };
+function savedTaskIdentities(scope: unknown): TrashTaskIdentity[] {
+  const identities = jsonObject(scope).taskIdentities;
+  if (!Array.isArray(identities)) return [];
+  return identities.flatMap(value => {
+    const row = jsonObject(value);
+    return typeof row.taskId === 'string' && row.taskId.trim() && typeof row.kind === 'string' && row.kind.trim()
+      && typeof row.sessionKind === 'string' && row.sessionKind.trim()
+      ? [{ taskId: row.taskId, kind: row.kind, sessionKind: row.sessionKind }] : [];
+  });
+}
+function journalTaskIdentity(identity: TrashTaskIdentity): boolean {
+  return identity.kind === 'journal.generate' || identity.sessionKind === 'journal-editor';
+}
+function publicPurgeScope(scope: unknown): Prisma.JsonValue | null {
+  const publicScope = { ...jsonObject(scope) };
+  delete publicScope.taskIdentities;
+  return Object.keys(publicScope).length ? publicScope as Prisma.JsonObject : null;
+}
+function trashEntryToView(entry: TrashEntry): TrashEntry {
+  return Object.hasOwn(jsonObject(entry.purgeScope), 'taskIdentities')
+    ? { ...entry, purgeScope: publicPurgeScope(entry.purgeScope) } : entry;
+}
+
+/** Missing rows cannot identify a Native checkpoint: ordinary and journal sessions share its namespace. */
+async function nativeCleanupIdentity(tx: Pick<Tx, 'agentTask'>, entry: TrashEntry | null): Promise<'journal' | 'ordinary' | 'unknown'> {
+  if (!entry) return 'unknown';
+  const identities = savedTaskIdentities(entry.purgeScope);
+  if (identities.some(journalTaskIdentity)) return 'journal';
+  const scope = jsonObject(entry.purgeScope);
+  const taskIds = new Set(Array.isArray(scope.taskIds) ? scope.taskIds.filter((id): id is string => typeof id === 'string') : []);
+  if (entry.kind === 'task') taskIds.add(entry.resourceId);
+  if (!taskIds.size) return 'unknown';
+  for (const taskId of taskIds) {
+    const task = await tx.agentTask.findUnique({ where: { id: taskId }, select: { kind: true, session: { select: { kind: true } } } });
+    const identity = task && typeof task.kind === 'string' && task.kind.trim() && typeof task.session?.kind === 'string' && task.session.kind.trim()
+      ? { taskId, kind: task.kind, sessionKind: task.session.kind } : identities.find(row => row.taskId === taskId);
+    if (!identity) return 'unknown';
+    if (journalTaskIdentity(identity)) return 'journal';
+  }
+  return 'ordinary';
+}
+
+async function rememberTrashTaskIdentity(tx: Tx, entryId: string, identity: TrashTaskIdentity): Promise<void> {
+  const entry = await tx.trashEntry.findUniqueOrThrow({ where: { id: entryId } });
+  const existing = jsonObject(entry.purgeScope);
+  const scope = { trashEntryId: entry.id, ...(entry.workspaceId ? { workspaceId: entry.workspaceId } : {}),
+    taskIds: [identity.taskId], artifactIds: [], assetIds: [], ...existing };
+  const identities = savedTaskIdentities(scope).filter(row => row.taskId !== identity.taskId);
+  await tx.trashEntry.update({ where: { id: entry.id }, data: { purgeScope: {
+    ...scope, taskIdentities: [...identities, identity],
+  } as Prisma.InputJsonObject } });
+}
+
 // Writers and physical cleanup take this same transaction lock. See migration reference guard.
 export async function lockTrashReferences(tx: Pick<Tx, '$executeRaw'>): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(728413920)`;
@@ -33,6 +88,46 @@ async function maintenance(tx: Tx): Promise<void> {
 }
 async function lockResource(tx: Tx, kind: TrashKind, id: string): Promise<void> {
   await tx.$queryRaw(Prisma.sql`SELECT id FROM ${Prisma.raw(TABLES[kind])} WHERE id = ${id}::uuid FOR UPDATE`);
+}
+
+/** Journal control rows must retain paid checkpoint authority through their journal lifecycle. */
+async function isJournalControlResource(tx: Pick<Tx, 'agentSession' | 'agentTask'>, kind: string, resourceId: string): Promise<boolean> {
+  if (kind === 'task') {
+    const task = await tx.agentTask.findUnique({ where: { id: resourceId }, select: { kind: true, session: { select: { kind: true } } } });
+    return task?.kind === 'journal.generate' || task?.session.kind === 'journal-editor';
+  }
+  if (kind === 'session') {
+    const session = await tx.agentSession.findUnique({ where: { id: resourceId }, select: { kind: true } });
+    return session?.kind === 'journal-editor'
+      || Boolean(await tx.agentTask.findFirst({ where: { sessionId: resourceId, kind: 'journal.generate' }, select: { id: true } }));
+  }
+  if (kind === 'research_object') {
+    return Boolean(await tx.agentSession.findFirst({ where: { researchObjectId: resourceId, kind: 'journal-editor' }, select: { id: true } })
+      || await tx.agentTask.findFirst({ where: { kind: 'journal.generate', session: { researchObjectId: resourceId } }, select: { id: true } })
+      || await tx.agentTask.findFirst({ where: { session: { researchObjectId: resourceId, kind: 'journal-editor' } }, select: { id: true } }));
+  }
+  return false;
+}
+async function hasJournalTrashReference(tx: Tx, entry: TrashEntry): Promise<boolean> {
+  if (savedTaskIdentities(entry.purgeScope).some(journalTaskIdentity)) return true;
+  if (await isJournalControlResource(tx, entry.kind, entry.resourceId)) return true;
+  const scope = jsonObject(entry.purgeScope);
+  if (Array.isArray(scope.taskIds)) {
+    for (const id of scope.taskIds) if (typeof id === 'string' && await isJournalControlResource(tx, 'task', id)) return true;
+  }
+  if (typeof scope.researchObjectId === 'string' && await isJournalControlResource(tx, 'research_object', scope.researchObjectId)) return true;
+  const children = await tx.trashEntry.findMany({ where: { parentId: entry.id }, select: { kind: true, resourceId: true } });
+  for (const child of children) if (await isJournalControlResource(tx, child.kind, child.resourceId)) return true;
+  const nativeObject = await tx.trashObjectCleanup.findFirst({ where: { trashEntryId: entry.id,
+    objectKey: { startsWith: NATIVE_AGENT_OBJECT_PREFIX }, state: { in: ['pending', 'deleting'] } }, select: { objectKey: true } });
+  if (nativeObject && await nativeCleanupIdentity(tx, entry) !== 'ordinary') return true;
+  return false;
+}
+async function requirePublicTrashResource(tx: Tx, kind: string, resourceId: string): Promise<void> {
+  if (await isJournalControlResource(tx, kind, resourceId)) throw new TrashError('NOT_FOUND', '内容不存在');
+}
+async function requirePublicTrashEntry(tx: Tx, entry: TrashEntry): Promise<void> {
+  if (await hasJournalTrashReference(tx, entry)) throw new TrashError('NOT_FOUND', '回收站项目不存在');
 }
 
 async function scopeFor(tx: Tx, kind: TrashKind, resourceId: string) {
@@ -157,6 +252,25 @@ async function mapContentReferences<T, R>(items: T[], map: (item: T) => Promise<
   return result;
 }
 
+/** Apply the processing limit after protected rows; stable cursors cannot let them occupy every batch. */
+async function scanTrashEntries(tx: Tx, where: Prisma.TrashEntryWhereInput,
+  orderBy: Prisma.TrashEntryFindManyArgs['orderBy'], limit: number): Promise<TrashEntry[]> {
+  const selected: TrashEntry[] = [];
+  let cursor: string | undefined;
+  while (selected.length < limit) {
+    const rows = await tx.trashEntry.findMany({ where, orderBy, take: limit,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
+    const protectedRows = await mapContentReferences(rows, row => hasJournalTrashReference(tx, row));
+    for (const [index, row] of rows.entries()) {
+      if (!protectedRows[index]) selected.push(row);
+      if (selected.length === limit) break;
+    }
+    if (rows.length < limit) break;
+    cursor = rows.at(-1)!.id;
+  }
+  return selected;
+}
+
 async function addEntry(tx: Tx, input: { kind: TrashKind; resourceId: string; userId: string; parentId?: string; at: Date }) {
   const prior = await tx.trashEntry.findFirst({ where: { kind: input.kind, resourceId: input.resourceId, state: { in: ['trashed', 'purge_pending'] } } });
   if (prior) return prior;
@@ -187,6 +301,7 @@ async function syncTrashSearchVisibility(deps: TrashDeps, id: string): Promise<v
       await lockTrashReferences(tx);
       const entry = await tx.trashEntry.findUnique({ where: { id } });
       if (!entry || !['trashed','purge_pending','restored'].includes(entry.state)) return;
+      if (await hasJournalTrashReference(tx, entry)) return;
       await setTrashSearchVisibility(deps, tx, entry, entry.state === 'restored');
       if (entry.lastError === 'search_visibility_pending') await tx.trashEntry.update({ where: { id }, data: { lastError: null } });
     }, { timeout: 30_000 });
@@ -198,6 +313,7 @@ async function syncTrashSearchVisibility(deps: TrashDeps, id: string): Promise<v
 export async function moveToTrash(deps: TrashDeps, input: { userId: string; kind: TrashKind; resourceId: string; deleteUnadopted?: boolean }, ctx: AuditContext = {}) {
   const moved = await deps.prisma.$transaction(async tx => {
     await maintenance(tx);
+    await requirePublicTrashResource(tx, input.kind, input.resourceId);
     const scope = await scopeFor(tx, input.kind, input.resourceId);
     if (!scope) throw new TrashError('NOT_FOUND', '内容不存在');
     await authorize(tx, scope, input.userId, input.kind === 'session' || input.kind === 'task');
@@ -251,17 +367,19 @@ export async function moveToTrash(deps: TrashDeps, input: { userId: string; kind
     return { entry: await tx.trashEntry.findUniqueOrThrow({ where: { id: entry.id } }), retained };
   }, { isolationLevel: 'Serializable', timeout: 30_000 });
   await syncTrashSearchVisibility(deps, moved.entry.id);
-  return moved;
+  return { ...moved, entry: trashEntryToView(moved.entry) };
 }
 
 export async function listTrash(deps: TrashDeps, input: { userId: string }) {
-  return deps.prisma.trashEntry.findMany({ where: { ownerId: input.userId, parentId: null, state: { in: ['trashed', 'purge_pending'] } }, orderBy: { deletedAt: 'desc' }, take: 200 });
+  return (await scanTrashEntries(deps.prisma, { ownerId: input.userId, parentId: null, state: { in: ['trashed', 'purge_pending'] } },
+    [{ deletedAt: 'desc' }, { id: 'desc' }], 200)).map(trashEntryToView);
 }
 export async function restoreTrash(deps: TrashDeps, input: { userId: string; id: string }, ctx: AuditContext = {}) {
   const restored = await deps.prisma.$transaction(async tx => {
     await maintenance(tx);
     const entry = await tx.trashEntry.findUnique({ where: { id: input.id } });
     if (!entry || entry.ownerId !== input.userId) throw new TrashError('NOT_FOUND', '回收站项目不存在');
+    await requirePublicTrashEntry(tx, entry);
     if (entry.state === 'restored') return entry;
     if (entry.state !== 'trashed' || entry.purgeAfter <= (deps.now?.() ?? new Date())) throw new TrashError('CONFLICT', '清除已开始或保留期已结束');
     const scope = await scopeFor(tx, entry.kind as TrashKind, entry.resourceId);
@@ -281,7 +399,7 @@ export async function restoreTrash(deps: TrashDeps, input: { userId: string; id:
   }, { isolationLevel: 'Serializable' });
   // Search is physically separate; re-read core liveness under its lock after commit.
   await syncTrashSearchVisibility(deps, restored.id);
-  return restored;
+  return trashEntryToView(restored);
 }
 
 export async function listCleanableContent(deps: TrashDeps, input: { userId: string; researchObjectId?: string }) {
@@ -290,8 +408,9 @@ export async function listCleanableContent(deps: TrashDeps, input: { userId: str
   const authority = ro ? await requireActiveMembership(deps.prisma, ro.workspaceId, input.userId) : null;
   const canDeleteMaterials = Boolean(ro && (authority?.membership.role === 'owner' || (ro.createdBy === input.userId && ['maintainer','author','contributor'].includes(authority?.membership.role ?? ''))));
   const [sessions, tasks, assets, artifacts] = await Promise.all([
-    deps.prisma.agentSession.findMany({ where: { researchObjectId: ro?.id ?? null, userId: input.userId, deletedAt: null, kind: { not: 'retained.products' } }, select: { id: true, title: true, createdAt: true } }),
-    deps.prisma.agentTask.findMany({ where: { session: { researchObjectId: ro?.id ?? null, userId: input.userId }, deletedAt: null, result: { not: Prisma.DbNull },
+    deps.prisma.agentSession.findMany({ where: { researchObjectId: ro?.id ?? null, userId: input.userId, deletedAt: null,
+      kind: { notIn: ['retained.products', 'journal-editor'] }, tasks: { none: { kind: 'journal.generate' } } }, select: { id: true, title: true, createdAt: true } }),
+    deps.prisma.agentTask.findMany({ where: { kind: { not: 'journal.generate' }, session: { researchObjectId: ro?.id ?? null, userId: input.userId, kind: { not: 'journal-editor' } }, deletedAt: null, result: { not: Prisma.DbNull },
       OR: [{ session: { deletedAt: null } }, { kind: { not: 'workspace.guide' } }, { result: { path: ['writingDraft'], not: Prisma.AnyNull } }],
     }, select: { id: true, kind: true, result: true, createdAt: true } }),
     ro ? deps.prisma.presentationAsset.findMany({ where: { researchObjectId: ro.id, deletedAt: null }, select: { id: true, kind: true, createdAt: true } }) : [],
@@ -315,19 +434,24 @@ export async function rememberDiscardedTaskResult(prisma: WorkspaceDeps['prisma'
   if (!keys.length) return;
   await prisma.$transaction(async tx => {
     await maintenance(tx);
+    if (await isJournalControlResource(tx, 'task', taskId)) return;
     const task = await tx.agentTask.findUnique({ where: { id: taskId }, include: { session: true } });
     const entryId = task?.trashEntryId ?? task?.session.trashEntryId;
     const entry = entryId ? await tx.trashEntry.findUnique({ where: { id: entryId } }) : await tx.trashEntry.findFirst({ where: { OR: [
       { kind: 'task', resourceId: taskId }, { purgeScope: { path: ['taskIds'], array_contains: [taskId] } },
     ], state: { in: ['trashed','purge_pending','purged'] } } });
     if (!entry) return;
+    if (task) await rememberTrashTaskIdentity(tx, entry.id, { taskId: task.id, kind: task.kind, sessionKind: task.session.kind });
     await enqueueObjects(tx, entry.id, keys);
     if (entry.state === 'purged') await tx.trashEntry.update({ where: { id: entry.id }, data: { state: 'purge_pending', lastError: '迟到的解析产物正在清理' } });
   });
 }
 async function eraseTask(tx: Tx, taskId: string, entryId: string): Promise<void> {
-  const task = await tx.agentTask.findUnique({ where: { id: taskId }, include: { temporaryDocument: true } });
+  await requirePublicTrashResource(tx, 'task', taskId);
+  const task = await tx.agentTask.findUnique({ where: { id: taskId }, include: { temporaryDocument: true, session: { select: { kind: true } } } });
   if (!task) return;
+  // This identity and row deletion commit together, including child-owned cleanup objects.
+  await rememberTrashTaskIdentity(tx, entryId, { taskId: task.id, kind: task.kind, sessionKind: task.session.kind });
   await enqueueObjects(tx, entryId, [...objectsIn(task.result), ...objectsIn(task.payload), ...(task.temporaryDocument ? [task.temporaryDocument.objectKey] : [])]);
   if (task.temporaryDocument) await tx.temporaryDocument.delete({ where: { id: task.temporaryDocument.id } });
   await tx.sourceRightsDecision.deleteMany({ where: { agentTaskId: taskId } });
@@ -426,6 +550,7 @@ async function removePrivateMediaReceipt(tx: Tx, assetId: string): Promise<void>
 }
 
 async function eraseResource(tx: Tx, entry: TrashEntry): Promise<string | null> {
+  await requirePublicTrashEntry(tx, entry);
   if (entry.kind === 'artifact') return await eraseArtifact(tx, entry.resourceId, entry.id) ? null : '其他存续内容仍引用该文件，已保留其引用';
   if (entry.kind === 'asset') {
     if (await assetIsReferenced(tx, entry.resourceId)) return '公开版本或其他内容仍引用该图片，已保留其引用';
@@ -495,6 +620,7 @@ export async function purgeTrash(deps: TrashDeps, input: { userId: string; id: s
     await maintenance(tx);
     const entry = await tx.trashEntry.findUnique({ where: { id: input.id } });
     if (!entry || entry.ownerId !== input.userId) throw new TrashError('NOT_FOUND', '回收站项目不存在');
+    await requirePublicTrashEntry(tx, entry);
     if (['purged', 'retained'].includes(entry.state)) return { entry, scope: null };
     if (!['trashed', 'purge_pending'].includes(entry.state)) throw new TrashError('CONFLICT', '项目已恢复');
     const scope = await scopeFor(tx, entry.kind as TrashKind, entry.resourceId);
@@ -513,14 +639,17 @@ export async function purgeTrash(deps: TrashDeps, input: { userId: string; id: s
     const assets = entry.kind === 'research_object' ? await tx.presentationAsset.findMany({ where: { researchObjectId: entry.resourceId }, select: { id: true } }) : [];
     const childAssets = await tx.trashEntry.findMany({ where: { parentId: entry.id, kind: 'asset', state: 'trashed' }, select: { resourceId: true } });
     const sourceArtifactIds = tasks.flatMap(task => { const value = task.ingestionTask?.artifactId ?? jsonObject(task.payload).artifactId; return typeof value === 'string' && /^[0-9a-f-]{36}$/iu.test(value) ? [value] : []; });
-    const purgeScope = entry.purgeScope ? entry.purgeScope as unknown as TrashSearchScope : { trashEntryId: entry.id,
+    const previousScope = publicPurgeScope(entry.purgeScope);
+    const purgeScope = previousScope ? previousScope as unknown as TrashSearchScope : { trashEntryId: entry.id,
       ...(entry.workspaceId ? { workspaceId: entry.workspaceId } : {}), ...(entry.kind === 'research_object' ? { researchObjectId: entry.resourceId } : {}), taskIds: tasks.map(t => t.id).sort(),
       artifactIds: [...new Set(entry.kind === 'artifact' ? [entry.resourceId] : [...artifacts.map(a => a.id), ...sourceArtifactIds])].sort(),
       assetIds: [...new Set(entry.kind === 'asset' ? [entry.resourceId] : [...assets.map(a => a.id), ...childAssets.map(a => a.resourceId)])].sort() };
-    await tx.trashEntry.update({ where: { id: entry.id }, data: { state: 'purge_pending', lastError: null, purgeScope: purgeScope as unknown as Prisma.InputJsonValue } });
+    await tx.trashEntry.update({ where: { id: entry.id }, data: { state: 'purge_pending', lastError: null,
+      purgeScope: { ...purgeScope, ...(Object.hasOwn(jsonObject(entry.purgeScope), 'taskIdentities')
+        ? { taskIdentities: jsonObject(entry.purgeScope).taskIdentities } : {}) } as Prisma.InputJsonObject } });
     return { entry, scope: purgeScope };
   }, { isolationLevel: 'Serializable', timeout: 30_000 });
-  if (!staged.scope) return staged.entry;
+  if (!staged.scope) return trashEntryToView(staged.entry);
   try {
     if (staged.scope.researchObjectId || staged.scope.taskIds.length || staged.scope.artifactIds.length || staged.scope.assetIds.length) {
       if (!deps.deleteSearchContent) throw new TrashError('CLEANUP_PENDING', '搜索内容清理服务暂不可用，将自动重试');
@@ -530,6 +659,7 @@ export async function purgeTrash(deps: TrashDeps, input: { userId: string; id: s
     const result = await deps.prisma.$transaction(async tx => {
       await maintenance(tx);
       const entry = await tx.trashEntry.findUniqueOrThrow({ where: { id: input.id } });
+      await requirePublicTrashEntry(tx, entry);
       if (entry.state !== 'purge_pending') return entry;
       if (entry.researchObjectId) await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${entry.researchObjectId}::uuid FOR UPDATE`;
       // Source bytes can be shared across works; remove only this lifecycle's private index scope.
@@ -551,8 +681,8 @@ export async function purgeTrash(deps: TrashDeps, input: { userId: string; id: s
     }, { isolationLevel: 'Serializable', timeout: 30_000 });
     await cleanTrashObjects(deps, input.id);
     const pendingObjects = await deps.prisma.trashObjectCleanup.count({ where: { trashEntryId: input.id, state: { in: ['pending', 'deleting'] } } });
-    if (pendingObjects && result.state === 'purged') return deps.prisma.trashEntry.update({ where: { id: input.id }, data: { state: 'purge_pending', lastError: '私有记录已清除，文件清理正在重试' } });
-    return result;
+    if (pendingObjects && result.state === 'purged') return trashEntryToView(await deps.prisma.trashEntry.update({ where: { id: input.id }, data: { state: 'purge_pending', lastError: '私有记录已清除，文件清理正在重试' } }));
+    return trashEntryToView(result);
   } catch (error) {
     await deps.prisma.trashEntry.updateMany({ where: { id: input.id, state: 'purge_pending' }, data: { lastError: '清除暂未完成，将重试；原内容继续处于回收站' } });
     throw error;
@@ -561,13 +691,48 @@ export async function purgeTrash(deps: TrashDeps, input: { userId: string; id: s
 
 /** A committed tombstone + common reference lock make object deletion retryable without broken new references. */
 export async function cleanTrashObjects(deps: TrashDeps, trashEntryId?: string): Promise<void> {
-  const queued = await deps.prisma.trashObjectCleanup.findMany({ where: { state: { in: ['pending', 'deleting'] }, ...(trashEntryId ? { trashEntryId } : {}) }, take: 100, orderBy: { updatedAt: 'asc' } });
+  // Select before mutating updatedAt: held objects cannot occupy the quota or move the cursor while scanning.
+  const queued: TrashObjectCleanup[] = [];
+  let cursor: string | undefined, eligible = 0;
+  while (eligible < 100) {
+    const rows = await deps.prisma.trashObjectCleanup.findMany({
+      where: { state: { in: ['pending', 'deleting'] }, ...(trashEntryId ? { trashEntryId } : {}) },
+      take: 100, orderBy: [{ updatedAt: 'asc' }, { objectKey: 'asc' }],
+      ...(cursor ? { cursor: { objectKey: cursor }, skip: 1 } : {}),
+    });
+    const protectedRows = await mapContentReferences(rows, async item => {
+      const entry = await deps.prisma.trashEntry.findUnique({ where: { id: item.trashEntryId } });
+      return (item.objectKey.startsWith(NATIVE_AGENT_OBJECT_PREFIX) && await nativeCleanupIdentity(deps.prisma, entry) !== 'ordinary')
+        || Boolean(entry && await hasJournalTrashReference(deps.prisma, entry));
+    });
+    for (const [index, row] of rows.entries()) {
+      queued.push(row);
+      if (!protectedRows[index]) eligible += 1;
+      if (eligible === 100) break;
+    }
+    if (rows.length < 100) break;
+    cursor = rows.at(-1)!.objectKey;
+  }
   for (const item of queued) {
     try {
       const claimed = await deps.prisma.$transaction(async tx => {
         await maintenance(tx);
         const current = await tx.trashObjectCleanup.findUnique({ where: { objectKey: item.objectKey } });
         if (!current || !['pending', 'deleting'].includes(current.state)) return false;
+        const entry = await tx.trashEntry.findUnique({ where: { id: current.trashEntryId } });
+        if (current.objectKey.startsWith(NATIVE_AGENT_OBJECT_PREFIX)) {
+          const identity = await nativeCleanupIdentity(tx, entry);
+          if (identity === 'unknown') {
+            // Old post-commit crashes lost row identity; hold bytes without recreating a task or paid checkpoint.
+            if (current.state !== 'pending' || current.lastError !== 'native_checkpoint_identity_unresolved') {
+              await tx.trashObjectCleanup.update({ where: { objectKey: current.objectKey },
+                data: { state: 'pending', lastError: 'native_checkpoint_identity_unresolved' } });
+            }
+            return false;
+          }
+          if (identity === 'journal') return false;
+        }
+        if (entry && await hasJournalTrashReference(tx, entry)) return false;
         if (current.state === 'deleting') return true;
         const pattern = '%' + item.objectKey.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_') + '%';
         const rows = await tx.$queryRaw<Array<{ used: boolean }>>`SELECT (
@@ -596,6 +761,9 @@ export async function cleanTrashObjects(deps: TrashDeps, trashEntryId?: string):
         await maintenance(tx);
         const current = await tx.trashObjectCleanup.findUnique({ where: { objectKey: item.objectKey } });
         if (current?.state !== 'deleting') return;
+        const entry = await tx.trashEntry.findUnique({ where: { id: current.trashEntryId } });
+        if (current.objectKey.startsWith(NATIVE_AGENT_OBJECT_PREFIX) && await nativeCleanupIdentity(tx, entry) !== 'ordinary') return;
+        if (entry && await hasJournalTrashReference(tx, entry)) return;
         await deps.storage.deleteObject(item.objectKey);
         await tx.blob.deleteMany({ where: { storageKey: item.objectKey, artifacts: { none: {} } } });
         await tx.trashObjectCleanup.update({ where: { objectKey: item.objectKey }, data: { state: 'deleted', attempts: { increment: 1 }, lastError: null } });
@@ -607,11 +775,12 @@ export async function cleanTrashObjects(deps: TrashDeps, trashEntryId?: string):
 }
 
 export async function purgeExpiredTrash(deps: TrashDeps): Promise<{ purged: number; failed: number }> {
-  const visibility = await deps.prisma.trashEntry.findMany({ where: { parentId: null, OR: [
+  const visibility = await scanTrashEntries(deps.prisma, { parentId: null, OR: [
     { state: { in: ['trashed','purge_pending'] } }, { state: 'restored', lastError: 'search_visibility_pending' },
-  ] }, select: { id: true }, orderBy: { deletedAt: 'desc' }, take: 100 });
+  ] }, [{ deletedAt: 'desc' }, { id: 'desc' }], 100);
   for (const entry of visibility) await syncTrashSearchVisibility(deps, entry.id);
-  const rows = await deps.prisma.trashEntry.findMany({ where: { parentId: null, OR: [{ state: 'trashed', purgeAfter: { lte: deps.now?.() ?? new Date() } }, { state: 'purge_pending' }] }, take: 20, orderBy: { purgeAfter: 'asc' } });
+  const rows = await scanTrashEntries(deps.prisma, { parentId: null, OR: [{ state: 'trashed', purgeAfter: { lte: deps.now?.() ?? new Date() } }, { state: 'purge_pending' }] },
+    [{ purgeAfter: 'asc' }, { id: 'asc' }], 20);
   let purged = 0, failed = 0;
   for (const row of rows) {
     try { const result = await purgeTrash(deps, { id: row.id, userId: row.ownerId }); if (result.state === 'purged') purged += 1; }
