@@ -4,7 +4,7 @@ import { isAbsolute, join, dirname, parse } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ImageUsageLimitError, validateImageRequest, validateImageBytes, type CompletedImageProviderResult, type ImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProviderResult } from './image';
 import { CODEX_IMAGE_ID_PATTERN, CODEX_IMAGE_MAX_DEADLINE_MS, CHATGPT_WEB_IMAGE_MAX_DEADLINE_MS, CODEX_IMAGE_MAX_JSON_BYTES, CODEX_IMAGE_MAX_PNG_BYTES, CODEX_IMAGE_READY_MAX_AGE_MS, imagePromptHash, validateCodexImageRequest, validateCodexImageResult, type ImageSpoolProvider } from './codex-image-protocol';
-import { SYNCLIP_IMAGE_MODEL } from './synclip-image-api';
+import { SYNCLIP_IMAGE_MODEL, validateSynclipImageModel } from './synclip-image-api';
 export interface CodexSpoolImageConfig {
   inboxDir: string; resultsDir: string; timeoutMs?: number; pollIntervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>;
   withSubmission?: <T>(owner: { taskId: string; executionAttempt?: number; artifactId?: string; referenceContentHash?: string }, publish: () => Promise<T>) => Promise<T>;
@@ -49,6 +49,15 @@ abstract class SpoolImageProvider implements ImageProvider {
     if (!Number.isSafeInteger(this.timeout) || this.timeout < 1 || this.timeout > maximumDeadline || (config.pollIntervalMs !== undefined && (!Number.isSafeInteger(config.pollIntervalMs) || config.pollIntervalMs < 1 || config.pollIntervalMs > 60000))) fail();
     this.now = config.now ?? Date.now; this.sleep = config.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
   }
+  private validateResult(value: unknown) {
+    const result = validateCodexImageResult(value, this.spoolProvider);
+    // Legacy Synclip success receipts omit the actual model. This reader cannot
+    // access the host's private receipt, so never substitute the current default.
+    if (this.spoolProvider === 'synclip' && result.status === 'succeeded') {
+      try { validateSynclipImageModel(result.model); } catch { fail(); }
+    }
+    return result;
+  }
   async canResumeBeforeSubmission(id: string): Promise<boolean> {
     if (!CODEX_IMAGE_ID_PATTERN.test(id)) return false;
     try {
@@ -86,7 +95,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       const request = validateCodexImageRequest(JSON.parse((await boundedRead(
         reservationPath, CODEX_IMAGE_MAX_JSON_BYTES,
       )).toString('utf8')), undefined, this.spoolProvider);
-      const result = validateCodexImageResult(JSON.parse(resultBytes.toString('utf8')), this.spoolProvider);
+      const result = this.validateResult(JSON.parse(resultBytes.toString('utf8')));
       if (request.id !== id || result.id !== id || result.promptHash !== request.promptHash) return 'unsafe';
       if (hasNotSubmitted) {
         const evidence = JSON.parse((await boundedRead(notSubmittedPath, CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')) as Record<string, unknown>;
@@ -115,9 +124,9 @@ abstract class SpoolImageProvider implements ImageProvider {
     )).toString('utf8')), undefined, this.spoolProvider);
     const output = join(this.config.resultsDir, id);
     await directory(output);
-    const result = validateCodexImageResult(JSON.parse((await boundedRead(
+    const result = this.validateResult(JSON.parse((await boundedRead(
       join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES,
-    )).toString('utf8')), this.spoolProvider);
+    )).toString('utf8')));
     if (request.id !== id || result.id !== id || result.status !== 'succeeded'
       || result.promptHash !== request.promptHash) fail();
     const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
@@ -138,7 +147,7 @@ abstract class SpoolImageProvider implements ImageProvider {
     const expectedPromptHash = imagePromptHash(prompt, reference);
     try {
       await directory(output);
-      const existingResult = validateCodexImageResult(JSON.parse((await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')), this.spoolProvider);
+      const existingResult = this.validateResult(JSON.parse((await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES)).toString('utf8')));
       if (existingResult.id !== id || existingResult.promptHash !== expectedPromptHash) fail();
       if (existingResult.status === 'succeeded') {
         const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
@@ -179,7 +188,7 @@ abstract class SpoolImageProvider implements ImageProvider {
       let bytes: Buffer | undefined;
       try { await directory(output); bytes = await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES); } catch (error) { if (!missing(error)) throw error; }
       if (bytes) {
-        const result = validateCodexImageResult(JSON.parse(bytes.toString('utf8')), this.spoolProvider);
+        const result = this.validateResult(JSON.parse(bytes.toString('utf8')));
         if (result.id !== id || result.promptHash !== request.promptHash) fail();
         if (result.status !== 'succeeded') {
           if (result.errorCode === 'USAGE_LIMIT') throw new ImageUsageLimitError();

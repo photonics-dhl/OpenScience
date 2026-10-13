@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { SynclipSpoolImageProvider } from '../src/codex-image';
@@ -46,7 +46,7 @@ describe('Synclip uses the existing image spool', () => {
     await writeFile(join(dirs.inboxDir, id + '.submitted.json'), JSON.stringify(request));
     expect(await provider.inspectRecoveryState(id)).toBe('submitted_without_result');
     await mkdir(join(dirs.resultsDir, id));
-    const result = { schemaVersion: 1, provider: 'synclip', id, promptHash: request.promptHash, status: 'succeeded' };
+    const result = { schemaVersion: 1, provider: 'synclip', id, promptHash: request.promptHash, status: 'succeeded', model: 'gpt-image-2' };
     await writeFile(join(dirs.resultsDir, id, 'result.png'), png());
     await writeFile(join(dirs.resultsDir, id, 'result.json'), JSON.stringify(result));
     expect(await provider.canResumeFromCompletedResult(id)).toBe(true);
@@ -56,5 +56,36 @@ describe('Synclip uses the existing image spool', () => {
       expect(await provider.inspectRecoveryState(id)).toBe('unsafe');
       expect(await provider.canResumeFromCompletedResult(id)).toBe(false);
     }
+  });
+  it.each([undefined, 'wrong-model'])('refuses completed Synclip output with unproven model %s without changing or resubmitting it', async model => {
+    const dirs = await spool(); let submissions = 0;
+    const provider = new SynclipSpoolImageProvider({ ...dirs, withSubmission: async (_owner, publish) => { submissions++; return publish(); } });
+    const result = JSON.stringify({ schemaVersion: 1, provider: 'synclip', id, promptHash: request.promptHash, status: 'succeeded', model });
+    const image = png();
+    await writeFile(join(dirs.inboxDir, id + '.submitted.json'), JSON.stringify(request));
+    await mkdir(join(dirs.resultsDir, id));
+    await writeFile(join(dirs.resultsDir, id, 'result.json'), result);
+    await writeFile(join(dirs.resultsDir, id, 'result.png'), image);
+    expect(await provider.inspectRecoveryState(id)).toBe('unsafe');
+    expect(await provider.canResumeFromCompletedResult(id)).toBe(false);
+    await expect(provider.resumeFromCompletedResult(id)).rejects.toThrow('INVALID_OUTPUT');
+    await expect(provider.generate({ requestId: id, prompt })).rejects.toThrow('INVALID_OUTPUT');
+    expect(submissions).toBe(0);
+    expect(await readdir(dirs.inboxDir)).toEqual([id + '.submitted.json']);
+    expect(await readFile(join(dirs.resultsDir, id, 'result.json'), 'utf8')).toBe(result);
+    expect(await readFile(join(dirs.resultsDir, id, 'result.png'))).toEqual(image);
+  });
+  it.each(['gpt-image-2.5', 'gpt-image-2'])('preserves actual completed %s across replay and recovery', async model => {
+    const dirs = await spool(); let submissions = 0;
+    const provider = new SynclipSpoolImageProvider({ ...dirs, withSubmission: async (_owner, publish) => { submissions++; return publish(); } });
+    await writeFile(join(dirs.inboxDir, id + '.submitted.json'), JSON.stringify(request));
+    await mkdir(join(dirs.resultsDir, id));
+    await writeFile(join(dirs.resultsDir, id, 'result.json'), JSON.stringify({ schemaVersion: 1, provider: 'synclip', id, promptHash: request.promptHash, status: 'succeeded', model }));
+    await writeFile(join(dirs.resultsDir, id, 'result.png'), png());
+    expect(await provider.inspectRecoveryState(id)).toBe('completed');
+    expect(await provider.canResumeFromCompletedResult(id)).toBe(true);
+    expect((await provider.resumeFromCompletedResult(id)).model).toBe(model);
+    expect((await provider.generate({ requestId: id, prompt })).model).toBe(model);
+    expect(submissions).toBe(0);
   });
 });
