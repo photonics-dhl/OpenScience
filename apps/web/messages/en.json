@@ -2269,7 +2269,7 @@
     "imageNumber": "Illustration {number}",
     "planningHistoryTitle": "Detailed instructions",
     "currentPlanTitle": "Current production plan",
-    "currentPlanBody": "New plans appear first. Review and approve the plan, then generate an image for the selected scene.",
+    "currentPlanBody": "Ask Hermes when you need an illustration. The plan below is for manual production; only approved plans can be used to generate scene images.",
     "selectPlan": "Choose another plan",
     "selectScene": "Choose a scene to generate",
     "rejectedPlanHistory": "Rejected plan history",
