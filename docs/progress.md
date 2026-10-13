@@ -14,6 +14,7 @@
 - 2026-10-13：视频 session 完成能力缺口映射：`createNativeVideoReadinessReader`、API/Worker 注入与 `infra/synclip-video/broker.mjs` 合同无代码遗漏；线上仍 `adminModelsEnabled=false`、无 `.ready`、timer disabled/inactive，`--list-voices` 返回 `SYNCLIP_AUDIO_CATALOG_FAILED`。下一步需授权确认服务器 Synclip Admin/LTX 与 Audio 权限、有效 voice，再按 installer/config/timer 流程处理；当前不重启、不部署、不发起付费任务。
 - 2026-10-13：视频只读核对确认 broker 关闭视频准入且 Synclip 音色目录返回 `SYNCLIP_AUDIO_CATALOG_FAILED`；已停止商业 Provider、付费任务与服务启用，不盲选音色、不重试，保留 Hermes 任务与失败证据。
 - 2026-10-13：视频线上根因进一步确认：Synclip broker timer 为 disabled/inactive 且无 `.ready` 心跳，`adminModelsEnabled=false`、音频配置缺失；系统按设计关闭视频准入。未产生视频/音频任务、扣费或 receipt；代码工作树保持干净。
+- 2026-10-13：交接补齐研究生命周期角色与入口：研究者从 `edit?stage=media` 负责确认与逐场景提交，Hermes 负责全文 Claims/Evidence 与视觉计划，读者及期刊/协作者仅经公开版本复核。视频生产仍阻塞；恢复前必须由服务/账户负责人授权 Synclip Admin/LTX、Audio 与可验证 voice，并由运维记录 `.ready`、timer、release 证据；之后按 readiness→一次私有短片→研究者科学/音画审核→完整影片→公开的顺序执行，任何失败即停止。
 - 2026-10-12 15:26：UI 替代 session 完成剩余 P2 类型契约修复 `5e1c4831`：PresentationWorkbenchProps 与 ResearchPresentation/StoryboardPanel/StoryboardPlans 统一为 `void | Promise<StoryboardWriteOutcome>`；13/13、Web typecheck、diff-check 通过，canonical 未改，独立 High 复审待回。
 - 2026-10-12 15:31：独立 High 对 `5e1c4831` 正式 GO（无 P0/P1）；P2 为 void 可继续丢弃 outcome 与潜在 type-only 依赖审计边，现有路径无运行时回归。已 cherry-pick/push 为 canonical `c258da85`，等待该提交精确 workflow 回执，未部署。
 - 2026-10-12 15:41：canonical `c258da85` 的精确 push workflow `38270923462` 已回执：browser-entry/web build 全通过；相同两项非 UI queue-recovery 断言失败，UI typecheck 与 storyboard 定向 CI 被跳过。未重跑、未部署、未安装，canonical 工作树干净。

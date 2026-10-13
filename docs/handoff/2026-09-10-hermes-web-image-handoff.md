@@ -7,6 +7,17 @@
 - 用户已要求继续有价值的并行开发；idle 不等于完成，但不得用无关检查填充。保留 PDF/SourceMap、认可图片、公开标识、sealed 记录、原失败/费用/receipt/oncekey；未知 paid/started CP 不重放，不因容量或 idle 扩预算、安装、重启或切换主 Gateway/Native M3。
 - 生图真实图片质量仍需来源明确的实际 PNG 与科学审阅；本轮仅完成 API-only 代码、测试与复审准备，尚未调用 Provider/部署。视频真实试听/完整影片与声音选择仍未验收；只读线上观察返回“视频制作暂不可用”，根因为 broker/audio 能力未启用。UI 单项代码合并不等于整站审美完成。
 
+## 研究生命周期角色与入口
+- **研究者**：从 Research Object 的 `edit?stage=media`（或 `/research-objects/:ro/presentation?version=:version`）进入；确认 Hermes 全文凝练、Claims/Evidence、分镜和每个 scene 的 `approved` 状态，再逐场景提交媒体。研究者负责科学准确性、私有草稿与最终公开决定。
+- **Hermes**：由已授权的 Research Object 任务入口读取全文（含推导、图注、附录），产出可追溯的 Claims/Evidence 与视觉计划；其草稿必须与正式公开内容分开，不能由 Codex 手工文本替代。
+- **读者**：从公开 Research Object/版本页读取已审核图像、视频和来源标识；在视频未通过真实试听与完整影片验收前，不应看到视频已可用的承诺。
+- **期刊/协作者**：通过公开版本链接、来源/版本标识和审核后的媒体查看或复核；不得获得 Hermes 管理权限，也不应把私有草稿或失败 receipt 当作正式结果。
+
+## 视频恢复前置条件与验收顺序
+当前**不具备生产视频条件**：只读服务器证据为 `adminModelsEnabled=false`、缺 `.ready`、broker timer `disabled/inactive`，音频目录返回 `SYNCLIP_AUDIO_CATALOG_FAILED`；因此不重启、不部署、不发起 Provider/付费任务，也不猜模型或 voice。
+恢复必须先由服务/账户负责人明确授权并提供可审计证据：Synclip Admin/LTX 权限已开、Audio 权限已开、一个已验证的 voice 标识可由 catalog 返回；随后由运维负责人按既有 installer/config/timer 流程启用并记录 `.ready`、timer 状态和 release 身份。授权前由总控保持阻塞，不由开发者自行放行。
+授权后的最小验收顺序是：①只读 readiness、catalog、timer 与 release 快照；②用已批准论文/分镜创建一次可恢复的私有短片任务，记录 task/attempt/receipt、实际模型、voice、费用和输入版本；③研究者核对科学关系与音画质量；④研究者批准后再做完整影片；⑤研究者决定公开，读者/期刊协作者仅复核公开版本。任一步失败均保留证据并停止后续提交。
+
 ## 总控与并行分工
 - 总控 `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 负责集成、CI、CURRENT/progress/index 与串行发布；openscience ACTIVE。
 | Session / ID | 当前责任、状态与下一动作 | 工作树 / branch |
