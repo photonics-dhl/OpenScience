@@ -55,9 +55,25 @@ for (const query of ['mode=blank', 'type=unknown&mode=blank']) {
   test(`untyped creation keeps the normal intake for ${query}`, async ({ page }) => {
     const writes = await setup(page, true);
     await page.goto(`/research-objects/new?${query}`);
-    await expect(page.locator('[data-evidence-dropzone="true"]')).toBeVisible();
+    const workspace = page.locator('[data-guide-workspace="true"]');
+    const sourceText = workspace.getByRole('textbox', { name: '研究内容', exact: true });
+    const fullText = 'Research source paragraph, retained before submission.\n'.repeat(60);
+    await expect(sourceText).toBeVisible();
+    await sourceText.fill(fullText);
+    // Blank creation starts with source text. File intake is reached through
+    // the visible upload action, rather than mounted before the user opens it.
+    const upload = workspace.getByRole('button', { name: '上传论文', exact: true });
+    await expect(upload).toBeVisible();
+    await upload.press('Enter');
+    await expect(workspace.locator('[data-evidence-dropzone="true"]')).toBeVisible();
+    const fileInput = workspace.locator('input[type=file]');
+    await expect(fileInput).toHaveCount(1);
     await expect(page.locator('input[type=file]')).toHaveCount(1);
-    await expect(page.locator('textarea')).toBeVisible();
+    await fileInput.setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 local intake fixture') });
+    await expect(workspace.locator('[data-guide-input-card="sources"]')).toContainText('paper.pdf');
+    await expect(workspace.locator('[data-guide-input-card="sources"]')).toContainText('直接填写的研究内容');
+    await expect(sourceText).toHaveValue(fullText);
+    await page.screenshot({ path: test.info().outputPath('unsubmitted-file-and-source-text.png'), fullPage: true });
     expect(writes).toHaveLength(0);
   });
 }
