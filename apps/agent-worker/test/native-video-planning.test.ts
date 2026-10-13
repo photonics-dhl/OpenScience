@@ -772,7 +772,9 @@ describe('native Hermes complete video planning', () => {
   it('selects optional fresh tools only from the owned marker and refuses mismatched saved contracts', () => {
     const fresh = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
     expect(fresh).toMatchObject({ nativeVideo: true, videoContext: true, nativeVideoAudio: true });
-    expect(fresh.sourceTools).toEqual(OPTIONAL_SAVED_TOOL_INPUT);
+    expect(fresh.sourceTools).toEqual(OPTIONAL_SAVED_TOOL_INPUT.map(tool => tool.name === 'paper_illustration_art'
+      ? { ...tool, description: tool.description + ' Generate exactly one art object for each scene needing design in the latest accepted science, in the same order. Skip preserved original-paper scenes and unchanged scenes outside the selected local revision. Put a style alternative inside that scene\'s existing styleRecommendations; never add an extra scene for an alternative style. Count from the accepted science, not a prior rejected candidate.' }
+      : tool));
     const profile = nativeIllustrationToolProfile(null, 'video');
     const old = { turns: [{ request: { options: { tools: profile.sourceTools.map(definition => ({ type: 'function', function: definition })) } } }] } as unknown as NativeAgentSessionState;
     expect(() => nativeIllustrationToolProfile(old, 'video', 'video-optional-audio-v1')).toThrow(/blocked/u);

@@ -679,6 +679,70 @@ describe('native Agent durable SDK turns', () => {
     for (let index = 0; index < calls.length; index++) expect(await restored.complete(calls[index])).toEqual(responses[index]);
     expect(f.calls).toBe(4);
   });
+  it('saves the 13th paid length reply at 98304 output tokens and never resubmits after exact signed replay', async () => {
+    // Original failure accounting; fixture text/signatures are synthetic, not the real paid task.
+    const outputTokens = [277, 293, 29_677, 2_979, 19_404, 5_410, 2_914, 6_045, 10_045, 2_699, 10_561, 5_102, 2_898];
+    const f = httpSessionFixture(async attempt => {
+      if (attempt > 13) throw new Error('Unexpected 14th paid HTTP request');
+      return new Response(JSON.stringify({ model: binding.model,
+        content: [{ type: 'thinking', thinking: 'Opaque original fixture reasoning.', signature: `paid-signature-${attempt}` },
+          ...(attempt <= 12 ? [{ type: 'tool_use', id: `read-${attempt}`, name: 'paper_read', input: {} }]
+            : [{ type: 'text', text: 'Unfinished plan.' }])],
+        stop_reason: attempt <= 12 ? 'tool_use' : 'max_tokens',
+        usage: { input_tokens: 20, output_tokens: outputTokens[attempt - 1] } }));
+    });
+    const limits = { maxTurns: 32, maxOutputTokens: 32_768, maxTotalOutputTokens: 98_304,
+      deadlineAt: Date.now() + 60_000 };
+    const session = f.create(limits);
+    const requests: Array<Omit<typeof request, 'messages'> & { messages: unknown[] }> = [];
+    const responses: Array<Awaited<ReturnType<typeof session.complete>>> = [];
+    let next: (typeof requests)[number] = { ...request, max_tokens: 32_768 };
+    for (let index = 0; index < 12; index++) {
+      requests.push(structuredClone(next));
+      const response = await session.complete(next); responses.push(response);
+      next = { ...next, messages: [...next.messages, response.choices[0]!.message,
+        { role: 'tool', tool_call_id: `read-${index + 1}`, content: `Original bound source ${index + 1}` }] };
+    }
+    const prefix = f.state!;
+    expect(prefix.turns).toHaveLength(12);
+    expect(prefix.turns.every(turn => turn.state === 'completed')).toBe(true);
+    expect(prefix.turns.reduce((sum, turn) => sum + (turn.state === 'completed' ? turn.response.usage.outputTokens : 0), 0)).toBe(95_406);
+    let savedBeforeRefusal: NativeAgentSessionState | null = null;
+    f.hooks.afterComplete = () => { savedBeforeRefusal = f.state; };
+    await expect(session.complete(next)).rejects.toThrow('output truncated; no automatic paid correction');
+    const exhausted = f.state!;
+    expect(savedBeforeRefusal).toEqual(exhausted);
+    expect(exhausted.turns).toHaveLength(13);
+    expect(exhausted.binding).toMatchObject(limits);
+    expect(exhausted.initialMessages).toEqual(prefix.initialMessages);
+    expect(exhausted.turns.slice(0, 12).map(turn => turn.state === 'completed' ? turn.response : null))
+      .toEqual(prefix.turns.map(turn => turn.state === 'completed' ? turn.response : null));
+    expect(exhausted.turns[12]).toMatchObject({ state: 'completed',
+      request: { options: { maxTokens: 32_768 } }, effectiveOptions: { maxTokens: 2_898 },
+      response: { finishReason: 'length', providerStopReason: 'max_tokens', text: 'Unfinished plan.',
+        usage: { outputTokens: 2_898 }, providerContent: { content: [
+          { type: 'thinking', thinking: 'Opaque original fixture reasoning.', signature: 'paid-signature-13' },
+          { type: 'text', text: 'Unfinished plan.' }] } } });
+    expect(exhausted.turns[12]?.state === 'completed' && exhausted.turns[12].response.toolCalls).toBeUndefined();
+    expect(exhausted.turns.reduce((sum, turn) => sum + (turn.state === 'completed' ? turn.response.usage.outputTokens : 0), 0)).toBe(98_304);
+    expect(f.calls.map(call => JSON.parse(call.body).max_tokens)).toEqual([
+      32_768, 32_768, 32_768, 32_768, 32_768, 32_768, 32_768, 32_768, 31_305, 21_260, 18_561, 8_000, 2_898]);
+    // Both the same SDK and a new process stop on the saved length response, without buying a correction.
+    await expect(session.complete(next)).rejects.toThrow('output truncated; no automatic paid correction');
+    const restored = f.create(limits);
+    for (let index = 0; index < requests.length; index++) {
+      expect(await restored.complete(requests[index])).toEqual(responses[index]);
+    }
+    await expect(restored.complete(next)).rejects.toThrow('output truncated; no automatic paid correction');
+    await expect(restored.complete(next)).rejects.toThrow('output truncated; no automatic paid correction');
+    expect(f.state).toEqual(exhausted);
+    expect(f.calls).toHaveLength(13); expect(f.published).toHaveLength(13);
+    expect(f.audits).toHaveLength(13); expect(f.fallbackCalls).toBe(0);
+    // Later paid request bodies must carry the original opaque blocks, including every signature.
+    const finalMessages = JSON.parse(f.calls[12]!.body).messages as Array<{ role: string; content: unknown }>;
+    expect(finalMessages.filter(message => message.role === 'assistant').map(message => message.content))
+      .toEqual(prefix.turns.map(turn => turn.state === 'completed' ? turn.response.providerContent!.content : null));
+  });
   it('retains earlier request identity without copying the same long source into every private turn', async () => {
     const f = fixture(2); const session = f.create({ maxInputBytes: 64_000_000 });
     const first = await session.complete(request);
