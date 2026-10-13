@@ -1,5 +1,17 @@
 # Runbook: 部署（Deployment）
 
+## 旧网页生图与审阅通道退役
+
+2026-10-13用户已授权完全退役旧生产ChatGPT网页生图/审阅通道。此授权只覆盖必要的退役切换、共享helper解耦和旧root可恢复归档，不包含R08、未发布UI或新科学Skill。源码从已观测生产`f804348c47da164d1632b7708dedbc39437f2150`建立隔离退役分支，不混入当前交付树尚未发布的其他改动。
+
+- 删除旧网页执行器、新派发入口及应用旧RW队列挂载；Synclip标准化使用独立`infra/synclip-image/normalize.mjs`。Codex-Sol仅读取身份全等的自有submitted/result，保留SQL/S3历史来源、有效paid和未知外部结果；空当前队列不能证明旧请求未提交，不换Provider重发。
+- 已完成主机操作：5个旧bridge/image/review unit在inactive、无drop-in、cleanup service空闲和原runner lock独占后归档移除，daemon-reload后全部not-found。私有归档`/var/backups/openscience/retired-chatgpt-web/20261013/`的receipt保留原owner/mode；没有启动旧执行器或恢复登录态。
+- 第一次切换前完成精确源码CI/High，沿既有单FD9应用流程发布并安装独立Synclip helper；原private-cleanup继续识别旧root。第二版加入固定归档reader/锁和七目录权限，完成Linuxroot定向CI后发布并安装新清理器。第一次切换后仍保留旧root和unit归档，供原回退版本恢复依赖。若回退旧应用，按receipt恢复准确unit文件/owner/mode后daemon-reload，保持disabled/inactive，确认旧root/挂载可用后才应用回退。
+- 待active和唯一rollback均为已验证退役版本、实际运行挂载及host包无旧helper依赖，再在部署和cleanup既有锁下将旧root原子移至固定`/var/backups/openscience/retired-chatgpt-web/20261013/runtime`。核无在途清理、旧执行器或写者，保留原属主/权限/paid/user内容；不得删除SQL/S3或自由清盘。
+- private-cleanup继续按原scope/schema1识别live及固定runtime归档中的image/review副本，持有两处原provider锁，仅获原七个copy目录写权限；profile/control等继续不可访问，不枚举units或其他备份。归档不是清理完成证据，未来授权Trash仍须精确删除或pending，不能把旧root缺失误记complete。归档移动后不能回退不识别归档的旧清理器。
+
+当前执行身份和状态统一见唯一CURRENT，本节定义顺序而非另建任务库。真实模型/科研质量不由本次源码退役和服务health验收证明。
+
 ## 当前原生 Hermes 发布入口
 
 新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图沿当前已授权的Synclip通道，启用范围与质量以[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)为准。实际版本、回滚身份与付费任务同见CURRENT。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。

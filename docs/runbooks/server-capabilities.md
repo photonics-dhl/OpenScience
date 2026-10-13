@@ -4,6 +4,8 @@
 
 ## 单机运行架构与资源
 
+2026-10-13用户授权完全退役旧网页生图/审阅通道。5个闲置bridge/image/review systemd unit已私有归档并移除，全部读回not-found；私有副本清理timer保持原状态。旧root仍被当时active/rollback应用挂载，未按unit不存在直接删除。源码关闭与受保护归档流程见[发布手册](deployment.md#旧网页生图与审阅通道退役)；不动ScanSci、Native、现役Codex或独立开发浏览器桥。
+
 2026-10-03 22:42（北京时间）的只读快照覆盖24个运行容器、宿主服务和外部模型调用关系，见[架构图](assets/2026-10-03-server-architecture.svg)、[逐容器内存/上限与磁盘表](assets/2026-10-03-server-resources.md)及[可编辑 Mermaid 源](assets/2026-10-03-server-architecture.mmd)。图是有日期的观察，不是实时监控；当前运行身份与整改执行状态仅见CURRENT。
 
 当时网站Web/API/Worker合计0.96GiB，网页浏览器8.36GiB，开发诊断栈3.99GiB。2026-10-05已完成 API 生图真实成功后的浏览器下线：网页浏览器容器移除、bridge与image/review timer disabled、profile登录态删除；历史jobs/spool/review-spool/results保留。下线后可用内存约17.85GiB，较此前8.48GiB增加约9.37GiB。开发诊断服务可以按需启停，ScanSci独立轻量浏览器、论文解析/检索和ClamAV仍是产品能力，不随网页生图停用。配置上限不是预留内存。
