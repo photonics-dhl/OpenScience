@@ -2,7 +2,7 @@
   --guide-ink: #153b40; --guide-muted: #54686b; --guide-accent: #145a61; --guide-rule: #ccd9d8;
   display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 46px;
   max-width: 1440px; margin-inline: auto; padding: 38px 56px 0;
-  color: var(--guide-ink); font-family: var(--font-bricolage), 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  color: var(--guide-ink); font-family: var(--font-bricolage), 'Microsoft YaHei', 'PingFang SC', var(--font-noto-serif-sc), system-ui, sans-serif;
 }
 .contents { border-right: 1px solid var(--guide-rule); }
 .desktopContents { position: sticky; top: 90px; padding: 6px 24px 32px 0; }
