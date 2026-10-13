@@ -4,7 +4,7 @@ import { getBlobStorageKey } from '@openscience/storage';
 import { readNativeAgentExecution, requireNativeAgentExecutionAuthority, supportsNativeIllustration, requireNativeVideoStoryboard } from '@openscience/domain';
 import { runNativeIllustrationTask, replayNativeVideoPlan, type VerifiedNativeVideoBase } from '../native-agent/illustration-task';
 import type { NativePaperImage, NativeSemanticSearch } from '../native-agent/paper-tools';
-import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
+import { validateSynclipAudioQuote, encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, type AiGateway, type OcrAuthorizationContext, type ScienceReviewInput } from '@openscience/ai-gateway';
 import { projectIllustrationEvidence, parseStoryboardDocument, parseStoryboardRequest, requireIllustrationSourceSupport, requireSceneImageParent, requireSceneImageRevision, requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativePixelReplanAuthority, requireVideoGenerationParents, storyboardSceneStyles, generatedSceneImageRequiresPixelReview, type PresentationGenerationPayload, type StoryboardDocument } from '@openscience/domain';
 import { generateStoryboard, renderStoryboard } from './storyboard';
@@ -1104,16 +1104,10 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           throw new Error('[blocked] Audio audition result lacks its original committed grant');
         const quote = result.quote;
         const narration = videoParents.storyboardView.document.scenes[payload.video.sceneIndex]!.narration;
-        if (!quote || !Number.isFinite(quote.coinsPerCharacter) || quote.coinsPerCharacter < 0
-          || quote.characters !== [...narration].length || !Number.isFinite(quote.estimatedCoins) || quote.estimatedCoins < 0
-          || quote.estimatedCoins !== quote.coinsPerCharacter * quote.characters
-          || !Number.isFinite(originalGrant.workerMaxEstimatedCoins) || originalGrant.workerMaxEstimatedCoins <= 0
-          || !Number.isFinite(originalGrant.hostMaxEstimatedCoins) || originalGrant.hostMaxEstimatedCoins <= 0
-          || !Number.isFinite(quote.workerCeiling) || quote.workerCeiling <= 0 || quote.workerCeiling > originalGrant.workerMaxEstimatedCoins
-          || !Number.isFinite(quote.hostCeiling)
-          || quote.hostCeiling <= 0 || quote.hostCeiling > originalGrant.hostMaxEstimatedCoins
-          || quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)
-          || (result.coinsUsed !== undefined && (!Number.isFinite(result.coinsUsed) || result.coinsUsed < 0)))
+        try { validateSynclipAudioQuote(quote, narration,
+          { workerCeiling: originalGrant.workerMaxEstimatedCoins, hostCeiling: originalGrant.hostMaxEstimatedCoins }); }
+        catch { throw new Error('[blocked] Audio audition quote does not match its protected grant'); }
+        if (result.coinsUsed !== undefined && (!Number.isFinite(result.coinsUsed) || result.coinsUsed < 0))
           throw new Error('[blocked] Audio audition quote does not match its protected grant');
         const audioBytes = await readAudioAuditionOutput(result);
         const objectKey = `presentation/${payload.researchObjectId}/${payload.versionId}/audio-audition/${task.id}/${originalGrant.inputHash}.mp3`;

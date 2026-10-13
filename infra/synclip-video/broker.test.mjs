@@ -334,6 +334,86 @@ async function authorizedAuditionJob(t, { workerCeiling = 200, hostCeiling = 200
   return { ...f, job, value };
 }
 
+function blockCatalog(f, rate = 1, premium = false) {
+  const original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    const response = await original(url, options);
+    if (!url.endsWith('/voices')) return response;
+    const body = await response.json();
+    for (const voice of body.data) { delete voice.coins_per_char; voice.credits_per_1k_chars = rate; voice.is_premium = premium; }
+    return Response.json(body);
+  };
+}
+
+for (const [rate, premium] of [[1, false], [4, true], [0, false]])
+  test('current block audition bills one request at the returned rate ' + rate, async t => {
+    const f = await authorizedAuditionJob(t, { narrations: ['Source narration', '\u{20BB7}'.repeat(120)] });
+    blockCatalog(f, rate, premium);
+    const value = { ...f.value, audio: { ...f.value.audio, speed: 1.2 },
+      audioAuditionGrant: { ...f.value.audioAuditionGrant, audio: { ...f.value.audio, speed: 1.2 } } };
+    value.inputHash = hash(JSON.stringify({ files: value.files, audio: value.audio, scenes: value.scenes,
+      purpose: value.purpose, sceneIndex: value.sceneIndex, voice: value.audio.voice, locale: value.locale }));
+    value.audioAuditionGrant.inputHash = value.inputHash;
+    await writeFile(join(f.job.d, 'request.json'), JSON.stringify(value));
+    f.cfg.audio = value.audio;
+    assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+    const audio = (await json(join(f.resultDir, 'result.json'))).audio;
+    assert.deepEqual(audio.quote, { creditsPer1kChars: rate, characters: 120, estimatedCoins: rate, workerCeiling: 200, hostCeiling: 200 });
+    assert.equal(audio.speed, 1.2);
+    assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1); assert.equal(f.calls.length, 0);
+  });
+
+test('current block audition rejects a rounded amount above the grant before attempt or POST', async t => {
+  const f = await authorizedAuditionJob(t, { workerCeiling: 0.5 }); blockCatalog(f);
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+  assert.equal((await json(join(f.resultDir, 'result.json'))).errorCode, 'AUDIO_AUDITION_BUDGET_EXCEEDED');
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), false);
+});
+
+test('current block audition rechecks a lowered Host cap before writing its attempt', async t => {
+  const f = await authorizedAuditionJob(t); blockCatalog(f);
+  f.deps.readAudioAuditionConfig = async () => ({ ...f.cfg, audioAuditionBudget: { maxEstimatedCoins: 0.5 } });
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'failed' });
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(await exists(join(f.privateDir, 'audio-1.attempt.json')), false);
+});
+
+for (const basis of ['linear', 'block']) test('saved ' + basis + ' audition GET recovery needs no current catalogue or new POST', async t => {
+  const f = await authorizedAuditionJob(t), scene = f.value.scenes[1];
+  const characters = [...scene.narration].length;
+  const price = basis === 'linear' ? { coinsPerCharacter: 0.25, estimatedCoins: characters * 0.25 }
+    : { creditsPer1kChars: 1, estimatedCoins: 1 };
+  const quote = { ...price, characters, workerCeiling: 200, hostCeiling: 200 };
+  await writeFile(join(f.job.d, 'started'), 'original-attempt');
+  await writeFile(join(f.job.d, 'audio-receipts.json'), JSON.stringify({ id, inputHash: f.value.inputHash, voice: narration.voice, speed: 1,
+    scenes: [{ index: 1, taskId: 'known-paid-original', request: { text: scene.narration, voice: narration.voice, speed: 1 }, quote }] }));
+  const original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    assert.equal(options.method, 'GET'); assert.ok(!url.endsWith('/voices'));
+    return original(url, options);
+  };
+  f.advance(600_001); f.cfg.audioAuditionEnabled = false;
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'succeeded' });
+  const audio = (await json(join(f.resultDir, 'result.json'))).audio;
+  assert.deepEqual(audio.quote, quote); assert.equal(audio.audioTaskId, 'known-paid-original');
+  assert.equal(f.audioCalls.length, 1); assert.equal(f.calls.length, 0);
+});
+
+test('current block unknown submission preserves its rounded quote and never POSTs again', async t => {
+  const f = await authorizedAuditionJob(t); blockCatalog(f);
+  const original = f.deps.audioFetch;
+  f.deps.audioFetch = async (url, options) => {
+    if (options.method !== 'POST') return original(url, options);
+    f.audioCalls.push({ method: 'POST', url }); throw Error('accepted response lost');
+  };
+  assert.deepEqual(await runSynclipVideoBrokerOnce(f.cfg, f.deps), { id, status: 'uncertain' });
+  const attempt = await json(join(f.privateDir, 'audio-1.attempt.json'));
+  assert.equal(attempt.quote.creditsPer1kChars, 1); assert.equal(attempt.quote.estimatedCoins, 1);
+  assert.equal(await runSynclipVideoBrokerOnce(f.cfg, f.deps), null);
+  assert.equal(f.audioCalls.filter(call => call.method === 'POST').length, 1);
+});
+
 test('audition narration length permits a selected short scene and posts only its TTS with an unselected long scene', async t => {
   const selected = 'The source-bound selected narration.';
   const unselected = 'Unselected source narration. '.repeat(5);

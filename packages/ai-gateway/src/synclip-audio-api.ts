@@ -11,15 +11,21 @@ export const SYNCLIP_AUDIO_MAX_REQUEST_BYTES = 128 * 1024;
 export const SYNCLIP_AUDIO_MAX_RESPONSE_BYTES = 256 * 1024;
 export const SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024;
 
-export interface SynclipAudioVoice {
+export type SynclipAudioPricing = { coins_per_char: number; credits_per_1k_chars?: never }
+  | { credits_per_1k_chars: number; coins_per_char?: never };
+export type SynclipAudioVoice = SynclipAudioPricing & {
   id: string;
   name: string;
   gender: string;
   languages: string[];
   preview_url?: string | null;
   is_premium: boolean;
-  coins_per_char: number;
-}
+};
+/** Supplier accounting units; neither platform AI credits nor a currency conversion. */
+export type SynclipAudioPriceQuote = { characters: number; estimatedCoins: number } & (
+  { coinsPerCharacter: number; creditsPer1kChars?: never } | { creditsPer1kChars: number; coinsPerCharacter?: never }
+);
+export type SynclipAudioQuote = SynclipAudioPriceQuote & { workerCeiling: number; hostCeiling: number };
 export interface SynclipAudioRequest { text: string; voice: string; speed?: number }
 export interface SynclipAudioSubmission { task_id: string }
 export type SynclipAudioStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -106,22 +112,68 @@ export function validateSynclipAudioVoices(value: unknown): SynclipAudioVoice[] 
     if (!record(item) || !token(item.id) || ids.has(item.id) || !label(item.name, 256) || !label(item.gender, 64)
       || !Array.isArray(item.languages) || !item.languages.length || item.languages.length > 64
       || item.languages.some(language => !label(language, 64)) || new Set(item.languages).size !== item.languages.length
-      || typeof item.is_premium !== 'boolean' || !nonnegative(item.coins_per_char)) throw invalid();
+      || typeof item.is_premium !== 'boolean') throw invalid();
+    const pricing = readAudioPricing(item);
     ids.add(item.id);
     return { id: item.id, name: item.name, gender: item.gender, languages: [...item.languages] as string[],
       ...(item.preview_url === undefined ? {} : { preview_url: item.preview_url === null ? null : publicUrl(item.preview_url) }),
-      is_premium: item.is_premium, coins_per_char: item.coins_per_char };
+      is_premium: item.is_premium, ...pricing };
   });
+}
+
+function readAudioPricing(value: Record<string, unknown>): SynclipAudioPricing {
+  const linear = Object.hasOwn(value, 'coins_per_char'), block = Object.hasOwn(value, 'credits_per_1k_chars');
+  if (linear === block) throw invalid();
+  if (linear && nonnegative(value.coins_per_char)) return { coins_per_char: value.coins_per_char };
+  if (block && nonnegative(value.credits_per_1k_chars)) return { credits_per_1k_chars: value.credits_per_1k_chars };
+  throw invalid();
+}
+
+/** Keep historical codepoint counts. Supplier Unicode counting beyond a short block is unverified. */
+export function createSynclipAudioPriceQuote(pricing: SynclipAudioPricing, text: string): SynclipAudioPriceQuote {
+  if (!record(pricing) || typeof text !== 'string' || !text.trim() || invalidCharacters(text, true)) throw invalid();
+  const price = readAudioPricing(pricing), characters = [...text].length;
+  if (!Number.isSafeInteger(characters) || characters < 1) throw invalid();
+  if (price.coins_per_char !== undefined) {
+    const estimatedCoins = characters * price.coins_per_char;
+    if (!nonnegative(estimatedCoins)) throw invalid();
+    return { coinsPerCharacter: price.coins_per_char, characters, estimatedCoins };
+  }
+  // ASCII boundaries are unambiguous. Short non-ASCII input fits one block even
+  // under the conservative UTF-8 bound; refuse larger ambiguous Unicode quotes.
+  const utf8Bytes = Buffer.byteLength(text, 'utf8');
+  if (utf8Bytes > 1000 && utf8Bytes !== characters) throw invalid();
+  const estimatedCoins = Math.ceil(characters / 1000) * price.credits_per_1k_chars;
+  if (!nonnegative(estimatedCoins)) throw invalid();
+  return { creditsPer1kChars: price.credits_per_1k_chars, characters, estimatedCoins };
+}
+
+/** Reconcile the saved basis and original text/caps; never consult or reprice from a live catalogue. */
+export function validateSynclipAudioQuote(value: unknown, text: string, caps: { workerCeiling: number; hostCeiling: number }): SynclipAudioQuote {
+  if (!record(value) || !nonnegative(caps.workerCeiling) || caps.workerCeiling <= 0
+    || !nonnegative(caps.hostCeiling) || caps.hostCeiling <= 0) throw invalid();
+  const linear = Object.hasOwn(value, 'coinsPerCharacter'), block = Object.hasOwn(value, 'creditsPer1kChars');
+  if (linear === block || Object.keys(value).some(key => !['coinsPerCharacter', 'creditsPer1kChars', 'characters', 'estimatedCoins', 'workerCeiling', 'hostCeiling'].includes(key))) throw invalid();
+  const pricing = linear ? { coins_per_char: value.coinsPerCharacter } : { credits_per_1k_chars: value.creditsPer1kChars };
+  const price = createSynclipAudioPriceQuote(readAudioPricing(pricing), text);
+  if (value.characters !== price.characters || value.estimatedCoins !== price.estimatedCoins
+    || !nonnegative(value.workerCeiling) || value.workerCeiling <= 0 || value.workerCeiling > caps.workerCeiling
+    || !nonnegative(value.hostCeiling) || value.hostCeiling <= 0 || value.hostCeiling > caps.hostCeiling
+    || price.estimatedCoins > Math.min(value.workerCeiling, value.hostCeiling)) throw invalid();
+  return { ...price, workerCeiling: value.workerCeiling, hostCeiling: value.hostCeiling };
 }
 
 export function validateSynclipAudioTask(value: unknown, expectedId: string): SynclipAudioTask {
   const id = validateSynclipAudioTaskId(expectedId);
   if (!record(value) || value.task_id !== id || typeof value.status !== 'string' || !['queued', 'processing', 'completed', 'failed'].includes(value.status)
     || (value.progress !== undefined && (!nonnegative(value.progress) || value.progress > 100))
-    || (value.coins_used !== undefined && !nonnegative(value.coins_used))) throw invalid();
+    || (Object.hasOwn(value, 'coins_used') && !nonnegative(value.coins_used))
+    || (Object.hasOwn(value, 'credits_charged') && !nonnegative(value.credits_charged))
+    || (Object.hasOwn(value, 'coins_used') && Object.hasOwn(value, 'credits_charged') && value.coins_used !== value.credits_charged)) throw invalid();
+  const charge = value.coins_used ?? value.credits_charged;
   const base: SynclipAudioTaskBase = { task_id: id,
     ...(value.progress === undefined ? {} : { progress: value.progress as number }),
-    ...(value.coins_used === undefined ? {} : { coins_used: value.coins_used as number }) };
+    ...(charge === undefined ? {} : { coins_used: charge as number }) };
   if (value.status !== 'completed') {
     if (value.output !== undefined && value.output !== null) throw invalid();
     return { ...base, status: value.status as 'queued' | 'processing' | 'failed' };

@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import type { StoryboardDocument, StoryboardView } from '@openscience/domain';
+import type { SynclipAudioQuote } from '@openscience/ai-gateway';
 
 const MAX_JSON = 128 * 1024;
 const MAX_PNG = 10 * 1024 * 1024;
@@ -77,7 +78,7 @@ export interface AudioAuditionResult {
   sceneIndex: number; locale: 'zh' | 'en'; voice: string; speed: number; audioTaskId: string;
   filePath: string; contentType: 'audio/mpeg'; contentHash: string; size: number; durationSeconds: number;
   timingStatus: 'decoded' | 'requires_revision';
-  quote: { coinsPerCharacter: number; characters: number; estimatedCoins: number; workerCeiling: number; hostCeiling: number };
+  quote: SynclipAudioQuote;
   coinsUsed?: number;
 }
 function fail(message = 'INVALID_VIDEO_SPOOL_OUTPUT'): never { throw new Error(message); }

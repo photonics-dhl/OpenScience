@@ -299,7 +299,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { describeIllustrationBrief, parseStoryboardDocument, presentationClaimContent, presentationEvidenceIdentity,
   readVisualNarrativeSource, requireVideoGenerationParents, CONTENT_DRIVEN_PROFILE,
   type IllustrationBrief, type NativeAgentCheckpointReference } from '@openscience/domain';
-import type { AudioAuditionProposal } from '../src/presentation/host-video-spool';
+import type { AudioAuditionProposal, AudioAuditionResult } from '../src/presentation/host-video-spool';
 import { createPresentationGenerationHandler } from '../src/presentation/handler';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
@@ -594,8 +594,13 @@ describe('durable audio audition spending authority', () => {
 });
 
 describe('private audition handler and current-attempt recovery', () => {
-  async function handlerFixture() {
+  async function handlerFixture(basis: 'linear' | 'block' = 'linear') {
     const f = await audioGrantFixture();
+    // The original fixture narration is 44 ASCII characters; quotes are saved supplier amounts.
+    const quote: AudioAuditionResult['quote'] = basis === 'block'
+      ? { creditsPer1kChars: 1, characters: 44, estimatedCoins: 1, workerCeiling: 7, hostCeiling: 7 }
+      : { coinsPerCharacter: 0.1, characters: 44, estimatedCoins: 4.4, workerCeiling: 7, hostCeiling: 7 };
+    let returnedQuote = quote;
     const objects = new Map<string, Buffer>();
     f.frames.forEach((frame, index) => {
       const bytes = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(25, index)]);
@@ -632,49 +637,62 @@ describe('private audition handler and current-attempt recovery', () => {
         const grant = await createAudioAuditionAuthorization(f.deps)({ ...f.proposal, executionAttempt: input.executionAttempt });
         if (grant.executionAttempt !== input.executionAttempt) adopted++;
         afterAudio?.();
-        const characters = [...f.parent.provenance.storyboardDocument.scenes[1]!.narration].length;
         return { purpose: 'audio-audition', taskId: input.taskId, executionAttempt: grant.executionAttempt, inputHash: grant.inputHash,
           sceneIndex: 1, voice: grant.audio.voice, speed: 1, locale: 'zh', audioTaskId: 'known-original-tts', filePath: path,
           contentHash: corruptOutput ? '0'.repeat(64) : createHash('sha256').update(mp3).digest('hex'), size: mp3.length,
           contentType: 'audio/mpeg', durationSeconds: 2.5, timingStatus: 'decoded',
-          quote: { coinsPerCharacter: 0.1, characters, estimatedCoins: characters * 0.1, workerCeiling: 7, hostCeiling: 7 }, coinsUsed: characters * 0.1 };
+          quote: returnedQuote, coinsUsed: quote.estimatedCoins };
       } } });
-    return { ...f, deps: { ...f.deps, storage }, objects, dir, path, mp3, handler, get stored() { return stored; }, get generated() { return generated; },
+    return { ...f, deps: { ...f.deps, storage }, objects, dir, path, mp3, handler, quote,
+      replaceQuote: (value: unknown) => { returnedQuote = value as AudioAuditionResult['quote']; },
+      get stored() { return stored; }, get generated() { return generated; },
       get adopted() { return adopted; }, afterAudio: (hook: () => void) => { afterAudio = hook; }, corruptOutput: () => { corruptOutput = true; } };
   }
 
-  it('stores validated private MP3 with the raw committed grant and never creates or generates a video asset', async () => {
-    const f = await handlerFixture();
+  it.each(['linear', 'block'] as const)('stores validated %s-price private MP3 with the raw committed grant and never creates or generates a video asset', async basis => {
+    const f = await handlerFixture(basis);
     try {
       await f.run(f.handler);
       expect(f.owner.error).toBeNull(); expect(f.owner.status).toBe('succeeded');
       const key = `presentation/${roId}/${versionId}/audio-audition/${f.owner.id}/${f.proposal.inputHash}.mp3`;
       expect(f.owner.result).toMatchObject({ purpose: 'audio-audition', previous: 'preserved', audioAudition: {
         taskId: f.owner.id, executionAttempt: 1, inputHash: f.proposal.inputHash, sceneIndex: 1, objectKey: key,
-        audioTaskId: 'known-original-tts', contentType: 'audio/mpeg', durationSeconds: 2.5, timingStatus: 'decoded' } });
+        audioTaskId: 'known-original-tts', contentType: 'audio/mpeg', durationSeconds: 2.5, timingStatus: 'decoded',
+        quote: f.quote, coinsUsed: f.quote.estimatedCoins } });
+      expect((f.owner.result.audioAudition as AudioAuditionResult).quote).toEqual(f.quote);
+      expect(f.owner.result.audioAuditionGrant).toMatchObject({ executionAttempt: 1, inputHash: f.proposal.inputHash,
+        workerMaxEstimatedCoins: 7, hostMaxEstimatedCoins: 7 });
       expect(f.objects.get(key)).toEqual(f.mp3); expect(f.stored).toBe(1); expect(f.generated).toBe(0);
     } finally { await rm(f.dir, { recursive: true }); }
   });
 
-  it('adopts the original MP3/attempt on the next real claim after storage acknowledgment was lost', async () => {
-    const f = await handlerFixture();
+  it.each(['linear', 'block'] as const)('adopts the original %s-price MP3/attempt on the next real claim after storage acknowledgment was lost', async basis => {
+    const f = await handlerFixture(basis);
     try {
       const put = f.deps.storage.putObject;
       f.deps.storage.putObject = async (...args: Parameters<StorageAdapter['putObject']>) => { await put(...args); throw Error('lost storage acknowledgment'); };
       await f.run(f.handler);
-      expect(f.owner.status).toBe('failed'); const original = structuredClone(f.owner.result.audioAuditionGrant);
+      expect(f.owner.status).toBe('failed'); expect(f.owner.error).toBe('lost storage acknowledgment');
+      expect(f.owner.result.audioAudition).toBeUndefined(); expect(f.stored).toBe(1);
+      const original = structuredClone(f.owner.result.audioAuditionGrant);
       expect(original).toBeDefined();
       f.owner.status = 'pending'; f.state.policy = null; f.deps.storage.putObject = put;
       await f.run(f.handler);
       expect(f.owner.error).toBeNull(); expect(f.owner.status).toBe('succeeded'); expect(f.owner.executionAttempt).toBe(2);
       expect(f.owner.result.audioAuditionGrant).toEqual(original);
-      expect(f.owner.result.audioAudition).toMatchObject({ executionAttempt: 1, audioTaskId: 'known-original-tts' });
+      expect(f.owner.result.audioAudition).toMatchObject({ executionAttempt: 1, audioTaskId: 'known-original-tts',
+        inputHash: f.proposal.inputHash, quote: f.quote, coinsUsed: f.quote.estimatedCoins });
+      expect((f.owner.result.audioAudition as AudioAuditionResult).quote).toEqual(f.quote);
+      const key = `presentation/${roId}/${versionId}/audio-audition/${f.owner.id}/${f.proposal.inputHash}.mp3`;
+      expect(f.objects.get(key)).toEqual(f.mp3); expect(f.stored).toBe(2);
+      expect([...f.objects.keys()].filter(key => key.endsWith('.mp3'))).toHaveLength(1);
+      expect(f.events.filter(event => event === 'grant-cas')).toHaveLength(1);
       expect(f.adopted).toBe(1); expect(f.generated).toBe(0);
     } finally { await rm(f.dir, { recursive: true }); }
   });
 
-  it('runs real claim → durable authority → actual spool publication, then adopts expired original bytes without republishing', async () => {
-    const f = await handlerFixture();
+  it.each(['linear', 'block'] as const)('runs real %s-price claim → durable authority → actual spool publication, then adopts expired original bytes without republishing', async basis => {
+    const f = await handlerFixture(basis);
     try {
       const inboxDir = join(f.dir, 'inbox'), resultsDir = join(f.dir, 'results');
       await mkdir(inboxDir); await mkdir(resultsDir);
@@ -690,14 +708,12 @@ describe('private audition handler and current-attempt recovery', () => {
           expect(f.events.slice(-2)).toEqual(['grant-cas', 'commit']); publications++;
           const out = join(resultsDir, f.owner.id); await mkdir(out, { recursive: true });
           await writeFile(join(out, 'audition.mp3'), f.mp3);
-          const characters = [...f.parent.provenance.storyboardDocument.scenes[1]!.narration].length;
           await writeFile(join(out, 'result.json'), JSON.stringify({ schemaVersion: 1, purpose: 'audio-audition', id: f.owner.id,
             provider: 'synclip', model: 'ltx23',
             status: 'succeeded', inputHash: request.inputHash, executionAttempt: request.executionAttempt,
             audio: { sceneIndex: 1, locale: 'zh', voice: f.proposal.audio.voice, speed: 1, audioTaskId: 'original-known-tts',
               contentType: 'audio/mpeg', outputSha256: createHash('sha256').update(f.mp3).digest('hex'), outputSize: f.mp3.length,
-              durationSeconds: 2.5, timingStatus: 'decoded', quote: { coinsPerCharacter: 0.1, characters,
-                estimatedCoins: characters * 0.1, workerCeiling: 7, hostCeiling: 5 }, coinsUsed: characters * 0.1 } }));
+              durationSeconds: 2.5, timingStatus: 'decoded', quote: { ...f.quote, hostCeiling: 5 }, coinsUsed: f.quote.estimatedCoins } }));
         } });
       const handler = createPresentationGenerationHandler({ videoSpool: spool });
       const put = f.deps.storage.putObject;
@@ -708,16 +724,21 @@ describe('private audition handler and current-attempt recovery', () => {
       expect(original).toBeDefined();
       await rm(join(inboxDir, f.owner.id), { recursive: true }); await rm(join(resultsDir, '.ready'));
       f.owner.status = 'pending'; f.state.policy = null; now += 120_000; f.deps.storage.putObject = put;
-      await f.run(handler);
+      const restartedSpool = new SynclipVideoSpool({ inboxDir, resultsDir, now: () => now, timeoutMs: 60_000,
+        authorizeAudioAudition: createAudioAuditionAuthorization(f.deps),
+        sleep: async () => { throw Error('restarted Worker must consume original bytes without republishing'); } });
+      await f.run(createPresentationGenerationHandler({ videoSpool: restartedSpool }));
       expect(f.owner.error).toBeNull(); expect(f.owner.status).toBe('succeeded'); expect(f.owner.executionAttempt).toBe(2);
       expect(f.owner.result.audioAuditionGrant).toEqual(original);
-      expect(f.owner.result.audioAudition).toMatchObject({ executionAttempt: 1, audioTaskId: 'original-known-tts', quote: { hostCeiling: 5 } });
+      expect(f.owner.result.audioAudition).toMatchObject({ executionAttempt: 1, audioTaskId: 'original-known-tts', coinsUsed: f.quote.estimatedCoins });
+      expect((f.owner.result.audioAudition as AudioAuditionResult).quote).toEqual({ ...f.quote, hostCeiling: 5 });
+      expect(f.events.filter(event => event === 'grant-cas')).toHaveLength(1);
       expect(publications).toBe(1);
       await expect(readFile(join(inboxDir, f.owner.id, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
     } finally { await rm(f.dir, { recursive: true }); }
   });
 
-  it('executes one normal API audition through claimed grant, real broker and private StorageAdapter completion', async () => {
+  it.each(['linear', 'block'])('executes one normal API %s-price audition through claimed grant, real broker and private StorageAdapter completion', async basis => {
     const f = await handlerFixture();
     const { runSynclipVideoBrokerOnce } = await import('../../../infra/synclip-video/broker.mjs');
     const objectRoot = join(f.dir, 'objects'), bucket = 'audition-fixture';
@@ -832,7 +853,10 @@ describe('private audition handler and current-attempt recovery', () => {
       await Promise.all([cfg.inbox, cfg.results, cfg.privateRoot].map(path => mkdir(path)));
       const providerCalls: Array<{ method: string; url: string }> = [];
       let originalGrant: Record<string, unknown> | undefined;
-      const narration = doc.scenes[1]!.narration, characters = [...narration].length, rate = 0.1;
+      const narration = doc.scenes[1]!.narration, characters = [...narration].length, rate = basis === 'block' ? 1 : 0.1;
+      const price = basis === 'block' ? { credits_per_1k_chars: rate } : { coins_per_char: rate };
+      const quotePrice = basis === 'block' ? { creditsPer1kChars: rate } : { coinsPerCharacter: rate };
+      const estimatedCoins = basis === 'block' ? 1 : characters * rate;
       const brokerDeps = { readKey: async () => 'synthetic-test-key',
         audioFetch: async (url: string, options: RequestInit) => {
           const method = options.method ?? 'GET'; providerCalls.push({ method, url });
@@ -842,10 +866,10 @@ describe('private audition handler and current-attempt recovery', () => {
             expect(JSON.parse(String(options.body))).toEqual({ text: narration, voice: cfg.audio.voice, speed: cfg.audio.speed });
           }
           const data = url.endsWith('/voices') ? [{ id: cfg.audio.voice, name: 'Synthetic catalog voice', gender: 'Female', languages: ['zh'],
-            is_premium: false, coins_per_char: rate, preview_url: null }]
+            is_premium: false, ...price, preview_url: null }]
             : method === 'POST' ? { task_id: 'vertical-original-tts', status: 'queued' }
               : { task_id: 'vertical-original-tts', status: 'completed', output: { type: 'audio', url: 'https://cdn.synclip.ai/fixture.mp3' },
-                coins_used: characters * rate, url_expires_at: '2099-01-01T00:00:00Z' };
+                credits_charged: estimatedCoins, url_expires_at: '2099-01-01T00:00:00Z' };
           return Response.json({ success: true, data });
         },
         downloadAudio: async () => ({ bytes: f.mp3, format: 'mp3', contentType: 'audio/mpeg' }), decodeAudio: async () => 2.5,
@@ -897,8 +921,8 @@ describe('private audition handler and current-attempt recovery', () => {
       expect(transactionOptions).toContainEqual(expect.objectContaining({ isolationLevel: 'Serializable' }));
       const audio = raw.result.audioAudition;
       expect(audio).toMatchObject({ taskId, executionAttempt: 1, audioTaskId: 'vertical-original-tts', durationSeconds: 2.5,
-        contentType: 'audio/mpeg', timingStatus: 'decoded', quote: { coinsPerCharacter: rate, characters,
-          estimatedCoins: characters * rate, workerCeiling: 7, hostCeiling: 5 }, coinsUsed: characters * rate });
+        contentType: 'audio/mpeg', timingStatus: 'decoded', quote: { ...quotePrice, characters,
+          estimatedCoins, workerCeiling: 7, hostCeiling: 5 }, coinsUsed: estimatedCoins });
       const stored = await storage.getObject(audio.objectKey);
       expect(await streamToBuffer(stored.body)).toEqual(f.mp3);
       expect(await storage.headObject(audio.objectKey)).toMatchObject({ size: f.mp3.length, contentType: 'audio/mpeg', sha256: audio.contentHash });
@@ -919,6 +943,38 @@ describe('private audition handler and current-attempt recovery', () => {
       await app?.close(); await new Promise<void>((resolveClose, rejectClose) => server.close(error => error ? rejectClose(error) : resolveClose()));
       await rm(f.dir, { recursive: true });
     }
+  });
+
+  describe.each(['linear', 'block'] as const)('%s-price final handler quote guards', basis => {
+    it.each(['basis', 'both price fields', 'amount', 'count', 'worker ceiling raised', 'host ceiling raised',
+      'worker ceiling below amount', 'host ceiling below amount'])('rejects altered %s before MP3 access or storage adoption', async reason => {
+      const f = await handlerFixture(basis);
+      try {
+        const altered: Record<string, unknown> = { ...f.quote };
+        if (reason === 'basis') {
+          if (basis === 'block') { delete altered.creditsPer1kChars; altered.coinsPerCharacter = 1; }
+          else { delete altered.coinsPerCharacter; altered.creditsPer1kChars = 0.1; }
+        }
+        if (reason === 'both price fields') Object.assign(altered, basis === 'block' ? { coinsPerCharacter: 0.1 } : { creditsPer1kChars: 1 });
+        if (reason === 'amount') altered.estimatedCoins = 2;
+        if (reason === 'count') altered.characters = 45;
+        if (reason === 'worker ceiling raised') altered.workerCeiling = 8;
+        if (reason === 'host ceiling raised') altered.hostCeiling = 8;
+        if (reason === 'worker ceiling below amount') altered.workerCeiling = 0.5;
+        if (reason === 'host ceiling below amount') altered.hostCeiling = 0.5;
+        f.replaceQuote(altered);
+        // A final quote rejection must precede even opening the producer's MP3.
+        await rm(f.path);
+        await f.run(f.handler);
+        expect(f.owner.status).toBe('failed');
+        expect(f.owner.error).toBe('[blocked] Audio audition quote does not match its protected grant');
+        expect(f.owner.result).toMatchObject({ previous: 'preserved', audioAuditionGrant: {
+          executionAttempt: 1, inputHash: f.proposal.inputHash, workerMaxEstimatedCoins: 7, hostMaxEstimatedCoins: 7 } });
+        expect(f.owner.result.audioAudition).toBeUndefined(); expect(f.stored).toBe(0); expect(f.generated).toBe(0);
+        expect([...f.objects.keys()].some(key => key.endsWith('.mp3'))).toBe(false);
+        expect(f.events.filter(event => event === 'grant-cas')).toHaveLength(1);
+      } finally { await rm(f.dir, { recursive: true }); }
+    });
   });
 
   it.each(['hash', 'role', 'parent', 'attempt', 'payload', 'workspace', 'cas'])('rejects changed %s before private result completion', async reason => {

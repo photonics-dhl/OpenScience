@@ -10,6 +10,7 @@ import {
 } from '../../packages/ai-gateway/dist/synclip-video-api.js';
 import { SynclipAudioClient, SynclipAudioError, downloadSynclipAudio, validateSynclipAudioRequest,
   validateSynclipAudioTask, validateSynclipAudioTaskId, validateSynclipAudioBytes,
+  createSynclipAudioPriceQuote, validateSynclipAudioQuote,
 } from '../../packages/ai-gateway/dist/synclip-audio-api.js';
 import { resolveSynclipImageReference } from './image-reference.mjs';
 
@@ -308,11 +309,11 @@ async function prepareAudio(cfg, directory, request, apiKey, deps, auditionScene
           || language.toLowerCase().startsWith(request.storyboard.locale + '-'))) fail('AUDIO_VOICE_LANGUAGE_UNAVAILABLE');
         if (request.purpose === 'audio-audition') {
           const grant = requireAuditionGrant(request), maximum = auditionBudget(cfg);
-          const characters = [...parameters.text].length, estimatedCoins = characters * selected.coins_per_char;
-          if (maximum === null || !Number.isFinite(estimatedCoins) || estimatedCoins < 0) fail('AUDIO_AUDITION_BUDGET_UNAVAILABLE');
-          quote = { coinsPerCharacter: selected.coins_per_char, characters, estimatedCoins,
+          if (maximum === null) fail('AUDIO_AUDITION_BUDGET_UNAVAILABLE');
+          const price = createSynclipAudioPriceQuote(selected, parameters.text);
+          quote = { ...price,
             workerCeiling: grant.workerMaxEstimatedCoins, hostCeiling: Math.min(maximum, grant.hostMaxEstimatedCoins) };
-          if (estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)) fail('AUDIO_AUDITION_BUDGET_EXCEEDED');
+          if (quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)) fail('AUDIO_AUDITION_BUDGET_EXCEEDED');
         }
         catalogLoaded = true;
       }
@@ -602,11 +603,9 @@ async function runAudioAudition(cfg, directory, value, hasStarted, deps) {
     }
     const receipt = await json(join(directory, 'audio-receipts.json')), item = receipt.scenes.find(entry => entry.index === value.sceneIndex);
     const quote = item?.quote, scene = value.scenes[value.sceneIndex];
-    if (!quote || quote.characters !== [...scene.narration].length || !Number.isFinite(quote.coinsPerCharacter) || quote.coinsPerCharacter < 0
-      || quote.estimatedCoins !== quote.characters * quote.coinsPerCharacter || !Number.isFinite(quote.estimatedCoins)
-      || !Number.isFinite(quote.workerCeiling) || quote.workerCeiling <= 0 || quote.workerCeiling > grant.workerMaxEstimatedCoins
-      || !Number.isFinite(quote.hostCeiling) || quote.hostCeiling <= 0 || quote.hostCeiling > grant.hostMaxEstimatedCoins
-      || quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)) fail('AUDIO_AUDITION_QUOTE');
+    try { validateSynclipAudioQuote(quote, scene.narration,
+      { workerCeiling: grant.workerMaxEstimatedCoins, hostCeiling: grant.hostMaxEstimatedCoins }); }
+    catch { fail('AUDIO_AUDITION_QUOTE'); }
     const metadata = await json(join(directory, 'audio/scene-' + value.sceneIndex + '.json'));
     const bytes = validateSynclipAudioBytes(await read(join(directory, 'audio/scene-' + value.sceneIndex + '.mp3'), 16 * 1024 * 1024)).bytes;
     const statusPath = join(directory, 'audio/scene-' + value.sceneIndex + '.status.json');

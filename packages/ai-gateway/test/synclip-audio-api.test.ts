@@ -7,6 +7,7 @@ import {
   SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES, SYNCLIP_AUDIO_MAX_REQUEST_BYTES, SYNCLIP_AUDIO_MAX_RESPONSE_BYTES,
   SYNCLIP_AUDIO_MAX_TEXT_BYTES, SynclipAudioClient, SynclipAudioError, downloadSynclipAudio,
   validateSynclipAudioBytes, validateSynclipAudioRequest, validateSynclipAudioTask, validateSynclipAudioVoices,
+  createSynclipAudioPriceQuote, validateSynclipAudioQuote,
   type SynclipAudioClientConfig, type SynclipAudioDownloadOptions, type SynclipAudioDownloadRequestOptions,
   type SynclipAudioRequest,
 } from '../src/synclip-audio-api';
@@ -21,6 +22,8 @@ const response = (data: unknown) => new Response(JSON.stringify({ success: true,
   headers: { 'content-type': 'application/json' },
 });
 const chineseVoice = { ...voice, id: 'zh-CN-XiaoxiaoNeural', name: '晓晓', languages: ['zh'], preview_url: null, coins_per_char: 0.25 };
+const voiceMetadata = Object.fromEntries(Object.entries(voice).filter(([key]) => key !== 'coins_per_char'));
+const blockVoice = { ...voiceMetadata, credits_per_1k_chars: 1 };
 const completed = (url = 'https://cdn.synclip.ai/audio.mp3?Signature=private') => ({
   task_id: taskId, status: 'completed' as const, progress: 100,
   output: { type: 'audio' as const, url, duration: 5.4 }, coins_used: 10, url_expires_at: '2099-01-01T00:00:00Z',
@@ -91,6 +94,27 @@ describe('Synclip audio public contract', () => {
 });
 
 describe('Synclip audio input and catalog validation', () => {
+  it('accepts the current per-block directory without fabricating a per-character rate', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response([blockVoice]))
+      .mockResolvedValueOnce(response({ task_id: taskId, status: 'queued' }));
+    const client = new SynclipAudioClient({ apiKey, fetch: fetcher });
+    expect(await client.listVoices()).toEqual([blockVoice]);
+    expect(await client.create(requestInput)).toEqual({ task_id: taskId });
+    expect(fetcher.mock.calls[1]?.[1]?.body).toBe(JSON.stringify(requestInput));
+  });
+  it.each([{}, { credits_per_1k_chars: null }, { credits_per_1k_chars: '1' }, { credits_per_1k_chars: -1 },
+    { credits_per_1k_chars: NaN }, { credits_per_1k_chars: Infinity }, { credits_per_1k_chars: 1, coins_per_char: 0.001 }])(
+    'rejects missing, malformed or ambiguous price %j', price => {
+      expect(() => validateSynclipAudioVoices([{ ...voiceMetadata, ...price }])).toThrow(SynclipAudioError);
+    });
+  it('clears current block-price eligibility after an invalid refresh', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response([blockVoice]))
+      .mockResolvedValueOnce(response([{ ...blockVoice, coins_per_char: 0.001 }]));
+    const client = new SynclipAudioClient({ apiKey, fetch: fetcher });
+    await client.listVoices(); await expect(client.listVoices()).rejects.toThrow(SynclipAudioError);
+    await expect(client.create(requestInput)).rejects.toMatchObject({ code: 'SYNCLIP_AUDIO_VOICE_NOT_AVAILABLE' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('accepts a catalog with nullable or absent previews and fractional or zero prices', () => {
     const noPreview = Object.fromEntries(Object.entries(voice).filter(([key]) => key !== 'preview_url'));
     const voices = [chineseVoice, { ...noPreview, coins_per_char: 0 }];
@@ -174,6 +198,39 @@ describe('Synclip audio input and catalog validation', () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(new SynclipAudioClient({ apiKey, fetch: fetcher }).query(id)).rejects.toMatchObject({ outcome: 'invalid' });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe('original audio quote price basis', () => {
+  it.each([[1, 1, 1], [4, 120, 4], [1, 1000, 1], [1, 1001, 2], [4, 1200, 8], [0, 120, 0]])(
+    'quotes rate %s and ASCII length %s as %s supplier credits', (rate, count, amount) => {
+      expect(createSynclipAudioPriceQuote({ credits_per_1k_chars: rate }, 'a'.repeat(count)))
+        .toEqual({ creditsPer1kChars: rate, characters: count, estimatedCoins: amount });
+    });
+  it('preserves historical linear quotes and 120 non-BMP codepoints in one current block', () => {
+    const text = '\u{20BB7}'.repeat(120);
+    expect(createSynclipAudioPriceQuote({ coins_per_char: 0.25 }, text)).toEqual({ coinsPerCharacter: 0.25, characters: 120, estimatedCoins: 30 });
+    expect(createSynclipAudioPriceQuote({ credits_per_1k_chars: 1 }, text)).toEqual({ creditsPer1kChars: 1, characters: 120, estimatedCoins: 1 });
+    expect(() => createSynclipAudioPriceQuote({ credits_per_1k_chars: 1 }, '\u{20BB7}'.repeat(600))).toThrow();
+  });
+  it.each(['linear', 'block'] as const)('validates original %s basis without a catalog, rejecting altered amount/count/caps', basis => {
+    const text = 'Saved original text';
+    const price = basis === 'linear' ? { coins_per_char: 0.1 } : { credits_per_1k_chars: 1 };
+    const quote = { ...createSynclipAudioPriceQuote(price, text), workerCeiling: 7, hostCeiling: 5 };
+    const caps = { workerCeiling: 7, hostCeiling: 7 };
+    expect(validateSynclipAudioQuote(quote, text, caps)).toEqual(quote);
+    for (const patch of [{ characters: quote.characters + 1 }, { estimatedCoins: quote.estimatedCoins + 1 },
+      { workerCeiling: 8 }, { hostCeiling: 8 }, { hostCeiling: 0.5 }, { creditsPer1kChars: 1, coinsPerCharacter: 0.1 }]) {
+      expect(() => validateSynclipAudioQuote({ ...quote, ...patch }, text, caps)).toThrow();
+    }
+  });
+  it('normalizes optional supplier charge aliases without substituting estimates', () => {
+    const withoutCharge = Object.fromEntries(Object.entries(completed()).filter(([key]) => key !== 'coins_used'));
+    expect(validateSynclipAudioTask(withoutCharge, taskId)).not.toHaveProperty('coins_used');
+    expect(validateSynclipAudioTask({ ...withoutCharge, credits_charged: 4 }, taskId).coins_used).toBe(4);
+    expect(validateSynclipAudioTask({ ...withoutCharge, credits_charged: 0, coins_used: 0 }, taskId).coins_used).toBe(0);
+    for (const patch of [{ credits_charged: 4, coins_used: 3 }, { credits_charged: null }, { credits_charged: '4' }])
+      expect(() => validateSynclipAudioTask({ ...withoutCharge, ...patch }, taskId)).toThrow();
   });
 });
 
