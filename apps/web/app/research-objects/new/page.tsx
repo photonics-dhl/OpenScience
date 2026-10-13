@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { useSession } from '@/components/auth/SessionProvider';
+import { GuideResearchWorkspace } from '@/components/guide/GuideResearchWorkspace';
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
@@ -26,6 +27,7 @@ import type { Locale } from '@/i18n/locale';
 import { getHermesDraftStorage } from '@/lib/hermes/draft-state';
 import { startPaperNarrative } from '@/lib/hermes/start-paper-narrative';
 import { researchCreationCopy } from '@/lib/research-creation-copy';
+import { guideWorkspaceCopy } from '@/lib/guide-workspace-copy';
 
 const CREATION_SUGGESTION: HermesGuideSuggestion = {
   bodyKey: 'guide.neutral.body',
@@ -42,6 +44,37 @@ function temporaryTitle(goal: string, materials: readonly IntakeMaterial[], fall
 }
 
 export default function NewResearchObjectPage() {
+  const searchParams = useSearchParams();
+  const requestedType = searchParams.get('type');
+  const researchType = requestedType === 'published' || requestedType === 'preprint' ? requestedType : null;
+  const mode = searchParams.get('mode');
+  return !researchType && (mode === 'blank' || mode === 'direct')
+    ? <DirectResearchObjectWorkspace />
+    : <ResearchObjectCreation />;
+}
+
+function DirectResearchObjectWorkspace() {
+  const session = useSession();
+  const router = useRouter();
+  const t = useTranslations('createResearch');
+  const dashboardT = useTranslations('dashboard');
+  const entryHref = '/research-objects/new?mode=direct';
+  useEffect(() => {
+    if (session.status === 'anonymous') router.replace(`/auth/login?returnTo=${encodeURIComponent(entryHref)}`);
+  }, [router, session.status]);
+  if (session.status !== 'authenticated' || !session.user?.userId) return <DashboardShell activeRoute="dashboard" navigationLabel={t('navigationLabel')} skipLabel={t('skipLabel')}>
+    {session.status === 'unavailable' ? <div role="alert" className="mx-auto max-w-4xl">
+      <p>{dashboardT('errors.load')}</p>
+      <button type="button" className="min-h-11 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink" onClick={() => void session.refresh(true)}>{dashboardT('errors.retry')}</button>
+    </div> : <p role="status" className="mx-auto max-w-4xl text-sm text-os-muted-paper">{dashboardT('loading')}</p>}
+  </DashboardShell>;
+  return <DashboardShell activeRoute="dashboard" navigationLabel={t('navigationLabel')} skipLabel={t('skipLabel')}>
+    <Link href="/dashboard" className="research-return-link"><span aria-hidden="true">←</span>{t('backToDesk')}</Link>
+    <GuideResearchWorkspace key={session.user.userId} entryHref={entryHref} initialDirectMode />
+  </DashboardShell>;
+}
+
+function ResearchObjectCreation() {
   const t = useTranslations('createResearch');
   const intakeT = useTranslations('ingestion.intake');
   const locale = useLocale() as Locale;
@@ -53,6 +86,7 @@ export default function NewResearchObjectPage() {
   const researchType = requestedType === 'published' || requestedType === 'preprint' ? requestedType : null;
   const draftMode = researchType === 'preprint' && searchParams.get('mode') === 'blank';
   const copy = researchCreationCopy(locale);
+  const workspaceCopy = guideWorkspaceCopy(locale);
   const returnTo = `/research-objects/new${searchParams.size ? `?${searchParams.toString()}` : ''}`;
   const loginHref = `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
@@ -333,6 +367,14 @@ export default function NewResearchObjectPage() {
     && (researchType ? (title.trim() && (draftMode || (materials.length === 1 && /\.pdf$/iu.test(materials[0]!.file.name))) && (researchType !== 'published' || (authors.trim() && journal.trim()))) : (goal.trim() || title.trim() || materials.length)),
   );
 
+  function guardWorkspaceEntry(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (pendingRef.current) { event.preventDefault(); return; }
+    if (goal.trim() || title.trim() || materials.length || researchObjectId) {
+      event.preventDefault();
+      setError(workspaceCopy.switchWarning);
+    }
+  }
+
   return (
     <DashboardShell
       activeRoute="dashboard"
@@ -348,6 +390,12 @@ export default function NewResearchObjectPage() {
           </div>
           <p data-reading-role="body" className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-os-muted-paper">{researchType === 'published' ? copy.publishedDescription : researchType === 'preprint' ? copy.preprintDescription : t('description')}</p>
         </header>
+
+        {!researchType ? <nav className="mt-5 flex flex-wrap gap-5 text-sm" aria-label={workspaceCopy.update}>
+          <Link href="/research-objects/new?mode=direct" className="research-return-link" aria-disabled={pending} tabIndex={pending ? -1 : undefined} onClick={guardWorkspaceEntry}>{workspaceCopy.direct} →</Link>
+          <Link href="/research-objects/new?mode=direct" className="research-return-link" aria-disabled={pending} tabIndex={pending ? -1 : undefined} onClick={guardWorkspaceEntry}>{workspaceCopy.update} →</Link>
+        </nav> : null}
+        {!researchType && error === workspaceCopy.switchWarning ? <p className="mt-3 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}{researchObjectId ? <> <Link className="underline underline-offset-4" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit`}>{intakeT('openDraft')} →</Link></> : null}</p> : null}
 
         <form className="mt-6" onSubmit={submit} aria-busy={pending}>
           <fieldset className="m-0 min-w-0 border-0 p-0" disabled={pending} onDropCapture={(event) => { if (pending) { event.preventDefault(); event.stopPropagation(); } }}>
@@ -400,7 +448,7 @@ export default function NewResearchObjectPage() {
           </details>}
           </fieldset>
 
-          {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
+          {error && error !== workspaceCopy.switchWarning ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
           <footer className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-os-rule-paper pt-4">
             <p className="m-0 max-w-lg text-sm leading-6 text-os-muted-paper">{t('privacyNote')}</p>
             <div className="flex items-center gap-4">

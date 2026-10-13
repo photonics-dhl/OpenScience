@@ -6,7 +6,8 @@ import { guidePageCopy } from '@/lib/guide-page-copy';
 
 export async function generateMetadata() {
   const locale = await getLocale();
-  return { title: `${guidePageCopy[locale === 'en' ? 'en' : 'zh'].pageName} | OpenScience` };
+  const t = guidePageCopy[locale === 'en' ? 'en' : 'zh'];
+  return { title: `${t.pageName} | OpenScience`, description: `${t.invitation}. ${t.beginning}` };
 }
 
 export default async function GuidePage() {
