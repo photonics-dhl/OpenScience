@@ -4,7 +4,7 @@ import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse } from 'node:path';
 import type { StoryboardDocument, StoryboardView, VideoSceneDirection } from '@openscience/domain';
 import { classifyNativeVideoAudio } from '@openscience/domain';
-import { SYNCLIP_VIDEO_MODEL, SYNCLIP_VIDEO_MODELS, type SynclipVideoModel } from '@openscience/ai-gateway';
+import { SYNCLIP_VIDEO_MODEL, SYNCLIP_VIDEO_MODELS, validateSynclipAudioQuote, type SynclipVideoModel } from '@openscience/ai-gateway';
 import type { HostVideoInput, AudioAuditionInput, AudioAuditionProposal, AudioAuditionGrant, AudioAuditionResult } from './host-video-spool';
 
 const MAX_JSON = 512 * 1024; const MAX_PNG = 10 * 1024 * 1024; const MAX_MP4 = 256 * 1024 * 1024;
@@ -144,13 +144,10 @@ export class SynclipVideoSpool {
         || !Number.isSafeInteger(saved.outputSize) || Number(saved.outputSize) < 1 || Number(saved.outputSize) > 16 * 1024 * 1024
         || typeof saved.durationSeconds !== 'number' || !Number.isFinite(saved.durationSeconds) || saved.durationSeconds <= 0 || saved.durationSeconds > 600
         || !['decoded', 'requires_revision'].includes(String(saved.timingStatus)) || !quote
-        || !Number.isFinite(quote.coinsPerCharacter) || quote.coinsPerCharacter < 0 || !Number.isSafeInteger(quote.characters) || quote.characters < 1
-        || quote.characters !== [...scenes[input.sceneIndex]!.narration].length
-        || quote.estimatedCoins !== quote.characters * quote.coinsPerCharacter || !Number.isFinite(quote.estimatedCoins)
-        || !Number.isFinite(quote.workerCeiling) || quote.workerCeiling <= 0 || quote.workerCeiling > grant.workerMaxEstimatedCoins
-        || !Number.isFinite(quote.hostCeiling) || quote.hostCeiling <= 0 || quote.hostCeiling > grant.hostMaxEstimatedCoins
-        || quote.estimatedCoins > Math.min(quote.workerCeiling, quote.hostCeiling)
         || (saved.coinsUsed !== undefined && (typeof saved.coinsUsed !== 'number' || !Number.isFinite(saved.coinsUsed) || saved.coinsUsed < 0))) fail('AUDIO_AUDITION_RESULT');
+      try { validateSynclipAudioQuote(quote, scenes[input.sceneIndex]!.narration,
+        { workerCeiling: grant.workerMaxEstimatedCoins, hostCeiling: grant.hostMaxEstimatedCoins }); }
+      catch { fail('AUDIO_AUDITION_RESULT'); }
       const filePath = join(resultDir, 'audition.mp3'), bytes = await boundedRead(filePath, 16 * 1024 * 1024);
       if (bytes.length !== saved.outputSize || createHash('sha256').update(bytes).digest('hex') !== saved.outputSha256) fail('AUDIO_AUDITION_RESULT');
       return { purpose: 'audio-audition', taskId: input.taskId, executionAttempt: grant.executionAttempt, inputHash,

@@ -146,14 +146,14 @@ describe('private audio audition transport', () => {
       actorId: 'actor', workspaceId: 'workspace', researchObjectId: 'ro', versionId: 'version', parentIdentity: 'verified-parent' };
     return { ...f, input };
   }
-  async function output(f: Awaited<ReturnType<typeof fixture>>, grant: Record<string, unknown>, resultPatch: Record<string, unknown> = {}) {
+  async function output(f: Awaited<ReturnType<typeof fixture>>, grant: Record<string, unknown>, resultPatch: Record<string, unknown> = {}, audioPatch: Record<string, unknown> = {}) {
     const outDir = join(f.resultsDir, TASK); await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, 'audition.mp3'), audioBytes);
     await writeFile(join(outDir, 'result.json'), JSON.stringify({ schemaVersion: 1, id: TASK, purpose: 'audio-audition', status: 'succeeded', provider: 'synclip', model: 'ltx23', ...resultPatch,
       inputHash: grant.inputHash, executionAttempt: grant.executionAttempt, audio: { sceneIndex: 1, locale: 'zh', voice: audio.voice, speed: 1,
         audioTaskId: 'known-tts', contentType: 'audio/mpeg', outputSha256: createHash('sha256').update(audioBytes).digest('hex'),
         outputSize: audioBytes.length, durationSeconds: 2.5, timingStatus: 'decoded',
-        quote: { coinsPerCharacter: 2, characters: 11, estimatedCoins: 22, workerCeiling: 200, hostCeiling: 200 }, coinsUsed: 22 } }));
+        quote: { coinsPerCharacter: 2, characters: 11, estimatedCoins: 22, workerCeiling: 200, hostCeiling: 200 }, coinsUsed: 22, ...audioPatch } }));
   }
   it('rejects an audio audition when readiness advertises another model', async () => {
     const f = await fixture(); let grants = 0;
@@ -191,13 +191,32 @@ describe('private audio audition transport', () => {
     expect(request.audioAuditionGrant.inputHash).toBe(request.inputHash);
     await expect(readFile(join(f.resultsDir, TASK, 'result.mp4'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
-  it('new execution attempts consume the original known result without republishing even after its deadline', async () => {
+  it.each(['linear', 'block'])('new attempts consume the original known %s quote without republishing after its deadline', async basis => {
     const f = await fixture(); let original: Record<string, unknown>;
     const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
       authorizeAudioAudition: async proposal => { original = { ...proposal, executionAttempt: 1, createdAt: f.now - 1000, deadlineAt: f.now - 1,
-        schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 }; await output(f, original); return original as never; } });
+        schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        await output(f, original, {}, basis === 'block' ? { quote: { creditsPer1kChars: 1, characters: 11,
+          estimatedCoins: 1, workerCeiling: 200, hostCeiling: 200 } } : {}); return original as never; } });
     const result = await spool.audition({ ...f.input, executionAttempt: 2 });
     expect(result.executionAttempt).toBe(1);
+    await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it.each(['both-prices', 'amount', 'count', 'worker-cap', 'host-cap', 'rate-mode'])('rejects changed block quote %s before MP3 adoption', async defect => {
+    const f = await fixture();
+    const quote: Record<string, unknown> = { creditsPer1kChars: 1, characters: 11, estimatedCoins: 1, workerCeiling: 200, hostCeiling: 200 };
+    if (defect === 'both-prices') quote.coinsPerCharacter = 1;
+    if (defect === 'amount') quote.estimatedCoins = 0.011;
+    if (defect === 'count') quote.characters = 12;
+    if (defect === 'worker-cap') quote.workerCeiling = 201;
+    if (defect === 'host-cap') quote.hostCeiling = 201;
+    if (defect === 'rate-mode') { delete quote.creditsPer1kChars; quote.coinsPerCharacter = 1; }
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now,
+      authorizeAudioAudition: async proposal => {
+        const original = { ...proposal, schemaVersion: 1, workerMaxEstimatedCoins: 200, hostMaxEstimatedCoins: 200 };
+        await output(f, original, {}, { quote }); return original as never;
+      } });
+    await expect(spool.audition(f.input)).rejects.toThrow('AUDIO_AUDITION_RESULT');
     await expect(readFile(join(f.inboxDir, TASK, 'request.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
   it('audition narration length only bounds the selected scene and retains an unselected long scene', async () => {
