@@ -26,14 +26,28 @@ describe('Synclip fixed image API', () => {
     expect(init.headers).toMatchObject({ Authorization: `Bearer ${apiKey}` });
     expect(JSON.parse(String(init.body))).toEqual({ prompt: 'Preserve the exact scientific labels.', model: 'gpt-image-2.5', aspectRatio: '16:9' });
   });
-  it('recognizes only an explicit model-unavailable error as a fallback signal', async () => {
+  it.each(['model_unavailable', 'model_not_available', 'model_not_found', 'unsupported_model'])(
+    'recognizes the explicit %s error as a fallback signal without retrying in the client', async code => {
     const fetcher = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'MODEL_UNAVAILABLE' } }), { status: 400, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code } }), { status: 400, headers: { 'content-type': 'application/json' } }))
       .mockResolvedValueOnce(response({ task_id: taskId, status: 'processing' }));
     const client = new SynclipImageClient({ apiKey, fetch: fetcher });
     await expect(client.create('Bound prompt', 'gpt-image-2.5')).rejects.toMatchObject({ code: 'SYNCLIP_MODEL_UNAVAILABLE', outcome: 'invalid' });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toMatchObject({ model: 'gpt-image-2.5' });
+  });
+  it.each([
+    { error: { code: 'rate_limit_exceeded', message: 'model_unavailable' } },
+    { error: { code: 'insufficient_quota' } },
+    { error: { code: 'authentication_error' } },
+    { error: { message: 'unsupported_model' } },
+  ])('does not authorize fallback from unrelated errors or message text: %j', async body => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(body), {
+      status: 400, headers: { 'content-type': 'application/json' },
+    }));
+    await expect(new SynclipImageClient({ apiKey, fetch: fetcher }).create('Bound prompt'))
+      .rejects.toMatchObject({ code: 'SYNCLIP_HTTP_FAILED', outcome: 'uncertain' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('also recognizes the same explicit error in a successful HTTP envelope without broadening fallback', async () => {
     const fetcher = vi.fn(async () => response({ error: { code: 'MODEL_UNAVAILABLE' } }));

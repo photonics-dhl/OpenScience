@@ -2,6 +2,7 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-13：API-only admission 审计补充四种明确模型不可用码、非模型错误/纯消息文本不降级、降级请求失败或响应丢失后不再 POST 的可执行回归；未修改生产代码。broker/transport 36/36、Gateway API/spool/image 54/54、node syntax/diff-check 通过，日志 `tmp/synclip-admission-{node,gateway}-20261013.log`。私有审阅 checkpoint、来源绑定与批准守卫本轮仅静态核对已有用例，未重新执行 Domain/Worker 审阅套件。发现用户提示仍有缺口：Web 目前仅有 generatorVersion DTO，没有消费实际模型的降级提示组件；后台 receipt 完成不等于用户已获告知，需由 UI 集成补齐。未读凭据、未调用 Provider/真实生成/部署，截图不作为运行时可用性证据。
 - 2026-10-13：历史 beta-gate NO-GO (`22674ce5`/`d17e8d8d`) 已由完整依赖链修复并替代；旧结论保留在 Git 历史，不再作为当前实施入口。
 - 2026-10-13：用户提供 Synclip `POST /v1/image` 合同截图，明确 `gpt-image-2.5` 可用（价格标注 6）；API-only 适配器改为 2.5 主模型，仅显式结构化模型不可用时一次降级到 2，并把实际模型绑定到 attempt/receipt/spool result/生成器版本。定向 API/transport/broker 测试与 ai-gateway typecheck 通过；未调用 Provider、未部署。
 - 2026-10-13：提交前置审计发现并修复恢复路径的模型连续性缺口：已有 `succeeded` 公示结果现在必须与 attempt/receipt 的实际模型一致，否则在任何 GET 前 fail-closed；新增无 GET/无覆盖回归。broker+transport 33/33、Gateway 28/28、node check/diff-check 全绿，独立 High GO（P0/P1/P2=0）；未调用 Provider、未生成、未部署。

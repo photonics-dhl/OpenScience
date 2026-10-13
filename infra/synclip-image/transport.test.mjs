@@ -103,6 +103,25 @@ test('falls back once only after an explicit model-unavailable response and bind
   assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-attempt.json'), 'utf8')).model, 'gpt-image-2');
   assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).model, 'gpt-image-2');
 });
+for (const fallbackError of ['SYNCLIP_MODEL_UNAVAILABLE', 'SYNCLIP_TIMEOUT', 'SYNCLIP_NETWORK_FAILED']) {
+  test(`fallback ${fallbackError} consumes the last POST opportunity across execute and resume`, async () => {
+    const f = await fixture();
+    f.deps.client.create = async (prompt, model) => {
+      f.calls.push(['POST', prompt, model]);
+      const code = model === 'gpt-image-2.5' ? 'SYNCLIP_MODEL_UNAVAILABLE' : fallbackError;
+      throw Object.assign(Error(code), { code });
+    };
+    for (const method of [executeSynclipImage, executeSynclipImage, resumeSynclipImage]) {
+      await assert.rejects(method(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+    }
+    assert.deepEqual(f.calls, [
+      ['POST', f.request.prompt, 'gpt-image-2.5'], ['POST', f.request.prompt, 'gpt-image-2'],
+    ]);
+    assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-attempt.json'), 'utf8')).model, 'gpt-image-2');
+    await assert.rejects(readFile(join(f.privateDir, 'synclip-receipt.json')), { code: 'ENOENT' });
+  });
+}
+
 test('concurrent executors consume one exclusive POST opportunity', async () => {
   const f = await fixture(); const first = f.deps.client.create;
   f.deps.client.create = async prompt => { await new Promise(resolve => setTimeout(resolve, 20)); return first(prompt); };
