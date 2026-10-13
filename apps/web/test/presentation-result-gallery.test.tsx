@@ -2,7 +2,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 
-vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
+vi.mock('next-intl', () => ({ useTranslations: () => (key: string, values?: { name?: string }) => key === 'generatedBy' ? `Created with ${values?.name}` : key }));
 vi.stubGlobal('React', React);
 
 import { PresentationResultGallery } from '../components/presentation/PresentationResultGallery';
@@ -31,6 +31,31 @@ function gallery(assets: PresentationAsset[], plans = [plan()]) {
     allAssets={[...plans, ...assets]} canWrite working={false} onTransition={vi.fn()}
     renderReviewAction={(asset) => <button>{`recover-${asset.id}`}</button>} />);
 }
+
+it.each(['gpt-image-2', 'gpt-image-2.5'])('retains the actual %s model on refreshed gallery assets without asserting an unavailable primary', model => {
+  const asset = image('synclip', 29, { generator: 'OpenScience Hermes scene image / synclip', generatorVersion: model });
+  for (const saved of [asset, JSON.parse(JSON.stringify(asset))]) {
+    const markup = gallery([saved]);
+    expect(markup).toContain(`Created with ${model}`);
+    expect(markup).not.toMatch(/unavailable|fallback|downgraded/);
+  }
+});
+
+it.each([
+  { generatorVersion: 'v1' }, { generatorVersion: '' }, { generatorVersion: 'unknown' },
+  { generator: 'OpenScience Hermes scene image / chatgpt-web' },
+  { kind: 'video' as const }, { status: 'rejected' as const },
+])('does not label unrelated or rejected gallery media as a Synclip model: %j', overrides => {
+  expect(gallery([image('synclip', 29, { generator: 'OpenScience Hermes scene image / synclip',
+    generatorVersion: 'gpt-image-2', ...overrides })])).not.toContain('Created with');
+});
+
+it.each(['draft', 'approved'] as const)('only shows approved model provenance in the read-only gallery: %s', status => {
+  const asset = image('synclip', 29, { status, generator: 'OpenScience Hermes scene image / synclip', generatorVersion: 'gpt-image-2' });
+  const markup = renderToStaticMarkup(<PresentationResultGallery researchObjectId="ro" versionId="v"
+    assets={[asset]} allAssets={[asset]} canWrite={false} working={false} onTransition={vi.fn()} />);
+  expect(markup.includes('Created with gpt-image-2')).toBe(status === 'approved');
+});
 
 it('leads with the newest usable image and keeps every other attempt and recovery in closed history', () => {
   const markup = gallery([image('old', 20), image('681ef614', 28), image('pending', 29, { canApprove: false })]);

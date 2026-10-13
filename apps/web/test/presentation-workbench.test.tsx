@@ -1,13 +1,58 @@
 import { createElement } from 'react';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.stubGlobal('React', React);
+
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
-  useTranslations: () => (key: string) => key === 'generate' ? 'presentation.generate' : key === 'approve' ? 'presentation.approve' : key,
+  useTranslations: () => (key: string, values?: { name?: string }) => key === 'generatedBy' ? `Created with ${values?.name}` : key === 'generate' ? 'presentation.generate' : key === 'approve' ? 'presentation.approve' : key,
 }));
 
 import { PresentationWorkbench } from '../components/presentation/PresentationWorkbench';
+import type { PresentationAsset } from '../lib/api';
+
+function modelWorkbench(asset: PresentationAsset, canWrite = true, resultsOnly = true) {
+  return renderToStaticMarkup(createElement(PresentationWorkbench, {
+    researchObjectId: 'ro', claims: [], assets: [asset],
+    version: { versionId: 'v', publicationNo: null, createdAt: '', commitMessage: '', status: 'draft' },
+    canWrite, resultsOnly, onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(),
+  }));
+}
+const synclipImage: PresentationAsset = {
+  id: 'synclip-image', researchObjectId: 'ro', versionId: 'v', kind: 'image', status: 'draft',
+  generator: 'OpenScience Hermes scene image / synclip', generatorVersion: 'gpt-image-2',
+  contentHash: 'a'.repeat(64), label: 'Scientific image', sourceClaimIds: [], createdAt: '', updatedAt: '',
+};
+
+it.each([true, false])('shows the saved Synclip model after fresh loading through resultsOnly=%s without inventing a fallback cause', resultsOnly => {
+  for (const model of ['gpt-image-2', 'gpt-image-2.5']) {
+    const asset = { ...synclipImage, generatorVersion: model };
+    const initial = modelWorkbench(asset, true, resultsOnly);
+    const refreshed = modelWorkbench(JSON.parse(JSON.stringify(asset)), true, resultsOnly);
+    for (const markup of [initial, refreshed]) {
+      expect(markup).toContain(`Created with ${model}`);
+      expect(markup).not.toMatch(/unavailable|fallback|downgraded/);
+    }
+  }
+});
+
+it.each([
+  { generatorVersion: 'v1' }, { generatorVersion: '' }, { generatorVersion: 'unknown' },
+  { generator: 'OpenScience Hermes scene image / chatgpt-web' },
+  { generator: 'OpenScience paper-original figure' }, { kind: 'video' as const },
+  { status: 'rejected' as const },
+])('does not infer a Synclip model notice for unrelated or rejected media: %j', overrides => {
+  for (const resultsOnly of [true, false]) {
+    expect(modelWorkbench({ ...synclipImage, ...overrides }, true, resultsOnly)).not.toContain('Created with');
+  }
+});
+
+it.each([true, false])('keeps unreviewed model details out of read-only resultsOnly=%s while showing approved media provenance', resultsOnly => {
+  expect(modelWorkbench(synclipImage, false, resultsOnly)).not.toContain('Created with');
+  expect(modelWorkbench({ ...synclipImage, status: 'approved' }, false, resultsOnly)).toContain('Created with gpt-image-2');
+});
 
 it.each([
   { canWrite: true, loading: false, loadFailed: false, showsEditor: true },

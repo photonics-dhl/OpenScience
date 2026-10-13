@@ -12,6 +12,7 @@ import { StoryboardPlans } from './StoryboardPlans';
 import { PresentationResultGallery } from './PresentationResultGallery';
 import { ResearchMediaDeck, type ResearchMediaSlide } from './ResearchMediaDeck';
 import { MediaAssetActions } from './MediaAssetActions';
+import { displayedSynclipImageModel } from './image-model-display';
 import { PaperFigureUpload, type PaperFigureSelection, type PaperFigureUploadOutcome, type PaperFigureReviewOutcome } from './PaperFigureUpload';
 import type { PresentationVideoRequest } from '@/lib/api';
 
@@ -139,7 +140,12 @@ export function PresentationWorkbench({
     const videoSlides = activeMediaAssets.filter((asset) => asset.kind === 'video').map((asset) => toSlide(asset, 'video', t('researchVideoTitle')));
     const renderActions = (slide: ResearchMediaSlide) => {
       const asset = mediaAssets.find((item) => item.id === slide.id);
-      return asset ? <MediaAssetActions key={asset.id} asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} reviewAction={renderReviewAction?.(asset)} onTransition={onTransition} onDeleted={assetDeleted} /> : null;
+      if (!asset) return null;
+      const model = displayedSynclipImageModel(asset, canWrite);
+      return <div key={asset.id}>
+        {model ? <p className="m-0 mb-2 text-sm leading-6 text-os-muted-paper">{t('generatedBy', { name: model })}</p> : null}
+        <MediaAssetActions asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} reviewAction={renderReviewAction?.(asset)} onTransition={onTransition} onDeleted={assetDeleted} />
+      </div>;
     };
     return (
       <div className="min-w-0 text-os-ink" data-presentation-results="true">
