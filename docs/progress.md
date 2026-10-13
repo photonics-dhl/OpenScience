@@ -5,7 +5,7 @@
 - 2026-10-13：用户提供供应商原ID及2.5/51s/Success/-6/Deducted；原请求GET-only已取回raw/normalized并形成明确2.5回执，0新生成POST，原UNCERTAIN保留。平台原task已恢复成功，同ID新2.5图为私有draft、Native M3审查accepted，恢复无额外平台扣费；总控看图确认主结构清楚，但额外字/渐变/角标未完全贴合brief，未自动批准。官方图片文档确认供应商6 coins，货币折算未知。用户另准指定私有稿去重，站内39→9、30进可恢复回收站，总控独立比对公开v1/v2、受保护原图不变且v3仍私有。精确对象、授权与证据见CURRENT。
 - 2026-10-13：生图安全诊断两文件49/49通过，独立gpt-6.1-sol High GO，已提交并集成，精确候选Media五jobs均成功；视频Skill已审源码完成集成，独立候选Media五jobs均成功，未更新线上Native资源。前端三文件恢复修复已审并集成，18/18及截图增量1/1、build/type/lint通过；指南纠错单文件High与原Skill读取通过并集成。总控精确集成候选已推、Media全部五jobs成功，保留同任务GET和身份取消范围；现场具体502请求/源头未证。精确提交、CI、写权与证据见CURRENT。
 - 2026-10-13：生图为已授权应用/Synclip更新与一次私有实测的唯一执行方。发布High发现12旧成功回执缺model可能误标2.5，已用原reader两文件最小修复并提交推送f804348c；68/68、Gateway TC/ESLint通过，独立gpt-6.1-sol High GO且P0/P1/P2=0。原156保持历史NO-GO，精确新Journal与Media五jobs均成功，人类再次明确f804许可；并发切换差额High GO，owner已暂停image timer，应用发布exit0且三服务健康、只读发布挂载核实；host同SHA安装exit0、API/Worker/host主2.5/备2一致，原timer/fresh ready已恢复；私有v3 Hermes对话与Native科研规划/来源审核均成功；一次2.5真实提交在约15秒执行窗口后UNCERTAIN，无externalID/PNG，未降级或重发。后续原ID对账/恢复已推进至上条，真实画面质量仍待审核。旧PNG/paid/公开版本及2份unknown保留，legacy无model拒采用且不重发；对象、CI、运行身份与前向恢复边界只见CURRENT。
-- 2026-10-13：Guide的invitation整页稿获直接人类认可并授权按图实施，UI owner接Guide组件/相邻CSS、copy与原测试的独立范围；保留原search分支，从canonical精确基线建独立Guide分支复用原树，不触碰媒体链或共享文档。其他页面仍基于原44页手册逐页讨论/效果图认可后实施；Guide运行与最小真实旅程尚待验收；为保留原长文本与草稿能力，已准有限P05通用分支复用和Guide伴随助手/导航标签调整，另补P05重复助手条件与import→direct草稿入口，不授权重设计P05。写权、认可消息、源码/CI/部署状态只见CURRENT。
+- 2026-10-13：Guide的invitation整页稿获直接人类认可并授权按图实施，UI owner接Guide组件/相邻CSS、copy与原测试的独立范围；保留原search分支，从canonical精确基线建独立Guide分支复用原树，不触碰媒体链或共享文档。其他页面仍基于原44页手册逐页讨论/效果图认可后实施；Guide已完成104单测、真实类型与生产构建、原6页面测试及桌面手机QA/独立High，匿名入口实走、认证创建与草稿仍为mock E2E；14文件已提交并逐字收候选，最小GuideCI另获独立High，新精确Media已发，健康CI补本机未执行lint，生产未更新；为保留原长文本与草稿能力，已准有限P05通用分支复用和Guide伴随助手/导航标签调整，另补P05重复助手条件与import→direct草稿入口，不授权重设计P05。写权、认可消息、源码/CI/部署状态只见CURRENT。
 - 2026-10-13：本次独立前后比对确认原published版本/受保护图未变、v3仍私有；平台gross3credits、auto-fund3、net0，不是实际免费。此前沿授权的站内编辑历史创建唯一私有v3；新稿无公开标识，原公开版本/认可图未变，任务87→87、active=0。继承Claims/图片映射已回读，原历史恢复不复制分镜，后续须沿新稿Hermes来源绑定路径规划，不能用旧published parent。精确对象和回执只见CURRENT。
 - 2026-10-13：Guide测试修复已提交并推送，仅改变现有键盘导航验收与截图输出位置，不改产品布局。独立High GO，生产模式3/3、最终附件后1/1及ESLint通过，精确Media/Journal成功；不保留初始首屏输入保证，也不证明新版设计已获认可。Video未变检查复用，完整CI回执见CURRENT。
 - 2026-10-13：API-only默认gpt-image-2.5、明确结构化模型不可用才一次降级2的源码与回归已合入；截图确认供应商列有2.5。持久generatorVersion模型展示已补，原独立High/定向检查有效；模型原因不足时不臆测。新发现legacy恢复P1按上节处置，不用历史绿灯覆盖新运行风险，真实PNG/科学质量仍开放。
@@ -17,6 +17,6 @@
 
 - 2026-10-13：本机出现359份tracked源码缺失，已从HEAD恢复并核对一致；现存依赖部分缺失，docs-sync通过且复用同版本现有工具lint通过。暂停所有归档/清理，视频owner只读报告已完成，6个cache索引缺失使当前完整offline方案不可行；独立High批准的源码快照已完成原Vitest/编译验证，复用只读现有依赖且未修改shared node_modules。没有新安装，远端CI及生产不受影响，精确失败/恢复证据见CURRENT。
 
-- 2026-10-13：首图源码及HTTP提交/GET测试独立High Source GO，原合同25/25；最小Media接线另获High。精确新CI在Domain构建发现载荷类型与分镜读取漏传来源ID两处错误，新功能用例尚未执行；image两行最小修复已获独立增量High GO并提交，总控已精确集成/push并发起新Media，video只读取证。旧已绿恢复候选与首图候选分别验收；不授权新部署/Provider，原paid/unknown、私有draft及用户采用/公开边界保持。
+- 2026-10-13：首图源码及HTTP提交/GET测试独立High Source GO，原合同25/25；最小Media接线另获High。精确CI的两TS构建错误修复已审提交，新CI实际build通过；23TS lint暴露18既有规范问题，image等价修复与video原两scroll例精确GET fixture均已High/提交并精确集成，原安全guard保留；最新候选已含Guide与对应CI补缺并push，Media正在验收，后继新功能用例仍待真实结果。旧已绿恢复候选与首图候选分别验收；不授权新部署/Provider，原paid/unknown、私有draft及用户采用/公开边界保持。
 
 历史实施、审查、失败与发布回执均在Git及CURRENT引用的原证据中；此窗口不保存另一套动态任务表。
