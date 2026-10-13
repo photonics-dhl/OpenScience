@@ -2,6 +2,7 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-13：Guide浏览器CI修复15601bb0经独立gpt-6.1-sol High GO（P0/P1/P2=0）已提交/推送，仅改原测试的键盘导航验收与截图输出位置，未改产品页面。现有生命周期介绍在输入区前，改验从页内链接Tab至输入框后的完整可见；不冒称初始首屏或整页完整Tab验收。生产模式3/3、最终附件改动后1/1、ESLint通过，精确远端CI待回。UI新版效果图仍待认可，生图私有修订与真实执行仍待授权；证据和边界见CURRENT。
 - 2026-10-13：新Media回执在现有Guide首屏输入框断言失败，其余两个Guide用例未运行；四个browser-entry、Video和Journal成功。视频聊天获完整gpt-6.1-sol High定位/修复交接，限现有Guide和对应浏览器用例，冻结差异后独立审查；不落实尚待用户认可的新设计。精确CI、失败日志与写权见CURRENT。生图私有修订授权和UI精简候选反馈仍待用户决定。
 - 2026-10-13：只读前置发现指定RO的版本均published、draft=0，scene0已有approved图；旧workspace.guide不能冒称当前已批准分镜，旧failed run不能充作剩余预算。精确对象和脱敏回执见CURRENT受控提交前置段；没有创建私有版本/Provider/生成/部署，后续私有修订范围与真实执行需用户决定。
 - 2026-10-13：总控恢复完整交接：生图c7d455d8已提交36/36与54/54回归，结果页持久实际模型提示已提交20be2c62；新增21/21、typecheck/ESLint通过，完整两文件38通过/10失败与c7d基线同名同错。视频以gpt-6.1-sol High独立复核c7d回归及五文件Web差异均GO（P0/P1/P2=0）；真实浏览器展示未验收，已快进推送frontend/nanqing的460c8bd0，Video/Journal精确CI成功，Media四个browser-entry成功，后续skill-path的Guide断言失败，最新处置见CURRENT。UI首稿因同图重复/文字杂乱退回，精简候选focused已交用户审阅，尚未授权新版产品实现；旧Guide验收不等于新方案获认可。CURRENT/progress/index由总控单写，心跳已纠正替代UI聊天与执行边界。Synclip Provider/真实论文生成/部署仍待明确授权，UI概念图按该聊天独立授权执行。
