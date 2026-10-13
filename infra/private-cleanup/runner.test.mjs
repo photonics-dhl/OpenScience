@@ -97,6 +97,7 @@ async function fixture(t, oldLedger = false, locations = ['live'], artifactsOnly
     .replaceAll('/opt/openscience-codex', join(base, 'absent-codex'))
     .replaceAll('/opt/openscience-video', join(base, 'absent-video'))
     .replaceAll('/usr/bin/systemctl', `"${control}"`)
+    .replace('node=/usr/bin/node', `node='${process.execPath.replaceAll("'", "'\\''")}'`)
     .replace(/^\[\[ \$bundle =~ .*$/mu, `[[ $bundle == "${bundle}" ]] || exit 65`);
   const script = join(bundle, 'run.sh'); await writeFile(script, shell);
   const runGuard = async () => {
