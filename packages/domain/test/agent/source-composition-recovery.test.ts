@@ -7,6 +7,7 @@ import { inspectHermesSourceCompositionRecovery } from '../../src/ingestion/sour
 import { sourceCompositionRecoveryFixture, sourceCompositionCandidate as candidate, sourceReviewPacketFailureFixture, sourceSavedCompositionFixture as savedCompositionFixture } from './source-composition-recovery-fixture';
 import { claimAgentTask, markTaskProgress } from '../../src/agent/agent';
 import { requireHermesSourceCompositionRecoveryExecution } from '../../src/ingestion/source-composition-recovery';
+import { seedHistoricalSourceReviewRecovery } from './historical-source-review-fixture';
 
 async function claimedRecovery() {
   const f = await sourceCompositionRecoveryFixture(); await retryHermesGeneration(f.deps, f.recoveryInput);
@@ -18,8 +19,7 @@ async function claimedRecovery() {
 
 
 async function failedPacketIndependent() {
-  const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
-  const root = f.db.agentTasks.at(-1)!;
+  const f = await sourceReviewPacketFailureFixture(); const root = await seedHistoricalSourceReviewRecovery(f, f.packetInput);
   Object.assign(root, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.review.result) });
   Object.assign(root.result.scientificReview, { status: 'blocked_scientific_review', attemptId: '22222222-2222-5222-8222-222222222222' });
   for (const key of Object.keys(root.result.fieldDiagnosticsDetails)) root.result.fieldDiagnosticsDetails[key] = 'scientificReview=unavailable';
@@ -39,7 +39,6 @@ describe('same-run final source composition recovery', () => {
   it.each([
     ['composition', async () => { const f = await sourceCompositionRecoveryFixture(); return { f, request: f.recoveryInput }; }],
     ['saved composition review', async () => { const f = await savedCompositionFixture(); return { f, request: f.resumeInput }; }],
-    ['source review', async () => { const f = await sourceReviewPacketFailureFixture(); return { f, request: f.packetInput }; }],
   ] as const)('holds new paid video %s recovery, then preserves its same-key receipt', async (_phase, make) => {
     const { f, request } = await make(); let ready = false;
     Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
@@ -55,6 +54,15 @@ describe('same-run final source composition recovery', () => {
     const recovered = structuredClone(f.db); ready = false;
     await retryHermesGeneration(f.deps, request);
     expect(f.db).toEqual(recovered); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches + 1);
+  });
+
+  it.each([false, true])('keeps retired packet recovery closed when video ready=%s', async ready => {
+    const f = await sourceReviewPacketFailureFixture();
+    Object.assign(f.deps, { videoEnabled: true, readVideoReadiness: async () => ready });
+    f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.generationSettings.output = 'video';
+    const before = structuredClone(f.db); const dispatches = f.redis.lpush.mock.calls.length;
+    await expect(retryHermesGeneration(f.deps, f.packetInput)).rejects.toThrow('retired');
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
   });
 
   it('reviews a proven paid composition once without rerunning composition or rewriting failed science', async () => {
@@ -168,22 +176,26 @@ describe('same-run final source composition recovery', () => {
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toEqual(ledger);
   });
 
-  it('recognizes the paid packet continuation as the same independent intent for its one positively verified technical successor', async () => {
-    const f = await failedPacketIndependent(); const ledger = structuredClone(f.db.usageLedger);
-    expect(await getHermesResearchRun(f.deps, f.technicalInput)).toMatchObject({
-      generationRecovery: 'source-review-not-submitted', chargeableAttempts: 0 });
-    await retryHermesGeneration(f.deps, f.technicalInput); expect(f.db.usageLedger).toEqual(ledger);
-    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
-    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
-      failedTaskId: f.root.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).toMatchObject({
-      mode: 'web', notSubmittedRecovery: { requestId: f.root.result.scientificReview.attemptId, promptHash: 'c'.repeat(64) } });
-    await retryHermesGeneration(f.deps, f.technicalInput); expect(f.db.usageLedger).toEqual(ledger);
+  it('rejects a new Web technical successor and only replays an already persisted receipt without dispatch or charge', async () => {
+    const f = await failedPacketIndependent(); const before = structuredClone(f.db);
+    const dispatches = f.redis.lpush.mock.calls.length;
+    expect((await getHermesResearchRun(f.deps, f.technicalInput)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps, f.technicalInput)).rejects.toThrow('retired');
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
+    const owner = await seedHistoricalSourceReviewRecovery(f, f.technicalInput, f.verifier);
+    expect(f.db.usageLedger).toEqual(before.usageLedger);
+    Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    const persisted = structuredClone(f.db);
+    await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
+      failedTaskId: f.root.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).rejects.toThrow('retired');
+    await retryHermesGeneration(f.deps, f.technicalInput);
+    expect(f.db).toEqual(persisted); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
   });
 
   it.each(['bound-proof', 'credit-policy', 'chargeable', 'intent-owner', 'route', 'digest', 'request-key'])(
     'rejects a changed technical packet receipt (%s) before provider authorization', async change => {
-      const f = await failedPacketIndependent(); await retryHermesGeneration(f.deps, f.technicalInput);
-      const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+      const f = await failedPacketIndependent(); const owner = await seedHistoricalSourceReviewRecovery(f, f.technicalInput, f.verifier);
+      Object.assign(owner, { status: 'running', executionAttempt: 1 });
       const receipt = f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!;
       if (change === 'bound-proof') receipt.metadata.notSubmittedRecovery.input.promptHash = 'd'.repeat(64);
       if (change === 'credit-policy') receipt.metadata.creditPolicy = 'free';
@@ -197,31 +209,20 @@ describe('same-run final source composition recovery', () => {
     });
 
   it('rejects a paid packet recovery receipt moved to another workspace', async () => {
-    const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
-    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    const f = await sourceReviewPacketFailureFixture(); const owner = await seedHistoricalSourceReviewRecovery(f, f.packetInput);
+    Object.assign(owner, { status: 'running', executionAttempt: 1 });
     f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!.workspaceId = 'other';
     await expect(requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
       failedTaskId: f.review.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).rejects.toThrow('[blocked]');
   });
 
-  it('continues an exact initial local packet overflow with one paid web review and preserves the failed rows', async () => {
+  it('preserves an exact initial local packet overflow and rejects new Web tasks, charges and dispatches', async () => {
     const f = await sourceReviewPacketFailureFixture();
-    const oldReview = structuredClone(f.review); const failedSteps = structuredClone(f.db.hermesResearchSteps.filter(row => row.runId === f.run.id && row.status === 'failed'));
-    const tasks = f.db.agentTasks.length; const debits = f.db.usageLedger.length;
-    expect(await getHermesResearchRun(f.deps, f.packetInput)).toMatchObject({
-      canRetryGeneration: true, generationRecovery: 'source-review-independent', chargeableAttempts: 1 });
-    await retryHermesGeneration(f.deps, f.packetInput);
-    const owner = f.db.agentTasks.at(-1)!;
-    expect(f.db.agentTasks).toHaveLength(tasks + 1); expect(f.db.usageLedger).toHaveLength(debits + 1);
-    expect(f.review).toEqual(oldReview);
-    for (const row of failedSteps) expect(f.db.hermesResearchSteps.find(step => step.id === row.id)).toEqual(row);
-    expect(f.db.auditLogs.at(-1)!.metadata).toMatchObject({ recoveryClass: 'independent_source_review_packet_overflow', reviewMode: 'web' });
-    const after = structuredClone(f.db.usageLedger); const dispatches = f.redis.lpush.mock.calls.length;
-    await retryHermesGeneration(f.deps, f.packetInput);
-    expect(f.db.usageLedger).toEqual(after); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
-    Object.assign(owner, { status: 'running', executionAttempt: 1 });
-    expect(await requireHermesSourceReviewExecution(f.prisma, { ownerTaskId: owner.id, ingestionTaskId: f.source.id,
-      failedTaskId: f.review.id, compositionTaskId: f.composition.id, executionAttempt: 1 })).toMatchObject({ mode: 'web' });
+    const before = structuredClone(f.db); const dispatches = f.redis.lpush.mock.calls.length;
+    expect((await getHermesResearchRun(f.deps, f.packetInput)).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(f.deps, f.packetInput)).rejects.toThrow('retired');
+    await expect(retryHermesGeneration(f.deps, { ...f.packetInput, idempotencyKey: 'another-tab' })).rejects.toThrow('retired');
+    expect(f.db).toEqual(before); expect(f.redis.lpush).toHaveBeenCalledTimes(dispatches);
   });
 
   it.each(['receipt-missing', 'receipt-duplicate', 'receipt-actor', 'receipt-run', 'receipt-policy', 'receipt-map', 'receipt-charge',
@@ -266,8 +267,8 @@ describe('same-run final source composition recovery', () => {
     });
 
   it('rejects changed packet recovery evidence and a second client key while retaining the same paid intent', async () => {
-    const f = await sourceReviewPacketFailureFixture(); await retryHermesGeneration(f.deps, f.packetInput);
-    const owner = f.db.agentTasks.at(-1)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+    const f = await sourceReviewPacketFailureFixture(); const owner = await seedHistoricalSourceReviewRecovery(f, f.packetInput);
+    Object.assign(owner, { status: 'running', executionAttempt: 1 });
     const input = { ownerTaskId: owner.id, ingestionTaskId: f.source.id, failedTaskId: f.review.id,
       compositionTaskId: f.composition.id, executionAttempt: 1 };
     const receipt = f.db.auditLogs.find(row => row.action === 'hermes.research_run.source_review_recovery' && row.metadata.newAgentTaskId === owner.id)!;
@@ -280,7 +281,7 @@ describe('same-run final source composition recovery', () => {
 
   it('reconciles a completed packet continuation into the existing ready review, preserving original diagnostics', async () => {
     const f = await sourceReviewPacketFailureFixture(); const oldStep = structuredClone(f.db.hermesResearchSteps.find(row => row.agentTaskId === f.review.id && row.stage === 'source_review'));
-    await retryHermesGeneration(f.deps, f.packetInput); const owner = f.db.agentTasks.at(-1)!;
+    const owner = await seedHistoricalSourceReviewRecovery(f, f.packetInput);
     owner.status = 'succeeded'; owner.executionAttempt = 1;
     owner.result = { ...structuredClone(f.composition.result), scientificReview: { ...structuredClone(f.composition.result.scientificReview),
       kind: 'independent_review', contractVersion: '5', status: 'review_received', sourceAgentTaskId: f.composition.id,

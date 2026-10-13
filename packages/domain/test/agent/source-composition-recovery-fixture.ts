@@ -7,6 +7,7 @@ import { reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/ag
 import { claimAgentTask } from '../../src/agent/agent';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
 import { HERMES_INDEPENDENT_SOURCE_REVIEW } from '../../src/ingestion/source-review-recovery';
+import { seedHistoricalSourceReviewRecovery } from './historical-source-review-fixture';
 
 export async function sourceCompositionRecoveryFixture() {
   const f = await privateSourceReanalysisFixture();
@@ -106,8 +107,7 @@ export async function sourceReviewPacketFailureFixture() {
 
 export async function exhaustedRecoveredCompositionFixture() {
   const f = await sourceReviewPacketFailureFixture();
-  await retryHermesGeneration(f.deps, f.packetInput);
-  const root = f.db.agentTasks.at(-1)!;
+  const root = await seedHistoricalSourceReviewRecovery(f, f.packetInput);
   Object.assign(root, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.review.result) });
   Object.assign(root.result.scientificReview, { status: 'blocked_scientific_review', attemptId: '22222222-2222-5222-8222-222222222222' });
   for (const field of Object.keys(root.result.fieldDiagnosticsDetails)) root.result.fieldDiagnosticsDetails[field] = 'scientificReview=unavailable';
@@ -121,10 +121,9 @@ export async function exhaustedRecoveredCompositionFixture() {
   };
   stop();
   const verifier = vi.fn(async () => true);
-  await retryHermesGeneration({ ...f.deps, canRetrySourceReviewBeforeSubmission: verifier }, {
+  const current = await seedHistoricalSourceReviewRecovery(f, {
     ...f.packetInput, expectedVersion: f.db.hermesResearchRuns.find(row => row.id === f.run.id)!.version,
-    idempotencyKey: 'last-packet-technical-successor' });
-  const current = f.db.agentTasks.at(-1)!;
+    idempotencyKey: 'last-packet-technical-successor' }, verifier);
   Object.assign(current, { status: 'succeeded', executionAttempt: 1, result: structuredClone(root.result) });
   stop(); verifier.mockClear();
   const run = f.db.hermesResearchRuns.find(row => row.id === f.run.id)!;
