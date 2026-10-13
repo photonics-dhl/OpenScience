@@ -428,6 +428,10 @@ export interface DashboardResearchApi {
   title: string;
   version: number;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  visibility?: string;
+  workspaceId?: string;
 }
 
 export interface ResearchObjectSearchApi {

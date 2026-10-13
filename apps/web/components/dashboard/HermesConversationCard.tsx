@@ -1,23 +1,23 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-import { ArrowRight } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { getDashboardPageCopy } from '@/lib/dashboard-page-copy';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
+import type { HermesVisualState } from '@/components/hermes/hermes-state';
 import styles from '@/app/dashboard/dashboard.module.css';
 
-export function HermesConversationCard({ onInvoke, open = false, working = false }: { onInvoke(): void; open?: boolean; working?: boolean }) {
+export function HermesConversationCard({ onInvoke, open = false, working = false, hasResearch = true, state, suggestion }: {
+  onInvoke(): void; open?: boolean; working?: boolean; hasResearch?: boolean;
+  state?: HermesVisualState; suggestion: HermesGuideSuggestion;
+}) {
   const t = useTranslations('dashboard.hermes');
+  const copy = getDashboardPageCopy(useLocale());
   return (
     <section className={`hermes-conversation-card ${styles.hermesConversation}`} aria-label={t('conversation.label')} data-hermes-protected="true">
-      <div className={styles.hermesIdentity}>
-        <div>
-          <h2 className={styles.hermesTitle}>Hermes</h2>
-          <p className={styles.hermesMessage} aria-live="polite">{t(working ? 'taskStates.working' : 'conversation.body')}</p>
-        </div>
-      </div>
-      <button className={styles.primaryAction} type="button" onClick={onInvoke} aria-haspopup="dialog" aria-expanded={open}>
-        {t('conversation.label')}
-        <ArrowRight size={16} aria-hidden="true" />
-      </button>
+      <HermesDockAnchor floating={false} assistantOpen={open} onInvoke={onInvoke}
+        state={state} suggestion={suggestion} presentation="dashboard-seat"
+        entryLabel={copy.openConversation} entryHint={working ? t('taskStates.working') : hasResearch ? copy.hermesBody : copy.hermesEmptyBody} />
     </section>
   );
 }

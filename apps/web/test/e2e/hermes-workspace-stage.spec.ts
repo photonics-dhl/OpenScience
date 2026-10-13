@@ -155,9 +155,12 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(page.locator('[data-hermes-avatar-entry="true"]')).toHaveCount(1);
   await expect(host).toHaveCount(1);
   await expect(host.locator(stageSelector)).toHaveCount(1);
-  await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
+  const dashboardSeat = /^\/dashboard\/?$/.test(new URL(page.url()).pathname);
+  const expectedSize = dashboardSeat ? (page.viewportSize()!.width <= 599 ? 140 : 180) : 64;
+  if (dashboardSeat) await expect(stage).toHaveAttribute('data-hermes-dashboard-seat', 'true');
+  else await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'true');
-  await expect(stage).toHaveAttribute('data-hermes-stage-size', '64');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', String(expectedSize));
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'false');
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'false');
@@ -170,20 +173,20 @@ async function assertAvatar(page: Page, placement: 'viewport' | 'document-flow' 
   await expect(entryLabel).toHaveClass('hermes-avatar-entry-label');
   await expect(entryLabel).toContainText('Hermes');
   await expect(entryLabel).toHaveAttribute('aria-expanded', 'false');
-  for (const viewport of [host, stage, input, host.locator('[data-hermes-compact-placement]')]) {
+  for (const viewport of dashboardSeat ? [host, stage, input] : [host, stage, input, host.locator('[data-hermes-compact-placement]')]) {
     await expect(viewport).toBeVisible();
     await expect.poll(async () => {
       const bounds = await viewport.boundingBox();
       return bounds && { width: bounds.width, height: bounds.height };
-    }).toEqual({ width: 64, height: 64 });
+    }).toEqual({ width: expectedSize, height: expectedSize });
   }
-  await expect(input).toHaveCSS('overflow', 'hidden');
+  await expect(input).toHaveCSS('overflow', dashboardSeat ? 'visible' : 'hidden');
   // The 160px composition is clipped by the 64px button; its carrier AABB is not a work collision.
   const composition = input.locator('[data-hermes-companion-actor="true"]');
   await expect.poll(() => composition.evaluate((node) => {
     const { width, height } = node.getBoundingClientRect();
     return { width, height };
-  })).toEqual({ width: 160, height: 160 });
+  })).toEqual({ width: dashboardSeat ? expectedSize : 160, height: dashboardSeat ? expectedSize : 160 });
   // Read related boxes in one browser task while their shared page-entry animation runs.
   const { visible, frame, stageBounds } = await host.evaluate((anchor) => {
     const currentStage = anchor.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
@@ -339,7 +342,7 @@ test('only the primary left pointer invokes the toolbar avatar, without capture 
   await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
 });
 
-test('the 64px toolbar avatar stays in its page frame during pointer travel and menus', async ({ page }) => {
+test('the dashboard full-body seat stays in its page frame during pointer travel and menus', async ({ page }) => {
   await mockWorkspace(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'networkidle' });
@@ -363,7 +366,8 @@ test('the 64px toolbar avatar stays in its page frame during pointer travel and 
     // the toolbar avatar remains fully visible throughout the actual menu interaction.
     await page.setViewportSize({ width, height: 450 });
     await page.evaluate(() => window.scrollTo(0, 8));
-    expect(await page.evaluate(() => window.scrollY)).toBe(8);
+    await input.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await assertAvatar(page);
     for (const openMenu of ['pointer', 'keyboard']) {
       if (openMenu === 'keyboard') {
@@ -453,7 +457,7 @@ for (const width of [1440, 800, 390]) {
   });
 }
 
-test('Hermes mounts and draws the real Wanko portrait in the clipped avatar and full original slot', async ({ page }) => {
+test('Hermes mounts and draws the real Wanko portrait in its dashboard seat and original conversation slot', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
   await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'networkidle' });
