@@ -13,7 +13,7 @@
 - 2026-10-13：视频角色入口、native-first与external-narration职责已整理；本地准入关闭不能解释为供应商拒权，旧通用catalog错误缺运行身份定位。真实视频仍待专门权限/预算/运维授权，不因本次生图更新启用视频。恢复责任与最小验收见CURRENT的视频段。
 - 长期目标仍是2–3篇真实论文的Hermes全文凝练、来源/科学理解、配图与用户质量确认及公开展示；普通用户旅程、完整视频和整站审美尚未完成。候选、已部署、实际观察和用户认可分别记录，不用检查数量替代交付。
 
-- 2026-10-13：已核生图聊天最新人类授权，CI后修复付费图提交超时丢ID及自动恢复；精确前置CI已成功，生图owner已开始原test的RED增量；实际Node运行RED已复现15秒提交中断/UNCERTAIN过早退出，GREEN56/56及前段独立High GO；后续隔离快照原Gateway三文件64/64、真实TypeScript两package编译和host51/51通过，已审前段已提交并推精确候选；本机ESLint初始化失败，精确CI四TS lint及相关Gateway/host步骤已通过；精确Media五jobs全部成功；迟到completed未自动入库P1经独立High定位，已交视频owner在独立树复用原维护入口/CAS/outbox修复，新增测试待实际Media执行，六文件Source High问题已清零并提交09e05f56，精确候选070e50ac的Media四browser jobs成功、Domain旧suite22failed/12pass；新image fixture含video字段、旧Legacy期望及mock差额已作两文件最小修复、差额High通过并推送精确新候选；新Media再次定位Domain夹具count/parent状态差额，已最小修复并审查提交，新精确Media中Domain34/34通过，随后原文件20lint错误阻断；生产owner单独修等价lint再续首图，原测试owner不并改生产。Worker/类型仍未执行；现有Worker类型检查复用，仅补原Domain suite和六文件lint/触发路径，CI差额独立High GO。禁止重复扣费/重POST或自行部署。若确有CI额度失败，保留证据并以受影响等价本地检查推进，独立High不省。
+- 2026-10-13：已授权付费图自动恢复修复：前段提交/定向原测试、真实编译、host及精确Media均已通过并集成；后段completed-only CAS/outbox源码独立High无开放项。经原夹具修复与单文件等价lint修复，最新精确Media的Domain34/34、六TS lint及四browser jobs通过；Worker776/777，唯一新恢复it因局部fake协议/回滚后陈旧引用在修，后继类型未执行。原测试owner独占三个测试文件、三个生产文件已交生图owner接首图，不并写。具体SHA、失败、High和对应CI只见CURRENT。当前不授权新部署/生成，保留原任务、收费与unknown；无可信原ID且无查询合同的永久丢响应不能凭空恢复。
 
 - 2026-10-13：本机出现359份tracked源码缺失，已从HEAD恢复并核对一致；现存依赖部分缺失，docs-sync通过且复用同版本现有工具lint通过。暂停所有归档/清理，视频owner只读报告已完成，6个cache索引缺失使当前完整offline方案不可行；独立High批准的源码快照已完成原Vitest/编译验证，复用只读现有依赖且未修改shared node_modules。没有新安装，远端CI及生产不受影响，精确失败/恢复证据见CURRENT。
 
