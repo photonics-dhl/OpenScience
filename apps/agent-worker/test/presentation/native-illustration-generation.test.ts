@@ -213,7 +213,8 @@ describe('automatic original paid Native image admission through the existing Wo
     // source/permission checks, review checkpoint, private store and handler terminal CAS are retained.
     const host = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementation(async input => {
       expect(input.config.sourceTools.map(tool => tool.name)).toContain('paper_image_view');
-      const tools = ['skill_view', 'paper_image_view'].map(name => ({ type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } } }));
+      const tools = [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object', properties: {} } })),
+        ...input.config.sourceTools].map(tool => ({ type: 'function', function: tool }));
       const messages: Array<Record<string, unknown>> = [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }];
       const first = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages, tools });
       messages.push(first.choices[0]!.message as unknown as Record<string, unknown>);
