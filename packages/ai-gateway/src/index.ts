@@ -31,7 +31,6 @@ export {
   type MiniMaxVisionConfig,
   type MiniMaxVisionPricing,
 } from './provider';
-export { ChatGptWebScienceReviewProvider, type ChatGptWebScienceReviewConfig } from './science-review';
 export { nativeImageReviewMessages, nativeImageReviewPromptHash, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
 export { CodexSolImageReviewProvider, type CodexSolReviewConfig } from './codex-sol-review';
 export { CODEX_SOL_REVIEW_PROVIDER, CODEX_SOL_REVIEW_MODEL, CODEX_SOL_REVIEW_EFFORT,
@@ -91,7 +90,7 @@ export {
   type ProviderCapabilityPolicy,
 } from './ocr';
 
-export { CodexSpoolImageProvider, ChatGptWebSpoolImageProvider, SynclipSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
+export { CodexSpoolImageProvider, SynclipSpoolImageProvider, type CodexSpoolImageConfig } from './codex-image';
 export * from './codex-image-protocol';
 export {
   SYNCLIP_VIDEO_ORIGIN, SYNCLIP_VIDEO_MODELS, SYNCLIP_VIDEO_MODEL, SYNCLIP_VIDEO_DURATIONS,

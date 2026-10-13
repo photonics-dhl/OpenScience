@@ -1,6 +1,7 @@
 import { requireStyleReferenceImage } from './scene-image';
 import { imageReviewHasNoSubmission } from './native-image-review';
 import { requireArtStyleContinuationTaskAuthority } from '../agent/art-style-continuation';
+import { requireFirstImageContinuationTaskAuthority } from '../agent/first-image-continuation';
 import { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageRevision, requireSceneImageSpendIsNew, hasSceneImageProvenance, readStoredGeneratedImageReview, requireAcceptedSceneImageReview, sceneImageReviewTaskResult, sceneImageRequiresPixelReview, generatedSceneImageRequiresPixelReview, type SceneImageRequest } from './scene-image';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -10,7 +11,7 @@ import { recordValue, refreshWorkingResearchRecord } from '../commit/research-re
 import { isVersionHistoryCopy, requireValidVersionHistoryCopy } from './version-history-copy';
 import { classifyNativeVideoAudio, parseStoryboardRequest, parseStoryboardDocument, presentationStoryboardView, canonicalStoryboardStyle, type StoryboardRequest, type StoryboardView } from './storyboard';
 import type { AuditContext } from '@openscience/observability';
-import type { AgentTask, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
+import type { AgentTask, AuditLog, PresentationAsset, PresentationAssetStatus, Prisma } from '@prisma/client';
 import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, taskToView, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { HermesVideoUnavailableError, isHermesVideoReady, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
@@ -717,12 +718,15 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
       const expectedStatus = stage === 'scene_image' ? 'awaiting_scene_images_review' : 'awaiting_storyboard_review';
       const ids = (await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: asset.id } })).map(link => link.claimId).sort();
       const taskPayload = task ? parsePresentationGenerationPayload(task.payload) : undefined;
-      const styleAuthority = run?.maxAgentTasks === 2 && task && taskPayload
+      const firstImageAuthority = run?.maxAgentTasks === 2 && task && taskPayload
+        ? await requireFirstImageContinuationTaskAuthority(tx, { runId: run.id, actorId: input.userId, taskId: task.id, payload: taskPayload, review: true }) : false;
+      const styleAuthority = !firstImageAuthority && run?.maxAgentTasks === 2 && task && taskPayload
         ? await requireArtStyleContinuationTaskAuthority(tx, { runId: run.id, actorId: input.userId, taskId: task.id, payload: taskPayload, review: true }) : false;
       const renderAuthority = run && task && ![9, 11, 13].includes(run.maxAgentTasks ?? 0) && stage === 'scene_image'
         ? await requireHermesImageRenderRecoveryAuthority(tx, { runId: run.id, actorId: input.userId,
           taskId: task.id, phase: 'review' }).catch(() => null) : null;
-      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel && !styleAuthority) || run.status !== expectedStatus
+      if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || (![9, 11, 13].includes(run.maxAgentTasks ?? 0) && !renderAuthority && !pixel && !styleAuthority && !firstImageAuthority) || run.status !== expectedStatus
+        || (firstImageAuthority && stage !== 'storyboard')
         || run.actorId !== input.userId || run.researchObjectId !== input.researchObjectId || run.versionId !== input.versionId
         || !step || step.status !== 'awaiting_approval' || task?.status !== 'succeeded' || task.deletedAt
         || taskPayload?.hermesRunAuthority?.runId !== run.id || taskPayload.hermesRunAuthority.stage !== stage
@@ -735,7 +739,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
           || !['accepted', 'revised', 'blocked'].includes(String(review.decision))))
         || (pixel && (stage === 'storyboard' ? task.id !== pixel.task.id
           : taskPayload.sceneImage?.storyboardAssetId !== pixel.task.id || step.ordinal >= pixel.sceneLimit))
-        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || styleAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
+        || (input.status === 'approved') !== (stage === 'storyboard' && (pixel || styleAuthority || firstImageAuthority || run.maxAgentTasks === 11 || run.maxAgentTasks === 13) ? review.decision === 'accepted' : review.decision !== 'blocked')) {
         throw new PresentationAssetError('VALIDATION_ERROR', 'Hermes internal review does not match the current candidate and grant');
       }
       // Source-support authority was replayed above; its receipt preserves all historical image decisions.
@@ -1232,7 +1236,7 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
     input: { runId: string; actorId: string; taskId: string }) {
     const run = await prisma.hermesResearchRun.findUnique({ where: { id: input.runId }, include: { steps: true } });
     if (!run || run.profile !== VISUAL_NARRATIVE_PROFILE || !Number.isSafeInteger(run.maxAgentTasks)) return null;
-    const chain: Array<{ receipt: Prisma.AuditLogGetPayload<{}>; metadata: Record<string, unknown>;
+    const chain: Array<{ receipt: AuditLog; metadata: Record<string, unknown>;
       task: Prisma.AgentTaskGetPayload<{ include: { session: true } }>; payload: PresentationGenerationPayload }> = [];
     let taskId = input.taskId;
     for (;;) {
@@ -1271,7 +1275,9 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
         researchObjectId: run.researchObjectId, versionId: run.versionId!, sourceClaimIds: run.sourceClaimIds,
         parentAssetId: String(meta.parentStoryboardAssetId) });
       const proof = recordValue(meta.sourceProof);
-      const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = parent.payload.storyboard!;
+      const settings = { ...parent.payload.storyboard! };
+      delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+      delete settings.baseAssetId; delete settings.revisionMode;
       // The bounded history may append scientific plan revisions to this root.
       // Root proof and every revision link are still validated below.
       if (meta.sceneSet !== 'terminal' || meta.sceneReviews !== undefined || meta.anchorImageId !== undefined
@@ -1335,7 +1341,9 @@ export async function readNarrativePixelReplanHistory(prisma: Pick<Prisma.Transa
     for (let index = 1; index < chain.length; index++) {
       const previous = chain[index - 1]!; const current = chain[index]!; const value = current.metadata;
       const failed = readPixelBlockedCheckpoint(previous.task, previous.payload, baseIdentity, meta);
-      const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = previous.payload.storyboard!;
+      const settings = { ...previous.payload.storyboard! };
+      delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+      delete settings.baseAssetId; delete settings.revisionMode;
       if (value.previousReceiptId !== previous.receipt.id || value.rootReceiptId !== root.receipt.id
         || value.previousMaxAgentTasks !== previous.metadata.maxAgentTasks || value.maxAgentTasks !== Number(value.previousMaxAgentTasks) + 1
         || value.existingTaskCount !== Number(meta.existingTaskCount) + index
@@ -1501,9 +1509,11 @@ async function readNarrativeTechnicalReceipt(prisma: Pick<Prisma.TransactionClie
             throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative technical replacement task changed');
         if (replacement.mode === 'review_only') {
             const original = await prisma.presentationAsset.findUniqueOrThrow({ where: { id: previous.id } });
-            const { imageReview: _originalReview, ...originalProvenance } = recordValue(original.provenance);
+            const originalProvenance = { ...recordValue(original.provenance) };
+            delete originalProvenance.imageReview;
             const saved = await prisma.presentationAsset.findUnique({ where: { id: next.id }, include: { sourceClaims: true } });
-            const { imageReview: _review, ...provenance } = recordValue(saved?.provenance);
+            const provenance = { ...recordValue(saved?.provenance) };
+            delete provenance.imageReview;
             if (!saved || saved.deletedAt || saved.kind !== 'image' || !['draft', 'approved', 'rejected'].includes(saved.status)
                 || saved.researchObjectId !== run.researchObjectId || saved.versionId !== run.versionId
                 || saved.objectKey !== original.objectKey || saved.contentHash !== original.contentHash
@@ -1680,8 +1690,10 @@ async function readNarrativeTechnicalFollowupReceipt(
         const next = await prisma.agentTask.findUnique({ where: { id: replacement.newTaskId }, include: { session: true } });
         const oldImage = await prisma.presentationAsset.findUniqueOrThrow({ where: { id: previous.id } });
         const nextImage = await prisma.presentationAsset.findUnique({ where: { id: replacement.newTaskId }, include: { sourceClaims: true } });
-        const { imageReview: _oldReview, ...prior } = recordValue(oldImage.provenance);
-        const { imageReview: _newReview, ...copied } = recordValue(nextImage?.provenance);
+        const prior = { ...recordValue(oldImage.provenance) };
+        delete prior.imageReview;
+        const copied = { ...recordValue(nextImage?.provenance) };
+        delete copied.imageReview;
         if (!next || next.deletedAt || next.kind !== 'presentation.generate' || next.sessionId !== previous.sessionId
             || next.session.deletedAt || next.session.status !== 'active' || next.session.userId !== run.actorId
             || next.session.researchObjectId !== run.researchObjectId || !isDeepStrictEqual(next.payload, previous.payload)
@@ -1765,7 +1777,8 @@ export async function requireManualSceneImageReviewReceipt(
         prisma.presentationAsset.findUnique({ where: { id: sourceAssetId }, include: { sourceClaims: true } }),
     ]);
     const prior = recordValue(original?.provenance);
-    const { imageReview: _imageReview, ...copyWithoutReview } = copied;
+    const copyWithoutReview = { ...copied };
+    delete copyWithoutReview.imageReview;
     const metadata = recordValue(receipt.metadata);
     const failedSourceReview = sourceTask?.status === 'failed' && sourceTask.error === 'scientific review provider failed';
     const localBudgetFailure = isLocalImageReviewBudgetFailure(sourceTask);

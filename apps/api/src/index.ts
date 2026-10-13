@@ -4,7 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { ChatGptWebSpoolImageProvider, ChatGptWebScienceReviewProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider,
+import { CodexSpoolImageProvider, CodexSolImageReviewProvider, SynclipSpoolImageProvider,
   createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
@@ -57,14 +57,12 @@ async function main(): Promise<void> {
     const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
     const codexImageInboxDir = process.env.CODEX_IMAGE_INBOX_DIR?.trim();
     const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
-    const chatGptImageInboxDir = process.env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim();
-    const chatGptImageResultsDir = process.env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim();
     const synclipImageInboxDir = process.env.SYNCLIP_IMAGE_INBOX_DIR?.trim();
     const synclipImageResultsDir = process.env.SYNCLIP_IMAGE_RESULTS_DIR?.trim();
-    const reviewInboxDir = process.env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim();
-    const reviewResultsDir = process.env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim();
-    const imageReviewReader = env.ai.sceneImageEnabled && reviewInboxDir && reviewResultsDir
-      ? new ChatGptWebScienceReviewProvider({ inboxDir: reviewInboxDir, resultsDir: reviewResultsDir }) : undefined;
+    const reviewInboxDir = process.env.CODEX_SOL_REVIEW_INBOX_DIR?.trim();
+    const reviewResultsDir = process.env.CODEX_SOL_REVIEW_RESULTS_DIR?.trim();
+    const imageReviewReader = reviewInboxDir && reviewResultsDir
+      ? new CodexSolImageReviewProvider({ inboxDir: reviewInboxDir, resultsDir: reviewResultsDir }) : undefined;
     const spoolImageProvider = (kind: string): RecoverableImageProvider | undefined => {
       if (!env.ai.sceneImageEnabled) return undefined;
       if (kind === 'synclip' && synclipImageInboxDir && synclipImageResultsDir) {
@@ -72,9 +70,6 @@ async function main(): Promise<void> {
       }
       if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
         return new CodexSpoolImageProvider({ inboxDir: codexImageInboxDir, resultsDir: codexImageResultsDir });
-      }
-      if (kind === 'chatgpt-web' && chatGptImageInboxDir && chatGptImageResultsDir) {
-        return new ChatGptWebSpoolImageProvider({ inboxDir: chatGptImageInboxDir, resultsDir: chatGptImageResultsDir });
       }
       return undefined;
     };
@@ -134,9 +129,6 @@ async function main(): Promise<void> {
       } : {}),
       ...(imageReviewReader ? {
         canResumeImageReviewFromCompletedResult: (requestId: string) => imageReviewReader.canResumeFromCompletedResult(requestId),
-        canRetryImageReviewBeforeSubmission: imageReviewReader.canRetryBeforeSubmission.bind(imageReviewReader),
-        canRetryImageReviewAfterQuotaRefusal: imageReviewReader.canRetryAfterQuotaRefusal.bind(imageReviewReader),
-        canRetrySourceReviewBeforeSubmission: imageReviewReader.canRetrySourceReviewBeforeSubmission.bind(imageReviewReader),
       } : {}),
       // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
       audit: createPrismaAuditSink(prisma),

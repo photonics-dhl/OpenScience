@@ -90,14 +90,12 @@ services:
       # Read-only submission evidence for credit-safe generation recovery.
       - /opt/openscience-codex/inbox:/codex-jobs/inbox:ro
       - /opt/openscience-codex/results:/codex-jobs/results:ro
-      - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:ro
-      - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:ro
       - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
+      - /opt/openscience-codex-review/inbox:/codex-sol-review-jobs/inbox:ro
+      - /opt/openscience-codex-review/results:/codex-sol-review-jobs/results:ro
       # Observe atomically replaced video heartbeats without provider credentials or input access.
       - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
-      - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:ro
-      - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -107,7 +105,6 @@ services:
       CLAMAV_HOST: malware-scanner
       CLAMAV_PORT: "3310"
       MINIMAX_IMAGE_ENABLED: "true"
-      CHATGPT_WEB_IMAGE_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
       # Optional second image provider; empty keeps the single-provider behaviour.
       HERMES_SCENE_IMAGE_FALLBACK_PROVIDER: ${HERMES_SCENE_IMAGE_FALLBACK_PROVIDER:-}
@@ -119,13 +116,11 @@ services:
       SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
-      CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
-      CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
+      CODEX_SOL_REVIEW_INBOX_DIR: /codex-sol-review-jobs/inbox
+      CODEX_SOL_REVIEW_RESULTS_DIR: /codex-sol-review-jobs/results
       SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
       SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
       SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
-      CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
-      CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
       BGE_M3_ENABLED: ${BGE_M3_ENABLED:-false}
       BGE_M3_MODEL_VERSION_ID: ${BGE_M3_MODEL_VERSION_ID:-}
       BGE_M3_MODEL_REVISION: ${BGE_M3_MODEL_REVISION:-}
@@ -202,13 +197,9 @@ services:
       - /opt/openscience-video/results:/video-jobs/results:ro
       - /opt/openscience-synclip-video/spool/inbox:/synclip-video-jobs/inbox:rw
       - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
-      - /opt/openscience-chatgpt-browser/spool/inbox:/chatgpt-web-image-jobs/inbox:rw
-      - /opt/openscience-chatgpt-browser/spool/results:/chatgpt-web-image-jobs/results:ro
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:rw
       - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
-      - /opt/openscience-chatgpt-browser/review-spool/inbox:/chatgpt-web-review-jobs/inbox:rw
-      - /opt/openscience-chatgpt-browser/review-spool/results:/chatgpt-web-review-jobs/results:ro
-      - /opt/openscience-codex-review/inbox:/codex-sol-review-jobs/inbox:rw
+      - /opt/openscience-codex-review/inbox:/codex-sol-review-jobs/inbox:ro
       - /opt/openscience-codex-review/results:/codex-sol-review-jobs/results:ro
       - /opt/openscience-private-cleanup/inbox:/private-cleanup/inbox:rw
       - /opt/openscience-private-cleanup/results:/private-cleanup/results:ro
@@ -219,7 +210,6 @@ services:
         required: false
     environment:
       MINIMAX_IMAGE_ENABLED: "true"
-      CHATGPT_WEB_IMAGE_ENABLED: "true"
       # Worker enforces ingestion consent and sends only selected page rasters.
       MINIMAX_VISION_ENABLED: "true"
       HERMES_SCENE_IMAGE_PROVIDER: ${HERMES_SCENE_IMAGE_PROVIDER:-minimax}
@@ -229,14 +219,9 @@ services:
       HERMES_VIDEO_PROVIDER: ${HERMES_VIDEO_PROVIDER:-disabled}
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
-      CHATGPT_WEB_IMAGE_INBOX_DIR: /chatgpt-web-image-jobs/inbox
-      CHATGPT_WEB_IMAGE_RESULTS_DIR: /chatgpt-web-image-jobs/results
       SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
       SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
       SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
-      CHATGPT_WEB_SCIENCE_REVIEW_ENABLED: "true"
-      CHATGPT_WEB_REVIEW_INBOX_DIR: /chatgpt-web-review-jobs/inbox
-      CHATGPT_WEB_REVIEW_RESULTS_DIR: /chatgpt-web-review-jobs/results
       CODEX_SOL_IMAGE_REVIEW_ENABLED: ${CODEX_SOL_IMAGE_REVIEW_ENABLED:-false}
       CODEX_SOL_REVIEW_INBOX_DIR: /codex-sol-review-jobs/inbox
       CODEX_SOL_REVIEW_RESULTS_DIR: /codex-sol-review-jobs/results

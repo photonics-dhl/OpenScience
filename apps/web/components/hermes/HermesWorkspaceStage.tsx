@@ -256,7 +256,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   // Dashboard and editor already own their assistant. Their floating registration
   // supplies that existing action instead of opening another drawer.
   const routeOwnsAssistant = pathname === '/dashboard' || /^\/research-objects\/[^/]+\/edit\/?$/.test(pathname);
-  const hasFallbackDrawer = surface === 'workspace' && !routeOwnsAssistant && (!presentation || presentation.usesFallbackAssistant || pathname === '/research-objects/new');
+  const hasFallbackDrawer = surface === 'workspace' && !routeOwnsAssistant && (!presentation || presentation.usesFallbackAssistant);
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}

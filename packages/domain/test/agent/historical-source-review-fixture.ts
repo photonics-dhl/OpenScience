@@ -1,5 +1,53 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { fixture } from './direct-source-review-fixture';
+import type { retryHermesGeneration } from '../../src/agent/research-run';
+import { inspectHermesSourceReviewRecovery } from '../../src/ingestion/source-review-recovery';
+
+/** Reconstruct a persisted pre-retirement binding; never call the retired task producer. */
+export async function seedHistoricalSourceReviewRecovery(f: Pick<ReturnType<typeof fixture>, 'db' | 'prisma'>,
+  input: Parameters<typeof retryHermesGeneration>[1], verifier?: Parameters<typeof inspectHermesSourceReviewRecovery>[3]) {
+  const proof = await inspectHermesSourceReviewRecovery(f.prisma, input.runId, undefined, verifier);
+  if (proof?.reviewMode !== 'web') throw new Error('Historical Web binding is incomplete');
+  const { run, source, failed, composition, sourceStep, originalStep, recoveryKey } = proof;
+  const digest = createHash('sha256').update(JSON.stringify({ actorId: input.actorId,
+    researchObjectId: input.researchObjectId, runId: input.runId, expectedVersion: input.expectedVersion,
+    idempotencyKey: input.idempotencyKey })).digest('hex');
+  const id = randomUUID(); const sessionId = `historical-recovery-session:${id}`;
+  const predecessor = f.db.agentTasks.find(row => row.id === failed.id)!;
+  const session = f.db.agentSessions.find(row => row.id === predecessor.sessionId)!;
+  const task: typeof predecessor = { ...structuredClone(predecessor), id, sessionId, status: 'pending', result: null,
+    executionAttempt: 0, retryCount: 0, idempotencyKey: recoveryKey };
+  f.db.agentSessions.push({ ...structuredClone(session), id: sessionId,
+    idempotencyKey: `${recoveryKey}:hermes-recovery:${digest}` });
+  f.db.agentTasks.push(task);
+  if (!proof.technicalRecovery) {
+    const debit = f.db.usageLedger.find(row => row.idempotencyKey === `agent-task-reserve:${failed.id}`)!;
+    f.db.usageLedger.push({ ...structuredClone(debit), id: `historical-recovery-debit:${id}`,
+      idempotencyKey: `agent-task-reserve:${id}`, metadata: { taskId: id, kind: 'sdf.extract', policy: 'charged-on-submit' } });
+  }
+  Object.assign(f.db.ingestionTasks.find(row => row.id === source.id)!, { agentTaskId: id, state: 'queued', error: null });
+  Object.assign(f.db.hermesResearchSteps.find(row => row.id === sourceStep.id)!, { agentTaskId: id, status: 'waiting', error: null });
+  f.db.hermesResearchSteps.push({ ...structuredClone(f.db.hermesResearchSteps.find(row => row.id === originalStep.id)!),
+    id: `historical-recovery-step:${id}`, agentTaskId: id, ordinal: proof.nextOrdinal, status: 'waiting', error: null });
+  Object.assign(f.db.hermesResearchRuns.find(row => row.id === run.id)!, { status: 'running', error: null,
+    lastReconciledAt: null, version: input.expectedVersion + 1 });
+  f.db.auditLogs.push({ id: `historical-recovery-receipt:${id}`, action: 'hermes.research_run.source_review_recovery',
+    actorId: input.actorId, targetType: 'hermes_research_run', targetId: run.id, workspaceId: run.researchObject.workspaceId,
+    metadata: { requestDigest: digest, clientIdempotencyKey: input.idempotencyKey,
+      explicitUserAction: true, possibleDuplicateProviderCharge: !proof.packetFailureEvidence,
+      reviewMode: 'web', reviewProvider: 'chatgpt-web-science-review', reviewModel: 'chatgpt-web/6-pro', noRuntimeFallback: true,
+      previousVersion: input.expectedVersion, previousRunError: run.error, oldAgentTaskId: failed.id,
+      compositionSourceAgentTaskId: composition.id, newAgentTaskId: id, serviceFailureAuditIds: proof.auditIds,
+      serviceFailureClassifications: proof.failureClassifications, recoveryClass: proof.recoveryClass,
+      contractRepairAuditIds: proof.contractRepairAuditIds,
+      ...(proof.savedOutputEvidence ? { savedOutputEvidence: proof.savedOutputEvidence, freshReview: false, savedOutputReused: true } : {}),
+      ...(proof.packetFailureEvidence ? { packetFailureEvidence: proof.packetFailureEvidence, freshReview: true, savedOutputReused: false } : {}),
+      ...(proof.technicalRecovery ? { notSubmittedRecovery: proof.technicalRecovery, independentIntentTaskId: failed.id } : {}),
+      stage: 'source_review', ordinal: proof.nextOrdinal, chargeableAttempts: proof.technicalRecovery ? 0 : 1,
+      creditPolicy: proof.technicalRecovery ? 'reuse-original-reservation' : 'new-review-task-charged;original-failure-preserved' },
+  });
+  return task;
+}
 
 /** Persisted pre-Hermes-only intent. New producers must no longer create this Web receipt. */
 export function seedHistoricalIndependentSourceReview(f: ReturnType<typeof fixture>) {

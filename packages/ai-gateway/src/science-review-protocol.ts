@@ -137,7 +137,6 @@ export interface ScienceReviewProvider {
   hasImageReviewReservation?(requestId: string): Promise<boolean>;
   /** Attribute a failed image-review audit to the model pinned in a durable reservation. */
   modelForImageReviewReservation?(requestId: string): Promise<string | undefined>;
-  ownsLegacyImageReviewReservation?(requestId: string): Promise<boolean>;
   /** Consume an exact saved image-review response without publishing another request. */
   resumeFromCompletedResult?(input: ScienceReviewInput): Promise<ScienceReviewProviderResult>;
 }

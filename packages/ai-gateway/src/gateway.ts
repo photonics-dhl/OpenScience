@@ -201,6 +201,7 @@ export class AiGateway {
 
   /** Read-only recovery evidence; unsupported providers cannot authorize a technical successor. */
   async canRetrySourceReviewBeforeSubmission(input: SourceReviewNotSubmittedProof): Promise<boolean> {
+    if (this.scientificReviewProvider?.name === 'chatgpt-web-science-review') return false;
     return this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input) ?? false;
   }
 
@@ -310,13 +311,18 @@ export class AiGateway {
         provider: result.completion.provider, model: result.completion.model };
     }
     let provider = this.scientificReviewProvider;
-    if ('kind' in input.source && input.source.kind === 'illustration-image' && this.illustrationImageReviewProvider) {
-      const prior = await this.scientificReviewProvider?.hasImageReviewReservation?.(input.requestId) ?? false;
-      const selected = await this.illustrationImageReviewProvider.hasImageReviewReservation?.(input.requestId) ?? false;
-      const solSelected = await this.illustrationImageReviewProvider.ownsLegacyImageReviewReservation?.(input.requestId) ?? false;
-      if (prior && selected && !solSelected) throw new AiGatewayError('SCHEMA_VALIDATION', 'image review has conflicting provider reservations');
-      provider = solSelected ? this.illustrationImageReviewProvider
-        : prior ? this.scientificReviewProvider : this.illustrationImageReviewProvider;
+    if ('kind' in input.source && input.source.kind === 'illustration-image') {
+      // Unmarked tasks belong to historical spool execution. Only an existing
+      // reservation at the active Sol provider identifies an attempt we can resume.
+      // An absent retired spool never proves the old payer did not submit.
+      provider = this.illustrationImageReviewProvider;
+      if (!provider || provider.name === 'chatgpt-web-science-review'
+        || !await provider.hasImageReviewReservation?.(input.requestId)) {
+        throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'historical Web image review is retired; no active provider reservation');
+      }
+    }
+    if (provider?.name === 'chatgpt-web-science-review' || input.sourceReviewRecovery) {
+      throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'historical Web scientific review is retired');
     }
     if (!provider || !(await this.providerEnabled(provider.name, 'text')).enabled) {
       throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'scientific review provider unavailable');
@@ -335,9 +341,7 @@ export class AiGateway {
     if (allowed !== true) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'external processing denied');
     const start = Date.now();
     let outcome: 'succeeded' | 'failed' = 'failed';
-    let actualModel = provider.name === 'chatgpt-web-science-review'
-      && 'kind' in input.source && input.source.kind === 'illustration-image'
-      ? 'chatgpt-web/5.6-sol' : provider.model;
+    let actualModel = provider.model;
     try {
       if (completedOnly && !provider.resumeFromCompletedResult) {
         throw new AiGatewayError('ALL_PROVIDERS_FAILED', 'completed review reader unavailable');
@@ -354,10 +358,6 @@ export class AiGateway {
     } finally {
       const elapsed = Date.now() - start;
       try {
-        if (provider.name === 'chatgpt-web-science-review' && 'kind' in input.source
-          && input.source.kind === 'illustration-image' && provider.modelForImageReviewReservation) {
-          actualModel = await provider.modelForImageReviewReservation(input.requestId).catch(() => undefined) ?? actualModel;
-        }
         await this.record({
           operation: 'scientific_review', provider: provider.name, model: actualModel,
           inputTokens: null, outputTokens: null, estimatedInputTokens: Math.ceil([...input.prompt].length / 3),

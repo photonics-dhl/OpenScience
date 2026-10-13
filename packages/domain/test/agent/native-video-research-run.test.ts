@@ -4,11 +4,12 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import {
   createHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, requireHermesPresentationTaskAuthority,
   authorizeHermesGenerationGrant, type HermesNarrativeGrant, type HermesResearchRunDeps,
+  retryHermesGeneration,
 } from '../../src/agent/research-run';
-import { CONTENT_DRIVEN_PROFILE, VISUAL_NARRATIVE_PROFILE, requireVideoGenerationParents } from '../../src/assets/video';
+import { CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, requireVideoGenerationParents } from '../../src/assets/video';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
-import { parseStoryboardDocument } from '../../src/assets/storyboard';
+import { parseStoryboardDocument, presentationStoryboardView } from '../../src/assets/storyboard';
 import { parsePresentationGenerationPayload, requireStoryboardBase, submitPresentationGeneration } from '../../src/assets/presentation-asset';
 import { initialNativeAgentExecution, type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
 import { isHermesVideoTask } from '../../src/agent/video-readiness';
@@ -720,5 +721,79 @@ describe('explicit native video research run', () => {
     expect(f.db.agentTasks.find(task => task.id === video.id)).toEqual(before);
     expect(f.generated()).toHaveLength(5);
     expect(f.debits()).toHaveLength(5);
+  });
+});
+
+
+async function historicalImageRecoveryFixture(executionAttempt: number) {
+  const f = fixture(null);
+  const parentId = uuid(40); const taskId = uuid(41); const sessionId = uuid(42);
+  const savedDocument = document(1);
+  const doc = parseStoryboardDocument({ schemaVersion: savedDocument.schemaVersion, title: savedDocument.title,
+    narrative: savedDocument.narrative, scenes: savedDocument.scenes.map(scene => ({ title: scene.title,
+      narration: scene.narration, visualAction: scene.visualAction, illustration: scene.illustration,
+      sourceClaimIds: scene.sourceClaimIds })) }, [ids.claim], 'image');
+  const parent = { id: parentId, researchObjectId: ids.ro, versionId: ids.version, kind: 'interactive_html', status: 'approved',
+    deletedAt: null, contentHash: hash(doc), provenance: { subtype: 'sourced_storyboard', source: 'verified_claims',
+      storyboardSettings: { ...settings, output: 'image', narrative: true }, storyboardDocument: doc } };
+  f.db.presentationAssets.push(parent);
+  f.db.presentationAssetClaims.push({ presentationAssetId: parentId, claimId: ids.claim });
+  expect(presentationStoryboardView(parent, [ids.claim])?.output).toBe('image');
+  f.db.agentSessions.push({ id: sessionId, userId: ids.actor, researchObjectId: ids.ro, kind: 'chat', status: 'active', deletedAt: null });
+  f.db.agentTasks.push({ id: taskId, sessionId, kind: 'presentation.generate', status: 'failed', deletedAt: null,
+    result: null, error: '[blocked] Hermes run authority is invalid', executionAttempt, retryCount: 0,
+    payload: { schemaVersion: 1, researchObjectId: ids.ro, versionId: ids.version, kind: 'image', sourceClaimIds: [ids.claim],
+      sceneImage: { storyboardAssetId: parentId, sceneIndex: 0 }, hermesRunAuthority: {
+        runId: ids.run, stage: 'scene_image', ordinal: 0, profile: CONTENT_DRIVEN_IMAGE_PROFILE } } });
+  f.db.usageLedger.push({ id: 'original-historical-image-debit', userId: ids.actor, resource: 'ai_credit', delta: -1,
+    kind: 'consume', idempotencyKey: `agent-task-reserve:${taskId}`, metadata: { taskId, kind: 'presentation.generate', policy: 'charged-on-submit' } });
+  f.db.hermesResearchSteps.push(f.step('storyboard', { presentationAssetId: parentId }),
+    f.step('scene_image', { status: 'failed', agentTaskId: taskId, error: '[blocked] Hermes run authority is invalid' }));
+  Object.assign(f.run(), { profile: CONTENT_DRIVEN_IMAGE_PROFILE, maxAgentTasks: 7, status: 'failed',
+    error: '[blocked] Hermes run authority is invalid' });
+  const findFirst = f.prisma.agentTask.findFirst.bind(f.prisma.agentTask);
+  vi.spyOn(f.prisma.agentTask, 'findFirst').mockImplementation(async args => {
+    const key = args.where?.idempotencyKey;
+    if (key && typeof key === 'object' && 'startsWith' in key) {
+      return f.db.agentTasks.find(task => typeof task.idempotencyKey === 'string' && task.idempotencyKey.startsWith(String(key.startsWith))) ?? null;
+    }
+    return findFirst(args);
+  });
+  return f;
+}
+
+describe('historical unmarked image generation payer recovery', () => {
+  it.each([0, 1])('does not treat attempt %s plus an empty current spool as proof the historical payer did not submit', async attempt => {
+    const f = await historicalImageRecoveryFixture(attempt);
+    const inspector = vi.fn(async () => 'before_submission' as const);
+    const canResume = vi.fn(async () => true);
+    const deps = { ...f.deps, inspectImageRecoveryState: inspector, canResumeImageBeforeSubmission: canResume };
+    const before = structuredClone(f.db); const dispatches = vi.mocked(f.deps.redis.lpush).mock.calls.length;
+    expect((await getHermesResearchRun(deps, { actorId: ids.actor, researchObjectId: ids.ro, runId: ids.run })).canRetryGeneration).not.toBe(true);
+    await expect(retryHermesGeneration(deps, { actorId: ids.actor, researchObjectId: ids.ro,
+      runId: ids.run, expectedVersion: f.run().version, idempotencyKey: 'old-paid-empty-new-provider' })).rejects.toMatchObject({ code: 'SOURCE_NOT_READY' });
+    expect(inspector).toHaveBeenCalled();
+    expect(canResume).not.toHaveBeenCalled();
+    expect(f.db).toEqual(before); expect(vi.mocked(f.deps.redis.lpush).mock.calls).toHaveLength(dispatches);
+  });
+
+  it.each(['uncertain', 'submitted_without_result', 'unsafe', 'no-inspector'] as const)('does not rearm or charge a historical %s image', async state => {
+    const f = await historicalImageRecoveryFixture(1);
+    const deps = { ...f.deps, canResumeImageBeforeSubmission: vi.fn(async () => true),
+      ...(state !== 'no-inspector' ? { inspectImageRecoveryState: vi.fn(async () => state) } : {}) };
+    const before = structuredClone(f.db); const dispatches = vi.mocked(f.deps.redis.lpush).mock.calls.length;
+    await expect(retryHermesGeneration(deps, { actorId: ids.actor, researchObjectId: ids.ro,
+      runId: ids.run, expectedVersion: f.run().version, idempotencyKey: `old-image-${state}` })).rejects.toMatchObject({ code: 'SOURCE_NOT_READY' });
+    expect(f.db).toEqual(before); expect(vi.mocked(f.deps.redis.lpush).mock.calls).toHaveLength(dispatches);
+  });
+
+  it.each(['completed', 'failed', 'usage_limited'] as const)('retains recovery backed by the active payer own %s receipt', async state => {
+    const f = await historicalImageRecoveryFixture(1);
+    for (const task of f.generated().filter(task => task.payload.kind === 'image')) task.error = 'Image provider failed';
+    const inspector = vi.fn(async () => state);
+    const view = await getHermesResearchRun({ ...f.deps, inspectImageRecoveryState: inspector }, {
+      actorId: ids.actor, researchObjectId: ids.ro, runId: ids.run });
+    expect(view.canRetryGeneration, JSON.stringify({ state, calls: inspector.mock.calls, error: f.run().error })).toBe(true);
+    expect(inspector).toHaveBeenCalled();
   });
 });

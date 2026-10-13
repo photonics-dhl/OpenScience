@@ -61,7 +61,10 @@ ReadWritePaths=-/opt/openscience-codex/inbox -/opt/openscience-codex/results -/o
 ReadWritePaths=-/opt/openscience-video/inbox -/opt/openscience-video/results -/opt/openscience-video/private
 ReadWritePaths=-/opt/openscience-chatgpt-browser/spool/inbox -/opt/openscience-chatgpt-browser/spool/results -/opt/openscience-chatgpt-browser/private -/opt/openscience-chatgpt-browser/jobs
 ReadWritePaths=-/opt/openscience-chatgpt-browser/review-spool/inbox -/opt/openscience-chatgpt-browser/review-spool/results -/opt/openscience-chatgpt-browser/review-private
+ReadWritePaths=-/var/backups/openscience/retired-chatgpt-web/20261013/runtime/spool/inbox -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/spool/results -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/private -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/jobs
+ReadWritePaths=-/var/backups/openscience/retired-chatgpt-web/20261013/runtime/review-spool/inbox -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/review-spool/results -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/review-private
 InaccessiblePaths=-/opt/openscience-chatgpt-browser/profile -/opt/openscience-chatgpt-browser/downloads -/opt/openscience-chatgpt-browser/egress -/opt/openscience-chatgpt-browser/control
+InaccessiblePaths=-/var/backups/openscience/retired-chatgpt-web/20261013/runtime/profile -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/downloads -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/egress -/var/backups/openscience/retired-chatgpt-web/20261013/runtime/control
 UMask=0077
 EOF
 cat > "$timer" <<'EOF'

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { executeSynclipImage, resumeSynclipImage } from './transport.mjs';
-import { normalizeImage } from '../chatgpt-browser/broker.mjs';
+import { normalizeImage } from './normalize.mjs';
 import { SynclipImageClient } from '../../packages/ai-gateway/dist/synclip-image-api.js';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
@@ -374,7 +374,7 @@ test('normalizer reuse is import-safe and runs only isolated local edge sampling
     } else if (args.at(-1) === '/output/result.pending.png') await writeFile(join(normalizedDir, 'result.pending.png'), png);
   };
   assert.deepEqual(await normalizeImage(f.config, id, rawPath, normalizedDir, Date.now() + 45000, runDocker), png);
-  assert.equal(calls.length, 3); assert.deepEqual(calls[2], ['rm', '-f', `xgs-chatgpt-web-normalize-${id}`]);
+  assert.equal(calls.length, 3); assert.deepEqual(calls[2], ['rm', '-f', `xgs-synclip-normalize-${id}`]);
   for (const args of calls.slice(0, 2)) {
     assert.equal(args[args.indexOf('--network') + 1], 'none'); assert.ok(args.includes('--read-only'));
     assert.ok(!args.join(' ').includes(f.config.apiKey)); assert.ok(!args.includes('auth.json'));

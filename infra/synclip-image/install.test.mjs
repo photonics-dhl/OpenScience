@@ -44,7 +44,7 @@ async function fixture(existing = true) {
     .replaceAll('/etc/systemd/system', posix(units));
   const script = join(base, 'install.sh'); await writeFile(script, installer);
   for (const file of ['infra/synclip-image/broker.mjs', 'infra/synclip-image/transport.mjs',
-    'infra/chatgpt-browser/broker.mjs', 'infra/codex-image-runner/core.mjs']) {
+    'infra/synclip-image/normalize.mjs', 'infra/codex-image-runner/core.mjs']) {
     const target = join(release, file); await mkdir(dirname(target), { recursive: true }); await copyFile(join(repo, file), target);
   }
   const dist = join(release, 'packages/ai-gateway/dist'); await mkdir(dist, { recursive: true });

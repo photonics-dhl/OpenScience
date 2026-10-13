@@ -748,6 +748,7 @@ for (const follow of [true, false]) {
   test(`Hermes ${follow ? 'follows restored messages' : 'keeps a reader who scrolled up'} in the editor`, async ({ page }) => {
     await mockWorkspace(page);
     await mockPublishedPreview(page);
+    await mockGet(page, '/api/research-objects/ro-hermes/hermes-runs?originGuideTaskId=scroll-task', { run: null });
     await page.addInitScript(() => sessionStorage.setItem('openscience.hermes-handoff:hermes-user:ro-hermes:scroll-task', JSON.stringify({
       viewerId: 'hermes-user', researchObjectId: 'ro-hermes', taskId: 'scroll-task', expiresAt: Date.now() + 60_000,
     })));

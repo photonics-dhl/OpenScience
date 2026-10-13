@@ -17,7 +17,7 @@ import {
   ApiClientError, apiRequest, confirmIngestionTask, createResearchObject,
   createWorkspaceGuideSession, submitWorkspaceGuideTask,
   getIngestionTask, getResearchObject, listMyWorkspaces, listVersions, startIngestionBatch,
-  updateSdf, type DashboardResearchApi, type IngestionTaskDetail, type SdfCore,
+  safeReturnTo, updateSdf, type DashboardResearchApi, type IngestionTaskDetail, type SdfCore,
   type VersionSummary, type WorkspaceApi, type WorkspaceGuideResult,
 } from '@/lib/api';
 import { emptyCore } from '@/lib/editor-state';
@@ -28,8 +28,6 @@ import { SDF_FIELDS, type SdfField } from '@/lib/suggestions';
 import styles from './guide-research-workspace.module.css';
 
 const suggestion: HermesGuideSuggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral', titleKey: 'guide.neutral.title' };
-const loginHref = `/auth/login?returnTo=${encodeURIComponent('/guide')}`;
-const directLoginHref = `/auth/login?returnTo=${encodeURIComponent('/guide?mode=direct')}`;
 
 function errorText(cause: unknown, fallback: string) {
   return cause instanceof Error ? cause.message : fallback;
@@ -50,7 +48,10 @@ function proposedCore(detail: IngestionTaskDetail): SdfCore | null {
   return { ...emptyCore(), ...Object.fromEntries(SDF_FIELDS.map((field) => [field, candidate[field]])) };
 }
 
-export function GuideResearchWorkspace() {
+export function GuideResearchWorkspace({ entryHref = '/research-objects/new?mode=direct', initialDirectMode = false }: {
+  entryHref?: string;
+  initialDirectMode?: boolean;
+}) {
   const locale = useLocale();
   const editorT = useTranslations('editor');
   const ingestionStatusT = useTranslations('ingestion.status');
@@ -73,7 +74,9 @@ export function GuideResearchWorkspace() {
   const freeTextInput = useRef<HTMLTextAreaElement>(null);
   const [existingSources, setExistingSources] = useState<string[]>([]);
   const [materials, setMaterials] = useState<IntakeMaterial[]>([]);
-  const [directMode, setDirectMode] = useState(false);
+  const initialDirect = useRef(initialDirectMode);
+  const [directMode, setDirectMode] = useState(initialDirect.current);
+  const loginHref = `/auth/login?returnTo=${encodeURIComponent(safeReturnTo(entryHref))}`;
   const [sourceOpen, setSourceOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const switchingRef = useRef(false);
@@ -116,13 +119,14 @@ export function GuideResearchWorkspace() {
     ownerRef.current === expectedOwner && epoch.current === expectedEpoch, []);
 
   useEffect(() => {
+    ownerRef.current = owner;
     const preserveInitialIdea = !previousOwner.current && Boolean(owner);
     previousOwner.current = owner;
     epoch.current++;
     busyRef.current = false; setBusy(false); switchingRef.current = false; setSwitching(false);
     setWorkspaces([]); setWorkspaceId(''); setResearch([]); setSelectedId('');
     originalTitle.current = '';
-    if (!preserveInitialIdea) { setTitle(''); setIdea(''); setMaterials([]); setDirectMode(false); setSourceOpen(false); }
+    if (!preserveInitialIdea) { setTitle(''); setIdea(''); setMaterials([]); setDirectMode(initialDirect.current); setSourceOpen(false); }
     setFreeText(''); freeTextFile.current = null; setExistingSources([]);
     setCore(emptyCore()); setVersion(1); setVersions([]);
     setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId(''); setIngestionDetail(null); setProposal(null); setDirty(false);
@@ -141,11 +145,8 @@ export function GuideResearchWorkspace() {
       setWorkspaceId(spaces.find((item) => item.type === 'personal')?.id ?? spaces[0]?.id ?? '');
       setResearch(found.researchObjects);
     }).catch((cause) => { if (isCurrent(owner, current)) setError(errorText(cause, copy.failure)); });
+    return () => { epoch.current++; ownerRef.current = ''; };
   }, [owner, isCurrent, copy.failure]);
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('mode') === 'direct') setDirectMode(true);
-  }, []);
 
   const refreshResearch = useCallback(async (expectedOwner: string, expectedEpoch: number) => {
     const result = await apiRequest<{ researchObjects: DashboardResearchApi[] }>('/api/research-objects?limit=100');
@@ -162,7 +163,7 @@ export function GuideResearchWorkspace() {
     switchingRef.current = true; setSwitching(true); setError(''); setStatus('');
     if (!id) {
       originalTitle.current = '';
-      setSelectedId(''); setTitle(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setExistingSources([]); setCore(emptyCore()); setVersion(1); setDirty(false); setDirectMode(false); setSourceOpen(false);
+      setSelectedId(''); setTitle(''); setIdea(''); setMaterials([]); setFreeText(''); freeTextFile.current = null; setExistingSources([]); setCore(emptyCore()); setVersion(1); setDirty(false); setDirectMode(initialDirect.current); setSourceOpen(false);
       setIngestionTaskIds([]); setIngestionLabels({}); setIngestionStates({}); setReviewTaskId(''); setIngestionDetail(null); setProposal(null); setVersions([]);
       createKey.current = ''; createIntent.current = null; uploadKey.current = ''; uploadSignature.current = '';
       guideSessionKey.current = ''; guideSessionTitle.current = ''; guideTaskKey.current = ''; guideTaskIntent.current = null; guideSessionId.current = ''; setInitialTaskId('');
@@ -204,7 +205,7 @@ export function GuideResearchWorkspace() {
   async function begin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busyRef.current || switchingRef.current) return;
-    if (!owner || !workspaceId) { router.push(directMode ? directLoginHref : loginHref); return; }
+    if (!owner || !workspaceId) { router.push(loginHref); return; }
     if (!idea.trim() && !title.trim() && !freeText.trim() && materials.length === 0 && !SDF_FIELDS.some((field) => coreRef.current[field].trim())) { setError(copy.required); return; }
     const current = epoch.current;
     const goal = guideSessionTitle.current || idea.trim();
@@ -276,7 +277,7 @@ export function GuideResearchWorkspace() {
     } catch (cause) {
       if (isCurrent(owner, current)) {
         setError(errorText(cause, copy.failure));
-        if (cause instanceof ApiClientError && cause.status === 401) router.push(directMode ? directLoginHref : loginHref);
+        if (cause instanceof ApiClientError && cause.status === 401) router.push(loginHref);
       }
     } finally { if (isCurrent(owner, current)) { busyRef.current = false; setBusy(false); } }
   }
@@ -367,7 +368,7 @@ export function GuideResearchWorkspace() {
 
   function applyHermesEdit(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace = false) {
     const changed = SDF_FIELDS.filter((field) => typeof edit.changes[field] === 'string');
-    if (!editorDraft || edit.base.researchObjectId !== selectedId || edit.base.scope !== 'sdf' || edit.base.version !== version || busyRef.current) return { applied: 0, conflicts: changed.length };
+    if (ownerRef.current !== owner || !editorDraft || edit.base.researchObjectId !== selectedId || edit.base.scope !== 'sdf' || edit.base.version !== version || busyRef.current) return { applied: 0, conflicts: changed.length };
     const next = { ...coreRef.current }; let applied = 0, conflicts = 0;
     const before = draftContext(selectedId, version, next);
     for (const field of changed) {
@@ -420,7 +421,7 @@ export function GuideResearchWorkspace() {
       </div>
       {owner && workspaces.length > 1 ? <div className={styles.controls}><label>{copy.workspaces}<select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} disabled={busy || switching}>{workspaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label></div> : null}
       <div className={styles.composerActions}><div className={styles.companion}><HermesDockAnchor floating={false} assistantOpen={conversationOpen} suggestion={suggestion}
-        state={busy ? 'scanning' : error ? 'failed' : 'idle'} onInvoke={() => owner ? setConversationOpen(true) : router.push(directMode ? directLoginHref : loginHref)} workspaceId={selectedId || 'guide'} /></div><div className={styles.actions}><button type="submit" disabled={busy || switching}>{owner ? busy ? copy.saving : copy.send : copy.signIn}</button></div></div>
+        state={busy ? 'scanning' : error ? 'failed' : 'idle'} onInvoke={() => owner ? setConversationOpen(true) : router.push(loginHref)} workspaceId={selectedId || 'guide'} /></div><div className={styles.actions}><button type="submit" disabled={busy || switching}>{owner ? busy ? copy.saving : copy.send : copy.signIn}</button></div></div>
       {!owner ? <p className={styles.hint}>{copy.local}</p> : null}
     </form>
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
@@ -429,6 +430,7 @@ export function GuideResearchWorkspace() {
       locale={locale === 'en' ? 'en' : 'zh'} suggestion={suggestion} dashboardContext={dashboardContext}
       route={selectedId ? 'research-object-edit' : 'research-object-new'} routeResearchObjectId={selectedId || undefined}
       initialGoal={conversationGoal} initialTaskId={initialTaskId || undefined} onDraftEdit={applyHermesEdit} onUndoDraftEdit={() => {
+        if (ownerRef.current !== owner) return;
         const previous = lastHermesEdit.current;
         if (!previous || previous.base.researchObjectId !== selectedId || previous.base.version !== version) return;
         const next = { ...coreRef.current };
@@ -445,6 +447,6 @@ export function GuideResearchWorkspace() {
       {ingestionTaskIds.length ? <section className={styles.review}><h3>{copy.source}</h3>{ingestionTaskIds.length > 1 ? <select aria-label={copy.source} value={reviewTaskId} onChange={(event) => { reviewTaskRef.current = event.target.value; setReviewTaskId(event.target.value); setIngestionDetail(null); setProposal(null); }}>{ingestionTaskIds.map((id) => <option key={id} value={id}>{ingestionLabels[id] || id}{ingestionStates[id] ? ` · ${ingestionStatusT(ingestionStates[id])}` : ''}</option>)}</select> : null}<p>{ingestionDetail ? `${ingestionDetail.task.logicalPath} · ${ingestionStatusT(ingestionDetail.task.state)}` : copy.pending}</p><button type="button" onClick={() => void refreshExtraction()} disabled={busy}>{copy.refresh}</button>{proposal ? <div><h4>{copy.review}</h4>{SDF_FIELDS.map((field) => <div key={field}><label>{editorT(field)}<textarea value={proposal[field]} disabled={busy} onChange={(event) => setProposal((value) => value ? { ...value, [field]: event.target.value } : value)} /></label><HermesExtractionEvidence field={field} result={ingestionDetail?.task.result} /></div>)}<button type="button" onClick={() => void acceptExtraction()} disabled={busy || dirty || !SDF_FIELDS.some((field) => proposal[field].trim())}>{copy.accept}</button></div> : ingestionDetail ? <p>{copy.extractionUnavailable}</p> : null}</section> : null}
     </div> : null}
 
-    <div className={styles.picker}><span>{copy.update}</span>{owner ? <select aria-label={copy.choose} value={selectedId} onChange={(event) => void selectResearch(event.target.value)} disabled={busy || switching}><option value="">{copy.newResearch}</option>{research.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select> : <Link href={directMode ? directLoginHref : loginHref}>{copy.choose} →</Link>}{owner && research.length === 0 ? <small>{copy.noResearch}</small> : null}</div>
+    <div className={styles.picker}><span>{copy.update}</span>{owner ? <select aria-label={copy.choose} value={selectedId} onChange={(event) => void selectResearch(event.target.value)} disabled={busy || switching}><option value="">{copy.newResearch}</option>{research.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select> : <Link href={loginHref}>{copy.choose} →</Link>}{owner && research.length === 0 ? <small>{copy.noResearch}</small> : null}</div>
   </section>;
 }

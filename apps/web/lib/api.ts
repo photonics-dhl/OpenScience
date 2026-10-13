@@ -538,6 +538,9 @@ export function createHermesResearchRun(researchObjectId: string, ingestionTaskI
 export function getHermesResearchRun(researchObjectId: string, runId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun }> {
   return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs/${encodeURIComponent(runId)}`, { signal });
 }
+export function getFirstImageRun(researchObjectId: string, originGuideTaskId: string, signal?: AbortSignal): Promise<{ run: HermesResearchRun | null }> {
+  return request(`/api/research-objects/${encodeURIComponent(researchObjectId)}/hermes-runs?originGuideTaskId=${encodeURIComponent(originGuideTaskId)}`, { signal });
+}
 
 export interface HermesAudioAuditionPreset { provider: 'synclip'; voice: string; speed: number }
 export interface HermesVideoCapability { canGenerateVideo: boolean; audioAudition: { audio: HermesAudioAuditionPreset } | null }
@@ -1460,6 +1463,7 @@ export interface AgentTaskView {
 }
 
 export interface WorkspaceGuidePayload {
+  executionIntent?: 'first-image';
   goal: string;
   locale: 'zh' | 'en';
   route: 'dashboard' | 'research-object-new' | 'research-object-edit';
@@ -1476,6 +1480,8 @@ export interface WorkspaceGuidePayload {
 }
 
 export interface WorkspaceGuideResult {
+  /** Server-created continuation; never a model-produced identifier. */
+  firstImageRun?: { runId: string; versionId: string };
   summary: string;
   nextSteps: Array<{
     label: string;

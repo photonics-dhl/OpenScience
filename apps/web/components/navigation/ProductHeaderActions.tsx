@@ -14,7 +14,7 @@ export function ProductHeaderActions({ tone = 'paper', existingActions }: {
   const t = useTranslations('productNavigation');
   const { status, user } = useSession();
   return <div className={styles.access} data-navigation-tone={tone}>
-    <Link href="/guide" className={styles.deskLink}>{t('uploadCreate')}</Link>
+    <Link href="/guide" className={styles.deskLink}>{t('guide')}</Link>
     {status === 'authenticated' && user
       ? existingActions ?? <AccountLink user={user} tone={tone} />
       : <><Link href="/auth/login" className={styles.publicLink}>{t('loginRegister')}</Link>{existingActions}</>}

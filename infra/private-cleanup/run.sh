@@ -97,16 +97,23 @@ done
 lock_file() {
   local file=$1 fd=$2
   [[ -f $file && ! -L $file && $(readlink -f -- "$file") == "$file" ]] || return 1
-  case "$fd" in 7) exec 7<"$file" ;; 8) exec 8<"$file" ;; 9) exec 9<"$file" ;; 10) exec 10<"$file" ;; 11) exec 11<"$file" ;; *) return 1 ;; esac
+  case "$fd" in 7) exec 7<"$file" ;; 8) exec 8<"$file" ;; 9) exec 9<"$file" ;; 10) exec 10<"$file" ;; 11) exec 11<"$file" ;; 12) exec 12<"$file" ;; 13) exec 13<"$file" ;; 14) exec 14<"$file" ;; *) return 1 ;; esac
   [[ $(readlink -- "/proc/$$/fd/$fd") == "$file" ]] || return 1
   flock -n "$fd" || return 1
   locks+=("$fd")
 }
-# Existing provider lock order: image → science → shared, then independent Codex/video.
-if [[ -e /opt/openscience-chatgpt-browser ]]; then
+# Existing provider lock order per fixed root: image → science → shared,
+# live before archive, then independent Codex/video. Open only original lock files.
+if [[ -e /opt/openscience-chatgpt-browser || -L /opt/openscience-chatgpt-browser ]]; then
   lock_file /opt/openscience-chatgpt-browser/jobs/image-runner.lock 7 || defer
   lock_file /opt/openscience-chatgpt-browser/jobs/science-review-runner.lock 8 || defer
   lock_file /opt/openscience-chatgpt-browser/jobs/runner.lock 9 || defer
+fi
+archive=/var/backups/openscience/retired-chatgpt-web/20261013/runtime
+if [[ -e $archive || -L $archive ]]; then
+  lock_file "$archive/jobs/image-runner.lock" 12 || defer
+  lock_file "$archive/jobs/science-review-runner.lock" 13 || defer
+  lock_file "$archive/jobs/runner.lock" 14 || defer
 fi
 if [[ -e /opt/openscience-codex ]]; then lock_file /opt/openscience-codex/runner.lock 10 || defer; fi
 if [[ -e /opt/openscience-video ]]; then lock_file /opt/openscience-video/runner.lock 11 || defer; fi

@@ -14,17 +14,18 @@ import {
   MiniMaxCodingPlanVisionProvider,
   MiniMaxImageProvider,
   CodexSpoolImageProvider,
-  ChatGptWebSpoolImageProvider,
   SynclipSpoolImageProvider,
   createNativeVideoReadinessReader,
   type NativeVideoReadinessReader,
-  ChatGptWebScienceReviewProvider,
   CodexSolImageReviewProvider,
+  CODEX_SOL_REVIEW_PROVIDER,
+  CODEX_SOL_REVIEW_MODEL,
   MutableProviderKillSwitch,
   OpenAiCompatProvider,
   NATIVE_IMAGE_REQUEST_MAX_BYTES,
   type ExternalProcessingPolicy,
   type ImageProvider,
+  type ScienceReviewInput,
   type MiniMaxVisionPricing,
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
@@ -44,7 +45,6 @@ import {
   requireHermesSourceCompositionRecoveryExecution,
   type HermesSavedSourceReviewOutput,
   type HermesSavedSourceCompositionCandidate,
-  type SourceReviewNotSubmittedInput,
   VISUAL_NARRATIVE_PROFILE,
   requireJournalExternalOcrAuthority,
   journalSourceProcessingAllowed,
@@ -104,15 +104,30 @@ function isRecoverableNativeImageProcessingTask(task: Pick<AgentTask, 'status' |
     && (task.error === NATIVE_IMAGE_CONTRACT_HOLD || isValidNativeImagePlanningContractTask(task));
 }
 
-const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number;
-  sourceReview?: {
-    input: Parameters<typeof requireHermesSourceReviewExecution>[1];
-    execution: Extract<Awaited<ReturnType<typeof requireHermesSourceReviewExecution>>, { mode: 'web' }>;
-  };
-}>();
+const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
 type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
-type IllustrationSubmission = NonNullable<ConstructorParameters<typeof ChatGptWebScienceReviewProvider>[0]['withIllustrationSubmission']>;
+type IllustrationSubmission = NonNullable<ConstructorParameters<typeof CodexSolImageReviewProvider>[0]['withIllustrationSubmission']>;
 type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
+
+/** Called after the existing image/task/asset binder; missing audits grant no submission permission. */
+export async function requireHistoricalImageReviewPayer(prisma: Prisma.TransactionClient, input: ScienceReviewInput): Promise<void> {
+  if (!('kind' in input.source) || input.source.kind !== 'illustration-image'
+    || input.illustrationContext?.imageReviewMode !== undefined) return;
+  const calls = await prisma.auditLog.findMany({ where: { action: 'ai.gateway.call', requestId: input.requestId },
+    select: { metadata: true } });
+  const promptHash = createHash('sha256').update(input.prompt, 'utf8').digest('hex');
+  for (const call of calls) {
+    const metadata = call.metadata && typeof call.metadata === 'object' && !Array.isArray(call.metadata) ? call.metadata : {};
+    if (metadata.operation !== 'scientific_review') continue;
+    // A Sol receipt must not override positive evidence that this same image
+    // was sent to Chat or another payer. Removing the Web directory lost the
+    // previous cross-spool conflict check; the existing SQL audit is the veto.
+    if (metadata.provider !== CODEX_SOL_REVIEW_PROVIDER || metadata.model !== CODEX_SOL_REVIEW_MODEL
+      || metadata.promptHash !== promptHash || metadata.inputContentHash !== input.source.sourceEvidenceIdentity) {
+      throw new Error('[blocked] Retired or conflicting historical image review payer');
+    }
+  }
+}
 
 /** Fence only local producer writes; provider waiting and model execution never hold this transaction. */
 export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.extract' | 'presentation.generate'): SpoolSubmission {
@@ -150,18 +165,6 @@ export function createSpoolSubmission(prisma: AgentDeps['prisma'], kind: 'sdf.ex
         ...(Array.isArray(video?.sceneImageAssetIds) ? video.sceneImageAssetIds : [])].filter((id): id is string => typeof id === 'string');
       if (parents.length && await tx.presentationAsset.count({ where: { id: { in: parents }, deletedAt: null, researchObjectId: task.session.researchObjectId ?? undefined } }) !== new Set(parents).size) {
         throw new Error('[blocked] media source was deleted');
-      }
-      if (kind === 'sdf.extract' && execution.sourceReview) {
-        const bound = execution.sourceReview;
-        const expectedKey = `ingestion-analysis-compose:${bound.input.ingestionTaskId}:${bound.input.failedTaskId}:${bound.input.compositionTaskId}:scientific-review-v4`;
-        if (bound.input.ownerTaskId !== task.id || bound.input.executionAttempt !== execution.executionAttempt
-          || task.idempotencyKey !== expectedKey)
-          throw new Error('[blocked] Source review publication identity changed');
-        const current = await requireHermesSourceReviewExecution(tx, bound.input);
-        if (JSON.stringify(current) !== JSON.stringify(bound.execution)
-          || !await buildIngestionExternalProcessingPolicy(tx)({ taskId: task.id,
-            workspaceId: task.session.researchObject.workspaceId, actorId: task.session.userId }))
-          throw new Error('[blocked] Source review publication authorization changed');
       }
       return publish();
     }, { timeout: 30_000 });
@@ -521,7 +524,6 @@ export function createHandlers(
       let reviewExistingSourceTaskId: string | undefined;
       let savedReviewOutput: HermesSavedSourceReviewOutput | undefined;
       let savedCompositionCandidate: HermesSavedSourceCompositionCandidate | undefined;
-      let sourceReviewRecovery: SourceReviewNotSubmittedInput | undefined;
       let beforeReviewProviderCall: (() => Promise<void>) | undefined;
       let requireReviewedClaims = false;
       let scientificReviewMode: 'model' | 'web' = 'model';
@@ -569,6 +571,7 @@ export function createHandlers(
           };
           const execution = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
             executionInput), { isolationLevel: 'Serializable' });
+          if (execution.mode === 'web') throw new Error('[blocked] Historical Web source review is retired');
           if (execution.mode === 'agent') {
             if (nativeAgentExecution?.profile !== 'paper-source-review' || execution.taskId !== ownerTask.id
               || execution.sourceMapRef.artifactId !== artifact.id || execution.sourceMapRef.contentHash !== artifact.blobSha256)
@@ -580,7 +583,6 @@ export function createHandlers(
           scientificReviewMode = execution.mode;
           savedReviewOutput = execution.savedOutput;
           savedCompositionCandidate = execution.mode === 'model' ? execution.savedCompositionCandidate : undefined;
-          sourceReviewRecovery = execution.mode === 'web' ? execution.notSubmittedRecovery : undefined;
           if (execution.mode === 'model' && execution.nativeSourceReview) {
             const identity = structuredClone(execution.nativeSourceReview);
             nativeSourceReview = { identity, withSubmission: async (reviewedCandidateHash, ordinal, target, submit) => {
@@ -604,15 +606,6 @@ export function createHandlers(
               }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
               return response;
             } };
-          }
-          if (execution.mode === 'web' && execution.taskId !== ownerTask.id)
-            throw new Error('[blocked] Independent source review task identity changed');
-          const claimedExecution = spoolTaskExecution.getStore();
-          if (execution.mode === 'web' && claimedExecution?.taskId === ownerTask.id
-            && claimedExecution.executionAttempt === executionInput.executionAttempt) {
-            // Keep the original selection through readiness/attachment awaits until the
-            // existing locked spool transaction can revalidate it immediately before publish.
-            claimedExecution.sourceReview = { input: { ...executionInput }, execution: structuredClone(execution) };
           }
           beforeReviewProviderCall = async () => {
             const current = await deps.prisma.$transaction(tx => requireHermesSourceReviewExecution(tx,
@@ -677,7 +670,7 @@ export function createHandlers(
               },
               select: { id: true },
             });
-            requireReviewedClaims = scientificReviewMode === 'web' || Boolean(savedReviewOutput) || narrativeStep !== null;
+            requireReviewedClaims = Boolean(savedReviewOutput) || narrativeStep !== null;
           }
         }
       }
@@ -899,7 +892,6 @@ export function createHandlers(
             requireReviewedClaims,
             ...(savedReviewOutput ? { savedReviewOutput } : {}),
             ...(savedCompositionCandidate ? { savedCompositionCandidate } : {}),
-            ...(sourceReviewRecovery ? { sourceReviewRecovery } : {}),
             ...(nativeSourceReview ? { nativeSourceReview } : {}),
             ...(beforeReviewProviderCall ? { beforeReviewProviderCall } : {}),
             authorizationContext: trustedAuthorizationContext,
@@ -1341,7 +1333,6 @@ async function main(): Promise<void> {
       } catch { return false; }
     };
     const imageSubmission = createSpoolSubmission(prisma, 'presentation.generate');
-    const reviewSubmission = createSpoolSubmission(prisma, 'sdf.extract');
     const illustrationReviewPolicy: ExternalProcessingPolicy = async context => {
       const execution = spoolTaskExecution.getStore();
       if (!execution || execution.taskId !== context.taskId) return false;
@@ -1359,6 +1350,7 @@ async function main(): Promise<void> {
       return prisma.$transaction(async tx => {
         await lockTrashReferences(tx);
         await requireIllustrationReviewSubmission(tx, input);
+        await requireHistoricalImageReviewPayer(tx, input);
         return publish();
       }, { timeout: 30_000 });
     };
@@ -1375,7 +1367,7 @@ async function main(): Promise<void> {
       },
       externalProcessingPolicy,
       undefined,
-      { image: imageSubmission, review: reviewSubmission, illustration: illustrationSubmission,
+      { image: imageSubmission, illustration: illustrationSubmission,
         nativeImageReview: createNativeImageReviewSubmission(prisma) },
       illustrationReviewPolicy,
     );
@@ -1515,7 +1507,7 @@ export function buildGateway(
   audit?: ConstructorParameters<typeof AiGateway>[0]['audit'],
   externalProcessingPolicy: ExternalProcessingPolicy = async () => false,
   runtimeCapabilityPolicy: ProviderCapabilityPolicy = new MutableProviderKillSwitch(),
-  spoolSubmissions?: { image: SpoolSubmission; review: SpoolSubmission; illustration?: IllustrationSubmission; nativeImageReview?: NativeImageReviewSubmission },
+  spoolSubmissions?: { image: SpoolSubmission; illustration?: IllustrationSubmission; nativeImageReview?: NativeImageReviewSubmission },
   illustrationReviewPolicy?: ExternalProcessingPolicy,
 ): AiGateway {
   const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
@@ -1548,11 +1540,6 @@ export function buildGateway(
       return synclipImageConfigured(env)
         ? new SynclipSpoolImageProvider({ inboxDir: env.SYNCLIP_IMAGE_INBOX_DIR!.trim(), resultsDir: env.SYNCLIP_IMAGE_RESULTS_DIR!.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
     }
-    if (kind === 'chatgpt-web') {
-      return env.AI_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_ENABLED === 'true' && env.CHATGPT_WEB_IMAGE_INBOX_DIR?.trim() && env.CHATGPT_WEB_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('chatgpt-web')
-        ? new ChatGptWebSpoolImageProvider({ inboxDir: env.CHATGPT_WEB_IMAGE_INBOX_DIR.trim(), resultsDir: env.CHATGPT_WEB_IMAGE_RESULTS_DIR.trim(),
-          timeoutMs: configuredWorkerConcurrency(env) * 900_000 + 300_000, withSubmission: spoolSubmissions?.image }) : undefined;
-    }
     if (kind === 'codex') {
       return env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
         ? new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
@@ -1576,18 +1563,8 @@ export function buildGateway(
   if (fallbackImageKind && imageProviders.length < 2) {
     console.warn(`image fallback provider '${fallbackImageKind}' is configured but unavailable or disabled; running with ${imageProviders.length} provider(s)`);
   }
-  // Today only the chatgpt-web spool protocol reports a definitive non-submission
-  // ("USAGE_LIMIT" with the request provably not submitted). With any other primary
-  // the fallback can never trigger, so state that instead of implying a spare account.
-  if (fallbackImageKind && imageProviders.length > 1 && primaryImageKind !== 'chatgpt-web') {
+  if (fallbackImageKind && imageProviders.length > 1) {
     console.warn(`image fallback is configured but primary '${primaryImageKind}' cannot report a definitive non-submission; the fallback will not trigger`);
-  }
-  // A spool fallback keeps the result on disk, so the recovery path can reuse it. The
-  // API provider keeps none, so an interrupted fallback attempt is only recoverable as
-  // an explicitly charged new generation. Only chatgpt-web can trigger the fallback, so
-  // this stays quiet for the combinations the warning above already covers.
-  if (fallbackImageKind === 'minimax' && imageProviders.length > 1 && primaryImageKind === 'chatgpt-web') {
-    console.warn('image fallback provider \'minimax\' keeps no durable result; an interrupted fallback attempt cannot be reused and needs an explicitly charged new generation');
   }
   const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
   const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
@@ -1602,20 +1579,11 @@ export function buildGateway(
         maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
       }, fetcher)]
     : [];
-  const scientificReviewProvider = env.AI_ENABLED === 'true' && env.CHATGPT_WEB_SCIENCE_REVIEW_ENABLED === 'true'
-    && env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim() && env.CHATGPT_WEB_REVIEW_RESULTS_DIR?.trim()
-    ? new ChatGptWebScienceReviewProvider({
-        inboxDir: env.CHATGPT_WEB_REVIEW_INBOX_DIR.trim(),
-        resultsDir: env.CHATGPT_WEB_REVIEW_RESULTS_DIR.trim(),
-        withSubmission: spoolSubmissions?.review,
-        withIllustrationSubmission: spoolSubmissions?.illustration,
-      })
-    : undefined;
   const illustrationImageReviewProvider = env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true'
     && env.CODEX_SOL_REVIEW_INBOX_DIR?.trim() && env.CODEX_SOL_REVIEW_RESULTS_DIR?.trim()
-    && env.CHATGPT_WEB_REVIEW_INBOX_DIR?.trim() && spoolSubmissions?.illustration
+    && spoolSubmissions?.illustration
     ? new CodexSolImageReviewProvider({ inboxDir: env.CODEX_SOL_REVIEW_INBOX_DIR.trim(),
-        resultsDir: env.CODEX_SOL_REVIEW_RESULTS_DIR.trim(), legacyInboxDir: env.CHATGPT_WEB_REVIEW_INBOX_DIR.trim(),
+        resultsDir: env.CODEX_SOL_REVIEW_RESULTS_DIR.trim(),
         withIllustrationSubmission: spoolSubmissions.illustration })
     : undefined;
   if (env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true' && !illustrationImageReviewProvider)
@@ -1636,7 +1604,6 @@ export function buildGateway(
     providers,
     ocrProviders,
     imageProviders,
-    scientificReviewProvider,
     illustrationImageReviewProvider,
     nativeImageReviewProvider,
     audit,

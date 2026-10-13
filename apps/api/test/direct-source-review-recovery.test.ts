@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createSession } from '@openscience/auth';
 import { fixture, fields } from '../../../packages/domain/test/agent/direct-source-review-fixture';
-import { seedHistoricalIndependentSourceReview } from '../../../packages/domain/test/agent/historical-source-review-fixture';
+import { seedHistoricalIndependentSourceReview, seedHistoricalSourceReviewRecovery } from '../../../packages/domain/test/agent/historical-source-review-fixture';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakeRedis } from './helpers/fakes';
 
@@ -20,7 +20,7 @@ async function apiFixture(canRetrySourceReviewBeforeSubmission?: Parameters<type
 }
 
 describe('fresh source review recovery HTTP contract', () => {
-  it('uses positive broker evidence for one disclosed uncharged technical successor through GET and POST', async () => {
+  it('keeps a retired Web technical successor closed through GET and POST even with positive broker evidence', async () => {
     const verifier = vi.fn(async () => true);
     const f = await apiFixture(verifier);
     const result = f.db.agentTasks[1].result;
@@ -44,22 +44,31 @@ describe('fresh source review recovery HTTP contract', () => {
     f.db.hermesResearchSteps.at(-1)!.status = 'failed'; f.db.hermesResearchRuns[0].status = 'failed';
     f.db.ingestionTasks[0].state = 'needs_review';
     const read = () => f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
-    expect((await read()).json().run).toMatchObject({ generationRecovery: 'source-review-not-submitted', chargeableAttempts: 0 });
+    const before = structuredClone(f.db);
+    expect((await read()).json().run.canRetryGeneration).not.toBe(true);
     expect(verifier).toHaveBeenCalledWith(expect.objectContaining({ requestId: root.result.scientificReview.attemptId, promptHash: 'c'.repeat(64) }));
     verifier.mockResolvedValue(false);
     expect((await read()).json().run.canRetryGeneration).not.toBe(true);
     const retry = { ...request, headers: { 'idempotency-key': 'technical-successor' }, payload: { expectedVersion: f.db.hermesResearchRuns[0].version } };
-    const ledger = structuredClone(f.db.usageLedger);
     const rejected = await f.app.inject(retry);
     expect(rejected.statusCode).toBe(400);
     expect(rejected.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR', message: 'This source review has no safe source recovery' } });
-    expect(f.db.usageLedger).toEqual(ledger);
+    expect(f.db).toEqual(before);
     expect(f.redis.lpush).not.toHaveBeenCalled();
     verifier.mockResolvedValue(true);
+    const retired = await f.app.inject(retry);
+    expect(retired.statusCode).toBe(409); expect(retired.json().error).toMatchObject({ code: 'SOURCE_NOT_READY' });
+    expect(retired.json().error.message).toContain('retired');
+    expect((await f.app.inject(retry)).statusCode).toBe(409);
+    expect(f.db).toEqual(before); expect(f.redis.lpush).not.toHaveBeenCalled();
+    // A receipt committed before retirement remains a read-only replay response.
+    await seedHistoricalSourceReviewRecovery(f, { ...f.input,
+      expectedVersion: f.db.hermesResearchRuns[0].version, idempotencyKey: 'technical-successor' }, verifier);
+    expect(f.db.usageLedger).toEqual(before.usageLedger);
+    const persisted = structuredClone(f.db);
     expect((await f.app.inject(retry)).statusCode).toBe(202);
     expect((await f.app.inject(retry)).statusCode).toBe(202);
-    expect(f.db.usageLedger).toEqual(ledger);
-    expect(f.redis.lpush).toHaveBeenCalledTimes(1);
+    expect(f.db).toEqual(persisted); expect(f.redis.lpush).not.toHaveBeenCalled();
   });
   it('projects saved-body correction privately and reuses the same explicit endpoint and replay receipt', async () => {
     const f = await apiFixture(); const result = f.db.agentTasks[1].result;

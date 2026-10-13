@@ -86,13 +86,10 @@ on:
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
+      - 'apps/agent-worker/test/historical-image-review-payer.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
-      - 'infra/chatgpt-browser/review-broker.mjs'
-      - 'infra/chatgpt-browser/runner.cjs'
-      - 'infra/chatgpt-browser/review-runner.cjs'
-      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
@@ -107,7 +104,7 @@ on:
       - 'packages/ai-gateway/test/native-agent-bridge.test.ts'
       - 'infra/hermes-agent/**'
       - 'infra/synclip-image/**'
-      - 'infra/chatgpt-browser/broker.mjs'
+      - 'infra/private-cleanup/**'
       - 'packages/ai-gateway/src/synclip-image-api.ts'
       - 'packages/ai-gateway/src/codex-image*.ts'
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
@@ -131,14 +128,13 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
-      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
-      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
-      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
+      - 'apps/web/app/guide/page.tsx'
+      - 'apps/web/components/navigation/ProductHeaderActions.tsx'
       - 'apps/web/app/research-objects/new/page.tsx'
       - 'apps/web/lib/hermes/start-paper-narrative.ts'
       - 'apps/web/lib/hermes/stage-portal.ts'
@@ -198,6 +194,18 @@ on:
       - 'apps/agent-worker/test/presentation/style-recommendations.test.ts'
       - 'apps/agent-worker/test/presentation/selected-scene-art.test.ts'
       - 'packages/domain/test/assets/style-recommendations.test.ts'
+      - 'packages/domain/src/agent/first-image-continuation.ts'
+      - 'packages/domain/src/agent/workspace-guide-contract.ts'
+      - 'packages/domain/test/agent/first-image-continuation*.ts'
+      - 'packages/domain/test/workspace-guide-contract.test.ts'
+      - 'apps/api/src/routes/agent.ts'
+      - 'apps/api/test/agent-payload.test.ts'
+      - 'apps/api/test/first-image-continuation.test.ts'
+      - 'apps/web/components/hermes/HermesFirstImageResult.tsx'
+      - 'apps/web/lib/hermes/presentation-intent.ts'
+      - 'apps/web/test/hermes-guide-recovery.test.ts'
+      - 'apps/web/test/hermes-presentation-intent.test.ts'
+      - 'apps/web/test/e2e/hermes-first-image.spec.ts'
       - 'packages/domain/src/agent/art-style-continuation.ts'
       - 'packages/domain/test/agent/art-style-continuation.test.ts'
       - 'apps/api/src/routes/research-runs.ts'
@@ -352,13 +360,10 @@ on:
       - 'apps/web/test/e2e/hermes-source-parsing.spec.ts'
       - 'apps/agent-worker/test/gateway-config.test.ts'
       - 'apps/agent-worker/test/native-image-review-routing.test.ts'
+      - 'apps/agent-worker/test/historical-image-review-payer.test.ts'
       - 'apps/api/src/routes/presentation-assets.ts'
       - 'apps/api/test/presentation-assets-routes.test.ts'
       - 'infra/codex-sol-review/**'
-      - 'infra/chatgpt-browser/review-broker.mjs'
-      - 'infra/chatgpt-browser/runner.cjs'
-      - 'infra/chatgpt-browser/review-runner.cjs'
-      - 'infra/chatgpt-browser/review-runner-selector.test.cjs'
       - 'infra/codex-image-runner/proxy.mjs'
       - 'infra/compose/docker-compose.prod.yml'
       - 'infra/scripts/production-deploy-transaction.sh'
@@ -373,7 +378,7 @@ on:
       - 'packages/ai-gateway/test/native-agent-bridge.test.ts'
       - 'infra/hermes-agent/**'
       - 'infra/synclip-image/**'
-      - 'infra/chatgpt-browser/broker.mjs'
+      - 'infra/private-cleanup/**'
       - 'packages/ai-gateway/src/synclip-image-api.ts'
       - 'packages/ai-gateway/src/codex-image*.ts'
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
@@ -397,14 +402,13 @@ on:
       - 'packages/ai-gateway/src/science-review*.ts'
       - 'packages/ai-gateway/test/codex-sol-review*.test.ts'
       - 'packages/ai-gateway/test/image-review-routing.test.ts'
-      - 'packages/ai-gateway/test/web-image-review-model.test.ts'
-      - 'packages/ai-gateway/test/source-review-not-submitted.test.ts'
-      - 'packages/ai-gateway/test/source-review-broker.test.ts'
       - 'packages/ai-gateway/test/structured-retry-budget.test.ts'
       - 'apps/agent-worker/src/presentation/handler.ts'
       - 'apps/agent-worker/test/presentation/generated-image-review.test.ts'
       - 'apps/web/components/hermes/HermesMediaReview.tsx'
       - 'apps/web/components/presentation/PresentationResultGallery.tsx'
+      - 'apps/web/app/guide/page.tsx'
+      - 'apps/web/components/navigation/ProductHeaderActions.tsx'
       - 'apps/web/app/research-objects/new/page.tsx'
       - 'apps/web/lib/hermes/start-paper-narrative.ts'
       - 'apps/web/lib/hermes/stage-portal.ts'
@@ -464,6 +468,18 @@ on:
       - 'apps/agent-worker/test/presentation/style-recommendations.test.ts'
       - 'apps/agent-worker/test/presentation/selected-scene-art.test.ts'
       - 'packages/domain/test/assets/style-recommendations.test.ts'
+      - 'packages/domain/src/agent/first-image-continuation.ts'
+      - 'packages/domain/src/agent/workspace-guide-contract.ts'
+      - 'packages/domain/test/agent/first-image-continuation*.ts'
+      - 'packages/domain/test/workspace-guide-contract.test.ts'
+      - 'apps/api/src/routes/agent.ts'
+      - 'apps/api/test/agent-payload.test.ts'
+      - 'apps/api/test/first-image-continuation.test.ts'
+      - 'apps/web/components/hermes/HermesFirstImageResult.tsx'
+      - 'apps/web/lib/hermes/presentation-intent.ts'
+      - 'apps/web/test/hermes-guide-recovery.test.ts'
+      - 'apps/web/test/hermes-presentation-intent.test.ts'
+      - 'apps/web/test/e2e/hermes-first-image.spec.ts'
       - 'packages/domain/src/agent/art-style-continuation.ts'
       - 'packages/domain/test/agent/art-style-continuation.test.ts'
       - 'apps/api/src/routes/research-runs.ts'
@@ -567,7 +583,7 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Lint Synclip image Gateway sources and tests
         run: npx pnpm@9.15.0 exec eslint packages/ai-gateway/src/synclip-image-api.ts packages/ai-gateway/src/codex-image.ts packages/ai-gateway/test/synclip-image-api.test.ts packages/ai-gateway/test/synclip-image-spool.test.ts
@@ -576,6 +592,7 @@ jobs:
           mkdir -p tmp/hermes-cleanup-20261003
           sudo "$(command -v node)" --test infra/synclip-image/transport.test.mjs infra/synclip-image/broker.test.mjs infra/synclip-image/install.test.mjs
       - run: python3 -m unittest discover -s infra/synclip-image -p configure_key_test.py
+      - run: sudo "$(command -v node)" --test infra/private-cleanup/runner.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts
       - run: python3 -m unittest discover -s infra/hermes-agent -p "test_*.py"
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_host_broker.py
@@ -591,9 +608,11 @@ jobs:
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
       - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+      - name: Lint first-image continuation sources and tests
+        run: npx pnpm@9.15.0 exec eslint apps/agent-worker/src/presentation/handler.ts apps/agent-worker/src/scientific-writing-source.ts apps/agent-worker/src/workspace-guide.ts apps/agent-worker/test/workspace-guide.test.ts apps/api/src/routes/agent.ts apps/api/src/routes/research-runs.ts apps/api/test/agent-payload.test.ts apps/api/test/first-image-continuation.test.ts apps/web/components/hermes/HermesAssistantDrawer.tsx apps/web/components/hermes/HermesFirstImageResult.tsx apps/web/lib/api.ts apps/web/lib/hermes/presentation-intent.ts apps/web/test/e2e/hermes-first-image.spec.ts apps/web/test/hermes-guide-recovery.test.ts apps/web/test/hermes-presentation-intent.test.ts packages/domain/src/agent/first-image-continuation.ts packages/domain/src/agent/native-agent-execution.ts packages/domain/src/agent/workspace-guide-contract.ts packages/domain/src/assets/illustration-source.ts packages/domain/src/assets/presentation-asset.ts packages/domain/test/agent/first-image-continuation-fixture.ts packages/domain/test/agent/first-image-continuation.test.ts packages/domain/test/workspace-guide-contract.test.ts
       - name: Check completed paid image recovery and changed sources
         run: |
-          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/research-run.test.ts
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/research-run.test.ts test/agent/first-image-continuation.test.ts test/workspace-guide-contract.test.ts
           npx pnpm@9.15.0 exec eslint packages/domain/src/agent/research-run.ts packages/domain/src/index.ts packages/domain/test/agent/research-run.test.ts apps/agent-worker/src/index.ts apps/agent-worker/test/queue-recovery.test.ts apps/agent-worker/test/presentation/native-illustration-generation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
@@ -619,11 +638,11 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/source-parser-recovery.test.ts test/research-runs.test.ts test/direct-source-review-recovery.test.ts test/agent-payload.test.ts test/first-image-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/native-source-correction.test.ts test/private-source-reanalysis.test.ts test/source-composition-recovery.test.ts test/entrypoint-startup.test.ts test/presentation-assets-routes.test.ts test/search-runtime.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/api typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/security/rate-limit.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/gateway-config.test.ts test/native-image-review-routing.test.ts test/historical-image-review-payer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/skills/handdraw-routing.test.ts test/presentation/automatic-style.test.ts test/presentation/scientific-comparison.test.ts test/presentation/style-recommendations.test.ts test/presentation/selected-scene-art.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/style-recommendations.test.ts test/agent/art-style-continuation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/extractor.test.ts -t "disclosure guidance"
@@ -650,26 +669,24 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "auto-funds a current platform admin"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/ingestion-service.test.ts -t "review-only preflight recovery"
       - run: node --check infra/codex-sol-review/runner.mjs
-      - run: node --check infra/chatgpt-browser/review-broker.mjs
-      - run: node --check infra/chatgpt-browser/runner.cjs
-      - run: node --check infra/chatgpt-browser/review-runner.cjs
-      - run: node --test infra/chatgpt-browser/review-runner-selector.test.cjs
       - run: node --check infra/codex-sol-review/review-client.mjs
       - run: bash -n infra/codex-sol-review/install.sh
       - run: npx pnpm@9.15.0 --filter @openscience/web typecheck
       - run: npx pnpm@9.15.0 --filter @openscience/web build
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/hermes-audio-audition.test.tsx test/api-agent.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-guide-recovery.test.ts test/hermes-presentation-intent.test.ts test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/hermes-audio-audition.test.tsx test/api-agent.test.ts
+      - name: Lint approved Guide sources and regression tests
+        run: npx pnpm@9.15.0 exec eslint apps/web/app/guide/page.tsx apps/web/app/research-objects/new/page.tsx apps/web/components/guide/GuideResearchWorkspace.tsx apps/web/components/guide/ResearchGuide.tsx apps/web/components/hermes/HermesWorkspaceStage.tsx apps/web/components/navigation/ProductHeaderActions.tsx apps/web/lib/guide-page-copy.ts apps/web/lib/hermes/companion-surface.ts apps/web/test/e2e/guide-workspace.spec.ts apps/web/test/e2e/vendor-ux.spec.ts apps/web/test/hermes-companion-surface.test.ts apps/web/test/hermes-global-companion.test.tsx apps/web/test/research-guide-data.test.tsx apps/web/test/e2e/researcher-services.spec.ts
       - name: Hermes surface lifetime and dashboard behavior
         run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/research-guide-data.test.tsx test/guide-workspace-state.test.ts test/auth-dashboard.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts researcher-services.spec.ts guide-workspace.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-first-image.spec.ts create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts researcher-services.spec.ts guide-workspace.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - name: Guide layout and contextual companion focus
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test vendor-ux.spec.ts --grep "guide workspace supports keyboard|English guide keeps the inline composer|guide remains independent" --config playwright.config.ts --workers 1 --max-failures=1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-guide-browser
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test vendor-ux.spec.ts --grep "guide hands creation off through the research desk|anonymous guide entry preserves the research desk login destination|Guide lifecycle, media explanations and FAQ|English Guide stays readable on narrow phones|public preview failure has a retry|guide is reachable from common primary navigation" --config playwright.config.ts --workers 1 --max-failures=1 --reporter=line --trace=retain-on-failure --output ../../tmp/hermes-guide-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
@@ -705,6 +722,7 @@ jobs:
           path: |
             apps/web/test/visual/out/**/*.png
             apps/web/test/visual/out/**/*.json
+            tmp/hermes-guide-browser/**/*.png
             tmp/native-restore-source-identity/ci-*/
           if-no-files-found: ignore
           retention-days: 7

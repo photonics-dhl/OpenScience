@@ -11,14 +11,14 @@ import {
 
 describe('global Hermes product routes', () => {
   it('starts private research in an avatar entry at every viewport', () => {
-    for (const pathname of ['/guide', '/guide/', '/dashboard', '/dashboard/', '/research-objects/new', '/research-objects/object/edit', '/research-objects/object/overview']) {
+    for (const pathname of ['/dashboard', '/dashboard/', '/research-objects/new', '/research-objects/object/edit', '/research-objects/object/overview']) {
       expect(hermesStartsCompact(pathname)).toBe(true);
       expect(hermesUsesAvatarEntry(pathname)).toBe(true);
     }
   });
 
   it('keeps the research avatar out of public reading and landing', () => {
-    for (const pathname of ['/', '/research/OSR-2026-000023', '/research-objects-old/object/edit']) {
+    for (const pathname of ['/', '/guide', '/guide/', '/research/OSR-2026-000023', '/research-objects-old/object/edit']) {
       expect(hermesUsesAvatarEntry(pathname)).toBe(false);
     }
   });
@@ -35,7 +35,7 @@ describe('global Hermes product routes', () => {
   });
 
   it.each([
-    '/guide', '/guide/', '/dashboard', '/research-objects/new', '/research-objects/object/edit',
+    '/dashboard', '/research-objects/new', '/research-objects/object/edit',
     '/research-objects/object/overview', '/research-objects/object/hermes',
     '/research-objects/object/files', '/research-objects/object/presentation',
     '/research-objects/object/publish', '/research-objects/object/versions',
@@ -45,7 +45,7 @@ describe('global Hermes product routes', () => {
   });
 
   it.each([
-    '/', '/_visual/hermes-live2d', '/%5Fvisual/hermes-live2d', '/%5fvisual/research-workbench',
+    '/', '/guide', '/guide/', '/_visual/hermes-live2d', '/%5Fvisual/hermes-live2d', '/%5fvisual/research-workbench',
     '/visual-public-reading', '/visual-public-reading/example', '/api/research', '/_next/data',
     '/dashboard-preview', '/research-objects-old/object/edit', '/unknown',
   ])('leaves the harness or non-product path %s without a global owner', (pathname) => {

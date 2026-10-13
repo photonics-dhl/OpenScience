@@ -6,6 +6,10 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./workspace-guide-contract": {
+      "types": "./dist/agent/workspace-guide-contract.d.ts",
+      "default": "./dist/agent/workspace-guide-contract.js"
+    },
     "./journal-form-contract": {
       "types": "./dist/journal/form-contract.d.ts",
       "default": "./dist/journal/form-contract.js"

@@ -57,7 +57,7 @@ type StoryboardCheckpointIdentity = {
 
 async function readReviewedVisualContextSource(prisma: Parameters<typeof readVisualNarrativeSource>[0],
   scope: Parameters<typeof readVisualNarrativeSource>[1], payload: PresentationGenerationPayload,
-  claims: readonly { extractionStatus: string; provenance?: unknown }[], evidence: readonly { artifactId: string }[], result: unknown) {
+  claims: readonly { extractionStatus: string; provenance?: unknown }[], evidence: readonly { artifactId: string }[], result: unknown, taskId: string) {
   if (!payload.storyboard?.narrative) {
     if (payload.storyboard?.output !== 'image' || !hasSingleReviewedVisualSource(claims, evidence)) return undefined;
     const saved = result && typeof result === 'object' && !Array.isArray(result) ? result as Record<string, unknown> : {};
@@ -69,7 +69,8 @@ async function readReviewedVisualContextSource(prisma: Parameters<typeof readVis
         && !Object.hasOwn(checkpoint, 'narrativeSourceIdentity');
     })) return undefined;
   }
-  const source = await readVisualNarrativeSource(prisma, scope);
+  const source = await readVisualNarrativeSource(prisma, scope, payload.hermesRunAuthority
+    ? { runId: payload.hermesRunAuthority.runId, taskId } : undefined);
   // A single Evidence artifact may still be a different paper from the Claim lineage.
   // Compare against the authorized ingestion identity; authorization/identity errors above never become legacy fallback.
   return !payload.storyboard?.narrative && evidence.some(row => row.artifactId !== source.reference.artifactId) ? undefined : source;
@@ -101,9 +102,12 @@ function privateStoryboardResult(result: unknown): Record<string, unknown> {
 
 function storyboardScience(document: StoryboardDocument) {
   return { ...document, scenes: document.scenes.map(scene => {
-    const { visualAction: _visualAction, illustration, ...rest } = scene;
+    const { illustration } = scene;
+    const rest: Record<string, unknown> = { ...scene };
+    delete rest.visualAction; delete rest.illustration;
     if (!illustration) return rest;
-    const { composition: _composition, treatment: _treatment, ...science } = illustration;
+    const science: Record<string, unknown> = { ...illustration };
+    delete science.composition; delete science.treatment;
     return { ...rest, illustration: science };
   }) };
 }
@@ -504,7 +508,7 @@ export async function requireIllustrationReviewSubmission(prisma: Prisma.Transac
     const currentSource = await readReviewedVisualContextSource(prisma, {
       userId: input.authorizationContext.actorId, workspaceId: input.authorizationContext.workspaceId,
       researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds,
-    }, payload, claims, evidence, owner.result);
+    }, payload, claims, evidence, owner.result, owner.id);
     const identity = {
       payload, sourceEvidenceIdentity: source.sourceEvidenceIdentity,
       claimContent: snapshot.claimContent, baseIdentity: snapshot.baseIdentity,
@@ -732,16 +736,18 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     })) as PresentationClaim[]);
     const narrativeScope = { userId: scope.userId, workspaceId: researchObject.workspaceId,
       researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds };
-    const sourceMetadata = await readReviewedVisualContextSource(deps.prisma, narrativeScope, payload, claimRows, sourceEvidence, owner.result);
+    const firstImageSource = payload.hermesRunAuthority ? { runId: payload.hermesRunAuthority.runId, taskId: task.id } : undefined;
+    const sourceMetadata = await readReviewedVisualContextSource(deps.prisma, narrativeScope, payload, claimRows, sourceEvidence, owner.result, task.id);
     const narrativeSource = sourceMetadata
-      ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope, sourceEvidence) : undefined;
+      ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope, sourceEvidence, firstImageSource) : undefined;
     if (narrativeSource && narrativeSource.identity !== sourceMetadata?.identity)
       throw new Error('[blocked] Reviewed paper source changed during illustration planning');
-    const requireUnchangedEvidence = async (prisma: Pick<Prisma.TransactionClient, 'evidenceRecord' | 'version' | 'claimNode' | 'ingestionTask' | 'presentationAsset'>) => {
+    const requireUnchangedEvidence = async (prisma: Parameters<typeof readVisualNarrativeSource>[0]
+      & Pick<Prisma.TransactionClient, 'evidenceRecord' | 'presentationAsset'>) => {
       if (scientificMedia && presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload, lineageByClaim)) !== sourceEvidenceIdentity) {
         throw new Error('[blocked] Reviewed source evidence changed during media generation');
       }
-      if (narrativeSource && (await readVisualNarrativeSource(prisma, narrativeScope)).identity !== narrativeSource.identity)
+      if (narrativeSource && (await readVisualNarrativeSource(prisma, narrativeScope, firstImageSource)).identity !== narrativeSource.identity)
         throw new Error('[blocked] Reviewed paper source changed during illustration planning');
       if (storyboardDocument) await requireNarrativeOriginals(prisma, payload, storyboardDocument);
     };
@@ -1229,7 +1235,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
           || saved.assetId !== parentTask.id || saved.contentHash !== sceneParent.contentHash)
           throw new Error('[blocked] Native image plan scope changed');
         const context = saved.nativeIllustrationContext as StoryboardCheckpointIdentity | undefined;
-        const source = await readReviewedVisualContextSource(deps.prisma, narrativeScope, parentPayload, claimRows, sourceEvidence, saved);
+        const source = await readReviewedVisualContextSource(deps.prisma, narrativeScope, parentPayload, claimRows, sourceEvidence, saved, parentTask.id);
         if (!context || !source || !isDeepStrictEqual(saved.sourceMapRef, source.reference))
           throw new Error('[blocked] Native image plan source changed');
         const expected = { ...context, payload: parentPayload, claimContent: presentationClaimContent(claims), sourceEvidenceIdentity,
@@ -1580,7 +1586,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
                 id: { notIn: recovery.consumedAuditIds } } })) {
                 throw new Error('[blocked] Initial science recovery has an existing uncheckpointed provider attempt');
               }
-              revalidateInitialScienceRecovery = async (tx, beforePlanning) => {
+              revalidateInitialScienceRecovery = async (tx) => {
                 const current = await requireIllustrationReviewAuthority(tx, {
                   taskId: task.id, actorId: scope.userId, workspaceId: researchObject.workspaceId,
                 });

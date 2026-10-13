@@ -135,6 +135,12 @@ it('selects Codex scene images only explicitly with all enablement conditions', 
   for (const patch of [{ AI_ENABLED: 'false' }, { HERMES_SCENE_IMAGE_PROVIDER: 'disabled' }, { CODEX_IMAGE_INBOX_DIR: '' }, { AI_DISABLED_PROVIDERS: 'codex-image' }]) expect(loadApiEnv({ ...env, ...patch }).ai.sceneImageEnabled).toBe(false);
 });
 
+it('keeps the retired browser image provider disabled even with its historical enablement flags', () => {
+  expect(loadApiEnv({ AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'chatgpt-web',
+    CHATGPT_WEB_IMAGE_ENABLED: 'true', CHATGPT_WEB_IMAGE_INBOX_DIR: '/legacy/inbox',
+    CHATGPT_WEB_IMAGE_RESULTS_DIR: '/legacy/results' }).ai.sceneImageEnabled).toBe(false);
+});
+
 it('enables Synclip only through explicit host-spool configuration, without an application credential', () => {
   const env = { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', SYNCLIP_IMAGE_ENABLED: 'true',
     SYNCLIP_IMAGE_INBOX_DIR: '/synclip/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/synclip/results' };

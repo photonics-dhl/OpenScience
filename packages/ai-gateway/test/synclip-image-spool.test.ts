@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
-import { ChatGptWebSpoolImageProvider, CodexSpoolImageProvider, SynclipSpoolImageProvider } from '../src/codex-image';
+import { CodexSpoolImageProvider, SynclipSpoolImageProvider } from '../src/codex-image';
 import { imagePromptHash, validateCodexImageRequest, validateCodexImageResult } from '../src/codex-image-protocol';
 
 const id = '01900000-0000-7000-8000-000000000001';
@@ -25,17 +25,42 @@ function png() {
 }
 
 describe('Synclip uses the existing image spool', () => {
-  it.each(['codex', 'chatgpt-web'] as const)('does not change historical %s unknown behavior', async kind => {
+  it('does not change historical Codex unknown behavior', async () => {
     const dirs = await spool(); let now = Date.now(); let sleeps = 0;
     const config = { ...dirs, timeoutMs: 5000, now: () => now, sleep: async (ms: number) => {
       now += ms; sleeps++;
       const reserved = JSON.parse(await readFile(join(dirs.inboxDir, id + '.submitted.json'), 'utf8'));
       await mkdir(join(dirs.resultsDir, id));
       await writeFile(join(dirs.resultsDir, id, 'result.json'), JSON.stringify({ schemaVersion: 1,
-        ...(kind === 'chatgpt-web' ? { provider: kind } : {}), id, promptHash: reserved.promptHash, status: 'uncertain', errorCode: 'UNCERTAIN' }));
+        id, promptHash: reserved.promptHash, status: 'uncertain', errorCode: 'UNCERTAIN' }));
     } };
-    const provider = kind === 'codex' ? new CodexSpoolImageProvider(config) : new ChatGptWebSpoolImageProvider(config);
+    const provider = new CodexSpoolImageProvider(config);
     await expect(provider.generate({ requestId: id, prompt })).rejects.toThrow('UNCERTAIN'); expect(sleeps).toBe(1);
+  });
+  it.each(['uncertain', 'succeeded'] as const)('preserves retired Web %s receipts without adopting or resubmitting them', async status => {
+    const dirs = await spool();
+    const reservationPath = join(dirs.inboxDir, id + '.submitted.json');
+    const resultDir = join(dirs.resultsDir, id);
+    const reservation = JSON.stringify({ ...request, provider: 'chatgpt-web' });
+    const receipt = JSON.stringify({ schemaVersion: 1, provider: 'chatgpt-web', id,
+      promptHash: request.promptHash, status, ...(status === 'uncertain' ? { errorCode: 'UNCERTAIN' } : {}) });
+    const bytes = png();
+    await writeFile(reservationPath, reservation); await mkdir(resultDir);
+    await writeFile(join(resultDir, 'result.json'), receipt); await writeFile(join(resultDir, 'result.png'), bytes);
+    let submissions = 0;
+    const config = { ...dirs, withSubmission: async <T>(_owner: unknown, publish: () => Promise<T>) => { submissions++; return publish(); } };
+    for (const provider of [new CodexSpoolImageProvider(config), new SynclipSpoolImageProvider(config)]) {
+      expect(await provider.canResumeBeforeSubmission(id)).toBe(false);
+      expect(await provider.inspectRecoveryState(id)).toBe('unsafe');
+      expect(await provider.canResumeFromCompletedResult(id)).toBe(false);
+      await expect(provider.resumeFromCompletedResult(id)).rejects.toThrow('INVALID_OUTPUT');
+      await expect(provider.generate({ requestId: id, prompt })).rejects.toThrow('INVALID_OUTPUT');
+    }
+    expect(submissions).toBe(0);
+    await expect(readFile(join(dirs.inboxDir, id + '.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(reservationPath, 'utf8')).toBe(reservation);
+    expect(await readFile(join(resultDir, 'result.json'), 'utf8')).toBe(receipt);
+    expect(await readFile(join(resultDir, 'result.png'))).toEqual(bytes);
   });
   it.each([{ id: '01900000-0000-7000-8000-000000000002' }, { promptHash: 'a'.repeat(64) }, { model: undefined }])(
     'rejects changed recovered identity after uncertainty: %j', async patch => {
