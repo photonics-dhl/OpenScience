@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { Prisma } from '@prisma/client';
+import { Prisma, type AuditLog } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
 import { recordAudit } from '../workspace/audit';
 import { requireActiveMembership } from '../workspace/helpers';
@@ -671,7 +671,9 @@ async function inspectNarrativePixelReplan(tx: Prisma.TransactionClient, run: Ru
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
     + run.steps.filter(item => ['source_composition', 'source_review'].includes(item.stage)).length;
   if (!Number.isSafeInteger(run.maxAgentTasks) || existingTaskCount > run.maxAgentTasks!) return null;
-  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = source.payload.storyboard!;
+  const settings = { ...source.payload.storyboard! };
+  delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+  delete settings.baseAssetId; delete settings.revisionMode;
   return { [PIXEL_REPLAN_ELIGIBILITY]: true as const, runId: run.id, source, checkpoint,
     replacesTaskId: source.task.id,
     sceneSteps: images.map(({ id, ordinal, status, agentTaskId, presentationAssetId, error }) => ({ id, ordinal, status, agentTaskId, presentationAssetId, error })),
@@ -748,7 +750,9 @@ async function inspectNarrativeSourceSupportReplan(tx: Prisma.TransactionClient,
     + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
   if (!Number.isSafeInteger(run.maxAgentTasks) || existingTaskCount > run.maxAgentTasks!) return null;
   const sourceProof = { parentTaskIdentity: parent.taskIdentity, invalidBases };
-  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = parent.payload.storyboard!;
+  const settings = { ...parent.payload.storyboard! };
+  delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+  delete settings.baseAssetId; delete settings.revisionMode;
   return { [PIXEL_REPLAN_ELIGIBILITY]: true as const, runId: run.id, parent, sourceProof,
     sourceIdentity: JSON.stringify({ parentIdentity: parent.parentIdentity, sourceProof }),
     replacesTaskId: parent.task.id, previousMaxAgentTasks: run.maxAgentTasks!, existingTaskCount,
@@ -821,7 +825,8 @@ async function readCompletedImageReviewSource(tx: Prisma.TransactionClient, run:
     || !isDeepStrictEqual(payload.hermesRunAuthority, { runId: run.id, stage: 'scene_image', ordinal: step.ordinal, profile: run.profile })) return null;
   const parent = await requireSceneImageParent(tx, payload);
   const asset = await tx.presentationAsset.findUnique({ where: { id: task.id }, include: { sourceClaims: { select: { claimId: true } } } });
-  const provenance = jsonRecord(asset?.provenance); const { imageReview: _review, ...imageProvenance } = provenance;
+  const provenance = jsonRecord(asset?.provenance); const imageProvenance = { ...provenance };
+  delete imageProvenance.imageReview;
   const checkpoint = jsonRecord(jsonRecord(pixel.task.result).storyboardCheckpoint);
   if (!parent || parent.view.output !== 'image' || !parent.view.narrative || !asset || asset.deletedAt || asset.kind !== 'image' || asset.status !== 'draft'
     || asset.researchObjectId !== run.researchObjectId || asset.versionId !== run.versionId || !asset.objectKey
@@ -948,7 +953,9 @@ async function inspectNarrativePixelPlanRevision(tx: Prisma.TransactionClient, r
     payload: { path: ['hermesRunAuthority', 'runId'], equals: run.id } } })
     + run.steps.filter(step => ['source_composition', 'source_review'].includes(step.stage)).length;
   if (existingTaskCount !== Number(pixel.metadata.existingTaskCount) + pixel.depth + 1) return null;
-  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = pixel.payload.storyboard!;
+  const settings = { ...pixel.payload.storyboard! };
+  delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+  delete settings.baseAssetId; delete settings.revisionMode;
   return { [PIXEL_REPLAN_ELIGIBILITY]: true as const, runId: run.id, pixel, failed, existingTaskCount,
     replacesTaskId: pixel.task.id, previousMaxAgentTasks: run.maxAgentTasks!, maxAgentTasks: run.maxAgentTasks! + 1,
     payload: { ...pixel.payload, storyboard: { ...settings, revisionTaskId: pixel.task.id } } };
@@ -1523,7 +1530,8 @@ async function inspectNarrativeBlockedRevision(tx: Prisma.TransactionClient, run
       || (issue.kind === 'requires_replan' ? issue.labelIndex !== null : (typeof issue.labelIndex !== 'number' || !Number.isInteger(issue.labelIndex)
         || typeof document.scenes[0]!.illustration?.labels[issue.labelIndex] !== 'string' || !issue.sources.length))) return null;
   }
-  const { revisionImageAssetId: _image, ...settings } = payload.storyboard!;
+  const settings = { ...payload.storyboard! };
+  delete settings.revisionImageAssetId;
   return { ...source, task, payload: { ...payload, storyboard: { ...settings, revisionTaskId: task.id, narrativeSceneLimit: 1 } },
     imageStep, review, checkpoint, grantAuditId: grants[0]!.id, resumeAuditId: resumes[0]!.id };
 }
@@ -1593,7 +1601,9 @@ async function inspectNarrativeAcceptedImageReplan(tx: Prisma.TransactionClient,
       || extension.sourceIdentity !== source.identity || extension.reviewHash !== source.reviewHash
       || extension.priorGrantAuditId !== originalGrant.id || extension.priorResumeAuditId !== secondResume.id || extension.newRunCount !== 0) return null;
   }
-  const { revisionTaskId: _task, revisionImageAssetId: _image, baseAssetId: _base, revisionMode: _mode, ...settings } = source.payload.storyboard;
+  const settings = { ...source.payload.storyboard };
+  delete settings.revisionTaskId; delete settings.revisionImageAssetId;
+  delete settings.baseAssetId; delete settings.revisionMode;
   return { ...source, payload: { ...source.payload, storyboard: { ...settings, revisionImageAssetId: source.image.id, narrativeSceneLimit: 1 } },
     storyboardStep, imageStep, priorGrantAuditId: originalGrant.id, priorResumeAuditId: secondResume.id };
 }
@@ -1828,7 +1838,7 @@ function knownStoryboardOutput(meta: Record<string, unknown>) {
     || (meta.outcome === 'failed' && meta.error === 'provider_empty' && meta.finishReason === 'length' && meta.outputTokens === meta.maxOutputTokens);
 }
 
-function savedStoryboardTimeoutCalls(calls: Prisma.AuditLogGetPayload<{}>[], checkpoint: Record<string, unknown>, after: Date, failedAt: Date) {
+function savedStoryboardTimeoutCalls(calls: AuditLog[], checkpoint: Record<string, unknown>, after: Date, failedAt: Date) {
   const current = calls.filter(call => call.createdAt > after); const last = current.at(-1); const timeout = jsonRecord(last?.metadata);
   const reviewIndex = current.findIndex(call => jsonRecord(call.metadata).operation === 'scientific_review');
   const review = current.slice(reviewIndex);
@@ -1908,7 +1918,7 @@ async function readPixelStoryboardOutputContext(tx: Prisma.TransactionClient,
   return { checkpoint, planningReceipt, workspaceId: ro.workspaceId };
 }
 
-function pixelStoryboardOutputTimeoutCallsMatch(calls: Prisma.AuditLogGetPayload<{}>[],
+function pixelStoryboardOutputTimeoutCallsMatch(calls: AuditLog[],
   context: Awaited<ReturnType<typeof readPixelStoryboardOutputContext>>, failedAt: Date) {
   const priorIds = context.planningReceipt.metadata.planningAuditIds as string[];
   const current = calls.filter(call => !priorIds.includes(call.id));
