@@ -66,6 +66,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     return err;
   };
   let transactionQueue: Promise<void> = Promise.resolve();
+  const agentKindMatches = (kind: string, filter: any) => filter === undefined || (typeof filter === 'string'
+    ? kind === filter
+    : (filter.equals === undefined || kind === filter.equals)
+      && (filter.in === undefined || filter.in.includes(kind))
+      && (filter.not === undefined || kind !== filter.not)
+      && (filter.notIn === undefined || !filter.notIn.includes(kind)));
 
   const agentTaskWithInclude = (row: any, include: any) => {
     if (!include?.session) return { ...row };
@@ -95,7 +101,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     if (!whereSession) return true;
     const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
     if (!session || (whereSession.userId !== undefined && session.userId !== whereSession.userId)
-      || (whereSession.status !== undefined && session.status !== whereSession.status)) return false;
+      || (whereSession.status !== undefined && session.status !== whereSession.status)
+      || (whereSession.researchObjectId !== undefined && session.researchObjectId !== whereSession.researchObjectId)
+      || !agentKindMatches(session.kind, whereSession.kind)) return false;
     const researchWhere = whereSession.researchObject?.is;
     if (!researchWhere) return true;
     const researchObject = db.researchObjects.find((candidate) => candidate.id === session.researchObjectId);
@@ -167,6 +175,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const researchObject = db.researchObjects.find((candidate) => candidate.id === session?.researchObjectId);
         const workspace = db.workspaces.find((candidate) => candidate.id === researchObject?.workspaceId);
         if (!session || session.userId !== userId || session.status !== 'active'
+          || (queryText.includes('session."kind" <> \'journal-editor\'') && session.kind === 'journal-editor')
           || !researchObject || !workspace || workspace.status !== 'active'
           || !db.memberships.some((membership) => membership.workspaceId === workspace.id && membership.userId === userId)) {
           return false;
@@ -942,14 +951,19 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
       findFirst: async ({ where }: any) => db.agentSessions.find((session) =>
-        where.researchObjectId === undefined || session.researchObjectId === where.researchObjectId,
+        (where.researchObjectId === undefined || session.researchObjectId === where.researchObjectId)
+        && agentKindMatches(session.kind, where.kind),
       ) ?? null,
       delete: async ({ where }: any) => {
         const index = db.agentSessions.findIndex((session) => session.id === where.id);
         return db.agentSessions.splice(index, 1)[0];
       },
       findMany: async ({ where, orderBy }: any) => {
-        const rows = db.agentSessions.filter((s) => (where.userId === undefined || s.userId === where.userId));
+        const rows = db.agentSessions.filter((s) => (where.userId === undefined || s.userId === where.userId)
+          && (where.researchObjectId === undefined || s.researchObjectId === where.researchObjectId)
+          && agentKindMatches(s.kind, where.kind)
+          && (where.tasks?.none === undefined || !db.agentTasks.some(task => task.sessionId === s.id
+            && agentKindMatches(task.kind, where.tasks.none.kind))));
         if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
         return rows;
       },
@@ -961,18 +975,18 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.agentTasks.push(row);
         return row;
       },
-      findUnique: async ({ where, include }: any) => {
+      findUnique: async ({ where, include, select }: any) => {
         const row = db.agentTasks.find((t) =>
           (where.id ? t.id === where.id : t.idempotencyKey === where.idempotencyKey),
         ) ?? null;
         if (!row) return null;
-        return agentTaskWithInclude(row, include);
+        return agentTaskWithInclude(row, include ?? (select?.session ? { session: select.session } : undefined));
       },
       findFirst: async ({ where, include, orderBy }: any) => {
         let rows = db.agentTasks.filter((task) => {
           return (where.sessionId === undefined || task.sessionId === where.sessionId)
             && agentTaskMatchesSession(task, where.session)
-            && (where.kind === undefined || task.kind === where.kind)
+            && agentKindMatches(task.kind, where.kind)
             && (typeof where.status !== 'string' || task.status === where.status)
             && (where.status?.in === undefined || where.status.in.includes(task.status))
             && (where.retryCount === undefined || task.retryCount === where.retryCount)
@@ -1017,7 +1031,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.agentTasks.filter((t) =>
           agentTaskMatchesSession(t, where.session) &&
-          (where.kind === undefined || (typeof where.kind === 'string' ? t.kind === where.kind : where.kind.in.includes(t.kind))) &&
+          agentKindMatches(t.kind, where.kind) &&
           (where.dispatchedAt === undefined || t.dispatchedAt === where.dispatchedAt) &&
           (typeof where.status !== 'string' || t.status === where.status),
         );
