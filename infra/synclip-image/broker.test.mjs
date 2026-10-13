@@ -81,6 +81,19 @@ test('fresh submission uses actual runOne and transport and publishes only the o
   assert.deepEqual(await readFile(join(f.resultDir, 'result.png')), png);
   assert.ok(!JSON.stringify(result).includes('host-only-test-key')); assert.ok(!JSON.stringify(result).includes('remote-original'));
 });
+test('fresh submission rejects a transport attempt bound to another request before publishing', async () => {
+  const f = await fixture(); await writeFile(join(f.config.inbox, id + '.json'), JSON.stringify(f.request));
+  const original = f.deps.transportDependencies.normalize;
+  f.deps.transportDependencies.normalize = async (config, taskId, raw, normalized) => {
+    const result = await original(config, taskId, raw, normalized);
+    await writeFile(join(f.privateDir, 'synclip-attempt.json'), JSON.stringify({ ...f.identity, requestId: '99999999-9999-4999-8999-999999999999' }));
+    return result;
+  };
+  assert.deepEqual(await runSynclipBrokerOnce(f.config, f.deps), { id, status: 'uncertain' });
+  assert.deepEqual(JSON.parse(await readFile(join(f.resultDir, 'result.json'), 'utf8')), {
+    schemaVersion: 1, provider: 'synclip', id, promptHash: f.request.promptHash, status: 'uncertain', errorCode: 'UNCERTAIN',
+  });
+});
 test('known-ID recovery runs before core, performs GET only and preserves the previous uncertain receipt', async () => {
   const f = await fixture(); await f.claimed(); const previous = await readFile(join(f.resultDir, 'result.json'));
   assert.deepEqual(await runSynclipBrokerOnce(f.config, f.deps), { id, status: 'reconciled' });

@@ -133,7 +133,7 @@ export async function runSynclipBrokerOnce(config, dependencies = {}) {
     const original = await boundRequest(config, request.id);
     if (!isDeepStrictEqual(request, original)) throw uncertain();
     const bytes = await (dependencies.execute ?? executeSynclipImage)(request, privateDir, await transportConfig(deadlineAt), dependencies.transportDependencies);
-    return { bytes: bytes.bytes ?? bytes, model: bytes.model ?? (await readSynclipImageModel(privateDir)) };
+    return { bytes: bytes.bytes ?? bytes, model: bytes.model ?? (await readSynclipImageModel(privateDir, request)) };
   } });
   return result ?? pending;
 }

@@ -67,11 +67,13 @@ async function context(request, privateDir, config, dependencies) {
     timeoutMs: Math.max(1, Math.min(15000, deadlineAt - now())) });
   return { request, privateDir, config, dependencies, now, deadlineAt, identity, client };
 }
-export async function readSynclipImageModel(privateDir) {
+export async function readSynclipImageModel(privateDir, request) {
   const bytes = await safeRead(join(privateDir, 'synclip-attempt.json'), 2048);
   const value = JSON.parse(bytes.toString('utf8'));
-  if (!isDeepStrictEqual(Object.keys(value).sort(), ['aspectRatio', 'model', 'promptHash', 'requestId', 'schemaVersion'].sort())) throw uncertain();
-  return validateSynclipImageModel(value.model);
+  const model = validateSynclipImageModel(value.model);
+  const identity = { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash, model, aspectRatio: '16:9' };
+  if (!isDeepStrictEqual(value, identity)) throw uncertain();
+  return model;
 }
 async function receipt(ctx) {
   const attemptBytes = await optional(join(ctx.privateDir, 'synclip-attempt.json'), 2048);
