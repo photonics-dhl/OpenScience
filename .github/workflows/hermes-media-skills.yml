@@ -567,6 +567,8 @@ jobs:
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/web-image-review-model.test.ts test/structured-retry-budget.test.ts test/source-review-not-submitted.test.ts test/source-review-broker.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
+      - name: Lint Synclip image Gateway sources and tests
+        run: npx pnpm@9.15.0 exec eslint packages/ai-gateway/src/synclip-image-api.ts packages/ai-gateway/src/codex-image.ts packages/ai-gateway/test/synclip-image-api.test.ts packages/ai-gateway/test/synclip-image-spool.test.ts
       - name: Check image host operations with their production privileges
         run: |
           mkdir -p tmp/hermes-cleanup-20261003
