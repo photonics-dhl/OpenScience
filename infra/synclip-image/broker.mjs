@@ -67,7 +67,8 @@ async function recoveryCandidate(config, id, now) {
   const previous = await optional(join(resultDir, 'result.json'));
   if (previous) {
     const result = validateCodexImageResult(JSON.parse(previous.toString('utf8')), 'synclip');
-    if (result.id !== id || result.promptHash !== request.promptHash) throw uncertain();
+    if (result.id !== id || result.promptHash !== request.promptHash
+      || result.status === 'succeeded' && result.model !== identity.model) throw uncertain();
     if (result.status === 'succeeded') return null;
     if (result.status !== 'uncertain' && !(result.status === 'failed' && ['EXPIRED', 'EXECUTION_FAILED'].includes(result.errorCode))) throw uncertain();
   }

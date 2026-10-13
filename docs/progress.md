@@ -4,6 +4,7 @@
 
 - 2026-10-13：历史 beta-gate NO-GO (`22674ce5`/`d17e8d8d`) 已由完整依赖链修复并替代；旧结论保留在 Git 历史，不再作为当前实施入口。
 - 2026-10-13：用户提供 Synclip `POST /v1/image` 合同截图，明确 `gpt-image-2.5` 可用（价格标注 6）；API-only 适配器改为 2.5 主模型，仅显式结构化模型不可用时一次降级到 2，并把实际模型绑定到 attempt/receipt/spool result/生成器版本。定向 API/transport/broker 测试与 ai-gateway typecheck 通过；未调用 Provider、未部署。
+- 2026-10-13：提交前置审计发现并修复恢复路径的模型连续性缺口：已有 `succeeded` 公示结果现在必须与 attempt/receipt 的实际模型一致，否则在任何 GET 前 fail-closed；新增无 GET/无覆盖回归。broker+transport 33/33、Gateway 28/28、node check/diff-check 全绿，独立 High GO（P0/P1/P2=0）；未调用 Provider、未生成、未部署。
 - 2026-10-13：模型策略补强已完成：broker 在发布前把 attempt 的 requestId/promptHash/model/aspectRatio 与原始请求重新绑定；Hermes 任务提示、回执、生成器版本和历史计划均统一为 2.5 默认、明确不可用才降级 2。新增跨请求伪造回归；AI Gateway 47/47、transport 16/16、broker 16/16、Native illustration 215/215，通过 docs 差异检查；未调用 Provider、未部署。
 - 2026-10-13：UI Guide 主线已按用户确认实现：P04→P05 研究生命周期，节点标注研究者、Hermes、读者、期刊/协作者角色与站内入口，并可展开查看说明；未新增截图或素材。独立 High GO；Guide/companion 23/23、web typecheck、diff-check 通过。full web suite 仍有与本 diff 无关的既有失败；未调用 Provider、未生成图片、未部署。
 - 2026-10-13：独立 High 复核发现并修复两处接线：fallback `gpt-image-2` 的已付图片引用现在按持久化 attempt 模型校验；Gateway 审计记录跟随实际返回模型且空模型回退到 provider 配置。补回归测试；AI Gateway 57/57、transport/broker 31/31、image-reference 73/73（Windows 文件 symlink 1 项跳过）、docs lint/sync 全绿。最终 High GO；独立 reviewer 报告全链无材料正确性/安全问题，未调用 Provider、未部署。

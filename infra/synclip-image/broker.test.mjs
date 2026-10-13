@@ -144,6 +144,16 @@ test('mismatched original reservation, receipt, or public result blocks GET and 
     assert.deepEqual(f.calls, []); assert.deepEqual(await readFile(path), saved);
   }
 });
+test('a public result with a different model identity blocks recovery before GET', async () => {
+  const f = await fixture(); await f.claimed({ result: 'succeeded' });
+  const path = join(f.resultDir, 'result.json');
+  const value = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, JSON.stringify({ ...value, model: 'gpt-image-2' }));
+  const saved = await readFile(path);
+  assert.equal(await runSynclipBrokerOnce(f.config, f.deps), null);
+  assert.deepEqual(f.calls, []);
+  assert.deepEqual(await readFile(path), saved);
+});
 test('recovery never overwrites a different original published image', async () => {
   const f = await fixture(); await f.claimed(); const existing = Buffer.from('retained-original');
   await writeFile(join(f.resultDir, 'result.png'), existing);
