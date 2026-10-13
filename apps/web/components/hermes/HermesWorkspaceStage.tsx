@@ -1567,6 +1567,7 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
         assistantOpen={assistantOpen && !conversationAnchor}
         compactPresentation
         avatarPresentation={avatar || dashboardSeat}
+        dashboardSeat={dashboardSeat}
         inConversation={Boolean(conversationAnchor)}
         onInvoke={() => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
