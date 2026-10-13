@@ -2269,7 +2269,7 @@
     "imageNumber": "图解 {number}",
     "planningHistoryTitle": "详细制作指令",
     "currentPlanTitle": "当前制作方案",
-    "currentPlanBody": "新方案会优先显示。核对内容后批准方案，再制作所选场景的图片。",
+    "currentPlanBody": "需要配图时，直接告诉 Hermes。下方方案用于手动制作，只有已批准的方案才能逐幕生成图片。",
     "selectPlan": "选择其他方案",
     "selectScene": "选择要制作的场景",
     "rejectedPlanHistory": "已拒绝的方案记录",
