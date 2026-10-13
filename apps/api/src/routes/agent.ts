@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
+import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, requirePresentationWriteScope, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -135,6 +135,11 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     const idempotencyKey = req.headers['idempotency-key'];
     const session = await deps.prisma.agentSession.findUnique({ where: { id: body.sessionId } });
     if (!session || session.userId !== user.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
+    if (body.kind === 'workspace.guide' && body.payload.executionIntent === 'first-image') {
+      const scope = body.payload.context.presentation!;
+      if (session.researchObjectId !== scope.researchObjectId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话与图片研究对象不一致');
+      await requirePresentationWriteScope(deps.prisma, { userId: user.userId, researchObjectId: scope.researchObjectId, versionId: scope.versionId! });
+    }
     if (body.activeClaimId) {
       const claim = await deps.prisma.claimNode.findUnique({ where: { id: body.activeClaimId } });
       if (!claim || !session.researchObjectId || claim.researchObjectId !== session.researchObjectId) {

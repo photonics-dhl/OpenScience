@@ -9,7 +9,7 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
-async function fixture(page: Page, options: { delayedSelection?: boolean; publishedSource?: boolean; uploadedPaper?: boolean; guideResearchId?: string } = {}) {
+async function fixture(page: Page, options: { delayedSelection?: boolean; publishedSource?: boolean; uploadedPaper?: boolean; guideResearchId?: string; ownerId?: string; researchVersion?: number; multipleSources?: boolean } = {}) {
   const calls = { create: 0, guide: 0, confirm: 0, publish: 0, ingestionBodies: [] as string[], ingestionKeys: [] as string[], writes: [] as string[], targetReads: [] as string[] };
   const guideTask = { ...task, researchObjectId: options.guideResearchId ?? task.researchObjectId };
   let confirmed = false;
@@ -20,7 +20,7 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
     if (method !== 'GET') calls.writes.push(method + ' ' + path);
-    if (path === '/api/auth/me') return json(route, { userId: 'owner-1', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' });
+    if (path === '/api/auth/me') return json(route, { userId: options.ownerId ?? 'owner-1', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' });
     if (path === '/api/csrf-token') return json(route, { csrfToken: 'fixture-token' });
     if (path === '/api/workspaces') return json(route, { workspaces: [{ id: 'personal-1', name: 'Personal', type: 'personal', role: 'owner' }] });
     if (path === '/api/research-objects' && method === 'GET') return json(route, { researchObjects: [research('ro-old', 'Older study'), research('ro-next', 'Next study')] });
@@ -28,7 +28,10 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
     if ((path === '/api/research-objects/ro-new/ingest' || (options.uploadedPaper && path === '/api/research-objects/ro-old/ingest')) && method === 'POST') {
       calls.ingestionBodies.push(route.request().postDataBuffer()?.toString('utf8') ?? '');
       calls.ingestionKeys.push(route.request().headers()['idempotency-key']);
-      return json(route, { batchId: 'text-batch-1', researchObjectId: path.split('/')[3], tasks: [{ id: 'text-source-1', artifactId: 'text-artifact-1', logicalPath: options.uploadedPaper ? 'pending-paper.pdf' : '研究内容.md', state: 'queued', retryCount: 0, error: null }], artifacts: [] });
+      return json(route, { batchId: 'text-batch-1', researchObjectId: path.split('/')[3], tasks: [
+        { id: 'text-source-1', artifactId: 'text-artifact-1', logicalPath: options.uploadedPaper ? 'pending-paper.pdf' : '研究内容.md', state: 'queued', retryCount: 0, error: null },
+        ...(options.multipleSources ? [{ id: 'text-source-2', artifactId: 'text-artifact-2', logicalPath: '研究内容.md', state: 'queued', retryCount: 0, error: null }] : []),
+      ], artifacts: [] });
     }
     if (path === '/api/agent/sessions' && method === 'POST') return json(route, { session: { id: 'session-1' } });
     if (path === '/api/agent/tasks' && method === 'POST') { calls.guide++; return json(route, { task: guideTask }); }
@@ -48,6 +51,7 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
       if (match[2] === 'versions') return json(route, { versions: options.publishedSource && match[1] === 'ro-old' ? confirmed ? [privateVersion, publishedVersion] : [publishedVersion] : [] });
       if (match[2] === 'ingestion') return json(route, { researchObjectId: match[1], version: confirmed ? 2 : 1, tasks: options.publishedSource && match[1] === 'ro-old' && !confirmed ? [{ ...sourceTask, result: undefined, confirmation: null }] : [], latestConfirmation: null });
       const row = research(match[1], match[1] === 'ro-old' ? 'Older study' : 'Next study');
+      row.version = options.researchVersion ?? row.version;
       if (options.publishedSource && match[1] === 'ro-old') { row.version = confirmed ? 2 : 1; row.sdf.core = core(confirmed ? 'Hermes finding grounded in paper' : 'Original published problem'); }
       return json(route, { researchObject: row });
     }
@@ -62,7 +66,7 @@ test.describe('Guide unsent input switching', () => {
     for (const inputKind of ['idea', 'file', 'title', 'source text'] as const) {
       test(`retains an unsent ${inputKind} in ${existing ? 'existing' : 'new'} research`, async ({ page }) => {
         const calls = await fixture(page);
-        await page.goto('/guide');
+        await page.goto('/research-objects/new?mode=direct');
         const picker = page.getByRole('combobox', { name: '选择研究' });
         await expect(picker.locator('option')).toHaveCount(3);
         if (existing) { await picker.selectOption('ro-old'); await expect(page.locator('#guide-research-title')).toHaveValue('Older study'); }
@@ -91,7 +95,7 @@ test.describe('Guide unsent input switching', () => {
     }
     test(`allows switching after successfully submitting inputs in ${existing ? 'existing' : 'new'} research`, async ({ page }) => {
       const calls = await fixture(page, { uploadedPaper: true, guideResearchId: existing ? 'ro-old' : 'ro-new' });
-      await page.goto('/guide');
+      await page.goto('/research-objects/new?mode=direct');
       const picker = page.getByRole('combobox', { name: '选择研究' });
       await expect(picker.locator('option')).toHaveCount(3);
       if (existing) { await picker.selectOption('ro-old'); await expect(page.locator('#guide-research-title')).toHaveValue('Older study'); }
@@ -124,15 +128,17 @@ test.describe('Guide unsent input switching', () => {
 test('Guide sends the entered idea once and keeps the restored Hermes conversation in the page', async ({ page }) => {
   const calls = await fixture(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/guide');
+  await page.goto('/research-objects/new?mode=direct');
   await expect(page.getByRole('combobox', { name: '选择研究' }).locator('option')).toHaveCount(3);
   await page.locator('#guide-research-idea').fill('Help explain the central experiment.');
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.locator('[data-guide-workspace] .guide-embedded-conversation')).toBeVisible();
+  await expect(page.locator('.hermes-assistant-shell:visible')).toHaveCount(1);
+  await expect(page.locator('[data-live2d-instance="wanko"]')).toHaveCount(1);
   await expect(page.locator('[data-guide-workspace] .hermes-message')).toContainText(['Hermes received this research question.']);
   expect(calls.create).toBe(1);
   expect(calls.guide).toBe(1);
-  await expect(page).toHaveURL(/\/guide$/u);
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=direct$/u);
   if (process.env.GUIDE_SCREENSHOT_DIR) {
     mkdirSync(process.env.GUIDE_SCREENSHOT_DIR, { recursive: true });
     await page.screenshot({ path: `${process.env.GUIDE_SCREENSHOT_DIR}/guide-auth-desktop.png`, fullPage: true });
@@ -144,23 +150,24 @@ test('Guide sends the entered idea once and keeps the restored Hermes conversati
 
 test('changing research hides the previous editor until the authorized target has loaded', async ({ page }) => {
   await fixture(page, { delayedSelection: true });
-  await page.goto('/guide');
+  await page.goto('/research-objects/new?mode=direct');
   const picker = page.getByRole('combobox', { name: '选择研究' });
   await picker.selectOption('ro-old');
   await expect(page.locator('#sdf-field-problem')).toHaveValue('ro-old');
   await picker.selectOption('ro-next');
   await expect(page.locator('#sdf-field-problem')).toHaveCount(0);
   await expect(page.locator('#sdf-field-problem')).toHaveValue('ro-next');
-  await expect(page).toHaveURL(/\/guide$/u);
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=direct$/u);
 });
 
 test('direct writing submits the complete passage as source material without filling six fields', async ({ page }) => {
   const calls = await fixture(page);
-  await page.goto('/guide');
+  await page.goto('/research-objects/new?mode=direct');
   await expect(page.getByRole('combobox', { name: '选择研究' }).locator('option')).toHaveCount(3);
   await page.getByRole('button', { name: '直接填写', exact: true }).click();
   await expect(page.locator('#sdf-field-problem')).toHaveCount(0);
   const passage = '研究内容：我们搭建了一套实验平台，并记录了方法、测量过程与初步发现。\n'.repeat(100);
+  expect(passage.length).toBeGreaterThan(2000);
   await page.locator('#guide-research-text').fill(passage);
   await page.getByRole('button', { name: '直接填写', exact: true }).click();
   await expect(page.locator('#guide-research-text')).toHaveValue(passage);
@@ -171,14 +178,19 @@ test('direct writing submits the complete passage as source material without fil
   expect(calls.create).toBe(1);
   expect(calls.guide).toBe(0);
   expect(calls.publish).toBe(0);
-  await expect(page).toHaveURL(/\/guide$/u);
+  await page.locator('[data-guide-workspace] > form').getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('私有草稿已保存');
+  expect(calls.ingestionBodies).toHaveLength(1);
+  expect(calls.create).toBe(1);
+  expect(calls.guide).toBe(0);
+  expect(calls.publish).toBe(0);
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=direct$/u);
 });
 
 test('the three input cards align on desktop and remain equal and usable on a phone', async ({ page }) => {
   await fixture(page);
-  await page.route('**/api/auth/me', (route) => json(route, { error: { code: 'SESSION_INVALID', message: 'Anonymous preview' } }, 401));
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/guide');
+  await page.goto('/research-objects/new?mode=direct');
   const cards = page.locator('[data-guide-input-card]');
   await expect(cards).toHaveCount(3);
   const desktop = await cards.evaluateAll((items) => items.map((item) => { const box = item.getBoundingClientRect(); return { width: box.width, height: box.height, y: box.y }; }));
@@ -200,7 +212,7 @@ test('the three input cards align on desktop and remain equal and usable on a ph
 
 test('reviewing a source creates a private revision while the published version remains available', async ({ page }) => {
   const calls = await fixture(page, { publishedSource: true });
-  await page.goto('/guide');
+  await page.goto('/research-objects/new?mode=direct');
   const picker = page.getByRole('combobox', { name: '选择研究' });
   await picker.selectOption('ro-old');
   await expect(page.locator('#sdf-field-problem')).toHaveValue('Original published problem');
@@ -212,4 +224,164 @@ test('reviewing a source creates a private revision while the published version 
   await expect(page.locator('[data-guide-workspace]')).toContainText('已公开的原版本会保留');
   expect(calls.confirm).toBe(1);
   expect(calls.publish).toBe(0);
+});
+
+test('direct creation waits for authentication and sends anonymous users to its fixed login return', async ({ page }) => {
+  const calls = await fixture(page);
+  let releaseAuthentication!: () => void;
+  const authentication = new Promise<void>((resolve) => { releaseAuthentication = resolve; });
+  await page.route('**/api/auth/me', async (route) => {
+    await authentication;
+    return json(route, { error: { code: 'SESSION_INVALID', message: 'Anonymous preview' } }, 401);
+  });
+  const authRequest = page.waitForRequest('**/api/auth/me');
+  await page.goto('/research-objects/new?mode=blank&returnTo=https://example.invalid');
+  await authRequest;
+  await expect(page.locator('[data-guide-workspace]')).toHaveCount(0);
+  releaseAuthentication();
+  await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fresearch-objects%2Fnew%3Fmode%3Ddirect$/u);
+  await expect(page.locator('[data-guide-workspace]')).toHaveCount(0);
+  expect(calls.writes).toEqual([]);
+});
+
+test('blank and direct aliases preserve unsent source text and reset new research into direct mode', async ({ page }) => {
+  const calls = await fixture(page);
+  await page.goto('/research-objects/new?mode=blank');
+  const picker = page.getByRole('combobox', { name: '选择研究' });
+  await expect(picker.locator('option')).toHaveCount(3);
+  await expect(page.locator('#guide-research-text')).toBeVisible();
+  await page.locator('#guide-research-title').fill('Keep this title across aliases.');
+  await page.locator('#guide-research-text').fill('Keep this source across aliases.');
+  await page.evaluate(() => window.history.pushState(null, '', '/research-objects/new?mode=direct'));
+  await expect(page).toHaveURL(/mode=direct$/u);
+  await expect(page.locator('#guide-research-title')).toHaveValue('Keep this title across aliases.');
+  await expect(page.locator('#guide-research-text')).toHaveValue('Keep this source across aliases.');
+  await page.locator('#guide-research-title').fill('');
+  await page.locator('#guide-research-text').fill('');
+  await picker.selectOption('ro-old');
+  await expect(page.locator('#sdf-field-problem')).toHaveValue('ro-old');
+  await picker.selectOption('');
+  await expect(page.locator('#guide-research-text')).toBeVisible();
+  expect(calls.writes).toEqual([]);
+});
+
+for (const scenario of [
+  { name: 'matching owner and version', ownerId: 'owner-1', researchVersion: 1, restored: true },
+  { name: 'another owner', ownerId: 'owner-2', researchVersion: 1, restored: false },
+  { name: 'another server version', ownerId: 'owner-1', researchVersion: 2, restored: false },
+]) {
+  test(`direct creation restores an existing Guide draft only for ${scenario.name}`, async ({ page }) => {
+    const calls = await fixture(page, scenario);
+    await page.addInitScript((storedCore) => {
+      window.localStorage.setItem('guide:draft:owner-1:ro-old:1', JSON.stringify(storedCore));
+    }, core('Recovered private Guide draft'));
+    await page.goto('/research-objects/new?mode=direct');
+    const picker = page.getByRole('combobox', { name: '选择研究' });
+    await expect(picker.locator('option')).toHaveCount(3);
+    await picker.selectOption('ro-old');
+    await expect(page.locator('#sdf-field-problem')).toHaveValue(scenario.restored ? 'Recovered private Guide draft' : 'ro-old');
+    if (scenario.restored) {
+      await picker.selectOption('ro-next');
+      await expect(page.locator('[data-guide-workspace]').getByRole('alert')).toContainText('当前有未提交的输入');
+      await expect(picker).toHaveValue('ro-old');
+    }
+    expect(calls.writes).toEqual([]);
+  });
+}
+
+test('generic import exposes the existing direct and research-resume workspace', async ({ page }) => {
+  const calls = await fixture(page);
+  await page.goto('/research-objects/new?mode=import');
+  await expect(page.locator('[data-research-create]')).toBeVisible();
+  await page.getByRole('link', { name: '更新研究版本 →', exact: true }).click();
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=direct$/u);
+  await expect(page.locator('#guide-research-text')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '选择研究' }).locator('option')).toHaveCount(3);
+  expect(calls.writes).toEqual([]);
+});
+
+test('existing research appends files and pasted text through the original single ingestion batch', async ({ page }) => {
+  const calls = await fixture(page, { uploadedPaper: true, multipleSources: true, publishedSource: true });
+  await page.goto('/research-objects/new?mode=direct');
+  const picker = page.getByRole('combobox', { name: '选择研究' });
+  await expect(picker.locator('option')).toHaveCount(3);
+  await picker.selectOption('ro-old');
+  await expect(page.locator('#sdf-field-problem')).toHaveValue('Original published problem');
+  await page.getByRole('button', { name: '上传论文', exact: true }).click();
+  await page.locator('[data-evidence-intake] input[type="file"]').setInputFiles({ name: 'pending-paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 local fixture') });
+  await page.getByRole('button', { name: '直接填写', exact: true }).click();
+  await page.locator('#guide-research-text').fill('Additional research source, kept with the original paper.');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('私有草稿已保存');
+  expect(calls.ingestionBodies).toHaveLength(1);
+  expect(calls.ingestionBodies[0]).toContain('pending-paper.pdf');
+  expect(calls.ingestionBodies[0]).toContain('Additional research source, kept with the original paper.');
+  expect(calls.create).toBe(0);
+  expect(calls.guide).toBe(0);
+  expect(calls.publish).toBe(0);
+  await expect(page.locator('[data-guide-input-card="sources"]')).toContainText('paper.pdf');
+  await expect(page.locator('[data-guide-input-card="sources"]')).toContainText('pending-paper.pdf');
+});
+
+for (const entry of ['直接填写 →', '更新研究版本 →']) {
+  for (const input of ['instructions', 'title', 'file'] as const) {
+    test(`generic import preserves unsent ${input} when selecting ${entry}`, async ({ page }) => {
+      const calls = await fixture(page);
+      await page.goto('/research-objects/new?mode=import');
+      const creation = page.locator('[data-research-create]');
+      await expect(creation).toBeVisible();
+      if (input === 'instructions') await creation.locator('textarea').fill('Preserve my unsent request.');
+      if (input === 'title') {
+        await creation.locator('summary').filter({ hasText: '工作空间与标题' }).click();
+        await creation.locator('input[name="title"]').fill('Preserve my working title.');
+      }
+      if (input === 'file') await creation.locator('[data-evidence-intake] input[type="file"]').setInputFiles({ name: 'unsent-note.md', mimeType: 'text/markdown', buffer: Buffer.from('Preserve my unsent source.') });
+      await creation.getByRole('link', { name: entry, exact: true }).click();
+      await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/u);
+      await expect(creation.getByRole('alert')).toContainText('当前有未提交的输入');
+      if (input === 'instructions') await expect(creation.locator('textarea')).toHaveValue('Preserve my unsent request.');
+      if (input === 'title') await expect(creation.locator('input[name="title"]')).toHaveValue('Preserve my working title.');
+      if (input === 'file') await expect(creation.locator('[data-evidence-intake]')).toContainText('unsent-note.md');
+      expect(calls.writes).toEqual([]);
+    });
+  }
+}
+
+test('generic import protects a partially created research and offers its existing draft', async ({ page }) => {
+  const calls = await fixture(page);
+  await page.route('**/api/agent/sessions', (route) => json(route, { error: { code: 'SERVICE_UNAVAILABLE', message: 'Fixture guide handoff unavailable' } }, 503));
+  await page.goto('/research-objects/new?mode=import');
+  const creation = page.locator('[data-research-create]');
+  await creation.locator('textarea').fill('Create this research, keeping a failed handoff recoverable.');
+  await creation.getByRole('button', { name: '开始研究', exact: true }).click();
+  await expect(creation.getByRole('alert')).toContainText('Fixture guide handoff unavailable');
+  expect(calls.create).toBe(1);
+  await creation.locator('textarea').fill('');
+  const writesBefore = [...calls.writes];
+  for (const entry of ['直接填写 →', '更新研究版本 →']) {
+    await creation.getByRole('link', { name: entry, exact: true }).click();
+    await expect(page).toHaveURL(/\/research-objects\/new\?mode=import$/u);
+    await expect(creation.getByRole('alert')).toContainText('当前有未提交的输入');
+    await expect(creation.getByRole('alert').getByRole('link')).toHaveAttribute('href', '/research-objects/ro-new/edit');
+  }
+  expect(calls.writes).toEqual(writesBefore);
+});
+
+test('direct creation recovers from unavailable authentication through an explicit retry', async ({ page }) => {
+  const calls = await fixture(page);
+  let attempts = 0;
+  await page.route('**/api/auth/me', (route) => {
+    attempts++;
+    return attempts === 1
+      ? json(route, { error: { code: 'SERVICE_UNAVAILABLE', message: 'Fixture authentication unavailable' } }, 503)
+      : json(route, { userId: 'owner-1', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' });
+  });
+  await page.goto('/research-objects/new?mode=direct');
+  await expect(page.locator('#main-content').getByRole('alert')).toContainText('暂时无法恢复研究上下文');
+  await expect(page.locator('[data-guide-workspace]')).toHaveCount(0);
+  await page.getByRole('button', { name: '重新加载', exact: true }).click();
+  await expect(page.locator('#guide-research-text')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '选择研究' }).locator('option')).toHaveCount(3);
+  expect(attempts).toBe(2);
+  expect(calls.writes).toEqual([]);
 });

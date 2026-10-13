@@ -22,76 +22,86 @@ async function prepare(page: Page, profileFails = false) {
 }
 
 
-test('guide keeps one personal workspace entry for existing work', async ({ page }) => {
+test('guide hands creation off through the research desk', async ({ page }) => {
   await prepare(page);
   await page.goto('/guide');
-  const workspace = page.locator('article').getByRole('link', { name: '个人工作空间', exact: true });
+  const workspace = page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true });
   await expect(workspace).toHaveCount(1);
-  await expect(page.locator('article a[href^="/research-objects/new"]')).toHaveCount(0);
+  await expect(page.locator('article textarea, article input[type="file"], article a[href^="/research-objects/new"]')).toHaveCount(0);
   await workspace.click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole('link', { name: '从空白开始', exact: true }).click();
+  await expect(page).toHaveURL(/\/research-objects\/new\?mode=blank/);
 });
 
-test('anonymous guide workspace link preserves the login destination', async ({ page }) => {
+test('anonymous guide entry preserves the research desk login destination', async ({ page }) => {
   await prepare(page);
   await page.route('**/api/auth/me', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'fixture anonymous' } } }));
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/guide');
-  await page.locator('article').getByRole('link', { name: '个人工作空间', exact: true }).click();
+  await page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true }).click();
   await expect(page).toHaveURL(/\/auth\/login\?returnTo=%2Fdashboard$/);
 });
 
-test('guide workspace supports keyboard and small screens without business writes', async ({ page }) => {
+test('Guide lifecycle, media explanations and FAQ work on keyboard and mobile without business writes', async ({ page }) => {
   await prepare(page);
+  // The fixed public record is returned read-only. The real image pixels are
+  // deliberately not invented by this fixture.
+  await page.route('**/api/research/OSR-2026-000022/v/4', route => route.fulfill({ json: { research: {
+    presentationAssets: [{ id: 'guide-public-image', kind: 'image', url: '/guide-fixture.svg', reader: { order: 0, title: '公开版本的研究展示图' } }],
+  } } }));
+  await page.route('**/guide-fixture.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><title>Public media fixture</title></svg>' }));
   const writes: string[] = [];
-  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/guide');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Turn papers into structured, verifiable, machine-readable research objects.');
-  const input = page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。');
-  await expect(input).toBeVisible();
-  await expect(page.locator('#guide-lifecycle-title')).toBeVisible();
-  const beforeFocus = await input.boundingBox();
-  // The lifecycle introduction precedes the workspace. Tab navigation must
-  // reveal its composer without activating links or submitting the form.
-  await page.locator('article').getByRole('link', { name: '个人工作空间', exact: true }).focus();
-  for (let step = 0; step < 12 && !await input.evaluate(element => element === document.activeElement); step++) {
-    await page.keyboard.press('Tab');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('论文彼此相连');
+  await expect(page.locator('[data-guide-study-preview] img')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-workspace-stage], [data-hermes-action-anchor]')).toHaveCount(0);
+  const lifecycle = page.getByRole('tablist', { name: '了解研究的每一步' });
+  await lifecycle.getByRole('tab', { name: '3 展示研究 研究者 · 读者' }).press('ArrowRight');
+  await expect(page.locator('#guide-step-3')).toBeFocused();
+  await expect(page.getByRole('heading', { name: '核对之后，再与读者分享' })).toBeVisible();
+  await page.locator('#guide-step-3').press('Home');
+  await expect(page.locator('#guide-step-0')).toBeFocused();
+  await page.locator('#guide-step-2').click();
+  const formats = page.getByRole('tablist', { name: '展示方式' });
+  await formats.getByRole('tab', { name: '视频', exact: true }).click();
+  await expect(page.getByText('视频适合说明随时间变化的过程，或展示实验与操作。', { exact: true })).toBeVisible();
+  await expect(page.locator('article video, article iframe')).toHaveCount(0);
+  await formats.getByRole('tab', { name: '交互页面', exact: true }).click();
+  await expect(page.getByText('交互页面适合让读者调整参数、观察变化，或逐步查看研究内容。', { exact: true })).toBeVisible();
+  await formats.getByRole('tab', { name: '图文', exact: true }).click();
+  await page.getByRole('button', { name: '查看评论示意' }).click();
+  await expect(page.locator('#guide-comment-help')).toBeVisible();
+  await page.getByText('Hermes 整理的内容会自动公开吗？', { exact: true }).press('Enter');
+  await expect(page.getByText('不会。整理后的内容先保留在私有草稿中，由您核对和修改。公开发布需要单独确认。', { exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('guide-desktop-fixture.png'), fullPage: true, animations: 'disabled' });
+  for (const width of [390, 375, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator('aside summary')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  await expect(input).toBeFocused();
-  const box = await input.boundingBox();
-  await test.info().attach('guide-composer-keyboard-position', {
-    body: JSON.stringify({ beforeFocus, afterFocus: box }), contentType: 'application/json',
-  });
-  expect(box && box.y >= 0 && box.y + box.height <= 900).toBe(true);
-  await expect(page.getByRole('tablist')).toHaveCount(0);
-  await page.getByText('“可核验”具体指什么？', { exact: true }).press('Enter');
-  await expect(page.getByText('研究页面通过关联原文、材料和相关依据，让读者能够核对整理后的内容。它不表示平台已经证明研究结论正确。', { exact: true })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath('guide-desktop.png'), fullPage: true, animations: 'disabled' });
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(input).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: test.info().outputPath('guide-mobile-zh.png'), fullPage: true, animations: 'disabled' });
+  await page.locator('aside summary').click();
+  await page.locator('aside details').getByRole('link', { name: '研究示例', exact: true }).click();
+  await expect(page.locator('aside details')).not.toHaveAttribute('open', '');
+  await page.screenshot({ path: test.info().outputPath('guide-mobile-fixture.png'), fullPage: true, animations: 'disabled' });
   expect(writes).toEqual([]);
 });
 
-test('English guide keeps the inline composer readable on phones', async ({ page }) => {
+test('English Guide stays readable on narrow phones', async ({ page }) => {
   await prepare(page);
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010' }]);
-  const writes: string[] = [];
-  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   for (const width of [375, 320]) {
     await page.setViewportSize({ width, height: 812 });
     await page.goto('/guide');
-    await expect(page.locator('article').getByRole('link', { name: 'Personal workspace', exact: true })).toHaveCount(1);
-    await expect(page.getByPlaceholder('Upload your paper and other research files, and tell Hermes here what you want to accomplish.')).toBeVisible();
+    await expect(page.locator('article').getByRole('link', { name: 'Open research desk', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Share your research and ideas' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  expect(writes).toEqual([]);
 });
 
-test('guide remains independent of unavailable public preview data', async ({ page }) => {
+test('public preview failure has a retry without blocking Guide or creation entry', async ({ page }) => {
   await prepare(page);
   let reads = 0;
   await page.route('**/api/research/OSR-2026-000022/v/4', route => {
@@ -99,13 +109,17 @@ test('guide remains independent of unavailable public preview data', async ({ pa
     return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'preview unavailable' } } });
   });
   await page.goto('/guide');
-  await expect(page.getByPlaceholder('上传您的论文及各类研究文件，在此告诉 Hermes 你想完成什么。')).toBeVisible();
-  const example = page.locator('article a[href="/research/OSR-2026-000022/v/4"]');
-  await expect(example).toHaveAttribute('target', '_blank');
-  await expect(example).toHaveAttribute('rel', 'noopener noreferrer');
-  expect(reads).toBe(0);
+  await expect(page.getByRole('button', { name: '重新载入示例' })).toBeVisible();
+  await page.getByRole('button', { name: '重新载入示例' }).click();
+  await expect.poll(() => reads).toBeGreaterThan(1);
+  await expect(page.locator('article').getByRole('link', { name: '进入研究桌面', exact: true })).toBeVisible();
+  const examples = page.locator('article a[href="/research/OSR-2026-000022/v/4"]');
+  await expect(examples).toHaveCount(2);
+  for (const example of await examples.all()) {
+    await expect(example).toHaveAttribute('target', '_blank');
+    await expect(example).toHaveAttribute('rel', 'noopener noreferrer');
+  }
 });
-
 test('account tools keep secondary entries accessible and gate platform administration', async ({ page }) => {
   await prepare(page);
   for (const width of [320, 1024]) {
@@ -181,8 +195,8 @@ test('low balance uses monthly grant threshold and tolerates carried credit', as
 test('guide is reachable from common primary navigation and 404 is localized', async ({ page }) => {
   await prepare(page);
   await page.goto('/settings');
-  await page.locator('nav a[href="/guide"]').click();
-  await expect(page.getByRole('heading', { name: '带上你的论文， 我们一起往下走。' })).toBeVisible();
+  await page.locator('header a[href="/guide"]').click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('论文彼此相连');
   await expect(page.locator('article')).not.toContainText(/\b(?:RO|SDF)\b/);
   await page.goto('/vendor-path-that-does-not-exist');
   await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible();

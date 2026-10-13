@@ -277,7 +277,8 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
   })) : undefined;
   const evidence = await readReviewedPresentationEvidence(tx, payload, lineage);
   const source = await readVisualNarrativeSource(tx, { userId: session.userId, workspaceId: ro.workspaceId,
-    researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds });
+    researchObjectId: payload.researchObjectId, versionId: payload.versionId, sourceClaimIds: payload.sourceClaimIds },
+  payload.hermesRunAuthority ? { runId: payload.hermesRunAuthority.runId, taskId: task.id } : undefined);
   if (claims.length !== payload.sourceClaimIds.length || claims.some(claim => claim.extractionStatus !== 'succeeded')
     || presentationClaimContent(claims) !== context.claimContent || presentationEvidenceIdentity(evidence) !== context.sourceEvidenceIdentity
     || source.identity !== context.narrativeSourceIdentity || !isDeepStrictEqual(source.reference, result.sourceMapRef)) blocked();

@@ -300,6 +300,16 @@
     }
   },
   "hermesConversation": {
+    "firstImage": {
+      "planning": "Hermes 正在规划并核对这张图。",
+      "rendering": "正在生成图片并核对实际画面。",
+      "ready": "图片已生成，保存为私有草稿，尚未采用或公开。",
+      "stopped": "本次制作未完成。原任务和已有图片已保留；不会自动付费重画。",
+      "readError": "暂时无法读取本次制作状态，可继续查询原任务。",
+      "refresh": "刷新原任务状态",
+      "manage": "查看与管理图片",
+      "tooLong": "首张图片的要求请控制在 1000 字以内。"
+    },
     "contentRemoved": "已删除的会话或任务已退出当前上下文，保留的研究产物仍可访问。",
     "role": "你的研究协作助手",
     "conversation": "与 Hermes 的对话",

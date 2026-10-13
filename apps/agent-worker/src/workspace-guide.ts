@@ -2,10 +2,12 @@ import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import type { StorageAdapter } from '@openscience/storage';
 import {
   buildInterestContext,
+  createHermesFirstImageContinuation,
   parseWorkspaceGuidePayload,
   presentationStoryboardView,
   validateInterestContext,
   type AgentDeps,
+  type HermesResearchRunDeps,
   type WorkspaceGuidePayload,
   type WorkspaceWritingCitation,
   type WorkspaceWritingDraft,
@@ -20,6 +22,8 @@ import { SCIENTIFIC_WRITING_SKILL } from './skills/scientific-writing';
 type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
 
 export interface WorkspaceGuideResult extends Record<string, unknown> {
+  /** Written by the Domain continuation, not accepted from model JSON. */
+  firstImageRun?: { runId: string; versionId: string };
   summary: string;
   nextSteps: Array<{
     label: string;
@@ -445,8 +449,8 @@ export const workspaceGuideResultGuard: SchemaGuard<WorkspaceGuideResult> = (val
 
 export async function workspaceGuideHandler(
   gateway: AiGateway,
-  deps: Pick<AgentDeps, 'prisma'> & { storage?: StorageAdapter },
-  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown },
+  deps: Pick<AgentDeps, 'prisma'> & Partial<HermesResearchRunDeps>,
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt?: number },
 ): Promise<WorkspaceGuideResult> {
   const payload = parseWorkspaceGuidePayload(task.payload);
   const interestContext = task.interestContext === undefined || task.interestContext === null
@@ -454,6 +458,15 @@ export async function workspaceGuideHandler(
     : validateInterestContext(task.interestContext);
   if (interestContext.currentGoal !== payload.goal) {
     throw new Error('workspace.guide stored InterestContext goal mismatch');
+  }
+  if (payload.executionIntent === 'first-image') {
+    if (!deps.redis || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt! < 1)
+      throw new Error('[blocked] Current first-image execution is unavailable');
+    const firstImageRun = await createHermesFirstImageContinuation(deps as HermesResearchRunDeps,
+      { guideTaskId: task.id, executionAttempt: task.executionAttempt!, payload: task.payload });
+    return { summary: payload.locale === 'zh' ? 'Hermes 正在根据已审论文制作一张图片；完成后会保存在私有草稿中。'
+      : 'Hermes is creating one illustration from the reviewed paper. It will be saved as a private draft.',
+    nextSteps: [], needsMoreInformation: false, firstImageRun };
   }
   const ownerTask = await deps.prisma.agentTask.findUnique({
     where: { id: task.id },

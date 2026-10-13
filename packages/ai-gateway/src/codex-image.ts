@@ -178,6 +178,7 @@ abstract class SpoolImageProvider implements ImageProvider {
     };
     if (this.config.withSubmission) await this.config.withSubmission({ taskId: id, ...(referenceImage ? { referenceContentHash: referenceImage.contentHash } : {}) }, submit);
     else await submit();
+    let awaitingSynclipRecovery = false;
     while (this.now() < request.deadlineAt) {
       let bytes: Buffer | undefined;
       try { await directory(output); bytes = await boundedRead(join(output, 'result.json'), CODEX_IMAGE_MAX_JSON_BYTES); } catch (error) { if (!missing(error)) throw error; }
@@ -185,15 +186,22 @@ abstract class SpoolImageProvider implements ImageProvider {
         const result = this.validateResult(JSON.parse(bytes.toString('utf8')));
         if (result.id !== id || result.promptHash !== request.promptHash) fail();
         if (result.status !== 'succeeded') {
-          if (result.errorCode === 'USAGE_LIMIT') throw new ImageUsageLimitError();
-          throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
+          if (this.spoolProvider === 'synclip' && result.status === 'uncertain') {
+            // The host may finish a GET-only recovery of this original paid task.
+            // Keep the existing claim alive only within its original reservation.
+            awaitingSynclipRecovery = true;
+          } else {
+            if (result.errorCode === 'USAGE_LIMIT') throw new ImageUsageLimitError();
+            throw new Error(result.errorCode ?? (result.status === 'uncertain' ? 'UNCERTAIN' : 'EXECUTION_FAILED'));
+          }
+        } else {
+          const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
+          if (image.contentType !== 'image/png') fail(); return { ...image, ...(result.model ? { model: result.model } : {}) };
         }
-        const image = validateImageBytes(await boundedRead(join(output, 'result.png'), CODEX_IMAGE_MAX_PNG_BYTES));
-        if (image.contentType !== 'image/png') fail(); return { ...image, ...(result.model ? { model: result.model } : {}) };
       }
       await this.sleep(Math.min(this.config.pollIntervalMs ?? 1000, request.deadlineAt - this.now()));
     }
-    throw new Error('EXPIRED');
+    throw new Error(awaitingSynclipRecovery ? 'UNCERTAIN' : 'EXPIRED');
   }
 }
 

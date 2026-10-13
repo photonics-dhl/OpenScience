@@ -129,8 +129,8 @@ export function selectVisualSourceContext(sourceMap: DocumentSourceMap, extracti
 
 /** Reuse parser output and the completed review. Excerpts are context, while scene facts still require exact Claim/Evidence bindings. */
 export async function resolveVisualNarrativeSource(deps: { prisma: NarrativeReader; storage: StorageAdapter }, scope: NarrativeScope,
-  evidence: readonly VisualSourceEvidence[] = []) {
-  const source = await readVisualNarrativeSource(deps.prisma, scope);
+  evidence: readonly VisualSourceEvidence[] = [], firstImage?: Parameters<typeof readVisualNarrativeSource>[2]) {
+  const source = await readVisualNarrativeSource(deps.prisma, scope, firstImage);
   const sourceMap = await loadDocumentSourceMapReference(deps.storage, source.reference);
   const context: VisualNarrativeSource = {
     versionSdf: source.versionSdf, reviewedAnalysis: source.reviewedAnalysis, scientificReview: source.scientificReview,

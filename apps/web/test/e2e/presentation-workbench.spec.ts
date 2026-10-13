@@ -46,6 +46,10 @@ interface FixtureOptions {
   manyClaims?: boolean;
   failVersionOneReads?: boolean;
   taskErrorOnce?: boolean;
+  taskReadErrorCount?: number;
+  taskReadErrorStatus?: number;
+  taskReadErrorText?: boolean;
+  resultAssetReadErrorCount?: number;
   scopeLoadErrorOnce?: boolean;
   terminalTaskFailure?: boolean;
 }
@@ -62,6 +66,8 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
   let claimWriteAttempts = 0;
   let generationAttempts = 0;
   let taskReads = 0;
+  let taskReadErrors = options.taskReadErrorCount ?? 0;
+  let resultAssetReadErrors = options.resultAssetReadErrorCount ?? 0;
   let claimLoadFailures = options.scopeLoadErrorOnce ? 1 : 0;
   let assetLoadFailures = options.scopeLoadErrorOnce ? 1 : 0;
   let generated = false;
@@ -106,6 +112,10 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
       return json(route, { task: task('running', 12) }, 202);
     }
     if (path.endsWith('/versions/version-2/presentation-assets') && request.method() === 'GET') {
+      if (generated && resultAssetReadErrors > 0) {
+        resultAssetReadErrors -= 1;
+        return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Result assets temporarily unavailable' } }, 502);
+      }
       if (assetLoadFailures > 0) {
         assetLoadFailures -= 1;
         return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Assets temporarily unavailable' } }, 503);
@@ -119,6 +129,11 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
     if (path === `/api/research-objects/${ro.id}/versions/version-2/presentation-tasks/presentation-task`) {
       if (options.foreignTask) return json(route, { error: { code: 'NOT_FOUND', message: 'Presentation task not found' } }, 404);
       taskReads += 1;
+      if (taskReadErrors > 0) {
+        taskReadErrors -= 1;
+        if (options.taskReadErrorText) return route.fulfill({ status: options.taskReadErrorStatus ?? 502, contentType: 'text/html', body: '<h1>Bad Gateway</h1>' });
+        return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Task check temporarily unavailable' } }, options.taskReadErrorStatus ?? 502);
+      }
       if (options.terminalTaskFailure) return json(route, { task: task('failed', 41) });
       if (options.taskErrorOnce && taskReads === 1) return json(route, { error: { code: 'TEMPORARY_FAILURE', message: 'Task check temporarily unavailable' } }, 503);
       const completeAfter = options.pendingReads ?? 2;
@@ -142,7 +157,8 @@ async function fixtures(page: Page, options: FixtureOptions = {}) {
     return json(route, {});
   });
 
-  return { claimPostIds, claimPostBodies, generationKeys, generationBodies, patchExpectedTimes, taskReadCount: () => taskReads };
+  return { claimPostIds, claimPostBodies, generationKeys, generationBodies, patchExpectedTimes, taskReadCount: () => taskReads,
+    clearTaskReadErrors: () => { taskReadErrors = 0; } };
 }
 
 test('saved PNG review-only recovers a failed render without generating or approving again', async ({ page }) => {
@@ -455,9 +471,10 @@ test('does not let delayed or failed reads, or a delayed generation, move a chan
 });
 
 test('restores a scoped pending task from the URL and reports foreign tasks without leaking another scope', async ({ page }) => {
-  await fixtures(page, { pendingReads: 3, taskErrorOnce: true });
+  const state = await fixtures(page, { pendingReads: 6, taskReadErrorCount: 100 });
   await page.goto(`/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`);
-  await expect(page.getByRole('button', { name: /Resume checking/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Resume checking/i })).toBeEnabled({ timeout: 20_000 });
+  state.clearTaskReadErrors();
   await page.getByRole('button', { name: /Resume checking/i }).click();
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', /\d+/);
   const image = page.getByRole('img', { name: 'Claim evidence map', exact: true });
@@ -471,6 +488,192 @@ test('restores a scoped pending task from the URL and reports foreign tasks with
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Presentation task not found');
   await expect(page.locator('[data-presentation-asset]')).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
+});
+
+test.describe('presentation task read recovery', () => {
+  const taskPath = `/api/research-objects/${ro.id}/versions/version-2/presentation-tasks/presentation-task`;
+  const taskUrl = `/research-objects/${ro.id}/presentation?version=version-2&task=presentation-task`;
+  const observed = new WeakMap<Page, { writes: string[]; tasks: string[] }>();
+  test.beforeEach(async ({ page }) => {
+    await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: String(test.info().project.use.baseURL) }]);
+    const reads = { writes: [] as string[], tasks: [] as string[] }; observed.set(page, reads);
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) reads.writes.push(`${request.method()} ${path}`);
+      if (request.method() === 'GET' && path.includes('/presentation-tasks/')) reads.tasks.push(path);
+    });
+  });
+  test.afterEach(async ({ page }) => {
+    expect(observed.get(page)!.writes, 'Read recovery must never submit business work').toEqual([]);
+    expect(observed.get(page)!.tasks.every(path => path === taskPath), 'Recovery stays on the original task and version').toBe(true);
+  });
+
+  for (const text of [false, true]) test(`automatically resumes the same task after one ${text ? 'non-JSON' : 'JSON'} 502`, async ({ page }) => {
+    const state = await fixtures(page, { taskReadErrorCount: 1, taskReadErrorText: text, pendingReads: 2 });
+    await page.goto(taskUrl);
+    await expect(page.getByRole('button', { name: 'Resume checking', exact: true })).toBeDisabled();
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/version=version-2$/);
+    expect(state.taskReadCount()).toBe(2);
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toHaveCount(0);
+  });
+
+  test('keeps completion read recovery visible when result assets return 502', async ({ page }) => {
+    const state = await fixtures(page, { pendingReads: 1, resultAssetReadErrorCount: 4 });
+    await page.goto(taskUrl);
+    const resume = page.getByRole('button', { name: 'Resume checking', exact: true });
+    await expect(resume).toBeVisible();
+    await expect(resume).toBeDisabled();
+    await expect(resume).toBeEnabled({ timeout: 20_000 });
+    expect(state.taskReadCount()).toBe(4);
+    await expect(page.locator('[data-presentation-task="succeeded"]')).toContainText('Checks paused');
+    await page.screenshot({ path: test.info().outputPath('completed-task-read-paused.png'), fullPage: true });
+    await resume.click();
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/version=version-2$/);
+    await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toHaveCount(0);
+  });
+
+  test('removes manual recovery when a transient failure is followed by permission denial', async ({ page }) => {
+    await fixtures(page);
+    let reads = 0;
+    await page.route(`**${taskPath}`, route => json(route, { error: { code: 'READ_FAILED', message: 'Task read failed' } }, ++reads === 1 ? 502 : 403));
+    await page.goto(taskUrl);
+    await expect.poll(() => reads).toBe(2);
+    await page.waitForTimeout(2_500);
+    expect(reads).toBe(2);
+    await expect(page.getByRole('button', { name: 'Resume checking', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
+  });
+
+  test('keeps completion read recovery visible in the embedded media workbench', async ({ page }) => {
+    const state = await fixtures(page, { pendingReads: 1, resultAssetReadErrorCount: 4 });
+    const core = { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    await page.route('**/api/versions/version-2', route => json(route, { version: { versionId: 'version-2', snapshot: { core, artifacts: [] } } }));
+    await page.route(`**/api/research-objects/${ro.id}/versions/version-2/record`, route => json(route, { record: {
+      objectId: ro.id, versionId: 'version-2', recordState: 'recorded', sdf: core, manifest: [], claims: [initialClaim], evidence: [],
+    } }));
+    await page.route(`**/api/research-objects/${ro.id}/ingestion`, route => json(route, { tasks: [], version: versions[0] }));
+    await page.route(`**/api/research-objects/${ro.id}/authors`, route => json(route, { authors: [], version: ro.version }));
+    await page.goto(`/research-objects/${ro.id}/edit?stage=media&version=version-2&task=presentation-task`);
+    const results = page.locator('[data-presentation-results]');
+    await expect(results).toBeVisible();
+    const resume = page.getByRole('button', { name: 'Resume checking', exact: true });
+    await expect(resume).toBeDisabled();
+    await expect(resume).toBeEnabled({ timeout: 20_000 });
+    expect(state.taskReadCount()).toBe(4);
+    await expect(page.locator('[data-presentation-task="succeeded"]')).toContainText('Checks paused');
+    await resume.click();
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/edit\?stage=media&version=version-2$/);
+    await expect(results.getByRole('alert')).toHaveCount(0);
+  });
+
+  test('bounds persistent read failures and manually resumes the same task', async ({ page }) => {
+    const state = await fixtures(page, { taskReadErrorCount: 100, pendingReads: 1 });
+    await page.goto(taskUrl);
+    const resume = page.getByRole('button', { name: 'Resume checking', exact: true });
+    await expect(resume).toBeEnabled({ timeout: 20_000 });
+    expect(state.taskReadCount()).toBe(4);
+    await page.waitForTimeout(2_500);
+    expect(state.taskReadCount()).toBe(4);
+    state.clearTaskReadErrors();
+    await resume.click();
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toBeVisible();
+    expect(state.taskReadCount()).toBe(5);
+  });
+
+  for (const status of [401, 403, 404]) test(`stops rather than retrying a ${status} task read`, async ({ page }) => {
+    const state = await fixtures(page, { taskReadErrorCount: 100, taskReadErrorStatus: status });
+    await page.goto(taskUrl);
+    await expect.poll(() => state.taskReadCount()).toBe(1);
+    await page.waitForTimeout(2_500);
+    expect(state.taskReadCount()).toBe(1);
+    await expect(page.getByRole('button', { name: 'Resume checking', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
+  });
+
+  test('cancels scheduled read recovery when the version changes', async ({ page }) => {
+    const state = await fixtures(page, { taskReadErrorCount: 1, pendingReads: 1 });
+    await page.goto(taskUrl);
+    await expect(page.getByText('Task check temporarily unavailable', { exact: true })).toBeVisible();
+    await page.locator('select').first().selectOption('version-1');
+    await expect(page).toHaveURL(/version=version-1$/);
+    await page.waitForTimeout(2_500);
+    expect(state.taskReadCount()).toBe(1);
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
+  });
+
+  test('cancels scheduled read recovery when the viewer logs out', async ({ page }) => {
+    const state = await fixtures(page, { taskReadErrorCount: 1, pendingReads: 1 });
+    await page.goto(taskUrl);
+    await expect(page.getByText('Task check temporarily unavailable', { exact: true })).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(new Event('openscience-session-invalidated')));
+    await page.waitForTimeout(2_500);
+    expect(state.taskReadCount()).toBe(1);
+    await expect(page.getByRole('img', { name: 'Claim evidence map', exact: true })).toHaveCount(0);
+  });
+
+  test('does not adopt a delayed task result after an actor switch', async ({ page }) => {
+    await fixtures(page);
+    let actor = 'user-presentation', started = false, finished = false;
+    let resultAssetReads = 0;
+    await page.route(`**/api/research-objects/${ro.id}/versions/version-2/presentation-assets`, route => {
+      if (!finished) return json(route, { assets: [] });
+      resultAssetReads += 1;
+      return json(route, { assets: [{ ...asset, id: 'old-viewer-result', label: 'Old viewer result' }] });
+    });
+    await page.route('**/api/auth/me', route => json(route, { userId: actor, email: 'presentation@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' }));
+    await page.route(`**${taskPath}`, async route => {
+      if (actor !== 'user-presentation') return json(route, { error: { code: 'NOT_FOUND', message: 'Presentation task not found' } }, 404);
+      started = true;
+      await new Promise(resolve => setTimeout(resolve, 1_500));
+      finished = true;
+      return json(route, { task: task('succeeded', 100) });
+    });
+    await page.goto(taskUrl);
+    await expect.poll(() => started).toBe(true);
+    actor = 'other-presentation';
+    await page.evaluate(() => window.dispatchEvent(new Event('openscience-session-changed')));
+    await expect.poll(() => finished).toBe(true);
+    await expect(page.getByRole('img', { name: 'Old viewer result', exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(/[?&]task=presentation-task$/);
+    const reads = observed.get(page)!.tasks.length;
+    await page.waitForTimeout(2_500);
+    expect(observed.get(page)!.tasks).toHaveLength(reads);
+    expect(resultAssetReads).toBe(0);
+  });
+
+  for (const status of ['succeeded', 'failed'] as const) test(`discards delayed ${status}-task assets after an actor switch`, async ({ page }) => {
+    await fixtures(page);
+    let actor = 'user-presentation', completedTaskRead = false, started = false, finished = false;
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/auth/me', route => json(route, { userId: actor, email: 'presentation@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' }));
+    await page.route(`**${taskPath}`, route => {
+      if (actor !== 'user-presentation') return json(route, { error: { code: 'NOT_FOUND', message: 'Presentation task not found' } }, 404);
+      completedTaskRead = true;
+      return json(route, { task: task(status, status === 'succeeded' ? 100 : 41) });
+    });
+    await page.route(`**/api/research-objects/${ro.id}/versions/version-2/presentation-assets`, async route => {
+      if (!completedTaskRead || actor !== 'user-presentation') return json(route, { assets: [] });
+      started = true;
+      await held;
+      finished = true;
+      return json(route, { assets: [{ ...asset, id: 'old-viewer-result', label: 'Old viewer result' }] });
+    });
+    try {
+      await page.goto(taskUrl);
+      await expect.poll(() => started).toBe(true);
+      actor = 'other-presentation';
+      await page.evaluate(() => window.dispatchEvent(new Event('openscience-session-changed')));
+      await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('Presentation task not found');
+      release();
+      await expect.poll(() => finished).toBe(true);
+      await expect(page.getByRole('img', { name: 'Old viewer result', exact: true })).toHaveCount(0);
+      await expect(page).toHaveURL(/[?&]task=presentation-task$/);
+    } finally { release(); }
+  });
 });
 
 test('keeps writes and task polling blocked until a failed whole-scope load is retried successfully', async ({ page }) => {
@@ -490,6 +693,7 @@ test('shows a terminal task failure without offering an endless resume loop', as
   await expect(page.locator('[data-presentation-task="failed"]')).toContainText('Generation failed');
   await expect(page.locator('[data-presentation-workbench] [role="alert"]')).toContainText('The renderer rejected this request.');
   await expect(page.getByRole('button', { name: /Resume checking/i })).toHaveCount(0);
+  await page.locator('[data-source-tools] > summary').click();
   await page.getByRole('checkbox').first().check();
   await expect(page.getByRole('button', { name: /Generate concept map/i })).toBeEnabled();
 });

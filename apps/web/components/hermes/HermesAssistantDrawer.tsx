@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { isExplicitFirstImageRequest } from '@openscience/domain/workspace-guide-contract';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-
 import type { HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
 import { useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
+import { HermesFirstImageResult } from './HermesFirstImageResult';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
@@ -111,7 +113,7 @@ export interface HermesAssistantDrawerProps {
   onSourceCommand?(command: string): Promise<boolean>;
 }
 
-function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
+export function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
   const value = task.result;
   if (!value || typeof value.summary !== 'string' || typeof value.needsMoreInformation !== 'boolean' || !Array.isArray(value.nextSteps)) return null;
   const nextSteps = value.nextSteps.filter((step): step is WorkspaceGuideResult['nextSteps'][number] => {
@@ -122,6 +124,14 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
       && (candidate.targetId === undefined || typeof candidate.targetId === 'string');
   }).slice(0, 1);
   if (nextSteps.length !== value.nextSteps.length) return null;
+  if (value.firstImageRun !== undefined) {
+    const run = value.firstImageRun as Record<string, unknown>;
+    if (!run || typeof run !== 'object' || Object.keys(run).sort().join(',') !== 'runId,versionId'
+      || ![run.runId, run.versionId].every(id => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id))
+      || value.needsMoreInformation || nextSteps.length || value.presentationDraft || value.researchRunDraft || value.draftEdit || value.writingDraft) return null;
+    return { summary: value.summary, nextSteps: [], needsMoreInformation: false,
+      firstImageRun: { runId: run.runId as string, versionId: run.versionId as string } };
+  }
   const researchRunDraft = value.researchRunDraft === undefined ? undefined : readHermesResearchRunDraft(value.researchRunDraft);
   if (value.researchRunDraft !== undefined && (!researchRunDraft || value.needsMoreInformation || nextSteps.length
     || value.presentationDraft || value.draftEdit || value.writingDraft)) return null;
@@ -280,6 +290,10 @@ function HermesAssistantDrawerContent({
   const currentOwner = `${viewerId || 'pending'}:${route}:${routeResearchObjectId ?? ''}`;
   const [resolvedGuide, setResolvedGuide] = useState({ owner: currentOwner, versionId: requestedVersion });
   const resolvedGuideVersion = resolvedGuide.owner === currentOwner ? resolvedGuide.versionId : '';
+  const versionScope = `${currentOwner}:${requestedVersion}:${dashboardContext.presentation?.versionId ?? ''}:${dashboardContext.editorDraft?.scope ?? ''}`;
+  const [firstImageVersionBinding, setFirstImageVersionBinding] = useState<{ scope: string; versionId: string }>();
+  const firstImageViewVersion = firstImageVersionBinding?.scope === versionScope ? firstImageVersionBinding.versionId
+    : dashboardContext.presentation?.versionId || requestedVersion || resolvedGuideVersion;
   const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
   const sessionId = useRef<string | null>(null);
   const deletedSessions = useRef(new Set<string>());
@@ -609,7 +623,7 @@ function HermesAssistantDrawerContent({
         : listAgentTasks();
       void loadTasks.then(({ tasks: candidates }) => {
           const tasks = candidates.filter((candidate) => !deletedTasks.current.has(candidate.id) && (!candidate.sessionId || !deletedSessions.current.has(candidate.sessionId)));
-          if (cancelled || submittingRef.current || sessionId.current || dismissedInitialTask.current === initialTaskId) return;
+          if (cancelled || submittingRef.current || sessionId.current || (initialTaskId && dismissedInitialTask.current === initialTaskId)) return;
           const writingTasks = tasks.filter((candidate) => (route === 'research-object-edit'
             ? candidate.researchObjectId === routeResearchObjectId
             : !candidate.researchObjectId) && candidate.status === 'succeeded' && Boolean(resultFromTask(candidate)?.writingDraft))
@@ -728,13 +742,26 @@ function HermesAssistantDrawerContent({
         sessionId.current = response.session.id;
       }
       taskKey.current ??= crypto.randomUUID();
+      let firstImageVersion: string | undefined;
+      if (!pendingPayload.current && route === 'research-object-edit' && routeResearchObjectId
+        && isExplicitFirstImageRequest(normalized)) {
+        if (normalized.length > 1000) throw new Error(tc('firstImage.tooLong'));
+        const prepared = onPrepareVersion ? await onPrepareVersion(dashboardContext.editorDraft) : null;
+        if (ownerRef.current !== owner) return;
+        prepared?.assertCurrent();
+        firstImageVersion = prepared?.versionId || dashboardContext.presentation?.versionId || requestedVersion || undefined;
+        if (!firstImageVersion) throw new Error(tc('prepareVersionFailed'));
+        setFirstImageVersionBinding({ scope: versionScope, versionId: firstImageVersion });
+      }
       pendingPayload.current ??= {
         goal: normalized, locale, route, target,
+        ...(firstImageVersion ? { executionIntent: 'first-image' as const } : {}),
         context: {
           tasks: dashboardContext.tasks,
           researchObjects: dashboardContext.researchObjects,
-          ...(dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
-          ...(dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
+          ...(firstImageVersion ? { presentation: { researchObjectId: routeResearchObjectId!, versionId: firstImageVersion } }
+            : dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
+          ...(!firstImageVersion && dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
           ...(dashboardContext.writingSource ? { writingSource: dashboardContext.writingSource } : {}),
           ...(route === 'research-object-edit' && (dashboardContext.researchRunSource ?? dashboardContext.writingSource) ? {
             researchRunSource: dashboardContext.researchRunSource ?? dashboardContext.writingSource,
@@ -854,6 +881,12 @@ function HermesAssistantDrawerContent({
           </React.Suspense>}
           {publicationVersion && routeResearchObjectId && <ResearchPublication key={`${routeResearchObjectId}:${publicationVersion}`} researchObjectId={routeResearchObjectId} selectedVersionId={publicationVersion} embedded conversation onConfirmationChange={registerAction} beforePublish={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onPublished={(url) => { setPublicUrl(url); setLocalMessage(tc('published')); }} />}
           {mediaReviewVersion && routeResearchObjectId && <HermesMediaReview key={`${routeResearchObjectId}:${mediaReviewVersion}`} researchObjectId={routeResearchObjectId} versionId={mediaReviewVersion} onConfirmationChange={registerAction} beforeReview={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onReviewed={() => window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: routeResearchObjectId, versionId: mediaReviewVersion } }))} />}
+          {route === 'research-object-edit' && routeResearchObjectId && viewerId && firstImageViewVersion
+            && task?.researchObjectId === routeResearchObjectId && (result?.firstImageRun || !result)
+            && (!result?.firstImageRun || result.firstImageRun.versionId === firstImageViewVersion) && <HermesFirstImageResult
+              key={`${currentOwner}:${firstImageViewVersion}:${task.id}`} actorId={viewerId} researchObjectId={routeResearchObjectId}
+              versionId={firstImageViewVersion} guideTaskId={task.id} runId={result?.firstImageRun?.runId}
+              guidePending={task.status === 'pending' || task.status === 'running'} />}
           {localMessage && <p className="hermes-message hermes-message-assistant" role="status">{localMessage}</p>}
           {publicUrl && <Link className="hermes-conversation-link" href={publicUrl}>{tw('openPublic')} →</Link>}
           {literatureIntent && <div className="hermes-conversation-acquisition">

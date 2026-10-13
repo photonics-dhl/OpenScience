@@ -90,6 +90,91 @@ test('lost POST response cannot resend through either execute or resume', async 
   }
   assert.deepEqual(f.calls, [['POST']]);
 });
+
+for (const code of ['SYNCLIP_TIMEOUT', 'SYNCLIP_HTTP_FAILED']) {
+  test(`retains the first safe submission ${code} without leaking text or retrying`, async () => {
+    const f = await fixture();
+    f.deps.client.create = async () => {
+      f.calls.push(['POST']);
+      throw Object.assign(Error(`${f.config.apiKey} ${f.request.prompt} ${remote.output.url}`), { code, httpStatus: 503 });
+    };
+    await assert.rejects(executeSynclipImage(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+    const path = join(f.privateDir, 'synclip-failure.json');
+    const original = await readFile(path, 'utf8');
+    assert.deepEqual(JSON.parse(original), { stage: 'submission', code, httpStatus: 503 });
+    if (process.platform !== 'win32') assert.equal((await lstat(path)).mode & 0o777, 0o600);
+    for (const method of [executeSynclipImage, resumeSynclipImage]) {
+      await assert.rejects(method(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+    }
+    assert.deepEqual(f.calls, [['POST']]);
+    assert.equal(await readFile(path, 'utf8'), original);
+    for (const sensitive of [f.config.apiKey, f.request.prompt, remote.output.url]) assert.ok(!original.includes(sensitive));
+  });
+}
+
+test('retains a polling diagnostic while recovery uses only the original external ID', async () => {
+  const f = await fixture();
+  f.deps.client.query = async taskId => {
+    f.calls.push(['GET', taskId]);
+    throw Object.assign(Error(f.config.apiKey), { code: 'SYNCLIP_HTTP_FAILED', httpStatus: 429 });
+  };
+  await assert.rejects(executeSynclipImage(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+  assert.deepEqual(JSON.parse(await readFile(join(f.privateDir, 'synclip-failure.json'), 'utf8')),
+    { stage: 'query', code: 'SYNCLIP_HTTP_FAILED', httpStatus: 429 });
+  const originalQuery = async taskId => { f.calls.push(['GET', taskId]); return remote; };
+  f.deps.client.query = originalQuery;
+  assert.deepEqual(await resumeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
+  assert.equal(f.calls.filter(row => row[0] === 'POST').length, 1);
+  assert.ok(f.calls.filter(row => row[0] === 'GET').every(row => row[1] === remote.task_id));
+});
+
+test('GET-only recovery records its own failure without creating a provider task', async () => {
+  const f = await fixture();
+  const identity = { schemaVersion: 1, requestId: id, promptHash: f.request.promptHash, model: 'gpt-image-2.5', aspectRatio: '16:9' };
+  await writeFile(join(f.privateDir, 'synclip-attempt.json'), JSON.stringify(identity));
+  const receipt = JSON.stringify({ ...identity, taskId: remote.task_id });
+  await writeFile(join(f.privateDir, 'synclip-receipt.json'), receipt);
+  f.deps.client.query = async taskId => {
+    f.calls.push(['GET', taskId]);
+    throw Object.assign(Error(f.config.apiKey), { code: 'SYNCLIP_HTTP_FAILED', httpStatus: 401 });
+  };
+  await assert.rejects(resumeSynclipImage(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+  assert.deepEqual(JSON.parse(await readFile(join(f.privateDir, 'synclip-failure.json'), 'utf8')),
+    { stage: 'query', code: 'SYNCLIP_HTTP_FAILED', httpStatus: 401 });
+  assert.deepEqual(f.calls, [['GET', remote.task_id]]);
+  assert.equal(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8'), receipt);
+});
+
+for (const stage of ['download', 'normalize']) {
+  test(`identifies ${stage} failure without storing its raw error`, async () => {
+    const f = await fixture();
+    f.deps[stage] = async () => { throw Object.assign(Error(f.config.apiKey), { code: 'SYNCLIP_NETWORK_FAILED' }); };
+    await assert.rejects(executeSynclipImage(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+    assert.deepEqual(JSON.parse(await readFile(join(f.privateDir, 'synclip-failure.json'), 'utf8')),
+      { stage, code: 'SYNCLIP_NETWORK_FAILED' });
+    assert.equal(f.calls.filter(row => row[0] === 'POST').length, 1);
+  });
+}
+
+for (const httpStatus of [0, 600, 401.5, NaN, Infinity, '403 private-key']) {
+  test(`excludes invalid HTTP status ${httpStatus} and arbitrary error code`, async () => {
+    const f = await fixture();
+    f.deps.client.create = async () => { throw Object.assign(Error(f.config.apiKey), { code: f.config.apiKey, httpStatus }); };
+    await assert.rejects(executeSynclipImage(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+    assert.deepEqual(JSON.parse(await readFile(join(f.privateDir, 'synclip-failure.json'), 'utf8')),
+      { stage: 'submission', code: 'UNCLASSIFIED' });
+  });
+}
+
+test('diagnostic write failure does not replace uncertainty or permit another POST', async () => {
+  const f = await fixture(); await mkdir(join(f.privateDir, 'synclip-failure.json'));
+  f.deps.client.create = async () => { f.calls.push(['POST']); throw Object.assign(Error(f.config.apiKey), { code: 'SYNCLIP_TIMEOUT' }); };
+  for (const method of [executeSynclipImage, executeSynclipImage, resumeSynclipImage]) {
+    await assert.rejects(method(f.request, f.privateDir, f.config, f.deps), { code: 'UNCERTAIN' });
+  }
+  assert.deepEqual(f.calls, [['POST']]);
+  assert.equal((await lstat(join(f.privateDir, 'synclip-failure.json'))).isDirectory(), true);
+});
 test('falls back once only after an explicit model-unavailable response and binds the fallback model', async () => {
   const f = await fixture(); let first = true;
   f.deps.client.create = async (prompt, model) => {
@@ -102,6 +187,7 @@ test('falls back once only after an explicit model-unavailable response and bind
   assert.deepEqual(f.calls.filter(row => row[0] === 'POST').map(row => row[2]), ['gpt-image-2.5', 'gpt-image-2']);
   assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-attempt.json'), 'utf8')).model, 'gpt-image-2');
   assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).model, 'gpt-image-2');
+  await assert.rejects(readFile(join(f.privateDir, 'synclip-failure.json')), { code: 'ENOENT' });
 });
 for (const fallbackError of ['SYNCLIP_MODEL_UNAVAILABLE', 'SYNCLIP_TIMEOUT', 'SYNCLIP_NETWORK_FAILED']) {
   test(`fallback ${fallbackError} consumes the last POST opportunity across execute and resume`, async () => {
@@ -190,6 +276,7 @@ test('an incomplete exclusive attempt stays unknown without a POST', async () =>
 test('changed original request or mismatched receipt is rejected before networking', async () => {
   const f = await fixture(); await executeSynclipImage(f.request, f.privateDir, f.config, f.deps); f.calls.length = 0;
   await assert.rejects(resumeSynclipImage({ ...f.request, prompt: 'replacement' }, f.privateDir, f.config, f.deps));
+  await assert.rejects(readFile(join(f.privateDir, 'synclip-failure.json')), { code: 'ENOENT' });
   const path = join(f.privateDir, 'synclip-receipt.json'); const receipt = JSON.parse(await readFile(path, 'utf8'));
   await writeFile(path, JSON.stringify({ ...receipt, promptHash: '0'.repeat(64) }));
   await assert.rejects(resumeSynclipImage(f.request, f.privateDir, f.config, f.deps)); assert.deepEqual(f.calls, []);
@@ -231,6 +318,39 @@ test('real Gateway client and host transport preserve the exact private wire pro
   assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
   assert.deepEqual(wire.map(call => call.options.method), ['POST', 'GET']);
   assert.deepEqual(JSON.parse(wire[0].options.body), { prompt: f.request.prompt, model: 'gpt-image-2.5', aspectRatio: '16:9' });
+});
+
+test('actual host client allows a bounded POST response without lengthening GET', async t => {
+  const f = await fixture(); delete f.deps.client;
+  const clock = Date.now(); f.deps.now = () => clock;
+  const timeouts = []; const methods = []; const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => { timeouts.push(ms); return originalTimeout(callback, ms, ...args); });
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    methods.push(options.method);
+    if (options.method === 'POST') return Response.json({ success: true, data: { task_id: remote.task_id, status: 'processing' } });
+    assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).taskId, remote.task_id);
+    return Response.json({ success: true, data: remote });
+  });
+  assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
+  assert.deepEqual(methods, ['POST', 'GET']); assert.deepEqual(timeouts, [120000, 15000]);
+});
+
+test('permitted fallback uses only the remaining original response budget', async t => {
+  const f = await fixture(); delete f.deps.client;
+  let clock = Date.now(); f.deps.now = () => clock; f.config.deadlineAt = clock + 120000;
+  const timeouts = []; const models = []; const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => { timeouts.push(ms); return originalTimeout(callback, ms, ...args); });
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    if (options.method === 'POST') {
+      models.push(JSON.parse(options.body).model);
+      if (models.length === 1) { clock += 110000; return Response.json({ error: { code: 'model_unavailable' } }, { status: 400 }); }
+      return Response.json({ success: true, data: { task_id: remote.task_id, status: 'processing' } });
+    }
+    return Response.json({ success: true, data: remote });
+  });
+  assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
+  assert.deepEqual(models, ['gpt-image-2.5', 'gpt-image-2']); assert.deepEqual(timeouts, [120000, 10000, 10000]);
+  assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).model, 'gpt-image-2');
 });
 test('execute polls the same saved task at bounded intervals and stops without resubmission at its deadline', async () => {
   const f = await fixture(); let clock = Date.now(); const start = clock;

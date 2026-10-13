@@ -50,14 +50,15 @@ describe('global companion SSR ownership', () => {
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
 
-  it('keeps the actual guide composer with a single compact companion', () => {
+  it('keeps the public guide free of a persistent workspace companion', () => {
     navigation.pathname = '/guide';
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><ResearchGuide /></HermesWorkspaceStageProvider>);
     expect(markup).toContain('href="/dashboard"');
-    expect(markup).toContain('id="guide-research-idea"');
-    expect(markup).not.toContain('role="tablist"');
-    expect(markup.match(/data-live2d-instance="wanko"/g)).toHaveLength(1);
-    expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
+    expect(markup).not.toContain('id="guide-research-idea"');
+    expect(markup).not.toContain('data-guide-workspace');
+    expect(markup).not.toContain('data-hermes-dock-anchor');
+    expect(markup).not.toContain('data-hermes-workspace-stage');
+    expect(markup).not.toContain('data-live2d-instance');
   });
 
   it('opens the actual conversation without adding a second companion portrait', () => {
@@ -72,7 +73,7 @@ describe('global companion SSR ownership', () => {
     expect(markup.match(/<img\b[^>]*src="[^"]*\/hermes\/wanko-static[^"]*"/g)).toHaveLength(1);
   });
 
-  it.each(['/guide', '/explore', '/auth/login', '/me', '/journals/example', '/dashboard', '/research-objects/object/edit'])('renders exactly one Wanko on %s', (pathname) => {
+  it.each(['/explore', '/auth/login', '/me', '/journals/example', '/dashboard', '/research-objects/new', '/research-objects/object/edit'])('renders exactly one Wanko on %s', (pathname) => {
     navigation.pathname = pathname;
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><main>Research content</main></HermesWorkspaceStageProvider>);
     expect(markup.match(/data-hermes-workspace-stage="true"/g)).toHaveLength(1);
@@ -82,12 +83,12 @@ describe('global companion SSR ownership', () => {
     expect(markup).not.toContain('Current research object');
     expect(markup).not.toContain('data-hermes-presence-control');
     expect(markup).toContain('data-hermes-size-mode="automatic"');
-    const isWorkspace = pathname === '/guide' || pathname === '/dashboard' || pathname === '/research-objects/object/edit';
+    const isWorkspace = pathname === '/dashboard' || pathname === '/research-objects/new' || pathname === '/research-objects/object/edit';
     expect(markup).toContain(`data-hermes-stage-size="${isWorkspace ? 64 : 120}"`);
     if (isWorkspace) expect(markup).toContain('data-hermes-avatar="true"');
   });
 
-  it.each(['/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {
+  it.each(['/', '/guide', '/guide/', '/_visual/hermes-live2d', '/%5Fvisual/research-workbench', '/visual-public-reading'])('keeps %s free of a floating companion', (pathname) => {
     navigation.pathname = pathname;
     const markup = renderToStaticMarkup(<HermesWorkspaceStageProvider><main>Harness</main></HermesWorkspaceStageProvider>);
     expect(markup).not.toContain('data-hermes-workspace-stage');

@@ -173,7 +173,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,
@@ -186,6 +186,7 @@ export {
   type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
 export { HermesVideoUnavailableError, isHermesVideoReady, requireHermesVideoReady, isHermesVideoRun, isHermesVideoTask, type HermesVideoReadinessDeps } from './agent/video-readiness';
+export { createHermesFirstImageContinuation, findFirstImageContinuation } from './agent/first-image-continuation';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,

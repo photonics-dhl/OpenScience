@@ -158,7 +158,7 @@ export function PresentationWorkbench({
         {canWrite ? <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}
           canWrite={canWrite} unavailable={working || loading || loadFailed} onGenerateStoryboard={onGenerateStoryboard}
           onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} /> : null}
-        {task && task.status !== 'succeeded' ? (
+        {task && (task.status !== 'succeeded' || task.paused) ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">
               <span className="font-semibold">{task.paused ? t('taskPaused') : t(`taskStatus.${task.status}`)}</span>
@@ -168,7 +168,7 @@ export function PresentationWorkbench({
               <span className="block h-full bg-os-vermilion-ink transition-[width] motion-reduce:transition-none" style={{ width: `${task.progress}%` }} />
             </div>
             {retryAction}
-            {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
+            {task.paused && onResumeTask ? <button type="button" disabled={working} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none disabled:opacity-50" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
           </div>
         ) : null}
         {error ? <div className="mt-5 border-l-2 border-state-danger pl-4" role="alert">{error.includes('Storyboard output rejected:') ? <><p className="m-0 text-sm leading-6 text-state-danger">{t('briefNeedsRevision')}</p><details className="mt-2 text-xs leading-5"><summary className="cursor-pointer py-2">{t('failureDetails')}</summary><p className="break-words">{error}</p></details></> : <p className="m-0 text-sm leading-6 text-state-danger">{error}</p>}</div> : null}
@@ -201,7 +201,7 @@ export function PresentationWorkbench({
             )}
             {deletionNotice}
           </section>
-            {task && task.status !== 'succeeded' ? (
+            {task && (task.status !== 'succeeded' || task.paused) ? (
               <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
                 <div className="flex items-center justify-between gap-4 text-sm">
                   <span className="font-semibold">{task.paused ? t('taskPaused') : t(`taskStatus.${task.status}`)}</span>
@@ -211,7 +211,7 @@ export function PresentationWorkbench({
                   <span className="block h-full bg-os-vermilion-ink transition-[width] motion-reduce:transition-none" style={{ width: `${task.progress}%` }} />
                 </div>
                 {retryAction}
-            {task.paused && onResumeTask ? <button type="button" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
+            {task.paused && onResumeTask ? <button type="button" disabled={working} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm font-semibold transition-transform active:scale-[0.96] motion-reduce:transform-none disabled:opacity-50" onClick={onResumeTask}><RotateCw className="h-4 w-4" aria-hidden="true" />{t('resumeTask')}</button> : null}
               </div>
             ) : null}
 

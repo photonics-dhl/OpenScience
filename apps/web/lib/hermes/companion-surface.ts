@@ -9,14 +9,14 @@ export function hermesUsesAvatarEntry(pathname: string): boolean {
 }
 
 const productRoots = new Set([
-  'guide', 'explore', 'research', 'collections', 'auth', 'me', 'settings',
+  'explore', 'research', 'collections', 'auth', 'me', 'settings',
   'developers', 'trash', 'journals', 'admin', 'editorial',
 ]);
 
 export function resolveHermesCompanionSurface(pathname: string): HermesCompanionSurface | null {
   if (pathname === '/') return null;
   const root = pathname.split('/')[1];
-  if (root === 'dashboard' || root === 'research-objects' || root === 'guide') return 'workspace';
+  if (root === 'dashboard' || root === 'research-objects') return 'workspace';
   return productRoots.has(root) ? 'navigation' : null;
 }
 

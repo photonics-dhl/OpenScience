@@ -300,6 +300,16 @@
     }
   },
   "hermesConversation": {
+    "firstImage": {
+      "planning": "Hermes is planning and checking this illustration.",
+      "rendering": "Generating the image and checking the actual result.",
+      "ready": "Your image is saved as a private draft. It has not been adopted or published.",
+      "stopped": "This operation did not finish. The original task and images are preserved; no paid redraw will start automatically.",
+      "readError": "The operation status could not be read. You can check the original task again.",
+      "refresh": "Refresh original task",
+      "manage": "View and manage images",
+      "tooLong": "Keep the first-image request within 1,000 characters."
+    },
     "contentRemoved": "The removed conversation or task is no longer active. Retained research outputs remain available.",
     "role": "Your research collaborator",
     "conversation": "Conversation with Hermes",
