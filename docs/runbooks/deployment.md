@@ -12,6 +12,8 @@
 
 当前执行身份和状态统一见唯一CURRENT，本节定义顺序而非另建任务库。真实模型/科研质量不由本次源码退役和服务health验收证明。
 
+归档后禁止通过标准deploy主动安装R1或任何旧root-only cleaner：原事务会在应用切换前安装candidate清理器，发布后补装新reader留有timer执行窗口。R2同次失败自动回退R1不重装旧cleaner且尚未归档，安全；日后主动回退必须先持原FD9、cleanup和归档三provider锁，把runtime原子恢复旧root并核receipt/锁身份，再准备符合现有源祖先守卫的恢复候选。可保留双路径new cleaner，不假设存在app-only发布入口；旧unit与登录态不得恢复运行。
+
 ## 当前原生 Hermes 发布入口
 
 新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图沿当前已授权的Synclip通道，启用范围与质量以[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)为准。实际版本、回滚身份与付费任务同见CURRENT。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
