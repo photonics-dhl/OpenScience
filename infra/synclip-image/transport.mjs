@@ -7,6 +7,7 @@ import { normalizeImage } from '../chatgpt-browser/broker.mjs';
 import { validateCodexImageRequest } from '../../packages/ai-gateway/dist/codex-image-protocol.js';
 import { validateImageBytes } from '../../packages/ai-gateway/dist/image.js';
 import { SynclipImageClient, SYNCLIP_IMAGE_PRIMARY_MODEL, SYNCLIP_IMAGE_FALLBACK_MODEL, SYNCLIP_IMAGE_MAX_BYTES,
+  SYNCLIP_IMAGE_SUBMISSION_TIMEOUT_MS,
   validateSynclipImageModel,
   validateSynclipTaskId, validateSynclipImageTask, validateSynclipOriginal, downloadSynclipImage } from '../../packages/ai-gateway/dist/synclip-image-api.js';
 
@@ -78,8 +79,11 @@ async function context(request, privateDir, config, dependencies) {
     if (!isDeepStrictEqual(value, { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash, model, aspectRatio: '16:9' })) throw uncertain();
   }
   const identity = { schemaVersion: 1, requestId: request.id, promptHash: request.promptHash, model, aspectRatio: '16:9' };
-  const client = () => dependencies.client ?? new SynclipImageClient({ apiKey: config.apiKey,
-    timeoutMs: Math.max(1, Math.min(15000, deadlineAt - now())) });
+  const client = () => {
+    const remaining = deadlineAt - now(); if (remaining <= 0) throw uncertain();
+    return dependencies.client ?? new SynclipImageClient({ apiKey: config.apiKey,
+      timeoutMs: Math.min(15000, remaining), submissionTimeoutMs: Math.min(SYNCLIP_IMAGE_SUBMISSION_TIMEOUT_MS, remaining) });
+  };
   return { request, privateDir, config, dependencies, now, deadlineAt, identity, client, stage: 'recovery' };
 }
 export async function readSynclipImageModel(privateDir, request) {
@@ -151,19 +155,20 @@ export async function executeSynclipImage(request, privateDir, config, dependenc
   try {
     ctx = await context(request, privateDir, { ...config, deadlineAt: Math.min(config.deadlineAt ?? request.deadlineAt, request.deadlineAt) }, dependencies);
     ctx.stage = 'submission';
-    const client = ctx.client(); // Reject missing host credentials before reserving a paid attempt.
+    ctx.client(); // Reject missing host credentials before reserving a paid attempt.
     const path = join(privateDir, 'synclip-attempt.json');
     if (!await optional(path, 2048) && await exclusive(path, JSON.stringify(ctx.identity))) {
       if (ctx.now() >= ctx.deadlineAt) throw uncertain();
       let created;
       try {
-        created = await client.create(request.prompt, ctx.identity.model);
+        created = await ctx.client().create(request.prompt, ctx.identity.model);
       } catch (error) {
         if (error?.code !== 'SYNCLIP_MODEL_UNAVAILABLE' || ctx.identity.model !== SYNCLIP_IMAGE_PRIMARY_MODEL) throw error;
+        if (ctx.now() >= ctx.deadlineAt) throw uncertain();
         const fallbackIdentity = { ...ctx.identity, model: SYNCLIP_IMAGE_FALLBACK_MODEL };
         await atomicWrite(path, JSON.stringify(fallbackIdentity), 0o600);
         ctx.identity = fallbackIdentity;
-        created = await client.create(request.prompt, fallbackIdentity.model);
+        created = await ctx.client().create(request.prompt, fallbackIdentity.model);
       }
       const taskId = validateSynclipTaskId(created.task_id);
       if (!await exclusive(join(privateDir, 'synclip-receipt.json'), JSON.stringify({ ...ctx.identity, taskId }))) throw uncertain();

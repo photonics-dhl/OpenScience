@@ -15,6 +15,49 @@ const response = (data: unknown, status = 200) => new Response(JSON.stringify({ 
 });
 
 describe('Synclip fixed image API', () => {
+  it.each(['headers', 'body'])('keeps one delayed 51-second POST %s response while GET stays short', async delay => {
+    vi.useFakeTimers();
+    try {
+      const data = { task_id: taskId, status: 'processing' };
+      const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        if (init?.method === 'GET') return new Promise<Response>(() => {});
+        if (delay === 'headers') return new Promise<Response>(resolve => setTimeout(() => resolve(response(data)), 51_000));
+        return new Response(new ReadableStream({ start(controller) {
+          setTimeout(() => { controller.enqueue(new TextEncoder().encode(JSON.stringify({ success: true, data }))); controller.close(); }, 51_000);
+        } }), { headers: { 'content-type': 'application/json' } });
+      });
+      const client = new SynclipImageClient({ apiKey, fetch: fetcher, timeoutMs: 15_000, submissionTimeoutMs: 120_000 });
+      let settled: unknown;
+      const pending = client.create('Original paid prompt').then(value => { settled = value; return value; }, error => { settled = error; return error; });
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(settled).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(35_000);
+      expect(await pending).toEqual(data);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const query = client.query(taskId).catch(error => error);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await query).toMatchObject({ code: 'SYNCLIP_TIMEOUT' });
+      expect(fetcher.mock.calls.map(call => call[1]?.method)).toEqual(['POST', 'GET']);
+    } finally { vi.useRealTimers(); }
+  });
+  it('keeps a permanently unknown submission bounded and never retries it', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(() => new Promise<Response>(() => {}));
+      const client = new SynclipImageClient({ apiKey, fetch: fetcher, submissionTimeoutMs: 120_000 });
+      let settled: unknown;
+      const pending = client.create('Original paid prompt').catch(error => { settled = error; return error; });
+      await vi.advanceTimersByTimeAsync(119_999); expect(settled).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await pending).toMatchObject({ code: 'SYNCLIP_TIMEOUT', outcome: 'uncertain' });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].signal?.aborted).toBe(true);
+      expect(String(settled)).not.toContain(apiKey);
+    } finally { vi.useRealTimers(); }
+  });
+  it.each([0, -1, 120_001, Number.NaN])('rejects invalid POST response budget %s before submission', submissionTimeoutMs => {
+    expect(() => new SynclipImageClient({ apiKey, submissionTimeoutMs })).toThrow('SYNCLIP_CONFIG_INVALID');
+  });
   it('submits exactly one text-only gpt-image-2.5 request to the fixed origin', async () => {
     const fetcher = vi.fn(async () => response({ task_id: taskId, status: 'processing' }));
     const client = new SynclipImageClient({ apiKey, fetch: fetcher });

@@ -319,6 +319,39 @@ test('real Gateway client and host transport preserve the exact private wire pro
   assert.deepEqual(wire.map(call => call.options.method), ['POST', 'GET']);
   assert.deepEqual(JSON.parse(wire[0].options.body), { prompt: f.request.prompt, model: 'gpt-image-2.5', aspectRatio: '16:9' });
 });
+
+test('actual host client allows a bounded POST response without lengthening GET', async t => {
+  const f = await fixture(); delete f.deps.client;
+  const clock = Date.now(); f.deps.now = () => clock;
+  const timeouts = []; const methods = []; const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => { timeouts.push(ms); return originalTimeout(callback, ms, ...args); });
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    methods.push(options.method);
+    if (options.method === 'POST') return Response.json({ success: true, data: { task_id: remote.task_id, status: 'processing' } });
+    assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).taskId, remote.task_id);
+    return Response.json({ success: true, data: remote });
+  });
+  assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
+  assert.deepEqual(methods, ['POST', 'GET']); assert.deepEqual(timeouts, [120000, 15000]);
+});
+
+test('permitted fallback uses only the remaining original response budget', async t => {
+  const f = await fixture(); delete f.deps.client;
+  let clock = Date.now(); f.deps.now = () => clock; f.config.deadlineAt = clock + 120000;
+  const timeouts = []; const models = []; const originalTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => { timeouts.push(ms); return originalTimeout(callback, ms, ...args); });
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    if (options.method === 'POST') {
+      models.push(JSON.parse(options.body).model);
+      if (models.length === 1) { clock += 110000; return Response.json({ error: { code: 'model_unavailable' } }, { status: 400 }); }
+      return Response.json({ success: true, data: { task_id: remote.task_id, status: 'processing' } });
+    }
+    return Response.json({ success: true, data: remote });
+  });
+  assert.deepEqual(await executeSynclipImage(f.request, f.privateDir, f.config, f.deps), png);
+  assert.deepEqual(models, ['gpt-image-2.5', 'gpt-image-2']); assert.deepEqual(timeouts, [120000, 10000, 10000]);
+  assert.equal(JSON.parse(await readFile(join(f.privateDir, 'synclip-receipt.json'), 'utf8')).model, 'gpt-image-2');
+});
 test('execute polls the same saved task at bounded intervals and stops without resubmission at its deadline', async () => {
   const f = await fixture(); let clock = Date.now(); const start = clock;
   f.deps.now = () => clock; f.config.deadlineAt = clock + 4000;
