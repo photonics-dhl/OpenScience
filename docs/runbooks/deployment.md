@@ -28,6 +28,8 @@
 - 只有active和唯一rollback均为已验证的退役版本、实际挂载及Synclip安装包无旧helper依赖、没有未完成私有副本清理且用户/paid/unknown资产已归属，才可可恢复归档并移走旧root。原清理器在此之前继续识别旧目录；未消费的私有副本不能被误记complete。归档不是可公开资料，也不是自由清盘授权。
 - 首次切换若须回退到旧应用，先按归档receipt恢复准确unit文件及drop-in、owner/mode，再daemon-reload，保持disabled/inactive；确认原root/挂载可用后才执行原应用回退。不得恢复已删除登录态或启用网页派发。第二次切换后的回退版本也须使用独立Synclip helper。
 
+归档后禁止用标准deploy主动安装R1或任何仅识别旧root的cleaner：原事务每次都会安装candidate清理器，不能等发布后再补装新reader。R2同次失败的自动回退不重装旧cleaner，且归档尚未执行；这与日后主动回退不同。主动恢复旧cleaner必须先以当时实际active/rollback定锚，在原FD9、cleanup和归档三把provider锁下把runtime原子恢复至旧root，核实目录、receipt及锁身份，再准备符合既有源祖先守卫的恢复候选并发布。可继续保留能读双路径的新cleaner；不创造未实现的app-only发布入口。旧unit仍保持不存在或disabled/inactive，不恢复登录态。
+
 ### R08内部Journal边界修复的切换约束
 
 候选`e4fd4a6b`屏蔽内部journal通用接口及Trash旁路。历史purge可在删task事务提交后、删对象前崩溃；live task/session已不存在，原检查不足以区分同命名空间的Journal checkpoint。因此仅在原private purgeScope保存同事务kind身份，缺可信身份的旧Native对象保持pending；不删CP/Job/grant，不另建表或迁移。私有身份从公开响应与外部清理参数剥离，保护项不占原列表/处理配额。
