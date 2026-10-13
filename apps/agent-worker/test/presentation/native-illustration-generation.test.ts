@@ -3,10 +3,12 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { createAgentSession, submitAgentTask, markTaskProgress } from '../../../../packages/domain/src/agent/agent';
-import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../../../packages/domain/src/agent/research-run';
+import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults } from '../../../../packages/domain/src/agent/research-run';
 import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
-import { createPresentationGenerationHandler } from '../../src/presentation/handler';
+import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
+import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../../src/index';
+import * as nativeHost from '../../src/native-agent/host-task';
 import * as scenePlanning from '../../src/presentation/scene-image';
 import { SynclipVideoTimingError } from '../../src/presentation/synclip-video-spool';
 import type { runHostedNativeTask } from '../../src/native-agent/host-task';
@@ -166,6 +168,96 @@ async function failedNativeImage() {
   return { ...f, run, image, input: { actorId: id(1), researchObjectId: id(3), runId: run.id,
     expectedVersion: run.version, idempotencyKey: 'recover-existing-native-png' } };
 }
+
+describe('automatic original paid Native image admission through the existing Worker', () => {
+  it('reclaims startup attempt2, then admits one private original PNG through default maintenance, outbox and actual handler', async () => {
+    const f = await failedNativeImage();
+    const original = { tasks: f.db.agentTasks.map(task => task.id), ledger: structuredClone(f.db.usageLedger), payload: structuredClone(f.image.payload) };
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
+    let current = 0, complete = false, reviewCalls = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => current);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'MiniMax-M3',
+      content: ++reviewCalls === 1 ? [
+        { type: 'tool_use', id: 'image-skill', name: 'skill_view', input: { name: 'openscience-source-review' } },
+        { type: 'tool_use', id: 'image-view', name: 'paper_image_view', input: {} },
+      ] : [{ type: 'text', text: JSON.stringify({ decision: 'accepted', summary: 'The source-supported regions are connected.', repairInstruction: null }) }],
+      stop_reason: reviewCalls === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } })));
+    const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('minimax-key-1-model-1',
+      { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, fetcher)],
+    illustrationReviewPolicy: async () => true, authorizeIllustrationReview: input => requireIllustrationReviewSubmission(f.deps.prisma, input) });
+    const generate = vi.spyOn(gateway, 'generateImage'), replan = vi.spyOn(gateway, 'completeStructured');
+    const canResume = vi.spyOn(gateway, 'canResumeImageFromCompletedResult').mockImplementation(async requestId => complete && requestId === f.image.id);
+    const resume = vi.spyOn(gateway, 'resumeImageFromCompletedResult').mockImplementation(async requestId => {
+      expect(requestId).toBe(f.image.id);
+      return { bytes: png, contentType: 'image/png', provider: 'synclip', model: 'gpt-image-2.5', promptHash: 'c'.repeat(64) };
+    });
+    // Replace only the OS process for this new image-role phase. The real SDK history, image view,
+    // source/permission checks, review checkpoint, private store and handler terminal CAS are retained.
+    const host = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementation(async input => {
+      expect(input.config.sourceTools.map(tool => tool.name)).toContain('paper_image_view');
+      const tools = ['skill_view', 'paper_image_view'].map(name => ({ type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } } }));
+      const messages: Array<Record<string, unknown>> = [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }];
+      const first = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages, tools });
+      messages.push(first.choices[0]!.message as unknown as Record<string, unknown>);
+      for (const tool of first.choices[0]!.message.tool_calls ?? []) {
+        const args = JSON.parse(tool.function.arguments);
+        await input.authorize();
+        const result = tool.function.name === 'skill_view' ? { success: true, content: 'Compare the shown relation to its approved source.' }
+          : await input.paper.call(tool.function.name, args, 0, tool.id);
+        messages.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(result) });
+        if (tool.function.name === 'paper_image_view') {
+          if (!input.paper.images) throw new Error('Image view fixture must supply the actual saved PNG');
+          const image = await input.paper.images(args, result);
+          messages.push({ role: 'user', content: image.content });
+        }
+      }
+      const last = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages, tools });
+      return { finalResponse: last.choices[0]!.message.content!, observedPassageIds: [] };
+    });
+    const lists = new Map<string, string[]>([['agent:queue', []], ['agent:queue:processing', [f.image.id]]]);
+    const move = async (from: string, to: string) => {
+      const id = lists.get(from)?.pop() ?? null;
+      if (id) lists.set(to, [id, ...(lists.get(to) ?? [])]);
+      return id;
+    };
+    const redis = { lrange: async (key: string) => [...(lists.get(key) ?? [])],
+      lindex: async (key: string, index: number) => (lists.get(key) ?? []).at(index) ?? null,
+      rpoplpush: move, brpoplpush: move,
+      lpush: async (key: string, id: string) => { lists.set(key, [id, ...(lists.get(key) ?? [])]); return lists.get(key)!.length; },
+      lrem: async (key: string, _count: number, id: string) => { const rows = lists.get(key) ?? [], at = rows.indexOf(id); if (at < 0) return 0; rows.splice(at, 1); return 1; } };
+    const deps = { ...f.deps, redis, nativeSceneImageEnabled: true,
+      inspectImageRecoveryState: async (requestId: string) => await gateway.canResumeImageFromCompletedResult(requestId) ? 'completed' as const : 'unsafe' as const } as unknown as WorkerDeps;
+    const handler = createPresentationGenerationHandler({ gateway, nativeAgent: { gateway, inboxRoot: '/unused-test-socket',
+      runtime: f.deps.nativeAgentRuntime, renderPages: async () => [] } });
+    Object.assign(f.image, { status: 'running', error: null });
+    Object.assign(f.run, { status: 'generating_scene_images', lastReconciledAt: null });
+    Object.assign(f.db.hermesResearchSteps.find(step => step.agentTaskId === f.image.id)!, { status: 'running', error: null });
+    try {
+      expect(await recoverProcessingQueue(deps)).toBe(1);
+      const poll = await createPollOnce({ 'presentation.generate': handler });
+      expect(await poll(deps)).toBe(true);
+      expect(f.image).toMatchObject({ status: 'failed', executionAttempt: 2, retryCount: 0,
+        error: '[blocked] Previous paid image attempt has no saved result; explicit new generation is required' });
+      expect(resume).not.toHaveBeenCalled();
+      complete = true; current = 5_000; f.run.lastReconciledAt = null;
+      expect(await poll(deps)).toBe(true);
+      expect(f.image).toMatchObject({ status: 'succeeded', executionAttempt: 3, retryCount: 1, payload: original.payload,
+        result: { assetId: f.image.id, imageReview: { decision: 'accepted' } } });
+      const admitted = f.db.presentationAssets.filter(asset => asset.id === f.image.id);
+      expect(admitted).toHaveLength(1);
+      expect(admitted[0]).toMatchObject({ kind: 'image', status: 'draft', contentHash: sha(png), generatorVersion: 'gpt-image-2.5' });
+      expect(f.putObject.mock.calls.filter(([key]) => key.endsWith('.png')).map(([, body]) => Buffer.from(body))).toEqual([png]);
+      expect(resume).toHaveBeenCalledTimes(1);
+      expect(generate).not.toHaveBeenCalled(); expect(replan).not.toHaveBeenCalled();
+      expect(f.db.agentTasks.map(task => task.id)).toEqual(original.tasks);
+      expect(f.db.usageLedger).toEqual(original.ledger);
+      expect(f.db.researchObjects[0].visibility).toBe('private');
+      expect(await recoverCompletedHermesSceneImageResults(deps)).toMatchObject({ resumed: 0 });
+      expect(f.db.presentationAssets.filter(asset => asset.id === f.image.id)).toHaveLength(1);
+      expect(fetcher).toHaveBeenCalledTimes(2); // remaining scientific review, never a new image generation
+    } finally { host.mockRestore(); canResume.mockRestore(); resume.mockRestore(); generate.mockRestore(); replan.mockRestore(); clock.mockRestore(); }
+  });
+});
 
 describe('ordinary-user native illustration through real task/store/asset boundaries', () => {
   it.each(['noncommercial', 'timing', 'stale-lease'] as const)('keeps the native video executor and timing receipt bound through the real handler: %s', async mode => {

@@ -30,6 +30,7 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
+  recoverCompletedHermesSceneImageResults, type HermesResearchRunDeps,
   AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
   parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
   purgeExpiredTrash,
@@ -328,7 +329,8 @@ export interface WorkerVideoReadinessDeps extends HermesVideoReadinessDeps {
   videoEnabled?: boolean;
   readVideoReadiness?: NativeVideoReadinessReader;
 }
-export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; sceneImageEnabled?: boolean; nativeImageReaderReady?: boolean };
+export type WorkerDeps = AgentDeps & WorkerVideoReadinessDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner; nativeSceneImageEnabled?: boolean; sceneImageEnabled?: boolean; nativeImageReaderReady?: boolean;
+  inspectImageRecoveryState?: HermesResearchRunDeps['inspectImageRecoveryState'] };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number; retryCount?: number; recoveryContract?: string },
@@ -1015,6 +1017,44 @@ export function createResearchRunReconcileScheduler(options: {
   };
 }
 
+/** Inspect bounded managed-run pages; only Domain can restore an original paid task to the outbox. */
+export function createCompletedSceneImageRecoveryScheduler(options: {
+  intervalMs?: number;
+  now?: () => number;
+  stopping?: () => boolean;
+  recover?: typeof recoverCompletedHermesSceneImageResults;
+  onError?: (error: unknown) => void;
+} = {}): (deps: WorkerDeps) => Promise<boolean> {
+  const intervalMs = options.intervalMs ?? 5_000;
+  const clock = options.now ?? (() => performance.now());
+  const stopping = options.stopping ?? (() => false);
+  const recover = options.recover ?? recoverCompletedHermesSceneImageResults;
+  const onError = options.onError ?? ((error: unknown) => console.error('Hermes completed scene image recovery error', error));
+  let nextAt = Number.NEGATIVE_INFINITY;
+  let afterRunId: string | undefined;
+  let inFlight = false;
+  return async (deps) => {
+    if (stopping() || inFlight || !deps.nativeSceneImageEnabled || !deps.inspectImageRecoveryState) return false;
+    const current = clock();
+    if (current < nextAt) return false;
+    nextAt = current + intervalMs;
+    inFlight = true;
+    try {
+      const page = await recover(deps, { limit: 20, ...(afterRunId === undefined ? {} : { afterRunId }) });
+      // A full page advances even with no completed spool. An absent cursor wraps
+      // the next scan, so early unsafe rows cannot hide later paid completions.
+      afterRunId = page.cursor;
+      if (page.errors > 0) onError(new Error(`Completed scene image recovery: ${page.errors} of ${page.inspected} inspected runs failed`));
+      return true;
+    } catch (error) {
+      onError(error);
+      return false;
+    } finally {
+      inFlight = false;
+    }
+  };
+}
+
 /** Single-consumer startup recovery for tasks stranded by a previous worker process. */
 export async function recoverProcessingQueue(deps: WorkerDeps, stopping: () => boolean = () => false): Promise<number> {
   let recovered = 0;
@@ -1069,12 +1109,15 @@ export async function createPollOnce(
   const stopping = options.stopping ?? (() => false);
   const reconcileRuns = runMaintenance ? createResearchRunReconcileScheduler() : undefined;
   const resumeVideoTasks = runMaintenance ? createVideoReadinessResumeScheduler() : undefined;
+  const recoverSceneImages = runMaintenance ? createCompletedSceneImageRecoveryScheduler({ stopping }) : undefined;
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     if (stopping()) return false;
     if (reconcileRuns) {
       await reconcileRuns(deps);
       if (stopping()) return false;
       await resumeVideoTasks!(deps);
+      if (stopping()) return false;
+      await recoverSceneImages!(deps);
       if (stopping()) return false;
       await recoverUndispatchedAgentTasks(deps);
     }
@@ -1336,6 +1379,11 @@ async function main(): Promise<void> {
         nativeImageReview: createNativeImageReviewSubmission(prisma) },
       illustrationReviewPolicy,
     );
+    if (deps.nativeSceneImageEnabled) {
+      deps.inspectImageRecoveryState = async requestId => (
+        await gateway.canResumeImageFromCompletedResult(requestId) ? 'completed' : 'unsafe'
+      );
+    }
     const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata, 16 * 60_000);
     const rasterJobAdapter = createParserRasterJobClient(parserJobDir, expectedSidecarParserMetadata);
     const parserCascade = createWorkerParserCascade(
@@ -1388,10 +1436,12 @@ async function main(): Promise<void> {
     const maintenance = (async () => {
       const reconcileRuns = createResearchRunReconcileScheduler();
       const resumeVideoTasks = createVideoReadinessResumeScheduler();
+      const recoverSceneImages = createCompletedSceneImageRecoveryScheduler({ stopping: () => stopping });
       while (!stopping) {
         try {
           await reconcileRuns(deps);
           if (!stopping) await resumeVideoTasks(deps);
+          if (!stopping) await recoverSceneImages(deps);
           if (!stopping) await recoverUndispatchedAgentTasks(deps);
         } catch (error) {
           console.error('agent-worker maintenance error', error);

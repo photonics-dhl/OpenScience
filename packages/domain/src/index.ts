@@ -173,7 +173,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration,
+  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,

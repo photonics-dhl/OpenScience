@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { initialNativeAgentExecution } from '@openscience/domain';
-import { createAudioAuditionAuthorization, createPollOnce, createWorkerDeps, createResearchRunReconcileScheduler, reconcileResearchRunsTick, recoverProcessingQueue, type TaskHandler, type WorkerDeps } from '../src/index';
+import * as domain from '@openscience/domain';
+import { createAudioAuditionAuthorization, createPollOnce, createWorkerDeps, createResearchRunReconcileScheduler, createCompletedSceneImageRecoveryScheduler, reconcileResearchRunsTick, recoverProcessingQueue, type TaskHandler, type WorkerDeps } from '../src/index';
 
 describe('agent-worker durable queue recovery', () => {
   it('carries the actual bootstrap runtime into automatic review and storyboard creation', async () => {
@@ -123,6 +124,170 @@ describe('agent-worker durable queue recovery', () => {
     expect(task).toEqual(before);
     expect(lists.get('agent:queue:processing')).toEqual([task.id]);
     expect(lists.get('agent:queue')).toEqual([]);
+  });
+});
+
+describe('completed paid scene image maintenance scheduling', () => {
+  const enabled = (): WorkerDeps => ({ nativeSceneImageEnabled: true,
+    inspectImageRecoveryState: async () => 'unsafe' } as WorkerDeps);
+
+  it('reports partial transaction failures, advances past a full page without completed spools, then wraps', async () => {
+    let current = 0;
+    const pages = [
+      { inspected: 20, resumed: 0, errors: 3, cursor: 'run-020' },
+      { inspected: 2, resumed: 1, errors: 0 },
+      { inspected: 0, resumed: 0, errors: 0 },
+    ];
+    const recover = vi.fn<typeof domain.recoverCompletedHermesSceneImageResults>()
+      .mockImplementation(async () => pages.shift()!);
+    const errors: unknown[] = [];
+    const tick = createCompletedSceneImageRecoveryScheduler({ now: () => current, recover, onError: error => errors.push(error) });
+    const deps = enabled();
+    expect(await tick(deps)).toBe(true);
+    current = 4_999;
+    expect(await tick(deps)).toBe(false);
+    current = 5_000;
+    expect(await tick(deps)).toBe(true);
+    current = 10_000;
+    expect(await tick(deps)).toBe(true);
+    expect(recover.mock.calls).toEqual([
+      [deps, { limit: 20 }], [deps, { limit: 20, afterRunId: 'run-020' }], [deps, { limit: 20 }],
+    ]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(Error);
+    expect((errors[0] as Error).message).toBe('Completed scene image recovery: 3 of 20 inspected runs failed');
+  });
+
+  it('contains a rejected page, retains its cursor and throttles the next attempt', async () => {
+    let current = 0;
+    const unavailable = Error('recovery DB unavailable');
+    const recover = vi.fn<typeof domain.recoverCompletedHermesSceneImageResults>()
+      .mockResolvedValueOnce({ inspected: 20, resumed: 0, errors: 0, cursor: 'run-020' })
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce({ inspected: 1, resumed: 0, errors: 0 });
+    const errors: unknown[] = [];
+    const tick = createCompletedSceneImageRecoveryScheduler({ now: () => current, recover, onError: error => errors.push(error) });
+    const deps = enabled();
+    await tick(deps);
+    current = 5_000;
+    expect(await tick(deps)).toBe(false);
+    current = 5_001;
+    expect(await tick(deps)).toBe(false);
+    current = 10_000;
+    expect(await tick(deps)).toBe(true);
+    expect(errors).toEqual([unavailable]);
+    expect(recover.mock.calls.slice(1)).toEqual([
+      [deps, { limit: 20, afterRunId: 'run-020' }], [deps, { limit: 20, afterRunId: 'run-020' }],
+    ]);
+  });
+
+  it('skips without the configured native payer or completed-result reader', async () => {
+    const recover = vi.fn<typeof domain.recoverCompletedHermesSceneImageResults>()
+      .mockResolvedValue({ inspected: 0, resumed: 0, errors: 0 });
+    const tick = createCompletedSceneImageRecoveryScheduler({ now: () => 0, recover });
+    expect(await tick({ ...enabled(), inspectImageRecoveryState: undefined })).toBe(false);
+    expect(await tick({ ...enabled(), nativeSceneImageEnabled: false })).toBe(false);
+    expect(recover).not.toHaveBeenCalled();
+    expect(await tick(enabled())).toBe(true);
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not overlap slow scans after the interval and refuses new scans during shutdown', async () => {
+    let current = 0, stopped = false;
+    let finish!: (page: Awaited<ReturnType<typeof domain.recoverCompletedHermesSceneImageResults>>) => void;
+    const recover = vi.fn<typeof domain.recoverCompletedHermesSceneImageResults>()
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
+      .mockResolvedValue({ inspected: 0, resumed: 0, errors: 0 });
+    const tick = createCompletedSceneImageRecoveryScheduler({ now: () => current, stopping: () => stopped, recover });
+    const deps = enabled();
+    const first = tick(deps);
+    current = 5_000;
+    expect(await tick(deps)).toBe(false);
+    stopped = true;
+    finish({ inspected: 20, resumed: 0, errors: 0, cursor: 'run-020' });
+    expect(await first).toBe(true);
+    expect(await tick(deps)).toBe(false);
+    expect(recover).toHaveBeenCalledTimes(1);
+    stopped = false;
+    expect(await tick(deps)).toBe(true);
+    expect(recover.mock.calls[1]).toEqual([deps, { limit: 20, afterRunId: 'run-020' }]);
+  });
+
+  // Domain admission/receipt proofs and the real image handler are covered by the owner's tests.
+  // Only the Domain recovery boundary is replaced here; startup, claim, outbox and terminal writes are real.
+  async function queueFixture(kind = 'presentation.generate') {
+    const { prisma, db } = createFakePrisma();
+    const session = await prisma.agentSession.create({ data: { userId: uuid(99), kind: 'research', researchObjectId: null, deletedAt: null } });
+    const task = await prisma.agentTask.create({ data: { sessionId: session.id, kind,
+      payload: { schemaVersion: 1, kind: 'image', sceneImage: { storyboardAssetId: 'original-parent', sceneIndex: 0 } },
+      deletedAt: null, status: 'running', executionAttempt: 1, dispatchedAt: new Date() } });
+    const lists = new Map<string, string[]>([['agent:queue', []], ['agent:queue:processing', [task.id]]]);
+    const move = async (source: string, destination: string) => {
+      const id = lists.get(source)?.pop() ?? null;
+      if (id) lists.set(destination, [id, ...(lists.get(destination) ?? [])]);
+      return id;
+    };
+    const redis = {
+      lrange: async (key: string) => [...(lists.get(key) ?? [])],
+      lindex: async (key: string, index: number) => (lists.get(key) ?? []).at(index) ?? null,
+      rpoplpush: move, brpoplpush: move,
+      lpush: async (key: string, id: string) => { lists.set(key, [id, ...(lists.get(key) ?? [])]); return lists.get(key)!.length; },
+      lrem: async (key: string, _count: number, id: string) => {
+        const rows = lists.get(key) ?? [], index = rows.indexOf(id);
+        if (index < 0) return 0;
+        rows.splice(index, 1); return 1;
+      },
+    };
+    return { task, db, lists, deps: { ...enabled(), prisma, redis, mailer: createFakeMailer() } as unknown as WorkerDeps };
+  }
+
+  it('default polling runs recovery before the outbox after startup claim attempt 2 fails without the late result', async () => {
+    let current = 0, completed = false;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => current);
+    const f = await queueFixture();
+    const recover = vi.spyOn(domain, 'recoverCompletedHermesSceneImageResults').mockImplementation(async (deps, options) => {
+      expect(deps).toBe(f.deps); expect(options).toEqual({ limit: 20 });
+      if (!completed) return { inspected: 1, resumed: 0, errors: 0 };
+      expect(f.task.status).toBe('failed'); expect(f.task.executionAttempt).toBe(2);
+      // Simulate Domain's committed pending original task; the actual outbox must deliver it.
+      f.task.status = 'pending'; f.task.error = null; f.task.dispatchedAt = null;
+      return { inspected: 1, resumed: 1, errors: 0 };
+    });
+    const claims: number[] = [];
+    const handler: TaskHandler = async (_deps, task) => {
+      claims.push(task.executionAttempt);
+      if (!completed) throw Error('completed original result unavailable');
+      return { recoveredOriginalResult: true };
+    };
+    try {
+      expect(await recoverProcessingQueue(f.deps)).toBe(1);
+      const poll = await createPollOnce({ 'presentation.generate': handler });
+      expect(await poll(f.deps)).toBe(true);
+      expect(f.task).toMatchObject({ status: 'failed', executionAttempt: 2, retryCount: 0 });
+      expect(f.lists.get('agent:queue:processing')).toEqual([]);
+      completed = true; current = 4_999;
+      expect(await poll(f.deps)).toBe(false);
+      current = 5_000;
+      expect(await poll(f.deps)).toBe(true);
+      expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 3, retryCount: 0, result: { recoveredOriginalResult: true } });
+      expect(claims).toEqual([2, 3]);
+      expect(f.db.agentTasks).toHaveLength(1);
+      expect(f.lists.get('agent:queue')).toEqual([]);
+      expect(f.lists.get('agent:queue:processing')).toEqual([]);
+    } finally { recover.mockRestore(); clock.mockRestore(); }
+  });
+
+  it('a recovery error does not stop default polling from completing ordinary queued work', async () => {
+    const f = await queueFixture('search.index');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const recover = vi.spyOn(domain, 'recoverCompletedHermesSceneImageResults').mockRejectedValue(Error('recovery unavailable'));
+    try {
+      await recoverProcessingQueue(f.deps);
+      expect(await (await createPollOnce({ 'search.index': async () => ({ indexed: true }) }))(f.deps)).toBe(true);
+      expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 2, result: { indexed: true } });
+      expect(recover).toHaveBeenCalledTimes(1);
+      expect(error).toHaveBeenCalledTimes(1);
+    } finally { recover.mockRestore(); error.mockRestore(); }
   });
 });
 
