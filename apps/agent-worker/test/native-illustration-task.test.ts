@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile, nativeMediaCapabilityGuidance, nativeScienceRepairGuidance, NATIVE_ILLUSTRATION_TOOLS } from '../src/native-agent/illustration-task';
 import { createNativePaperTools, NATIVE_PAPER_TOOLS } from '../src/native-agent/paper-tools';
-import type { DocumentSourceMap } from '@openscience/domain';
-import { materializeIllustrationScience } from '../src/presentation/illustration-planner';
+import type { DocumentSourceMap, StoryboardDocument } from '@openscience/domain';
+import { materializeIllustrationArt, materializeIllustrationScience } from '../src/presentation/illustration-planner';
 import { loadIllustrationStyleSkills } from '../src/presentation/illustration-styles';
 import { normalizeScientificSourceNotation } from '../src/presentation/scientific-comparison';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
@@ -469,6 +469,69 @@ function fixture(options: { scienceFeedback?: boolean; deferDesignGuidance?: boo
   };
   return { tool, messages, invoke, complete, input, restore: () => createNativeIllustrationMaterializer(input) };
 }
+describe('Native VIDEO art follows its accepted scientific scene list', () => {
+  it.each([undefined, 'video-optional-audio-v1'] as const)('clarifies fresh %s art without rewriting an old saved tool definition', contract => {
+    const fresh = nativeIllustrationToolProfile(null, 'video', contract);
+    const art = fresh.sourceTools.find(tool => tool.name === 'paper_illustration_art')!;
+    expect(art.description).toContain('latest accepted science');
+    expect(art.description).toContain('same order');
+    expect(art.description).toContain('styleRecommendations');
+    const oldDescription = NATIVE_ILLUSTRATION_TOOLS.find(tool => tool.name === 'paper_illustration_art')!.description
+      + ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script.';
+    const oldTools = structuredClone(fresh.sourceTools).map(tool => tool.name === 'paper_illustration_art'
+      ? { ...tool, description: oldDescription } : tool);
+    const saved = { turns: [{ request: { options: { tools: oldTools.map(tool => ({ type: 'function', function: tool })) } } }] } as unknown as NativeAgentSessionState;
+    const before = JSON.stringify(saved);
+    expect(nativeIllustrationToolProfile(saved, 'video', contract).sourceTools).toEqual(oldTools);
+    expect(JSON.stringify(saved)).toBe(before);
+    expect(nativeMediaCapabilityGuidance({ output: 'video' }, true)).toEqual([]);
+    expect(nativeMediaCapabilityGuidance({ output: 'video' }, false).join('\n')).toContain('styleRecommendations');
+  });
+  it('requires exactly the five designed scenes and the accepted science ID, without trimming an extra style scene', () => {
+    const profile = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    const videoSettings = { ...settings, output: 'video' as const, narrativeSceneLimit: undefined };
+    const f = fixture({ ...profile, input: { ...profile, settings: videoSettings } });
+    f.invoke('paper_illustration_context', {}, 'context');
+    const candidate = { ...structuredClone(science), videoProduction: { schemaVersion: 1, narrativeArc: 'question-mechanism-takeaway',
+      visualContinuity: 'Preserve the same connected regions.', audioPolicy: 'external-narration', modelPolicy: 'commercial-primary' },
+      scenes: Array.from({ length: 5 }, () => ({ ...structuredClone(science.scenes[0]!), durationSeconds: 5,
+        videoDirection: { shotType: 'mechanism', purpose: 'Explain the connected regions.', subjectLock: 'The same connected regions',
+          generatedElements: 'Only the connected regions', motion: 'Highlight the connection without moving the regions.', camera: 'Fixed camera',
+          reference: 'scene-artwork', frameStrategy: 'start-reference', audioMode: 'external-narration', subtitleMode: 'none',
+          negativeConstraints: ['No invented scientific objects'], modelPolicy: 'commercial-primary' } })) };
+    const accepted = f.invoke('paper_illustration_science', candidate, 'accepted-science');
+    expect(accepted, JSON.stringify(accepted)).toMatchObject({ status: 'science_ready' });
+    const entries = Array.from({ length: 5 }, () => ({ layout: 'Put label 0 above subject 0.', treatment: 'Crisp ink on white paper.' }));
+    expect(f.invoke('paper_illustration_art', { scienceToolCallId: 'wrong-science', scenes: entries }, 'wrong-id'))
+      .toMatchObject({ status: 'invalid_illustration', error: 'exact_science_tool_required' });
+    expect(f.invoke('paper_illustration_art', { scienceToolCallId: 'accepted-science', scenes: [...entries, entries[0]] }, 'extra-style-scene'))
+      .toMatchObject({ status: 'invalid_illustration', error: 'art_scene_count_expected_5_actual_6' });
+    const result = f.invoke('paper_illustration_art', { scienceToolCallId: 'accepted-science', scenes: entries }, 'correct-art');
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'art_ready' });
+    expect(() => f.tool.finish(f.messages, '{"reviewToolCallId":"correct-art"}')).toThrow();
+    const intent = accepted.intent as ReturnType<typeof materializeIllustrationScience>;
+    const document = result.document as StoryboardDocument;
+    const base = { document, style: videoSettings.style, locale: videoSettings.locale, output: 'video' };
+    const localSettings = { ...videoSettings, revisionSceneIndex: 2 };
+    expect(() => materializeIllustrationArt({ scenes: entries }, intent, claims as never, localSettings, new Map(), base as never))
+      .toThrow('art_scene_count_expected_1_actual_5');
+    const local = materializeIllustrationArt({ scenes: [entries[2]] }, intent, claims as never, localSettings, new Map(), base as never);
+    for (const index of [0, 1, 3, 4]) expect(local.scenes[index]).toEqual(document.scenes[index]);
+    // IMAGE originals use the existing available-source path; VIDEO cannot gain paperOriginal fields.
+    const imageSettings = { ...settings, narrativeSceneLimit: undefined };
+    const originalRef = { assetId: '30000000-0000-4000-8000-000000000001', objectKey: `blobs/aa/aa/${'a'.repeat(64)}`,
+      contentHash: 'a'.repeat(64), figureId: 'Fig. 1', sourceClaimId: claims[0]!.id };
+    const originals = new Map([[originalRef.assetId, originalRef]]);
+    const imageScience = { ...structuredClone(science), scenes: Array.from({ length: 5 }, () => structuredClone(science.scenes[0]!)) };
+    imageScience.scenes[0]!.paperOriginalAssetId = originalRef.assetId as never;
+    const original = materializeIllustrationScience(imageScience, claims as never, imageSettings, originals);
+    expect(() => materializeIllustrationArt({ scenes: entries }, original, claims as never, imageSettings, originals))
+      .toThrow('art_scene_count_expected_4_actual_5');
+    const reused = materializeIllustrationArt({ scenes: entries.slice(1) }, original, claims as never, imageSettings, originals);
+    expect(reused.scenes[0]!.paperOriginal).toEqual(original.scenes[0]!.paperOriginal);
+    expect(reused.scenes).toHaveLength(5);
+  });
+});
 describe('Native designed scenes omit the nullable original reference', () => {
   it('requires a compact direct science repair call after validator feedback', () => {
     const description = nativeIllustrationToolProfile(null).sourceTools

@@ -215,7 +215,7 @@ const NATIVE_VIDEO_TOOLS = NATIVE_ILLUSTRATION_TOOLS.map(tool => tool.name === '
     ? { ...tool, parameters: object({ scienceToolCallId: str, sceneIndex: { type: 'integer', minimum: 0, maximum: 5 }, scene: VIDEO_SCIENCE_SCENE }) }
     : { ...tool, description: tool.name === 'paper_illustration_context' ? VIDEO_CONTEXT_DESCRIPTION : tool.description + (tool.name === 'paper_illustration_review'
       ? ' Review the complete video plan, narration, timing, source-bound motion, global continuity and both exact frame/video prompts; accepting only a still image is insufficient.'
-      : tool.name === 'paper_illustration_art' ? ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script.' : '') });
+      : tool.name === 'paper_illustration_art' ? ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script. Generate exactly one art object for each scene needing design in the latest accepted science, in the same order. Skip preserved original-paper scenes and unchanged scenes outside the selected local revision. Put a style alternative inside that scene\'s existing styleRecommendations; never add an extra scene for an alternative style. Count from the accepted science, not a prior rejected candidate.' : '') });
 
 // Keep the prior video definitions exact: their schemas and context receipts are paid history.
 const OPTIONAL_AUDIO_VIDEO_SCIENCE_DESCRIPTION = VIDEO_SCIENCE_DESCRIPTION + ' Audio defaults to external-narration for the plan and every scene. Use native-first only when explicitly requested, with audioMode native in every scene. Provider-generated audio must stay grounded in the scene narration and is unverified; exact wording, speaker, timing and quality are not guaranteed. Mixed modes, silent, hybrid and compare-before-publish are unsupported.';
@@ -529,6 +529,7 @@ export function nativeMediaCapabilityGuidance(settings: Pick<StoryboardRequest, 
   if (saved) return [];
   if (settings.output === 'video') return [
     '如果目标包含视频，先通过skills_list定位并用skill_view完整读取openscience-synclip-capabilities，再完整读取openscience-research-video；先从论文原文、Claims、Evidence和已确认分镜形成短镜头方案，只提交私有候选。不得在合同核验前调用未接通的 Synclip 视频 API，也不得从博客猜模型值、时长、参考图字段或重试规则。',
+    '视频艺术阶段只为最新成功science中需要设计的场景逐一给出art对象，顺序一致；保留原论文图和局部修订中无需重绘的场景不占art条目。以成功science为准，不沿用被拒候选的场景数。风格备选写入同一场景已有的styleRecommendations，不得当作额外一幕；场景不匹配时修正art，不删除科学场景或跳过审阅。',
   ];
   return [
     '若方案涉及图片，先通过skills_list定位并用skill_view完整读取openscience-synclip-capabilities，再按其中记录的已验证server contract选择通道。博客文章只能提供能力线索，不能替代API合同；当前API合同的主模型是Synclip gpt-image-2.5，只有明确返回模型不可用时才一次性降级到gpt-image-2，并将实际模型写入receipt与生成器版本。视频请求必须另行完成合同核验，不得在此任务中自行调用未接通的Synclip视频适配器。',
