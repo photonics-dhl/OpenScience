@@ -274,6 +274,8 @@ describe('Hermes durable research run', () => {
       now: () => new Date(current) } as never;
     const tick = () => { current += 6_000; return reconcileHermesResearchRuns(deps); };
     const generationTasks = () => db.agentTasks.filter((task) => task.kind === 'presentation.generate');
+    Object.assign(prisma.agentTask, { count: async ({ where }: { where: { kind: string; payload: { path: string[]; equals: string } } }) =>
+      generationTasks().filter(task => task.kind === where.kind && task.payload?.hermesRunAuthority?.runId === where.payload.equals).length });
     const finishStage = (stage: string, kind: string) => {
       const steps = db.hermesResearchSteps.filter((step) => step.stage === stage);
       for (const step of steps) {
@@ -472,7 +474,7 @@ async function failedPaidScenes(sceneCount = 1) {
     storyboardCheckpoint: { ...context, executionAttempt: 1, planned: { document, promptHash: review.promptHash, reviewFormat: 2 } },
     storyboardReview: review, illustrationPrompts: document.scenes.map((_, sceneIndex) => ({ sceneIndex, prompt: `Verified frame ${sceneIndex}` })) } });
   parent.result.nativeAgentExecution.checkpoint = checkpoint;
-  f.db.presentationAssets.push({ id: parent.id, researchObjectId: paidIds.ro, versionId: paidIds.version, kind: 'interactive_html', status: 'draft', deletedAt: null,
+  f.db.presentationAssets.push({ id: parent.id, researchObjectId: paidIds.ro, versionId: paidIds.version, kind: 'interactive_html', status: 'approved', deletedAt: null,
     contentHash: parent.result.contentHash, createdAt: paidTime, updatedAt: paidTime,
     provenance: { source: 'verified_claims', subtype: 'sourced_storyboard', taskId: parent.id, sourceEvidenceIdentity,
       storyboardSettings: structuredClone(parent.payload.storyboard), storyboardDocument: document, illustrationReview: review } });
@@ -480,8 +482,8 @@ async function failedPaidScenes(sceneCount = 1) {
   await reconcileHermesResearchRuns(f.deps);
   await reconcileHermesResearchRuns(f.deps);
   const images = f.generated().filter(item => item.payload.kind === 'image');
-  expect(images).toHaveLength(sceneCount);
   expect(f.errors.map(String)).toEqual([]);
+  expect(images).toHaveLength(sceneCount);
   for (const image of images) Object.assign(image, { status: 'failed', executionAttempt: 1, retryCount: 0, error: 'image generation failed' });
   for (const step of f.db.hermesResearchSteps.filter(item => item.stage === 'scene_image')) Object.assign(step, { status: 'failed', error: 'image generation failed' });
   Object.assign(f.run(), { status: 'failed', error: 'image generation failed' });
