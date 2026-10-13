@@ -174,6 +174,22 @@ describe('automatic original paid Native image admission through the existing Wo
     const f = await failedNativeImage();
     Object.assign(f.deps.prisma.usageLedger, { findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
       f.db.usageLedger.find(row => row.idempotencyKey === where.idempotencyKey) ?? null });
+    const findLedger = f.deps.prisma.usageLedger.findFirst.bind(f.deps.prisma.usageLedger);
+    vi.spyOn(f.deps.prisma.usageLedger, 'findFirst').mockImplementation(async args => args?.where?.idempotencyKey
+      ? f.db.usageLedger.find(row => Object.entries(args.where!).every(([key, value]) => row[key] === value)) ?? null
+      : findLedger(args));
+    Object.assign(f.deps.prisma.presentationAsset, {
+      findUniqueOrThrow: async (args: Parameters<typeof f.deps.prisma.presentationAsset.findUnique>[0]) => {
+        const row = await f.deps.prisma.presentationAsset.findUnique(args);
+        if (!row) throw new Error('Missing fixture presentation asset');
+        return row;
+      },
+      update: async (args: Parameters<typeof f.deps.prisma.presentationAsset.update>[0]) => {
+        const changed = await f.deps.prisma.presentationAsset.updateMany({ where: args.where, data: { provenance: args.data.provenance } });
+        if (changed.count !== 1) throw new Error('Missing fixture presentation asset');
+        return f.deps.prisma.presentationAsset.findUniqueOrThrow({ where: args.where });
+      },
+    });
     const original = { tasks: f.db.agentTasks.map(task => task.id), ledger: structuredClone(f.db.usageLedger), payload: structuredClone(f.image.payload) };
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
     let current = 0, complete = false, reviewCalls = 0;
@@ -243,7 +259,8 @@ describe('automatic original paid Native image admission through the existing Wo
       expect(resume).not.toHaveBeenCalled();
       complete = true; current = 5_000; f.run.lastReconciledAt = null;
       expect(await poll(deps)).toBe(true);
-      expect(f.image).toMatchObject({ status: 'succeeded', executionAttempt: 3, retryCount: 1, payload: original.payload,
+      const savedTask = await deps.prisma.agentTask.findUniqueOrThrow({ where: { id: f.image.id } });
+      expect(savedTask, `${savedTask.error ?? ''}; ${String(f.transactionError() ?? '')}`).toMatchObject({ status: 'succeeded', executionAttempt: 3, retryCount: 1, payload: original.payload,
         result: { assetId: f.image.id, imageReview: { decision: 'accepted' } } });
       const admitted = f.db.presentationAssets.filter(asset => asset.id === f.image.id);
       expect(admitted).toHaveLength(1);
