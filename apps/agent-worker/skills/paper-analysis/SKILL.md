@@ -1,10 +1,12 @@
 ---
 name: paper-analysis
-description: Hermes 服务器论文理解工作流。用于真实论文高级解析、全文覆盖、跨章节综合、证据核验、物理审查和 SDF 建议；不用于普通问答。
+description: 历史固定Worker论文理解工作流档案，保留当时全文覆盖与恢复设计。不用于现役原生Hermes路由，也不授权网页审阅、重发或科学放行。
 version: 3
 ---
 
 # Hermes Paper Analysis
+
+> **HISTORICAL：本文件不在现役运行加载闭包内。** 固定Worker实际方法来自`apps/agent-worker/src/skills/paper-analysis.ts`；原生Hermes目录由`infra/hermes-agent/install.py`安装现役科学方法，不复制本文件。2026-10-13已授权退役旧网页生图/审阅通道，下文网页阶段及工具名只作历史设计证据，禁止据此新派发。默认任务核对我们的转述是否忠于论文，不对原论文做同行评议；专项批判性评议须用户另行请求。当前入口与边界见能力台账。
 
 该 Skill 必须由服务器任务处理器执行。仅存在本文件、依赖已安装或容器已启动，都不能报告能力已接通。
 
