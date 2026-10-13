@@ -2,7 +2,7 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
-- 2026-10-13：已核实生图聊天人类明确授权部署15601bb0到应用和Synclip执行器并立即一次完整实测；总控委托生图为唯一串行执行方。独立gpt-6.1-sol High随后发现P1：旧成功回执缺model会被新Gateway补为2.5，线上确有12份此类旧回执。156发布暂为NO-GO，image正在原reader/相邻测试收口，video仅复核新增差额；尚无服务器mutation/新生成。保留旧图片、公开版本、paid及2份uncertain记录，不重放。具体运行身份、证据与发布授权边界见CURRENT。
+- 2026-10-13：生图为已授权应用/Synclip更新与一次私有实测的唯一执行方。发布High发现12旧成功回执缺model可能误标2.5，已用原reader两文件最小修复并提交推送f804348c；68/68、Gateway TC/ESLint通过，独立gpt-6.1-sol High GO且P0/P1/P2=0。原156保持历史NO-GO，精确新Media/Journal正在运行，通过后owner直接接续发布实测；未部署/未生成。旧PNG/paid/公开版本及2份unknown保留，legacy无model拒采用且不重发；对象、CI、运行身份与前向恢复边界只见CURRENT。
 - 2026-10-13：Guide第三步范围纠正为图文、视频、HTML与公开评论；用户明确研究页统一讨论、可引用具体文字/媒体。media-comments新效果图已交审，字号、文案、版式仍待认可；示意不证明样本已有视频/HTML/评论，未获得新版产品实现许可。
 - 2026-10-13：沿授权的站内编辑历史创建唯一私有v3；新稿无公开标识，原公开版本/认可图未变，任务87→87、active=0。继承Claims/图片映射已回读，原历史恢复不复制分镜，后续须沿新稿Hermes来源绑定路径规划，不能用旧published parent。精确对象和回执只见CURRENT。
 - 2026-10-13：Guide测试修复已提交并推送，仅改变现有键盘导航验收与截图输出位置，不改产品布局。独立High GO，生产模式3/3、最终附件后1/1及ESLint通过，精确Media/Journal成功；不保留初始首屏输入保证，也不证明新版设计已获认可。Video未变检查复用，完整CI回执见CURRENT。
