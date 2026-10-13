@@ -144,6 +144,10 @@ on:
       - 'apps/web/components/hermes/HermesAssistantDrawer.tsx'
       - 'apps/web/components/hermes/useHermesViewerId.ts'
       - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
+      - 'apps/web/components/hermes/HermesRiggedPortrait.tsx'
+      - 'apps/web/components/hermes/HermesVisualAdapter.tsx'
+      - 'apps/web/lib/hermes/defer-live2d.ts'
+      - 'apps/web/test/hermes-deferred-start.test.ts'
       - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
       - 'apps/web/components/hermes/HermesAudioAuditionPlayer.tsx'
@@ -423,6 +427,10 @@ on:
       - 'apps/web/components/hermes/HermesAssistantDrawer.tsx'
       - 'apps/web/components/hermes/useHermesViewerId.ts'
       - 'apps/web/components/hermes/HermesWorkspaceStage.tsx'
+      - 'apps/web/components/hermes/HermesRiggedPortrait.tsx'
+      - 'apps/web/components/hermes/HermesVisualAdapter.tsx'
+      - 'apps/web/lib/hermes/defer-live2d.ts'
+      - 'apps/web/test/hermes-deferred-start.test.ts'
       - 'apps/web/components/hermes/HermesShellDockAnchor.tsx'
       - 'apps/web/components/hermes/HermesPresentationAction.tsx'
       - 'apps/web/components/hermes/HermesAudioAuditionPlayer.tsx'
@@ -686,11 +694,11 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-result-gallery.test.tsx test/storyboard-panel.test.tsx test/presentation-storyboard-selection.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-guide-recovery.test.ts test/hermes-presentation-intent.test.ts test/start-paper-narrative.test.ts test/media-asset-actions.test.tsx test/hermes-research-run-source-status.test.tsx test/hermes-video-draft.test.ts test/hermes-video-action.test.tsx test/hermes-video-run-panel.test.tsx test/hermes-research-run-panel.test.tsx test/hermes-viewer-session.test.tsx test/hermes-presentation-action.test.ts test/hermes-audio-audition.test.tsx test/api-agent.test.ts
       - name: Lint approved research desktop sources and tests
-        run: npx pnpm@9.15.0 exec eslint apps/web/app/dashboard/page.tsx apps/web/components/dashboard/HermesConversationCard.tsx apps/web/components/dashboard/ResearchList.tsx apps/web/components/hermes/HermesDockAnchor.tsx apps/web/components/hermes/HermesWorkspaceStage.tsx apps/web/lib/api.ts apps/web/lib/dashboard-page-copy.ts apps/web/test/auth-dashboard.test.tsx apps/web/test/e2e/auth-dashboard.spec.ts apps/web/test/e2e/hermes-dashboard.spec.ts apps/web/test/e2e/hermes-workspace-stage.spec.ts apps/web/test/hermes-global-companion.test.tsx
+        run: npx pnpm@9.15.0 exec eslint apps/web/app/dashboard/page.tsx apps/web/components/dashboard/HermesConversationCard.tsx apps/web/components/dashboard/ResearchList.tsx apps/web/components/hermes/HermesDockAnchor.tsx apps/web/components/hermes/HermesWorkspaceStage.tsx apps/web/lib/api.ts apps/web/lib/dashboard-page-copy.ts apps/web/test/auth-dashboard.test.tsx apps/web/test/e2e/auth-dashboard.spec.ts apps/web/test/e2e/hermes-dashboard.spec.ts apps/web/test/e2e/hermes-workspace-stage.spec.ts apps/web/test/hermes-global-companion.test.tsx apps/web/components/hermes/HermesRiggedPortrait.tsx apps/web/components/hermes/HermesVisualAdapter.tsx apps/web/lib/hermes/defer-live2d.ts apps/web/test/hermes-deferred-start.test.ts
       - name: Lint approved Guide sources and regression tests
         run: npx pnpm@9.15.0 exec eslint apps/web/app/guide/page.tsx apps/web/app/research-objects/new/page.tsx apps/web/components/guide/GuideResearchWorkspace.tsx apps/web/components/guide/ResearchGuide.tsx apps/web/components/hermes/HermesWorkspaceStage.tsx apps/web/components/navigation/ProductHeaderActions.tsx apps/web/lib/guide-page-copy.ts apps/web/lib/hermes/companion-surface.ts apps/web/test/e2e/guide-workspace.spec.ts apps/web/test/e2e/vendor-ux.spec.ts apps/web/test/hermes-companion-surface.test.ts apps/web/test/hermes-global-companion.test.tsx apps/web/test/research-guide-data.test.tsx apps/web/test/e2e/researcher-services.spec.ts
       - name: Hermes surface lifetime and dashboard behavior
-        run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/research-guide-data.test.tsx test/guide-workspace-state.test.ts test/auth-dashboard.test.tsx
+        run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-deferred-start.test.ts test/hermes-stage-portal.test.ts test/hermes-companion-surface.test.ts test/hermes-global-companion.test.tsx test/research-guide-data.test.tsx test/guide-workspace-state.test.ts test/auth-dashboard.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
