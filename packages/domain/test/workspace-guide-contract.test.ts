@@ -42,6 +42,16 @@ describe('workspace guide route and semantic target contract', () => {
     expect(parseWorkspaceGuidePayload({ ...firstImage, goal: '请帮我生图' })).toHaveProperty('executionIntent', 'first-image');
     expect(() => parseWorkspaceGuidePayload({ ...firstImage, goal: 'Generate an image, ' + 'x'.repeat(1000) })).toThrow();
   });
+  it.each(['请直接生成一张图片', '直接生成图片', 'Generate an image explaining the scene transitions in this paper.'])(
+    'recognizes an explicit new first-image request: %s', goal => {
+      expect(parseWorkspaceGuidePayload({ ...firstImage, goal })).toHaveProperty('executionIntent', 'first-image');
+    });
+  it.each(['Generate an image for scene 2.', '生成一张图片，用于第2幕', '生成一张图片，给第二幕使用', '生成一张图片，针对场景2'])(
+    'leaves exact-scene requests on the existing parent-scoped route: %s', goal => {
+      expect(() => parseWorkspaceGuidePayload({ ...firstImage, goal })).toThrow();
+      const legacy: Partial<typeof firstImage> = { ...firstImage, goal }; delete legacy.executionIntent;
+      expect(parseWorkspaceGuidePayload(legacy)).not.toHaveProperty('executionIntent');
+    });
   it('accepts only the three workspace route classes and known semantic targets', () => {
     expect(parseWorkspaceGuidePayload(payload)).toEqual(payload);
     expect(parseWorkspaceGuidePayload({ ...payload, route: 'dashboard', target: null }).route).toBe('dashboard');

@@ -67,11 +67,14 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: string[]) => Object.k
 /** This is an execution boundary, not a general natural-language router. */
 export function isExplicitFirstImageRequest(goal: string): boolean {
   const text = goal.trim();
+  // A request for a particular existing scene belongs to the exact-parent/manual path.
+  if (/\b(?:for|of)\s+(?:the\s+)?(?:existing\s+)?scene\s+\d+\b/iu.test(text)
+    || /(?:为|给|用于|针对)\s*(?:(?:现有|已有)的?)?\s*(?:第\s*[一二三四五六七八九十\d]+\s*幕|(?:第\s*)?[一二三四五六七八九十\d]+\s*场景|(?:场景|分镜)\s*[一二三四五六七八九十\d]+)/u.test(text)) return false;
   if (!text
     || /[?？\n\r"“”「」]|(?:不要|不需要|别生成|暂不|仅规划|只规划|先规划|如何|怎么|为什么|是否|能否|助手|论文说|视频|公开|发布|每[张幅个]|多张|一组|[二三四五六七八九十2-9]张)|\b(?:not|don't|only|plan|how|why|whether|assistant|said|video|publish|each|multiple|several|images)\b/iu.test(text)) return false;
   return /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?生图(?:[，,：:\s]|$|[。！!])/u.test(text)
-    || /^(?:请\s*)?(?:帮我\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?(?:生成|画|绘制|制作)(?:一张|一幅|首张|第一张|个|张|幅)?(?:解释性|概念|科学)?(?:图片|配图|插图|图解|图)(?:[，,：:\s]|$|[。！!])/u.test(text)
-    || /^(?:请\s*)?(?:帮我\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?配(?:一张|一幅|张|幅)图(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?(?:生成|画|绘制|制作)(?:一张|一幅|首张|第一张|个|张|幅)?(?:解释性|概念|科学)?(?:图片|配图|插图|图解|图)(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?配(?:一张|一幅|张|幅)图(?:[，,：:\s]|$|[。！!])/u.test(text)
     || /^(?:please\s+)?(?:generate|create|draw|make)\s+(?:(?:one|an?|the first)\s+)?(?:image|illustration|diagram)\b/iu.test(text);
 }
 
