@@ -1,7 +1,7 @@
 ---
 name: openscience-synclip-capabilities
 description: Use the Synclip image and video capability guide for evidence-grounded media planning, model selection, prompting, review, and safe handoff. This is a production guide, not a source of paper facts or an API key.
-version: "2026-10-08"
+version: "2026-10-13"
 ---
 
 # Synclip capability guide
@@ -21,14 +21,15 @@ This guide is the compact operational index for Synclip. It is derived from the 
 
 The current server image route is the Synclip adapter in `packages/ai-gateway/src/synclip-image-api.ts`, `packages/ai-gateway/src/codex-image.ts` and `infra/synclip-image/`. It is selected by `HERMES_SCENE_IMAGE_PROVIDER=synclip` and requires the private host spool to be enabled. The current implementation:
 
-- sends one asynchronous `POST https://api.synclip.ai/v1/image` with `model: "gpt-image-2"`, the reviewed prompt and `aspectRatio: "16:9"`;
+- uses the API-only route: sends `POST https://api.synclip.ai/v1/image` with primary `model: "gpt-image-2.5"`, the reviewed prompt and `aspectRatio: "16:9"`;
+- permits one fallback to `gpt-image-2` only when the submission response explicitly contains a structured model-unavailable code: `model_unavailable`, `model_not_available`, `model_not_found` or `unsupported_model`. Authentication, quota, network, timeout and `UNCERTAIN` outcomes do not permit fallback or another generation POST. Preserve the consumed attempt and reconcile its original task;
 - queries only the saved task with `GET https://api.synclip.ai/v1/tasks/:id` and accepts `queued`, `processing`, `completed` or `failed`;
 - downloads only a completed HTTPS result with an unexpired URL, public IPv4 DNS, bounded bytes and image-dimension checks;
 - uses no reference image in this adapter. The current request protocol intentionally rejects a reference field, so a blog description of image references or editing is not an instruction to add one;
 - stores the request, submission marker, task receipt, result and normalized private PNG through the existing image spool. The Worker then runs the existing image review and publication/approval guards;
 - keeps the API key in the private host configuration. It must never enter a prompt, task payload, log, browser message or Git file.
 
-This current route has real private-draft evidence for `gpt-image-2` and accepted image review, but that proves the present image route can run; it does not prove every Synclip model, the video API, long-term cross-paper quality or the claims in the blog. The authoritative runtime state is the [Hermes CURRENT handoff](../../docs/handoff/2026-09-10-hermes-web-image-handoff.md).
+Historical private-draft `gpt-image-2` results and accepted image reviews demonstrate that earlier route; they do not prove current `gpt-image-2.5` image quality, every Synclip model, the video API, long-term cross-paper quality or the claims in the blog. The installed runtime and original task/attempt/receipt determine what actually ran; changing this source guide does not update the installed Native catalogue. Record requested and actual model separately, and show the user when the permitted fallback was used. The authoritative runtime state and current image acceptance evidence are in the [Hermes CURRENT handoff](../../../docs/handoff/2026-09-10-hermes-web-image-handoff.md).
 
 The video candidate lives in `packages/ai-gateway/src/synclip-video-api.ts`, `apps/agent-worker/src/presentation/synclip-video-spool.ts` and `infra/synclip-video/`. Current [public video documentation](https://synclip.ai/dev/docs/video) restricts `POST /v1/video` to `veo3.1-fast` / `veo3.1-pro`; Pro requires tier t2 or higher. The [admin video documentation](https://synclip.ai/dev/docs/video-admin) places `ltx23` / `ltx23fast` and `seedance2` / `seedance2fast` at `POST /v1/video-admin`, requiring an admin API key. Do not infer that permission from a successful image call. LTX uses `duration_seconds` (5/10/15) and `orientation`; the documented `resolution` field belongs to Seedance. The adapter retains its internal target-resolution field without claiming that LTX guarantees that resolution.
 
@@ -40,7 +41,7 @@ The [audio documentation](https://synclip.ai/dev/docs/audio) provides `GET /v1/v
 
 | Need | Blog-described Synclip option | Use when | Current server status |
 |---|---|---|---|
-| Scientific still or explainer image | GPT Image 2 | The deliverable is a single readable still; fix subject, relationship, layout, labels and exclusions in the brief | **Integrated:** current adapter uses `gpt-image-2`, text-only, 16:9 |
+| Scientific still or explainer image | GPT Image 2 (blog); 2.5 (API contract) | The deliverable is a single readable still; fix subject, relationship, layout, labels and exclusions in the brief | **Integrated:** API-only `gpt-image-2.5` primary; one `gpt-image-2` fallback only for the four structured model-unavailable codes above; text-only, 16:9 |
 | Image Studio template or image-to-image edit | Nano Banana Pro | Identity, restyling, mockup or repeatable template workflow | Blog/UI capability only; not the current server image adapter |
 | Reference-guided cinematic video | LTX (`ltx23`/`ltx23fast`; current admin docs call it 2.5) | Approved first/last frame links; 5/10/15 seconds | Admin-only adapter candidate; permission and private decoded quality still require verification |
 | Public text/image video | Veo 3.1 Fast / Pro | First/last frame or up to three reference images; do not mix those modes | Exact public API values documented; no integrated OpenScience adapter yet |
@@ -105,7 +106,7 @@ The following is the complete 25-post set shown by the blog index on 2026-10-07.
 | [Summer Game Fest](https://synclip.ai/blog/summer-game-fest-2026-announcements) | Build an asset stack: hero, supporting images, summary cards and reusable crops | Editorial example, not a research generation recipe |
 | [Northern Lights](https://synclip.ai/blog/northern-lights-ai-images) | For stills, use restrained palette, foreground scale and realism before spectacle | Topic-specific example; scientific truth still comes from the paper |
 | [SpaceX launch visuals](https://synclip.ai/blog/spacex-ai-launch-visuals) | Start from narrative intent, then make hero/workflow/refinement asset classes | Trend example; no scientific or API contract |
-| [GPT Image 2](https://synclip.ai/blog/how-to-use-gpt-image-2-for-real-content-workflows-in-synclip) | Intent → scoped brief → candidate set → crop/format review → targeted refinement → approval | Current server model matches, but current adapter remains text-only 16:9 |
+| [GPT Image 2](https://synclip.ai/blog/how-to-use-gpt-image-2-for-real-content-workflows-in-synclip) | Intent → scoped brief → candidate set → crop/format review → targeted refinement → approval | Blog describes Image 2; the current API adapter defaults to 2.5 and remains text-only 16:9 |
 | [Seedance prompt guide](https://synclip.ai/blog/seedance-2-prompt-guide) | Subject + environment + action, then camera/style/audio/text/references; number references and assign one role | Prompt method; no current OpenScience adapter |
 | [LTX 2.3](https://synclip.ai/blog/ltx-video-2-3-ai-video-generator) | First frame, last frame and both are independent in the described integration; motion prompts should describe camera behavior | Older article; do not copy `ltx23` API IDs without current contract |
 | [AI Canvas](https://synclip.ai/blog/ai-canvas-launch) | Keep input, generation, preview, download and reusable workflow in one visible chain | Synclip canvas product; no current server canvas integration |
@@ -114,7 +115,7 @@ The following is the complete 25-post set shown by the blog index on 2026-10-07.
 | [Seedance coming soon](https://synclip.ai/blog/seedance-2-ai-video-generator) | Fast for scene validation, standard for final; use one subject and one clear scene | The page labels the model coming soon; never submit from this entry |
 | [Grok Video](https://synclip.ai/blog/grok-video-ai-video-generator) | One reference image, explicit subject/scene/camera/motion/style, choose ratio before prompt | Blog/UI feature; 720p and pricing are not current server contract |
 | [Veo 3.1](https://synclip.ai/blog/veo-3-1-first-last-frame-reference-images) | Reference images solve identity drift; first/last frames solve transitions; Fast explores, Pro finalizes | Exact Synclip request schema unverified |
-| [Nano Banana Christmas templates](https://synclip.ai/blog/ai-christmas-photo-generator-nano-banana-pro-templates) | Template + short prompt; change one variable at a time; use no-readable-text when typography matters | Image Studio template workflow; not current `gpt-image-2` adapter |
+| [Nano Banana Christmas templates](https://synclip.ai/blog/ai-christmas-photo-generator-nano-banana-pro-templates) | Template + short prompt; change one variable at a time; use no-readable-text when typography matters | Image Studio template workflow; not current GPT Image API adapter |
 | [Natural body movement](https://synclip.ai/blog/body-movement) | Head-only is stable; optional body movement is a deliberate higher-cost lipsync layer | Lipsync feature; not paper video integration |
 | [Sora watermark remover](https://synclip.ai/blog/watermark-remover) | A post-processing tool can preserve motion while removing a platform mark | Not used for OpenScience assets; rights/provenance must be explicit |
 | [Sora Video Creator](https://synclip.ai/blog/sora-video-creator) | Subject/place/camera/mood; optional reference frame; choose orientation and duration before generation | UI/workspace claim; exact API adapter unverified |
