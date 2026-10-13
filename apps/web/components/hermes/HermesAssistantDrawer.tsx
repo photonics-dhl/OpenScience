@@ -623,7 +623,7 @@ function HermesAssistantDrawerContent({
         : listAgentTasks();
       void loadTasks.then(({ tasks: candidates }) => {
           const tasks = candidates.filter((candidate) => !deletedTasks.current.has(candidate.id) && (!candidate.sessionId || !deletedSessions.current.has(candidate.sessionId)));
-          if (cancelled || submittingRef.current || sessionId.current || dismissedInitialTask.current === initialTaskId) return;
+          if (cancelled || submittingRef.current || sessionId.current || (initialTaskId && dismissedInitialTask.current === initialTaskId)) return;
           const writingTasks = tasks.filter((candidate) => (route === 'research-object-edit'
             ? candidate.researchObjectId === routeResearchObjectId
             : !candidate.researchObjectId) && candidate.status === 'succeeded' && Boolean(resultFromTask(candidate)?.writingDraft))

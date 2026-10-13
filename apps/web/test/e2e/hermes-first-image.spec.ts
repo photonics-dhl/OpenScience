@@ -38,6 +38,7 @@ async function setup(page: Page, restore: boolean) {
     if (path.endsWith('/authors')) return reply(route, { authors: [] });
     if (path.endsWith('/versions')) return reply(route, { versions: [{ versionId: state.versionId, versionNo: 1, status: 'draft', publicationNo: null }] });
     if (path === `/api/versions/${state.versionId}`) return reply(route, { version: { versionId: state.versionId, snapshot: { core, artifacts: [] } } });
+    if (path === `/api/research-objects/${ro}/versions/${state.versionId}/claims`) return reply(route, { claims: [] });
     if (path.endsWith('/record')) return reply(route, { record: { objectId: ro, versionId: state.versionId, versionNo: 1, citation: { title: 'First image' }, sdf: core, claims: [], evidence: [], manifest: [], media: [] } });
     if (path === '/api/agent/tasks') return reply(route, { tasks: restore ? [task()] : [] });
     if (path === `/api/agent/tasks/${guideId}`) return reply(route, { task: task() });
