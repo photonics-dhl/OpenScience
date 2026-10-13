@@ -37,6 +37,7 @@ async function setup(page: Page, restore: boolean) {
     if (path.endsWith('/ingestion')) return reply(route, { researchObjectId: ro, version: 1, tasks: [], latestConfirmation: null });
     if (path.endsWith('/authors')) return reply(route, { authors: [] });
     if (path.endsWith('/versions')) return reply(route, { versions: [{ versionId: state.versionId, versionNo: 1, status: 'draft', publicationNo: null }] });
+    if (path === `/api/versions/${state.versionId}`) return reply(route, { version: { versionId: state.versionId, snapshot: { core, artifacts: [] } } });
     if (path.endsWith('/record')) return reply(route, { record: { objectId: ro, versionId: state.versionId, versionNo: 1, citation: { title: 'First image' }, sdf: core, claims: [], evidence: [], manifest: [], media: [] } });
     if (path === '/api/agent/tasks') return reply(route, { tasks: restore ? [task()] : [] });
     if (path === `/api/agent/tasks/${guideId}`) return reply(route, { task: task() });
@@ -55,9 +56,16 @@ async function setup(page: Page, restore: boolean) {
   return state;
 }
 
+async function openResearchConversation(page: Page, versionId: string) {
+  await page.goto(`${baseUrl}/research-objects/${ro}/edit?version=${versionId}`);
+  await page.locator('[data-hermes-avatar-anchor="true"]').getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide', exact: true })
+    .or(page.getByRole('complementary', { name: 'Hermes research guide', exact: true }))).toBeVisible();
+}
+
 test('current image request uses the saved-version marker once and shows the real private result', async ({ page }) => {
   const state = await setup(page, false);
-  await page.goto(`${baseUrl}/research-objects/${ro}/edit?version=${version}`);
+  await openResearchConversation(page, version);
   const input = page.getByLabel('Send an instruction to Hermes', { exact: true });
   await expect(input).toBeVisible();
   await input.fill('Generate one image explaining this paper.');
@@ -76,7 +84,7 @@ test('current image request uses the saved-version marker once and shows the rea
 
 test('restoring a lost guide result and retrying a failed GET never submits another task', async ({ page }) => {
   const state = await setup(page, true); state.unavailableOnce = true;
-  await page.goto(`${baseUrl}/research-objects/${ro}/edit?version=${version}`);
+  await openResearchConversation(page, version);
   await page.getByRole('button', { name: 'Refresh original task' }).click();
   await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
   state.complete = true;
@@ -86,7 +94,7 @@ test('restoring a lost guide result and retrying a failed GET never submits anot
 
 test('a prior version result is not displayed as the current draft', async ({ page }) => {
   const state = await setup(page, true); state.complete = true; state.versionId = uuid(20);
-  await page.goto(`${baseUrl}/research-objects/${ro}/edit?version=${state.versionId}`);
+  await openResearchConversation(page, state.versionId);
   await expect.poll(() => state.originGets).toBeGreaterThan(0);
   await expect(page.getByAltText('Private first illustration')).toHaveCount(0);
   expect(state.submissions).toEqual([]); expect(state.unexpectedWrites).toEqual([]);
