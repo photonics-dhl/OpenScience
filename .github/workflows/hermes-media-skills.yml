@@ -32,6 +32,7 @@ on:
       - 'packages/domain/src/assets/video.ts'
       - 'packages/domain/test/assets/video.test.ts'
       - 'packages/domain/test/agent/native-video-research-run.test.ts'
+      - 'packages/domain/test/agent/research-run.test.ts'
       - 'packages/domain/test/agent/hermes-run-intent-query.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-materializer.test.ts'
@@ -297,6 +298,7 @@ on:
       - 'packages/domain/src/assets/video.ts'
       - 'packages/domain/test/assets/video.test.ts'
       - 'packages/domain/test/agent/native-video-research-run.test.ts'
+      - 'packages/domain/test/agent/research-run.test.ts'
       - 'packages/domain/test/agent/hermes-run-intent-query.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-generation.test.ts'
       - 'apps/agent-worker/test/presentation/native-illustration-materializer.test.ts'
@@ -589,6 +591,10 @@ jobs:
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
       - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+      - name: Check completed paid image recovery and changed sources
+        run: |
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/research-run.test.ts
+          npx pnpm@9.15.0 exec eslint packages/domain/src/agent/research-run.ts packages/domain/src/index.ts packages/domain/test/agent/research-run.test.ts apps/agent-worker/src/index.ts apps/agent-worker/test/queue-recovery.test.ts apps/agent-worker/test/presentation/native-illustration-generation.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/native-agent-session.test.ts test/native-paper-tools.test.ts test/native-host-task.test.ts test/native-task-store.test.ts test/native-science-materialization.test.ts test/native-source-review-task.test.ts test/queue-recovery.test.ts test/native-illustration-task.test.ts test/native-illustration-skill-replay.test.ts test/native-video-planning.test.ts test/presentation/native-illustration-generation.test.ts test/presentation/native-illustration-materializer.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/native-agent-execution.test.ts test/agent/native-video-research-run.test.ts test/agent/hermes-run-intent-query.test.ts test/assets/native-video-storyboard.test.ts test/assets/native-video-parents.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
