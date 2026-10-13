@@ -25,7 +25,7 @@ Industry / Investors 技术发现入口复用已有 `/literature/acquisitions` �
 - 新实际流程缺口：automatic-review.ts64–72把同上下文作者自检直接视为ready；结构/回执完整仍有实际案例失真。现有独立Native paper-source-review核对转述且需max9 run/step/audit/原作者CP真实绑定，不能直接refresh绕过。High GO方案仅在新max9创建中原子复用真实reviewer与普通收费；旧分类/历史语义保留，不加策略字段或暂停门禁。实际Native图像能力false，沿原hold维持0请求；实现及实际收益见CURRENT，作者84稿不重写或假审批。
 - 已确定耗时断点：多个已选Claim批次超过既有8000字符上限，却只得到笼统合同错误，导致重复试子集。已部署增量仅给新实际工具描述精确总长反馈，复用已装scientific-summary的读者组织方法，写简洁中文、自然语言机制及必要Claims；原guard/预算/模型/根Skill不变、旧paid反馈原样回放。审查、发布及真实收益以CURRENT为准，不据定向测试声称语义可靠。
 - 未消费能力：Native计算器/隔离科学计算尚未适配；默认理解不需要替作者重算。ResearchRun没有安全cancel入口，遇坏源保持图像关闭并保留自然终态，不能杀进程或改库伪造取消；该权限/并发/paid接线为独立债务。新source reanalysis API helper尚无真实站内普通用户入口验收。
-- Synclip应用接线、私密Key、host与broker已启用；历史 RO 真实任务和 PNG 仅作为既有证据保留。当前 API 合同 `POST /v1/image` 明确列出 `gpt-image-2.5`，代码将其作为主模型，仅在明确结构化模型不可用错误时一次性降级 `gpt-image-2`；普通 4xx、超时、网络错误和未知响应保持不确定，禁止重发。实际新 Provider receipt/PNG/科学审阅仍未验收，完整运行身份与证据只见CURRENT。
+- Synclip当前为API-only、主模型`gpt-image-2.5`，仅结构化明确模型不可用才一次降级`gpt-image-2`；超时、网络或未知响应不授权重发。已授权的一次真实图经用户原ID关联和原任务GET恢复、Native M3实际审阅并私有入库，用户质量认可仍开放。新源码前段由Gateway独立POST预算与host原deadline共同约束，及时持久化回执，并在原reservation内等待同ID结果；保留unknown attempt/oncekey，不重新扣费。原测试及High已覆盖该前段，deadline/重启后的failed任务自动接回仍由Domain/Worker原CAS/outbox补接，尚未完成；无可信原ID且供应商无查询/幂等合同不能承诺恢复。源码、CI、实际运行与真实质量分别见[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)，本次不部署。
 - 2026-10-06 的最小 API候选修复为 `f52ee24c`：无 Cookie 的 `session-guard` 401 发送改为等待完成后返回，针对生产 `/auth/me` 重复响应日志新增回归；定向 API 16/16 与文件级 lint 通过，尚未部署，不能把本地候选当作线上已修复。
 
 ## Synclip 能力指南（2026-10-07）
@@ -522,7 +522,7 @@ Figma只读结果：本机figma-temp、figma-primary均enabled=false，当前会
 | ClamAV | 上传文件恶意内容扫描 | `PRODUCTION` | 免费、本地 CPU | agent-worker/隔离边界；fail-closed | signature freshness、blocked path、资源峰值 |
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
-| Synclip `gpt-image-2.5` image | 已审科学分镜的私有图像候选 | `PRODUCTION` | 私密 provider key；由 AI Gateway 和既有 image policy 控制；明确模型不可用时一次性降级 `gpt-image-2`；不把 key 放入 Hermes 输入 | `packages/ai-gateway/src/synclip-image-api.ts` → `infra/synclip-image/` → image spool → Worker review/CAS；当前 text-only、16:9、异步 task | API 合同截图已确认主模型；真实新 receipt/PNG/科学质量仍按 CURRENT 继续验收 |
+| Synclip `gpt-image-2.5` image | 已审科学分镜的私有图像候选 | `PRODUCTION` | 私密 provider key；由 AI Gateway 和既有 image policy 控制；明确模型不可用时一次性降级 `gpt-image-2`；不把 key 放入 Hermes 输入 | `packages/ai-gateway/src/synclip-image-api.ts` → `infra/synclip-image/` → image spool → Worker review/CAS；当前 text-only、16:9、异步 task | 合同与一次真实原ID/PNG/Native审阅已有证据；人工质量认可、自动恢复增量与实际运行分别按 CURRENT，不由测试代替 |
 | Synclip video adapter / guide | 商业论文镜头，复用已审核 Claims/分镜/图像回执 | `BLOCKED` | LTX 走 admin-only `/v1/video-admin`；`duration_seconds`；短 HTTPS 首帧；每镜保存付费回执 | 修正旧公共端点和内联帧；保留历史结果；凭据/模型/权限不能由图像成功推定 | 现有视频 CI 做离线与 Linux 检查；真实音画、原生 Hermes 视频规划和用户认可尚未完成 |
 | ChatGPT web image/science review | 历史网页生图与独立科学复核 | `BLOCKED` | 旧浏览器 runner 已停用；不再作为当前生图或审阅通道 | 历史 runner、broker、profile 和回执保留作审计/回滚证据；当前图像改走 Synclip，当前 imageReview 使用既有 M3 路径 | 历史结果不代表当前可调用能力；未知外部提交不得重放 |
 | Tavily MCP/API | 通用网页发现 | `PRODUCTION / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
