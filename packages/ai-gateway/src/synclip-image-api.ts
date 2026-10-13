@@ -14,6 +14,8 @@ export type SynclipImageModel = (typeof SYNCLIP_IMAGE_MODELS)[number];
 /** Compatibility alias for callers that mean the default new-image model. */
 export const SYNCLIP_IMAGE_MODEL = SYNCLIP_IMAGE_PRIMARY_MODEL;
 export const SYNCLIP_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
+/** Response tolerance for a single paid POST, still bounded by the host task deadline. */
+export const SYNCLIP_IMAGE_SUBMISSION_TIMEOUT_MS = 120_000;
 export interface SynclipImageTask {
   task_id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed';
@@ -91,15 +93,18 @@ async function boundedJson(response: Response): Promise<unknown> {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
   } finally { reader.releaseLock(); }
 }
-export interface SynclipImageClientConfig { apiKey: string; timeoutMs?: number; fetch?: typeof fetch }
+export interface SynclipImageClientConfig { apiKey: string; timeoutMs?: number; submissionTimeoutMs?: number; fetch?: typeof fetch }
 /** One POST or one GET per method. Durable submission ownership belongs to the host transport. */
 export class SynclipImageClient {
-  readonly #apiKey: string; readonly #fetch: typeof fetch; readonly #timeoutMs: number;
+  readonly #apiKey: string; readonly #fetch: typeof fetch; readonly #timeoutMs: number; readonly #submissionTimeoutMs: number;
   constructor(config: SynclipImageClientConfig) {
     if (typeof config?.apiKey !== 'string' || !/^[\x21-\x7e]{1,4096}$/u.test(config.apiKey)
-      || (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 30000)))
+      || (config.timeoutMs !== undefined && (!Number.isInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 30000))
+      || (config.submissionTimeoutMs !== undefined && (!Number.isInteger(config.submissionTimeoutMs)
+        || config.submissionTimeoutMs < 1 || config.submissionTimeoutMs > SYNCLIP_IMAGE_SUBMISSION_TIMEOUT_MS)))
       throw new SynclipImageError('SYNCLIP_CONFIG_INVALID', 'invalid');
     this.#apiKey = config.apiKey; this.#fetch = config.fetch ?? globalThis.fetch; this.#timeoutMs = config.timeoutMs ?? 15000;
+    this.#submissionTimeoutMs = config.submissionTimeoutMs ?? this.#timeoutMs;
   }
   async #request(method: 'POST' | 'GET', path: string, body?: string): Promise<Record<string, unknown>> {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
@@ -121,7 +126,8 @@ export class SynclipImageClient {
     };
     try {
       return await Promise.race([operation(), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new SynclipImageError('SYNCLIP_TIMEOUT')); }, this.#timeoutMs);
+        timer = setTimeout(() => { controller.abort(); reject(new SynclipImageError('SYNCLIP_TIMEOUT')); },
+          method === 'POST' ? this.#submissionTimeoutMs : this.#timeoutMs);
       })]);
     } catch (error) {
       controller.abort(); if (error instanceof SynclipImageError) throw error;
