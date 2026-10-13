@@ -4,9 +4,9 @@
 
 ## 单机运行架构与资源
 
-最新有日期的调查为2026-10-13 21:00–21:36（北京时间）：见[生图汇报](assets/2026-10-13-server-health.png)与[主机、各容器、磁盘和卷明细](assets/2026-10-13-server-resources.md)。主机30.07 GiB，可用16.84 GiB，根盘普通可用62.84 GiB；API容器当日4次cgroup OOM为P1，整机余量不能消除容器自身上限风险。原因仍待定位；未执行API启停、扩容或压力测试。
+最新资源调查为2026-10-13 21:00–21:36（北京时间）：见[生图汇报](assets/2026-10-13-server-health.png)与[主机、各容器、磁盘和卷明细](assets/2026-10-13-server-resources.md)。主机30.07 GiB，可用16.84 GiB，根盘普通可用62.84 GiB；采样时API容器当日4次cgroup OOM为P1，整机余量不能消除容器自身上限风险。原因仍待定位；调查阶段未执行API启停、扩容或压力测试，后续退役部署正常重建容器不算OOM修复。
 
-2026-10-13按用户完全退役旧网页通道的授权，已归档并移除5个闲置bridge/image/review systemd unit，读回均not-found；私有副本清理timer保持原状态。源码退役候选已解耦Synclip标准化工具、移除旧执行器与RW队列入口；应用尚未发布，当前及回退应用仍挂旧spool，旧root尚未删除。后续严格按[发布与退役手册](deployment.md#旧网页生图与审阅通道退役)，不动ScanSci、Native、现役Codex或独立开发浏览器桥。
+2026-10-14 01:26按用户完全退役旧网页通道的授权，两阶段退役发布及旧root原子归档完成；见[退役后架构图与证据](assets/2026-10-14-retired-architecture.md)。应用与唯一回退均无旧队列挂载，Synclip使用独立标准化工具，5个旧unit读回not-found，旧root已移出`/opt`。归档保留约1.2 GiB历史私有材料，不能称释放相同磁盘空间；双位置清理器及timer保留，未来Trash仍能识别归档。后续按[发布与退役手册](deployment.md#旧网页生图与审阅通道退役)保留双位置reader，不动ScanSci、Native、现役Codex或独立开发浏览器桥。
 
 2026-10-03 22:42（北京时间）的只读快照覆盖24个运行容器、宿主服务和外部模型调用关系，见[架构图](assets/2026-10-03-server-architecture.svg)、[逐容器内存/上限与磁盘表](assets/2026-10-03-server-resources.md)及[可编辑 Mermaid 源](assets/2026-10-03-server-architecture.mmd)。图是有日期的观察，不是实时监控；当前运行身份与整改执行状态仅见CURRENT。
 
