@@ -19,6 +19,28 @@ export function ResearchGuide() {
       <h1 lang="en">{t.slogan}</h1>
       <p className={styles.lead}>{t.subtitle}</p>
     </header>
+    <section className={styles.lifecycle} aria-labelledby="guide-lifecycle-title">
+      <div className={styles.lifecycleIntro}>
+        <p className={styles.eyebrow}>P04 → P05</p>
+        <h2 id="guide-lifecycle-title">{t.lifecycle.title}</h2>
+        <p>{t.lifecycle.intro}</p>
+      </div>
+      <ol className={styles.lifecycleList}>
+        {t.lifecycle.nodes.map((node) => <li key={node.id} className={styles.lifecycleItem}>
+          <details>
+            <summary><span className={styles.nodeId}>{node.id}</span><span className={styles.nodeTitle}>{node.title}</span><ChevronDown size={16} aria-hidden="true" /></summary>
+            <div className={styles.nodeBody}>
+              <p className={styles.nodeSummary}>{node.summary}</p>
+              <p>{node.detail}</p>
+              <dl className={styles.nodeMeta}>
+                <div><dt>{t.lifecycle.roleLabel}</dt><dd>{node.roles}</dd></div>
+                <div><dt>{t.lifecycle.entryLabel}</dt><dd><Link href={node.href}>{node.entry}<ArrowUpRight size={14} aria-hidden="true" /></Link></dd></div>
+              </dl>
+            </div>
+          </details>
+        </li>)}
+      </ol>
+    </section>
     <GuideResearchWorkspace />
     <div className={styles.example}>
       <span>{t.exampleHint}</span>

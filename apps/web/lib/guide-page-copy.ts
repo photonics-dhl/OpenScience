@@ -3,6 +3,18 @@ export const guidePageCopy = {
     pageName: '上传／创建研究', workspace: '个人工作空间',
     slogan: 'Turn papers into structured, verifiable, machine-readable research objects.',
     subtitle: '带上论文，与 Hermes 一起梳理思路、打磨表达。',
+    lifecycle: {
+      title: '一条研究生命周期主线',
+      intro: '从研究者交付材料，到 Hermes 协助整理，再到读者、期刊与协作者接力使用同一份可核验记录。展开节点查看说明与入口。',
+      roleLabel: '角色', entryLabel: '入口', openLabel: '展开节点',
+      nodes: [
+        { id: 'P04', title: '研究者提交问题与材料', summary: '从一篇论文、预出版成果或直接填写的研究想法开始。', detail: '研究者选择上传／创建研究入口，保留来源、版本和私有草稿；提交前仍可修改材料。', roles: '研究者', entry: '上传／创建研究', href: '/guide' },
+        { id: 'P05', title: 'Hermes 提炼结构化研究', summary: 'Hermes 先理解全文，再按六字段整理 Claims 与 Evidence。', detail: 'Hermes 通过工作台协助提炼问题、洞见、方法、结果、局限与可复现性；结果先进入待核对草稿，不自动公开。', roles: 'Hermes', entry: 'Hermes 研究工作台', href: '/guide?mode=direct' },
+        { id: 'P06', title: '研究者核对与修订', summary: '研究者检查原文、证据和表达，决定保存草稿或形成新版本。', detail: '核对是公开前的责任边界。研究者可以返回来源、修改六字段，并通过个人工作空间继续处理。', roles: '研究者 · Hermes', entry: '个人工作空间', href: '/dashboard' },
+        { id: 'P07', title: '读者阅读与核验', summary: '读者沿研究页面与原始来源理解问题、方法、结果和局限。', detail: '公开研究页面提供固定版本与来源入口，让读者能够复查整理后的内容；平台不替读者证明结论。', roles: '读者', entry: '公开研究', href: '/explore' },
+        { id: 'P08', title: '期刊与协作者接力', summary: '期刊和协作者在各自入口发现、关联和继续维护研究。', detail: '期刊从目录与编辑入口管理公开内容，协作者从研究页面和版本记录接续讨论；公开修改通过新版本或明确勘误。', roles: '期刊 · 协作者', entry: '期刊目录', href: '/journals' },
+      ],
+    },
     exampleHint: '想先看看整理后的研究？', example: '查看研究页面示例', newTab: '（在新标签页打开）',
     faqTitle: '常见问题',
     questions: [
@@ -16,6 +28,18 @@ export const guidePageCopy = {
     pageName: 'Upload / create research', workspace: 'Personal workspace',
     slogan: 'Turn papers into structured, verifiable, machine-readable research objects.',
     subtitle: 'Bring your paper. Refine your ideas and expression with Hermes.',
+    lifecycle: {
+      title: 'One research lifecycle',
+      intro: 'A single path from researcher materials, through Hermes-assisted structuring, to readers, journals and collaborators using the same verifiable record. Expand a node for its explanation and entry point.',
+      roleLabel: 'Role', entryLabel: 'Entry', openLabel: 'Expand node',
+      nodes: [
+        { id: 'P04', title: 'Researcher brings the question and materials', summary: 'Start with a paper, preprint or a research idea entered directly.', detail: 'The researcher uses the upload/create entry, keeps sources and versions attached, and can revise the private draft before submitting.', roles: 'Researcher', entry: 'Upload / create research', href: '/guide' },
+        { id: 'P05', title: 'Hermes structures the research', summary: 'Hermes understands the full text, then organizes six fields, claims and evidence.', detail: 'Hermes helps draft problem, insight, method, results, limitations and reproducibility; the result remains a reviewable draft and is not published automatically.', roles: 'Hermes', entry: 'Hermes research workspace', href: '/guide?mode=direct' },
+        { id: 'P06', title: 'Researcher reviews and revises', summary: 'Check sources, evidence and wording before saving a draft or creating a new version.', detail: 'Review is the publication boundary. The researcher can return to sources, edit the six fields and continue from the personal workspace.', roles: 'Researcher · Hermes', entry: 'Personal workspace', href: '/dashboard' },
+        { id: 'P07', title: 'Reader reads and verifies', summary: 'Follow the research page and original sources to understand the problem, method, results and limits.', detail: 'Public research provides fixed-version and source entries so readers can check the structured account; the platform does not prove the conclusions for them.', roles: 'Reader', entry: 'Public research', href: '/explore' },
+        { id: 'P08', title: 'Journals and collaborators continue the work', summary: 'Journals and collaborators discover, connect and maintain research through their own entries.', detail: 'Journals use the directory and editorial entry to manage public content; collaborators follow research pages and version history. Public changes use a new version or explicit erratum.', roles: 'Journal · Collaborator', entry: 'Journal directory', href: '/journals' },
+      ],
+    },
     exampleHint: 'See what a structured study looks like.', example: 'View an example research page', newTab: ' (opens in a new tab)',
     faqTitle: 'Common questions',
     questions: [
