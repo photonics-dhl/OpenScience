@@ -26,9 +26,9 @@
 - 总控 `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index，负责收取已审差异、集成与对应 CI；发布仍暂停。openscience ACTIVE，已改为实际 UI 聊天与最新授权边界。交接须含范围/基线/写权/完成证据/最小验收，发送成功不等于已执行；模型失败先保留续点再用≥gpt-6.1-sol接续，不重复已完成工作。
 | Session / ID | 当前责任、状态与下一动作 | 工作树 / branch |
 |---|---|---|
-| 生图 / `01a0e831-be19-7813-8379-58313178ff26` | API-only主模型/回退/恢复及c7d回归已提交；结果页持久模型提示20be2c62已High GO并提交，21/21与typecheck/ESLint通过。当前只读整理一次私有2.5验证的具体来源/场景/现有预算与缺口供用户授权，不再跑重复审计；真实提交未授权。 | canonical / `release/onchip-production-line` |
+| 生图 / `01a0e831-be19-7813-8379-58313178ff26` | API-only主模型/回退/恢复及c7d回归已提交；结果页持久模型提示20be2c62已High GO并提交，21/21与typecheck/ESLint通过。只读前置已证实目标RO的版本均已发布且无draft、目标scene已有approved图片；须由用户决定后续私有修订范围与执行预算，再重新绑定新版本对象。暂停真实提交，不能复用旧失败run或旧指南任务充作授权。 | canonical / `release/onchip-production-line` |
 | 视频 / `01a0e851-4d6c-7221-9559-b8c56a3413fe` | 视频代码/fixture已High GO并通过Media；纠正目录权限推断的证据交总控收口。c7d新增回归已由gpt-6.1-sol High独立复核GO（P0/P1/P2=0），五文件Web提示也已独立High GO（P0/P1/P2=0），交总控提交/CI；不重审旧链、不写共享文档、不启服务。真实视频阻塞见上节。 | canonical只读审查；旧视频树保留证据 |
-| UI / `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`（替代旧01a0f118） | 按该聊天用户最新决定制作完整Guide概念图供审阅；固定左目录/移动折叠目录、生命周期与四角色入口。旧Guide代码已有High GO和23/23，不代表新版设计获认可；撤回旧代码收尾派单；整页候选图已直接交用户，待视觉/标题/章节及FAQ/手机细节反馈。 | `E:/Miscellaneous/XGS/.worktrees/research-product-craft`，设计产物放ignored tmp |
+| UI / `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`（替代旧01a0f118） | 按该聊天用户最新决定制作完整Guide概念图供审阅；固定左目录/移动折叠目录、生命周期与四角色入口。旧Guide代码已有High GO和23/23，不代表新版设计获认可；撤回旧代码收尾派单；首稿用户反馈同图重复、文字杂乱且无重点，已交精简候选P03-guide-focused-20261013.png：一张UI示意/一张案例图、一次展开一个阶段。新布局/文案仍待认可，不写产品代码。 | `E:/Miscellaneous/XGS/.worktrees/research-product-craft`，设计产物放ignored tmp |
 
 ## 当前 Git / CI / 运行事实
 - canonical `release/onchip-production-line`：生产连续性修复 `d60d2ad1` 已独立 High GO（P0/P1/P2=0）；API回归提交 `c7d455d8542c2fb00ff024c59930c0f0ef2abb59` 无生产代码变更，36/36与54/54，日志 `tmp/synclip-admission-{node,gateway}-20261013.log`。视频线独立High已对该新增差异GO（P0/P1/P2=0）；旧 Media CI不证明后续新Web提示或新版Guide已验收。Web提示提交 `20be2c623bed33886a79935dd91a9356cf378f36` 已独立High GO（P0/P1/P2=0）；实际HEAD/status以Git为准。新增21/21、typecheck/ESLint通过，完整两文件38通过/10失败与c7d基线同名同错，日志 `tmp/synclip-model-notice-{focused,tests,baseline,typecheck,lint}.log`；实际浏览器刷新/布局未验收。无Synclip Provider/真实PNG/部署。
@@ -36,12 +36,16 @@
 - Video exact CI `38280757897` for merge head `2e1a28de` completed successfully: skill-path and all four browser-entry jobs passed. The two stale queue-recovery fixture failures are closed; Journal/search evidence remains as previously recorded, with no production-code failure attributed to the merged UI/video code.
 - Image admission/floor/reader and beta-gate alignment are merged and High-reviewed; complete producer/floor and real PNG quality remain open. The API submission contract is merged; no Synclip task has been created and API receipt/PNG/scientific review remain open. Media `38288353198`'s four shared native-video parent failures are addressed by `613db2c8` plus `1a22f83c`; exact Media `38291046457` is green. No deployment until the API result, human PNG/scientific gates and receipt evidence close.
 
-- GitHub协作目标仍为 `origin/frontend/nanqing`，从canonical提交正常快进推送；不推main、不强推、不部署。此次累计API/Guide/Web差异由实际触发的Media/Journal/Video workflow验收，旧CI成功不能代替新提交。
+- GitHub协作目标仍为 `origin/frontend/nanqing`，从canonical提交正常快进推送；不推main、不强推、不部署。已正常快进推送460c8bd031869ad0890696ff3e534a097e57fe43；对应Video 38376163034、Journal 38376163057成功；Media 38376162983四个browser-entry成功，skill-path仍在执行（源码含20be2c62），旧CI成功不能代替新提交。后续纯文档回执不代表新的生产发布。
+
+## 生图受控提交的实际前置（10-13 17:26–17:28只读）
+- RO `aa450f1e-fafc-46d8-a072-d935e01b0544` 最新v2 `9f570ec9-f115-4d83-890d-08f978e4c5d6` 已published；draft=0、活动任务=0。approved parent `cd150093-2a59-45fb-a3dd-1be4dc9bb773` 的sceneIndex=0来源Claim `6fd965d7-77f9-478e-9075-32b010a8c607`，已有approved图片 `4e64c389-32ed-45b8-b9d0-0fa1dca96dfa`。不能在已发布版本重生成或改旧图；已向用户确认是否创建私有修订稿（仅准备，不生图）；答复前不新增业务版本。若选择私有修订，须沿既有产品流程并按真实继承结果重新绑定新version/parent/Claim。
+- 旧writing-draft `4237cbcf-8371-4222-bc53-4f6eb45b2111` 实为9-23 workspace.guide，grounded_with_unresolved_review且无versionId/assetId，不能作为新approved分镜证明。旧run `b3eee57a-8a08-4867-9281-cb5b950affbf` failed、maxAgentTasks=46不是剩余额度；ai_credit合计0/管理员规则不代表新付费授权，截图“6”计价单位仍未确定。原始脱敏回执 `tmp/synclip-aa450-{current-admission,parent}-read.json`；仅读应用元数据，无Provider/DB写/生成/部署。
 
 ## Open deliverables and gates
 - 生图：Web现已消费持久generatorVersion显示实际模型，原因字段不足时不臆测降级原因；总控收取对应精确CI，已通过后端回归无需重放。下一步确认一次私有gpt-image-2.5验证的既有来源/授权/费用/任务恢复前提，获得用户明确执行许可才提交。保留Hermes草稿、原论文/已认图片/未知paid CP；不重做Hermes、不换论文、不扩预算。真实PNG、科学质量与公开许可分别验收。
 - Video: CI `38280757897` / Media `38291046457` green; execution remains blocked. Follow the video prerequisites above: first resolve the catalogue command's local identity/phase and current account qualification, then obtain scoped server-operation authorization and verify application/broker pairing before private production. Do not treat the generic failure as a proven permission denial or bypass readiness; this documentation pass has made no server/Provider call.
-- UI：既有写反馈/逐场景入口已High GO合入c258da85/b82594d8/b06a8fab；共享旧queue-recovery夹具由af42e5e2修复，后续Media通过。Guide旧实现b34db919已有独立High与23/23，当前新版候选位于UI树 `tmp/ui-art-20261008/product-page-planning-20261011/review-candidates/P03-guide-full-page-20261013.png`，已直接展示；参考原A版/Figma/P04/P07/P15，局部界面和科研图均为设计示意，不是线上截图或科学资产。等用户认可再按已确定范围实现；实际站内旅程和整站审美验收仍开放。
+- UI：既有写反馈/逐场景入口已High GO合入c258da85/b82594d8/b06a8fab；共享旧queue-recovery夹具由af42e5e2修复，后续Media通过。Guide旧实现b34db919已有独立High与23/23，当前候选位于UI树 `tmp/ui-art-20261008/product-page-planning-20261011/review-candidates/P03-guide-focused-20261013.png`，已交用户审阅；同目录full-page旧稿因同图重复/文字杂乱被退回，不算认可。参考原A版/Figma/P04/P07/P15，局部界面和科研图均为设计示意，不是线上截图或科学资产。等用户认可再按已确定范围实现；实际站内旅程和整站审美验收仍开放。
 - No deployment until the relevant code, exact CI, High review, and real-product/media quality gates close. Human review of paper visuals remains a separate acceptance gate.
 
 ## Historical pointers
