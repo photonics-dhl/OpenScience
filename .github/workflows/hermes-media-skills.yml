@@ -673,7 +673,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
       - name: Verify generated Prisma clients include the required musl engines
         run: |
-          test -f packages/database/generated/client/libquery_engine-linux-musl.so.node
+          test -f node_modules/.prisma/client/libquery_engine-linux-musl.so.node
           test -f packages/search/generated/client/libquery_engine-linux-musl.so.node
       - name: Verify rollback readers against the complete installed release
         run: |

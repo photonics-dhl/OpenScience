@@ -29,7 +29,7 @@ test('skill-path keeps official Prisma targets and runs the complete rollback se
   assert.match(workflow, /PRISMA_CLI_BINARY_TARGETS:\s*debian-openssl-3\.0\.x,linux-musl/u);
   assert.match(workflow, /--filter @openscience\/database generate/u);
   assert.match(workflow, /--filter @openscience\/search generate/u);
-  assert.match(workflow, /packages\/database\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
+  assert.match(workflow, /node_modules\/\.prisma\/client\/libquery_engine-linux-musl\.so\.node/u);
   assert.match(workflow, /packages\/search\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
   assert.match(workflow, /verifyApplicationRollbackReaders\(\{ candidateRoot: process\.env\.GITHUB_WORKSPACE, rollbackRoot: process\.env\.GITHUB_WORKSPACE \}\)/u);
 });
