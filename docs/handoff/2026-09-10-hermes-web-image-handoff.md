@@ -17,7 +17,7 @@
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
 ## 当前 Git / CI / 发布候选
-- canonical最新源码为 **6c7036239856760d8bc2f559196fd5874e6cd89c**（后继文档提交以Git为准），已收R04六路径；此前UI测试bd2719e0保留。push自动触发Media **38640203872**，首次核对queued；不重复dispatch。实际default-self/组合CI待收，不能用a133六绿替代；含尚未完成Linux/运行验收的R01/R12/Ops，**不能整包按UI许可发布**。根main只导航；本机依赖缺失仍在，源码clean不等于依赖恢复。
+- canonical最新源码为 **6c7036239856760d8bc2f559196fd5874e6cd89c**（后继文档提交以Git为准），R04六路径1990+/15−已审收取；Media **38640203872 completed/success，6/6 jobs成功**，root已独立核精确SHA/终态，未重复dispatch。仍含尚未完成运行验收的R01/R12/Ops，**不能整包按UI许可发布**。根main只导航；本机依赖缺失仍在，源码clean不等于依赖恢复。
 - root-owned `C:/Users/Mac/.codex/worktrees/media-reviewed-integration/XGS` / `codex/p04-media-integration` 已从clean、正常push的 **40e8d071592c272a6f53eaa3a440dff9fa72122e** 发布；生产84为祖先。父3118f4a43769b5b601fc019a11f86763f057e314，40e8新增仅已审媒体保留E2E（源bd2719e0，9+/3−）；原3118为26文件536+/383−：23 Web + Node24三文件。实际发布包与canonical尚未ready部分分开。
 - 精确来源：5dd687f6→32b412ef；5e7b430a→ac2fb194；b2756b42→9c69c46c；3cff5edf仅Web→c69ac3b6；235ae555→81e6ff7e；ea0885a9仅Web→edd1c25e；79c1c239三文件patch→3118f4a4。40e8d071=bd2719e0单文件E2E。两层独立High均GO/P0P1P2=0；不取HEAD整份compose/domain index，不带R12/R01/R02 fresh runtime/Gateway/Ops。
 - 隔离scope/3118实际组合与40e8唯一E2E差异的独立High均GO/P0P1P2=0，回执tmp/coordination/ui-release-scope-high.md、tmp/ui-release-3118-retention-high.md。3118旧CI38613196449仅媒体保留compact误选旧selector失败，已按原error-context/源码修正；新精确40e8 Media **38616783173 completed/success，6 jobs全过**：Guide/creation72、layout/focus6、media retention6、后继recovery34全部通过，类型/build/lint/unit/docs通过。root独立仅核终态/SHA；owner唯一skill.log与receipt在tmp/ui-release-40e8-*。本机Playwright缺失未跑、不安装。主ci.yml未触发，不冒称主仓全CI。
@@ -41,7 +41,7 @@
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
 - R04已审序列及验证完整留架构树tmp/r04-class-supplier-{high,final-receipt}.md（八段High GO），后继71项比对留tmp/r04-later-fixture-{comparison.json,deltas.log}，最小收取scope与独立High在tmp/r04-canonical-integration-scope.md。callback P2为default generic DI供应者证明覆盖债务；task-store input.authorize当前真实supplier仍在whole-module闭包，未证线上bypass，旧opaque/P1反例已修不能复活。此限制不自动阻断有界收取；真实pair若依赖changed/unbounded外部持久reader supplier则不得放行。40e8/84与canonical受保护模块有diff，candidate=self六绿不能证明跨版本兼容，当前无生产GO。
-- 精确Linux **38634342000@a133b3e6** completed/success，6/6 jobs通过；root已独立核终态/SHA，owner唯一日志tmp/r04-ci-a133b3e6-skill-path.log。真实core/search生成/build/双musl后完整installed verifier default-self/Worker closure、新旧installer恢复均过；broker27、部署341零skip、Worker822、Domain485、API214/类型、art33、Worker review54、ingestion原grep1+15选中、Web类型/build/unit及72+6+6+34浏览器均过，末Web preflight1选中通过。ingestion非全82、failure-only evidence上传条件skip非必需检查跳过。此前所有失败记录保留；此为候选整体CI通过，不等于canonical集成、跨版本配对或生产GO。
+- 实际canonical **38640203872@6c703623**完整CI六绿，owner唯一新日志/最终回执为架构树tmp/r04-canonical-6c703623-{skill-path.log,receipt.md}。真实core/search生成与双musl后完整installed verifier default-self/Worker closure成功；部署341零fail/skip、broker17（未搬R12）、Worker830、Domain485、API214、art33、Native review54、ingestion原selected1+15通过；保留Gateway151/重建、backup/manage67、monitor8、export/construction、类型/build/lint/docs及72+6+6+34浏览器，末Web preflight1选中通过。其他4 browser-entry及PG job成功；仅failure-only evidence上传条件skip。先前a133六绿保留为候选历史，不代替本次；本次关闭canonical源码/CI验收，跨版本pair与架构生产仍未放行。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
 ## 研究生命周期角色与入口
