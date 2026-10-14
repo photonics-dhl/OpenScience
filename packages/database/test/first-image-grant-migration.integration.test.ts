@@ -63,7 +63,7 @@ async function expectRejected(tx: Prisma.TransactionClient, action: () => Promis
 
 const historical: Array<[string | null, number | null]> = [
   [null, null], ['onchip-field-sampling-v1', 7], ['content-driven-v1', 8],
-  ['content-driven-image-v1', 7], ...[9, 11, 13, 15].map(n => ['visual-narrative-v1', n] as [string, number]),
+  ['content-driven-image-v1', 7], ...[9, 10, 11, 13, 15].map(n => ['visual-narrative-v1', n] as [string, number]),
 ];
 
 afterAll(async () => prisma.$disconnect());
@@ -92,10 +92,11 @@ describe('two-task image grant migration (real PostgreSQL)', () => {
       await apply(tx, forward);
       const invalid: Array<[string | null, number | null]> = [
         ...[-1, 0, 1, 3, 4, 5, 6, 7, 8].map(n => ['visual-narrative-v1', n] as [string, number]),
-        ['visual-narrative-v1', null], [null, 2], [null, 9], ['unknown', null], ['unknown', 2], ['unknown', 9],
-        ['onchip-field-sampling-v1', null], ['onchip-field-sampling-v1', 2], ['onchip-field-sampling-v1', 8],
-        ['content-driven-v1', null], ['content-driven-v1', 2], ['content-driven-v1', 7],
-        ['content-driven-image-v1', null], ['content-driven-image-v1', 2], ['content-driven-image-v1', 8],
+        ['visual-narrative-v1', null], ...[2, 7, 8, 9, 10, 11, 13, 15].map(n => [null, n] as [null, number]),
+        ['unknown', null], ['unknown', 2], ['unknown', 9],
+        ['onchip-field-sampling-v1', null], ['onchip-field-sampling-v1', 2], ['onchip-field-sampling-v1', 6], ['onchip-field-sampling-v1', 8],
+        ['content-driven-v1', null], ['content-driven-v1', 2], ['content-driven-v1', 7], ['content-driven-v1', 9],
+        ['content-driven-image-v1', null], ['content-driven-image-v1', 2], ['content-driven-image-v1', 6], ['content-driven-image-v1', 8],
       ];
       for (const [profile, maximum] of invalid) await expectRejected(tx, () => insert(tx, profile, maximum), '23514');
     });
@@ -122,7 +123,7 @@ describe('two-task image grant migration (real PostgreSQL)', () => {
       const rows = await tx.$queryRawUnsafe<Array<{ max_agent_tasks: number }>>(
         'SELECT max_agent_tasks FROM "hermes_research_runs" WHERE profile=$1 ORDER BY id', 'visual-narrative-v1',
       );
-      expect(rows.map(row => row.max_agent_tasks)).toEqual([9, 11, 13, 15, 2]);
+      expect(rows.map(row => row.max_agent_tasks)).toEqual([9, 10, 11, 13, 15, 2]);
       await insert(tx, 'visual-narrative-v1', 2);
       await expectRejected(tx, () => insert(tx, 'visual-narrative-v1', 3), '23514');
     });
