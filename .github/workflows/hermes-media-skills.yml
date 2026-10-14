@@ -619,7 +619,7 @@ jobs:
           set -e
           cat tmp/first-image-grant/red.log
           test "$red_status" -ne 0
-          grep -q '23514' tmp/first-image-grant/red.log
+          grep -Fxq 'FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN' tmp/first-image-grant/red.log
       - name: Verify exact grants, invalid values and safe rollback
         shell: bash
         run: |
