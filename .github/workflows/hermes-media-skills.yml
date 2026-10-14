@@ -619,7 +619,9 @@ jobs:
           set -e
           cat tmp/first-image-grant/red.log
           test "$red_status" -ne 0
-          grep -Fxq 'FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN' tmp/first-image-grant/red.log
+          # Vitest prefixes stderr with ANSI SGR resets even when redirected.
+          # Strip formatting only; still require the exact observed-error marker.
+          sed -E 's/\x1B\[[0-9;]*m//g' tmp/first-image-grant/red.log | grep -Fxq 'FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN'
       - name: Verify exact grants, invalid values and safe rollback
         shell: bash
         run: |
