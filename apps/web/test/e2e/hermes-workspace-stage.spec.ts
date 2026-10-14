@@ -646,7 +646,7 @@ test('editing presents the contribution and six fields from the existing researc
     const content = page.locator('[data-workbench-section="content"]');
     await expect(content).toBeVisible();
     await expect(content.locator('[data-sdf-node]')).toHaveCount(6);
-    await expect(page.locator('[data-workbench-section="media"]')).toBeVisible();
+    await expect(page.locator('[data-workbench-section="media"]')).toHaveAttribute('aria-hidden', 'true');
     for (const name of ['Problem', 'Insight', 'Method', 'Results', 'Limitations', 'Reproducibility']) {
       const button = content.getByRole('button', { name, exact: true });
       expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);

@@ -715,6 +715,9 @@ type AuditFindFirstArgs = Prisma.AuditLogFindFirstArgs & { where: Prisma.AuditLo
 
 async function savedManualSceneFixture(output: 'image' | 'video' = 'video') {
   const ctx: ManualSceneContext = sceneFixture(output);
+  (ctx as ManualSceneContext & { nativeAgentRuntime: { runtimeId: string; skillCatalogueId: string; model: string } }).nativeAgentRuntime = {
+    runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3',
+  };
   ctx.audit = { record: async (event, tx) => tx.auditLog.create({ data: event }) };
   const branchId = '80000000-0000-4000-8000-000000000001';
   const commitId = '90000000-0000-4000-8000-000000000001';
