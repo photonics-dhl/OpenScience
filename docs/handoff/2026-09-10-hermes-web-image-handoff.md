@@ -2,7 +2,7 @@
 > 唯一状态入口：`.worktrees/onchip-video-release` / `release/onchip-production-line`；root main 仅导航。历史过程与完整资产表保存在本文件 Git 历史（例如 caf7b280），不得执行旧 next action。
 
 ## 最新授权与执行边界（2026-10-15）
-- 最新人类已明确：**UI 可单独修复并部署；71e 仍不部署**。UI 不等待无真实依赖的 R04/R12；仍禁止 Provider、商业视频、新生图/音频/收费重试。保留视频与生图最终目标，不把当前冻结解释为取消目标，也不把旧条件式许可当现在执行窗口。
+- 最新人类已明确：**UI 可单独修复并部署；71e 仍不部署**。视频chat原始人类消息01a13cd5-8604-71c2-abcb-51e71f9c3bb7已核：仅准复用Hermes修订链创建一次新的私有规划任务，实际修三项并定向High，保留父任务/Claims/来源/回执。该次规划替代旧no-new-task限制；商业生图/视频/配音Provider、公开与部署仍禁止，不外推其他收费重试。保留视频/生图最终目标。
 - 目标仍为 2–3 篇真实论文经 NousResearch Hermes 全文理解、Claims/Evidence、凝练、配图、用户质量确认及公开展示；普通用户旅程、完整视频、整站审美仍未完成。Codex 不冒充 Hermes 产物，测试/安装/accepted 不等于科学质量或用户认可。
 - UI 已认可 P03 Guide、P04 研究桌面及既定四视图，最新许可覆盖独立修复与原流程部署；其他页面仍按44页手册逐页认可，不自动整站改写。现有 Guide/P04 旧版本上线证据不能代替新四视图的运行验收。
 - 生图执行恢复时仍须 API-only / gpt-image-2.5，只有结构化明确模型不可用才一次降级 gpt-image-2；不用 chatgpt-web。原一次 cb9 迁移/新 Guide/首图已消费，不再据该许可 POST。其他独立生图目标保留待核授权，当前无 Provider 执行窗口。
@@ -11,7 +11,7 @@
 ## 总控与当前并行写权
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
-- 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
+- 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：已核直接人类一次私有Hermes规划授权并STARTED，经现有目标私有v3鉴权入口修三项，未收到新task/产物/High前不称完成。owner只写ignored回执，root独占正式状态；不改源码/直写DB/商业媒体/公开/部署。提交一次即保留ID，不确定先查原任务不重POST。原入口只读报告tmp/coordination/71e-private-revision-entry.md保留为旧限制下的事实，不再称无新任务授权。
 - 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：候选5abc1a71的Media38653081778已success六绿、Linux broker55/55零skip。common-only实际两文件patch独立High GO，root已收至f0194de781e5de84b281863091f9ebf5a651c40a并正常推送；实际postimage与已审稿逐文本相同，AST2/diff-check过，最终git diff757+/67−。自动Media38655469978待终态，owner唯一取新日志核实际common43项及原checks，不重复dispatch；tracked写权关闭，仅ignored回执。原root4/producer3/unit_ended/poll不变，无stop协议；sameUID末端原子保证、overallR12与生产仍NO-GO。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
@@ -34,7 +34,7 @@
 ## 71e 科学分镜与能力差额
 - 原父任务71e70ae3-be30-43ce-8c2f-496d9220ec6b与同父修订591e9fd8-14ed-4ef4-885f-0f6ade1d386d均已有真实succeeded/attempt1/retry0，后者100%、result100848B、final-brief accepted；ledger各一次正常+1管理员fund/-1submit。不能继续称这两任务容量失败，也不重新提交。92df持久化失败为Native Agent output truncated，与Web systemError分开。
 - 先前两项修订（超强耦合限超导量子比特—微波腔；scene1唯一v·k=ω(k)）已进入私有草稿并High GO，未公开/批准成片。新三项仅方案High GO：scene3统一few-nanometre gap；从10/10/10/15=45s恢复父计划5/10/10/10=35s；>1000x限该金纳米立方体/金膜nanoparticle-on-mirror实验，不推广一般polaritons或未验证mid-IR。
-- 新三项**尚未写回草稿**；只读源码已证现有鉴权入口只支持新Native重新规划任务，PATCH只改审批状态，Storage草稿与历史replay不能改服务器分镜正文；此轮不创建新任务、不直写DB、不用Codex文件冒充Hermes自动结果。报告 tmp/coordination/71e-three-item-high-review-20261015.md；claims13c0de89-3863-40cd-aaac-8bf547ebe702 p11与b6a…边界保留。71e不部署、无新任务、无Provider。
+- 新三项**尚未收到写回成功证据**；原现有鉴权入口需新Native重新规划，PATCH只改审批状态，Storage/replay不能改服务器正文。最新原始人类已准一次新私有Hermes规划，视频owner已STARTED沿原链实施，等待新task/asset、实际三项修订与独立High；保留先前两项已落地修订及父任务/Claims/来源/receipt，不用Codex手稿冒充自动产物。旧方案High报告tmp/coordination/71e-three-item-high-review-20261015.md，claims13c0de89-3863-40cd-aaac-8bf547ebe702 p11与b6a…边界继续有效；商业媒体Provider/公开/部署仍禁。
 - Synclip公开Docs/用户截图已并入原能力台账：Veo Fast18/Pro54不是LTX报价；音频standard1/premium4每started1000chars/request，1200字2/8，供应商credits/coins与平台AI点分开。LTX23/ltx23fast账户资格、5/10/15s价格、有限总预算与所选音轨仍需真实依据；不重复向用户索取已给公开页/原ID/Key。
 - 音色旧reader credits_per_1k_chars/coins_per_char差额源码已审并在应用84收取；VIDEO host旧59a/ltx23/720p/receipt-v2/adminfalse/timer disabled/ready null未改。安装源码、实际消费、产品质量分别判断；不启用/试听/生成。
 
