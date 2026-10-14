@@ -2,7 +2,9 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
-- 2026-10-14：视频父链循环修复的实际CI已跑完原Native父链，257例/1355ms，新增7边界例通过，原递归OOM未再出现；五suite仍474/480，6处现代local Host旧预期失败，权限竞态尚未执行。缺Native配置可能先留session的因果已交同一独立High，按现成配置检查和原fixture修复，不把整体红灯冒称RED/GREEN完成。其余写权和单一生产窗口保持；精确证据见CURRENT。
+- 2026-10-14：R09机械抽离已独立High GO并串行收取，15个Web路径与原审提交逐字相同，原77项/82模块零环证据复用；3条lint与基线一致，未冒称全绿或新UI验收。架构正式RELEASED给UI接续P07四视图，接源回执待收；其余架构/视频WIP未混入。新图质量回执显示上游encoding实验比较与single-panel/禁数据曲线/标签清单跨字段不一致，归因已纠正为整条规划表达需收口，不仅归咎Provider；真实图仍私有审核未通过，未重画。精确写权、证据和候选/生产状态见CURRENT。
+
+- 2026-10-14：视频父链循环修复的实际CI已跑完原Native父链，257例/1355ms，新增7边界例通过，原递归OOM未再出现；五suite仍474/480，6处现代local Host旧预期失败，权限竞态尚未执行。缺Native配置仅先留session/audit、原core已拒扣费的因果已核，现成配置预检两文件修复已独立High静态GO并进入新精确CI；权限P1及真实RED/GREEN仍待完成。其余写权和单一生产窗口保持；精确证据见CURRENT。
 
 - 2026-10-14：已直接核UI最新人类实施许可，P07四视图/Hermes与P04/P03清爽字体布局交互进入落实，旧“只审图”限制已更新。root已核当前生产已推基线与canonical/架构Web源码相同，UI已在原树当前发布基线建立新分支STARTED，精确Guide/桌面文件及JSON单写已确认；P07/Hermes与架构R09有真实WIP重叠，架构已ACK收口15文件，原77项/82模块证据复用、独立High启动，须单独提交并明确交回后串行接续，不覆盖现有重构。视频父链循环四文件修复已静态High GO，精确CI终态失败，等待唯一owner核Native-parent与四权限竞态真实RED；同事务writer/currentdraft P1仍开放，未冒称完整通过。运行/业务/部署未因此变更，精确授权、基线和写权见CURRENT。
 
