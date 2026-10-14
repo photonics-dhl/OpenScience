@@ -7,7 +7,7 @@ import { builtinModules, createRequire } from 'node:module';
 import {
   chmod, lstat, open, readFile, readdir, realpath, rename, rm,
 } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
@@ -65,10 +65,16 @@ function rollbackCompatibilityUnknown() {
   throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN: preserve candidate, paired resources and deploy journal; repair forward with compatible readers');
 }
 
-export function verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPackageRoot, enginePackageRoot }) {
+function verifyPrismaVendorRuntimeAtPaths({ sourceRoot, runtimeFile, runtimeRoot = dirname(runtimeFile), generatedRoot = dirname(dirname(runtimeFile)),
+  upstreamPackageRoot, enginePackageRoot, allowPnpmCore = false }) {
   const relativeRuntime = relative(sourceRoot, runtimeFile).replaceAll('\\', '/');
-  if (!/^(?:packages\/[a-z-]+\/generated\/client|node_modules\/\.prisma\/client)\/runtime\/library\.js$/u.test(relativeRuntime)) rollbackCompatibilityUnknown();
-  const generatedRoot = dirname(dirname(runtimeFile));
+  const standardRuntime = /^(?:packages\/[a-z-]+\/generated\/client|node_modules\/\.prisma\/client)\/runtime\/library\.js$/u.test(relativeRuntime);
+  if (!standardRuntime && !allowPnpmCore) rollbackCompatibilityUnknown();
+  const insideSourceRoot = path => {
+    const relativePath = relative(sourceRoot, path);
+    return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath));
+  };
+  if (!insideSourceRoot(runtimeFile) || !insideSourceRoot(runtimeRoot) || !insideSourceRoot(generatedRoot)) rollbackCompatibilityUnknown();
   const boundedFile = path => {
     const stat = lstatSync(path);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 128 * 1024 * 1024) rollbackCompatibilityUnknown();
@@ -77,7 +83,7 @@ export function verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPac
   const client = JSON.parse(boundedFile(join(upstreamPackageRoot, 'package.json')));
   const engines = JSON.parse(boundedFile(join(enginePackageRoot, 'package.json')));
   const generated = JSON.parse(boundedFile(join(generatedRoot, 'package.json')));
-  const coreRuntime = /^node_modules\/\.prisma\/client\/runtime\/library\.js$/u.test(relativeRuntime);
+  const coreRuntime = allowPnpmCore || /^node_modules\/\.prisma\/client\/runtime\/library\.js$/u.test(relativeRuntime);
   const schema = boundedFile(join(generatedRoot, 'schema.prisma')).toString('utf8');
   const schemaWithoutComments = schema.replace(/\/\/[^\r\n]*|\/\*[\s\S]*?\*\//gu, '');
   const generatorBlocks = [...schemaWithoutComments.matchAll(/\bgenerator\s+[A-Za-z_][A-Za-z0-9_]*\s*\{([^{}]*)\}/gu)].map(match => match[1]);
@@ -93,10 +99,10 @@ export function verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPac
   const sameFile = (left, right) => {
     if (!boundedFile(left).equals(boundedFile(right))) rollbackCompatibilityUnknown();
   };
-  const runtimeFiles = readdirSync(dirname(runtimeFile), { withFileTypes: true });
+  const runtimeFiles = readdirSync(runtimeRoot, { withFileTypes: true });
   for (const entry of runtimeFiles) {
     if (!entry.isFile() || !/^[A-Za-z0-9._-]+$/u.test(entry.name)) rollbackCompatibilityUnknown();
-    sameFile(join(dirname(runtimeFile), entry.name), join(upstreamPackageRoot, 'runtime', entry.name));
+    sameFile(join(runtimeRoot, entry.name), join(upstreamPackageRoot, 'runtime', entry.name));
   }
   const engineFiles = readdirSync(generatedRoot, { withFileTypes: true }).filter(entry => /query.?engine/iu.test(entry.name));
   if (!engineFiles.length || !engineFiles.some(entry => entry.name === 'libquery_engine-linux-musl.so.node')) rollbackCompatibilityUnknown();
@@ -109,10 +115,18 @@ export function verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPac
     schema, binaryTargets };
 }
 
-function verifyPrismaCoreClientRuntime({ sourceRoot, upstreamPackageRoot, enginePackageRoot }) {
-  const runtimeFile = join(sourceRoot, 'node_modules', '.prisma', 'client', 'runtime', 'library.js');
-  if (!existsSync(runtimeFile)) rollbackCompatibilityUnknown();
-  return verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPackageRoot, enginePackageRoot });
+export function verifyPrismaVendorRuntime(args) {
+  return verifyPrismaVendorRuntimeAtPaths(args);
+}
+
+export function verifyPrismaCoreClientRuntime({ sourceRoot, upstreamPackageRoot, enginePackageRoot }) {
+  const sourceRequire = createRequire(join(sourceRoot, 'package.json'));
+  const clientPackageRoot = dirname(sourceRequire.resolve('@prisma/client/package.json'));
+  const runtimeFile = sourceRequire.resolve('@prisma/client/runtime/library.js');
+  const generatedRoot = resolve(clientPackageRoot, '..', '..', '.prisma', 'client');
+  if (!existsSync(runtimeFile) || !existsSync(generatedRoot)) rollbackCompatibilityUnknown();
+  return verifyPrismaVendorRuntimeAtPaths({ sourceRoot, runtimeFile, runtimeRoot: dirname(runtimeFile), generatedRoot,
+    upstreamPackageRoot, enginePackageRoot, allowPnpmCore: true });
 }
 
 function rollbackReaderClosure(ts, root, roots, vendorPackages) {

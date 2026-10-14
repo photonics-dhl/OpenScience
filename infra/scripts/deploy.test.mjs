@@ -379,6 +379,29 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   assert.notEqual(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
 });
 
+test('core Prisma verifier resolves the pnpm virtual-store client layout', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-prisma-core-layout-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const trusted = createRequire(import.meta.url), upstreamPackageRoot = dirname(trusted.resolve('@prisma/client/package.json'));
+  const version = JSON.parse(await readFile(join(upstreamPackageRoot, 'package.json'), 'utf8')).version;
+  const enginePackageRoot = join(root, 'installed-engines'), engine = 'libquery_engine-linux-musl.so.node';
+  await mkdir(enginePackageRoot, { recursive: true });
+  await writeFile(join(enginePackageRoot, 'package.json'), JSON.stringify({ name: '@prisma/engines', version }));
+  await writeFile(join(enginePackageRoot, engine), Buffer.from('trusted-engine-fixture'));
+  await writeFile(join(root, 'package.json'), '{}');
+  const clientRoot = join(root, 'node_modules', '@prisma', 'client');
+  await mkdir(join(clientRoot, 'runtime'), { recursive: true });
+  await writeFile(join(clientRoot, 'package.json'), JSON.stringify({ name: '@prisma/client', version }));
+  await copyFile(join(upstreamPackageRoot, 'runtime', 'library.js'), join(clientRoot, 'runtime', 'library.js'));
+  const generatedRoot = join(root, 'node_modules', '.prisma', 'client');
+  await mkdir(generatedRoot, { recursive: true });
+  await writeFile(join(generatedRoot, 'package.json'), JSON.stringify({ name: 'prisma-client-fixture', version, main: 'index.js' }));
+  await writeFile(join(generatedRoot, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
+  await copyFile(join(enginePackageRoot, engine), join(generatedRoot, engine));
+  assert.deepEqual(deployLock.verifyPrismaCoreClientRuntime({ sourceRoot: root, upstreamPackageRoot, enginePackageRoot }).binaryTargets,
+    ['native', 'linux-musl']);
+});
+
 test('ordinary rollback never permits an unknown reader because persisted-state diagnostics are empty', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-reader-hold-'));
   t.after(() => rm(root, { recursive: true, force: true }));
