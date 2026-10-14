@@ -81,9 +81,14 @@ async function fixture(native = true) {
         visualAction: 'One arrow along x.', sourceClaimIds: [id(5)] }] } } };
   db.presentationAssets.push(parent); db.presentationAssetClaims.push({ presentationAssetId: id(8), claimId: id(5) });
   const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+  const nativeObjects = new Map<string, Buffer>();
   const deps = { prisma, redis: { lpush: async () => 1 }, mailer: {} as never,
     ...(native ? { nativeAgentRuntime: runtime } : {}),
-    storage: { getObject: async () => ({ body: Readable.from([bytes]), size: bytes.length }) } };
+    storage: {
+      headObject: async (key: string) => nativeObjects.has(key) ? { key, size: nativeObjects.get(key)!.length } : null,
+      putObject: async (key: string, body: Uint8Array) => { const value = Buffer.from(body); nativeObjects.set(key, value); return { key, size: value.length }; },
+      getObject: async (key: string) => { const value = nativeObjects.get(key) ?? bytes; return { body: Readable.from([value]), size: value.length }; },
+    } };
   const session = await createAgentSession(deps as never, { userId: id(1), researchObjectId: id(3), kind: 'visualization' });
   const payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'image', sourceClaimIds: [id(5)],
     sceneImage: { storyboardAssetId: id(8), sceneIndex: 0 } };
