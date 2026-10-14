@@ -258,7 +258,8 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
 }
 
 /** Final task adoption shares the same source readers used before each Worker call and asset write. */
-export async function requireNativeIllustrationTerminalSource(tx: Prisma.TransactionClient, task: AgentTask): Promise<void> {
+export async function requireNativeIllustrationTerminalSource(tx: Prisma.TransactionClient, task: AgentTask,
+  nativeBaseProofReader?: Parameters<typeof requireStoryboardBase>[2]): Promise<void> {
   if (readNativeAgentExecution(task.result)?.profile !== 'paper-illustration') return;
   const result = record(task.result) ? task.result : {};
   const context = record(result.nativeIllustrationContext) ? result.nativeIllustrationContext : undefined;
@@ -267,7 +268,7 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
   const ro = await tx.researchObject.findUnique({ where: { id: payload.researchObjectId } });
   if (!context || !session || !ro || !isDeepStrictEqual(context.payload, payload)) blocked();
   const base = payload.storyboard?.output === 'video' && payload.storyboard.narrative === true
-    ? await requireStoryboardBase(tx, payload) : undefined;
+    ? await requireStoryboardBase(tx, payload, nativeBaseProofReader) : undefined;
   if (context.baseIdentity !== (base?.identity ?? null)) blocked();
   const claims = await tx.claimNode.findMany({ where: { id: { in: payload.sourceClaimIds },
     researchObjectId: payload.researchObjectId, versionId: payload.versionId } });
