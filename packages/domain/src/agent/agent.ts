@@ -1039,7 +1039,9 @@ export async function cancelAgentTask(
         }, ctx);
         return { task: stopped.task, outcome: 'applied' as const };
       }, { isolationLevel: 'Serializable' });
-      if (result.outcome === 'applied') await syncIngestionState(deps, result.task.id, 'failed', result.task.error);
+      // Replays also repair a post-commit ingestion-state write that may have
+      // failed after the owned stop itself was durable.
+      if (result.outcome !== 'terminal') await syncIngestionState(deps, result.task.id, 'failed', result.task.error);
       return { ...taskToView(result.task), outcome: result.outcome };
     } catch (error) {
       if (!isSerializableWriteConflict(error) || attempt >= 2) throw error;
