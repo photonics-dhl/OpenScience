@@ -19,6 +19,7 @@ const JOURNAL_PHASES = new Set(['prepared', 'migrating', 'switching', 'published
 const NATIVE_ROOT = '/opt/openscience-hermes';
 const NATIVE_TIMER = 'openscience-hermes-broker.timer';
 const executeFile = promisify(execFile);
+const VERIFIER_SOURCE_URL = import.meta.url;
 
 const APPLICATION_ROLLBACK_READERS = [
   ['apps/agent-worker/src/index.ts'],
@@ -951,29 +952,61 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   return true;
 }
 
-export async function verifyApplicationRollbackReaders({ candidateRoot, rollbackRoot, compilerRoot = candidateRoot, roots = APPLICATION_ROLLBACK_READERS }) {
+export async function verifyApplicationRollbackReaders({ candidateRoot, rollbackRoot, compilerRoot = candidateRoot, roots = APPLICATION_ROLLBACK_READERS, diagnostics = false }) {
   // A healthy release/runtime marker cannot prove that persisted paid work stays
   // readable. Never execute rollback code or grant downgrade from a live empty query.
+  let stage = 'worker-candidate';
   try {
     if (roots === APPLICATION_ROLLBACK_ROOTS) {
       verifyWorkerRecoveryWiring({ sourceRoot: resolve(candidateRoot), compilerRoot });
+      stage = 'worker-rollback';
       verifyWorkerRecoveryWiring({ sourceRoot: resolve(rollbackRoot), compilerRoot });
     }
+    stage = 'compiler';
     const trustedRequire = createRequire(join(compilerRoot, 'package.json')), ts = trustedRequire('typescript');
     let vendorPackages;
+    stage = 'vendor-resolution';
     try {
       vendorPackages = { upstreamPackageRoot: dirname(trustedRequire.resolve('@prisma/client/package.json')),
         enginePackageRoot: dirname(createRequire(trustedRequire.resolve('prisma/package.json')).resolve('@prisma/engines/package.json')) };
     } catch { /* Any generated vendor module still fails closed without both installed packages. */ }
     if (roots === APPLICATION_ROLLBACK_ROOTS) {
       if (!vendorPackages) rollbackCompatibilityUnknown();
+      stage = 'core-candidate';
       verifyPrismaCoreClientRuntime({ sourceRoot: resolve(candidateRoot), ...vendorPackages });
+      stage = 'core-rollback';
       verifyPrismaCoreClientRuntime({ sourceRoot: resolve(rollbackRoot), ...vendorPackages });
     }
+    stage = 'closure-candidate';
     const current = rollbackReaderClosure(ts, resolve(candidateRoot), roots, vendorPackages);
+    stage = 'closure-rollback';
     const previous = rollbackReaderClosure(ts, resolve(rollbackRoot), roots, vendorPackages);
+    stage = 'comparison';
     if (JSON.stringify(current) !== JSON.stringify(previous)) rollbackCompatibilityUnknown();
-  } catch { rollbackCompatibilityUnknown(); }
+  } catch (error) {
+    if (diagnostics === true) {
+      try {
+        const knownCodes = ['ENOENT', 'ENOTDIR', 'EACCES', 'ELOOP', 'MODULE_NOT_FOUND', 'ERR_PACKAGE_PATH_NOT_EXPORTED'];
+        const errorCode = error?.code;
+        const code = knownCodes.includes(errorCode) ? errorCode
+          : typeof error?.message === 'string' && error.message.startsWith('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN:')
+            ? 'COMPATIBILITY_UNKNOWN' : 'UNCLASSIFIED';
+        const verifierLines = [];
+        for (const frame of (typeof error?.stack === 'string' ? error.stack.slice(0, 16384) : '').split(/\r?\n/u)) {
+          if (!/^\s+at /u.test(frame)) continue;
+          const location = frame.indexOf(`${VERIFIER_SOURCE_URL}:`);
+          if (location === -1) continue;
+          const match = frame.slice(location + VERIFIER_SOURCE_URL.length + 1).match(/^(\d+):\d+\)?$/u);
+          const line = match ? Number(match[1]) : undefined;
+          if (Number.isSafeInteger(line) && line > 0 && line <= 1_000_000 && !verifierLines.includes(line)) verifierLines.push(line);
+          if (verifierLines.length === 3) break;
+        }
+        // Never emit the message, raw stack, error.path or process environment.
+        console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage, code, verifierLines })}`);
+      } catch { /* Diagnostic output must not replace the fail-closed result. */ }
+    }
+    rollbackCompatibilityUnknown();
+  }
 }
 
 async function applicationRollbackPreflight(options) {

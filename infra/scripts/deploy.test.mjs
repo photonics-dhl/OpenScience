@@ -32,7 +32,49 @@ test('skill-path keeps official Prisma targets and runs the complete rollback se
   assert.match(workflow, /require\.resolve\('@prisma\/client\/package\.json'\)/u);
   assert.match(workflow, /path\.join\(root, '\.\.', '\.\.', '\.prisma', 'client'\)/u);
   assert.match(workflow, /packages\/search\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
-  assert.match(workflow, /verifyApplicationRollbackReaders\(\{ candidateRoot: process\.env\.GITHUB_WORKSPACE, rollbackRoot: process\.env\.GITHUB_WORKSPACE \}\)/u);
+  assert.match(workflow, /verifyApplicationRollbackReaders\(\{ candidateRoot: process\.env\.GITHUB_WORKSPACE, rollbackRoot: process\.env\.GITHUB_WORKSPACE, diagnostics: true \}\)/u);
+});
+
+test('rollback verifier diagnostics are opt-in, bounded and preserve rejection', async () => {
+  const verifierSource = deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(verifierSource);
+  const events = [], failure = new Error('private-connection-and-paper-content');
+  let rejectDiagnosticOutput = false;
+  failure.code = 'MODULE_NOT_FOUND';
+  failure.stack = `Error: ${failure.message}\n    at unrelated (/private-user/secret-path:900:2)`;
+  const verify = runInNewContext(`${verifierSource.replace('export ', '')}; verifyApplicationRollbackReaders`, {
+    APPLICATION_ROLLBACK_READERS: [], APPLICATION_ROLLBACK_ROOTS: {}, resolve, join,
+    VERIFIER_SOURCE_URL: new URL('./production-deploy-lock.mjs', import.meta.url).href,
+    createRequire() { throw failure; },
+    console: { error(value) { if (rejectDiagnosticOutput) throw Error('private-log-sink-failure'); events.push(value); } },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  for (const diagnostics of [undefined, false, 'true']) {
+    await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.equal(events.length, 0);
+  }
+  await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.equal(events.length, 1);
+  const diagnostic = JSON.parse(events[0].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, ''));
+  assert.deepEqual(diagnostic, { stage: 'compiler', code: 'MODULE_NOT_FOUND', verifierLines: [] });
+  assert.doesNotMatch(events[0], /private|connection|paper|secret-path|candidate|rollback/u);
+  failure.code = 'private-error-code';
+  failure.path = '/private-user/secret-path';
+  const verifierUrl = new URL('./production-deploy-lock.mjs', import.meta.url).href;
+  failure.stack += [123, 456, 789, 900].map(line => `\n    at check (${verifierUrl}:${line}:2)`).join('');
+  await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.deepEqual(JSON.parse(events[1].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')),
+    { stage: 'compiler', code: 'UNCLASSIFIED', verifierLines: [123, 456, 789] });
+  assert.doesNotMatch(events[1], /private|connection|paper|secret-path|file:|production-deploy-lock/u);
+  rejectDiagnosticOutput = true;
+  await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.equal(events.length, 2);
+  rejectDiagnosticOutput = false;
+  let codeReads = 0;
+  Object.defineProperty(failure, 'code', { get() { codeReads += 1; return codeReads === 1 ? 'ENOENT' : 'private-error-code'; } });
+  await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.equal(codeReads, 1);
+  assert.equal(JSON.parse(events[2].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')).code, 'ENOENT');
 });
 
 test('bounded Worker recovery wiring proof accepts the current construction path', () => {
