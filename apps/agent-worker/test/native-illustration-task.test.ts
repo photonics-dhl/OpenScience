@@ -18,6 +18,42 @@ const science = { title: 'Two regions', narrative: { mainMessage: 'A supported r
 
 const IMAGE_REPAIR_DESCRIPTION = "After invalid_illustration, use the actual diagnostic and named fields. If its source or conditions are uncertain, make a bounded paper_read/paper_view of the same authorized paper or read one relevant existing Skill before repairing. Then copy the latest returned scienceToolCallId and replace exactly one reported scene, preserving every other scene and root field. Never add Claims/evidence grants, change author meaning, resend full science or submit art while unresolved. Syntax alone may be malformed output, not a platform fault. On an explicit platform/resource/budget failure or no source-supported scene repair, preserve the candidate and diagnostic and stop. (exact scienceToolCallId feedback)";
 const OLD_REPAIR_GUIDANCE = "如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。";
+// Saved compatibility fixtures use the actual original descriptors, not the new fresh profile.
+const originalImageTools = [...NATIVE_PAPER_TOOLS, ...NATIVE_ILLUSTRATION_TOOLS];
+const savedTools = (tools: typeof originalImageTools, messages: ChatMessage[] = []) => ({
+  turns: [{ request: { messages, options: { tools: tools.map(tool => ({ type: 'function', function: structuredClone(tool) })) } } }],
+}) as unknown as NativeAgentSessionState;
+
+describe('unmarked fresh IMAGE planning guidance', () => {
+  it('routes diagnostic-first repair without enabling the explicit-trig validator or changing science/context', () => {
+    const fresh = nativeIllustrationToolProfile(null, 'image');
+    const original = nativeIllustrationToolProfile(savedTools(originalImageTools), 'image');
+    for (const name of ['paper_illustration_context', 'paper_illustration_science'])
+      expect(fresh.sourceTools.find(tool => tool.name === name)).toEqual(original.sourceTools.find(tool => tool.name === name));
+    expect(fresh).toMatchObject({ sourceExplicitTrig: false, nativeVideo: false, sourceNotation: true,
+      scienceFeedback: true, sourceQuantityProse: true, sourceQuantityLocations: true });
+    expect(fresh.sourceTools.map(tool => tool.name)).toEqual(original.sourceTools.map(tool => tool.name));
+    expect(fresh.sourceTools.find(tool => tool.name === 'paper_illustration_science_repair')!.description).toBe(IMAGE_REPAIR_DESCRIPTION);
+    expect(nativeScienceRepairGuidance(fresh.sourceTools)).toContain('paper_read/paper_view');
+    expect(nativeScienceRepairGuidance(original.sourceTools)).toBe(OLD_REPAIR_GUIDANCE);
+  });
+  it('restores the new serialized IMAGE descriptors and flags exactly, without another fresh classification', () => {
+    const fresh = nativeIllustrationToolProfile(null, 'image');
+    const state = savedTools(fresh.sourceTools);
+    const before = JSON.stringify(state);
+    expect(nativeIllustrationToolProfile(state, 'image')).toEqual(fresh);
+    expect(JSON.stringify(state)).toBe(before);
+    expect(fresh.sourceTools.find(tool => tool.name === 'paper_illustration_review')!.description)
+      .toContain('encoding, composition, treatment and constraints');
+  });
+  it.each([undefined, 'video-optional-audio-v1'] as const)('leaves the original VIDEO descriptors and resumed flags unchanged: %s', contract => {
+    const video = nativeIllustrationToolProfile(null, 'video', contract);
+    expect(nativeIllustrationToolProfile(savedTools(video.sourceTools), 'video', contract)).toEqual(video);
+    for (const name of ['paper_illustration_science_repair', 'paper_illustration_art'])
+      expect(video.sourceTools.find(tool => tool.name === name)).toEqual(originalImageTools.find(tool => tool.name === name));
+    expect(nativeScienceRepairGuidance(video.sourceTools)).toBe(OLD_REPAIR_GUIDANCE);
+  });
+});
 
 describe('saved image explicit trig reader', () => {
   const contract = 'image-source-explicit-trig-v1';
@@ -26,7 +62,7 @@ describe('saved image explicit trig reader', () => {
   const explicit = 'τ₁ ≈ (FWHMs/Ve)*(1-(β*cos(θ)))';
   const compact = 'The source gives the factor (FWHM_S/Ve)·(1−βcosθ).';
   const saved = (newTools: boolean, messages: ChatMessage[] = []) => ({
-    turns: [{ request: { messages, options: { tools: nativeIllustrationToolProfile(null).sourceTools.map(tool => ({
+    turns: [{ request: { messages, options: { tools: originalImageTools.map(tool => ({
       type: 'function', function: { ...structuredClone(tool),
         ...(newTools && tool.name === 'paper_illustration_science' ? { description: tool.description + suffix } : {}),
         ...(newTools && tool.name === 'paper_illustration_science_repair' ? { description: IMAGE_REPAIR_DESCRIPTION } : {}) },
@@ -115,9 +151,10 @@ describe('saved image explicit trig reader', () => {
 });
 
 describe('fresh image diagnostic guidance', () => {
-  const state = (messages: ChatMessage[] = []) => {
+  const state = (messages: ChatMessage[] = [], fresh = false) => {
+    if (fresh) return savedTools(nativeIllustrationToolProfile(null).sourceTools, messages);
     const suffix = ' Image source explicit-trig contract: complete sin/cos/tan calls with one Greek argument are equivalent to their compact source notation only under this exact saved image contract. Retain every coefficient, function, argument and denominator; unknown or incomplete syntax stays unsupported.';
-    return { turns: [{ request: { messages, options: { tools: nativeIllustrationToolProfile(null).sourceTools.map(tool => ({
+    return { turns: [{ request: { messages, options: { tools: originalImageTools.map(tool => ({
       type: 'function', function: { ...structuredClone(tool),
         ...(tool.name === 'paper_illustration_science' ? { description: tool.description + suffix } : {}),
         ...(tool.name === 'paper_illustration_science_repair' ? { description: IMAGE_REPAIR_DESCRIPTION } : {}) },
@@ -126,19 +163,19 @@ describe('fresh image diagnostic guidance', () => {
   const profile = () => nativeIllustrationToolProfile(state(), 'image', 'image-source-explicit-trig-v1');
   const scene = (value: string) => ({ ...structuredClone(science.scenes[0]!), narration: value, message: value,
     encoding: value, labels: [value], subjects: [{ description: value, basis: { sourceId: 's1' } }] });
-  const setup = () => {
+  const setup = (fresh = false) => {
     const selected = [{ ...structuredClone(claims[0]!), sourcePassages: [...claims[0]!.sourcePassages,
       { evidenceId: '20000000-0000-4000-8000-000000000002', relation: 'supports', text: 'The reported width is w=27 nm under the stated condition.' }] }];
-    const p = profile(), input = { ...structuredClone(science), scenes: [structuredClone(science.scenes[0]!), scene('w=28 nm')] };
-    const f = fixture({ ...p, input: { claims: selected as never, settings: { ...settings, narrativeSceneLimit: 2 }, sourceExplicitTrig: true } });
+    const p = fresh ? nativeIllustrationToolProfile(null) : profile(), input = { ...structuredClone(science), scenes: [structuredClone(science.scenes[0]!), scene('w=28 nm')] };
+    const f = fixture({ ...p, input: { claims: selected as never, settings: { ...settings, narrativeSceneLimit: 2 }, sourceExplicitTrig: p.sourceExplicitTrig } });
     return { f, input, selected, p };
   };
-  const replay = (f: ReturnType<typeof fixture>, messages = f.messages) => createNativeIllustrationMaterializer({
-    ...f.input, ...nativeIllustrationToolProfile(state(messages), 'image', 'image-source-explicit-trig-v1'), savedState: state(messages),
+  const replay = (f: ReturnType<typeof fixture>, messages = f.messages, fresh = false) => createNativeIllustrationMaterializer({
+    ...f.input, ...nativeIllustrationToolProfile(state(messages, fresh), 'image', fresh ? undefined : 'image-source-explicit-trig-v1'), savedState: state(messages, fresh),
   }).finish(messages, '{"reviewToolCallId":"review-call"}');
 
   it('keeps the old tool array and instruction value exact, including the empty-tool case', () => {
-    const old = nativeIllustrationToolProfile(null);
+    const old = nativeIllustrationToolProfile(savedTools(originalImageTools));
     expect(old.sourceTools).toEqual([...NATIVE_PAPER_TOOLS, ...NATIVE_ILLUSTRATION_TOOLS]);
     expect(nativeScienceRepairGuidance(old.sourceTools)).toBe(OLD_REPAIR_GUIDANCE);
     expect(nativeScienceRepairGuidance(old.sourceTools, false)).toBe(OLD_REPAIR_GUIDANCE);
@@ -149,8 +186,8 @@ describe('fresh image diagnostic guidance', () => {
     expect(old.sourceTools.find(tool => tool.name === 'paper_illustration_science_repair')!.description).not.toBe(IMAGE_REPAIR_DESCRIPTION);
   });
 
-  it('reconstructs invalid -> actual authorized paper read -> same-call-ID repair without changing the root or other scene', async () => {
-    const { f, input, selected, p } = setup(), before = structuredClone(input);
+  it.each([false, true])('reconstructs invalid -> actual authorized paper read -> same-call-ID repair without changing root/other scene (unmarked fresh=%s)', async fresh => {
+    const { f, input, selected, p } = setup(fresh), before = structuredClone(input);
     const parser = { name: 'fixture', version: '1' };
     const map: DocumentSourceMap = { artifactId: 'paper', contentHash: 'a'.repeat(64), parser,
       pages: selected[0]!.sourcePassages.map((passage, index) => ({ page: index + 1, width: 100, height: 100,
@@ -162,6 +199,7 @@ describe('fresh image diagnostic guidance', () => {
     const invalid = f.invoke('paper_illustration_science', input, 'science-invalid');
     expect(invalid).toMatchObject({ status: 'invalid_illustration', scienceToolCallId: 'science-invalid', error: expect.stringContaining('_source') });
     const read = await paper.call('paper_read', args) as { passages: Array<{ text: string }> };
+    await expect(paper.call('paper_read', { passageIds: ['foreign-passage'] })).rejects.toThrow();
     // Canonical passages can retain a complete cross-page span; the bounded
     // read includes the exact selected source, rather than a truncated quote.
     expect(read.passages[0]!.text).toContain(selected[0]!.sourcePassages[1]!.text);
@@ -174,7 +212,7 @@ describe('fresh image diagnostic guidance', () => {
       layout: 'Put label 0 above subject 0.', treatment: 'Crisp ink on white paper.' })) }, 'art-call');
     f.invoke('paper_illustration_review', { planToolCallId: 'art-call', decision: 'accepted', summary: 'Fixture mapping agrees.',
       corrections: [], issues: [] }, 'review-call');
-    const result = replay(f), expected = materializeIllustrationScience({ ...before, scenes: [before.scenes[0]!] }, selected as never,
+    const result = replay(f, f.messages, fresh), expected = materializeIllustrationScience({ ...before, scenes: [before.scenes[0]!] }, selected as never,
       { ...settings, narrativeSceneLimit: 2 }, new Map(), true, true, true, true, true, true, true);
     expect((repaired.intent as typeof expected).scenes[0]).toEqual(expected.scenes[0]);
     expect(result.document.scenes[0]!.illustration!.subjects).toEqual(expected.scenes[0]!.illustration.subjects);
@@ -184,6 +222,7 @@ describe('fresh image diagnostic guidance', () => {
     expect(f.input.claims).toEqual(selected);
     const names = f.messages.filter(message => message.role === 'assistant').flatMap(message => message.toolCalls!.map(tool => tool.function.name));
     expect(names).toEqual(['paper_illustration_science', 'paper_read', 'paper_illustration_science_repair', 'paper_illustration_art', 'paper_illustration_review']);
+    expect(nativeScienceRepairGuidance(p.sourceTools, p.sourceExplicitTrig)).toContain('paper_read/paper_view');
     for (const failure of ['call-id', 'scene', 'source', 'receipt']) {
       const changed = structuredClone(f.messages);
       if (failure === 'receipt') {
@@ -197,14 +236,14 @@ describe('fresh image diagnostic guidance', () => {
         if (failure === 'source') repair.scene.subjects[0].basis.sourceId = 'foreign';
         call.function.arguments = JSON.stringify(repair);
       }
-      expect(() => replay(f, changed), failure).toThrow();
+      expect(() => replay(f, changed, fresh), failure).toThrow();
     }
   });
 
-  it('keeps local-only repair and an unresolved stop prefix free of new science/art/review calls', () => {
-    const { f, input } = setup();
+  it.each([false, true])('keeps local-only repair and an unresolved stop prefix free of new science/art/review calls (unmarked fresh=%s)', fresh => {
+    const { f, input, p } = setup(fresh);
     f.invoke('paper_illustration_science', input, 'science-invalid');
-    const stopped = structuredClone(f.messages), reader = createNativeIllustrationMaterializer({ ...f.input, ...profile(), savedState: state(stopped) });
+    const stopped = structuredClone(f.messages), reader = createNativeIllustrationMaterializer({ ...f.input, ...p, savedState: state(stopped, fresh) });
     expect(reader.call('paper_illustration_science', input, 0, 'science-invalid')).toEqual(JSON.parse(stopped[1]!.content));
     expect(() => reader.finish(stopped, '{"reviewToolCallId":"missing"}')).toThrow();
     f.invoke('paper_illustration_science_repair', { scienceToolCallId: 'science-invalid', sceneIndex: 1, scene: scene('w=27 nm') }, 'science-repaired');
@@ -641,7 +680,7 @@ const PAID_ANNOTATION_SCIENCE_DESCRIPTION = PAID_HZ_SCIENCE_DESCRIPTION + ' Reco
 const PAID_PROSE_SCIENCE_DESCRIPTION = PAID_ANNOTATION_SCIENCE_DESCRIPTION + ' A bare expression reference can match only that exact whole expression explicitly reported in the same supporting quote. Ordinary complete predicates after a comparison are prose, not units; unknown units remain binding. Use exact case-sensitive source IDs, supports relations and complete supporting text of 12..12000 characters; page markers or qualifiers cannot serve as subject bases. If an independent comparison is written after prose, separate it with a semicolon instead of an ambiguous mathematical wrapper; never remove functions, factors, terms or units.';
 const PAID_CONTEXT_DESCRIPTION = 'Read the exact reviewed six-dimensional paper understanding, Claims and bound sources, eligible originals, style catalogue and requested scope. Start here; source IDs sN belong to this immutable selection, whereas paper tools use P IDs.';
 function savedProfile(description: string | undefined, omitTools = false, contextDescription = PAID_CONTEXT_DESCRIPTION, repairCallIdFeedback = false): NativeAgentSessionState {
-  const tools = nativeIllustrationToolProfile(null).sourceTools.map(tool => ({ type: 'function' as const,
+  const tools = originalImageTools.map(tool => ({ type: 'function' as const,
     function: { ...structuredClone(tool), ...(tool.name === 'paper_illustration_science' ? { description } : {}),
       ...(tool.name === 'paper_illustration_science_repair' && !repairCallIdFeedback ? { description: tool.description.replace(' (exact scienceToolCallId feedback)', '') } : {}),
       ...(tool.name === 'paper_illustration_context' ? { description: contextDescription } : {}) } }));
