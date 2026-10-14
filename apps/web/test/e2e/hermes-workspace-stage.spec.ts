@@ -389,6 +389,15 @@ async function enterEditor(page: Page) {
   await expect(page).toHaveURL(new RegExp(roPath + '/edit\\?view=content$'));
 }
 
+test('plain editor visits keep the contribution view as the default', async ({ page }) => {
+  await mockWorkspace(page);
+  await page.goto(baseUrl + '/dashboard', { waitUntil: 'networkidle' });
+  await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: new RegExp(researchTitle) }).click();
+  await expect(page).toHaveURL(new RegExp(roPath + '/edit$'));
+  await expect(page.getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
+  await expect(page.locator('[data-workbench-section="content"]')).toHaveAttribute('aria-hidden', 'true');
+});
+
 test('only the primary left pointer invokes the toolbar avatar, without capture or drag', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
