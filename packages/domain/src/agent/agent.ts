@@ -169,6 +169,11 @@ type AgentTaskRetrySnapshot = Prisma.AgentTaskGetPayload<{
   include: { session: { include: { researchObject: { include: { workspace: { include: { members: true } } } } } } };
 }>;
 
+/** Journal Agent rows hold private workflow control state; journal APIs expose their products. */
+function isInternalJournalTask(task: { kind: string; session: { kind: string } }): boolean {
+  return task.kind === 'journal.generate' || task.session.kind === 'journal-editor';
+}
+
 function retryAuthorityInclude(userId: string) {
   return {
     session: {

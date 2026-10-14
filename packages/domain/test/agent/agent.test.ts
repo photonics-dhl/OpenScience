@@ -1782,6 +1782,18 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
 });
 
 describe('owner task stop fence', () => {
+  it('does not expose or stop internal journal-editor tasks', async () => {
+    const { deps, user, db } = await makeDeps();
+    db.agentSessions.push({ id: 'journal-editor-session', userId: user.id, researchObjectId: null, kind: 'journal-editor',
+      title: 'Journal', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({ id: 'journal-editor-task', sessionId: 'journal-editor-session', kind: 'journal.generate', status: 'pending',
+      progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, deletedAt: null, error: null,
+      payload: {}, result: null, interestContext: null, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: 'journal-editor-task', expectedExecutionAttempt: 0 }))
+      .rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+    expect(db.agentTasks[0]).toMatchObject({ status: 'pending', executionAttempt: 0, error: null });
+  });
+
   it('stops a pending generation before dispatch and preserves the paid row', async () => {
     const { deps, user, ro, db, redis } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
