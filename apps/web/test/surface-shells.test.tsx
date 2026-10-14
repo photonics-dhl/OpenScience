@@ -27,7 +27,7 @@ vi.mock('@/lib/public-server-api', () => ({
   getServerResearchIndex: async () => ({ items: [], nextCursor: null }),
 }));
 vi.mock('next/navigation', () => ({
-  usePathname: () => null,
+  usePathname: () => '/',
   useRouter: () => ({ replace: () => undefined }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -103,12 +103,12 @@ describe('Optical Editorial brand and surface shells', () => {
     const outsideNavigation = header.replace(navigation, '');
 
     expect(navigation).toContain('data-mobile-navigation-layout="wrapped"');
-    expect(navigation).toContain('data-mobile-navigation-grid="true"');
-    expect(navigation.match(/href="([^"]+)"/gu)).toEqual([
-      'href="/explore"', 'href="/journals"', 'href="/guide"',
-    ]);
+    expect(navigation.match(/href="([^"]+)"/gu)).toEqual(['href="/explore"']);
+    for (const menu of ['services', 'features', 'about']) {
+      expect(navigation).toContain(`data-route-item="${menu}"`);
+    }
     expect(outsideNavigation).toContain('data-shell-utility="true"');
-    for (const href of ['/dashboard', '/auth/login']) {
+    for (const href of ['/guide', '/auth/login']) {
       expect(outsideNavigation).toContain(`href="${href}"`);
       expect(navigation).not.toContain(`href="${href}"`);
     }
@@ -136,7 +136,7 @@ describe('Optical Editorial brand and surface shells', () => {
   it.each([
     ['research desk', DashboardShell, {}],
     ['research workspace', WorkspaceShell, { leftRail: 'Outline', rightRail: 'Evidence' }],
-  ] as const)('%s keeps every global research destination reachable', (_name, Shell, extraProps) => {
+  ] as const)('%s keeps global menus, discovery and signed-out access reachable', (_name, Shell, extraProps) => {
     const markup = renderToStaticMarkup(createElement(
       Shell,
       { skipLabel: 'Skip', ...extraProps },
@@ -144,13 +144,16 @@ describe('Optical Editorial brand and surface shells', () => {
     ));
 
     expect(markup).toContain('data-product-route-navigation="true"');
-    for (const href of ['/dashboard', '/explore', '/journals', '/guide']) {
+    for (const menu of ['services', 'features', 'about']) {
+      expect(markup).toContain(`data-route-item="${menu}"`);
+    }
+    for (const href of ['/explore', '/guide', '/auth/login']) {
       expect(markup).toContain(`href="${href}"`);
     }
     expect(markup).not.toContain('href="/research-objects/new"');
   });
 
-  it('identity pages keep public discovery and the research desk reachable', () => {
+  it('identity pages keep public discovery and signed-out research access reachable', () => {
     const markup = renderToStaticMarkup(createElement(
       IdentityShell,
       { skipLabel: 'Skip' },
@@ -159,7 +162,8 @@ describe('Optical Editorial brand and surface shells', () => {
 
     expect(markup).toContain('data-product-route-navigation="true"');
     expect(markup).toContain('href="/explore"');
-    expect(markup).toContain('href="/dashboard"');
+    expect(markup).toContain('href="/guide"');
+    expect(markup).toContain('href="/auth/login"');
   });
 
   it.each([

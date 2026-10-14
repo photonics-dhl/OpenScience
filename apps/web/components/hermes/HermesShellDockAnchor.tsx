@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import { HermesDockAnchor } from './HermesDockAnchor';
-import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 
 /**
  * Gives public surfaces without a page-owned Hermes anchor a compact host.

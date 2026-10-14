@@ -10,7 +10,7 @@ import { useSession } from '@/components/auth/SessionProvider';
 import { GuideResearchWorkspace } from '@/components/guide/GuideResearchWorkspace';
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
-import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStageContext';
 import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';

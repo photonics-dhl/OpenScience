@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import { HermesDockAnchor } from '../components/hermes/HermesDockAnchor';
+
+vi.mock('next/navigation', () => ({ usePathname: () => '/explore' }));
+vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 
 const source = (relativePath: string) => readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 
@@ -45,8 +51,14 @@ describe('Research Folio product system', () => {
     const anchor = source('../components/hermes/HermesDockAnchor.tsx');
     const surface = source('../components/research/ResearchSurfaceShell.tsx');
     expect(stage).toContain('data-hermes-placement={anchored ? \'anchored\' : \'detached\'}');
-    expect(anchor).toContain("data-hermes-companion-margin={floating ? undefined : 'true'}");
-    expect(anchor).not.toContain('aria-hidden="true"');
+    expect(anchor).toContain("data-hermes-companion-margin={floating && !avatarEntry ? undefined : 'true'}");
+    const markup = renderToStaticMarkup(createElement(HermesDockAnchor, {
+      floating: false, onInvoke: () => {},
+      suggestion: { kind: 'neutral', titleKey: 'guide.neutral.title', bodyKey: 'guide.neutral.body' },
+    }));
+    const renderedAnchor = markup.match(/<div\b[^>]*data-hermes-dock-anchor="true"[^>]*>/)?.[0];
+    expect(renderedAnchor).toBeDefined();
+    expect(renderedAnchor).not.toContain('aria-hidden="true"');
     expect(surface).toContain('<HermesDockAnchor');
     expect(surface).toContain('<HermesAssistantDrawer');
   });

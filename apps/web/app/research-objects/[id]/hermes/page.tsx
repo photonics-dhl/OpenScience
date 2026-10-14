@@ -11,7 +11,7 @@ import { HermesSourceReview } from '@/components/hermes/HermesSourceReview';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
-import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStageContext';
 import { HermesExtractionEvidence } from '@/components/hermes/HermesExtractionEvidence';
 import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';

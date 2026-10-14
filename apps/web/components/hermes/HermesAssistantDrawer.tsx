@@ -32,12 +32,12 @@ import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
-import { ResearchPublication } from '@/components/research/ResearchPublication';
+import { ResearchPublicationPanel } from '@/components/research/ResearchPublicationPanel';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { HermesMediaReview } from './HermesMediaReview';
 import { ScientificText } from '@/components/content/ScientificText';
 import { HermesWritingDraft, type HermesWritingDraftValue } from './HermesWritingDraft';
-import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : React.useLayoutEffect;
 
@@ -879,7 +879,7 @@ function HermesAssistantDrawerContent({
               onBack={() => { setPresentationIntent(null); setActionBusy(false); }}
               onDone={() => { setPresentationIntent(null); setPresentationSuggestion(undefined); setActionBusy(false); setGoal(''); setLocalMessage(tc('productionSubmitted')); if (resolvedDraftScope) saveHermesGuideGoal(draftStorage, resolvedDraftScope, ''); }} />
           </React.Suspense>}
-          {publicationVersion && routeResearchObjectId && <ResearchPublication key={`${routeResearchObjectId}:${publicationVersion}`} researchObjectId={routeResearchObjectId} selectedVersionId={publicationVersion} embedded conversation onConfirmationChange={registerAction} beforePublish={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onPublished={(url) => { setPublicUrl(url); setLocalMessage(tc('published')); }} />}
+          {publicationVersion && routeResearchObjectId && <ResearchPublicationPanel key={`${routeResearchObjectId}:${publicationVersion}`} researchObjectId={routeResearchObjectId} selectedVersionId={publicationVersion} embedded conversation onConfirmationChange={registerAction} beforePublish={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onPublished={(url) => { setPublicUrl(url); setLocalMessage(tc('published')); }} />}
           {mediaReviewVersion && routeResearchObjectId && <HermesMediaReview key={`${routeResearchObjectId}:${mediaReviewVersion}`} researchObjectId={routeResearchObjectId} versionId={mediaReviewVersion} onConfirmationChange={registerAction} beforeReview={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onReviewed={() => window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: routeResearchObjectId, versionId: mediaReviewVersion } }))} />}
           {route === 'research-object-edit' && routeResearchObjectId && viewerId && firstImageViewVersion
             && task?.researchObjectId === routeResearchObjectId && (result?.firstImageRun || !result)

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { useTranslations } from 'next-intl';
 
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
-import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStageContext';
 import { hasExplicitMath, ScientificText, withoutInternalSourceMarkers } from '@/components/content/ScientificText';
 import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import type { SdfCore } from '../../lib/api';

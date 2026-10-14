@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 import type { HermesAnchorAction, HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import type { HermesDockSide } from '@/lib/hermes/travel-path';
 
-import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 
 const DEFAULT_ACTIONS: HermesAnchorAction[] = ['explain', 'draft', 'check'];
 const DEFAULT_SIDES: HermesDockSide[] = ['right', 'top'];

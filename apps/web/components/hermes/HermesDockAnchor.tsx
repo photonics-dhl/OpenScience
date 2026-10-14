@@ -8,7 +8,7 @@ import { hermesStartsCompact, hermesUsesAvatarEntry } from '@/lib/hermes/compani
 
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
-import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
 
