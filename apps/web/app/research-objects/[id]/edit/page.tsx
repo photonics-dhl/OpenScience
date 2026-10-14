@@ -102,7 +102,14 @@ type IngestionProposal = {
 
 const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
 const aggregateCoreText = (core: SdfCore) => SDF_FIELDS.map((field) => core[field].trim()).filter(Boolean).join('\n\n');
-type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[]; history?: string | string[] } };
+type EditorView = 'contribution' | 'content' | 'media' | 'materials';
+type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[]; history?: string | string[]; stage?: string | string[]; view?: string | string[] } };
+
+function editorViewFromSearch(searchParams?: EditorPageProps['searchParams']): EditorView {
+  const view = typeof searchParams?.view === 'string' ? searchParams.view : '';
+  if (view === 'content' || view === 'media' || view === 'materials') return view;
+  return searchParams?.stage === 'media' ? 'media' : 'contribution';
+}
 
 export default function EditorPage(props: EditorPageProps) {
   return <EditorWorkspace key={props.params.id} {...props} />;
@@ -127,6 +134,15 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const locale = useLocale() as Locale;
   const roId = params.id;
   const router = useRouter();
+  const requestedView = editorViewFromSearch(searchParams);
+  const [activeView, setActiveView] = useState<EditorView>(requestedView);
+  useEffect(() => setActiveView(requestedView), [requestedView]);
+  const selectView = useCallback((view: EditorView) => {
+    setActiveView(view);
+    const next = new URLSearchParams(window.location.search);
+    next.set('view', view);
+    router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?${next.toString()}`, { scroll: false });
+  }, [roId, router]);
   const ingestionTaskId = typeof searchParams?.ingestionTask === 'string' ? searchParams.ingestionTask : '';
   const hermesTaskId = typeof searchParams?.hermesTask === 'string' ? searchParams.hermesTask : '';
   const [hermesHandoffResolved, setHermesHandoffResolved] = useState(!hermesTaskId);
@@ -1215,6 +1231,16 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={extracting ? 'scanning' : undefined} suggestion={editorSuggestion} workspaceId={roId} />
           <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
           <details className={styles.moreMenu}><summary>{th('more')}</summary><div><button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setHistoryOpen(true); }}>{th('title')}</button><ResearchContentManager researchObjectId={params.id} onChanged={(removed) => void refreshManagedContent(removed)} /></div></details>
+          <nav className={styles.viewTabs} aria-label={tw('viewsLabel')}>
+            {([
+              ['contribution', tw('coreContribution')],
+              ['content', tw('researchContent')],
+              ['media', tw('mediaAndVideo')],
+              ['materials', tw('materialsRecords')],
+            ] as const).map(([view, label]) => (
+              <button key={view} type="button" className={styles.viewTab} data-active={activeView === view ? 'true' : undefined} aria-current={activeView === view ? 'page' : undefined} onClick={() => selectView(view)}>{label}</button>
+            ))}
+          </nav>
         </div>}
         header={
           <ObjectHeader
@@ -1230,8 +1256,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         outline={null}
         main={
           <div className={styles.document}>
-            <section className={styles.leadSection} aria-label={tw('contribution')}>
-              <ScientificText hideSourceMarkers as="p" className={styles.contribution}>{state.core.insight || state.core.results || state.core.problem || tw('contributionPlaceholder')}</ScientificText>
+            {(activeView === 'contribution' || draftPrompt || historyMessage || errorMsg) ? <section className={styles.leadSection} aria-label={tw('contribution')}>
+              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} /> : null}
               {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
@@ -1246,9 +1272,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 <button className={styles.secondaryButton} onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
               </div>
               )}
-            </section>
+            </section> : null}
 
-            <section className={styles.productSection} id="workbench-media" data-workbench-section="media">
+            <section className={`${styles.productSection} ${activeView === 'media' ? '' : styles.viewPanelHidden}`} id="workbench-media" data-workbench-section="media" aria-hidden={activeView === 'media' ? undefined : true}>
               <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
               {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
               {versions[0] && snapshotReady ? <ResearchPresentation key={`${versions[0].versionId}:${contentRefresh}`} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
@@ -1258,14 +1284,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div> : null}
             </section>
 
-            <section className={styles.contentSection} id="workbench-content" data-workbench-section="content">
+            <section className={`${styles.contentSection} ${activeView !== 'content' && activeView !== 'materials' ? styles.viewPanelHidden : ''}`} id="workbench-content" data-workbench-section="content" aria-hidden={activeView === 'content' || activeView === 'materials' ? undefined : true}>
 
-            {ingestionReviewActive && <button type="button" className={styles.secondaryButton} onClick={() => { setHermesOpen(true); if (sourceReviewRef.current) sourceReviewRef.current.open = true; }}>{th('reviewInHermes')}</button>}
-            <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} />
+            {activeView === 'content' && ingestionReviewActive && <button type="button" className={styles.secondaryButton} onClick={() => { setHermesOpen(true); if (sourceReviewRef.current) sourceReviewRef.current.open = true; }}>{th('reviewInHermes')}</button>}
+            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} /> : null}
 
-            {readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
+            {activeView === 'content' && readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
 
-            <details className={styles.disclosure}>
+            {activeView === 'materials' ? <details className={styles.disclosure} open>
               <summary>{tw('supportingMaterials')}</summary>
               <div className={styles.supportingBody}>
             <details className={styles.subDisclosure}>
@@ -1274,7 +1300,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
                   setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
                   setSelectedIngestionTaskId(task.id);
-                  router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?ingestionTask=${encodeURIComponent(task.id)}`);
+                  const next = new URLSearchParams(window.location.search);
+                  next.set('ingestionTask', task.id);
+                  router.replace(`/research-objects/${encodeURIComponent(roId)}/edit?${next.toString()}`, { scroll: false });
                 }} />
 
               </div>
@@ -1315,7 +1343,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             </details>}
 
               </div>
-            </details>
+            </details> : null}
             </section>
           </div>
         }

@@ -17,6 +17,7 @@ interface Props {
   onGenerateSceneImage?: (claimIds: string[], request: SceneImageRequest) => void | Promise<StoryboardWriteOutcome>;
   onGenerateVideo?: (claimIds: string[], request: PresentationVideoRequest) => void;
   onTransition: (asset: PresentationAsset, status: 'approved' | 'rejected') => unknown | Promise<unknown>;
+  compact?: boolean;
 }
 
 type Selection = { latestId: string; assetId: string } | null;
@@ -41,7 +42,7 @@ export function selectStoryboard(assets: PresentationAsset[], selection: Selecti
   return { active, choices, history: plans.filter(asset => asset.status === 'rejected') };
 }
 
-export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onTransition }: Props) {
+export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onTransition, compact = false }: Props) {
   const t = useTranslations('presentation');
   const tw = useTranslations('workbench');
   const ts = useTranslations('presentation.storyboard');
@@ -120,10 +121,12 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
     {active ? <section data-active-storyboard={active.id} aria-labelledby={`${selectId}-heading`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id={`${selectId}-heading`} className="m-0 text-base font-semibold">{t('currentPlanTitle')}</h2>
-          <p className="m-0 mt-1 text-sm text-os-muted-paper">{active.storyboard!.document.title} · {t(`assetStatus.${active.status}`)}</p>
+          {compact ? <p id={`${selectId}-heading`} className="m-0 text-sm leading-6 text-os-muted-paper">{t(`assetStatus.${active.status}`)}</p> : <>
+            <h2 id={`${selectId}-heading`} className="m-0 text-base font-semibold">{t('currentPlanTitle')}</h2>
+            <p className="m-0 mt-1 text-sm text-os-muted-paper">{active.storyboard!.document.title} · {t(`assetStatus.${active.status}`)}</p>
+          </>}
         </div>
-        {choices.length > 1 ? <label className="grid gap-1 text-xs font-semibold text-os-muted-paper" htmlFor={selectId}>
+        {!compact && choices.length > 1 ? <label className="grid gap-1 text-xs font-semibold text-os-muted-paper" htmlFor={selectId}>
           {t('selectPlan')}
           <select id={selectId} value={active.id} disabled={unavailable}
             className="min-h-11 max-w-full rounded-control border border-os-rule-paper bg-os-paper px-3 py-2 text-sm text-os-ink disabled:opacity-50"
@@ -132,15 +135,15 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
           </select>
         </label> : null}
       </div>
-      <p className="m-0 mt-2 text-sm leading-6 text-os-muted-paper">{t('currentPlanBody')}</p>
-      <details key={active.id} open={active.status === 'draft'} data-current-storyboard-details="true" className="mt-3">
+      {!compact ? <p className="m-0 mt-2 text-sm leading-6 text-os-muted-paper">{t('currentPlanBody')}</p> : null}
+      {!compact ? <details key={active.id} open={active.status === 'draft'} data-current-storyboard-details="true" className="mt-3">
         <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">{t('planningHistoryTitle')}</summary>
         <StoryboardPanel storyboard={active.storyboard}
           parent={assets.find(asset => asset.id === active.storyboard?.baseAssetId)?.storyboard}
           baseAssetId={active.id} claims={claims} selectedClaimIds={active.sourceClaimIds}
           canGenerate={writable} onGenerate={onGenerateStoryboard}
           canGenerateImage={false} />
-      </details>
+      </details> : null}
       {writable && active.status === 'draft' && active.canTransition === true ? <div className="mt-4 flex flex-wrap gap-3">
         {active.canApprove === true ? <button type="button" className="min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold"
           disabled={transitionStates[active.id]?.state === 'working'} aria-busy={transitionStates[active.id]?.state === 'working'}
@@ -179,7 +182,7 @@ export function StoryboardPlans({ assets, claims, canWrite, unavailable, onGener
       </div> : null}
       {canWrite && onGenerateVideo ? <MechanismVideoPanel key={active.id} parent={active} assets={assets} disabled={unavailable} onGenerate={onGenerateVideo} /> : null}
     </section> : null}
-    {history.length ? <details className="mt-4 border-t border-os-rule-paper pt-2" data-storyboard-history="true">
+    {!compact && history.length ? <details className="mt-4 border-t border-os-rule-paper pt-2" data-storyboard-history="true">
       <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink">{t('rejectedPlanHistory')}</summary>
       {history.map(asset => <div key={asset.id} className="border-t border-os-rule-paper py-4">
         <p className="m-0 mb-3 text-xs text-os-muted-paper">{t('assetStatus.rejected')}</p>

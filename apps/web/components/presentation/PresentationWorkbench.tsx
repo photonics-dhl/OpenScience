@@ -157,7 +157,7 @@ export function PresentationWorkbench({
         {deletionNotice}
         {canWrite ? <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}
           canWrite={canWrite} unavailable={working || loading || loadFailed} onGenerateStoryboard={onGenerateStoryboard}
-          onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} /> : null}
+          onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} compact /> : null}
         {task && (task.status !== 'succeeded' || task.paused) ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">
