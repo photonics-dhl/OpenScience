@@ -251,7 +251,9 @@ describe('native Agent server-owned execution receipts', () => {
     const f = sourceFixture(); const session = f.db.agentSessions[0]!;
     const input = { userId: f.input.actorId, sessionId: session.id, kind: 'sdf.extract',
       payload: { artifactId: f.ids.artifact, researchObjectId: f.ids.ro }, idempotencyKey: 'normal-paper:extract:0' };
-    const old = await persistAgentTaskInTransaction(f.deps, f.prisma as never, input);
+    // A markerless paid row is historical evidence, not a fresh public task with
+    // missing runtime. Preserve it through the existing package-internal helper.
+    const old = await persistHistoricalSourceTaskInTransaction(f.deps, f.prisma as never, input);
     expect(readNativeAgentExecution(old.task.result)).toBeUndefined();
     const deps = { ...f.deps, nativeAgentRuntime: runtime }; const ledger = f.db.usageLedger.length;
     expect((await persistAgentTaskInTransaction(deps, f.prisma as never, input)).replayed).toBe(true);
@@ -264,6 +266,24 @@ describe('native Agent server-owned execution receipts', () => {
       { ...input, idempotencyKey: 'signed-historical-review' });
     expect(readNativeAgentExecution(signedHistorical.task.result)).toBeUndefined();
   });
+  it.each(['pending', 'unknown', 'saved'] as const)(
+    'returns exact %s task replay before unavailable runtime admission or new billing', async state => {
+      const f = sourceFixture(); const session = f.db.agentSessions[0]!;
+      const input = { userId: f.input.actorId, sessionId: session.id, kind: 'sdf.extract',
+        payload: { artifactId: f.ids.artifact, researchObjectId: f.ids.ro }, idempotencyKey: `r02-replay-${state}` };
+      const created = await persistAgentTaskInTransaction({ ...f.deps, nativeAgentRuntime: runtime }, f.prisma as never, input);
+      const row = f.db.agentTasks.find(task => task.id === created.task.id)!;
+      if (state !== 'pending') {
+        row.status = state === 'saved' ? 'succeeded' : 'running';
+        Object.assign(row.result.nativeAgentExecution, { checkpoint: { ...reference(state === 'saved' ? 'completed' : 'started'), taskId: row.id } });
+      }
+      const snapshot = structuredClone(row), ledger = structuredClone(f.db.usageLedger);
+      for (const unavailable of [undefined, { ...runtime, runtimeId: '' }]) {
+        const replay = await persistAgentTaskInTransaction({ ...f.deps, nativeAgentRuntime: unavailable }, f.prisma as never, input);
+        expect(replay).toEqual({ task: snapshot, replayed: true });
+        expect(f.db.usageLedger).toEqual(ledger); expect(row).toEqual(snapshot);
+      }
+    });
   it('creates a distinct actual Agent marker, and has no marker for disabled server routing', () => {
     expect(readNativeAgentExecution(initialNativeAgentExecution(runtime))).toMatchObject({ kind: 'hermes-agent', ...runtime });
     expect(initialNativeAgentExecution(undefined)).toBeUndefined(); expect(readNativeAgentExecution({ nativeSourceReview: { mode: 'model-native' } })).toBeUndefined();
