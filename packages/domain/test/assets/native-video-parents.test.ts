@@ -243,9 +243,10 @@ function submissionFixture(f: ListFixture) {
   db.usageLedger.push({ id: uuid(83), userId: f.input.userId, resource: 'ai_credit', delta: 20, kind: 'grant', createdAt: now });
   for (const name of ['claimNode', 'evidenceRecord', 'ingestionTask', 'version', 'researchObject', 'workspace', 'membership', 'hermesResearchStep'] as const)
     Object.assign(prisma[name], f.prisma[name]);
-  prisma.presentationAsset.updateMany = async ({ where, data }: any) => {
-    const asset = db.presentationAssets.find(candidate => candidate.id === where.id) ?? f.assets.find(candidate => candidate.id === where.id);
-    if (!asset || where.updatedAt && asset.updatedAt?.getTime() !== where.updatedAt.getTime()) return { count: 0 };
+  prisma.presentationAsset.updateMany = async ({ where, data }: Parameters<typeof prisma.presentationAsset.updateMany>[0]) => {
+    const asset = db.presentationAssets.find(candidate => candidate.id === where!.id) ?? f.assets.find(candidate => candidate.id === where!.id);
+    // This fake consumes the producer's timestamp equality predicate, not a DateTimeFilter.
+    if (!asset || where!.updatedAt && asset.updatedAt?.getTime() !== (where!.updatedAt as Date).getTime()) return { count: 0 };
     Object.assign(asset, data, { updatedAt: new Date((asset.updatedAt?.getTime?.() ?? Date.now()) + 1) });
     return { count: 1 };
   };

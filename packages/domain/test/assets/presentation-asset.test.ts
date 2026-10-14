@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import type { AuditLog, Prisma } from '@prisma/client';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { claimAgentTask } from '../../src/agent/agent';
 import { initialNativeAgentExecution } from '../../src/agent/native-agent-execution';
@@ -704,9 +705,17 @@ it('does not charge a new direct frame of an approved video storyboard while clo
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(0);
 });
 
+type RetryImageReview = NonNullable<Parameters<typeof submitExistingSceneImageReview>[0]['canRetryImageReviewBeforeSubmission']>;
+type ManualSceneContext = ReturnType<typeof sceneFixture> & {
+  audit?: { record(event: Prisma.AuditLogCreateArgs['data'], tx: Prisma.TransactionClient): Promise<AuditLog> };
+  canRetryImageReviewBeforeSubmission?: RetryImageReview;
+};
+type AuditFindManyArgs = Prisma.AuditLogFindManyArgs & { where: Prisma.AuditLogWhereInput };
+type AuditFindFirstArgs = Prisma.AuditLogFindFirstArgs & { where: Prisma.AuditLogWhereInput };
+
 async function savedManualSceneFixture(output: 'image' | 'video' = 'video') {
-  const ctx = sceneFixture(output);
-  (ctx as any).audit = { record: async (event: any, tx: any) => tx.auditLog.create({ data: event }) };
+  const ctx: ManualSceneContext = sceneFixture(output);
+  ctx.audit = { record: async (event, tx) => tx.auditLog.create({ data: event }) };
   const branchId = '80000000-0000-4000-8000-000000000001';
   const commitId = '90000000-0000-4000-8000-000000000001';
   ctx.db.commits.push({ id: commitId, branchId });
@@ -731,11 +740,11 @@ async function savedManualSceneFixture(output: 'image' | 'video' = 'video') {
       sourceEvidenceIdentity: 'a'.repeat(64), contentType: 'image/png' } });
   ctx.db.presentationAssetClaims.push({ presentationAssetId: source.id, claimId: CLAIM });
   const originalFindMany = ctx.prisma.presentationAsset.findMany;
-  ctx.prisma.presentationAsset.findMany = async (args: any) => args.where?.provenance?.path?.[0] === 'reviewSourceAssetId'
+  ctx.prisma.presentationAsset.findMany = async (args: NonNullable<Parameters<typeof originalFindMany>[0]>) => args.where?.provenance?.path?.[0] === 'reviewSourceAssetId'
     ? ctx.db.presentationAssets.filter(asset => asset.provenance?.reviewSourceAssetId === source.id
       && (args.where.deletedAt === undefined || (asset.deletedAt ?? null) === args.where.deletedAt))
     : originalFindMany(args);
-  ctx.prisma.presentationAsset.findUniqueOrThrow = async ({ where }: any) => {
+  ctx.prisma.presentationAsset.findUniqueOrThrow = async ({ where }: Prisma.PresentationAssetFindUniqueOrThrowArgs) => {
     const found = ctx.db.presentationAssets.find(asset => asset.id === where.id);
     if (!found) throw Error('NOT_FOUND');
     return { ...found, sourceClaims: ctx.db.presentationAssetClaims.filter(link => link.presentationAssetId === found.id) };
@@ -785,7 +794,7 @@ it('starts one charged review-only task from an existing manual PNG without anot
     provenance: { reviewSourceAssetId: source.id, taskId: reviewed.id },
   });
   expect(ctx.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(2);
-  ctx.prisma.auditLog.findFirst = async ({ where }: any) => ctx.db.auditLogs.find(row =>
+  ctx.prisma.auditLog.findFirst = async ({ where }: AuditFindFirstArgs) => ctx.db.auditLogs.find(row =>
     row.action === where.action && row.targetType === where.targetType &&
     row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
   ctx.db.agentTasks.find(task => task.id === reviewed.id)!.status = 'running';
@@ -824,20 +833,20 @@ it('recovers a saved manual PNG only with matching failed-review audit and not-s
     metadata: { operation: 'scientific_review', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/5.6-sol',
       outcome: 'failed', error: 'scientific_review_failed', promptHash,
       inputContentHash: parent!.sourceEvidenceIdentity, pageCount: 1, pageNumbers: [1] } });
-  ctx.prisma.auditLog.findMany = async ({ where }: any) => ctx.db.auditLogs.filter(row =>
+  ctx.prisma.auditLog.findMany = async ({ where }: AuditFindManyArgs) => ctx.db.auditLogs.filter(row =>
     row.requestId === where.requestId && row.action === where.action);
-  ctx.prisma.auditLog.findFirst = async ({ where }: any) => ctx.db.auditLogs.find(row =>
+  ctx.prisma.auditLog.findFirst = async ({ where }: AuditFindFirstArgs) => ctx.db.auditLogs.find(row =>
     row.action === where.action && row.targetType === where.targetType &&
     row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id,
     idempotencyKey: 'recover-unsubmitted-manual-review' };
-  const proof = vi.fn(async () => false);
-  (ctx as any).canRetryImageReviewBeforeSubmission = proof;
+  const proof = vi.fn<RetryImageReview>(async () => false);
+  ctx.canRetryImageReviewBeforeSubmission = proof;
   await expect(submitExistingSceneImageReview(ctx as never, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   expect(ctx.db.presentationAssets.filter(asset => asset.provenance?.reviewSourceAssetId === source.id)).toHaveLength(0);
   proof.mockResolvedValue(true);
   const transact = ctx.prisma.$transaction;
-  ctx.prisma.$transaction = async (fn: any, options: any) => {
+  ctx.prisma.$transaction = async (fn: Parameters<typeof transact>[0], options: Parameters<typeof transact>[1]) => {
     ctx.db.users.find(user => user.id === USER)!.platformRole = 'user';
     return transact(fn, options);
   };
@@ -961,13 +970,13 @@ it('replaces one failed review-only request with a new identity only after exact
     metadata: { operation: 'scientific_review', provider: 'chatgpt-web-science-review', model: 'chatgpt-web/5.6-sol',
       outcome: 'failed', error: 'scientific_review_failed', promptHash,
       inputContentHash: parent!.sourceEvidenceIdentity, pageCount: 1, pageNumbers: [1] } });
-  ctx.prisma.auditLog.findMany = async ({ where }: any) => ctx.db.auditLogs.filter(row =>
+  ctx.prisma.auditLog.findMany = async ({ where }: AuditFindManyArgs) => ctx.db.auditLogs.filter(row =>
     row.requestId === where.requestId && row.action === where.action);
-  ctx.prisma.auditLog.findFirst = async ({ where }: any) => ctx.db.auditLogs.find(row =>
+  ctx.prisma.auditLog.findFirst = async ({ where }: AuditFindFirstArgs) => ctx.db.auditLogs.find(row =>
     row.action === where.action && row.targetType === where.targetType &&
     row.targetId === where.targetId && row.actorId === where.actorId) ?? null;
-  const proved = vi.fn(async () => true);
-  (ctx as any).canRetryImageReviewBeforeSubmission = proved;
+  const proved = vi.fn<RetryImageReview>(async () => true);
+  ctx.canRetryImageReviewBeforeSubmission = proved;
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: source.id,
     idempotencyKey: 'first-review-copy' };
   const first = await submitExistingSceneImageReview(ctx as never, input);
