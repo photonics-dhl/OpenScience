@@ -212,6 +212,146 @@ test('ordinary rollback compares persisted readers and their runtime helpers wit
   await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
 });
 
+async function gatewaySupplierFixtureSource() {
+  const ts = createRequire(import.meta.url)('typescript');
+  const path = fileURLToPath(new URL('../../packages/ai-gateway/src/gateway.ts', import.meta.url));
+  const file = ts.createSourceFile(path, await readFile(path, 'utf8'), ts.ScriptTarget.ES2022, true);
+  const gateway = file.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'AiGateway');
+  const property = gateway.members.find(node => ts.isPropertyDeclaration(node) && node.name?.text === 'scientificReviewProvider');
+  const constructor = gateway.members.find(node => ts.isConstructorDeclaration(node));
+  const assignment = constructor.body.statements.find(node => ts.isExpressionStatement(node)
+    && ts.isBinaryExpression(node.expression) && ts.isPropertyAccessExpression(node.expression.left)
+    && node.expression.left.name.text === 'scientificReviewProvider');
+  const method = gateway.members.find(node => ts.isMethodDeclaration(node) && node.name?.text === 'canRetrySourceReviewBeforeSubmission');
+  assert.ok(property && assignment && method);
+  // Use the actual consumer/member/assignment without importing or executing a Provider.
+  return `interface SourceReviewNotSubmittedProof { requestId: string }
+interface ScienceReviewProvider { name: string; canRetrySourceReviewBeforeSubmission?(input: SourceReviewNotSubmittedProof): Promise<boolean> }
+interface AiGatewayOptions { scientificReviewProvider?: ScienceReviewProvider }
+class AiGateway {
+${property.getText(file)}
+constructor(opts: AiGatewayOptions) { ${assignment.getText(file)} }
+${method.getText(file)}
+}
+function createFixtureGateway() { return new AiGateway({ scientificReviewProvider: { name: 'native', async canRetrySourceReviewBeforeSubmission() { return true; } } }); }
+export function readPersisted(input: SourceReviewNotSubmittedProof) { return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input); }
+`;
+}
+
+test('class supplier proof traces the real Gateway member through constructor and factory', async t => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  await mkdir(join(projectRoot, 'tmp'), { recursive: true });
+  const root = await mkdtemp(join(projectRoot, 'tmp/r04-class-supplier-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) await mkdir(directory);
+  const source = await gatewaySupplierFixtureSource();
+  const options = { candidateRoot: candidate, rollbackRoot: previous, compilerRoot: projectRoot, roots: [['consumer.ts', 'readPersisted']] };
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), source);
+  await deployLock.verifyApplicationRollbackReaders(options);
+  await writeFile(join(previous, 'consumer.ts'), source.replace('return true;', 'return false;'));
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const noProvider = source.replace("scientificReviewProvider: { name: 'native', async canRetrySourceReviewBeforeSubmission() { return true; } }", '');
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), noProvider);
+  await deployLock.verifyApplicationRollbackReaders(options);
+  const factoryVariants = [
+    source.replace(': Promise<boolean> {', ' {'),
+    source.replace('return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input);',
+      'const gateway = createFixtureGateway(); return gateway.canRetrySourceReviewBeforeSubmission(input);'),
+    source.replace('export function readPersisted(', 'function outerFactory() { return createFixtureGateway(); } export function readPersisted(')
+      .replace('return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input);', 'return outerFactory().canRetrySourceReviewBeforeSubmission(input);'),
+    source.replace('function createFixtureGateway()', 'const createFixtureGateway = () =>'),
+    noProvider.replace('this.scientificReviewProvider = opts.scientificReviewProvider;',
+      'const local = () => { return false; }; local(); this.scientificReviewProvider = opts.scientificReviewProvider;'),
+  ];
+  for (const variant of factoryVariants) {
+    for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), variant);
+    await deployLock.verifyApplicationRollbackReaders(options);
+  }
+});
+
+test('class supplier proof rejects unknown, escaped, rebound or mutable Gateway origins', async t => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  await mkdir(join(projectRoot, 'tmp'), { recursive: true });
+  const root = await mkdtemp(join(projectRoot, 'tmp/r04-class-supplier-negative-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) await mkdir(directory);
+  const source = await gatewaySupplierFixtureSource();
+  const options = { candidateRoot: candidate, rollbackRoot: previous, compilerRoot: projectRoot, roots: [['consumer.ts', 'readPersisted']] };
+  const cases = [
+    source.replace('private readonly scientificReviewProvider', 'private scientificReviewProvider'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'if (flag) this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; this.scientificReviewProvider = replacement;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; (this.scientificReviewProvider) = replacement;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; ({ value: this.scientificReviewProvider } = replacement);'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; return dynamicObject;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', '({ scientificReviewProvider: opts.scientificReviewProvider } = dynamicOptions); this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; for (this.scientificReviewProvider of unknownProviders) {}'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; for (this.scientificReviewProvider in unknownProviders) {}'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'opts.scientificReviewProvider.canRetrySourceReviewBeforeSubmission = unknownCallback; this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; this.scientificReviewProvider.canRetrySourceReviewBeforeSubmission = unknownCallback;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'this.scientificReviewProvider = opts.scientificReviewProvider; const alias = this.scientificReviewProvider; alias.canRetrySourceReviewBeforeSubmission = unknownCallback;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'mutate(opts.scientificReviewProvider); this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'const alias = opts; this.scientificReviewProvider = alias.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'mutate(opts); this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('this.scientificReviewProvider = opts.scientificReviewProvider;', 'opts.scientificReviewProvider = replacement; this.scientificReviewProvider = opts.scientificReviewProvider;'),
+    source.replace('constructor(opts: AiGatewayOptions)', 'constructor(opts: AiGatewayOptions = {})'),
+    source.replace('class AiGateway {', 'class AiGateway extends UnknownBase {'),
+    source.replace('class AiGateway {', 'class AiGateway { injected = mutate(this);'),
+    source.replace('class AiGateway {', 'class AiGateway { static { injectPrototype(); }'),
+    source.replace('async canRetrySourceReviewBeforeSubmission(input:', '@replaceMethod async canRetrySourceReviewBeforeSubmission(input:'),
+    source.replace('return new AiGateway({ scientificReviewProvider:', 'const Ctor = AiGateway; return new Ctor({ scientificReviewProvider:'),
+    source.replace("scientificReviewProvider: { name: 'native', async canRetrySourceReviewBeforeSubmission() { return true; } }", 'scientificReviewProvider: dynamicProvider()'),
+    source.replace('return new AiGateway({ scientificReviewProvider:', 'return new AiGateway({ ...unknown, scientificReviewProvider:'),
+    source.replace('return new AiGateway({ scientificReviewProvider:', 'return new AiGateway({ __proto__: unknown, scientificReviewProvider:'),
+    source.replace('return new AiGateway({ scientificReviewProvider:', 'return new AiGateway({ scientificReviewProvider: unknown, scientificReviewProvider:'),
+    source.replace('function createFixtureGateway()', 'const extra = new AiGateway(dynamicOptions()); function createFixtureGateway()'),
+    source.replace('export function readPersisted(', 'createFixtureGateway = dynamicFactory; export function readPersisted('),
+    `interface Proof { requestId: string }
+interface Provider { name: string; canRetrySourceReviewBeforeSubmission?(p: Proof): Promise<boolean> }
+interface Opts { scientificReviewProvider?: Provider }
+class Gateway {
+  private readonly scientificReviewProvider?: Provider;
+  constructor(opts: Opts) { this.scientificReviewProvider = opts.scientificReviewProvider; }
+  async canRetrySourceReviewBeforeSubmission(input: Proof) {
+    if (this.scientificReviewProvider?.name === 'chatgpt-web-science-review') return false;
+    return this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input) ?? false;
+  }
+}
+function factory() { return new Gateway({}); }
+factory = dynamicFactory;
+export function readPersisted(input: Proof) { return factory().canRetrySourceReviewBeforeSubmission(input); }`,
+    source.replace('export function readPersisted(', 'const boundFactory = createFixtureGateway.bind(other); export function readPersisted('),
+    source.replace('return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input);',
+      'return (createFixtureGateway() as any).canRetrySourceReviewBeforeSubmission(input);'),
+    source.replace('return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input);',
+      'return createFixtureGateway()["canRetrySourceReviewBeforeSubmission"](input);'),
+    source.replace("scientificReviewProvider: { name: 'native', async canRetrySourceReviewBeforeSubmission() { return true; } }", '')
+      .replace('this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input)', 'this.scientificReviewProvider.canRetrySourceReviewBeforeSubmission(input)'),
+    source.replace('return this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input) ?? false;',
+      'const detached = function(this: AiGateway) { return this.scientificReviewProvider?.canRetrySourceReviewBeforeSubmission?.(input) ?? false; }; return detached.call(this);'),
+    source.replace('return createFixtureGateway().canRetrySourceReviewBeforeSubmission(input);',
+      'const gateway = createFixtureGateway(); const detached = gateway.canRetrySourceReviewBeforeSubmission; return detached.call(other, input);'),
+    ...[
+      "Object.prototype['scientificReviewProvider'] = unknownProvider;",
+      'Object.prototype[dynamicKey] = unknownProvider;',
+      "Object.defineProperty(Object.prototype, 'scientificReviewProvider', { value: unknownProvider });",
+      "Reflect.set(Object.prototype, 'scientificReviewProvider', unknownProvider);",
+      'const prototypeAlias = Object.prototype; prototypeAlias[dynamicKey] = unknownProvider;',
+      'const prototypeAlias = Object.getPrototypeOf({}); prototypeAlias[dynamicKey] = unknownProvider;',
+      "const prototypeAlias = Object['prototype']; prototypeAlias[dynamicKey] = unknownProvider;",
+      'const O = Object; const prototypeAlias = O.getPrototypeOf({}); prototypeAlias[dynamicKey] = unknownProvider;',
+      "const prototypeAlias = Object['getPrototypeOf']({}); prototypeAlias[dynamicKey] = unknownProvider;",
+    ].map(mutation => source.replace("scientificReviewProvider: { name: 'native', async canRetrySourceReviewBeforeSubmission() { return true; } }", '')
+      .replace('export function readPersisted(', `${mutation} export function readPersisted(`)),
+  ];
+  for (const [index, unsafe] of cases.entries()) {
+    for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), unsafe);
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u, `unsafe class origin ${index}`);
+  }
+});
+
 test('rollback rejects the five unsafe runtime closure variants reproduced by independent High review', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-runtime-closure-'));
   t.after(() => rm(root, { recursive: true, force: true }));

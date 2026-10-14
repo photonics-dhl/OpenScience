@@ -397,6 +397,245 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
     inspect(parsed);
   }
   const supplierSymbols = new Map(), supplierArguments = new Set(), supplierValues = new Set(), supplierFunctions = new Set();
+  const canonicalSymbols = node => {
+    let symbol = checker.getSymbolAtLocation(node);
+    if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+    return symbol ? checker.getRootSymbols(symbol) : [];
+  };
+  const canonicalSymbol = node => {
+    const symbols = canonicalSymbols(node);
+    return symbols.length === 1 ? symbols[0] : undefined;
+  };
+  const walkRuntime = (rootNode, visit) => {
+    const walk = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      visit(node); ts.forEachChild(node, walk);
+    };
+    walk(rootNode);
+  };
+  const directFunction = node => {
+    for (let parent = node.parent; parent; parent = parent.parent) {
+      if (ts.isArrowFunction(parent)) continue;
+      if (functionLike(parent) || ts.isConstructorDeclaration(parent)) return parent;
+    }
+    return undefined;
+  };
+  const isWrite = node => {
+    let target = node;
+    while (target.parent) {
+      const parent = target.parent;
+      if (ts.isBinaryExpression(parent)) return parent.left === target
+        && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+      if (ts.isDeleteExpression(parent)) return true;
+      if (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+        return [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator);
+      if (ts.isForOfStatement(parent) || ts.isForInStatement(parent)) return parent.initializer === target;
+      if (ts.isParenthesizedExpression(parent) || ts.isAsExpression(parent) || ts.isNonNullExpression(parent)
+        || ts.isPropertyAccessExpression(parent) && parent.expression === target
+        || ts.isElementAccessExpression(parent) && parent.expression === target
+        || ts.isPropertyAssignment(parent) && parent.initializer === target
+        || ts.isObjectLiteralExpression(parent) || ts.isArrayLiteralExpression(parent)) target = parent;
+      else return false;
+    }
+    return false;
+  };
+  const closedObject = node => {
+    if (!node || !ts.isObjectLiteralExpression(node)) return false;
+    const names = new Set();
+    for (const property of node.properties) {
+      if (ts.isSpreadAssignment(property) || !property.name || ts.isComputedPropertyName(property.name)
+        || (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))
+        || property.name.text === '__proto__' || names.has(property.name.text)) return false;
+      names.add(property.name.text);
+    }
+    return true;
+  };
+  // Keep the existing pinned-vendor boundary used by the callback scanner above.
+  const applicationModules = [...modules.values()].filter(parsed => !verifiedVendorModules.has(parsed));
+  const memberName = node => ts.isPropertyAccessExpression(node) ? node.name.text
+    : ts.isElementAccessExpression(node) && node.argumentExpression && ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : undefined;
+  const valueUse = node => {
+    while (node.parent && (ts.isParenthesizedExpression(node.parent) || ts.isAsExpression(node.parent)
+      || ts.isNonNullExpression(node.parent) || ts.isSatisfiesExpression(node.parent))) node = node.parent;
+    return node;
+  };
+  const builtinObjectValue = node => {
+    if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node) || ts.isSatisfiesExpression(node)) return builtinObjectValue(node.expression);
+    // The noLib program has no intrinsic declarations; reject value aliases and shadows as well.
+    if (ts.isIdentifier(node) && ['Object', 'Reflect'].includes(node.text)
+      && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+      && !(ts.isPropertyAssignment(node.parent) && node.parent.name === node)) return true;
+    return (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
+      && ts.isIdentifier(node.expression) && node.expression.text === 'globalThis' && ['Object', 'Reflect'].includes(memberName(node));
+  };
+  const classProofs = new Map();
+  const proveThisSupplier = (expression, fields, seen) => {
+    const method = directFunction(expression), owner = method?.parent;
+    const access = expression.parent;
+    if (!method || !ts.isMethodDeclaration(method) || !owner || !ts.isClassDeclaration(owner) || !owner.name
+      || owner.heritageClauses?.length || ts.getDecorators(owner)?.length || ts.getDecorators(method)?.length || fields.length < 2
+      || !ts.isPropertyAccessExpression(access) || access.expression !== expression) rollbackCompatibilityUnknown();
+    const matchingMembers = owner.members.filter(member => member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
+      && member.name.text === fields[0]);
+    const property = matchingMembers.length === 1 && ts.isPropertyDeclaration(matchingMembers[0]) ? matchingMembers[0] : undefined;
+    if (!property || canonicalSymbol(access.name) !== canonicalSymbol(property.name)) rollbackCompatibilityUnknown();
+    let proof = classProofs.get(property);
+    if (!proof) {
+      const hasModifier = (node, kind) => node.modifiers?.some(modifier => modifier.kind === kind);
+      const constructors = owner.members.filter(member => ts.isConstructorDeclaration(member));
+      const constructor = constructors.length === 1 ? constructors[0] : undefined;
+      const parameter = constructor?.parameters.length === 1 ? constructor.parameters[0] : undefined;
+      if (!hasModifier(property, ts.SyntaxKind.PrivateKeyword) || !hasModifier(property, ts.SyntaxKind.ReadonlyKeyword)
+        || hasModifier(property, ts.SyntaxKind.StaticKeyword) || property.initializer || ts.getDecorators(property)?.length
+        || owner.members.some(member => ts.getDecorators(member)?.length || ts.isClassStaticBlockDeclaration(member)
+          || ts.isPropertyDeclaration(member) && member.initializer)
+        || !constructor?.body || !parameter || !ts.isIdentifier(parameter.name) || parameter.initializer
+        || parameter.dotDotDotToken || parameter.modifiers?.length) rollbackCompatibilityUnknown();
+      const assignmentStatements = constructor.body.statements.filter(statement => ts.isExpressionStatement(statement)
+        && ts.isBinaryExpression(statement.expression) && statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+        && ts.isPropertyAccessExpression(statement.expression.left) && statement.expression.left.expression.kind === ts.SyntaxKind.ThisKeyword
+        && canonicalSymbol(statement.expression.left.name) === canonicalSymbol(property.name));
+      const assignment = assignmentStatements.length === 1 ? assignmentStatements[0].expression : undefined;
+      if (!assignment || !ts.isPropertyAccessExpression(assignment.right) || !ts.isIdentifier(assignment.right.expression)
+        || canonicalSymbol(assignment.right.expression) !== canonicalSymbol(parameter.name)
+        || assignment.right.name.text !== fields[0]) rollbackCompatibilityUnknown();
+      // A constructor return can replace the instance even when its field assignment is valid.
+      walkRuntime(constructor.body, node => {
+        if (!ts.isReturnStatement(node)) return;
+        for (let parent = node.parent; parent; parent = parent.parent) {
+          if (parent === constructor) rollbackCompatibilityUnknown();
+          if (functionLike(parent)) break;
+        }
+      });
+      const constructions = [], classSymbol = canonicalSymbol(owner.name);
+      for (const parsed of applicationModules) {
+        walkRuntime(parsed, node => {
+          if (ts.isIdentifier(node) && canonicalSymbol(node) === classSymbol && node !== owner.name
+            && !ts.isImportSpecifier(node.parent) && !ts.isExportSpecifier(node.parent)
+            && !(ts.isNewExpression(node.parent) && node.parent.expression === node)) rollbackCompatibilityUnknown();
+          if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && canonicalSymbol(node.expression) === classSymbol) {
+            if (checker.getResolvedSignature(node)?.declaration !== constructor || node.arguments?.length !== 1
+              || !closedObject(node.arguments[0])) rollbackCompatibilityUnknown();
+            constructions.push(node);
+          }
+          if (node.kind === ts.SyntaxKind.ThisKeyword && directFunction(node)?.parent === owner
+            && !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)) rollbackCompatibilityUnknown();
+          if (ts.isIdentifier(node) && canonicalSymbol(node) === canonicalSymbol(parameter.name) && node !== parameter.name
+            && !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node && !isWrite(node.parent))) rollbackCompatibilityUnknown();
+          const name = memberName(node);
+          if (name === fields[0] && isWrite(node) && node !== assignment.left) rollbackCompatibilityUnknown();
+          // An omitted option is safe only while the target cannot be injected through a prototype.
+          if (ts.isElementAccessExpression(node) && isWrite(node)
+            && ['prototype', '__proto__'].includes(memberName(node.expression))) rollbackCompatibilityUnknown();
+          if (['prototype', '__proto__'].includes(name)) {
+            const parent = valueUse(node).parent;
+            const comparison = ts.isBinaryExpression(parent) && [ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken,
+              ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(parent.operatorToken.kind);
+            const primitiveRead = (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === valueUse(node)
+              && ['hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf'].includes(memberName(parent));
+            if (isWrite(node) || name === '__proto__' || !comparison && !primitiveRead) rollbackCompatibilityUnknown();
+          }
+          if (builtinObjectValue(node)) {
+            const use = valueUse(node), parent = use.parent;
+            if (!((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === use && memberName(parent))
+              && !(ts.isCallExpression(parent) && parent.expression === use) && !(ts.isNewExpression(parent) && parent.expression === use)) rollbackCompatibilityUnknown();
+          }
+          if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && builtinObjectValue(node.expression) && name === 'getPrototypeOf') {
+            const call = valueUse(node).parent, parent = call.parent;
+            if (!ts.isCallExpression(call) || call.expression !== node || !ts.isBinaryExpression(parent)
+              || ![ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken,
+                ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(parent.operatorToken.kind)) rollbackCompatibilityUnknown();
+          }
+          if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && builtinObjectValue(node.expression)
+            && ['defineProperty', 'defineProperties', 'setPrototypeOf', 'set', 'deleteProperty'].includes(name)) {
+            const call = valueUse(node).parent;
+            if (!ts.isCallExpression(call) || call.expression !== node || ['defineProperties', 'setPrototypeOf'].includes(name)
+              || !call.arguments[1] || !ts.isStringLiteral(call.arguments[1])
+              || [fields[0], 'prototype', '__proto__'].includes(call.arguments[1].text)) rollbackCompatibilityUnknown();
+          }
+          if (ts.isElementAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword
+            && directFunction(node)?.parent === owner) rollbackCompatibilityUnknown();
+        });
+      }
+      if (!constructions.length) rollbackCompatibilityUnknown();
+      proof = { constructions, owner, parameter, assignment }; classProofs.set(property, proof);
+    }
+    const proveReceiver = (receiver, visited = new Set()) => {
+      if (!receiver || visited.has(receiver) || visited.size >= 64) rollbackCompatibilityUnknown();
+      const next = new Set(visited).add(receiver);
+      if (ts.isParenthesizedExpression(receiver) || ts.isAsExpression(receiver) || ts.isNonNullExpression(receiver)) return proveReceiver(receiver.expression, next);
+      if (ts.isNewExpression(receiver) && proof.constructions.includes(receiver)) return;
+      if (ts.isCallExpression(receiver)) {
+        const factory = checker.getResolvedSignature(receiver)?.declaration;
+        if (!ts.isIdentifier(receiver.expression) || !runtimeBody(factory)
+          || !modules.has(resolve(factory.getSourceFile().fileName))) rollbackCompatibilityUnknown();
+        const binding = ts.isFunctionDeclaration(factory) ? factory : factory.parent;
+        if (!binding.name || !ts.isIdentifier(binding.name)
+          || !ts.isFunctionDeclaration(binding) && (!ts.isVariableDeclaration(binding)
+            || !ts.isVariableDeclarationList(binding.parent) || !(binding.parent.flags & ts.NodeFlags.Const))) rollbackCompatibilityUnknown();
+        const factorySymbol = canonicalSymbol(binding.name);
+        if (!factorySymbol || canonicalSymbol(receiver.expression) !== factorySymbol) rollbackCompatibilityUnknown();
+        // A resolved signature does not prove a runtime callee that was reassigned or escaped.
+        for (const parsed of applicationModules) walkRuntime(parsed, node => {
+          if (ts.isIdentifier(node) && canonicalSymbol(node) === factorySymbol && node !== binding.name
+            && !ts.isImportSpecifier(node.parent) && !ts.isExportSpecifier(node.parent)
+            && !(ts.isCallExpression(node.parent) && node.parent.expression === node)) rollbackCompatibilityUnknown();
+        });
+        const returns = [];
+        walkRuntime(factory, node => { if (ts.isReturnStatement(node) && enclosingFunction(node) === factory) returns.push(node); });
+        if (returns.length !== 1 || !ts.isBlock(factory.body) || factory.body.statements.at(-1) !== returns[0]) rollbackCompatibilityUnknown();
+        return proveReceiver(returns[0].expression, next);
+      }
+      if (ts.isIdentifier(receiver)) {
+        const declarations = canonicalSymbol(receiver)?.declarations;
+        const declaration = declarations?.length === 1 ? declarations[0] : undefined;
+        if (!declaration || !ts.isVariableDeclaration(declaration) || !ts.isVariableDeclarationList(declaration.parent)
+          || !(declaration.parent.flags & ts.NodeFlags.Const) || !declaration.initializer) rollbackCompatibilityUnknown();
+        for (const parsed of applicationModules) walkRuntime(parsed, node => {
+          if (ts.isIdentifier(node) && canonicalSymbol(node) === canonicalSymbol(receiver) && node !== declaration.name
+            && !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node
+              && ts.isCallExpression(node.parent.parent) && node.parent.parent.expression === node.parent)) rollbackCompatibilityUnknown();
+        });
+        return proveReceiver(declaration.initializer, next);
+      }
+      rollbackCompatibilityUnknown();
+    };
+    const methodSymbol = canonicalSymbol(method.name);
+    if (!methodSymbol) rollbackCompatibilityUnknown();
+    for (const parsed of applicationModules) walkRuntime(parsed, node => {
+      if (ts.isElementAccessExpression(node) && memberName(node) === method.name.text) rollbackCompatibilityUnknown();
+      if (!ts.isIdentifier(node)) return;
+      const symbols = canonicalSymbols(node), member = node.parent;
+      if (ts.isPropertyAccessExpression(member) && member.name === node && node.text === method.name.text
+        && symbols.length !== 1) rollbackCompatibilityUnknown();
+      if (symbols.includes(methodSymbol) && node !== method.name) {
+        if (symbols.length !== 1 || !ts.isPropertyAccessExpression(member) || member.name !== node || !ts.isCallExpression(member.parent)
+          || member.parent.expression !== member) rollbackCompatibilityUnknown();
+        proveReceiver(member.expression);
+      }
+    });
+    const optionalField = ts.isPropertyAccessExpression(access.parent) && access.parent.expression === access
+      && !!access.parent.questionDotToken;
+    for (const construction of proof.constructions) {
+      const options = construction.arguments[0];
+      const supplied = options.properties.some(member => member.name?.text === fields[0]);
+      if (!supplied) {
+        if (!optionalField) rollbackCompatibilityUnknown();
+      } else {
+        // A provided object must not escape through a field alias or an unproved constructor call.
+        walkRuntime(proof.owner, node => {
+          if (!ts.isPropertyAccessExpression(node) || node.name.text !== fields[0] || node === proof.assignment.left) return;
+          const fromThis = node.expression.kind === ts.SyntaxKind.ThisKeyword;
+          const fromOptions = ts.isIdentifier(node.expression) && canonicalSymbol(node.expression) === canonicalSymbol(proof.parameter.name);
+          if (!fromThis && !fromOptions || node === proof.assignment.right) return;
+          if (!ts.isPropertyAccessExpression(node.parent) || node.parent.expression !== node
+            || node.parent.name.text !== 'name' && !(ts.isCallExpression(node.parent.parent)
+              && node.parent.parent.expression === node.parent && node.parent.name.text === fields[1])) rollbackCompatibilityUnknown();
+        });
+        proveSupplier(options, fields, seen);
+      }
+    }
+  };
   const proveSupplier = (expression, fields = [], seen = new Set()) => {
     if (!expression || seen.has(expression) || seen.size >= 64) rollbackCompatibilityUnknown();
     supplierValues.add(expression);
@@ -404,6 +643,7 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
     if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression)
       || ts.isSatisfiesExpression(expression)) return proveSupplier(expression.expression, fields, next);
     if (ts.isPropertyAccessExpression(expression)) return proveSupplier(expression.expression, [expression.name.text, ...fields], next);
+    if (expression.kind === ts.SyntaxKind.ThisKeyword) return proveThisSupplier(expression, fields, next);
     if (ts.isObjectLiteralExpression(expression)) {
       if (!fields.length || expression.properties.some(property => ts.isSpreadAssignment(property) || property.name && ts.isComputedPropertyName(property.name))) rollbackCompatibilityUnknown();
       const matches = expression.properties.filter(property => property.name?.text === fields[0]);
