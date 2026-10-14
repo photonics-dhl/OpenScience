@@ -507,6 +507,26 @@ async function nativeLocalFixture(mode: 'historical-external' | 'marked-external
 }
 
 describe('ordinary Native video revision parent contract', () => {
+  it.each([['marked-external', 'full'], ['marked-external', 'selected'], ['marked-native', 'full'], ['marked-native', 'selected']] as const)(
+    'books %s %s private revisions with commercial VIDEO disabled', async (mode, scope) => {
+      const f = await nativeLocalFixture(mode);
+      if (scope === 'full') Reflect.deleteProperty(f.input.storyboard, 'revisionSceneIndex');
+      f.videoEnabled = false; f.readVideoReadiness.mockResolvedValue(false);
+      const parent = structuredClone(f.parentTask), before = f.db.agentTasks.length;
+      const debitCount = f.db.usageLedger.filter(row => row.kind === 'consume').length;
+      const task = await submitPresentationGeneration(f as never, f.input);
+      expect(f.db.agentTasks).toHaveLength(before + 1);
+      expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(debitCount + 1);
+      expect(f.db.agentTasks.find(row => row.id === task.id)!.result)
+        .toEqual(initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1'));
+      expect(f.parentTask).toEqual(parent); expect(f.readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it.each(['marked-external', 'marked-native'] as const)('inherits the verified %s contract on a full private child', async mode => {
+    const f = await nativeLocalFixture(mode); Reflect.deleteProperty(f.input.storyboard, 'revisionSceneIndex');
+    const task = await submitPresentationGeneration(f as never, f.input);
+    expect(f.db.agentTasks.find(row => row.id === task.id)!.result)
+      .toEqual(initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1'));
+  });
   it.each(['historical-external', 'marked-external', 'marked-native'] as const)(
     'inherits the actual %s parent contract in one task/debit and retains full Host readiness', async mode => {
       const f = await nativeLocalFixture(mode), parent = structuredClone(f.parentTask);
