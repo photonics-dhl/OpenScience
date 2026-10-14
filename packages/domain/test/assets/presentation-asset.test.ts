@@ -586,6 +586,30 @@ describe('ordinary Native video revision parent contract', () => {
     expect(reads).toBeGreaterThanOrEqual(3); expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
     expect(f.readVideoReadiness).not.toHaveBeenCalled();
   });
+  it.each([['full', 'viewer'], ['selected', 'viewer'], ['full', 'historical'], ['selected', 'historical']] as const)(
+    'rejects %s planning when write scope becomes %s after the outer parent proof', async (scope, change) => {
+      const f = await nativeLocalFixture('marked-external');
+      if (scope === 'full') Reflect.deleteProperty(f.input.storyboard, 'revisionSceneIndex');
+      f.videoEnabled = false; f.readVideoReadiness.mockResolvedValue(false);
+      const findSession = f.prisma.agentSession.findUnique.bind(f.prisma.agentSession); let changed = false;
+      vi.spyOn(f.prisma.agentSession, 'findUnique').mockImplementation(async args => {
+        if (!changed && args.where.idempotencyKey === `presentation-session:${USER}:${RO}:${VERSION}`) {
+          changed = true;
+          if (change === 'viewer') f.db.memberships[0].role = 'viewer';
+          else {
+            f.db.commits.push({ id: 'new-private-commit', branchId: 'presentation-branch' });
+            f.db.versions.push({ ...f.db.versions[0], id: '10000000-0000-4000-8000-000000000009', commitId: 'new-private-commit', versionNo: 2 });
+          }
+        }
+        return findSession(args);
+      });
+      const parent = structuredClone(f.parentTask), tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
+      await expect(submitPresentationGeneration(f as never, f.input))
+        .rejects.toMatchObject({ code: change === 'viewer' ? 'FORBIDDEN' : 'ILLEGAL_TRANSITION' });
+      expect(changed).toBe(true); expect(f.parentTask).toEqual(parent);
+      expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
+      expect(f.readVideoReadiness).not.toHaveBeenCalled();
+    });
   it.each(['deleted-parent', 'contract-drift', 'claim-drift', 'temporarily-unreadable-parent'] as const)(
     'publicly replays the exact paid child after %s without parent/Claim/Host reads or any write', async change => {
       const f = await nativeLocalFixture('marked-native');
