@@ -6,11 +6,51 @@ import { requireRoAccess } from '../visibility/access';
 import { CommitError } from '../commit/errors';
 import { buildManifest } from './manifest';
 import { publicVersionNumber, readPublicationMetadata } from '../publish/publication-metadata';
+import { Readable } from 'node:stream';
 
 /** 导出文件条目（§5.2 目录树，纯文件不依赖平台 DB，§5.3 MUST）。 */
 export interface ExportFile {
   path: string;
   content: Buffer;
+}
+
+interface ExportStreamFile {
+  path: string;
+  content: Buffer | Readable;
+}
+
+type ExportInput = { userId?: string; versionId: string };
+
+function lazyAttachment(deps: ArtifactDeps, blobSha256: string): Readable {
+  let body: Readable | undefined;
+  let opening = false;
+  const stream = new Readable({
+    read() {
+      if (body) { body.resume(); return; }
+      if (opening) return;
+      opening = true;
+      void (async () => {
+        try {
+          if (stream.destroyed) return;
+          body = (await deps.storage.getObject(getBlobStorageKey(blobSha256))).body;
+          if (stream.destroyed) { body.destroy(); return; }
+          body.once('error', error => stream.destroy(error));
+          body.once('end', () => stream.push(null));
+          body.once('close', () => {
+            if (!body!.readableEnded && !stream.destroyed) stream.destroy(new Error('Export object stream closed early'));
+          });
+          body.on('data', (chunk: Buffer) => { if (!stream.push(chunk)) body!.pause(); });
+        } catch (error) {
+          stream.destroy(error instanceof Error ? error : new Error('Export object unavailable'));
+        }
+      })();
+    },
+    destroy(error, callback) {
+      body?.destroy();
+      callback(error);
+    },
+  });
+  return stream;
 }
 
 /** SDF 六字段名（§5.1）。 */
@@ -37,10 +77,12 @@ export function classifyArtifact(logicalPath: string): string {
  * 从 Version + Manifest + Blob 重建目录树 + manifest.json（§5.3）。
  * 可见性判定（§4.2 requireRoAccess）。
  */
+export function buildExportPackage(deps: ArtifactDeps, input: ExportInput & { streaming: true }): Promise<ExportStreamFile[]>;
+export function buildExportPackage(deps: ArtifactDeps, input: ExportInput): Promise<ExportFile[]>;
 export async function buildExportPackage(
   deps: ArtifactDeps,
-  input: { userId?: string; versionId: string },
-): Promise<ExportFile[]> {
+  input: ExportInput & { streaming?: boolean },
+): Promise<ExportStreamFile[]> {
   const version = await deps.prisma.version.findUnique({
     where: { id: input.versionId },
     include: { researchObject: true, manifest: { include: { entries: true } }, publications: true },
@@ -58,7 +100,7 @@ export async function buildExportPackage(
   const frozen = await getResearchRecord(deps, { researchObjectId: ro.id, versionId: version.id, userId: input.userId });
   const citation = recordValue(recordValue(frozen.record).citation);
   const frozenTitle = typeof citation.title === 'string' ? citation.title : 'Research object (title not recorded)';
-  const files: ExportFile[] = [{ path: 'research-record.json', content: Buffer.from(JSON.stringify(frozen.record, null, 2), 'utf8') }];
+  const files: ExportStreamFile[] = [{ path: 'research-record.json', content: Buffer.from(JSON.stringify(frozen.record, null, 2), 'utf8') }];
   const buf = (s: string) => Buffer.from(s, 'utf8');
 
   // manifest.json（§5.3）
@@ -92,8 +134,8 @@ export async function buildExportPackage(
 
   // 附件归位（Design Gate：figures/code/artifacts）
   for (const entry of entries) {
-    const blob = await deps.storage.getObject(getBlobStorageKey(entry.blobSha256));
-    const content = await streamToBuffer(blob.body);
+    const stream = lazyAttachment(deps, entry.blobSha256);
+    const content = input.streaming ? stream : await streamToBuffer(stream);
     files.push({ path: classifyArtifact(entry.logicalPath), content });
   }
 
