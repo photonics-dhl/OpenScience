@@ -12,6 +12,7 @@ BindReadOnlyPaths=@NATIVE_RUNTIME@/.runtime-id:/runtime-id
 BindReadOnlyPaths=@ADAPTER_RELEASE@:/adapter
 BindReadOnlyPaths=@SKILL_CATALOGUE@:/catalogue
 BindReadOnlyPaths=/opt/openscience-hermes/bridges/%i/worker.sock:/bridge/worker.sock
+LoadCredential=native-caller:/opt/openscience-hermes/bridges/%i/caller.credential
 BindPaths=/var/lib/openscience-hermes/%i:/task
 DynamicUser=yes
 StateDirectory=openscience-hermes/%i

@@ -51,6 +51,7 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
   const now = input.now ?? Date.now;
   let cursor = 0;
   let inFlight = false;
+  let firstMessages: ChatMessage[] | undefined;
   async function read() {
     const state = await input.store.read();
     if (state && (state.kind !== 'hermes-native-agent' || !isDeepStrictEqual(state.binding, binding)
@@ -71,8 +72,10 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
     if (!state) {
       // A new task starts from its fixed goal. A caller cannot supply invented paid history.
       if (messages.some(m => m.role === 'assistant' || m.role === 'tool')) blocked('initial history is not empty');
+      if (firstMessages && !isDeepStrictEqual(messages, firstMessages)) blocked('first request changed');
       return;
     }
+    if (firstMessages && !isDeepStrictEqual(state.initialMessages, firstMessages)) blocked('first request changed');
     if (!isDeepStrictEqual(messages.slice(0, state.initialMessages.length), state.initialMessages)) blocked('initial request changed');
     const preceding = cursor > 0 ? state.turns[cursor - 1]?.request.messages : undefined;
     if (preceding?.length && !isDeepStrictEqual(messages.slice(0, preceding.length), preceding)) blocked('earlier request history changed');
@@ -221,6 +224,21 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       return nativeAgentSdkResponse(result, `${binding.taskId}:native-turn:${cursor}`);
   }
   return {
+    async bindFirstTurn(goal: string, systemPrompt: string): Promise<void> {
+      // Only the host calls this after private executor authentication. The goal is
+      // Worker-owned; systemPrompt is the immutable Native SDK's actual cached prompt.
+      if (inFlight) blocked('concurrent SDK request');
+      inFlight = true;
+      try {
+        await authorize(); const state = await read();
+        if (typeof goal !== 'string' || !goal.trim() || typeof systemPrompt !== 'string' || !systemPrompt.trim())
+          blocked('first request changed');
+        const expected: ChatMessage[] = [{ role: 'system', content: systemPrompt }, { role: 'user', content: goal }];
+        if (firstMessages && !isDeepStrictEqual(firstMessages, expected)
+          || state && !isDeepStrictEqual(state.initialMessages, expected)) blocked('first request changed');
+        firstMessages = structuredClone(expected);
+      } finally { inFlight = false; }
+    },
     async systemPrompt(): Promise<string | undefined> {
       await authorize(); const state = await read();
       return state?.initialMessages.find(m => m.role === 'system')?.content;

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, access, rm } from 'node:fs/promises';
+import { mkdtemp, access, readFile, rm } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
@@ -9,22 +10,49 @@ import { createNativePaperTools, NATIVE_PAPER_TOOLS } from '../src/native-agent/
 import { runHostedNativeTask } from '../src/native-agent/host-task';
 
 const taskId = 'af36958a-d6d0-4666-a69c-e3c60170b17f';
-function post(socketPath: string, path: string, value: unknown) {
+const route = vi.hoisted(() => ({ portable: false, listener: undefined as unknown as (request: unknown, response: unknown) => Promise<void> }));
+vi.mock('node:http', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:http')>();
+  return { ...actual, createServer: (listener: typeof route.listener) => {
+    if (!route.portable) return actual.createServer(listener as never);
+    route.listener = listener;
+    const server = { once: () => server, on: () => server, listen: (_path: string, ready: () => void) => ready(),
+      close: () => undefined, closeIdleConnections: () => undefined };
+    return server;
+  } };
+});
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, chmod: (path: string, mode: number) => route.portable && path.endsWith('worker.sock')
+    ? Promise.resolve() : actual.chmod(path, mode) };
+});
+const callers = new Map<string, string>();
+function post(socketPath: string, path: string, value: unknown, caller: string | null | undefined = callers.get(socketPath)) {
+  const headers = { 'content-type': 'application/json', ...(caller == null ? {} : { 'x-openscience-native-caller': caller }) };
+  if (route.portable) {
+    const request = Object.assign(Readable.from(value === undefined ? [] : [Buffer.from(JSON.stringify(value))]), {
+      method: value === undefined ? 'GET' : 'POST', url: path, headers });
+    let status = 0; let body: Record<string, unknown> = {};
+    return route.listener(request, { writeHead: (code: number) => { status = code; },
+      end: (text: string) => { body = JSON.parse(text); } }).then(() => ({ status, body }));
+  }
   return new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
-    const request = httpRequest({ socketPath, path, method: 'POST', headers: { 'content-type': 'application/json' } }, response => {
+    const request = httpRequest({ socketPath, path, method: value === undefined ? 'GET' : 'POST', headers }, response => {
       let text = ''; response.on('data', chunk => { text += chunk; });
       response.on('end', () => resolve({ status: response.statusCode!, body: JSON.parse(text) }));
     });
-    request.on('error', reject); request.end(JSON.stringify(value));
+    request.on('error', reject); request.end(value === undefined ? undefined : JSON.stringify(value));
   });
 }
 async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 3, thinkingOnly = false,
   options?: { firstTool?: { id: string; name: string; input: Record<string, unknown> };
     renderPages?: Parameters<typeof createNativePaperTools>[1];
     deadlineMs?: number;
+    bootstrap?: boolean; savedState?: NativeAgentSessionState;
+    authorize?: () => Promise<void>;
     withAuthorizedToolCall?: <T>(run: () => Promise<T>) => Promise<T> }) {
   const root = await mkdtemp(join(tmpdir(), 'hm-'));
-  let state: NativeAgentSessionState | null = null; let providerCalls = 0; const bodySizes: number[] = [];
+  let state: NativeAgentSessionState | null = structuredClone(options?.savedState ?? null); let providerCalls = 0; const bodySizes: number[] = [];
   const provider = new AnthropicCompatProvider('offline', { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, async (_url, requestOptions) => {
     bodySizes.push(Buffer.byteLength(String(requestOptions!.body)));
     const first = providerCalls++ === 0;
@@ -34,30 +62,132 @@ async function fixture(finalText = 'final', stopReason = 'end_turn', maxTurns = 
     ] : thinkingOnly ? [{ type: 'thinking', thinking: 'Unfinished private reasoning.', signature: 'original' }]
       : [{ type: 'text', text: finalText }], stop_reason: first ? 'tool_use' : stopReason, usage: { input_tokens: 5, output_tokens: 5 } }));
   });
-  const binding = { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
+  const binding = options?.savedState?.binding ?? { taskId, artifactId: 'paper', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
     runtimeId: thinkingOnly ? `installed-native-continuation-${'a'.repeat(40)}` : 'fixture',
     skillCatalogueId: 'fixture', model: 'MiniMax-M3', allowedTools: NATIVE_PAPER_TOOLS.map(t => t.name),
     maxTurns, maxOutputTokens: 100, maxTotalOutputTokens: 1000, maxInputBytes: 9000, deadlineAt: Date.now() + (options?.deadlineMs ?? 20_000) };
   const store = { async read() { return structuredClone(state); }, async compareAndSet(_expected: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async complete(_started: unknown, next: NativeAgentSessionState) { state = structuredClone(next); },
     async publish<T>(_started: unknown, submit: () => Promise<T>) { return submit(); } };
-  const session = createNativeAgentSession({ gateway: new AiGateway({ providers: [provider] }), binding, store, authorize: async () => undefined });
+  const authorize = options?.authorize ?? (async () => undefined);
+  const session = createNativeAgentSession({ gateway: new AiGateway({ providers: [provider] }), binding, store, authorize });
   const parser = { name: 'fixture', version: '1' };
   const paper = createNativePaperTools({ artifactId: 'paper', contentHash: 'a'.repeat(64), parser, pages: [{ page: 1, width: 100, height: 100,
     blocks: [{ id: 'one', kind: 'paragraph', text: 'Original evidence.', boundingBox: { x: 0, y: 0, width: 100, height: 100 }, parser, transformations: [] }] }] }, options?.renderPages ?? (async () => []));
   const sourceCalls: Array<{ name: string; sequence?: number; callId?: string }> = [];
   const final = runHostedNativeTask({ inboxRoot: root, executionAttempt: 1, config: { ...binding, goal: 'Read', instructions: 'Read', sourceTools: NATIVE_PAPER_TOOLS },
-    deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize: async () => undefined,
+    deadlineAt: binding.deadlineAt, maxInputBytes: binding.maxInputBytes, session, store, authorize,
     paper: { ...paper, call: async (name, args, sequence, callId) => { sourceCalls.push({ name, sequence, callId }); return paper.call(name, args); },
       ...(options?.withAuthorizedToolCall ? { withAuthorizedToolCall: options.withAuthorizedToolCall } : {}) } });
   void final.catch(() => undefined);
   const socketPath = join(root, `${taskId}-1`, 'worker.sock');
   for (let i = 0; i < 100; i++) { try { await access(join(root, `${taskId}-1`, 'request.json')); break; } catch { await new Promise(r => setTimeout(r, 10)); } }
+  try { callers.set(socketPath, await readFile(join(root, `${taskId}-1`, 'caller.credential'), 'utf8')); } catch { /* unfixed producer */ }
   const sdk = { model: binding.model, max_tokens: 100, messages: [{ role: 'system', content: 'fixed' }, { role: 'user', content: 'Read' }],
     tools: NATIVE_PAPER_TOOLS.map(tool => ({ type: 'function', function: tool })) };
+  if (options?.bootstrap !== false && callers.has(socketPath)) {
+    expect((await post(socketPath, '/task/config', { systemPrompt: 'fixed' })).status).toBe(200);
+  }
   return { socketPath, sdk, final, bodySizes, sourceCalls, get state() { return state!; }, get providerCalls() { return providerCalls; },
-    cleanup: async () => { await rm(root, { recursive: true, force: true }); } };
+    cleanup: async () => { callers.delete(socketPath); await rm(root, { recursive: true, force: true }); } };
 }
+describe('Native caller authentication at the actual router', () => {
+  // Exercise the real HTTP handler/body parsing on Windows too. Only the unavailable
+  // Unix listen/chmod boundary is simulated; session and provider receipts are real fixtures.
+  beforeEach(() => { route.portable = true; });
+  afterEach(() => { route.portable = false; });
+  it.each(['/task/config', '/v1/chat/completions', '/task/tools/authorize', '/task/tools/call', '/task/tools/images', '/task/finish'])
+    ('rejects missing/wrong caller on %s without stopping or consuming the legitimate task', async path => {
+      const f = await fixture();
+      try {
+        for (const caller of [null, 'f'.repeat(64), 'wrong-public-sdk-label']) {
+          const denied = await post(f.socketPath, path, path === '/task/config' ? undefined : f.sdk, caller);
+          expect(denied.status).toBe(401);
+          expect(JSON.stringify(denied.body)).not.toContain(callers.get(f.socketPath));
+          expect(f.providerCalls).toBe(0); expect(f.sourceCalls).toEqual([]);
+        }
+        const config = await post(f.socketPath, '/task/config', undefined);
+        expect(config.status).toBe(200);
+        expect(JSON.stringify(config.body)).not.toContain(callers.get(f.socketPath));
+        expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(200);
+        expect(f.providerCalls).toBe(1);
+        await post(f.socketPath, '/task/finish', { status: 'stopped' });
+        await expect(f.final).rejects.toThrow('stopped');
+      } finally { await f.cleanup(); }
+    });
+  it('keeps the private caller outside paid/model requests throughout the full authorized tool loop', async () => {
+    const f = await fixture();
+    try {
+      const first = await post(f.socketPath, '/v1/chat/completions', f.sdk);
+      const args = { passageIds: ['P00001'] };
+      expect((await post(f.socketPath, '/task/tools/authorize', { name: 'paper_read', arguments: args })).status).toBe(200);
+      const read = await post(f.socketPath, '/task/tools/call', { name: 'paper_read', arguments: args });
+      const message = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
+      expect((await post(f.socketPath, '/v1/chat/completions', { ...f.sdk, messages: [...f.sdk.messages, message,
+        { role: 'tool', tool_call_id: 'read-1', content: JSON.stringify(read.body) }] })).status).toBe(200);
+      expect((await post(f.socketPath, '/task/finish', { status: 'completed', finalResponse: 'final' })).status).toBe(200);
+      expect((await f.final).finalResponse).toBe('final'); expect(f.providerCalls).toBe(2);
+      expect(JSON.stringify(f.state)).not.toContain(callers.get(f.socketPath));
+    } finally { await f.cleanup(); }
+  });
+  it('rejects a completion before private first-turn bootstrap', async () => {
+    const f = await fixture('final', 'end_turn', 3, false, { bootstrap: false });
+    try {
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(409);
+      await expect(f.final).rejects.toThrow('stopped'); expect(f.providerCalls).toBe(0);
+    } finally { await f.cleanup(); }
+  });
+  it.each(['goal', 'system'])('rejects changed first %s despite a correct caller credential', async kind => {
+    const f = await fixture();
+    try {
+      const changed = structuredClone(f.sdk);
+      changed.messages[kind === 'goal' ? 1 : 0]!.content = 'Changed first turn';
+      expect((await post(f.socketPath, '/v1/chat/completions', changed)).status).toBe(409);
+      await expect(f.final).rejects.toThrow('first request changed'); expect(f.providerCalls).toBe(0);
+    } finally { await f.cleanup(); }
+  });
+  it('does not let a conflicting bootstrap stop or replace the authorized first turn', async () => {
+    const f = await fixture();
+    try {
+      expect((await post(f.socketPath, '/task/config', { systemPrompt: 'fixed' })).status).toBe(200);
+      // Caller-provided goal fields have no authority: the host binds its own goal.
+      expect((await post(f.socketPath, '/task/config', { systemPrompt: 'fixed', goal: 'Different task' })).status).toBe(200);
+      expect((await post(f.socketPath, '/task/config', { systemPrompt: 'changed' })).status).toBe(409);
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(200);
+      await post(f.socketPath, '/task/finish', { status: 'stopped' });
+      await expect(f.final).rejects.toThrow('stopped'); expect(f.providerCalls).toBe(1);
+    } finally { await f.cleanup(); }
+  });
+  it('does not let caller authentication replace live source/lease authority', async () => {
+    let allowed = true;
+    const f = await fixture('final', 'end_turn', 3, false, {
+      authorize: async () => { if (!allowed) throw new Error('[blocked] source authority revoked'); },
+    });
+    try {
+      allowed = false;
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(409);
+      await expect(f.final).rejects.toThrow('stopped'); expect(f.providerCalls).toBe(0);
+    } finally { await f.cleanup(); }
+  });
+  it('replays a saved paid first turn with a fresh private caller and refuses bootstrap overwrites', async () => {
+    const seed = await fixture(); let saved: NativeAgentSessionState;
+    try {
+      expect((await post(seed.socketPath, '/v1/chat/completions', seed.sdk)).status).toBe(200);
+      saved = structuredClone(seed.state);
+      await post(seed.socketPath, '/task/finish', { status: 'stopped' }); await expect(seed.final).rejects.toThrow('stopped');
+    } finally { await seed.cleanup(); }
+    const f = await fixture('final', 'end_turn', 3, false, { savedState: saved!, bootstrap: false });
+    try {
+      const config = await post(f.socketPath, '/task/config', undefined);
+      expect(config.body.systemPrompt).toBe('fixed');
+      expect((await post(f.socketPath, '/task/config', { systemPrompt: 'changed' })).status).toBe(409);
+      expect((await post(f.socketPath, '/task/config', { systemPrompt: config.body.systemPrompt })).status).toBe(200);
+      expect((await post(f.socketPath, '/v1/chat/completions', f.sdk)).status).toBe(200);
+      expect(f.state).toEqual(saved!); expect(f.providerCalls).toBe(0);
+      await post(f.socketPath, '/task/finish', { status: 'stopped' }); await expect(f.final).rejects.toThrow('stopped');
+    } finally { await f.cleanup(); }
+  });
+});
 describe.skipIf(process.platform === 'win32')('private native Unix socket router', () => {
   it('rechecks journal authority after page rasterization before sending pixels', async () => {
     let begin!: () => void; let resume!: () => void; let allowed = true; let checks = 0;

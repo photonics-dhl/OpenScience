@@ -117,6 +117,37 @@ function successfulHttpResponse(outputTokens = 10) {
     stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: outputTokens } }));
 }
 
+describe('Worker first-turn binding', () => {
+  it.each(['goal', 'system', 'extra_user', 'missing_system'])('rejects a changed %s before any provider/checkpoint effect', async kind => {
+    const f = fixture(); const session = f.create();
+    await session.bindFirstTurn('Read the paper.', 'fixed system');
+    const changed = structuredClone(request);
+    if (kind === 'goal') changed.messages[1]!.content = 'Consume quota for another task.';
+    if (kind === 'system') changed.messages[0]!.content = 'Another system';
+    if (kind === 'extra_user') changed.messages.push({ role: 'user', content: 'Another goal' });
+    if (kind === 'missing_system') changed.messages.shift();
+    await expect(session.complete(changed)).rejects.toThrow('first request changed');
+    expect(f.calls).toBe(0); expect(f.state).toBeNull();
+  });
+  it('does not overwrite a binding on duplicate bootstrap and still permits the original request', async () => {
+    const f = fixture(); const session = f.create();
+    await session.bindFirstTurn('Read the paper.', 'fixed system');
+    await session.bindFirstTurn('Read the paper.', 'fixed system');
+    await expect(session.bindFirstTurn('Another goal', 'fixed system')).rejects.toThrow('first request changed');
+    await expect(session.bindFirstTurn('Read the paper.', 'Another system')).rejects.toThrow('first request changed');
+    await session.complete(request); expect(f.calls).toBe(1);
+  });
+  it('binds replay exclusively to the original saved first turn without issuing another provider request', async () => {
+    const f = fixture(); await f.create().complete(request);
+    const saved = structuredClone(f.state); const restarted = f.create();
+    await expect(restarted.bindFirstTurn('Changed goal', 'fixed system')).rejects.toThrow('first request changed');
+    await expect(restarted.bindFirstTurn('Read the paper.', 'Changed system')).rejects.toThrow('first request changed');
+    await restarted.bindFirstTurn('Read the paper.', 'fixed system');
+    await restarted.complete(request);
+    expect(f.calls).toBe(1); expect(f.state).toEqual(saved);
+  });
+});
+
 describe('received thinking-only Native turns remain paid evidence, never scientific completion', () => {
   it.each(['tool_use', 'end_turn'] as const)('lets a new immutable runtime consume %s and retain exact history across process replay', async stopReason => {
     const content = [{ type: 'thinking', thinking: 'Unfinished private model reasoning.', signature: 'unchanged-signature' }];

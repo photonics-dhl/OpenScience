@@ -7,6 +7,45 @@ import re
 import sys
 
 
+def read_caller_credential(path):
+    from task_agent import NativeTaskStopped
+    try:
+        value = path.read_text(encoding='ascii')
+    except (OSError, UnicodeError):
+        raise NativeTaskStopped('Native caller credential is unavailable') from None
+    if not re.fullmatch(r'[a-f0-9]{64}', value):
+        raise NativeTaskStopped('Native caller credential is unavailable')
+    return value
+
+
+def worker_transport_class(caller_credential):
+    import httpx
+    from task_agent import NativeTaskStopped
+    class WorkerTransport(httpx.BaseTransport):
+        def __init__(self):
+            self.transport = httpx.HTTPTransport(uds='/bridge/worker.sock', retries=0)
+
+        def handle_request(self, request):
+            if request.url.host != 'openscience-worker':
+                raise NativeTaskStopped('Native transport attempted an unowned destination')
+            # Control calls and every rebuilt SDK client share this private transport,
+            # never the SDK's public api_key label or model-visible request data.
+            request.headers['x-openscience-native-caller'] = caller_credential
+            try:
+                response = self.transport.handle_request(request)
+                if response.status_code != 200:
+                    response.close()
+                    raise NativeTaskStopped('Worker stopped the native task')
+                return response
+            except Exception:
+                # httpx errors can retain the request/headers. Do not propagate them.
+                raise NativeTaskStopped('Native task transport outcome is unavailable') from None
+
+        def close(self):
+            self.transport.close()
+    return WorkerTransport
+
+
 def write_task_model_context(task_home, config):
     value = config.get('contextWindowTokens')
     if value is None:
@@ -17,8 +56,26 @@ def write_task_model_context(task_home, config):
     (task_home/'config.yaml').write_text(f'model:\n  context_length: {value}\n', encoding='utf-8')
 
 
+def bind_native_first_turn(agent, config, call):
+    from task_agent import NativeTaskStopped
+    def bind(prompt):
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise NativeTaskStopped('Native first turn is unavailable')
+        if call('/task/config', {'systemPrompt': prompt}) != {'bound': True}:
+            raise NativeTaskStopped('Native first turn is unavailable')
+    # Fresh runs invoke the actual builder through the original SDK loop, retaining
+    # its first-session hooks. Saved checkpoints must never rebuild their date/skills.
+    prompt = config.get('systemPrompt')
+    if prompt is None:
+        agent._native_bind_first_turn = bind
+    else:
+        agent._cached_system_prompt = prompt
+        bind(prompt)
+
+
 def main():
     instance = os.environ.get("OPENSCIENCE_NATIVE_INSTANCE", "")
+    credential_directory = os.environ.get('CREDENTIALS_DIRECTORY', '')
     os.environ.clear()
     os.environ.update(HOME="/task", HERMES_HOME="/task", PATH="/usr/bin:/bin",
         HERMES_TELEMETRY_ENABLED="false", HERMES_NO_AUTO_UPDATE="1", PYTHONUNBUFFERED="1",
@@ -30,24 +87,10 @@ def main():
     if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}-[1-9][0-9]{0,8}", instance):
         raise NativeTaskStopped("Native unit identity is unavailable")
 
-    class WorkerTransport(httpx.BaseTransport):
-        def __init__(self):
-            self.transport = httpx.HTTPTransport(uds="/bridge/worker.sock", retries=0)
-
-        def handle_request(self, request):
-            if request.url.host != "openscience-worker":
-                raise NativeTaskStopped("Native transport attempted an unowned destination")
-            try:
-                response = self.transport.handle_request(request)
-                if response.status_code != 200:
-                    response.close()
-                    raise NativeTaskStopped("Worker stopped the native task")
-                return response
-            except Exception as error:
-                raise NativeTaskStopped("Native task transport outcome is unavailable") from error
-
-        def close(self):
-            self.transport.close()
+    # systemd chooses this private directory; do not accept a path from task/model DTOs.
+    if credential_directory != f'/run/credentials/openscience-hermes@{instance}.service':
+        raise NativeTaskStopped('Native caller credential directory is unavailable')
+    WorkerTransport = worker_transport_class(read_caller_credential(Path(credential_directory)/'native-caller'))
 
     client = httpx.Client(transport=WorkerTransport(), base_url="http://openscience-worker", trust_env=False,
                           timeout=httpx.Timeout(610, connect=5))
@@ -102,8 +145,7 @@ def main():
                 raise NativeTaskStopped("Native executable tool profile changed")
             guard_registered_tools(registry, allowed,
                 lambda name, args: call("/task/tools/authorize", {"name": name, "arguments": args}), SkillScope(skills))
-            if config.get("systemPrompt"):
-                agent._cached_system_prompt = config["systemPrompt"]
+            bind_native_first_turn(agent, config, call)
             result = agent.run_conversation(config["goal"], system_message=config["instructions"], task_id=config["taskId"])
             final = result.get("final_response")
             if not isinstance(final, str) or not final.strip() or result.get("error"):
