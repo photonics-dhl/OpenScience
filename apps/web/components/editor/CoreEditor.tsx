@@ -82,7 +82,9 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
 }) {
   const t = useTranslations('editor');
   const visibleFields = fields?.length ? fields : FIELDS;
-  const current = activeField ?? visibleFields[0] ?? 'problem';
+  const current = activeField && visibleFields.includes(activeField)
+    ? activeField
+    : visibleFields[0] ?? 'problem';
   const hermesStage = useOptionalHermesWorkspaceStage();
   const [editingField, setEditingField] = useState<keyof Omit<SdfCore, 'schemaVersion'> | null>(null);
 
