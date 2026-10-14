@@ -113,10 +113,15 @@ async function fixture(native = true) {
     activeTransactions += 1;
     try { return await transact(...args); } finally { activeTransactions -= 1; }
   }) as typeof prisma.$transaction;
+  let fetchCalls = 0;
   const fetcher = vi.fn(async () => {
+    fetchCalls += 1;
     expect(activeTransactions).toBe(0);
-    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: [{ type: 'text', text: JSON.stringify({
-    decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null }) }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } }), { status: 200 });
+    const content = fetchCalls === 1
+      ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: 'openscience-source-review' } },
+        { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }]
+      : [{ type: 'text', text: JSON.stringify({ decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null }) }];
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content, stop_reason: fetchCalls === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } }), { status: 200 });
   });
   const provider = new AnthropicCompatProvider('minimax-key-1-model-1', { apiKey: 'test', baseUrl: 'https://minimax.example', model: 'MiniMax-M3' }, fetcher as never);
   const gateway = new AiGateway({ providers: [provider], illustrationReviewPolicy: async () => true,
@@ -224,7 +229,7 @@ describe('real Worker native image review persistence and replay', () => {
     expect(f.db.agentTasks[0].result.nativeImageReview.review).toEqual(f.asset.provenance.imageReview);
     f.db.agentTasks[0].executionAttempt = 2;
     expect(await f.handler(f.deps as never, f.task())).toEqual(first);
-    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.fetcher).toHaveBeenCalledTimes(2); expect(f.generateImage).not.toHaveBeenCalled();
   });
 
   it('keeps an uncertain started call and refuses resubmission after a Worker crash', async () => {
