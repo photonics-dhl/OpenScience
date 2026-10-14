@@ -2,6 +2,8 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-14：视频父链循环修复的实际CI已跑完原Native父链，257例/1355ms，新增7边界例通过，原递归OOM未再出现；五suite仍474/480，6处现代local Host旧预期失败，权限竞态尚未执行。缺Native配置可能先留session的因果已交同一独立High，按现成配置检查和原fixture修复，不把整体红灯冒称RED/GREEN完成。其余写权和单一生产窗口保持；精确证据见CURRENT。
+
 - 2026-10-14：已直接核UI最新人类实施许可，P07四视图/Hermes与P04/P03清爽字体布局交互进入落实，旧“只审图”限制已更新。root已核当前生产已推基线与canonical/架构Web源码相同，UI已在原树当前发布基线建立新分支STARTED，精确Guide/桌面文件及JSON单写已确认；P07/Hermes与架构R09有真实WIP重叠，架构已ACK收口15文件，原77项/82模块证据复用、独立High启动，须单独提交并明确交回后串行接续，不覆盖现有重构。视频父链循环四文件修复已静态High GO，精确CI终态失败，等待唯一owner核Native-parent与四权限竞态真实RED；同事务writer/currentdraft P1仍开放，未冒称完整通过。运行/业务/部署未因此变更，精确授权、基线和写权见CURRENT。
 
 - 2026-10-14：已按用户链接和截图复核Synclip公开视频/计价文档，合并原能力台账；公开Veo与已接LTX管理员通道分别记录，现缺有限供应商总预算与LTX账户/API费率证明，不再索取已知公共价。已授权首图owner回传原任务新PNG已存且task成功，但额外曲线/标签与场线不符导致Native像素审核BLOCKED，原私有图保留不自动重画，最终费用/保护回执待收；视频修订实现High发现同事务权限复核P1，精确CI又遇Native前序组heap OOM，owner按因果定位，不冒称通过或增加heap绕过。UI媒体主体获认可，新Hermes与另外三视图的四张v2已交设计聊天、root已收说明/文件存在证据，等待人类审阅。视频OOM已由独立High确认新增父proof递归，最小祖先reader修复已获原owner STARTED回执，仍保留逐祖先授权/来源证明。精确状态/写权见CURRENT。
