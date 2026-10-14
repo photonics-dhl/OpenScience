@@ -118,7 +118,7 @@ async function fixture() {
     }
     return originalCreate(args);
   });
-  const deps = { prisma, redis: { lpush: vi.fn(async () => 1) }, audit: { record: async (event: Record<string, unknown>,
+  const deps = { prisma, redis: { lpush: vi.fn(async () => 1) }, nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' }, audit: { record: async (event: Record<string, unknown>,
     tx: { auditLog: { create: (args: { data: Record<string, unknown> }) => Promise<unknown> } }) => tx.auditLog.create({ data: event }) } } as never;
   const input = { actorId: id(1), researchObjectId: id(3), runId: run.id, expectedVersion: 1, versionId: id(4), imageAssetId: id(14),
     sceneIndex: 1, style: 'infographic:technical-schematic', idempotencyKey: 'style-key' };
