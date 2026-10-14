@@ -1382,6 +1382,28 @@ async function persistedNativeAdmissionFixture() {
 }
 
 describe('ordinary inherited Native local revision admission', () => {
+  it.each([
+    ['external-narration', 'full', 'fresh'], ['external-narration', 'full', 'held'],
+    ['external-narration', 'selected', 'fresh'], ['external-narration', 'selected', 'held'],
+    ['native-first', 'full', 'fresh'], ['native-first', 'full', 'held'],
+    ['native-first', 'selected', 'fresh'], ['native-first', 'selected', 'held'],
+  ] as const)('admits %s %s %s planning without commercial VIDEO readiness', async (mode, scope, state) => {
+      const f = await local();
+      if (scope === 'full') Reflect.deleteProperty(f.task.payload.storyboard as object, 'revisionSceneIndex');
+      f.setAudio(mode, [mode === 'native-first' ? 'native' : 'external-narration', mode === 'native-first' ? 'native' : 'external-narration', mode === 'native-first' ? 'native' : 'external-narration']);
+      f.deps.videoEnabled = false; f.deps.readVideoReadiness = vi.fn(async () => false);
+      const parent = structuredClone(f.native.parentTask), original = structuredClone(f.task);
+      if (state === 'held') {
+        f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
+        expect(await recoverHeldVideoTasks(f.deps)).toBe(1); expect(await recoverHeldVideoTasks(f.deps)).toBe(0);
+        expect(await f.outbox()).toBe(1); expect(await f.outbox()).toBe(0);
+      }
+      await f.poll();
+      expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, payload: original.payload, result: original.result,
+        idempotencyKey: original.idempotencyKey });
+      expect(f.native.parentTask).toEqual(parent); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
+      expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
+  });
   async function local() {
     const f = await persistedNativeAdmissionFixture(); f.state.ready = true;
     f.task.payload = { ...structuredClone(f.native.parentTask.payload), storyboard: {

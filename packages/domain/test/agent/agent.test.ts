@@ -330,6 +330,19 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('R2 rejects an unproved full VIDEO parent before task and debit booking', async () => {
+    const f = await makeDeps(1);
+    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
+    const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
+    const before = structuredClone(f.db);
+    await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {
+      userId: f.user.id, sessionId: session.id, kind: 'presentation.generate', idempotencyKey: 'unproved-full-video-parent',
+      payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html',
+        sourceClaimIds: ['10000000-0000-4000-8000-000000000002'], storyboard: { output: 'video', narrative: true, locale: 'en', style: 'scientific',
+          instruction: 'Repair the existing private plan', baseAssetId: '10000000-0000-4000-8000-000000000003' } },
+    }))).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
+  });
   it('creates R2 first Native video tasks with the owned contract and one credit in the same transaction', async () => {
     const f = await makeDeps(1);
     const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
