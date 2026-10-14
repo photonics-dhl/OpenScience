@@ -240,7 +240,7 @@ describe('real Worker native image review persistence and replay', () => {
     expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('prepared');
     expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.state).toBe('started');
     f.db.agentTasks[0].executionAttempt = 2;
-    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/another submission is forbidden/);
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/Original image Agent submission outcome is unknown/);
     expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.generateImage).not.toHaveBeenCalled();
   });
 
@@ -256,7 +256,8 @@ describe('real Worker native image review persistence and replay', () => {
     await expect(f.handler(f.deps as never, f.task())).rejects.toThrow();
     expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
     expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('prepared');
-    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.state).toBe('started');
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.state).toBe('completed');
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.hasToolCalls).toBe(true);
     expect(f.fetcher).toHaveBeenCalledOnce();
   });
 });
