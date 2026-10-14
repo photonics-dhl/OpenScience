@@ -12,7 +12,7 @@
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：909 broker候选精确Media38652456476的skill-path失败，Linux sudo55=54pass/1error/0skip；唯一symlink原测试仍期望OSError，新typed校验提前抛明确ValueError，非symlink放行。owner唯一新写test_host_broker.py该方法精确异常+无rootbridge断言，定向独立High后commit回传，不改validator/不自行重跑CI；原run终态待收。common-only最小整合scope仍独立审查，未生成patch/收canonical。实际FS/UID/布局与旧stop用例已执行，非生产physicalstop；broker后检查skip不能算绿。overallR12及恶意同UID末端原子保证仍未放行。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：909旧run38652456476终态failure，仅broker symlink预期错、其他5job成功；55实际54pass/1error/0skip。唯一fixture修复5abc1a7178e035ff2e6640f3462a970205b24728（3+/1−）独立High GO已推，root单次新Media38653081778，owner唯一收新日志。同时common-only scope High GO，owner只写ignored canonical.patch/composition-high.md：common parser/custody/pin/cleanup两path，排全部旧stop/poll分支，保留root4/producer3/unit_ended及实际symlink拒绝；预计43仅静态数，最终patch High/候选新CI均待收。两树tracked冻结，未合canonical/未部署，overallR12及末端sameUID原子保证仍未放行。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
