@@ -46,7 +46,8 @@ export const aiWarningGuard: SchemaGuard<AiWarning[]> = (v: unknown): v is AiWar
 export async function reviewAnalyzeHandler(
   gateway: AiGateway,
   deps: AgentDeps,
-  task: { id: string },
+  task: { id: string; executionAttempt?: number },
+  options: { beforePersist?: () => Promise<void> } = {},
 ): Promise<{ warningCount: number }> {
   const persistedTask = await deps.prisma.agentTask.findUnique({
     where: { id: task.id }, include: { session: true },
@@ -68,6 +69,10 @@ export async function reviewAnalyzeHandler(
     { role: 'user' as const, content: coreText.slice(0, 8000) },
   ];
   const warnings = await gateway.completeStructured(aiWarningGuard, prompt, { temperature: 0.3 });
+  // The Domain task CAS remains authoritative. This live recheck sits directly
+  // before warning adoption so an owned stop cannot knowingly publish a late
+  // response; saveWarnings still owns its existing serializable review write.
+  await options.beforePersist?.();
   await saveWarnings(deps, { versionId, warnings });
   return { warningCount: warnings.length };
 }

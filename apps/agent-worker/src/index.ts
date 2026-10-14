@@ -26,7 +26,7 @@ import {
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
   recoverCompletedHermesSceneImageResults, type HermesResearchRunDeps,
-  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  AGENT_TASK_QUEUE, AGENT_TASK_OWNED_STOP_REASON, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
   parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
   purgeExpiredTrash,
   lockTrashReferences,
@@ -102,6 +102,82 @@ const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAtte
 type SpoolSubmission = GatewayImageSubmission;
 type IllustrationSubmission = GatewayIllustrationSubmission;
 type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
+
+/**
+ * Re-read the live task immediately before a Worker-owned model call.  The
+ * Domain stop CAS changes executionAttempt and stores the stable owned-stop
+ * marker, so a queued/late callback cannot submit another generation after the
+ * stop wins.  This is deliberately a read fence: an already invoked provider
+ * request remains in flight and its receipt is handled by the existing
+ * provider/native checkpoint path.
+ */
+export async function assertWorkerExecutionCurrent(
+  prisma: Pick<AgentDeps['prisma'], 'agentTask'>,
+  execution: { taskId: string; executionAttempt: number },
+): Promise<void> {
+  const task = await prisma.agentTask.findUnique({
+    where: { id: execution.taskId },
+    select: { status: true, executionAttempt: true, deletedAt: true, error: true },
+  });
+  if (!task || task.deletedAt || task.status !== 'running' || task.executionAttempt !== execution.executionAttempt
+    || task.error === AGENT_TASK_OWNED_STOP_REASON) {
+    throw new Error('[blocked] worker execution was stopped or superseded');
+  }
+}
+
+/** Testable boundary used by handler adapters that run inside the poll lease. */
+export function runWithWorkerExecution<T>(
+  execution: { taskId: string; executionAttempt: number },
+  run: () => Promise<T>,
+): Promise<T> {
+  return spoolTaskExecution.run(execution, run);
+}
+
+/**
+ * Bind ordinary structured/text/OCR calls to the current claimed task.  The
+ * Gateway's own retry loop invokes beforeEachProviderCall before every provider
+ * attempt; wrapping that hook here closes retries/fallbacks after an owned
+ * stop without mutating a shared Gateway or leaking task state across lanes.
+ */
+export function createTaskScopedGateway(gateway: AiGateway, prisma: WorkerDeps['prisma']): AiGateway {
+  const scoped = new Proxy(gateway, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== 'function') return value;
+      if (property !== 'completeStructured' && property !== 'completeStructuredWithMetadata'
+        && property !== 'complete' && property !== 'ocr' && property !== 'reviewScientific'
+        && property !== 'nativeAgentComplete') return value.bind(target);
+      return async (...args: unknown[]) => {
+        const execution = spoolTaskExecution.getStore();
+        if (!execution) return value.apply(target, args);
+        await assertWorkerExecutionCurrent(prisma, execution);
+        if (property === 'completeStructured' || property === 'completeStructuredWithMetadata') {
+          const options = (args[2] && typeof args[2] === 'object' ? args[2] : {}) as Record<string, unknown>;
+          const before = options.beforeEachProviderCall as (() => Promise<void>) | undefined;
+          const withSubmission = options.withProviderSubmission as ((ordinal: number, target: unknown, submit: () => Promise<unknown>) => Promise<unknown>) | undefined;
+          args[2] = {
+            ...options,
+            beforeEachProviderCall: async () => {
+              await assertWorkerExecutionCurrent(prisma, execution);
+              await before?.();
+              await assertWorkerExecutionCurrent(prisma, execution);
+            },
+            ...(withSubmission ? { withProviderSubmission: async (ordinal: number, target: unknown, submit: () => Promise<unknown>) => {
+              await assertWorkerExecutionCurrent(prisma, execution);
+              const result = await withSubmission(ordinal, target, async () => {
+                await assertWorkerExecutionCurrent(prisma, execution);
+                return submit();
+              });
+              return result;
+            } } : {}),
+          };
+        }
+        return value.apply(target, args);
+      };
+    },
+  });
+  return scoped;
+}
 
 /** Called after the existing image/task/asset binder; missing audits grant no submission permission. */
 export async function requireHistoricalImageReviewPayer(prisma: Prisma.TransactionClient, input: ScienceReviewInput): Promise<void> {
@@ -454,9 +530,10 @@ export function createHandlers(
       return { echoed: true };
     },
     'sdf.extract': async (deps, task) => {
+      const taskGateway = createTaskScopedGateway(gateway, deps.prisma);
       const artifactId = typeof task.payload.artifactId === 'string' ? task.payload.artifactId : null;
       if (!artifactId) {
-        const result = await extractHandler(gateway, task);
+        const result = await extractHandler(taskGateway, task);
         await enqueueFigureAuditFromResult(deps, task, result);
         return result;
       }
@@ -840,7 +917,7 @@ export function createHandlers(
           const reviewer = nativeSourceCorrection ?? nativeReviewer; const bindingInput = nativeReviewerInput;
           if (!reviewer || (!nativeSourceCorrection && !bindingInput) || !isDeepStrictEqual(sourceMapRef, reviewer.sourceMapRef))
             throw new Error('[blocked] Native independent source binding is unavailable');
-          const result = await runNativeSourceReviewTask({ gateway, deps: { ...deps, storage: deps.storage! },
+          const result = await runNativeSourceReviewTask({ gateway: taskGateway, deps: { ...deps, storage: deps.storage! },
             task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
             sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, sourceAgentTaskId: reviewer.sourceAgentTaskId,
             authorCheckpointSha256: reviewer.authorCheckpointSha256, sourceResult: reviewer.sourceResult, inboxRoot: options.nativeAgentInboxRoot!,
@@ -860,7 +937,7 @@ export function createHandlers(
           await enqueueFigureAuditFromResult(deps, task, result); return result;
         }
         if (nativeReviewer) throw new Error('[blocked] Native reviewer cannot execute as its author');
-        const result = await runNativePaperTask({ gateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
+        const result = await runNativePaperTask({ gateway: taskGateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
           sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, inboxRoot: options.nativeAgentInboxRoot!,
           authorize: async tx => {
             await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
@@ -875,7 +952,7 @@ export function createHandlers(
         });
         await enqueueFigureAuditFromResult(deps, task, result); return result;
       }
-      const extracted = await extractHandler(gateway, { payload: { manuscriptText } }, {
+      const extracted = await extractHandler(taskGateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
           requireReusableSemanticStage,
@@ -911,15 +988,17 @@ export function createHandlers(
       await enqueueFigureAuditFromResult(deps, task, result);
       return result;
     },
-    'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
-    'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
+    'review.analyze': async (deps, task) => reviewAnalyzeHandler(createTaskScopedGateway(gateway, deps.prisma), deps, task, {
+      beforePersist: () => assertWorkerExecutionCurrent(deps.prisma, { taskId: task.id, executionAttempt: task.executionAttempt }),
+    }),
+    'visualization.plan': async (deps, task) => visualizationPlanHandler(createTaskScopedGateway(gateway, deps.prisma), task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
         runtime: nativeAgentRuntimeFromEnv(process.env),
         semanticSearchFor: options.nativeSemanticSearch,
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
     'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
-    'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
+    'workspace.guide': async (deps, task) => workspaceGuideHandler(createTaskScopedGateway(gateway, deps.prisma), deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) => {
         const run = searchIndexTail.then(async () => options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task), operation => _deps.prisma.$transaction(async tx => {
