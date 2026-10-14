@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
-  chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
+  chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
+import { builtinModules } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,464 @@ const retentionSource = readFileSync(new URL('./production-release-retention.mjs
 const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
 const deployLockSource = readFileSync(new URL('./production-deploy-lock.mjs', import.meta.url), 'utf8');
 const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
+const rollbackImageMetadataFixture = (env = ['NODE_VERSION=22.20.0'], os = 'linux', architecture = 'amd64') => JSON.stringify({ Config: { Env: env }, Os: os, Architecture: architecture });
+
+test('skill-path keeps official Prisma targets and runs the complete rollback self-check', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/hermes-media-skills.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /PRISMA_CLI_BINARY_TARGETS:\s*native,linux-musl/u);
+  assert.match(workflow, /--filter @openscience\/database generate/u);
+  assert.match(workflow, /--filter @openscience\/search generate/u);
+  assert.match(workflow, /packages\/database\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
+  assert.match(workflow, /packages\/search\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
+  assert.match(workflow, /verifyApplicationRollbackReaders\(\{ candidateRoot: process\.env\.GITHUB_WORKSPACE, rollbackRoot: process\.env\.GITHUB_WORKSPACE \}\)/u);
+});
+
+test('bounded Worker recovery wiring proof accepts the current construction path', () => {
+  assert.equal(deployLock.verifyWorkerRecoveryWiring({ sourceRoot: fileURLToPath(new URL('../../', import.meta.url)) }), true);
+});
+
+test('bounded Worker recovery wiring proof rejects unsafe condition or duplicate maintenance changes', async t => {
+  const sourceRoot = await mkdtemp(join(tmpdir(), 'xgs-worker-wiring-'));
+  t.after(() => rm(sourceRoot, { recursive: true, force: true }));
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const indexPath = join(sourceRoot, 'apps/agent-worker/src/index.ts');
+  const runPath = join(sourceRoot, 'packages/domain/src/agent/research-run.ts');
+  await mkdir(dirname(indexPath), { recursive: true });
+  await mkdir(dirname(runPath), { recursive: true });
+  await copyFile(join(projectRoot, 'apps/agent-worker/src/index.ts'), indexPath);
+  await copyFile(join(projectRoot, 'packages/domain/src/agent/research-run.ts'), runPath);
+  const original = await readFile(indexPath, 'utf8');
+  await writeFile(indexPath, original.replace('if (deps.nativeSceneImageEnabled)', 'if (true)'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('runMaintenance: false', 'runMaintenance: true'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('!deps.nativeSceneImageEnabled || !deps.inspectImageRecoveryState', '(!deps.nativeSceneImageEnabled && false) || !deps.inspectImageRecoveryState'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('if (stopping() || inFlight || !deps.nativeSceneImageEnabled || !deps.inspectImageRecoveryState) return false;', 'if (false) { if (stopping() || inFlight || !deps.nativeSceneImageEnabled || !deps.inspectImageRecoveryState) return false; }'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled', 'nativeAgentRuntime, nativeSceneImageEnabled: true, nativeSceneImageEnabled, sceneImageEnabled'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const recoveryLine = original.match(/      const page = await recover\(deps, \{ limit: 20,[^\r\n]+\);\r?\n/u)?.[0];
+  assert.ok(recoveryLine);
+  const guardLine = original.match(/    if \(stopping\(\) \|\| inFlight \|\| !deps\.nativeSceneImageEnabled \|\| !deps\.inspectImageRecoveryState\) return false;\r?\n/u)?.[0];
+  assert.ok(guardLine);
+  const movedRecovery = original.replace(recoveryLine, '').replace(guardLine, recoveryLine + guardLine);
+  await writeFile(indexPath, movedRecovery);
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('const maintenance = (async () => {', 'const maintenance = () => {'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const runOriginal = await readFile(runPath, 'utf8');
+  await writeFile(indexPath, original);
+  const runGuard = runOriginal.match(/  if \(!deps\.nativeSceneImageEnabled \|\| !deps\.inspectImageRecoveryState\) return \{ inspected: 0, resumed: 0, errors: 0 \};\r?\n/u)?.[0];
+  assert.ok(runGuard);
+  await writeFile(runPath, runOriginal.replace(runGuard, `  if (process.env.UNSAFE_BYPASS) {\n${runGuard}  }\n`));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const workerGuard = original.match(/    if \(stopping\(\) \|\| inFlight \|\| !deps\.nativeSceneImageEnabled \|\| !deps\.inspectImageRecoveryState\) return false;\r?\n/u)?.[0];
+  assert.ok(workerGuard);
+  await writeFile(runPath, runOriginal);
+  await writeFile(indexPath, original.replace(workerGuard, `    if (process.env.UNSAFE_BYPASS) {\n${workerGuard}    }\n`));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const nestedFake = `function __fakeHolder() { function createWorkerDeps(input) { return { ...input, nativeSceneImageEnabled: false, readVideoReadiness: createNativeVideoReadinessReader() }; } }\n${original.replace('nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled', 'nativeAgentRuntime, nativeSceneImageEnabled: true, sceneImageEnabled')}`;
+  await writeFile(indexPath, nestedFake);
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('createPollOnce(handlers, { runMaintenance: false, stopping: () => stopping })',
+    'createPollOnce(handlers, { runMaintenance: false, stopping: () => false })'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('createCompletedSceneImageRecoveryScheduler({ stopping: () => stopping })',
+    'createCompletedSceneImageRecoveryScheduler({ stopping: () => stopping, recover: async () => ({ inspected: 0, resumed: 0, errors: 0 }) })'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original.replace('const recoverSceneImages = createCompletedSceneImageRecoveryScheduler({ stopping: () => stopping });',
+    'const createCompletedSceneImageRecoveryScheduler = () => async () => false;\n      const recoverSceneImages = createCompletedSceneImageRecoveryScheduler({ stopping: () => stopping });'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original);
+  await writeFile(indexPath, original.replace('  const recover = options.recover ?? recoverCompletedHermesSceneImageResults;',
+    '  const recoverCompletedHermesSceneImageResults = async () => ({ inspected: 0, resumed: 0, errors: 0 });\n  const recover = options.recover ?? recoverCompletedHermesSceneImageResults;'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(indexPath, original);
+  await writeFile(runPath, runOriginal.replace('const run = await tx.hermesResearchRun.findUnique',
+    'const actualRun = await tx.hermesResearchRun.findUnique').replace('        if (!run || run.version',
+    '        const run = {} as any;\n        if (!run || run.version'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('const step = run.steps.find(row => row.id === item.stepId)!;', 'const step = {} as any;'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('for (const item of pending) {', 'for (const item of ({} as any)) {'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('where: { id: candidate.id }', 'where: { id: candidate.version }'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('deps.prisma.$transaction(async tx => {',
+    'const tx = deps.prisma;\n      counts.resumed += await deps.prisma.$transaction(async inner => {'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('deps.prisma.$transaction(async tx => {', 'other.prisma.$transaction(async tx => {'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace("}, { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 20_000 });",
+    "}, { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 20_000 });"));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('id: run.id, actorId: run.actorId, researchObjectId: run.researchObjectId, versionId: run.versionId,',
+    'id: run.id, researchObjectId: run.researchObjectId, versionId: run.versionId,'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('status: \'generating_scene_images\', error: null, lastReconciledAt: null, version: { increment: 1 }',
+    'status: \'generating_scene_images\', error: null, lastReconciledAt: null'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal);
+});
+
+test('ordinary rollback compares persisted readers and their runtime helpers without executing old source', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-readers-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  const fixture = async (directory, helper = 'return value === "new-profile";', reader = '') => {
+    await mkdir(join(directory, 'packages/domain/src'), { recursive: true });
+    await writeFile(join(directory, 'packages/domain/src/reader.ts'), `import { accepts } from './helper';\nexport function readPersisted(value: string) { ${reader} return accepts(value); }\nexport function unrelated() { return 1; }\n`);
+    await writeFile(join(directory, 'packages/domain/src/helper.ts'), `export function accepts(value: string) { ${helper} }\n`);
+  };
+  await fixture(candidate); await fixture(previous, '/* old formatting */ return value === "new-profile";', '// retained historical reader\n');
+  const options = { candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['packages/domain/src/reader.ts', 'readPersisted']] };
+  assert.equal(typeof deployLock.verifyApplicationRollbackReaders, 'function');
+  await deployLock.verifyApplicationRollbackReaders(options);
+  await writeFile(join(previous, 'packages/domain/src/reader.ts'), 'import { accepts } from "./helper"; export function readPersisted(value: string) { return accepts(value); } export function unrelated() { throw Error("must not execute"); }');
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await fixture(previous, 'return value === "old-profile";');
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await rm(join(previous, 'packages/domain/src/helper.ts'));
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('rollback rejects the five unsafe runtime closure variants reproduced by independent High review', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-runtime-closure-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cases = [
+    { name: 'module-side-effect', reader: 'import { accepts } from "./helper"; export function readPersisted(v: string) { return accepts(v); }',
+      helper: flag => `let enabled = false; enabled = ${flag}; export function accepts(v: string) { return enabled && v === "new-profile"; }` },
+    { name: 'side-effect-import', reader: 'import "./helper"; export function readPersisted(v: string) { return globalThis.accepts(v); }',
+      helper: flag => `globalThis.accepts = (v: string) => ${flag} && v === "new-profile";` },
+    { name: 'default-object-export', reader: 'import api from "./helper"; export function readPersisted(v: string) { return api.accepts(v); }',
+      helper: flag => `function accepts(v: string) { return ${flag} && v === "new-profile"; } export default { accepts };` },
+    { name: 'callback-consumer', reader: 'export function readPersisted(deps: { accepts: (v: string) => boolean }, v: string) { return deps.accepts(v); }',
+      helper: flag => `import { readPersisted } from "./reader"; export function consume(v: string) { return readPersisted({ accepts: (x: string) => ${flag} && x === "new-profile" }, v); }` },
+    { name: 'builtin-import-alias', reader: 'export function readPersisted(v: string) { return !!accepts(v, "new-profile"); }',
+      prefix: flag => `import { ${flag === 'true' ? 'isDeepStrictEqual' : 'format'} as accepts } from "node:util";`, helper: () => '' },
+  ];
+  for (const item of cases) await t.test(item.name, async () => {
+    const candidate = join(root, item.name, 'candidate'), previous = join(root, item.name, 'previous');
+    for (const [directory, flag] of [[candidate, 'true'], [previous, 'false']]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'reader.ts'), (item.prefix?.(flag) ?? '') + item.reader);
+      await writeFile(join(directory, 'helper.ts'), item.helper(flag));
+    }
+    const options = { candidateRoot: candidate, rollbackRoot: previous,
+      compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] };
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    await writeFile(join(previous, 'reader.ts'), (item.prefix?.('true') ?? '') + item.reader);
+    await writeFile(join(previous, 'helper.ts'), item.helper('true'));
+    // Callback recovery is provable only with its actual source supplier rooted.
+    if (item.name === 'callback-consumer') options.roots.push(['helper.ts', 'consume']);
+    await deployLock.verifyApplicationRollbackReaders(options);
+    if (item.name === 'callback-consumer') {
+      await writeFile(join(previous, 'helper.ts'), item.helper('false'));
+      await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    }
+  });
+});
+
+test('rollback fails closed for missing generated modules and unresolved dynamic loading without executing source', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-unknown-runtime-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const body of [
+    'import { client } from "./generated/client"; export function readPersisted(v: string) { return client(v); }',
+    'export async function readPersisted(v: string) { return (await import(v)).read(v); }',
+    'import * as util from "node:util"; export function readPersisted(v: string) { return util[v](v); }',
+    'const util = await import("node:util"); export function readPersisted(v: string) { return util[v](v); }',
+    'import {createRequire as localLoader} from "node:module"; const load = localLoader(import.meta.url); export function readPersisted(v: string) { return load(v).read(v); }',
+  ]) {
+    const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+    for (const directory of [candidate, previous]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'reader.ts'), body);
+    }
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
+      compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+});
+
+test('an unused callback implementation cannot stand in for the missing reader consumer', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-unused-callback-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) {
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, 'reader.ts'), 'type Deps={accepts:(v:string)=>boolean}; export function readPersisted(deps:Deps,v:string){return deps.accepts(v);} const unused:Deps={accepts:()=>true};');
+  }
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('callback compatibility follows the actual supplier argument rather than an unrelated typed object', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-actual-callback-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  const prefix = 'type Deps={accepts:(v:string)=>boolean}; export function readPersisted(deps:Deps,v:string){return deps.accepts(v);} const unused:Deps={accepts:()=>true};';
+  const options = { candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] };
+  for (const body of [
+    'export function consume(unknown:Deps,v:string){return readPersisted(unknown,v);}',
+    'export function consume(unknown:Deps,v:string){const alias=unknown; return readPersisted(alias,v);}',
+    'export function consume(unknown:Deps,v:string){return readPersisted({...unused,...unknown},v);}',
+    'const actual:Deps={accepts:()=>true}; actual.accepts=unknownPredicate; export function consume(v:string){return readPersisted(actual,v);}',
+    'const actual:Deps={accepts:()=>true}; export const escaped=actual; export function consume(v:string){return readPersisted(actual,v);}',
+    'export const actual:Deps={accepts:()=>true}; export function consume(v:string){return readPersisted(actual,v);}',
+    'function accepts(v:string){return true;} accepts=unknownPredicate; const actual:Deps={accepts}; export function consume(v:string){return readPersisted(actual,v);}',
+    'function mutate(deps:Deps){deps.accepts=unknownPredicate;} const actual:Deps={accepts:()=>true}; mutate(actual); export function consume(v:string){return readPersisted(actual,v);}',
+    'function forward(deps:Deps,v:string):boolean{return readPersisted(deps,v)||forward(deps,v);} export function consume(v:string){return forward({accepts:()=>true},v);}',
+    'function concrete(v:string){return true;} export function consume(unknown:typeof concrete,v:string){return readPersisted({accepts:unknown},v);}',
+  ]) {
+    for (const directory of [candidate, previous]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'reader.ts'), prefix + body);
+    }
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+  const concrete = 'const actual:Deps={accepts:(v:string)=>v==="new-profile"}; const alias=actual; export function consume(v:string){return readPersisted(alias,v);}';
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'reader.ts'), prefix + concrete);
+  await deployLock.verifyApplicationRollbackReaders(options);
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'reader.ts'), 'function concrete(v:string){return true;} export function readPersisted(unknown:typeof concrete,v:string){return unknown(v);}');
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'reader.ts'), 'function concrete(v:string){return true;} export function readPersisted(unknown:typeof concrete,v:string){const alias=unknown;return alias(v);}');
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const directory of [candidate, previous]) await writeFile(join(directory, 'reader.ts'), prefix + 'function accepts(v:string){return v==="new-profile";} const actual:Deps={accepts}; export function consume(v:string){return readPersisted(actual,v);}');
+  await deployLock.verifyApplicationRollbackReaders(options);
+  await writeFile(join(candidate, 'reader.ts'), prefix + concrete);
+  await writeFile(join(previous, 'reader.ts'), prefix + concrete.replace('v==="new-profile"', 'false'));
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('static createRequire loaders retain module provenance and follow their literal dependencies', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-static-loader-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  const options = { candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] };
+  const fixture = async body => {
+    for (const directory of [candidate, previous]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'reader.ts'), body);
+      await writeFile(join(directory, 'helper.ts'), 'export function accepts(v:string){return v==="new-profile";}');
+    }
+  };
+  for (const anchor of ['__filename', 'import.meta.url']) {
+    await fixture(`import {createRequire as factory} from "node:module"; const load=factory(${anchor}); export function readPersisted(v:string){return load("node:util").isDeepStrictEqual(v,"new-profile");}`);
+    await deployLock.verifyApplicationRollbackReaders(options);
+  }
+  await fixture('import {createRequire} from "node:module"; const load=createRequire(__filename); export function readPersisted(v:string){return load("./helper").accepts(v);}');
+  await deployLock.verifyApplicationRollbackReaders(options);
+  await writeFile(join(previous, 'helper.ts'), 'export function accepts(v:string){return false;}');
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const body of [
+    'import {createRequire as factory} from "node:module"; export function readPersisted(v:string){const load=factory(v); return load("node:util").format(v);}',
+    'import {createRequire} from "node:module"; const load=createRequire(__filename); const escaped=load; export function readPersisted(v:string){return escaped("node:util").format(v);}',
+    'import {createRequire} from "node:module"; const load=createRequire(__filename); export function readPersisted(v:string){return load(v).read(v);}',
+    'import {createRequire} from "node:module"; let load=createRequire(__filename); export function readPersisted(v:string){return load("node:util").format(v);}',
+    'import {createRequire} from "node:module"; const load=createRequire(__filename); export function readPersisted(v:string){return load.resolve("node:util");}',
+    'import {createRequire} from "node:module"; const __filename="/different/module.js"; const load=createRequire(__filename); export function readPersisted(v:string){return load("node:util").format(v);}',
+  ]) {
+    await fixture(body);
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+});
+
+test('generated Prisma runtime requires exact installed vendor and engine bytes while model readers remain compared', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-prisma-vendor-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const trusted = createRequire(import.meta.url), upstreamPackageRoot = dirname(trusted.resolve('@prisma/client/package.json'));
+  const version = JSON.parse(await readFile(join(upstreamPackageRoot, 'package.json'), 'utf8')).version;
+  // Engine package files are the external artifact boundary. This fixture does
+  // not download/install an engine or treat an absent real artifact as verified.
+  const enginePackageRoot = join(root, 'installed-engines'), engine = 'libquery_engine-linux-musl.so.node';
+  await mkdir(enginePackageRoot);
+  await writeFile(join(enginePackageRoot, 'package.json'), JSON.stringify({ name: '@prisma/engines', version }));
+  await writeFile(join(enginePackageRoot, engine), Buffer.from('trusted-engine-fixture'));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) {
+    const generated = join(directory, 'packages/search/generated/client');
+    await mkdir(join(generated, 'runtime'), { recursive: true });
+    await writeFile(join(generated, 'runtime/library.js'), await readFile(join(upstreamPackageRoot, 'runtime/library.js')));
+    await writeFile(join(generated, engine), await readFile(join(enginePackageRoot, engine)));
+    await writeFile(join(generated, 'package.json'), JSON.stringify({ name: 'prisma-client-fixture', version, main: 'index.js' }));
+    await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
+    await writeFile(join(generated, 'index.js'), 'const runtime = require("./runtime/library.js"); exports.readPersisted = value => ({model:"new-profile",value,runtime});');
+  }
+  const collectorSource = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(collectorSource);
+  const collect = runInNewContext(`${collectorSource}; rollbackReaderClosure`, { resolve, relative, dirname, join, existsSync, readFileSync,
+    builtinModules, APPLICATION_ROLLBACK_READERS: [], verifyPrismaVendorRuntime: deployLock.verifyPrismaVendorRuntime,
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } });
+  const ts = trusted('typescript'), roots = [['packages/search/generated/client/index.js']], vendorPackages = { upstreamPackageRoot, enginePackageRoot };
+  const current = JSON.stringify(collect(ts, candidate, roots, vendorPackages));
+  assert.equal(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
+  const core = join(candidate, 'node_modules/.prisma/client');
+  await mkdir(join(core, 'runtime'), { recursive: true });
+  await writeFile(join(core, 'runtime/library.js'), await readFile(join(upstreamPackageRoot, 'runtime/library.js')));
+  await writeFile(join(core, engine), await readFile(join(enginePackageRoot, engine)));
+  await writeFile(join(core, 'package.json'), JSON.stringify({ name: 'prisma-client-core-fixture', version, main: 'index.js' }));
+  await writeFile(join(core, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
+  assert.deepEqual(deployLock.verifyPrismaVendorRuntime({ sourceRoot: candidate, runtimeFile: join(core, 'runtime/library.js'), ...vendorPackages }).binaryTargets,
+    ['native', 'linux-musl']);
+  await rm(join(core, engine));
+  assert.throws(() => deployLock.verifyPrismaVendorRuntime({ sourceRoot: candidate, runtimeFile: join(core, 'runtime/library.js'), ...vendorPackages }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const generated = join(previous, 'packages/search/generated/client');
+  await writeFile(join(generated, 'runtime/library.js'), 'module.exports = {forged:true};');
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(generated, 'runtime/library.js'), await readFile(join(upstreamPackageRoot, 'runtime/library.js')));
+  await writeFile(join(generated, engine), Buffer.from('changed-query-engine'));
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(generated, engine), await readFile(join(enginePackageRoot, engine)));
+  await writeFile(join(enginePackageRoot, 'package.json'), JSON.stringify({ name: '@prisma/engines', version: '0.0.0' }));
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(enginePackageRoot, 'package.json'), JSON.stringify({ name: '@prisma/engines', version }));
+  await rm(join(generated, engine));
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(generated, engine), await readFile(join(enginePackageRoot, engine)));
+  await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native"] }\nmodel SavedProfile { id String @id }\n');
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(generated, 'schema.prisma'), '// binaryTargets = ["native", "linux-musl"]\nmodel SavedProfile { id String @id }\n');
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
+  await writeFile(join(generated, 'runtime/custom-loader.js'), 'module.exports = {};');
+  assert.throws(() => collect(ts, previous, roots, vendorPackages), error => error.code === 'ENOENT');
+  await rm(join(generated, 'runtime/custom-loader.js'));
+  await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id oldOnly String }\n');
+  assert.notEqual(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
+  await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
+  await writeFile(join(generated, 'index.js'), 'const runtime = require("./runtime/library.js"); exports.readPersisted = value => ({model:"old-profile",value,runtime});');
+  assert.notEqual(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
+});
+
+test('ordinary rollback never permits an unknown reader because persisted-state diagnostics are empty', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-reader-hold-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) await mkdir(directory, { recursive: true });
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['missing-reader.ts', 'readPersisted']] }),
+  /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('rollback cannot downgrade the private-cleanup reader after the protected archive was added', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-cleaner-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  const body = readFileSync(new URL('../private-cleanup/runner.mjs', import.meta.url), 'utf8');
+  const archive = '/var/backups/openscience/retired-chatgpt-web/20261013/runtime';
+  assert.ok(body.includes(archive));
+  for (const directory of [candidate, previous]) {
+    await mkdir(join(directory, 'infra/private-cleanup'), { recursive: true });
+    await writeFile(join(directory, 'infra/private-cleanup/runner.mjs'), body);
+  }
+  const options = { candidateRoot: candidate, rollbackRoot: previous,
+    compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['infra/private-cleanup/runner.mjs', 'main']] };
+  await deployLock.verifyApplicationRollbackReaders(options);
+  await writeFile(join(previous, 'infra/private-cleanup/runner.mjs'), body.replace(`, '${archive}'`, ''));
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.equal(await readFile(join(candidate, 'infra/private-cleanup/runner.mjs'), 'utf8'), body);
+});
+
+test('ordinary rollback compatibility failure preserves the candidate and journal and never stops producers', async t => {
+  const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(operationSource);
+  for (const persistence of [
+    { native: true, paidUnknown: false, firstImage: false },
+    { native: false, paidUnknown: true, firstImage: false },
+    { native: false, paidUnknown: false, firstImage: true },
+    { native: false, paidUnknown: false, firstImage: false },
+  ]) await t.test(JSON.stringify(persistence), async () => {
+    const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'published' };
+    const before = structuredClone(journal), calls = [], diagnostics = [];
+    const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+      async verifyProductionDeployLockOnHost() { calls.push('lock'); },
+      async readTrustedJournal() { calls.push('journal-read'); return journal; },
+      async nativeCommand(command, args) { calls.push(`${command}:${args.slice(0, 2).join(':')}`); assert.equal(command, 'docker'); assert.deepEqual(Array.from(args.slice(0, 2)), ['image', 'inspect']); return rollbackImageMetadataFixture(); },
+      async verifyApplicationRollbackReaders() { calls.push('reader-comparison'); throw Error('new persisted contract'); },
+      async queryNativeWork(candidate, checkpoint, rollback) { assert.equal(candidate, journal.candidateSha); assert.equal(checkpoint, null); assert.equal(rollback, true); calls.push('current-reader-diagnostics'); return { persistence }; },
+      rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+      console: { error(value) { diagnostics.push(value); } },
+    });
+    await assert.rejects(operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.deepEqual(journal, before);
+    assert.deepEqual(calls, ['lock', 'journal-read', 'docker:image:inspect', 'docker:image:inspect', 'reader-comparison', 'current-reader-diagnostics']);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].includes(journal.candidateSha), false);
+  });
+});
+
+test('compatible ordinary rollback verifies both image Node runtimes and skips live-state diagnostics', async () => {
+  const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
+  const calls = [];
+  const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'switching' };
+  const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+    async verifyProductionDeployLockOnHost() { calls.push('lock'); }, async readTrustedJournal() { return journal; },
+    async nativeCommand(command, args) { calls.push(args.at(-1)); return rollbackImageMetadataFixture(); },
+    async verifyApplicationRollbackReaders() { calls.push('reader-comparison'); },
+    async queryNativeWork() { throw Error('compatible rollback must not query/drain producers'); },
+    rollbackCompatibilityUnknown() { throw Error('unknown'); }, console: { error() {} },
+  });
+  assert.equal(await operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
+  assert.deepEqual(calls, ['lock', `openscience-agent-worker:${journal.candidateSha}`, `openscience-agent-worker:${journal.rollbackSha}`, 'reader-comparison']);
+});
+
+test('different or missing image Node runtime is unknown even when reader source would match', async () => {
+  const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
+  for (const previousRuntime of [rollbackImageMetadataFixture(['NODE_VERSION=20.14.0']), rollbackImageMetadataFixture([]),
+    rollbackImageMetadataFixture(['NODE_VERSION=22.20.0', 'NODE_VERSION=20.14.0']), rollbackImageMetadataFixture(undefined, 'windows'),
+    rollbackImageMetadataFixture(undefined, 'linux', 'arm64')]) {
+    let reads = 0, comparisons = 0;
+    const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'switching' };
+    const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+      async verifyProductionDeployLockOnHost() {}, async readTrustedJournal() { return journal; },
+      async nativeCommand() { return reads++ === 0 ? rollbackImageMetadataFixture() : previousRuntime; },
+      async verifyApplicationRollbackReaders() { comparisons += 1; }, async queryNativeWork() { throw Error('unknown current query'); },
+      rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); }, console: { error() {} },
+    });
+    await assert.rejects(operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.equal(comparisons, 0);
+  }
+});
+
+test('rollback diagnostics retain terminal Native, paid-unknown and first-image run/receipt/step obligations', async t => {
+  const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
+  assert.ok(declaration);
+  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  for (const fixture of [
+    { status: 'succeeded', native: true, error: null, first: { runs: false, receipts: false, steps: false }, expected: { native: true, paidUnknown: false, firstImage: false } },
+    { status: 'failed', native: false, error: '[blocked] Previous paid image outcome unknown', first: { runs: false, receipts: false, steps: false }, expected: { native: false, paidUnknown: true, firstImage: false } },
+    ...['runs', 'receipts', 'steps'].map(key => ({ status: 'succeeded', native: false, error: null,
+      first: { runs: key === 'runs', receipts: key === 'receipts', steps: key === 'steps' }, expected: { native: false, paidUnknown: false, firstImage: true } })),
+  ]) await t.test(JSON.stringify(fixture.expected), async () => {
+    let output = ''; const queries = [];
+    await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, {
+      process: { env: { DATABASE_URL: 'fixture-only', REDIS_URL: 'fixture-only' }, argv: ['node', 'none', 'rollback'], stdout: { write(text) { output += text; } } },
+      AGENT_TASK_QUEUE: 'agent:queue', classifyNativeWorkSnapshot: deployLock.classifyNativeWorkSnapshot,
+      readNativeAgentExecution(result) { return result?.nativeAgentExecution; },
+      createPrismaClient() { return {
+        async $queryRawUnsafe(sql) {
+          queries.push(sql);
+          if (sql.startsWith('SELECT EXISTS')) return [fixture.first];
+          if (sql.includes('clock_timestamp')) return [{ now: new Date('2026-10-14T00:00:00.000Z') }];
+          assert.match(sql, /OR result \? 'nativeAgentExecution' OR kind='presentation.generate' AND result IS NOT NULL$/u);
+          return [{ id: 'private-task-identifier', status: fixture.status, kind: 'presentation.generate', deleted_at: null,
+            updated_at: new Date('2026-10-14T00:00:00.000Z'), error: fixture.error,
+            result: fixture.native ? { nativeAgentExecution: { profile: 'paper-illustration' } } : null }];
+        },
+        journalJob: { async findMany() { return []; } }, async $disconnect() {},
+      }; },
+      createRedisClient() { return { async lrange() { return []; }, async quit() {} }; },
+    });
+    assert.deepEqual(JSON.parse(output).persistence, fixture.expected);
+    assert.equal(output.includes('private-task-identifier'), false);
+    assert.match(queries[1], /hermes_research_runs/u);
+    assert.match(queries[1], /audit_logs/u);
+    assert.match(queries[1], /hermes_research_steps/u);
+  });
+});
 
 function nativeJournalFixture() {
   return {
@@ -1000,14 +1459,14 @@ test('Native real rollback adapter checks feasibility before restore and never s
 test('Native actual rollback feasibility preflight is read-only and refuses reader, stale source and image incompatibility', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-preflight-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const mode of ['healthy', 'reader', 'active', 'source', 'image']) {
+  for (const mode of ['healthy', 'reader', 'active', 'source', 'image', 'persisted-first-image', 'terminal-native', 'paid-unknown', 'unknown-empty']) {
     const candidate = join(root, mode, 'candidate'), previous = join(root, mode, 'previous'), trace = join(root, `${mode}.log`).replaceAll('\\', '/');
     await mkdir(candidate, { recursive: true }); await mkdir(previous, { recursive: true });
     if (mode === 'reader') await mkdir(join(candidate, 'infra/migrations/20260913010000_publication_identity'), { recursive: true });
     const script = [
       'set -eEuo pipefail', `TRACE='${trace}'; MODE='${mode}'; RELEASE_ROOT='${candidate.replaceAll('\\', '/')}'; PREVIOUS_RELEASE_ROOT='${previous.replaceAll('\\', '/')}'`,
       'PREVIOUS_RELEASE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; REMOTE_ROOT=/production',
-      'run_remote(){ case "$1" in "cat "*) printf "active\\n" >> "$TRACE"; if [ "$MODE" = active ]; then printf "cccccccccccccccccccccccccccccccccccccccc\\n"; else printf "%s\\n" "$RELEASE_SHA"; fi ;; "test "*) printf "source\\n" >> "$TRACE"; [ "$MODE" != source ] ;; "docker image inspect "*) printf "image\\n" >> "$TRACE"; [ "$MODE" != image ] ;; *) printf "unexpected-mutation\\n" >> "$TRACE"; return 90 ;; esac; }',
+      'run_remote(){ case "$1" in "cat "*) printf "active\\n" >> "$TRACE"; if [ "$MODE" = active ]; then printf "cccccccccccccccccccccccccccccccccccccccc\\n"; else printf "%s\\n" "$RELEASE_SHA"; fi ;; "test "*) printf "source\\n" >> "$TRACE"; [ "$MODE" != source ] ;; "docker image inspect "*) printf "image\\n" >> "$TRACE"; [ "$MODE" != image ] ;; *" application-rollback-preflight "*) printf "readers\\n" >> "$TRACE"; [ "$MODE" = healthy ] ;; *) printf "unexpected-mutation\\n" >> "$TRACE"; return 90 ;; esac; }',
       deploymentFunction('transaction_preflight_application_rollback'),
       'transaction_preflight_application_rollback',
     ].join('\n');
@@ -1018,7 +1477,7 @@ test('Native actual rollback feasibility preflight is read-only and refuses read
     if (mode === 'reader') assert.deepEqual(calls, []);
     if (mode === 'active') assert.deepEqual(calls, ['active']);
     if (mode === 'source') assert.deepEqual(calls, ['active', 'source']);
-    if (mode === 'healthy') assert.deepEqual(calls, ['active', 'source', 'image']);
+    if (mode === 'healthy' || ['persisted-first-image', 'terminal-native', 'paid-unknown', 'unknown-empty'].includes(mode)) assert.deepEqual(calls, ['active', 'source', 'image', 'readers']);
   }
 });
 

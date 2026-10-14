@@ -2,11 +2,12 @@
 import { randomUUID } from 'node:crypto';
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fstatSync } from 'node:fs';
+import { existsSync, fstatSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { builtinModules, createRequire } from 'node:module';
 import {
   chmod, lstat, open, readFile, readdir, realpath, rename, rm,
 } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
@@ -18,6 +19,936 @@ const JOURNAL_PHASES = new Set(['prepared', 'migrating', 'switching', 'published
 const NATIVE_ROOT = '/opt/openscience-hermes';
 const NATIVE_TIMER = 'openscience-hermes-broker.timer';
 const executeFile = promisify(execFile);
+
+const APPLICATION_ROLLBACK_READERS = [
+  ['apps/agent-worker/src/index.ts'],
+  ['packages/domain/src/agent/native-agent-execution.ts', 'readNativeAgentExecution', 'nativeAgentTerminalResult', 'requireNativeIllustrationTerminalSource'],
+  ['packages/domain/src/assets/native-image-review.ts', 'readNativeImageAgentExecution', 'readNativeImageReviewCheckpoint', 'imageReviewHasNoSubmission'],
+  ['packages/domain/src/assets/scene-image.ts', 'readStoredGeneratedImageReview', 'requireAcceptedSceneImageReview'],
+  ['apps/agent-worker/src/native-agent/session.ts', 'createNativeAgentSession'],
+  ['apps/agent-worker/src/native-agent/task-store.ts', 'createNativeTaskStore'],
+  ['apps/agent-worker/src/native-agent/illustration-task.ts', 'nativeIllustrationToolProfile', 'createNativeIllustrationMaterializer'],
+  ['apps/agent-worker/src/presentation/handler.ts', 'createPresentationGenerationHandler'],
+  ['packages/ai-gateway/src/gateway.ts', 'AiGateway'],
+  ['packages/ai-gateway/src/codex-image.ts', 'SpoolImageProvider'],
+  ['packages/domain/src/agent/first-image-continuation.ts', 'readFirstImageContinuationAuthority', 'advanceFirstImageContinuation', 'requireFirstImageContinuationTaskAuthority', 'findFirstImageContinuation'],
+  ['packages/domain/src/agent/research-run.ts', 'reconcileHermesResearchRuns', 'requireHermesPresentationTaskAuthority', 'retryHermesGeneration', 'recoverCompletedHermesSceneImageResults'],
+  ['infra/private-cleanup/runner.mjs', 'main'],
+];
+const APPLICATION_ROLLBACK_ROOTS = APPLICATION_ROLLBACK_READERS;
+const APPLICATION_CALLBACK_POLICY = Object.freeze({
+  kind: 'bounded-worker-recovery-ast',
+  // These are concrete persisted-reader consumers whose callback use is
+  // covered by the Worker/Domain wiring proof below. This list is deliberately
+  // finite; every sensitive callback outside these functions must resolve to a
+  // supplied implementation instead of being accepted as a typed parameter.
+  protectedFunctions: Object.freeze([
+    'apps/agent-worker/src/index.ts::main',
+    'apps/agent-worker/src/index.ts::createCompletedSceneImageRecoveryScheduler',
+    'packages/domain/src/agent/research-run.ts::inspectGenerationRecovery',
+    'packages/domain/src/agent/research-run.ts::inspectNarrativePixelReplan',
+    'packages/domain/src/agent/research-run.ts::inspectNarrativeTechnicalRecovery',
+    'packages/domain/src/agent/research-run.ts::inspectCompletedImageReviewRecovery',
+    'packages/domain/src/agent/research-run.ts::recoverCompletedHermesSceneImageResults',
+    'packages/domain/src/assets/presentation-asset.ts::readNarrativeTerminalSceneSource',
+    'packages/domain/src/assets/presentation-asset.ts::readNarrativeTechnicalReviewFollowupSource',
+    'packages/domain/src/assets/presentation-asset.ts::submitExistingSceneImageReview',
+  ]),
+  sensitiveCallbackTargets: Object.freeze([
+    'canResumeImageFromCompletedResult', 'canResumeImageBeforeSubmission', 'canResumeImageReviewFromCompletedResult',
+    'canRetryImageReviewBeforeSubmission', 'canRetryImageReviewAfterQuotaRefusal', 'canRetrySourceReviewBeforeSubmission',
+    'inspectImageRecoveryState', 'validateImageHistory',
+  ]),
+});
+
+function rollbackCompatibilityUnknown() {
+  throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN: preserve candidate, paired resources and deploy journal; repair forward with compatible readers');
+}
+
+export function verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPackageRoot, enginePackageRoot }) {
+  const relativeRuntime = relative(sourceRoot, runtimeFile).replaceAll('\\', '/');
+  if (!/^(?:packages\/[a-z-]+\/generated\/client|node_modules\/\.prisma\/client)\/runtime\/library\.js$/u.test(relativeRuntime)) rollbackCompatibilityUnknown();
+  const generatedRoot = dirname(dirname(runtimeFile));
+  const boundedFile = path => {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 128 * 1024 * 1024) rollbackCompatibilityUnknown();
+    return readFileSync(path);
+  };
+  const client = JSON.parse(boundedFile(join(upstreamPackageRoot, 'package.json')));
+  const engines = JSON.parse(boundedFile(join(enginePackageRoot, 'package.json')));
+  const generated = JSON.parse(boundedFile(join(generatedRoot, 'package.json')));
+  const coreRuntime = /^node_modules\/\.prisma\/client\/runtime\/library\.js$/u.test(relativeRuntime);
+  const schema = boundedFile(join(generatedRoot, 'schema.prisma')).toString('utf8');
+  const schemaWithoutComments = schema.replace(/\/\/[^\r\n]*|\/\*[\s\S]*?\*\//gu, '');
+  const generatorBlocks = [...schemaWithoutComments.matchAll(/\bgenerator\s+[A-Za-z_][A-Za-z0-9_]*\s*\{([^{}]*)\}/gu)].map(match => match[1]);
+  const binaryTargets = generatorBlocks.flatMap(block => block.match(/binaryTargets\s*=\s*\[([^\]]*)\]/u)?.[1]
+    ?.match(/['"]([^'"]+)['"]/gu)?.map(target => target.slice(1, -1)) ?? []);
+  if (client.name !== '@prisma/client' || engines.name !== '@prisma/engines' || typeof client.version !== 'string'
+    || engines.version !== client.version || generated.version !== client.version
+    || typeof generated.name !== 'string'
+    || (!generated.name.startsWith('prisma-client-') && !(coreRuntime && generated.name.length > 0))
+    || (!['index.js', './index.js'].includes(generated.main)
+      && !(coreRuntime && typeof generated.main === 'string' && /^[A-Za-z0-9._-]+\.js$/u.test(generated.main)))
+    || !binaryTargets.includes('linux-musl')) rollbackCompatibilityUnknown();
+  const sameFile = (left, right) => {
+    if (!boundedFile(left).equals(boundedFile(right))) rollbackCompatibilityUnknown();
+  };
+  const runtimeFiles = readdirSync(dirname(runtimeFile), { withFileTypes: true });
+  for (const entry of runtimeFiles) {
+    if (!entry.isFile() || !/^[A-Za-z0-9._-]+$/u.test(entry.name)) rollbackCompatibilityUnknown();
+    sameFile(join(dirname(runtimeFile), entry.name), join(upstreamPackageRoot, 'runtime', entry.name));
+  }
+  const engineFiles = readdirSync(generatedRoot, { withFileTypes: true }).filter(entry => /query.?engine/iu.test(entry.name));
+  if (!engineFiles.length || !engineFiles.some(entry => entry.name === 'libquery_engine-linux-musl.so.node')) rollbackCompatibilityUnknown();
+  for (const entry of engineFiles) {
+    if (!entry.isFile() || !/^libquery_engine-[A-Za-z0-9._-]+\.node$/u.test(entry.name)) rollbackCompatibilityUnknown();
+    sameFile(join(generatedRoot, entry.name), join(enginePackageRoot, entry.name));
+  }
+  return { client: { name: client.name, version: client.version }, engines: { name: engines.name, version: engines.version }, generated,
+    runtimeFiles: runtimeFiles.map(entry => entry.name).sort(), engineFiles: engineFiles.map(entry => entry.name).sort(),
+    schema, binaryTargets };
+}
+
+function verifyPrismaCoreClientRuntime({ sourceRoot, upstreamPackageRoot, enginePackageRoot }) {
+  const runtimeFile = join(sourceRoot, 'node_modules', '.prisma', 'client', 'runtime', 'library.js');
+  if (!existsSync(runtimeFile)) rollbackCompatibilityUnknown();
+  return verifyPrismaVendorRuntime({ sourceRoot, runtimeFile, upstreamPackageRoot, enginePackageRoot });
+}
+
+function rollbackReaderClosure(ts, root, roots, vendorPackages) {
+  // Custom fixtures retain the strict supplier proof. The complete release
+  // uses the bounded Worker recovery AST proof above for the only callback
+  // path that can rearm persisted paid work; arbitrary provider/parser DI
+  // callbacks are not treated as a persistence-reader proof.
+  const callbackPolicy = roots === APPLICATION_ROLLBACK_READERS ? APPLICATION_CALLBACK_POLICY : { kind: 'strict' };
+  const sourcePath = path => resolve(root, path);
+  const inside = path => !relative(root, path).startsWith('..') && !relative(root, path).includes('node_modules');
+  const functionLike = node => node && (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
+    || ts.isArrowFunction(node) || ts.isMethodDeclaration(node));
+  const enclosingFunction = node => {
+    for (let current = node; current; current = current.parent) if (functionLike(current)) return current;
+    return undefined;
+  };
+  const functionName = fn => {
+    if (!fn) return undefined;
+    if (fn.name && ts.isIdentifier(fn.name)) return fn.name.text;
+    for (let current = fn.parent; current; current = current.parent) {
+      if (ts.isVariableDeclaration(current) && ts.isIdentifier(current.name)) return current.name.text;
+    }
+    return undefined;
+  };
+  const isProtectedCallbackScope = node => {
+    if (callbackPolicy.kind !== 'bounded-worker-recovery-ast') return false;
+    for (let current = enclosingFunction(node); current; current = enclosingFunction(current.parent)) {
+      const key = `${relative(root, current.getSourceFile().fileName).replaceAll('\\', '/')}::${functionName(current)}`;
+      if (callbackPolicy.protectedFunctions.includes(key)) return true;
+    }
+    return false;
+  };
+  const resolveSource = (specifier, containingFile) => {
+    let base;
+    if (specifier.startsWith('.')) base = resolve(dirname(containingFile), specifier.replace(/\.js$/u, '')).replace(/([\\/])dist([\\/])/u, '$1src$2');
+    else if (/^@openscience\/[a-z-]+(?:\/.*)?$/u.test(specifier)) {
+      const [, name, ...subpath] = specifier.split('/');
+      const packageRoot = sourcePath(`packages/${name}`);
+      if (!subpath.length) base = join(packageRoot, 'src/index');
+      else {
+        const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+        const exported = manifest.exports?.[`./${subpath.join('/')}`]?.types;
+        if (typeof exported !== 'string' || !exported.startsWith('./dist/') || !exported.endsWith('.d.ts')) rollbackCompatibilityUnknown();
+        base = join(packageRoot, exported.replace('./dist/', 'src/').replace(/\.d\.ts$/u, ''));
+      }
+    } else return undefined;
+    const file = [base, `${base}.ts`, `${base}.mjs`, `${base}.js`, join(base, 'index.ts'), join(base, 'index.js')].find(candidate => inside(candidate)
+      && /\.(?:ts|mjs|js)$/u.test(candidate) && !candidate.endsWith('.d.ts') && existsSync(candidate));
+    if (!file) rollbackCompatibilityUnknown();
+    return { resolvedFileName: file, extension: file.endsWith('.mjs') ? ts.Extension.Mjs : file.endsWith('.js') ? ts.Extension.Js : ts.Extension.Ts };
+  };
+  const host = ts.createCompilerHost({ allowJs: true });
+  host.resolveModuleNames = (names, containingFile) => names.map(name => resolveSource(name, containingFile));
+  const sourceFiles = new Set(roots.map(([file]) => sourcePath(file)));
+  // TypeScript does not discover dependencies of a createRequire alias. Add
+  // only literal calls through locally declared loaders before type checking.
+  for (const path of sourceFiles) {
+    if (sourceFiles.size > 1024) rollbackCompatibilityUnknown();
+    const parsed = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.ES2022, true);
+    const factories = new Set(), loaders = new Set();
+    for (const statement of parsed.statements) {
+      if (ts.isImportDeclaration(statement) && ['module', 'node:module'].includes(statement.moduleSpecifier.text)
+        && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+        for (const element of statement.importClause.namedBindings.elements) if ((element.propertyName ?? element.name).text === 'createRequire') factories.add(element.name.text);
+      }
+    }
+    const discover = node => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && ts.isCallExpression(node.initializer)
+        && ts.isIdentifier(node.initializer.expression) && factories.has(node.initializer.expression.text)) loaders.add(node.name.text);
+      ts.forEachChild(node, discover);
+    };
+    discover(parsed);
+    const collect = node => {
+      const specifier = (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) ? node.moduleSpecifier
+        : ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+          || ts.isIdentifier(node.expression) && (node.expression.text === 'require' || loaders.has(node.expression.text))) ? node.arguments[0] : undefined;
+      if (specifier && ts.isStringLiteral(specifier)) {
+        const dependency = resolveSource(specifier.text, path);
+        if (dependency) sourceFiles.add(dependency.resolvedFileName);
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(parsed);
+  }
+  const program = ts.createProgram([...sourceFiles], {
+    allowJs: true, noLib: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
+  }, host);
+  if (program.getSyntacticDiagnostics().length) rollbackCompatibilityUnknown();
+  const checker = program.getTypeChecker(), selected = new Map(), modules = new Map(), verifiedVendorModules = new Set();
+  const callbackCalls = [], calledBodies = new Map(), externalLoaderValues = new Set(), literalLoaderCalls = new Set();
+  const canonical = node => {
+    const children = [];
+    ts.forEachChild(node, child => { children.push(canonical(child)); });
+    return [node.kind, ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? node.text : null, children];
+  };
+  const addConfiguration = path => {
+    const key = `configuration:${relative(root, path).replaceAll('\\', '/')}`;
+    if (selected.has(key)) return;
+    const parsed = ts.readConfigFile(path, name => readFileSync(name, 'utf8'));
+    if (parsed.error) rollbackCompatibilityUnknown();
+    selected.set(key, parsed.config.compilerOptions ?? {});
+    if (parsed.config.extends) {
+      if (typeof parsed.config.extends !== 'string' || !parsed.config.extends.startsWith('.')) rollbackCompatibilityUnknown();
+      const parent = resolve(dirname(path), parsed.config.extends);
+      if (!inside(parent)) rollbackCompatibilityUnknown();
+      addConfiguration(parent);
+    }
+  };
+  const addExternal = (specifier, containingFile) => {
+    const key = `${relative(root, containingFile).replaceAll('\\', '/')}:external:${specifier}`;
+    if (builtinModules.includes(specifier) || builtinModules.includes(specifier.replace(/^node:/u, ''))) { selected.set(key, 'node-builtin'); return; }
+    const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+    let directory = dirname(containingFile), manifest;
+    while (inside(directory)) {
+      const path = join(directory, 'node_modules', name, 'package.json');
+      if (existsSync(path)) { manifest = JSON.parse(readFileSync(path, 'utf8')); break; }
+      if (directory === root) break;
+      directory = dirname(directory);
+    }
+    if (manifest?.name !== name || typeof manifest.version !== 'string') rollbackCompatibilityUnknown();
+    selected.set(key, manifest.version);
+  };
+  const visitModule = path => {
+    if (modules.has(path)) return;
+    if (modules.size >= 1024 || !inside(path)) rollbackCompatibilityUnknown();
+    const parsed = program.getSourceFile(path);
+    if (!parsed || parsed.isDeclarationFile) rollbackCompatibilityUnknown();
+    modules.set(path, parsed);
+    // Full runtime modules include initialization, import bindings, default
+    // objects and callback wiring. Named declaration equality omits these.
+    const compiled = ts.transpileModule(parsed.text, { fileName: path, reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) rollbackCompatibilityUnknown();
+    const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    if (emitted.parseDiagnostics.length) rollbackCompatibilityUnknown();
+    selected.set(`module:${relative(root, path).replaceAll('\\', '/')}`, canonical(emitted));
+    if (/^(?:packages\/[a-z-]+\/generated\/client|node_modules\/\.prisma\/client)\/runtime\/library\.js$/u.test(relative(root, path).replaceAll('\\', '/'))) {
+      if (!vendorPackages) rollbackCompatibilityUnknown();
+      selected.set(`prisma-vendor:${relative(root, path).replaceAll('\\', '/')}`, verifyPrismaVendorRuntime({ sourceRoot: root, runtimeFile: path, ...vendorPackages }));
+      verifiedVendorModules.add(parsed);
+      return;
+    }
+    const namespaceImports = new Set();
+    const factorySymbols = new Set(), loaderSymbols = new Map();
+    for (const statement of parsed.statements) {
+      if (ts.isImportDeclaration(statement) && ['module', 'node:module'].includes(statement.moduleSpecifier.text)
+        && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+        for (const element of statement.importClause.namedBindings.elements) if ((element.propertyName ?? element.name).text === 'createRequire') factorySymbols.add(checker.getSymbolAtLocation(element.name));
+      }
+    }
+    const inspectLoader = node => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && factorySymbols.has(checker.getSymbolAtLocation(node.expression))) {
+        const declaration = node.parent, anchor = node.arguments[0];
+        if (!ts.isVariableDeclaration(declaration) || declaration.initializer !== node || !ts.isIdentifier(declaration.name)
+          || !ts.isVariableDeclarationList(declaration.parent) || !(declaration.parent.flags & ts.NodeFlags.Const)
+          || node.arguments.length !== 1 || !(ts.isIdentifier(anchor) && anchor.text === '__filename'
+            && !(checker.getSymbolAtLocation(anchor)?.declarations ?? []).some(item => !item.getSourceFile().isDeclarationFile)
+            || ts.isPropertyAccessExpression(anchor) && anchor.name.text === 'url' && ts.isMetaProperty(anchor.expression)
+              && anchor.expression.keywordToken === ts.SyntaxKind.ImportKeyword)) rollbackCompatibilityUnknown();
+        loaderSymbols.set(checker.getSymbolAtLocation(declaration.name), declaration);
+      }
+      ts.forEachChild(node, inspectLoader);
+    };
+    inspectLoader(parsed);
+    const validateLoader = node => {
+      if (ts.isIdentifier(node)) {
+        const symbol = checker.getSymbolAtLocation(node), parent = node.parent;
+        if (factorySymbols.has(symbol) && !ts.isImportSpecifier(parent)
+          && !(ts.isCallExpression(parent) && parent.expression === node)) rollbackCompatibilityUnknown();
+        if (loaderSymbols.has(symbol) && node !== loaderSymbols.get(symbol).name) {
+          if (!ts.isCallExpression(parent) || parent.expression !== node || parent.arguments.length !== 1 || !ts.isStringLiteral(parent.arguments[0])) rollbackCompatibilityUnknown();
+          literalLoaderCalls.add(parent);
+          const dependency = resolveSource(parent.arguments[0].text, path);
+          if (dependency) visitModule(dependency.resolvedFileName);
+          else { addExternal(parent.arguments[0].text, path); externalLoaderValues.add(parent); }
+        }
+      }
+      ts.forEachChild(node, validateLoader);
+    };
+    validateLoader(parsed);
+    for (const statement of emitted.statements) {
+      if ((!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) || !statement.moduleSpecifier) continue;
+      if (!ts.isStringLiteral(statement.moduleSpecifier)) rollbackCompatibilityUnknown();
+      const specifier = statement.moduleSpecifier.text, resolved = resolveSource(specifier, path);
+      if (resolved) visitModule(resolved.resolvedFileName);
+      else addExternal(specifier, path);
+      if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings
+        && ts.isNamespaceImport(statement.importClause.namedBindings)) namespaceImports.add(statement.importClause.namedBindings.name.text);
+    }
+    const checkDynamic = node => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        const initializer = node.initializer && ts.isAwaitExpression(node.initializer) ? node.initializer.expression : node.initializer;
+        if (initializer && ts.isCallExpression(initializer) && (initializer.expression.kind === ts.SyntaxKind.ImportKeyword
+          || ts.isIdentifier(initializer.expression) && initializer.expression.text === 'require')) namespaceImports.add(node.name.text);
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+        if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) rollbackCompatibilityUnknown();
+        const specifier = node.arguments[0].text, resolved = resolveSource(specifier, path);
+        if (resolved) visitModule(resolved.resolvedFileName);
+        else addExternal(specifier, path);
+      } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) rollbackCompatibilityUnknown();
+        const specifier = node.arguments[0].text, resolved = resolveSource(specifier, path);
+        if (resolved) visitModule(resolved.resolvedFileName);
+        else addExternal(specifier, path);
+      } else if (ts.isCallExpression(node) && (ts.isIdentifier(node.expression) && node.expression.text === 'eval'
+        || ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'createRequire')) rollbackCompatibilityUnknown();
+      if (ts.isIdentifier(node) && node.text === 'require' && !(ts.isCallExpression(node.parent) && node.parent.expression === node)
+        && !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node && node.parent.name.text === 'main')) rollbackCompatibilityUnknown();
+      if (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && namespaceImports.has(node.expression.text)) rollbackCompatibilityUnknown();
+      ts.forEachChild(node, checkDynamic);
+    };
+    checkDynamic(emitted);
+    const packagePath = /^(apps|packages)\/[a-z-]+\/src\//u.exec(relative(root, path).replaceAll('\\', '/'))?.[0];
+    if (packagePath) {
+      const packageRoot = sourcePath(packagePath.replace(/src\/$/u, ''));
+      const manifestPath = join(packageRoot, 'package.json');
+      if (existsSync(manifestPath)) {
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        selected.set(`package:${relative(root, packageRoot).replaceAll('\\', '/')}`, {
+          type: manifest.type ?? 'commonjs', main: manifest.main ?? null, exports: manifest.exports ?? null,
+          engines: manifest.engines ?? null, build: manifest.scripts?.build ?? null,
+        });
+        addConfiguration(join(packageRoot, 'tsconfig.json'));
+      } else if (roots === APPLICATION_ROLLBACK_READERS) rollbackCompatibilityUnknown();
+    }
+  };
+  for (const [file, ...names] of roots) {
+    const path = sourcePath(file), parsed = program.getSourceFile(path);
+    if (!parsed) rollbackCompatibilityUnknown();
+    const symbols = checker.getSymbolsInScope(parsed, ts.SymbolFlags.Value);
+    if (names.some(name => !symbols.some(item => item.name === name
+      && item.declarations?.some(declaration => declaration.getSourceFile() === parsed)))) rollbackCompatibilityUnknown();
+    visitModule(path);
+  }
+  const runtimeBody = node => node && (ts.isArrowFunction(node) || ts.isFunctionExpression(node)
+    || ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && !!node.body;
+  for (const parsed of modules.values()) {
+    if (verifiedVendorModules.has(parsed)) continue;
+    const inspect = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (ts.isCallExpression(node)) {
+        const declaration = checker.getResolvedSignature(node)?.declaration;
+        if (runtimeBody(declaration)) {
+          const calls = calledBodies.get(declaration) ?? [];
+          calls.push(node); calledBodies.set(declaration, calls);
+        }
+        const target = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
+        const targetDeclarations = checker.getSymbolAtLocation(target)?.declarations ?? [];
+        const abstractTarget = targetDeclarations.some(item => (ts.isParameter(item) || ts.isPropertySignature(item) || ts.isMethodSignature(item)
+          || callbackPolicy.kind === 'strict' && ts.isVariableDeclaration(item))
+          && inside(item.getSourceFile().fileName) && !item.getSourceFile().isDeclarationFile);
+        const receiverIsParameter = ts.isPropertyAccessExpression(node.expression)
+          && checker.getSymbolAtLocation(node.expression.expression)?.declarations?.some(item => ts.isParameter(item));
+        const sensitiveCallback = callbackPolicy.kind === 'bounded-worker-recovery-ast'
+          && callbackPolicy.sensitiveCallbackTargets.includes(target.text);
+        const applicationBoundaryCallback = callbackPolicy.kind === 'bounded-worker-recovery-ast'
+          && (isProtectedCallbackScope(node) || !sensitiveCallback && (receiverIsParameter || targetDeclarations.some(item => ts.isParameter(item))
+            || declaration && (ts.isFunctionTypeNode(declaration) || ts.isMethodSignature(declaration) || ts.isCallSignatureDeclaration(declaration))));
+        if (!applicationBoundaryCallback && !literalLoaderCalls.has(node) && (abstractTarget || declaration && (ts.isFunctionTypeNode(declaration) || ts.isMethodSignature(declaration) || ts.isCallSignatureDeclaration(declaration))
+          && inside(declaration.getSourceFile().fileName) && !declaration.getSourceFile().isDeclarationFile)) {
+          callbackCalls.push(node);
+        }
+      }
+      ts.forEachChild(node, inspect);
+    };
+    inspect(parsed);
+  }
+  const supplierSymbols = new Map(), supplierArguments = new Set(), supplierValues = new Set(), supplierFunctions = new Set();
+  const proveSupplier = (expression, fields = [], seen = new Set()) => {
+    if (!expression || seen.has(expression) || seen.size >= 64) rollbackCompatibilityUnknown();
+    supplierValues.add(expression);
+    const next = new Set(seen).add(expression);
+    if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression)
+      || ts.isSatisfiesExpression(expression)) return proveSupplier(expression.expression, fields, next);
+    if (ts.isPropertyAccessExpression(expression)) return proveSupplier(expression.expression, [expression.name.text, ...fields], next);
+    if (ts.isObjectLiteralExpression(expression)) {
+      if (!fields.length || expression.properties.some(property => ts.isSpreadAssignment(property) || property.name && ts.isComputedPropertyName(property.name))) rollbackCompatibilityUnknown();
+      const matches = expression.properties.filter(property => property.name?.text === fields[0]);
+      if (matches.length !== 1) rollbackCompatibilityUnknown();
+      const property = matches[0];
+      if (ts.isPropertyAssignment(property)) return proveSupplier(property.initializer, fields.slice(1), next);
+      if (ts.isShorthandPropertyAssignment(property)) return proveSupplier(property.name, fields.slice(1), next);
+      if (ts.isMethodDeclaration(property) && fields.length === 1 && property.body) return;
+      rollbackCompatibilityUnknown();
+    }
+    if (runtimeBody(expression) && !fields.length && modules.has(resolve(expression.getSourceFile().fileName))) return;
+    if (externalLoaderValues.has(expression)) return;
+    if (!ts.isIdentifier(expression)) rollbackCompatibilityUnknown();
+    let symbol = ts.isShorthandPropertyAssignment(expression.parent)
+      ? checker.getShorthandAssignmentValueSymbol(expression.parent) : checker.getSymbolAtLocation(expression);
+    if (symbol?.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+    const declarations = symbol?.declarations;
+    if (!declarations?.length || declarations.length !== 1) rollbackCompatibilityUnknown();
+    const declaration = declarations[0];
+    if (runtimeBody(declaration) && !fields.length && modules.has(resolve(declaration.getSourceFile().fileName))) {
+      supplierSymbols.set(symbol, declaration); supplierFunctions.add(symbol); return;
+    }
+    if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)
+      && ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const) {
+      if (declaration.parent.parent.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) rollbackCompatibilityUnknown();
+      supplierSymbols.set(symbol, declaration);
+      return proveSupplier(declaration.initializer, fields, next);
+    }
+    if (ts.isParameter(declaration) && runtimeBody(declaration.parent)) {
+      const owner = declaration.parent, index = owner.parameters.indexOf(declaration), calls = calledBodies.get(owner);
+      if (!calls?.length || declaration.dotDotDotToken || declaration.initializer) rollbackCompatibilityUnknown();
+      supplierSymbols.set(symbol, declaration);
+      for (const call of calls) {
+        for (let parent = call; parent; parent = parent.parent) if (parent === owner) rollbackCompatibilityUnknown();
+        supplierArguments.add(call.arguments[index]);
+        proveSupplier(call.arguments[index], fields, next);
+      }
+      return;
+    }
+    rollbackCompatibilityUnknown();
+  };
+  for (const call of callbackCalls) proveSupplier(call.expression);
+  for (const parsed of modules.values()) {
+    const checkUse = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (ts.isIdentifier(node)) {
+        const symbol = ts.isShorthandPropertyAssignment(node.parent) ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+        const declaration = supplierSymbols.get(symbol);
+        if (declaration && node !== declaration.name) {
+          const parent = node.parent;
+          const alias = ts.isVariableDeclaration(parent) && parent.initializer === node
+            && ts.isVariableDeclarationList(parent.parent) && parent.parent.flags & ts.NodeFlags.Const
+            && supplierSymbols.has(checker.getSymbolAtLocation(parent.name));
+          let access = node;
+          while (ts.isPropertyAccessExpression(access.parent) && access.parent.expression === access) access = access.parent;
+          const invocation = ts.isCallExpression(access.parent) && access.parent.expression === access && callbackCalls.includes(access.parent);
+          const concreteInvocation = supplierFunctions.has(symbol) && ts.isCallExpression(parent) && parent.expression === node;
+          if (!supplierValues.has(node) && !supplierArguments.has(node) && !alias && !invocation && !concreteInvocation) rollbackCompatibilityUnknown();
+        }
+      }
+      ts.forEachChild(node, checkUse);
+    };
+    checkUse(parsed);
+  }
+  return [...selected.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function namedRuntimeFunction(ts, sourceFile, name) {
+  const found = [];
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) found.push(statement);
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === name && declaration.initializer
+          && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) found.push(declaration.initializer);
+      }
+    }
+  }
+  return found.length === 1 ? found[0] : undefined;
+}
+
+/** Bounded proof for the persisted completed-image recovery wiring. */
+export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRoot }) {
+  const ts = createRequire(join(compilerRoot, 'package.json'))('typescript');
+  const indexPath = resolve(sourceRoot, 'apps/agent-worker/src/index.ts');
+  const runPath = resolve(sourceRoot, 'packages/domain/src/agent/research-run.ts');
+  if (!existsSync(indexPath) || !existsSync(runPath)) rollbackCompatibilityUnknown();
+  const compilerOptions = {
+    allowJs: true, noEmit: true, noLib: true, skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Node10, baseUrl: resolve(sourceRoot),
+    paths: { '@openscience/*': ['packages/*/src/index.ts'] },
+  };
+  const compilerHost = ts.createCompilerHost(compilerOptions);
+  const program = ts.createProgram([indexPath, runPath], compilerOptions, compilerHost);
+  const indexFile = program.getSourceFile(indexPath);
+  const runFile = program.getSourceFile(runPath);
+  const checker = program.getTypeChecker();
+  if (!indexFile || !runFile || program.getSyntacticDiagnostics().length) rollbackCompatibilityUnknown();
+  const deps = namedRuntimeFunction(ts, indexFile, 'createWorkerDeps');
+  const main = namedRuntimeFunction(ts, indexFile, 'main');
+  const scheduler = namedRuntimeFunction(ts, indexFile, 'createCompletedSceneImageRecoveryScheduler');
+  const poller = namedRuntimeFunction(ts, indexFile, 'createPollOnce');
+  const buildGateway = namedRuntimeFunction(ts, indexFile, 'buildGateway');
+  const recovery = namedRuntimeFunction(ts, runFile, 'recoverCompletedHermesSceneImageResults');
+  if (!deps || !main || !scheduler || !poller || !buildGateway || !recovery) rollbackCompatibilityUnknown();
+  const nodes = (root, predicate) => {
+    const found = [];
+    const visit = node => {
+      if (predicate(node)) found.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(root);
+    return found;
+  };
+  const functionLike = node => node && (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
+    || ts.isArrowFunction(node) || ts.isMethodDeclaration(node));
+  const symbolAt = node => {
+    let symbol = node ? checker.getSymbolAtLocation(node) : undefined;
+    if (symbol?.flags & ts.SymbolFlags.Alias) {
+      const aliased = checker.getAliasedSymbol(symbol);
+      if (aliased && aliased !== symbol) symbol = aliased;
+    }
+    return symbol;
+  };
+  const functionSymbol = fn => {
+    if (fn?.name && ts.isIdentifier(fn.name)) return symbolAt(fn.name);
+    for (let current = fn?.parent; current; current = current.parent) {
+      if (ts.isVariableDeclaration(current) && ts.isIdentifier(current.name) && current.initializer === fn) return symbolAt(current.name);
+    }
+    return undefined;
+  };
+  const importedFunctionBinding = (identifier, fn) => {
+    const symbol = identifier ? checker.getSymbolAtLocation(identifier) : undefined;
+    const declarations = symbol?.declarations ?? [];
+    if (declarations.length !== 1 || !ts.isImportSpecifier(declarations[0])) return false;
+    const importSpecifier = declarations[0];
+    const importDeclaration = importSpecifier.parent.parent.parent;
+    const importedName = (importSpecifier.propertyName ?? importSpecifier.name).text;
+    return ts.isImportDeclaration(importDeclaration) && ts.isStringLiteral(importDeclaration.moduleSpecifier)
+      && importedName === fn?.name?.text && importDeclaration.moduleSpecifier.text === '@openscience/domain';
+  };
+  const boundToFunction = (identifier, fn) => Boolean(symbolAt(identifier) && functionSymbol(fn)
+    && symbolAt(identifier) === functionSymbol(fn)) || importedFunctionBinding(identifier, fn);
+  const isBoundCall = (node, fn) => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && boundToFunction(node.expression, fn);
+  const variableSymbol = declaration => declaration && ts.isIdentifier(declaration.name) ? symbolAt(declaration.name) : undefined;
+  const boundToVariableDeclaration = (identifier, declaration) => Boolean(variableSymbol(declaration)
+    && symbolAt(identifier) === variableSymbol(declaration));
+  const enclosingFunction = node => {
+    for (let current = node; current; current = current.parent) if (functionLike(current)) return current;
+    return undefined;
+  };
+  const isNestedIn = (node, root) => {
+    for (let current = enclosingFunction(node); current; current = enclosingFunction(current.parent)) {
+      if (current === root) return true;
+    }
+    return false;
+  };
+  const isFirstStatementOfFunctionBody = (node, fn) => ts.isBlock(fn.body)
+    && node.parent === fn.body && fn.body.statements[0] === node;
+  const boundToVariable = (fn, name) => {
+    for (let current = fn.parent; current; current = current.parent) {
+      if (ts.isVariableDeclaration(current) && ts.isIdentifier(current.name) && current.name.text === name) {
+        const initializer = current.initializer;
+        const called = ts.isCallExpression(initializer) ? initializer.expression : undefined;
+        const callee = ts.isParenthesizedExpression(called) ? called.expression : called;
+        if (callee === fn) return true;
+      }
+    }
+    return false;
+  };
+  const isNamedCall = (node, name) => ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name;
+  const isMember = (node, receiver, property) => ts.isPropertyAccessExpression(node)
+    && ts.isIdentifier(node.expression) && node.expression.text === receiver && node.name.text === property;
+  const isNegatedMember = (node, receiver, property) => ts.isPrefixUnaryExpression(node)
+    && node.operator === ts.SyntaxKind.ExclamationToken && isMember(node.operand, receiver, property);
+  const flattenOr = expression => ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    ? [...flattenOr(expression.left), ...flattenOr(expression.right)] : [expression];
+  const hasDirectNegatedMember = (expression, receiver, property) => flattenOr(expression)
+    .some(item => isNegatedMember(item, receiver, property));
+  const hasBooleanLiteral = root => nodes(root, node => node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword).length > 0;
+  const hasConstantFalseAncestor = node => {
+    for (let current = node.parent; current; current = current.parent) {
+      if (ts.isIfStatement(current) && hasBooleanLiteral(current.expression)) return true;
+    }
+    return false;
+  };
+  const propertyName = property => property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+    ? property.name.text : undefined;
+  const objectProperties = (object, name) => object && ts.isObjectLiteralExpression(object)
+    ? object.properties.filter(property => propertyName(property) === name) : [];
+  const objectProperty = (object, name) => {
+    const properties = objectProperties(object, name);
+    return properties.length === 1 ? properties[0] : undefined;
+  };
+  const propertyValue = (object, name) => {
+    const property = objectProperty(object, name);
+    if (!property) return undefined;
+    if (ts.isPropertyAssignment(property)) return property.initializer;
+    if (ts.isShorthandPropertyAssignment(property)) return property.name;
+    return undefined;
+  };
+  const isNumberLiteral = (node, value) => ts.isNumericLiteral(node) && Number(node.text.replaceAll('_', '')) === value;
+  const isStringLiteral = (node, value) => ts.isStringLiteral(node) && node.text === value;
+  const isFalseKeyword = node => node?.kind === ts.SyntaxKind.FalseKeyword;
+  const hasCall = (root, predicate) => nodes(root, node => ts.isCallExpression(node) && predicate(node));
+
+  // createWorkerDeps must return the single shared object carrying the feature
+  // gate and readiness reader. Checking the AST properties prevents comments,
+  // dead branches, or an unrelated string from satisfying the proof.
+  const dependencyReturns = nodes(deps, node => ts.isReturnStatement(node) && ts.isObjectLiteralExpression(node.expression)
+    && enclosingFunction(node) === deps);
+  if (dependencyReturns.length !== 1) rollbackCompatibilityUnknown();
+  const dependencyObject = dependencyReturns[0].expression;
+  if (!dependencyObject.properties.some(property => ts.isSpreadAssignment(property)
+    && ts.isIdentifier(property.expression) && property.expression.text === 'input')
+    || !propertyValue(dependencyObject, 'nativeSceneImageEnabled')
+    || !propertyValue(dependencyObject, 'readVideoReadiness')) rollbackCompatibilityUnknown();
+  const nativeEnabledValue = propertyValue(dependencyObject, 'nativeSceneImageEnabled');
+  const readinessValue = propertyValue(dependencyObject, 'readVideoReadiness');
+  if (!ts.isIdentifier(nativeEnabledValue) || nativeEnabledValue.text !== 'nativeSceneImageEnabled'
+    || !isNamedCall(readinessValue, 'createNativeVideoReadinessReader')) rollbackCompatibilityUnknown();
+
+  const mainNodes = nodes(main, node => enclosingFunction(node) === main);
+  const variableCall = (name, callee) => mainNodes.find(node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === name && isBoundCall(node.initializer, callee));
+  const depsDeclaration = variableCall('deps', deps);
+  const gatewayDeclaration = variableCall('gateway', buildGateway);
+  if (!depsDeclaration || !gatewayDeclaration || hasConstantFalseAncestor(depsDeclaration)
+    || hasConstantFalseAncestor(gatewayDeclaration) || gatewayDeclaration.getStart() <= depsDeclaration.getStart()) rollbackCompatibilityUnknown();
+  const isBoundMember = (node, declaration, property) => ts.isPropertyAccessExpression(node)
+    && ts.isIdentifier(node.expression) && node.name.text === property
+    && boundToVariableDeclaration(node.expression, declaration);
+  const isNegatedBoundMember = (node, declaration, property) => ts.isPrefixUnaryExpression(node)
+    && node.operator === ts.SyntaxKind.ExclamationToken && isBoundMember(node.operand, declaration, property);
+  const hasDirectNegatedBoundMember = (expression, declaration, property) => flattenOr(expression)
+    .some(item => isNegatedBoundMember(item, declaration, property));
+  const nativeIf = mainNodes.find(node => ts.isIfStatement(node) && isBoundMember(node.expression, depsDeclaration, 'nativeSceneImageEnabled'));
+  if (!nativeIf || hasConstantFalseAncestor(nativeIf) || nativeIf.getStart() <= gatewayDeclaration.getStart()) rollbackCompatibilityUnknown();
+  const inspectorAssignments = nodes(nativeIf.thenStatement, node => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    && isBoundMember(node.left, depsDeclaration, 'inspectImageRecoveryState') && enclosingFunction(node) === main);
+  if (inspectorAssignments.length !== 1) rollbackCompatibilityUnknown();
+  const inspectorValue = inspectorAssignments[0].right;
+  const inspectorGatewayCalls = hasCall(inspectorValue, call => isBoundMember(call.expression, gatewayDeclaration, 'canResumeImageFromCompletedResult')
+    && call.arguments.length === 1 && ts.isIdentifier(call.arguments[0]) && call.arguments[0].text === 'requestId');
+  if (!inspectorGatewayCalls.length || hasConstantFalseAncestor(inspectorAssignments[0])) rollbackCompatibilityUnknown();
+  const inspectorResultLiterals = nodes(inspectorValue, node => isStringLiteral(node, 'completed') || isStringLiteral(node, 'unsafe'));
+  if (inspectorResultLiterals.length !== 2) rollbackCompatibilityUnknown();
+  const schedulerCalls = hasCall(main, call => call.expression && isBoundCall(call, scheduler)
+    && boundToVariable(enclosingFunction(call), 'maintenance'));
+  const mainStoppingDeclaration = nodes(main, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'stopping' && enclosingFunction(node) === main);
+  const mainStoppingSymbol = mainStoppingDeclaration.length === 1
+    ? checker.getSymbolAtLocation(mainStoppingDeclaration[0].name) : undefined;
+  const forwardsMainStopping = expression => {
+    if (!functionLike(expression) || expression.parameters.length !== 0 || !expression.body) return false;
+    const value = ts.isBlock(expression.body) && expression.body.statements.length === 1
+      && ts.isReturnStatement(expression.body.statements[0]) ? expression.body.statements[0].expression : expression.body;
+    return ts.isIdentifier(value) && value.text === 'stopping'
+      && mainStoppingSymbol && checker.getSymbolAtLocation(value) === mainStoppingSymbol;
+  };
+  if (schedulerCalls.length !== 1 || hasConstantFalseAncestor(schedulerCalls[0])
+    || schedulerCalls[0].getStart() <= inspectorAssignments[0].getStart()
+    || schedulerCalls[0].arguments.length !== 1 || !ts.isObjectLiteralExpression(schedulerCalls[0].arguments[0])
+    || objectProperties(schedulerCalls[0].arguments[0], 'stopping').length !== 1
+    || schedulerCalls[0].arguments[0].properties.some(property => ts.isSpreadAssignment(property)
+      || propertyName(property) !== 'stopping')
+    || !forwardsMainStopping(propertyValue(schedulerCalls[0].arguments[0], 'stopping'))) rollbackCompatibilityUnknown();
+  const maintenanceFunction = schedulerCalls.length === 1 ? enclosingFunction(schedulerCalls[0]) : undefined;
+  const recoveryBinding = maintenanceFunction ? nodes(maintenanceFunction, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'recoverSceneImages' && node.initializer === schedulerCalls[0]) : [];
+  const recoveryCalls = hasCall(main, call => ts.isCallExpression(call) && ts.isIdentifier(call.expression)
+    && recoveryBinding.length === 1 && boundToVariableDeclaration(call.expression, recoveryBinding[0])
+    && call.arguments.length === 1 && ts.isIdentifier(call.arguments[0]) && boundToVariableDeclaration(call.arguments[0], depsDeclaration)
+    && boundToVariable(enclosingFunction(call), 'maintenance'));
+  if (recoveryCalls.length !== 1 || recoveryCalls[0].getStart() <= schedulerCalls[0].getStart()
+    || enclosingFunction(recoveryCalls[0]) !== enclosingFunction(schedulerCalls[0]) || recoveryCalls.some(hasConstantFalseAncestor)) rollbackCompatibilityUnknown();
+  const pollerCalls = hasCall(main, call => isBoundCall(call, poller) && isNestedIn(call, main));
+  if (!pollerCalls.length || pollerCalls.some(call => hasConstantFalseAncestor(call)
+    || call.arguments.length !== 2 || !ts.isObjectLiteralExpression(call.arguments[1])
+    || objectProperties(call.arguments[1], 'runMaintenance').length !== 1
+    || objectProperties(call.arguments[1], 'stopping').length !== 1
+    || call.arguments[1].properties.some(property => ts.isSpreadAssignment(property)
+      || !['runMaintenance', 'stopping'].includes(propertyName(property)))
+    || !isFalseKeyword(propertyValue(call.arguments[1], 'runMaintenance'))
+    || !forwardsMainStopping(propertyValue(call.arguments[1], 'stopping')))) rollbackCompatibilityUnknown();
+
+  const schedulerReturnedFunctions = nodes(scheduler, node => ts.isReturnStatement(node)
+    && functionLike(node.expression) && enclosingFunction(node) === scheduler).map(node => node.expression);
+  if (schedulerReturnedFunctions.length !== 1) rollbackCompatibilityUnknown();
+  const schedulerRuntime = schedulerReturnedFunctions[0];
+  const schedulerDepsParameter = schedulerRuntime.parameters.length === 1 && ts.isIdentifier(schedulerRuntime.parameters[0].name)
+    ? schedulerRuntime.parameters[0] : undefined;
+  const schedulerGuards = nodes(schedulerRuntime, node => ts.isIfStatement(node)
+    && enclosingFunction(node) === schedulerRuntime
+    && hasDirectNegatedBoundMember(node.expression, schedulerDepsParameter, 'nativeSceneImageEnabled')
+    && hasDirectNegatedBoundMember(node.expression, schedulerDepsParameter, 'inspectImageRecoveryState'));
+  if (schedulerGuards.length !== 1 || hasBooleanLiteral(schedulerGuards[0].expression)
+    || hasConstantFalseAncestor(schedulerGuards[0])
+    || !isFirstStatementOfFunctionBody(schedulerGuards[0], schedulerRuntime)
+    || !ts.isReturnStatement(schedulerGuards[0].thenStatement)
+    || !isFalseKeyword(schedulerGuards[0].thenStatement.expression)) rollbackCompatibilityUnknown();
+  const recoverBindings = nodes(scheduler, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+    && node.name.text === 'recover' && enclosingFunction(node) === scheduler);
+  const recoverBinding = recoverBindings[0];
+  const recoverInitializer = recoverBinding?.initializer;
+  const recoverFallback = ts.isBinaryExpression(recoverInitializer) && recoverInitializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+    && isMember(recoverInitializer.left, 'options', 'recover')
+    && ts.isIdentifier(recoverInitializer.right) && boundToFunction(recoverInitializer.right, recovery);
+  const recoveryInvocation = hasCall(schedulerRuntime, call => ts.isCallExpression(call) && ts.isIdentifier(call.expression)
+    && recoverBinding && boundToVariableDeclaration(call.expression, recoverBinding)
+    && enclosingFunction(call) === schedulerRuntime
+    && call.arguments.length === 2 && schedulerDepsParameter && ts.isIdentifier(call.arguments[0])
+    && boundToVariableDeclaration(call.arguments[0], schedulerDepsParameter)
+    && isNumberLiteral(propertyValue(call.arguments[1], 'limit'), 20));
+  if (recoverBindings.length !== 1 || !recoverFallback || recoveryInvocation.length !== 1 || !recoveryInvocation.every(call => ts.isAwaitExpression(call.parent)
+    && ts.isVariableDeclaration(call.parent.parent) && schedulerGuards[0].getStart() < call.getStart()
+    && !hasConstantFalseAncestor(call))) rollbackCompatibilityUnknown();
+
+  const recoveryGuards = nodes(recovery, node => ts.isIfStatement(node)
+    && enclosingFunction(node) === recovery
+    && recovery.parameters.length >= 1 && ts.isIdentifier(recovery.parameters[0].name)
+    && hasDirectNegatedBoundMember(node.expression, recovery.parameters[0], 'nativeSceneImageEnabled')
+    && hasDirectNegatedBoundMember(node.expression, recovery.parameters[0], 'inspectImageRecoveryState'));
+  if (recoveryGuards.length !== 1 || hasBooleanLiteral(recoveryGuards[0].expression)
+    || hasConstantFalseAncestor(recoveryGuards[0])
+    || !isFirstStatementOfFunctionBody(recoveryGuards[0], recovery)
+    || !ts.isReturnStatement(recoveryGuards[0].thenStatement)
+    || !ts.isObjectLiteralExpression(recoveryGuards[0].thenStatement.expression)
+    || !isNumberLiteral(propertyValue(recoveryGuards[0].thenStatement.expression, 'inspected'), 0)
+    || !isNumberLiteral(propertyValue(recoveryGuards[0].thenStatement.expression, 'resumed'), 0)
+    || !isNumberLiteral(propertyValue(recoveryGuards[0].thenStatement.expression, 'errors'), 0)) {
+    rollbackCompatibilityUnknown();
+  }
+  const recoveryDepsParameter = recovery.parameters.length >= 1 && ts.isIdentifier(recovery.parameters[0].name)
+    ? recovery.parameters[0] : undefined;
+  const isDepsTransactionCall = call => ts.isCallExpression(call)
+    && ts.isPropertyAccessExpression(call.expression)
+    && call.expression.name.text === '$transaction'
+    && ts.isPropertyAccessExpression(call.expression.expression)
+    && isMember(call.expression.expression, 'deps', 'prisma')
+    && recoveryDepsParameter && boundToVariableDeclaration(call.expression.expression.expression, recoveryDepsParameter);
+  const transactionCallback = node => {
+    for (let current = node.parent; current; current = current.parent) {
+      if (isDepsTransactionCall(current)) {
+        if (current.arguments.length !== 2 || !ts.isObjectLiteralExpression(current.arguments[1])) return undefined;
+        const callback = current.arguments[0];
+        if (functionLike(callback) && isNestedIn(node, callback)) return { callback, transaction: current };
+      }
+    }
+    return undefined;
+  };
+  const transactionOptions = item => item?.transaction && item.transaction.arguments.length === 2
+    && ts.isObjectLiteralExpression(item.transaction.arguments[1])
+    && objectProperties(item.transaction.arguments[1], 'isolationLevel').length === 1
+    && objectProperties(item.transaction.arguments[1], 'maxWait').length === 1
+    && objectProperties(item.transaction.arguments[1], 'timeout').length === 1
+    && item.transaction.arguments[1].properties.every(property => !ts.isSpreadAssignment(property)
+      && ['isolationLevel', 'maxWait', 'timeout'].includes(propertyName(property)))
+    && isStringLiteral(propertyValue(item.transaction.arguments[1], 'isolationLevel'), 'Serializable')
+    && isNumberLiteral(propertyValue(item.transaction.arguments[1], 'maxWait'), 10_000)
+    && isNumberLiteral(propertyValue(item.transaction.arguments[1], 'timeout'), 20_000);
+  const transactionParameter = item => item?.callback?.parameters.length === 1
+    && ts.isIdentifier(item.callback.parameters[0].name) ? item.callback.parameters[0] : undefined;
+  const transactionParameterSymbol = item => {
+    const parameter = transactionParameter(item);
+    return parameter ? checker.getSymbolAtLocation(parameter.name) : undefined;
+  };
+  const transactionUsesParameter = (item, identifier) => {
+    const symbol = transactionParameterSymbol(item);
+    return !!symbol && ts.isIdentifier(identifier) && checker.getSymbolAtLocation(identifier) === symbol;
+  };
+  const lockCalls = hasCall(recovery, call => ts.isIdentifier(call.expression) && call.expression.text === 'lockTrashReferences'
+    && call.arguments.length === 1 && ts.isIdentifier(call.arguments[0])
+    && ts.isAwaitExpression(call.parent) && transactionCallback(call)
+    && transactionUsesParameter(transactionCallback(call), call.arguments[0]) && !hasConstantFalseAncestor(call));
+  const runUpdates = hasCall(recovery, call => ts.isPropertyAccessExpression(call.expression)
+    && call.expression.name.text === 'updateMany' && ts.isPropertyAccessExpression(call.expression.expression)
+    && call.expression.expression.name.text === 'hermesResearchRun'
+    && transactionCallback(call) && transactionUsesParameter(transactionCallback(call), call.expression.expression.expression)
+    && !hasConstantFalseAncestor(call));
+  const taskUpdates = hasCall(recovery, call => ts.isPropertyAccessExpression(call.expression)
+    && call.expression.name.text === 'updateMany' && ts.isPropertyAccessExpression(call.expression.expression)
+    && call.expression.expression.name.text === 'agentTask'
+    && transactionCallback(call) && transactionUsesParameter(transactionCallback(call), call.expression.expression.expression)
+    && !hasConstantFalseAncestor(call));
+  const stepUpdates = hasCall(recovery, call => ts.isPropertyAccessExpression(call.expression)
+    && call.expression.name.text === 'updateMany' && ts.isPropertyAccessExpression(call.expression.expression)
+    && call.expression.expression.name.text === 'hermesResearchStep'
+    && transactionCallback(call) && transactionUsesParameter(transactionCallback(call), call.expression.expression.expression)
+    && !hasConstantFalseAncestor(call));
+  const transactionCallbacks = [lockCalls, runUpdates, taskUpdates, stepUpdates].flat().map(transactionCallback);
+  const lockStatement = lockCalls[0]?.parent?.parent;
+  const lockTransaction = transactionCallbacks[0];
+  const propertyAccess = (node, declaration, property) => ts.isPropertyAccessExpression(node)
+    && ts.isIdentifier(node.expression) && node.name.text === property
+    && boundToVariableDeclaration(node.expression, declaration);
+  const runDeclarations = lockTransaction?.callback ? nodes(lockTransaction.callback, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'run' && enclosingFunction(node) === lockTransaction.callback) : [];
+  const pendingDeclarations = lockTransaction?.callback ? nodes(lockTransaction.callback, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'pending' && enclosingFunction(node) === lockTransaction.callback) : [];
+  const candidateDeclarations = nodes(recovery, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'candidate' && enclosingFunction(node) === recovery);
+  const itemDeclarations = lockTransaction?.callback ? nodes(lockTransaction.callback, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'item' && enclosingFunction(node) === lockTransaction.callback) : [];
+  const stepDeclarations = lockTransaction?.callback ? nodes(lockTransaction.callback, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'step' && enclosingFunction(node) === lockTransaction.callback) : [];
+  const runDeclaration = runDeclarations.length === 1 ? runDeclarations[0] : undefined;
+  const pendingDeclaration = pendingDeclarations.length === 1 ? pendingDeclarations[0] : undefined;
+  const candidateDeclaration = candidateDeclarations.length === 1 ? candidateDeclarations[0] : undefined;
+  const itemDeclaration = itemDeclarations.length === 1 ? itemDeclarations[0] : undefined;
+  const stepBindings = stepDeclarations.filter(declaration => declaration.initializer);
+  const stepDeclaration = stepBindings.length === 1 ? stepBindings[0] : undefined;
+  const itemLoop = itemDeclaration?.parent && ts.isVariableDeclarationList(itemDeclaration.parent)
+    && ts.isForOfStatement(itemDeclaration.parent.parent) && itemDeclaration.parent.parent.initializer === itemDeclaration.parent
+    ? itemDeclaration.parent.parent : undefined;
+  const itemFromPending = Boolean(itemLoop && pendingDeclaration && ts.isIdentifier(itemLoop.expression)
+    && ts.isArrayLiteralExpression(pendingDeclaration.initializer)
+    && boundToVariableDeclaration(itemLoop.expression, pendingDeclaration));
+  const runFetchExpression = runDeclaration?.initializer && ts.isAwaitExpression(runDeclaration.initializer)
+    ? runDeclaration.initializer.expression : undefined;
+  const runFetchWhere = runFetchExpression && ts.isCallExpression(runFetchExpression) && runFetchExpression.arguments.length === 1
+    ? propertyValue(runFetchExpression.arguments[0], 'where') : undefined;
+  const runFetchValid = !!runFetchExpression && ts.isCallExpression(runFetchExpression)
+    && ts.isPropertyAccessExpression(runFetchExpression.expression)
+    && runFetchExpression.expression.name.text === 'findUnique'
+    && ts.isPropertyAccessExpression(runFetchExpression.expression.expression)
+    && runFetchExpression.expression.expression.name.text === 'hermesResearchRun'
+    && lockTransaction && transactionUsesParameter(lockTransaction, runFetchExpression.expression.expression.expression)
+    && candidateDeclaration && propertyAccess(propertyValue(runFetchWhere, 'id'), candidateDeclaration, 'id');
+  const unwrapExpression = expression => ts.isParenthesizedExpression(expression)
+    || ts.isAsExpression(expression) || ts.isNonNullExpression(expression) ? unwrapExpression(expression.expression) : expression;
+  const stepFetchExpression = stepDeclaration?.initializer ? unwrapExpression(stepDeclaration.initializer) : undefined;
+  const stepPredicate = stepFetchExpression && ts.isCallExpression(stepFetchExpression)
+    && ts.isPropertyAccessExpression(stepFetchExpression.expression)
+    && stepFetchExpression.expression.name.text === 'find'
+    && ts.isPropertyAccessExpression(stepFetchExpression.expression.expression)
+    && stepFetchExpression.expression.expression.name.text === 'steps'
+    && runDeclaration && boundToVariableDeclaration(stepFetchExpression.expression.expression.expression, runDeclaration)
+    && stepFetchExpression.arguments.length === 1 && functionLike(stepFetchExpression.arguments[0]) ? stepFetchExpression.arguments[0] : undefined;
+  const stepPredicateValue = stepPredicate?.body && ts.isBlock(stepPredicate.body) && stepPredicate.body.statements.length === 1
+    && ts.isReturnStatement(stepPredicate.body.statements[0]) ? stepPredicate.body.statements[0].expression : stepPredicate?.body;
+  const stepPredicateParameter = stepPredicate?.parameters.length === 1 && ts.isIdentifier(stepPredicate.parameters[0].name)
+    ? stepPredicate.parameters[0] : undefined;
+  const stepFetchValid = Boolean(stepPredicate && stepPredicateParameter && itemDeclaration && ts.isBinaryExpression(stepPredicateValue)
+    && stepPredicateValue.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && propertyAccess(stepPredicateValue.left, stepPredicateParameter, 'id')
+    && propertyAccess(stepPredicateValue.right, itemDeclaration, 'stepId'));
+  const nullLiteral = node => node?.kind === ts.SyntaxKind.NullKeyword;
+  const exactObject = (object, expected) => ts.isObjectLiteralExpression(object)
+    && object.properties.length === Object.keys(expected).length
+    && Object.entries(expected).every(([name, predicate]) => objectProperties(object, name).length === 1
+      && predicate(propertyValue(object, name)));
+  const runWhere = {
+    id: value => propertyAccess(value, runDeclaration, 'id'), actorId: value => propertyAccess(value, runDeclaration, 'actorId'),
+    researchObjectId: value => propertyAccess(value, runDeclaration, 'researchObjectId'), versionId: value => propertyAccess(value, runDeclaration, 'versionId'),
+    status: value => propertyAccess(value, runDeclaration, 'status'), version: value => propertyAccess(value, runDeclaration, 'version'),
+    profile: value => propertyAccess(value, runDeclaration, 'profile'), maxAgentTasks: value => propertyAccess(value, runDeclaration, 'maxAgentTasks'),
+  };
+  const runData = {
+    status: value => isStringLiteral(value, 'generating_scene_images'), error: nullLiteral, lastReconciledAt: nullLiteral,
+    version: value => exactObject(value, { increment: item => isNumberLiteral(item, 1) }),
+  };
+  const taskWhere = {
+    id: value => propertyAccess(value, itemDeclaration, 'taskId'), deletedAt: nullLiteral,
+    kind: value => isStringLiteral(value, 'presentation.generate'), status: value => isStringLiteral(value, 'failed'),
+    retryCount: value => isNumberLiteral(value, 0), executionAttempt: value => propertyAccess(value, itemDeclaration, 'expectedExecutionAttempt'),
+    error: value => propertyAccess(value, itemDeclaration, 'expectedError'),
+    payload: value => exactObject(value, { equals: item => ts.isAsExpression(item) && propertyAccess(item.expression, itemDeclaration, 'expectedPayload') }),
+    result: value => exactObject(value, { equals: item => ts.isBinaryExpression(item) && item.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+      && propertyAccess(item.left, itemDeclaration, 'expectedResult') && ts.isPropertyAccessExpression(item.right)
+      && ts.isIdentifier(item.right.expression) && item.right.expression.text === 'Prisma' && item.right.name.text === 'DbNull' }),
+  };
+  const taskData = {
+    status: value => isStringLiteral(value, 'pending'), progress: value => isNumberLiteral(value, 0), retryCount: value => isNumberLiteral(value, 1),
+    error: nullLiteral, dispatchedAt: nullLiteral,
+  };
+  const stepWhere = {
+    id: value => propertyAccess(value, itemDeclaration, 'stepId'), runId: value => propertyAccess(value, runDeclaration, 'id'),
+    stage: value => isStringLiteral(value, 'scene_image'), ordinal: value => propertyAccess(value, itemDeclaration, 'ordinal'),
+    agentTaskId: value => propertyAccess(value, itemDeclaration, 'taskId'), status: value => propertyAccess(value, stepDeclaration, 'status'),
+    presentationAssetId: value => propertyAccess(value, stepDeclaration, 'presentationAssetId'),
+  };
+  const stepData = { status: value => isStringLiteral(value, 'running'), presentationAssetId: nullLiteral, error: nullLiteral };
+  const updateShape = (call, where, data) => call?.arguments.length === 1
+    && ts.isObjectLiteralExpression(call.arguments[0])
+    && exactObject(propertyValue(call.arguments[0], 'where'), where)
+    && exactObject(propertyValue(call.arguments[0], 'data'), data);
+  if (lockCalls.length !== 1 || runUpdates.length !== 1 || taskUpdates.length !== 1 || stepUpdates.length !== 1
+    || transactionCallbacks.some(item => item?.callback !== lockTransaction?.callback || item?.transaction !== lockTransaction?.transaction)
+    || !lockTransaction || !ts.isBlock(lockTransaction.callback.body)
+    || !transactionOptions(lockTransaction)
+    || !transactionParameter(lockTransaction) || !transactionParameterSymbol(lockTransaction)
+    || runDeclarations.length !== 1 || !runFetchValid || candidateDeclarations.length !== 1 || pendingDeclarations.length !== 1 || itemDeclarations.length !== 1
+    || !itemFromPending || stepBindings.length !== 1 || !stepFetchValid
+    || lockTransaction.callback.body.statements[0] !== lockStatement
+    || !ts.isExpressionStatement(lockStatement)
+    || !updateShape(runUpdates[0], runWhere, runData)
+    || !updateShape(taskUpdates[0], taskWhere, taskData)
+    || !updateShape(stepUpdates[0], stepWhere, stepData)
+    || [lockCalls, runUpdates, taskUpdates, stepUpdates].flat().some(call => call.getStart() <= recoveryGuards[0].getStart())) rollbackCompatibilityUnknown();
+  return true;
+}
+
+export async function verifyApplicationRollbackReaders({ candidateRoot, rollbackRoot, compilerRoot = candidateRoot, roots = APPLICATION_ROLLBACK_READERS }) {
+  // A healthy release/runtime marker cannot prove that persisted paid work stays
+  // readable. Never execute rollback code or grant downgrade from a live empty query.
+  try {
+    if (roots === APPLICATION_ROLLBACK_ROOTS) {
+      verifyWorkerRecoveryWiring({ sourceRoot: resolve(candidateRoot), compilerRoot });
+      verifyWorkerRecoveryWiring({ sourceRoot: resolve(rollbackRoot), compilerRoot });
+    }
+    const trustedRequire = createRequire(join(compilerRoot, 'package.json')), ts = trustedRequire('typescript');
+    let vendorPackages;
+    try {
+      vendorPackages = { upstreamPackageRoot: dirname(trustedRequire.resolve('@prisma/client/package.json')),
+        enginePackageRoot: dirname(createRequire(trustedRequire.resolve('prisma/package.json')).resolve('@prisma/engines/package.json')) };
+    } catch { /* Any generated vendor module still fails closed without both installed packages. */ }
+    if (roots === APPLICATION_ROLLBACK_ROOTS) {
+      if (!vendorPackages) rollbackCompatibilityUnknown();
+      verifyPrismaCoreClientRuntime({ sourceRoot: resolve(candidateRoot), ...vendorPackages });
+      verifyPrismaCoreClientRuntime({ sourceRoot: resolve(rollbackRoot), ...vendorPackages });
+    }
+    const current = rollbackReaderClosure(ts, resolve(candidateRoot), roots, vendorPackages);
+    const previous = rollbackReaderClosure(ts, resolve(rollbackRoot), roots, vendorPackages);
+    if (JSON.stringify(current) !== JSON.stringify(previous)) rollbackCompatibilityUnknown();
+  } catch { rollbackCompatibilityUnknown(); }
+}
+
+async function applicationRollbackPreflight(options) {
+  await verifyProductionDeployLockOnHost(options);
+  const journal = await readTrustedJournal(options);
+  if (journal.candidateSha !== options.candidateSha || journal.rollbackSha !== options.rollbackSha
+    || !['switching', 'published'].includes(journal.phase)) rollbackCompatibilityUnknown();
+  try {
+    const nodeVersion = async sha => {
+      const metadata = JSON.parse(await nativeCommand('docker', ['image', 'inspect', '--format', '{{json .}}', `openscience-agent-worker:${sha}`]));
+      const values = metadata?.Config?.Env;
+      const architecture = { x64: 'amd64', arm64: 'arm64' }[process.arch];
+      if (!Array.isArray(values) || metadata.Os !== process.platform || !architecture || metadata.Architecture !== architecture) rollbackCompatibilityUnknown();
+      const versions = values.filter(value => typeof value === 'string' && value.startsWith('NODE_VERSION='));
+      if (versions.length !== 1 || !/^NODE_VERSION=\d+\.\d+\.\d+$/u.test(versions[0])) rollbackCompatibilityUnknown();
+      return JSON.stringify([versions[0], metadata.Os, metadata.Architecture]);
+    };
+    if (await nodeVersion(options.candidateSha) !== await nodeVersion(options.rollbackSha)) rollbackCompatibilityUnknown();
+    await verifyApplicationRollbackReaders({ candidateRoot: `/opt/openscience-releases/${options.candidateSha}`,
+      rollbackRoot: `/opt/openscience-releases/${options.rollbackSha}` });
+  } catch {
+    // Current readers inspect recovery obligations only for bounded diagnostics.
+    // Live producers make an empty query insufficient to permit a downgrade.
+    try {
+      const work = await queryNativeWork(options.candidateSha, null, true);
+      console.error(`ROLLBACK_PERSISTENCE: native=${work.persistence.native} paid_unknown=${work.persistence.paidUnknown} first_image=${work.persistence.firstImage}`);
+    } catch { console.error('ROLLBACK_PERSISTENCE: unknown; current recovery state retained'); }
+    rollbackCompatibilityUnknown();
+  }
+  return 'APPLICATION_ROLLBACK_READERS_COMPATIBLE';
+}
 
 export async function verifyProductionDeployLockOnHost({
   lockDirectory = PRODUCTION_LOCK_DIRECTORY, requiredUid = 0, lockFd,
@@ -504,28 +1435,37 @@ import {classifyNativeWorkSnapshot} from '../../infra/scripts/production-deploy-
 if(!process.env.DATABASE_URL||!process.env.REDIS_URL)throw Error('Native work configuration missing');
 const prisma=createPrismaClient(),redis=createRedisClient();
 try {
- const tasks=await prisma.$queryRawUnsafe("SELECT id,status,kind,deleted_at,updated_at,error, CASE WHEN result ? 'nativeAgentExecution' THEN jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution','nativeImageReview',result->'nativeImageReview') ELSE NULL END AS result FROM agent_tasks WHERE status IN ('pending','running') OR result#>>'{nativeAgentExecution,checkpoint,state}'='started' OR error ~* 'unknown|uncertain'");
+ const rollback=process.argv[2]==='rollback';
+ const tasks=await prisma.$queryRawUnsafe("SELECT id,status,kind,deleted_at,updated_at,error, CASE WHEN result ? 'nativeAgentExecution' THEN jsonb_build_object('nativeAgentExecution',result->'nativeAgentExecution','nativeImageReview',result->'nativeImageReview') ELSE NULL END AS result FROM agent_tasks WHERE status IN ('pending','running') OR result#>>'{nativeAgentExecution,checkpoint,state}'='started' OR error ~* 'unknown|uncertain'"+(rollback?" OR result ? 'nativeAgentExecution' OR kind='presentation.generate' AND result IS NOT NULL":""));
  const journals=await prisma.journalJob.findMany({select:{state:true,kind:true,leaseToken:true,leaseExpiresAt:true,updatedAt:true}});
  const [queue,processing]=await Promise.all([redis.lrange(AGENT_TASK_QUEUE,0,-1),redis.lrange(AGENT_TASK_QUEUE+':processing',0,-1)]);
  const snapshot={tasks:tasks.map(t=>{const n=readNativeAgentExecution(t.result);return{id:t.id,status:t.status,deletedAt:t.deleted_at,nativeBound:!!n,nativePending:!!n||['sdf.extract','presentation.generate'].includes(t.kind),providerUncertain:n?.checkpoint?.state==='started'||/unknown|uncertain/i.test(t.error??''),updatedAt:t.updated_at.toISOString()};}),journals:journals.map(j=>({...j,updatedAt:j.updatedAt.toISOString()})),queue,processing};
  const checkpoint=process.argv[1]==='none'?null:process.argv[1];
  const classified=classifyNativeWorkSnapshot(snapshot,checkpoint);
+ let persistence;
+ if(rollback){
+  const [first]=await prisma.$queryRawUnsafe("SELECT EXISTS(SELECT 1 FROM hermes_research_runs WHERE idempotency_key LIKE 'hermes-first-image:%' OR profile='visual-narrative-v1' AND max_agent_tasks=2) AS runs, EXISTS(SELECT 1 FROM audit_logs WHERE action='hermes.research_run.first_image' AND target_type='hermes_research_run') AS receipts, EXISTS(SELECT 1 FROM hermes_research_steps s JOIN hermes_research_runs r ON r.id=s.run_id WHERE r.idempotency_key LIKE 'hermes-first-image:%' OR r.profile='visual-narrative-v1' AND r.max_agent_tasks=2) AS steps");
+  if(!first||![first.runs,first.receipts,first.steps].every(v=>typeof v==='boolean'))throw Error('Rollback recovery state unknown');
+  persistence={native:snapshot.tasks.some(t=>t.nativeBound),paidUnknown:snapshot.tasks.some(t=>t.providerUncertain),firstImage:first.runs||first.receipts||first.steps};
+ }
  const [clock]=await prisma.$queryRawUnsafe('SELECT clock_timestamp() AS now');
- process.stdout.write(JSON.stringify({...classified,dbTime:clock.now.toISOString()}));
+ process.stdout.write(JSON.stringify({...classified,dbTime:clock.now.toISOString(),...(rollback?{persistence}:{})}));
 }finally{await prisma.$disconnect();await redis.quit();}
 `;
 
-async function queryNativeWork(candidateSha, checkpoint) {
+async function queryNativeWork(candidateSha, checkpoint, rollbackDiagnostics = false) {
   const root = `/opt/openscience-releases/${candidateSha}`;
   const output = await nativeCommand('docker', ['compose', '--project-name', 'openscience-prod', '--project-directory', root,
     '--env-file', '/opt/openscience/.env.prod', '-f', `${root}/infra/compose/docker-compose.prod.yml`,
     'run', '--rm', '--no-deps', '-T', '-w', '/opt/openscience/apps/agent-worker', '--entrypoint', 'node', 'agent-worker',
-    '--input-type=module', '-e', NATIVE_WORK_QUERY, checkpoint ?? 'none'], { timeout: 120_000,
+    '--input-type=module', '-e', NATIVE_WORK_QUERY, checkpoint ?? 'none', ...(rollbackDiagnostics ? ['rollback'] : [])], { timeout: 120_000,
     env: { ...process.env, XGS_RELEASE_ROOT: root, XGS_RELEASE_IMAGE_TAG: candidateSha } });
   const result = JSON.parse(output);
-  if (!exactObjectKeys(result, ['safe', 'nativePending', 'nativeBoundPending', 'dbTime']) || result.safe !== true
+  if (!exactObjectKeys(result, ['safe', 'nativePending', 'nativeBoundPending', 'dbTime', ...(rollbackDiagnostics ? ['persistence'] : [])])
+    || (rollbackDiagnostics ? typeof result.safe !== 'boolean' : result.safe !== true)
     || typeof result.nativePending !== 'boolean' || typeof result.nativeBoundPending !== 'boolean'
-    || !Number.isFinite(Date.parse(result.dbTime))) invalidNativeState();
+    || !Number.isFinite(Date.parse(result.dbTime)) || rollbackDiagnostics && (!exactObjectKeys(result.persistence, ['native', 'paidUnknown', 'firstImage'])
+      || !Object.values(result.persistence).every(value => typeof value === 'boolean'))) invalidNativeState();
   return result;
 }
 
@@ -896,7 +1836,9 @@ function parseJournalCli(argv, command) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  if (['native-capture', 'native-pause-original', 'native-install', 'native-before-start', 'native-prepare-rollback',
+  if (argv[0] === 'application-rollback-preflight') {
+    process.stdout.write(`${await applicationRollbackPreflight(parseNativeCli(argv.slice(1), argv[0]))}\n`);
+  } else if (['native-capture', 'native-pause-original', 'native-install', 'native-before-start', 'native-prepare-rollback',
     'native-hold-producers', 'native-verify-stopped', 'native-api-web-ready', 'native-worker-ready', 'native-restore-timer', 'native-original-running', 'native-start-application'].includes(argv[0])) {
     process.stdout.write(`${await nativeOperation(argv[0], parseNativeCli(argv.slice(1), argv[0]))}\n`);
   } else if (argv[0] === 'verify-state') {
