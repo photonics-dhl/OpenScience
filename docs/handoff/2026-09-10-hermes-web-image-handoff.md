@@ -10,24 +10,24 @@
 
 ## 总控与当前并行写权
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
-- UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：已交四视图、单文件媒体保留修订bd2719e0及隔离40e8完整Media绿回执；暂停源码写入。下一步仅收root实际发布后站内观察/截图并独立核对已认可P03/P04/四视图，未收到证据时真实等待；不重复拉CI、不SSH/Provider/部署。隔离源码root单写。
+- UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已交3cd8401f；R04/class、host socket、task-store夹具三段High与真实Linux已收。当前仅Domain三测试native-video-parents/presentation-asset/native-image-review有条件写权：先核消费者等价，再复用canonical已有runtime/历史marker最小修订，独立High与定向验收后新精确CI一次；业务/R12/其余文件冻结，owner单取日志。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已推eac6e41d，四段R04及因果夹具High GO；精确Media38626284020后继API旧runtime夹具失败。当前仅apps/api/test/{presentation-assets-routes,private-source-reanalysis}.test.ts写权，按canonical 1c323935先核消费者等价后最小复用；定向验证/独立High后单提交及一次新精确CI。owner单取日志；业务/R12/其余文件冻结，不部署。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
 ## 当前 Git / CI / 发布候选
 - canonical当前已收UI测试修订bd2719e0（后继文档提交以Git为准）；含尚未完成Linux/运行验收的R01/R12/Ops，**不能整包按UI许可发布**。根main只导航；本机依赖缺失仍在，源码clean不等于依赖恢复。
-- 复用root-owned `C:/Users/Mac/.codex/worktrees/media-reviewed-integration/XGS` / `codex/p04-media-integration`；生产84为祖先，UI候选 **40e8d071592c272a6f53eaa3a440dff9fa72122e** 已clean正常push；父3118f4a43769b5b601fc019a11f86763f057e314，新增仅已审媒体保留E2E（源bd2719e0，9+/3−），产品/运行时不变。原3118为26文件536+/383−：23 Web + Node24三文件。
+- root-owned `C:/Users/Mac/.codex/worktrees/media-reviewed-integration/XGS` / `codex/p04-media-integration` 已从clean、正常push的 **40e8d071592c272a6f53eaa3a440dff9fa72122e** 发布；生产84为祖先。父3118f4a43769b5b601fc019a11f86763f057e314，40e8新增仅已审媒体保留E2E（源bd2719e0，9+/3−）；原3118为26文件536+/383−：23 Web + Node24三文件。实际发布包与canonical尚未ready部分分开。
 - 精确来源：5dd687f6→32b412ef；5e7b430a→ac2fb194；b2756b42→9c69c46c；3cff5edf仅Web→c69ac3b6；235ae555→81e6ff7e；ea0885a9仅Web→edd1c25e；79c1c239三文件patch→3118f4a4。40e8d071=bd2719e0单文件E2E。两层独立High均GO/P0P1P2=0；不取HEAD整份compose/domain index，不带R12/R01/R02 fresh runtime/Gateway/Ops。
 - 隔离scope/3118实际组合与40e8唯一E2E差异的独立High均GO/P0P1P2=0，回执tmp/coordination/ui-release-scope-high.md、tmp/ui-release-3118-retention-high.md。3118旧CI38613196449仅媒体保留compact误选旧selector失败，已按原error-context/源码修正；新精确40e8 Media **38616783173 completed/success，6 jobs全过**：Guide/creation72、layout/focus6、media retention6、后继recovery34全部通过，类型/build/lint/unit/docs通过。root独立仅核终态/SHA；owner唯一skill.log与receipt在tmp/ui-release-40e8-*。本机Playwright缺失未跑、不安装。主ci.yml未触发，不冒称主仓全CI。
 - canonical旧38610929208：4浏览器+PG成功，skill-path native-image-review 45pass/4fail；Worker step54已通过。caf7b280仅修历史no-marker fixture与fresh marker断言，独立High GO，新38612456058终态failure仅step68 ingestion-service auto-funds current platform admin；4browser+PG成功，本轮Native修订通过；按授权不扩修不属于UI隔离包的夹具。单次浏览器通过不证明旧flaky根因。该组fixture与隔离84旧runtime不同，不自动搬入。
-- Node24原候选79c1c239：仅Web从node22改为已缓存node24-bookworm@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0（v24.21.0），API22/Worker22-bookworm不变；test:release-contract接入compose合同。原compose4/4、deploy178pass/6Linux skips、隔离有界竞态not-reproduced、第二High GO零项，证据 tmp/coordination/node24-transform-race-20261015.md。不冒称生产修复或Native截断已关闭。
-- 2026-10-15 root：18:52Z fresh读回active84、无journal/failed、47.65GiB余量；新双库备份db-set-20261014T185208Z-3181383绑定84、校验OK、0700/0600、保留旧集合。40e8与远端同SHA/clean，已启动原deploy.sh --confirm --no-tests --rollback-ref 84… 40e8…，Native refresh关闭；正在原FD9 build阶段，尚未宣称发布完成。执行日志tmp/coordination/ui-40e8-deploy.log，最新状态以运行事实为准。
+- Node24源码79c1c239已随本次UI发布：仅Web改为已缓存node24-bookworm@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0（v24.21.0），API22/Worker22-bookworm不变；test:release-contract接入compose合同。原compose4/4、deploy178pass/6Linux skips、隔离有界竞态not-reproduced、第二High GO零项，证据 tmp/coordination/node24-transform-race-20261015.md。已取得真实线上路径与短窗0原错误，不宣称竞态永久消失或Native截断关闭。
+- 2026-10-15 root：原deploy.sh --confirm --no-tests --rollback-ref 84… 40e8…已exit0，ACTIVE_RELEASE_CAS_OK、journal cleared及原服务器retention完成；不重部署。前置双库备份db-set-20261014T185208Z-3181383绑定84/checksumsOK/0700与0600，旧集合保留。完整回执tmp/coordination/ui-40e8-production-receipt.md，原日志ui-40e8-deploy.log/.exit。
 
 ## 最新已核生产事实
-- fresh只读 tmp/coordination/ui-3118-before.json（2026-10-14T18:16:53Z）核active84、无journal/failed、候选目录未存在、47.84GiB余量、Web v22.23.2/健康；本机curl公网/__release为200/精确84（服务器Python请求HTTPError不冒称公网故障）。此前完整发布回执 tmp/coordination/media-84-deployment-readback.json observedAt=2026-10-14T18:05:31+08:00：active/public=84c2640b2ecf790fdbe89b2d958ea5dc4a13c8b2，rollback=cb9f9916eaa5202671080dc31eaa552bb22413e9，completed、healthy、无journal/failed marker。84精确Media38514277609六jobs成功。新发布须重新只读核身份，不能把此历史快照当fresh。
-- 84已沿原FD9发布；--no-tests明确跳过Parser/ScanSci/embedding及相应功能probe，不宣称这些验收通过。Native/runtime/catalogue/两Skill与IMAGE保留ea81bd69840c46a9e84349a70787f40f5cbbc1c3；VIDEO59a23906cec85092a6100a7a281a24079136cf4d关闭，未refresh/新Provider/商业视频。
+- 最新生产 **40e8d071592c272a6f53eaa3a440dff9fa72122e**，rollback **84c2640b2ecf790fdbe89b2d958ea5dc4a13c8b2**；2026-10-14T19:48:25Z路径后只读ui-40e8-after-path.json：active40e8、无journal/failed、容器healthy，Web实际v24.21.0、API仍Node22。本机curl公网/__release精确40e8且首页200；服务器Python HTTPError保留但不冒称公网故障。当前Web容器有界日志（last10min/≤2000行）原transformAlgorithm/digest1615827556均0，不外推永久关闭或R13根因。
+- 本次root真实可见路径：首页→使用指南→进入研究桌面→Hermes对话开/关→继续编辑原RO aa450f1e-fafc-46d8-a072-d935e01b0544→四分区；Guide中文/步骤轨道、P04单Hermes入口、既有六字段、恢复图e343与原PDF可见，私有/已保存与公开v2状态显示。未输入/保存/审批/公开/生成；截图仅工具输出实看，无落盘PNG。--no-tests跳过Parser/ScanSci/embedding及公网auth/admin功能probe，不宣称这些通过；Native refresh OFF，沿用此前Native/IMAGE ea81与关闭VIDEO59a的配对记录，不冒称本次重新核全bundle。
 - cb9为**此前迁移发布**：core53 validated，ledger54含既有历史ledger-only，search2；原双库备份db-set-20261014T023924Z-129937/checksumsOK，5旧checksum已证CRLF不改SQL。当前线上不是cb9。原release-cb9f9916与migration/release High证据保留。
 - 首图开始后generic Native safe不能证明旧应用回退安全；同一producer-held窗口仍覆盖failed/UNCERTAIN迟到恢复。未证明安全维持配对前向修复，journal清除不等于自动rollback许可；普通匹配host timer恢复后才能核fresh.ready。旧Web已退役、固定可恢复归档及双位置cleanup reader必须保留。
 
@@ -40,8 +40,8 @@
 
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
-- R04独立树已推3cd8401fbaed41da3c2f1a599aa1a624c93b2a08，前序599e8e0c class supplier两文件High GO、cb0a0d53 host socket三case改相对bind/finally恢复cwd增量High GO、3cd task-store Tx mock及scope身份断言增量High GO；后者本机18/18。三段独立gpt-6.1 High回执在架构树tmp/r04-class-supplier-high.md，最终总回执同前缀final-receipt.md。生产/R12未改变，整体CI未绿。
-- 精确Linux38622678560@3cd已终态failure：其他5jobs成功，skill-path真实full-default self/Worker closure、broker27、old/current source restore、部署组合341零skip、Worker12files822/822均通过；后继Domain5files480/485，5fail均native-video-parents runtime资格夹具。root已定位canonical既有3cff5edf该文件仅补1行nativeAgentRuntime；另原ea0885a9 presentation-asset与caf7b280 native-image-review已修合同须先核等价才复用。owner唯一日志tmp/r04-ci-3cd8401f-skill-path.log；后继未跑不能称完整CI，通过源码不等于部署。
+- R04独立树已推eac6e41d7c26cd83ee356e21fd60e73ab2a31c6d：599e8e0c class supplier两文件、cb0a0d53 host socket三case、3cd8401f task-store Tx mock、eac6e41d Domain runtime/历史marker三测试均独立gpt-6.1 High GO/P0P1P2=0；最后437/437定向通过。原High与总回执位于架构树tmp/r04-class-supplier-{high,final-receipt}.md；业务、生产、R12不变，泛型callback既有P2不冒称关闭。
+- 精确Linux38626284020@eac6终态failure、其他5jobs成功：full-default self/Worker closure、broker27、old/current source restore、部署组合341、Worker822、Domain原5file及此前历史媒体夹具均通过；后继API6file214中203pass/11fail，仅上述两个测试缺runtime导致预期202实得409。canonical 1c323935已含该两文件4+/2−修订；不改业务或断言放行，原后继未跑不称完整绿。owner唯一日志tmp/r04-ci-eac6e41d-skill-path.log；root仅核终态/SHA，R04源码仍独立候选未部署。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
 ## 研究生命周期角色与入口
