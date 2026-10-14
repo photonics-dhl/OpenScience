@@ -24,7 +24,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import { HermesExtractionEvidence } from '../../../../components/hermes/HermesExtractionEvidence';
 import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes-guide';
-import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStageContext';
 import {
   createCommit,
   apiRequest,

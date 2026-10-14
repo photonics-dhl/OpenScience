@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
-import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStageContext';
 import styles from './Identity.module.css';
 
 interface ResearchIdentityPanelProps {
