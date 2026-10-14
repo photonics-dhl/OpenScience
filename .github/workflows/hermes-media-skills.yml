@@ -7,6 +7,8 @@ on:
   push:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'infra/migrations/20261014010000_first_image_generation_grant/**'
+      - 'packages/database/test/first-image-grant-migration.integration.test.ts'
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
@@ -290,6 +292,8 @@ on:
   pull_request:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'infra/migrations/20261014010000_first_image_generation_grant/**'
+      - 'packages/database/test/first-image-grant-migration.integration.test.ts'
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
@@ -572,6 +576,66 @@ on:
       - '.github/workflows/hermes-media-skills.yml'
 
 jobs:
+  first-image-grant:
+    name: First image grant / real PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: image_grant_test
+          POSTGRES_PASSWORD: image_grant_ci
+          POSTGRES_DB: image_grant_test
+        ports: ['127.0.0.1:55440:5432']
+        options: >-
+          --health-cmd "pg_isready -U image_grant_test -d image_grant_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://image_grant_test:image_grant_ci@127.0.0.1:55440/image_grant_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - run: npx pnpm@9.15.0 --filter @openscience/database generate
+      - run: npx pnpm@9.15.0 --filter '@openscience/database^...' build
+      - name: Prove the first-image regression against the previous constraint
+        shell: bash
+        run: |
+          mkdir -p tmp/first-image-grant
+          candidate=infra/migrations/20261014010000_first_image_generation_grant/migration.sql
+          cp "$candidate" tmp/first-image-grant/candidate.sql
+          trap 'cp tmp/first-image-grant/candidate.sql "$candidate"' EXIT
+          cp infra/migrations/20260922030000_visual_narrative_dynamic_render_repair/migration.sql "$candidate"
+          set +e
+          npx pnpm@9.15.0 --filter @openscience/database exec vitest run --config vitest.integration.config.ts test/first-image-grant-migration.integration.test.ts -t 'reproduces the old first-image rejection' > tmp/first-image-grant/red.log 2>&1
+          red_status=$?
+          set -e
+          cat tmp/first-image-grant/red.log
+          test "$red_status" -ne 0
+          grep -q '23514' tmp/first-image-grant/red.log
+      - name: Verify exact grants, invalid values and safe rollback
+        shell: bash
+        run: |
+          set -o pipefail
+          npx pnpm@9.15.0 --filter @openscience/database exec vitest run --config vitest.integration.config.ts test/first-image-grant-migration.integration.test.ts | tee tmp/first-image-grant/green.log
+      - name: Lint the migration regression test
+        run: npx pnpm@9.15.0 exec eslint packages/database/test/first-image-grant-migration.integration.test.ts
+      - name: Preserve real PostgreSQL regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-image-grant-postgres
+          path: tmp/first-image-grant/
+          if-no-files-found: ignore
+          retention-days: 7
+
   skill-path:
     runs-on: ubuntu-latest
     timeout-minutes: 20
