@@ -60,12 +60,47 @@ export interface CreateLoggerOptions {
   destination?: NodeJS.WritableStream;
 }
 
+/** Fastify getters must be read before serialization; never traverse its socket/body graph. */
+function requestMetadata(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return {};
+  const request = value as { method?: unknown; routeOptions?: { url?: unknown } };
+  const method = request.method;
+  const route = request.routeOptions?.url;
+  return {
+    ...(typeof method === 'string' && /^[A-Z]{1,16}$/u.test(method) ? { method } : {}),
+    // Only the registered route pattern: actual URLs may contain private IDs or query credentials.
+    ...(typeof route === 'string' && route.startsWith('/') && route.length <= 1024
+      ? { route: redactSensitiveString(route.split('?', 1)[0]!) } : {}),
+  };
+}
+
+function responseMetadata(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return {};
+  const reply = value as { statusCode?: unknown; request?: unknown };
+  const statusCode = reply.statusCode;
+  return {
+    ...(typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+      ? { statusCode } : {}),
+    ...requestMetadata(reply.request),
+  };
+}
+
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
   const opts: LoggerOptions = {
     level: options.level ?? 'info',
     base: options.base ?? {},
     redact: { paths: REDACT_PATHS, censor: '[Redacted]' },
-    formatters: { log: (obj) => sanitizeValue(obj) as Record<string, unknown> },
+    serializers: { req: requestMetadata, res: responseMetadata },
+    formatters: { log: (obj) => {
+      // Pino runs the formatter before serializers. Preserve these opaque objects for
+      // their allowlisted serializers instead of cloning getters and request buffers.
+      const { req, res, ...fields } = obj;
+      return {
+        ...sanitizeValue(fields) as Record<string, unknown>,
+        ...(Object.hasOwn(obj, 'req') ? { req } : {}),
+        ...(Object.hasOwn(obj, 'res') ? { res } : {}),
+      };
+    } },
   };
   return options.destination ? pino(opts, options.destination) : pino(opts);
 }
