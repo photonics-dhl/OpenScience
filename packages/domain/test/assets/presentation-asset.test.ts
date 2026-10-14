@@ -433,7 +433,7 @@ function sceneFixture(output: 'image' | 'video' = 'video', platformRole: 'user' 
   ctx.db.presentationAssets.push({ id: ASSET, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', label: 'presentation_not_evidence', updatedAt: new Date(), contentHash: 'parent', provenance: { subtype: 'sourced_storyboard', storyboardDocument: document, storyboardSettings: { locale: 'en', style: 'ink', instruction: 'Explain', ...(output === 'image' ? { output } : {}) } } });
   ctx.db.presentationAssetClaims.push({ presentationAssetId: ASSET, claimId: CLAIM });
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
-  return { ...ctx, input };
+  return { ...ctx, input, nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } };
 }
 
 async function nativeLocalFixture(mode: 'historical-external' | 'marked-external' | 'marked-native') {

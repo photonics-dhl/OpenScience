@@ -620,6 +620,7 @@ transaction_preflight_application_rollback() {
   esac
   run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'" || return 71
   run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null" || return 71
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' application-rollback-preflight --candidate '$RELEASE_SHA' --rollback '$PREVIOUS_RELEASE_SHA' --lock-fd 9" || return 70
 }
 
 transaction_perform_application_rollback() {
