@@ -9,13 +9,56 @@ import { createNativeAgentSession, type NativeAgentSessionState } from '../../sr
 import { NATIVE_IMAGE_REVIEW_TOOLS, validateNativeImageReviewHistory } from '../../src/native-agent/illustration-task';
 import { createNativeImageReviewSubmission } from '../../src/index';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
+import type { runHostedNativeTask } from '../../src/native-agent/host-task';
+
+// The persistence tests exercise the real Worker/session/transaction path. The operating-system
+// Host is replaced with an in-process transport so CI does not depend on a native broker socket.
+vi.mock('../../src/native-agent/host-task', () => ({ runHostedNativeTask: async (input: Parameters<typeof runHostedNativeTask>[0]) => {
+  const systemPrompt = await input.session.systemPrompt() ?? input.config.instructions;
+  const bindFirstTurn = (input.session as typeof input.session & {
+    bindFirstTurn?: (goal: string, systemPrompt: string) => Promise<void>;
+  }).bindFirstTurn;
+  await bindFirstTurn?.(input.config.goal, systemPrompt);
+  const tools = [
+    { name: 'skills_list', description: 'List methods.', parameters: { type: 'object', properties: {} } },
+    { name: 'skill_view', description: 'Read a method.', parameters: { type: 'object', properties: {} } },
+    ...input.config.sourceTools,
+  ].map(tool => ({ type: 'function' as const, function: tool }));
+  let messages: Array<Record<string, unknown>> = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: input.config.goal },
+  ];
+  const withAuthorizedToolCall = input.paper.withAuthorizedToolCall ?? (async <T>(run: () => Promise<T>) => run());
+  for (let turn = 0; turn < input.config.maxTurns; turn += 1) {
+    const response = await input.session.complete({ model: input.config.model, max_tokens: input.config.maxOutputTokens, messages, tools });
+    const message = response.choices[0]!.message as unknown as Record<string, unknown>;
+    messages = [...messages, message];
+    const calls = (response.choices[0]!.message.tool_calls ?? []);
+    if (!calls.length) return { finalResponse: response.choices[0]!.message.content!, observedPassageIds: input.paper.observedPassageIds };
+    for (const call of calls) {
+      const args = JSON.parse(call.function.arguments);
+      await input.authorize();
+      const result = call.function.name === 'skill_view'
+        ? { success: true, content: 'Fixed source-review method.' }
+        : call.function.name === 'skills_list'
+          ? { success: true, skills: ['openscience-source-review'] }
+          : await withAuthorizedToolCall(() => input.paper.call(call.function.name, args, undefined, call.id));
+      messages = [...messages, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) }];
+      if (call.function.name === 'paper_image_view') {
+        const images = await withAuthorizedToolCall(() => input.paper.images(args, result));
+        messages = [...messages, { role: 'user', content: images.content }];
+      }
+    }
+  }
+  throw new Error('Fixture did not finish');
+} }));
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
 afterEach(() => vi.restoreAllMocks());
 
-async function fixture(native = false) {
+async function fixture(native = true) {
   const { prisma, db } = createFakePrisma();
   seedUser(db, { id: id(1), platformRole: 'platform_admin' });
   db.workspaces.push({ id: id(2), status: 'active' });
@@ -38,9 +81,14 @@ async function fixture(native = false) {
         visualAction: 'One arrow along x.', sourceClaimIds: [id(5)] }] } } };
   db.presentationAssets.push(parent); db.presentationAssetClaims.push({ presentationAssetId: id(8), claimId: id(5) });
   const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+  const nativeObjects = new Map<string, Buffer>();
   const deps = { prisma, redis: { lpush: async () => 1 }, mailer: {} as never,
     ...(native ? { nativeAgentRuntime: runtime } : {}),
-    storage: { getObject: async () => ({ body: Readable.from([bytes]), size: bytes.length }) } };
+    storage: {
+      headObject: async (key: string) => nativeObjects.has(key) ? { key, size: nativeObjects.get(key)!.length } : null,
+      putObject: async (key: string, body: Uint8Array) => { const value = Buffer.from(body); nativeObjects.set(key, value); return { key, size: value.length }; },
+      getObject: async (key: string) => { const value = nativeObjects.get(key) ?? bytes; return { body: Readable.from([value]), size: value.length }; },
+    } };
   const session = await createAgentSession(deps as never, { userId: id(1), researchObjectId: id(3), kind: 'visualization' });
   const payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'image', sourceClaimIds: [id(5)],
     sceneImage: { storyboardAssetId: id(8), sceneIndex: 0 } };
@@ -65,17 +113,24 @@ async function fixture(native = false) {
     activeTransactions += 1;
     try { return await transact(...args); } finally { activeTransactions -= 1; }
   }) as typeof prisma.$transaction;
+  let fetchCalls = 0;
   const fetcher = vi.fn(async () => {
-    expect(activeTransactions).toBe(0);
-    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: [{ type: 'text', text: JSON.stringify({
-    decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null }) }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } }), { status: 200 });
+    fetchCalls += 1;
+    // Native task-store.publish starts the provider request from inside its
+    // Serializable authority transaction; retain that production contract.
+    expect(activeTransactions).toBe(1);
+    const content = fetchCalls === 1
+      ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: 'openscience-source-review' } },
+        { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }]
+      : [{ type: 'text', text: JSON.stringify({ decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null }) }];
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content, stop_reason: fetchCalls === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } }), { status: 200 });
   });
   const provider = new AnthropicCompatProvider('minimax-key-1-model-1', { apiKey: 'test', baseUrl: 'https://minimax.example', model: 'MiniMax-M3' }, fetcher as never);
   const gateway = new AiGateway({ providers: [provider], illustrationReviewPolicy: async () => true,
     authorizeIllustrationReview: input => requireIllustrationReviewSubmission(prisma, input),
     nativeImageReviewSubmission: createNativeImageReviewSubmission(prisma, () => ({ taskId: owner.id, executionAttempt: owner.executionAttempt })) });
   const generateImage = vi.fn(); Object.assign(gateway, { generateImage });
-  const handler = createPresentationGenerationHandler({ gateway });
+  const handler = createPresentationGenerationHandler({ gateway, nativeAgent: { gateway, inboxRoot: '/tmp', runtime, renderPages: async () => [] } });
   const task = () => ({ id: owner.id, executionAttempt: db.agentTasks.find(value => value.id === owner.id)!.executionAttempt,
     retryCount: db.agentTasks.find(value => value.id === owner.id)!.retryCount, payload }) as never;
   return { prisma, db, deps, handler, task, owner, fetcher, generateImage, parent, asset, runtime, gateway, evidenceIdentity, approvedParent };
@@ -176,15 +231,16 @@ describe('real Worker native image review persistence and replay', () => {
     expect(f.db.agentTasks[0].result.nativeImageReview.review).toEqual(f.asset.provenance.imageReview);
     f.db.agentTasks[0].executionAttempt = 2;
     expect(await f.handler(f.deps as never, f.task())).toEqual(first);
-    expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.fetcher).toHaveBeenCalledTimes(2); expect(f.generateImage).not.toHaveBeenCalled();
   });
 
   it('keeps an uncertain started call and refuses resubmission after a Worker crash', async () => {
     const f = await fixture(); f.fetcher.mockRejectedValue(new Error('connection closed after acceptance'));
     await expect(f.handler(f.deps as never, f.task())).rejects.toThrow();
-    expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('started');
+    expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('prepared');
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.state).toBe('started');
     f.db.agentTasks[0].executionAttempt = 2;
-    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/another submission is forbidden/);
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/Original image Agent submission outcome is unknown/);
     expect(f.fetcher).toHaveBeenCalledOnce(); expect(f.generateImage).not.toHaveBeenCalled();
   });
 
@@ -199,7 +255,9 @@ describe('real Worker native image review persistence and replay', () => {
     });
     await expect(f.handler(f.deps as never, f.task())).rejects.toThrow();
     expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
-    expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('started');
+    expect(f.db.agentTasks[0].result.nativeImageReview.state).toBe('prepared');
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.state).toBe('completed');
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.hasToolCalls).toBe(true);
     expect(f.fetcher).toHaveBeenCalledOnce();
   });
 });
