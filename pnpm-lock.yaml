@@ -313,6 +313,9 @@ importers:
 
   packages/ai-gateway:
     dependencies:
+      '@openscience/config':
+        specifier: workspace:^
+        version: link:../config
       '@openscience/observability':
         specifier: workspace:^
         version: link:../observability

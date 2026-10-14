@@ -1,4 +1,5 @@
 import { DEFAULT_DEV_DATABASE_URL, DEFAULT_DEV_REDIS_URL } from './dev-defaults';
+import { loadGatewayImageConfig, sceneImageConfigured, type GatewayImageConfig } from './gateway-env';
 
 export interface ApiEnv {
   nodeEnv: string;
@@ -45,10 +46,7 @@ export interface ApiEnv {
     enabled: boolean;
     sceneImageEnabled: boolean;
     videoEnabled: boolean;
-    baseUrl: string;
-    apiKey: string;
-    primaryModel: string;
-    fallbackModels: string[];
+    imageGateway: GatewayImageConfig;
   };
 }
 
@@ -146,14 +144,12 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
 
   // P1D-1：AI Gateway 配置（§24 待确认：MiniMax-M3 及回退模型具体 API/ID，先占位）
   const aiEnabled = env.AI_ENABLED === 'true';
+  const imageGateway = loadGatewayImageConfig(env);
   const ai = {
     enabled: aiEnabled,
-    sceneImageEnabled: sceneImageEnabledFromEnv(env),
+    sceneImageEnabled: sceneImageConfigured(imageGateway),
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
-    baseUrl: env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1',
-    apiKey: env.MINIMAX_API_KEY ?? '',
-    primaryModel: env.MINIMAX_MODEL ?? 'MiniMax-M3',
-    fallbackModels: (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter((s) => s.length > 0),
+    imageGateway,
   };
 
   return {
@@ -187,12 +183,5 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
 
 /** Shared provider readiness used by API admission and the Worker execution gate. */
 export function sceneImageEnabledFromEnv(env: NodeJS.ProcessEnv): boolean {
-  const aiEnabled = env.AI_ENABLED === 'true';
-  const provider = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
-  const disabled = (env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim());
-  if (provider === 'synclip') return aiEnabled && env.SYNCLIP_IMAGE_ENABLED === 'true'
-    && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('synclip');
-  if (provider === 'codex') return aiEnabled && Boolean(env.CODEX_IMAGE_INBOX_DIR?.trim()) && Boolean(env.CODEX_IMAGE_RESULTS_DIR?.trim()) && !disabled.includes('codex-image');
-  return provider === 'minimax' && aiEnabled && env.MINIMAX_IMAGE_ENABLED === 'true'
-    && [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].some(key => Boolean(key?.trim())) && !disabled.includes('minimax-image');
+  return sceneImageConfigured(loadGatewayImageConfig(env));
 }

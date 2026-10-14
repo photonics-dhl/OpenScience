@@ -4,14 +4,10 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { CodexSpoolImageProvider, CodexSolImageReviewProvider, SynclipSpoolImageProvider,
-  createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+import { createGatewayRecoveryReaders, createNativeVideoReadinessReader } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
-
-/** Spool providers are the only ones that can answer a recovery question about a paid attempt. */
-type RecoverableImageProvider = ImageProvider & { inspectRecoveryState(requestId: string): Promise<ImageRecoveryState> };
 
 async function main(): Promise<void> {
   let ownedPrisma: ReturnType<typeof createPrismaClient> | undefined;
@@ -55,54 +51,9 @@ async function main(): Promise<void> {
     const searchPrisma = ownedSearch = process.env.SEARCH_DATABASE_URL ? createSearchPrismaClient() : undefined;
     const researchObjectSearch = buildHybridSearchFromEnv(prisma, searchPrisma);
     const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
-    const codexImageInboxDir = process.env.CODEX_IMAGE_INBOX_DIR?.trim();
-    const codexImageResultsDir = process.env.CODEX_IMAGE_RESULTS_DIR?.trim();
-    const synclipImageInboxDir = process.env.SYNCLIP_IMAGE_INBOX_DIR?.trim();
-    const synclipImageResultsDir = process.env.SYNCLIP_IMAGE_RESULTS_DIR?.trim();
-    const reviewInboxDir = process.env.CODEX_SOL_REVIEW_INBOX_DIR?.trim();
-    const reviewResultsDir = process.env.CODEX_SOL_REVIEW_RESULTS_DIR?.trim();
-    const imageReviewReader = reviewInboxDir && reviewResultsDir
-      ? new CodexSolImageReviewProvider({ inboxDir: reviewInboxDir, resultsDir: reviewResultsDir }) : undefined;
-    const spoolImageProvider = (kind: string): RecoverableImageProvider | undefined => {
-      if (!env.ai.sceneImageEnabled) return undefined;
-      if (kind === 'synclip' && synclipImageInboxDir && synclipImageResultsDir) {
-        return new SynclipSpoolImageProvider({ inboxDir: synclipImageInboxDir, resultsDir: synclipImageResultsDir });
-      }
-      if (kind === 'codex' && codexImageInboxDir && codexImageResultsDir) {
-        return new CodexSpoolImageProvider({ inboxDir: codexImageInboxDir, resultsDir: codexImageResultsDir });
-      }
-      return undefined;
-    };
-    // Recovery must see a result the worker's fallback provider produced, otherwise an
-    // operator is pushed into an explicitly charged new generation. Only the worker's
-    // primary provider is the payer, and only its spool may testify that nothing was
-    // submitted: when the primary has no spool at all (minimax) there is no payer to
-    // consult, and promoting a never-used spare into that role would let an empty inbox
-    // authorise reusing a reservation the payer may already have spent.
-    const imagePrimaryKind = process.env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
-    const imageFallbackKind = imagePrimaryKind === 'synclip' ? undefined : process.env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
-    const payerImageProvider = spoolImageProvider(imagePrimaryKind);
-    const spareImageProvider = imageFallbackKind && imageFallbackKind !== imagePrimaryKind
-      ? spoolImageProvider(imageFallbackKind) : undefined;
-    if (imageFallbackKind && !payerImageProvider) {
-      logger.warn(`image fallback '${imageFallbackKind}' is configured but primary '${imagePrimaryKind}' has no spool; an interrupted attempt needs an explicitly charged new generation`);
-    }
-    const inspectPooledImageRecoveryState = payerImageProvider
-      ? async (requestId: string): Promise<ImageRecoveryState> => {
-          const inspect = async (provider: RecoverableImageProvider): Promise<ImageRecoveryState> => {
-            try { return await provider.inspectRecoveryState(requestId); } catch (cause) {
-              logger.warn(`image recovery inspection failed: ${cause instanceof Error ? cause.message : String(cause)}`);
-              return 'unsafe';
-            }
-          };
-          // Only a saved result may be answered by the spare, because resuming one is a
-          // read. Every other verdict stays with the payer.
-          if (spareImageProvider && await inspect(spareImageProvider) === 'completed') return 'completed';
-          return inspect(payerImageProvider);
-        }
-      : undefined;
+    const recoveryReaders = createGatewayRecoveryReaders(env.ai.imageGateway, { logger });
     const nativeAgentRuntime = nativeAgentRuntimeFromEnv(process.env);
-    const nativeSceneImageEnabled = env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip';
+    const nativeSceneImageEnabled = env.ai.sceneImageEnabled && env.ai.imageGateway.primary === 'synclip';
     const app = ownedApp = await buildApp({
       nativeAgentRuntime,
       prisma,
@@ -122,14 +73,7 @@ async function main(): Promise<void> {
       readAudioAuditionReadiness: createNativeVideoReadinessReader(process.env, {
         nativeAgentConfigured: Boolean(nativeAgentRuntime), nativeSceneImageEnabled,
       }, 'audio-audition'),
-      ...(inspectPooledImageRecoveryState && payerImageProvider ? {
-        canResumeImageBeforeSubmission: async (requestId: string) => payerImageProvider.canResumeBeforeSubmission
-          ? await payerImageProvider.canResumeBeforeSubmission(requestId) : false,
-        inspectImageRecoveryState: inspectPooledImageRecoveryState,
-      } : {}),
-      ...(imageReviewReader ? {
-        canResumeImageReviewFromCompletedResult: (requestId: string) => imageReviewReader.canResumeFromCompletedResult(requestId),
-      } : {}),
+      ...recoveryReaders,
       // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
       audit: createPrismaAuditSink(prisma),
       // P1A-4：邮箱验证通过同事务创建 Personal Workspace（回调注入，避免 auth→domain 反向依赖）
