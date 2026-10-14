@@ -476,7 +476,11 @@ services:
 
   web:
     mem_limit: 1g
-    image: node:22
+    # Pin the server-verified Node 24.21.0 image digest: a floating major tag
+    # could reuse an older cached image without the Web Streams race fix.
+    # Keep API/Worker on node:22 for their Prisma/runtime compatibility; this
+    # is intentionally a Web-only runtime change.
+    image: node:24-bookworm@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
     user: node
     ports:
       - "127.0.0.1:3000:3000"

@@ -39,3 +39,13 @@ test('Next server-side public reads use the API service on the app network', asy
   assert.match(web, /depends_on:\n\s+api:\n\s+condition: service_healthy/);
   assert.match(web, /networks:\n\s+- app_net/);
 });
+
+test('Web uses the Web Streams-safe runtime while API keeps the Prisma-compatible runtime', async () => {
+  const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
+  const workerDockerfile = (await readFile(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  const api = compose.split('\n  api:\n', 2)[1]?.split(/\n {2}[a-zA-Z0-9_-]+:\n/u, 1)[0] ?? '';
+  const web = compose.split('\n  web:\n', 2)[1]?.split('\nnetworks:\n', 1)[0] ?? '';
+  assert.match(api, /\n\s+image: node:22\n/u);
+  assert.match(web, /\n\s+image: node:24-bookworm@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0\n/u);
+  assert.match(workerDockerfile, /^FROM node:22-bookworm\n/u);
+});
