@@ -46,10 +46,15 @@ export const aiWarningGuard: SchemaGuard<AiWarning[]> = (v: unknown): v is AiWar
 export async function reviewAnalyzeHandler(
   gateway: AiGateway,
   deps: AgentDeps,
-  task: { id: string },
+  task: { id: string; executionAttempt: number },
+  options: { beforePersist?: () => Promise<void> } = {},
 ): Promise<{ warningCount: number }> {
+  // Capture the actual Worker claim before any await; never adopt under an attempt
+  // reread or supplied after the model has returned.
+  const taskId = task.id;
+  const executionAttempt = task.executionAttempt;
   const persistedTask = await deps.prisma.agentTask.findUnique({
-    where: { id: task.id }, include: { session: true },
+    where: { id: taskId }, include: { session: { include: { researchObject: true } } },
   });
   const payload = persistedTask?.payload && typeof persistedTask.payload === 'object' && !Array.isArray(persistedTask.payload)
     ? persistedTask.payload as Record<string, unknown> : {};
@@ -63,11 +68,22 @@ export async function reviewAnalyzeHandler(
     || version.researchObjectId !== persistedTask.session.researchObjectId) {
     throw new Error('review task Version does not belong to its research object');
   }
+  if (!Number.isSafeInteger(executionAttempt) || executionAttempt < 1 || persistedTask.deletedAt
+    || persistedTask.status !== 'running' || persistedTask.executionAttempt !== executionAttempt
+    || persistedTask.session.deletedAt || persistedTask.session.status !== 'active' || persistedTask.session.kind !== 'review'
+    || !persistedTask.session.researchObject || persistedTask.session.researchObject.deletedAt) {
+    throw new Error('Review execution no longer owns this warning adoption');
+  }
+  const execution = { taskId, executionAttempt, sessionId: persistedTask.sessionId,
+    researchObjectId: persistedTask.session.researchObjectId, coreText, versionCommitId: version.commitId };
   const prompt = [
     { role: 'system' as const, content: '你是科研评审助手。基于 SDF core 文本生成结构化警告。只输出 JSON 数组，每项含 category（method_logic/statistical/figure_spec/data_consistency/reproducibility/missing_citation/overreach）、evidence（具体证据位置）、uncertainty（不确定性说明）、suggestion（建议）。只报告疑点，不裁定研究对错，不伪造引用来源。' },
     { role: 'user' as const, content: coreText.slice(0, 8000) },
   ];
   const warnings = await gateway.completeStructured(aiWarningGuard, prompt, { temperature: 0.3 });
-  await saveWarnings(deps, { versionId, warnings });
+  // Preserve the adapter's early check; Domain reauthorizes the captured claim
+  // under the cancellation lock in the same transaction as warning adoption.
+  await options.beforePersist?.();
+  await saveWarnings(deps, { versionId, warnings, execution });
   return { warningCount: warnings.length };
 }

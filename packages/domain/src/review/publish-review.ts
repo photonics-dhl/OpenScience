@@ -1,6 +1,8 @@
 import type { AuditContext } from '@openscience/observability';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { ReviewError } from './errors';
+import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
+import { TrashError } from '../trash/errors';
 import { recordAudit } from '../workspace/audit';
 import { notify } from '../notification/notifications';
 import { getEffectiveLicenses } from '../license/licenses';
@@ -212,27 +214,75 @@ export async function getPublicationReview(
   };
 }
 
+/** The claimed execution and source captured before generating these warnings. */
+export interface WarningReviewExecution {
+  taskId: string;
+  executionAttempt: number;
+  sessionId: string;
+  researchObjectId: string;
+  coreText: string;
+  versionCommitId: string;
+}
+
+function warningExecutionDenied(): ReviewError {
+  return new ReviewError('FORBIDDEN', 'Review execution no longer owns this warning adoption');
+}
+
 /** P1D-6：保存警告报告（§11.2 + §15 AIReview.warnings）；不阻断（status 独立）。 */
 export async function saveWarnings(
   deps: { prisma: ArtifactDeps['prisma'] },
-  input: { versionId: string; warnings: unknown[] },
+  input: { versionId: string; warnings: unknown[]; execution: WarningReviewExecution },
 ): Promise<void> {
+  const execution = { ...input.execution };
+  const versionId = input.versionId;
+  if (!execution || !Number.isSafeInteger(execution.executionAttempt) || execution.executionAttempt < 1
+    || !execution.taskId || !execution.sessionId || !execution.researchObjectId || !execution.versionCommitId
+    || typeof execution.coreText !== 'string' || !execution.coreText.trim()) throw warningExecutionDenied();
   for (let attempt = 0; ; attempt += 1) {
     try {
       await deps.prisma.$transaction(async (tx) => {
-        const review = await tx.aiReview.findUnique({ where: { versionId: input.versionId } });
+        await lockTrashReferences(tx);
+        try { await lockLiveResearchObject(tx, execution.researchObjectId); }
+        catch (error) {
+          if (error instanceof TrashError) throw warningExecutionDenied();
+          throw error;
+        }
+        // Serializable may take its snapshot before waiting for the advisory lock.
+        // Lock the task row too: a stop/lease update after that snapshot must cause
+        // a serialization failure and a new transaction, not stale authorization.
+        const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM agent_tasks WHERE id = ${execution.taskId}::uuid FOR UPDATE`;
+        if (locked.length !== 1 || locked[0]?.id !== execution.taskId) throw warningExecutionDenied();
+        const task = await tx.agentTask.findUnique({ where: { id: execution.taskId },
+          include: { session: { include: { researchObject: true } } } });
+        const payload = task?.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
+          ? task.payload as Record<string, unknown> : {};
+        const version = await tx.version.findUnique({ where: { id: versionId } });
+        if (!task || task.deletedAt || task.kind !== 'review.analyze' || task.status !== 'running'
+          || task.executionAttempt !== execution.executionAttempt || task.sessionId !== execution.sessionId
+          || !task.session || task.session.deletedAt || task.session.status !== 'active' || task.session.kind !== 'review'
+          || task.session.researchObjectId !== execution.researchObjectId || !task.session.researchObject
+          || task.session.researchObject.deletedAt || payload.versionId !== versionId || payload.coreText !== execution.coreText
+          || !version || version.researchObjectId !== execution.researchObjectId || version.commitId !== execution.versionCommitId) {
+          throw warningExecutionDenied();
+        }
+        const review = await tx.aiReview.findUnique({ where: { versionId } });
         if (!review) throw new Error('发布硬审核尚未完成');
+        if (review.researchObjectId !== execution.researchObjectId) throw warningExecutionDenied();
         const existing = Array.isArray(review.warnings) ? review.warnings : [];
         const markers = existing.filter((warning) => warning && typeof warning === 'object' && !Array.isArray(warning)
           && (warning as Record<string, unknown>).code === 'claim_evidence_snapshot');
         await tx.aiReview.update({
-          where: { versionId: input.versionId },
+          where: { versionId },
           data: { warnings: [...markers, ...input.warnings] as never },
         });
       }, { isolationLevel: 'Serializable' });
       return;
     } catch (error) {
-      if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+      // Prisma raw FOR UPDATE reports PG serialization failure as P2010/40001.
+      const failure = error as { code?: unknown; meta?: { code?: unknown } };
+      const retryable = failure?.code === 'P2034'
+        || (failure?.code === 'P2010' && failure.meta?.code === '40001');
+      if (retryable && attempt < 2) continue;
       throw error;
     }
   }
