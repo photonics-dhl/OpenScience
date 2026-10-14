@@ -2,6 +2,7 @@ import { registerResearchRecordRoutes } from './research-record';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createRequire } from 'node:module';
+import { Readable } from 'node:stream';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
 import { buildExportPackage, compareVersions, createCommit, getVersion, listVersions, rebuildVersion, restoreVersionDraft } from '@openscience/domain';
@@ -102,16 +103,49 @@ export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = versionIdParams.parse(req.params);
-    const files = await buildExportPackage(deps, { userId: user.userId, versionId: id });
+    const files = await buildExportPackage(deps, { userId: user.userId, versionId: id, streaming: true });
     // archiver 是 CJS 函数导出，@types 只有类 → createRequire 加载（api 编译为 CJS，__dirname 可用）
     const localRequire = createRequire(__dirname);
-    const archiver = localRequire('archiver') as (format: 'zip', opts?: { zlib?: { level: number } }) => { append: (buf: Buffer, meta: { name: string }) => void; finalize: () => Promise<void> };
+    const archiver = localRequire('archiver') as (format: 'zip', opts?: { zlib?: { level: number } }) => Readable & {
+      append: (source: Buffer | Readable, meta: { name: string }) => void;
+      finalize: () => Promise<void>;
+      abort: () => void;
+    };
     const archive = archiver('zip', { zlib: { level: 9 } });
-    for (const f of files) archive.append(f.content, { name: `open-science-object/${f.path}` });
-    await archive.finalize();
-    return reply
+    const closeSources = () => {
+      for (const file of files) if (file.content instanceof Readable) file.content.destroy();
+    };
+    archive.once('close', closeSources);
+    archive.once('error', closeSources);
+    reply.raw.once('close', () => {
+      if (!reply.raw.writableFinished) archive.abort();
+      closeSources();
+    });
+    let nextFile = 0;
+    const appendNext = () => {
+      if (archive.destroyed || reply.raw.destroyed) return;
+      const f = files[nextFile++];
+      if (!f) {
+        void archive.finalize().catch(() => archive.destroy(new Error('Archive export failed')));
+        return;
+      }
+      if (f.content instanceof Readable) {
+        // Archiver does not reliably forward errors from caller-owned inputs.
+        // Fail the download without exposing private storage error details.
+        f.content.once('error', () => archive.destroy(new Error('Archive export failed')));
+      }
+      archive.append(f.content, { name: `open-science-object/${f.path}` });
+    };
+    // Append consumes input streams immediately. Admit the next file only after
+    // the preceding ZIP entry completes, keeping remote attachment reads bounded.
+    archive.on('entry', appendNext);
+    // Attach the consumer before finalizing: ZIP backpressure otherwise deadlocks
+    // above its high-water mark. Object streams open only when the archive reads them.
+    reply
       .header('Content-Type', 'application/zip')
       .header('Content-Disposition', 'attachment; filename="open-science-object.zip"')
       .send(archive);
+    appendNext();
+    return reply;
   });
 }
