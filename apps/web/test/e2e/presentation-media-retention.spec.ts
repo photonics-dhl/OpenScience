@@ -31,15 +31,21 @@ test.afterAll(() => { harness?.kill(); if (log !== undefined) closeSync(log); })
 
 for (const embedded of [false, true]) test(`storyboard refresh preserves the exact selected parent and scene (embedded=${embedded})`, async ({ page }) => {
   await page.goto(`${harnessUrl}/?storyboards&embedded=${embedded}`);
-  await page.getByLabel('Choose another plan').selectOption('old');
+  const parentId = embedded ? 'current' : 'old';
+  if (embedded) await expect(page.getByLabel('Choose another plan')).toHaveCount(0);
+  else await page.getByLabel('Choose another plan').selectOption('old');
   await page.getByLabel('Choose a scene to generate').selectOption('2');
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', parentId);
+  await expect(page.locator('[data-scene-image]')).toHaveAttribute('data-scene-image', '2');
   await page.getByRole('button', { name: 'Begin refresh', exact: true }).click();
   await expect(page.locator('[data-scene-image]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Finish refresh', exact: true }).click();
-  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', 'old');
+  if (embedded) await expect(page.getByLabel('Choose another plan')).toHaveCount(0);
+  await expect(page.locator('[data-active-storyboard]')).toHaveAttribute('data-active-storyboard', parentId);
   await expect(page.locator('[data-scene-image]')).toHaveAttribute('data-scene-image', '2');
+  await expect(page.locator('[data-scene-image]')).toHaveAttribute('data-image-storyboard', parentId);
   await page.locator('[data-scene-image]').click();
-  await expect(page.locator('[data-image-request]')).toHaveText(JSON.stringify({ claimIds: ['claim-old'], request: { storyboardAssetId: 'old', sceneIndex: 2 } }));
+  await expect(page.locator('[data-image-request]')).toHaveText(JSON.stringify({ claimIds: [`claim-${parentId}`], request: { storyboardAssetId: parentId, sceneIndex: 2 } }));
 });
 
 for (const action of ['Remove newest', 'Reject newest']) test(`storyboard new-result focus does not resurrect superseded selection after ${action}`, async ({ page }) => {
