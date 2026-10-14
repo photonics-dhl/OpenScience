@@ -2,11 +2,12 @@ import { vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
-import { ensureHermesIngestionReview, reanalyzeConfirmedIngestion } from '../../src/ingestion/ingestion-service';
+import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
 import { reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
-import { claimAgentTask } from '../../src/agent/agent';
+import { claimAgentTask, findOrCreateAgentSessionInTransaction, persistHistoricalSourceTaskInTransaction } from '../../src/agent/agent';
 import { advancePrivateSourceReanalysisToReview, privateSourceReanalysisFixture } from './private-source-reanalysis-fixture';
-import { HERMES_INDEPENDENT_SOURCE_REVIEW } from '../../src/ingestion/source-review-recovery';
+import { HERMES_INDEPENDENT_SOURCE_REVIEW, inspectHermesPrivateSourceReanalysis,
+  privateSourceReanalysisBatchKey, privateSourceReanalysisRequestDigest } from '../../src/ingestion/source-review-recovery';
 import { seedHistoricalSourceReviewRecovery } from './historical-source-review-fixture';
 
 export async function sourceCompositionRecoveryFixture() {
@@ -25,7 +26,40 @@ export async function sourceCompositionRecoveryFixture() {
     for (const row of rows) Object.assign(row, data, { updatedAt: new Date() });
     return { count: rows.length };
   } });
-  const source = await reanalyzeConfirmedIngestion(f.deps, f.input);
+  // This fixture represents a persisted pre-retirement source-composition
+  // handoff. Seed the private reanalysis replay through the package-internal
+  // historical persistence path; do not invoke the public paid producer or
+  // mint a Native marker for old state.
+  const proof = await inspectHermesPrivateSourceReanalysis(f.prisma as never, f.input.sourceReanalysis);
+  if (!proof) throw new Error('Historical private source proof is incomplete');
+  const batchKey = privateSourceReanalysisBatchKey(proof.input);
+  const requestDigest = privateSourceReanalysisRequestDigest(proof);
+  const batch = await f.prisma.ingestionBatch.create({ data: {
+    userId: f.input.userId, researchObjectId: f.ids.ro, idempotencyKey: batchKey, requestDigest,
+  } });
+  const { session } = await findOrCreateAgentSessionInTransaction(f.deps, f.prisma as never, {
+    userId: f.input.userId, researchObjectId: f.ids.ro, kind: 'ingestion',
+    title: 'Historical source reanalysis', idempotencyKey: `${batchKey}:session`,
+  });
+  await f.prisma.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
+  const source = await f.prisma.ingestionTask.create({ data: {
+    batchId: batch.id, artifactId: f.ids.artifact, agentTaskId: null, state: 'needs_review',
+  } });
+  const historical = await persistHistoricalSourceTaskInTransaction(f.deps, f.prisma as never, {
+    sessionId: session.id, userId: f.input.userId, kind: 'sdf.extract',
+    payload: { artifactId: f.ids.artifact, researchObjectId: f.ids.ro },
+    idempotencyKey: `ingestion-analysis-reanalysis:${source.id}:${proof.current.id}`,
+  });
+  await f.prisma.ingestionTask.update({ where: { id: source.id }, data: { agentTaskId: historical.task.id } });
+  Object.assign(historical.task, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.anchorResult) });
+  f.db.auditLogs.push({ id: `historical-private-reanalysis:${source.id}`, action: 'ingestion.task.reanalyze',
+    actorId: f.input.userId, targetType: 'ingestion_task', targetId: source.id,
+    workspaceId: f.db.researchObjects.find(row => row.id === f.ids.ro)?.workspaceId,
+    metadata: { intent: 'new_paid_private_analysis', sourceRunId: proof.run.id, expectedRunVersion: proof.run.version,
+      creditPolicy: 'fresh_task_charge', confirmationPolicy: 'new_draft', sourceIngestionTaskId: proof.source.id,
+      sourceAgentTaskId: proof.current.id, newAgentTaskId: historical.task.id, artifactId: proof.source.artifactId,
+      sourceMapSha256: proof.reference.serializedSha256 },
+  });
   const { run, original, successor: failed } = await advancePrivateSourceReanalysisToReview(f, source.id, 'source_composition');
   const semanticStage = { kind: 'semantic_reduce', source: { artifactId: f.ids.artifact, contentHash: f.reference.contentHash,
     sourceMapHash: f.reference.serializedSha256 }, provider: 'primary', model: 'MiniMax-M3', promptHash: 'c'.repeat(64),
