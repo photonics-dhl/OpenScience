@@ -16,7 +16,7 @@ import { getBlobStorageKey } from '@openscience/storage';
 import { createAgentSession, dispatchAgentTask, getAgentTask, persistAgentTaskInTransaction, submitAgentTask, submitDeterministicPresentationTask, taskToView, type AgentDeps, type AgentTaskView } from '../agent/agent';
 import { HermesVideoUnavailableError, isHermesVideoReady, readHermesAudioAuditionPolicy, requireHermesVideoReady, type HermesVideoReadinessDeps } from '../agent/video-readiness';
 import { recordAudit } from '../workspace/audit';
-import { readNativeAgentExecution, type NativeAgentExecution } from '../agent/native-agent-execution';
+import { initialNativeAgentExecution, readNativeAgentExecution, type NativeAgentExecution } from '../agent/native-agent-execution';
 import { requireMembership } from '../workspace/helpers';
 import { PRESENTATION_ASSET_LABEL } from '../research-intelligence/types';
 import { PresentationAssetError } from './errors';
@@ -433,6 +433,8 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
     const base = await requireStoryboardBase(deps.prisma, payload);
     if (!replay && isOrdinaryNativeVideoStoryboardRevision(payload) && base?.nativeIdentity) {
       privateNativePlanRevision = base.nativePlanningContract === 'video-optional-audio-v1';
+      if (privateNativePlanRevision && !initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', base.nativePlanningContract))
+        throw new PresentationAssetError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
       selectNativeAudio(base.view.document, base.nativeIdentity, async () => {
         const current = await requireStoryboardBase(deps.prisma, payload);
         return current?.nativeIdentity ? { identity: current.nativeIdentity, document: current.view.document } : undefined;
