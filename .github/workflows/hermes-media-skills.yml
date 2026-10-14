@@ -112,6 +112,25 @@ on:
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
       - 'packages/config/src/api-env.ts'
       - 'packages/config/test/api-env.test.ts'
+      - 'packages/config/src/gateway-env.ts'
+      - 'packages/config/src/index.ts'
+      - 'packages/config/test/gateway-env.test.ts'
+      - 'packages/ai-gateway/src/factory.ts'
+      - 'packages/ai-gateway/test/gateway-factory.test.ts'
+      - 'packages/ai-gateway/package.json'
+      - 'pnpm-lock.yaml'
+      - 'packages/observability/src/logger.ts'
+      - 'apps/api/test/logger-injection.test.ts'
+      - 'apps/api/src/routes/commits.ts'
+      - 'apps/api/test/export-streaming.test.ts'
+      - 'packages/domain/src/export/packager.ts'
+      - 'packages/domain/test/export/export*.test.ts'
+      - 'infra/scripts/backup*.mjs'
+      - 'infra/scripts/backup.sh'
+      - 'infra/scripts/prepare-monitor-view*.py'
+      - 'infra/compose/docker-compose.monitor.yml'
+      - 'infra/development-platform/langfuse/manage.sh'
+      - 'infra/development-platform/langfuse/manage.test.mjs'
       - 'apps/api/src/index.ts'
       - 'apps/api/src/search-runtime.ts'
       - 'packages/ai-gateway/src/provider.ts'
@@ -397,6 +416,25 @@ on:
       - 'packages/ai-gateway/test/synclip-image*.test.ts'
       - 'packages/config/src/api-env.ts'
       - 'packages/config/test/api-env.test.ts'
+      - 'packages/config/src/gateway-env.ts'
+      - 'packages/config/src/index.ts'
+      - 'packages/config/test/gateway-env.test.ts'
+      - 'packages/ai-gateway/src/factory.ts'
+      - 'packages/ai-gateway/test/gateway-factory.test.ts'
+      - 'packages/ai-gateway/package.json'
+      - 'pnpm-lock.yaml'
+      - 'packages/observability/src/logger.ts'
+      - 'apps/api/test/logger-injection.test.ts'
+      - 'apps/api/src/routes/commits.ts'
+      - 'apps/api/test/export-streaming.test.ts'
+      - 'packages/domain/src/export/packager.ts'
+      - 'packages/domain/test/export/export*.test.ts'
+      - 'infra/scripts/backup*.mjs'
+      - 'infra/scripts/backup.sh'
+      - 'infra/scripts/prepare-monitor-view*.py'
+      - 'infra/compose/docker-compose.monitor.yml'
+      - 'infra/development-platform/langfuse/manage.sh'
+      - 'infra/development-platform/langfuse/manage.test.mjs'
       - 'apps/api/src/index.ts'
       - 'apps/api/src/search-runtime.ts'
       - 'packages/ai-gateway/src/provider.ts'
@@ -667,7 +705,7 @@ jobs:
       - run: npx pnpm@9.15.0 install --frozen-lockfile
       - run: npx pnpm@9.15.0 --filter @openscience/database generate
       - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
-      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts test/gateway-factory.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Lint Synclip image Gateway sources and tests
         run: npx pnpm@9.15.0 exec eslint packages/ai-gateway/src/synclip-image-api.ts packages/ai-gateway/src/codex-image.ts packages/ai-gateway/test/synclip-image-api.test.ts packages/ai-gateway/test/synclip-image-spool.test.ts
@@ -677,7 +715,14 @@ jobs:
           sudo "$(command -v node)" --test infra/synclip-image/transport.test.mjs infra/synclip-image/broker.test.mjs infra/synclip-image/install.test.mjs
       - run: python3 -m unittest discover -s infra/synclip-image -p configure_key_test.py
       - run: sudo "$(command -v node)" --test infra/private-cleanup/runner.test.mjs
-      - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/config exec vitest run test/api-env.test.ts test/gateway-env.test.ts
+      - name: Lint Gateway construction and streaming export changes
+        run: npx pnpm@9.15.0 exec eslint apps/agent-worker/src/index.ts apps/api/src/index.ts packages/ai-gateway/src/factory.ts packages/ai-gateway/src/index.ts packages/ai-gateway/test/gateway-factory.test.ts packages/config/src/api-env.ts packages/config/src/gateway-env.ts packages/config/src/index.ts packages/config/test/gateway-env.test.ts packages/observability/src/logger.ts apps/api/test/logger-injection.test.ts apps/api/src/routes/commits.ts apps/api/test/export-streaming.test.ts packages/domain/src/export/packager.ts packages/domain/test/export/export-streaming.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/export/export.test.ts test/export/export-streaming.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/logger-injection.test.ts test/export-streaming.test.ts
+      - run: node --test infra/scripts/backup-objects.test.mjs infra/scripts/backup-recovery-state.test.mjs infra/scripts/backup-full.test.mjs infra/development-platform/langfuse/manage.test.mjs
+      - run: sudo python3 -B infra/scripts/prepare-monitor-view.test.py
+      - run: bash -n infra/scripts/backup.sh infra/development-platform/langfuse/manage.sh
       - run: python3 -m unittest discover -s infra/hermes-agent -p "test_*.py"
       - run: sudo python3 -m unittest discover -s infra/hermes-agent -p test_host_broker.py
       - name: Verify archived-source restoration against the old and current installers
