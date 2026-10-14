@@ -933,6 +933,47 @@ describe('native Hermes complete video planning', () => {
       .call('paper_illustration_science', mixed, 0, 'bad-local-audio')).toMatchObject({ status: 'invalid_illustration' });
   });
 
+  it.each(['external-narration', 'native-first'] as const)('finishes and replays a modern %s full-parent correction of root and scenes one/three', policy => {
+    const { narrativeSceneLimit: _limit, ...ordinarySettings } = settings; void _limit;
+    const profile = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    const originalScience = structuredClone(science);
+    originalScience.scenes.push(structuredClone(originalScience.scenes[2]!));
+    originalScience.videoProduction.audioPolicy = policy;
+    originalScience.scenes.forEach(scene => { scene.videoDirection.audioMode = policy === 'native-first' ? 'native' : 'external-narration'; });
+    const allArt = { ...art, scenes: [...art.scenes, structuredClone(art.scenes[2]!)] };
+    const parent = createNativeIllustrationMaterializer({ claims, settings: ordinarySettings, paperOriginals: new Map(), ...profile });
+    expect(parent.call('paper_illustration_science', originalScience, 0, 'science-video')).toMatchObject({ status: 'science_ready' });
+    const original = parent.call('paper_illustration_art', allArt, 1, 'parent-art');
+    expect(original).toMatchObject({ status: 'art_ready' });
+    const base = { settings: ordinarySettings, view: { document: original.document, locale: ordinarySettings.locale, style: ordinarySettings.style,
+      output: 'video', narrative: true }, prompts: original.prompts, designSkills: [] } as unknown as import('../src/native-agent/illustration-task').VerifiedNativeVideoBase;
+    const before = structuredClone(base);
+    const revision = { ...ordinarySettings, baseAssetId: '10000000-0000-4000-8000-000000000003', instruction: 'Repair root and scenes one/three using the same source.' };
+    const child = createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile });
+    const revised = structuredClone(originalScience);
+    revised.narrative.mainMessage = 'A connection supported by the original source';
+    revised.scenes[1]!.narration = 'These regions have a supported connection.';
+    revised.scenes[3]!.narration = 'The source supports a connection.';
+    const messages: ChatMessage[] = [];
+    const call = (name: string, args: unknown, id: string) => {
+      const result = child.call(name, args, messages.length, id);
+      messages.push({ role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+        { role: 'tool', toolCallId: id, content: JSON.stringify(result) });
+      return result;
+    };
+    expect(call('paper_illustration_science', revised, 'full-science')).toMatchObject({ status: 'science_ready' });
+    expect(call('paper_illustration_art', { ...allArt, scienceToolCallId: 'full-science' }, 'full-art')).toMatchObject({ status: 'art_ready' });
+    expect(call('paper_illustration_review', { planToolCallId: 'full-art', decision: 'accepted', summary: 'Only source-supported private-plan corrections.',
+      corrections: [], issues: [] }, 'full-review')).toMatchObject({ decision: 'accepted' });
+    const final = '{"reviewToolCallId":"full-review"}', result = child.finish(messages, final);
+    expect(result.document.narrative?.mainMessage).toBe(revised.narrative.mainMessage);
+    for (const index of [0, 2]) expect(result.document.scenes[index]).toEqual(base.view.document.scenes[index]);
+    expect(result.document.scenes[1]!.narration).toBe(revised.scenes[1]!.narration);
+    expect(result.document.scenes[3]!.narration).toBe(revised.scenes[3]!.narration);
+    const restored = createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile });
+    expect(restored.finish(messages, final)).toEqual(result); expect(base).toEqual(before);
+  });
+
   it.each(['continuity', 'narrative', 'title', 'count', 'order', 'other-narration', 'other-motion'] as const)('rejects a local revision that changes %s outside its authorized scene', change => {
       const base = basePlan(), altered = structuredClone(science);
       if (change === 'continuity') altered.videoProduction.visualContinuity = 'Switch between different regions';
