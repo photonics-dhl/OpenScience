@@ -269,6 +269,7 @@ const REVIEW_PREFLIGHT_ERROR = '[blocked] Existing draft review requires a compl
 async function reviewPreflightFixture() {
   const fixture = makeDeps();
   const { deps, db, user, redis } = fixture;
+  Object.assign(deps, { nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' } });
   const batch = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID,
     processingConsent: true, files: [file('paper.pdf')] });
   const task = db.ingestionTasks.find(row => row.id === batch.tasks[0].id)!;
@@ -668,6 +669,7 @@ describe('multi-format ingestion service', () => {
 
   it('requires credit for non-admin remediation but auto-funds a current platform admin', async () => {
     const { deps, db, user } = makeDeps();
+    Object.assign(deps, { nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' } });
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
     const agentTask = db.agentTasks.find((row) => row.id === task.agentTaskId)!;
