@@ -26,7 +26,7 @@ const rollbackImageMetadataFixture = (env = ['NODE_VERSION=22.20.0'], os = 'linu
 
 test('skill-path keeps official Prisma targets and runs the complete rollback self-check', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/hermes-media-skills.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /PRISMA_CLI_BINARY_TARGETS:\s*native,linux-musl/u);
+  assert.match(workflow, /PRISMA_CLI_BINARY_TARGETS:\s*debian-openssl-3\.0\.x,linux-musl/u);
   assert.match(workflow, /--filter @openscience\/database generate/u);
   assert.match(workflow, /--filter @openscience\/search generate/u);
   assert.match(workflow, /packages\/database\/generated\/client\/libquery_engine-linux-musl\.so\.node/u);
