@@ -139,8 +139,9 @@ function nativeVideoProofFailure(error: unknown): never {
   throw error;
 }
 
-/** Completed private native plans are technically consumable; their status remains unchanged. */
-export async function requireNativeVideoStoryboard(prisma: VideoParentDb, asset: NativeVideoStoryboardAsset, payload: VideoParentScope): Promise<{
+/** Check one node only after the same bounded traversal has proved its base. */
+async function requireNativeVideoStoryboardNode(prisma: VideoParentDb, asset: NativeVideoStoryboardAsset, payload: VideoParentScope,
+  base?: NativeVideoBaseParent): Promise<{
   task: AgentTask; settings: StoryboardRequest; prompts: Array<{ sceneIndex: number; prompt: string; videoPrompt: string; renderResources?: NativeVideoRenderResources }>; sourceEvidenceIdentity: string;
 }> {
   requireNativeVideoReaders(prisma);
@@ -198,45 +199,55 @@ export async function requireNativeVideoStoryboard(prisma: VideoParentDb, asset:
   try {
     nativeAgentTerminalResult(task, 'succeeded', task.result);
     // Only this branch requires the additional source readers; the legacy caller contract stays minimal.
-    await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, task);
+    await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, task, async (_db, currentBase) => {
+      // The normal base reader still checks scope and selected-scene compatibility.
+      // Resolve only the exact ancestor already proved by this traversal, never recurse.
+      if (!base || currentBase.id !== base.asset.id || nativeStoryboardIdentity(currentBase) !== base.identity)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Native video base changed during source verification');
+      return base.proof;
+    });
   } catch (error) { nativeVideoProofFailure(error); }
   return { task, settings, prompts, sourceEvidenceIdentity: provenance.sourceEvidenceIdentity };
 }
 
-type NativeVideoStoryboardProof = Awaited<ReturnType<typeof requireNativeVideoStoryboard>>;
+type NativeVideoStoryboardProof = Awaited<ReturnType<typeof requireNativeVideoStoryboardNode>>;
 type NativeVideoBaseParent = { asset: NativeVideoStoryboardAsset; document: StoryboardDocument; proof: NativeVideoStoryboardProof; identity: string };
 const nativeStoryboardIdentity = (asset: NativeVideoStoryboardAsset) => JSON.stringify({
   contentHash: asset.contentHash, provenance: asset.provenance, ids: asset.sourceClaims.map(source => source.claimId).sort(),
 });
 const nativeDesignSkills = (proof: NativeVideoStoryboardProof) => record(record(record(proof.task.result).storyboardCheckpoint).planned).designSkills;
 
-async function readNativeVideoBaseParents(prisma: VideoParentDb, asset: NativeVideoStoryboardAsset, proof: NativeVideoStoryboardProof, scope: VideoParentScope) {
-  const ids = asset.sourceClaims.map(source => source.claimId).sort(), view = presentationStoryboardView(asset, ids);
-  const provenance = record(asset.provenance), result = record(proof.task.result);
-  const planned = record(record(result.storyboardCheckpoint).planned);
-  if (!view || asset.deletedAt || !['draft', 'approved'].includes(asset.status) || asset.researchObjectId !== scope.researchObjectId || asset.versionId !== scope.versionId
-    || !isDeepStrictEqual(ids, [...scope.sourceClaimIds].sort()) || proof.task.id !== asset.id || proof.task.deletedAt || proof.task.status !== 'succeeded'
-    || proof.task.kind !== 'presentation.generate' || proof.task.error !== null || provenance.source !== 'verified_claims' || provenance.taskId !== asset.id
-    || result.assetId !== asset.id || result.contentHash !== asset.contentHash || !isDeepStrictEqual(planned.document, view.document)
-    || !isDeepStrictEqual(result.storyboardReview, provenance.illustrationReview) || !isDeepStrictEqual(planned.designSkills, provenance.designSkills)
-    || proof.settings.output !== 'video' || proof.settings.narrative !== true || !isDeepStrictEqual(proof.settings, parseStoryboardRequest(provenance.storyboardSettings))
-    || proof.sourceEvidenceIdentity !== provenance.sourceEvidenceIdentity) {
-    throw new PresentationAssetError('VALIDATION_ERROR', 'Native video frame requires the current checked storyboard proof');
-  }
-  const parents: NativeVideoBaseParent[] = [{ asset, document: view.document, proof, identity: nativeStoryboardIdentity(asset) }];
+async function readNativeVideoBaseParents(prisma: VideoParentDb, asset: NativeVideoStoryboardAsset,
+  proof: NativeVideoStoryboardProof | undefined, scope: VideoParentScope): Promise<NativeVideoBaseParent[]> {
+  requireNativeVideoReaders(prisma);
+  const assets = [asset];
   const seen = new Set([asset.id]);
-  for (let current = parents[0]!; current.proof.settings.baseAssetId; current = parents.at(-1)!) {
-    const baseId = current.proof.settings.baseAssetId;
-    // The existing base reader checks one edge; bound malformed or excessive revision ancestry here.
-    if (seen.has(baseId) || parents.length >= 32) throw new PresentationAssetError('VALIDATION_ERROR', 'Native video base chain is cyclic or exceeds 32 parents');
+  for (let current = asset; ; current = assets.at(-1)!) {
+    const baseId = parseStoryboardRequest(record(current.provenance).storyboardSettings).baseAssetId;
+    if (!baseId) break;
+    // Bound the complete chain before invoking any node's source/CP proof.
+    if (seen.has(baseId) || assets.length >= 32) throw new PresentationAssetError('VALIDATION_ERROR', 'Native video base chain is cyclic or exceeds 32 parents');
     seen.add(baseId);
     const base = await prisma.presentationAsset.findUnique({ where: { id: baseId }, include: { sourceClaims: { select: { claimId: true } } } });
     if (!base) throw new PresentationAssetError('VALIDATION_ERROR', 'Native video base chain has a missing parent');
-    const baseProof = await requireNativeVideoStoryboard(prisma, base, scope);
-    const baseView = presentationStoryboardView(base, ids)!;
-    parents.push({ asset: base, document: baseView.document, proof: baseProof, identity: nativeStoryboardIdentity(base) });
+    assets.push(base);
   }
+  const parents: NativeVideoBaseParent[] = new Array(assets.length);
+  for (let index = assets.length - 1; index >= 0; index--) {
+    const current = assets[index]!;
+    const currentProof = await requireNativeVideoStoryboardNode(prisma, current, scope, parents[index + 1]);
+    const view = presentationStoryboardView(current, current.sourceClaims.map(source => source.claimId).sort())!;
+    parents[index] = { asset: current, document: view.document, proof: currentProof, identity: nativeStoryboardIdentity(current) };
+  }
+  if (proof && !isDeepStrictEqual(proof, parents[0]!.proof))
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Native video frame requires the current checked storyboard proof');
   return parents;
+}
+
+/** Completed private native plans retain their original status and full ancestor authority. */
+export async function requireNativeVideoStoryboard(prisma: VideoParentDb, asset: NativeVideoStoryboardAsset,
+  payload: VideoParentScope): Promise<NativeVideoStoryboardProof> {
+  return (await readNativeVideoBaseParents(prisma, asset, undefined, payload))[0]!.proof;
 }
 
 /** Qualify one exact-index candidate, retaining its actual parent and original native pixel owner. */

@@ -951,6 +951,27 @@ describe('explicit native video base-chain frame reuse', () => {
     const rejected = await chainFixture(33);
     await expect(requireVideoGenerationParents(rejected.prisma as never, rejected.input)).rejects.toThrow('Native video base chain');
   });
+  it.each(['cycle', 'over-depth'] as const)('rejects %s before any Native node CP proof is entered', async change => {
+    const f = await chainFixture(change === 'over-depth' ? 33 : 3);
+    if (change === 'cycle') { record(f.origin.asset.provenance.storyboardSettings).baseAssetId = parentId; refreshChain(f, f.chain); }
+    const reads = vi.spyOn(f.prisma.agentTask, 'findUnique'); reads.mockClear();
+    await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never, f.input)).rejects.toThrow('Native video base chain');
+    expect(reads).not.toHaveBeenCalled();
+  });
+  it('proves each of 32 Native ancestors once through the shared bounded traversal', async () => {
+    const f = await chainFixture(32), ids = new Set(f.chain.map(entry => entry.asset.id));
+    const reads = vi.spyOn(f.prisma.agentTask, 'findUnique'); reads.mockClear();
+    await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never, f.input)).resolves.toBeDefined();
+    expect(reads.mock.calls.filter(([args]) => ids.has(args.where.id!))).toHaveLength(32);
+  });
+  it.each(['failed', 'started', 'source-drift', 'unknown-contract'] as const)('rejects current deep ancestor %s during private plan proof', async change => {
+    const f = await chainFixture();
+    if (change === 'failed') f.origin.task.status = 'failed';
+    if (change === 'started') f.origin.task.result.nativeAgentExecution.checkpoint.state = 'started';
+    if (change === 'source-drift') f.origin.task.result.nativeIllustrationContext.sourceEvidenceIdentity = '0'.repeat(64);
+    if (change === 'unknown-contract') f.origin.task.result.nativeAgentExecution.planningContract = 'unknown-contract';
+    await expect(requireNativeVideoStoryboard(f.prisma as never, f.parent as never, f.input)).rejects.toThrow();
+  });
 
   it.each(['parent-identity', 'review-owner', 'blocked-review', 'import', 'aliased-parent'])('checks the actual original frame parent and native pixel owner: %s', async change => {
     const f = await chainFixture(), frame = f.frames[0]!;
