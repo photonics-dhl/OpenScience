@@ -63,7 +63,9 @@ async function fixture(platformRole = 'user', storage?: StorageAdapter, sceneIma
   const token = await createSession(redis as never, { userId: USER, status: 'email_verified' });
   const app = await buildApp({
     prisma, redis: redis as never, mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false,
-    security: { csrf: true }, rateLimitEnabled: false, storage, sceneImageEnabled, videoEnabled, readVideoReadiness: async () => videoEnabled,
+    security: { csrf: true }, rateLimitEnabled: false, storage, sceneImageEnabled, videoEnabled,
+    nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' },
+    readVideoReadiness: async () => videoEnabled,
   });
   const csrf = await app.inject({ method: 'GET', url: '/csrf-token' });
   return {

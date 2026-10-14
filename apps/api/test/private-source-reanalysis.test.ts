@@ -15,7 +15,7 @@ async function apiFixture(recoveredComposition = false, native = false,
   Object.assign(redis, { lpush: f.redis.lpush });
   const token = await createSession(redis, { userId: f.input.userId, status: 'email_verified' });
   const app = await buildApp({ prisma: f.prisma, redis, storage: f.storage, audit: f.deps.audit,
-    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, ...video,
+    mailer: createFakeMailer(), cookieSecret: 'test-secret', secureCookies: false, nativeAgentRuntime: f.deps.nativeAgentRuntime, ...video,
     ...(native ? { nativeAgentRuntime: { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' } } : {}) });
   apps.push(app);
   return { ...f, app, cookies: { openscience_session: token }, url: `/ingestion/${f.input.taskId}/reanalyze`,
