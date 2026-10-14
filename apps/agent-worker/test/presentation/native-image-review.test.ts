@@ -9,6 +9,49 @@ import { createNativeAgentSession, type NativeAgentSessionState } from '../../sr
 import { NATIVE_IMAGE_REVIEW_TOOLS, validateNativeImageReviewHistory } from '../../src/native-agent/illustration-task';
 import { createNativeImageReviewSubmission } from '../../src/index';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
+import type { runHostedNativeTask } from '../../src/native-agent/host-task';
+
+// The persistence tests exercise the real Worker/session/transaction path. The operating-system
+// Host is replaced with an in-process transport so CI does not depend on a native broker socket.
+vi.mock('../../src/native-agent/host-task', () => ({ runHostedNativeTask: async (input: Parameters<typeof runHostedNativeTask>[0]) => {
+  const systemPrompt = await input.session.systemPrompt() ?? input.config.instructions;
+  const bindFirstTurn = (input.session as typeof input.session & {
+    bindFirstTurn?: (goal: string, systemPrompt: string) => Promise<void>;
+  }).bindFirstTurn;
+  await bindFirstTurn?.(input.config.goal, systemPrompt);
+  const tools = [
+    { name: 'skills_list', description: 'List methods.', parameters: { type: 'object', properties: {} } },
+    { name: 'skill_view', description: 'Read a method.', parameters: { type: 'object', properties: {} } },
+    ...input.config.sourceTools,
+  ].map(tool => ({ type: 'function' as const, function: tool }));
+  let messages: Array<Record<string, unknown>> = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: input.config.goal },
+  ];
+  const withAuthorizedToolCall = input.paper.withAuthorizedToolCall ?? (async <T>(run: () => Promise<T>) => run());
+  for (let turn = 0; turn < input.config.maxTurns; turn += 1) {
+    const response = await input.session.complete({ model: input.config.model, max_tokens: input.config.maxOutputTokens, messages, tools });
+    const message = response.choices[0]!.message as unknown as Record<string, unknown>;
+    messages = [...messages, message];
+    const calls = (response.choices[0]!.message.tool_calls ?? []);
+    if (!calls.length) return { finalResponse: response.choices[0]!.message.content!, observedPassageIds: input.paper.observedPassageIds };
+    for (const call of calls) {
+      const args = JSON.parse(call.function.arguments);
+      await input.authorize();
+      const result = call.function.name === 'skill_view'
+        ? { success: true, content: 'Fixed source-review method.' }
+        : call.function.name === 'skills_list'
+          ? { success: true, skills: ['openscience-source-review'] }
+          : await withAuthorizedToolCall(() => input.paper.call(call.function.name, args, undefined, call.id));
+      messages = [...messages, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) }];
+      if (call.function.name === 'paper_image_view') {
+        const images = await withAuthorizedToolCall(() => input.paper.images(args, result));
+        messages = [...messages, { role: 'user', content: images.content }];
+      }
+    }
+  }
+  throw new Error('Fixture did not finish');
+} }));
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
