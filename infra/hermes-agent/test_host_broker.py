@@ -507,7 +507,9 @@ class BrokerFilesystemTests(unittest.TestCase):
     def test_symlinked_request_cannot_redirect_a_root_read(self):
         (self.task/'request.json').unlink()
         (self.task/'request.json').symlink_to(self.root/'missing')
-        with self.assertRaises(OSError): pin_bridge(self.inbox,self.bridges,INSTANCE,producer_uid=0)
+        with self.assertRaisesRegex(ValueError, '^Native producer file custody changed$'):
+            pin_bridge(self.inbox,self.bridges,INSTANCE,producer_uid=0)
+        self.assertFalse((self.bridges/INSTANCE).exists())
 
     def test_active_or_remaining_process_never_notifies_cleans_or_unlinks(self):
         pin_bridge(self.inbox,self.bridges,INSTANCE,producer_uid=0)
