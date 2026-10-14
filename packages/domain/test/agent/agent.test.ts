@@ -406,7 +406,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     }))).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(f.db).toEqual(before); expect(f.redis.lists.size).toBe(0);
   });
-  it('preserves an existing paid local row without retagging or revalidating a now-missing parent on exact replay', async () => {
+  it.each(['full', 'selected'] as const)('preserves an existing paid local row for %s without retagging or revalidating a now-missing parent on exact replay', async scope => {
     const f = await makeDeps(1);
     const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
     const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: { runtimeId: 'installed-native', skillCatalogueId: 'science-catalogue', model: 'MiniMax-M3' } };
@@ -414,6 +414,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       payload: { schemaVersion: 1, researchObjectId: f.ro.id, versionId: '10000000-0000-4000-8000-000000000001', kind: 'interactive_html',
         sourceClaimIds: ['10000000-0000-4000-8000-000000000002'], storyboard: { output: 'video', narrative: true, locale: 'en', style: 'scientific',
           instruction: 'Original local request', baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 1 } } };
+    if (scope === 'full') Reflect.deleteProperty(input.payload.storyboard, 'revisionSceneIndex');
     const row = await deps.prisma.agentTask.create({ data: { sessionId: session.id, kind: input.kind, payload: input.payload,
       idempotencyKey: input.idempotencyKey, result: { nativeAgentExecution: { kind: 'hermes-agent', profile: 'paper-illustration',
         runtimeId: 'historical-native', skillCatalogueId: 'historical-catalogue', model: 'MiniMax-M3' }, providerOutcome: 'unknown' } } });
@@ -436,7 +437,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       if (change === 'art') storyboard.artSceneIndex = 0;
       if (change === 'image') storyboard.output = 'image';
       if (change === 'non-narrative') storyboard.narrative = false;
-      if (change === 'art' || change === 'revision') {
+      if (change === 'art' || change === 'revision' || change === 'base') {
         // Art stays outside Native video; a real local revision now needs its authoritative parent.
         const before = structuredClone(f.db);
         await expect(deps.prisma.$transaction(tx => persistAgentTaskInTransaction(deps, tx, {

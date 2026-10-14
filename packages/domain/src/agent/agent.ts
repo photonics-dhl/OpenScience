@@ -28,7 +28,7 @@ import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } fro
 import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, isNativeSourceCorrectionTaskKey, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
-import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoSceneRevision, parsePresentationGenerationPayload, requireStoryboardBase } from '../assets/presentation-asset';
+import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoStoryboardRevision, parsePresentationGenerationPayload, requireStoryboardBase } from '../assets/presentation-asset';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
 import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, requireNativeIllustrationTerminalSource, supportsNativeIllustration, type NativeAgentRuntimeConfig } from './native-agent-execution';
@@ -646,7 +646,7 @@ async function persistAgentTaskCoreInTransaction(
   }
   let task: AgentTask;
   const nativeReviewResult = initialNativeImageReviewResult(input.kind, input.payload);
-  const inheritedContract = input.kind === 'presentation.generate' && isOrdinaryNativeVideoSceneRevision(input.payload)
+  const inheritedContract = input.kind === 'presentation.generate' && isOrdinaryNativeVideoStoryboardRevision(input.payload)
     ? (await requireStoryboardBase(tx, parsePresentationGenerationPayload(input.payload)))?.nativePlanningContract : undefined;
   // Only a new direct first video plan opts in, atomically with its task and credit.
   // Existing rows replay above; other Native entry points retain the historical contract.
