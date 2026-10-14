@@ -477,6 +477,26 @@ export async function verifyObjectBackup(directory, { limits: overrides } = {}) 
   } catch (error) { throw sanitize(error); }
 }
 
+/** Compare references extracted from an isolated restored core DB with verified
+ * backup bytes. References stay in a private JSONL file; errors never name keys.
+ * This verifies DB/backup closure, not an S3 restore or a global snapshot. */
+export async function verifyObjectReferences(directory, referenceFile, { limits: overrides } = {}) {
+  try {
+    const limits = limitsFor(overrides);
+    await verifyObjectBackup(directory, { limits });
+    const objects = new Map();
+    for await (const row of recordsAt(path.join(directory, 'objects.ndjson'), limits)) objects.set(row.key, row);
+    let references = 0;
+    for await (const row of recordsAt(referenceFile, limits)) {
+      if (++references > limits.maxObjects || !row || typeof row.key !== 'string' || !row.key.length || Buffer.byteLength(row.key) > 1024 ||
+          row.sha256 != null && !SHA256.test(row.sha256) || row.size != null && (!Number.isSafeInteger(row.size) || row.size < 0)) fail('FORMAT');
+      const object = objects.get(row.key);
+      if (!object || row.sha256 != null && object.sha256 !== row.sha256 || row.size != null && object.size !== row.size) fail('INTEGRITY');
+    }
+    return { references };
+  } catch (error) { throw sanitize(error); }
+}
+
 async function main(args) {
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -488,6 +508,9 @@ async function main(args) {
     } else if (args[0] === 'verify' && args.length === 2) {
       const result = await verifyObjectBackup(args[1]);
       process.stdout.write(`OBJECT_BACKUP_VERIFY_OK objects=${result.objectCount} bytes=${result.totalBytes}\n`);
+    } else if (args[0] === 'verify-references' && args.length === 3) {
+      const result = await verifyObjectReferences(args[1], args[2]);
+      process.stdout.write(`OBJECT_REFERENCES_OK references=${result.references}\n`);
     } else { fail('ARGUMENT'); }
   } catch (error) {
     process.stderr.write(`${sanitize(error).message}\n`);

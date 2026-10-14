@@ -21,6 +21,60 @@ V4 [requires ClickHouse >=25.12](https://langfuse.com/self-hosting/deployment/in
 
 The 8 GiB total is a **development-management resource ceiling**, with reduced ingestion concurrency and explicit Node heap limits. It is below the [official 16 GiB / 4-core / approximately 100 GiB VM recommendation](https://langfuse.com/self-hosting/deployment/docker-compose). The server inventory reported 19 GiB available RAM and about 80 GB free disk; these observations do not establish a sustained ingestion capacity. Start with bounded metadata imports. Do not raise caps or import full historic content to compensate for an overloaded service without reviewing server capacity.
 
+## Demand-based operation and budget (R11 candidate)
+
+Gateway telemetry is an existing Langfuse caller and keeps durable pending/accepted
+receipts. Backstage serves owner/dependency navigation, Serena serves selected
+revision symbols, Portainer serves container management. Idle CPU is not evidence
+that any of these is unused. Their current data/configuration and connections stay;
+no shutdown, volume deletion or cap reduction occurred in this source task.
+Existing limits remain Langfuse 8 GiB / 4.25 CPU, telemetry 256 MiB / 0.25 CPU,
+Catalog 2 GiB / 1.5 CPU, Serena 3 GiB / 2 CPU. These are ceilings, not reserved RAM.
+Review measured sustained RSS/restarts/queue age and ClickHouse query/merge/TTL
+load before changing these budgets; retain existing traces, not a fixed service count.
+
+**Preconditions:** use the installed immutable release and `manage.sh status`;
+confirm who currently queries Langfuse/Catalog/Serena and whether source Gateway
+audit history will survive the proposed collection pause. Retention and pending
+ingestion must be checked; do not infer safe resend from an empty query. Preserve
+the protected checkpoint and existing Langfuse backup/state. Only an authorized
+maintenance window may stop services. Source inventory cannot prove current callers.
+
+**Execution:** stop only the existing `openscience-development-gateway-audit`
+connector first (`docker stop openscience-development-gateway-audit`); its current
+Compose stop grace remains 35s. Check it is stopped, privately copy its full state
+directory with owner/mode preserved, and inspect only a summary of whether
+`checkpoint.json.pending` is null plus completedThrough; never print checkpoint
+contents/credentials or clear pending. Then run the installed `manage.sh backup
+--confirm` for an explicitly approved stopped-stack backup, followed by
+`manage.sh stop --confirm` when pausing the backend. New source stop/backup refuses
+a connector unless an exact-name all-state inventory proves absence or inspection
+proves the canonical telemetry project/service is `exited` with Running/Paused/
+Restarting all false. Running, restarting, paused, removing, created, unknown,
+identity mismatch and daemon/inspect errors refuse before backend changes. A
+running-only filter missed restart-policy recovery; this guard covers that lifecycle
+boundary. Existing Compose project separation did
+not coordinate the independent connector restart policy. Prevent concurrent
+operator/installer start and Docker daemon restart during the window; explicitly
+stop the connector first, since merely seeing a failed process is not the operator
+stop sequence. The check is not an atomic lock shared by those independent paths.
+
+If pending exists, retain it and the backup; reconcile against original Langfuse
+acceptance after restart using the existing connector logic. Do not replay/clear
+unknown submissions. Catalog/Serena can be stopped only after confirming no active
+caller, using `stop` for the exact existing project/service and preserving their
+source snapshot, cache, SQLite state and tokens. Do not change Portainer access or
+join any of these to the business network for convenience. Never `down -v`.
+
+**Rollback and verification:** start the installed Langfuse release with
+`manage.sh start --confirm` (waits for health, uses cached images), then start the
+same connector with its original image/state. Verify a small existing trace via
+the original query/UI, checkpoint progress and absence of unexplained pending;
+no new model call. Restart the private developer tunnel after container recreation,
+then verify an actual Catalog entity/Serena symbol at the selected revision if
+those services were paused. Match the caller's revision and retain all rollback
+data. Reduced service count or healthy containers alone does not close R11.
+
 ## Access and isolation
 
 Access uses the existing `infra/scripts/ssh-run.sh --development-tunnel`.

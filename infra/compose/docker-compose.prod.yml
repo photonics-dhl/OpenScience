@@ -3,7 +3,8 @@
 # 网络拓扑：
 #   data_net : postgres + redis + S3-compatible object storage（内部互联，均不绑公网端口）
 #   app_net  : web（127.0.0.1:3000）+ api（127.0.0.1:3001），nginx 分流反代
-#   api 双网卡（app_net + data_net）→ 仅 API 可达数据服务
+#   API/Worker: app_net 出口、internal data_net 数据、internal scan_net 扫描
+#   scanner_update_net: 仅 ClamAV 病毒库更新出口，不接入数据服务
 #
 # 生产纪律：
 #   - 零默认值：DB/redis/cookie/SMTP/S3 凭据全从 env_file（/opt/openscience/.env.prod，云上生成不入库）
@@ -151,6 +152,7 @@ services:
       - app_net
       - data_net
       - embedding_net
+      - scan_net
     restart: unless-stopped
 
   malware-scanner:
@@ -165,7 +167,8 @@ services:
       retries: 20
       start_period: 120s
     networks:
-      - data_net
+      - scan_net
+      - scanner_update_net
     restart: unless-stopped
 
   agent-worker:
@@ -275,6 +278,7 @@ services:
       - data_net
       - embedding_net
       - retrieval_net
+      - scan_net
     restart: unless-stopped
 
   scansci-mcp:
@@ -506,7 +510,12 @@ services:
 networks:
   data_net:
     driver: bridge
-    internal: false
+    internal: true
+  scan_net:
+    driver: bridge
+    internal: true
+  scanner_update_net:
+    driver: bridge
   app_net:
     driver: bridge
   embedding_net:

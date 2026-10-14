@@ -7,7 +7,7 @@
 #   - 恢复流程见 docs/runbooks/backup-restore.md（恢复演练属 §21.1）。
 #
 # 用法（云上执行，经 ssh-run.sh）:
-#   backup.sh [--confirm] [--db] [--objects]
+#   backup.sh [--confirm] [--db] [--objects] | backup.sh --full
 #     --db       PostgreSQL dump
 #     --objects  只读 S3 逻辑导出（不读取/修改 SeaweedFS 数据卷）
 #     --confirm  危险命令（rm 轮转）放行
@@ -20,14 +20,17 @@ umask 077
 CONFIRM=0
 BACKUP_DB=0
 BACKUP_OBJECTS=0
+BACKUP_FULL=0
 for arg in "$@"; do
   case "$arg" in
     --confirm) CONFIRM=1 ;;
     --db) BACKUP_DB=1 ;;
     --objects) BACKUP_OBJECTS=1 ;;
+    --full) BACKUP_FULL=1; BACKUP_DB=1; BACKUP_OBJECTS=1 ;;
     *) echo "未知参数: $arg" >&2; exit 64 ;;
   esac
 done
+[ "$BACKUP_FULL" -ne 1 ] || [ "$CONFIRM" -ne 1 ] || { echo 'FULL_BACKUP_FAIL: rotation held until isolated restore/offhost acceptance' >&2; exit 64; }
 [ "$BACKUP_DB" -eq 1 ] || [ "$BACKUP_OBJECTS" -eq 1 ] || { echo "用法: backup.sh [--confirm] --db [--objects]" >&2; exit 64; }
 
 REMOTE_ROOT="/opt/openscience"
@@ -117,6 +120,8 @@ if [ "$OLD_COUNT" -gt 0 ]; then
     echo "轮转需删除 $OLD_COUNT 旧备份，加 --confirm 放行" >&2
   else
     for set_name in "${DB_SETS[@]:$KEEP}"; do
+      # Daily standalone rotation must not break a retained full recovery set.
+      [ ! -d "$DUMP_DIR/full-set-${set_name#db-set-}" ] || continue
       case "$set_name" in db-set-[0-9]*Z-[0-9]*) rm -rf -- "$DUMP_DIR/$set_name" ;; *) echo "BACKUP_FAIL: unsafe rotation target" >&2; exit 1 ;; esac
     done
   fi
@@ -163,9 +168,33 @@ if [ "$BACKUP_OBJECTS" -eq 1 ]; then
       echo "轮转需删除 $OLD_OBJECT_COUNT 旧对象备份，加 --confirm 放行" >&2
     else
       for set_name in "${OBJECT_SETS[@]:$KEEP}"; do
+        [ ! -d "$DUMP_DIR/full-set-${set_name#objects-set-}" ] || continue
         [[ "$set_name" =~ ^objects-set-[0-9]{8}T[0-9]{6}Z-[1-9][0-9]*$ ]] || { echo "OBJECT_BACKUP_FAIL: unsafe rotation target" >&2; exit 1; }
         rm -rf -- "$DUMP_DIR/$set_name"
       done
     fi
   fi
+fi
+
+if [ "$BACKUP_FULL" -eq 1 ]; then
+  STATE_HELPER="$RELEASE_ROOT/infra/scripts/backup-recovery-state.mjs"
+  [ -f "$STATE_HELPER" ] || STATE_HELPER="$SCRIPT_DIR/backup-recovery-state.mjs"
+  [ -f "$STATE_HELPER" ] || { echo 'FULL_BACKUP_FAIL: recovery helper unavailable' >&2; exit 1; }
+  node "$STATE_HELPER" export "$DUMP_DIR" "$DATE" "$RELEASE_SHA"
+  node "$STATE_HELPER" verify "$DUMP_DIR/recovery-state-$DATE"
+  node "$OBJECT_HELPER" verify "$DUMP_DIR/objects-set-$DATE"
+  (cd "$DUMP_DIR/db-set-$DATE" && sha256sum -c core.sql.sha256 search.sql.sha256 >/dev/null)
+  # This completion record links independently published components. It does
+  # not turn sequential pg_dump/S3/host copies into an atomic global snapshot.
+  FULL_STAGE="$DUMP_DIR/.full-set-$DATE.staging"
+  [ ! -e "$FULL_STAGE" ] && [ ! -L "$FULL_STAGE" ] && [ ! -e "$DUMP_DIR/full-set-$DATE" ] && [ ! -L "$DUMP_DIR/full-set-$DATE" ] \
+    || { echo 'FULL_BACKUP_FAIL: completion record collision' >&2; exit 1; }
+  mkdir -m 0700 -- "$FULL_STAGE"
+  printf 'schema=1\nrelease=%s\ndb=db-set-%s\nobjects=objects-set-%s\nrecovery=recovery-state-%s\nconsistency=component-validated-not-point-in-time\n' \
+    "$RELEASE_SHA" "$DATE" "$DATE" "$DATE" > "$FULL_STAGE/manifest"
+  chmod 0600 "$FULL_STAGE/manifest"
+  sync -f "$FULL_STAGE/manifest" "$FULL_STAGE"
+  mv -- "$FULL_STAGE" "$DUMP_DIR/full-set-$DATE"
+  sync -f "$DUMP_DIR"
+  echo 'FULL_BACKUP_OK component_integrity=verified restore_consistency=pending offhost=pending'
 fi

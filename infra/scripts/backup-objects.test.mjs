@@ -9,7 +9,7 @@ import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import { CONTAINER_PROGRAM, createDockerSource, exportObjects, verifyObjectBackup } from './backup-objects.mjs';
+import { CONTAINER_PROGRAM, createDockerSource, exportObjects, verifyObjectBackup, verifyObjectReferences } from './backup-objects.mjs';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const release = 'a'.repeat(40);
@@ -17,6 +17,17 @@ const id = '20261003T120000Z-123';
 const secret = 'fixture-secret-must-not-appear';
 const digest = (data) => createHash('sha256').update(data).digest('hex');
 const require = createRequire(import.meta.url);
+
+test('isolated DB references require matching verified backup bytes; missing keys never leak', async t => {
+  const f = await fixture(t); const set = (await exportObjects(f.options)).directory;
+  const refs = path.join(f.root, 'references.ndjson');
+  await writeFile(refs, JSON.stringify({ key: 'paper.pdf', size: 3, sha256: digest('abc') }) + '\n', { mode: 0o600 });
+  assert.deepEqual(await verifyObjectReferences(set, refs), { references: 1 });
+  for (const row of [{ key: secret }, { key: 'paper.pdf', sha256: '0'.repeat(64) }, { key: 'paper.pdf', size: 4 }]) {
+    await writeFile(refs, JSON.stringify(row) + '\n', { mode: 0o600 });
+    await assert.rejects(verifyObjectReferences(set, refs), { message: 'OBJECT_BACKUP_FAIL: INTEGRITY' });
+  }
+});
 
 async function fixture(t, entries = [{ key: 'paper.pdf', data: Buffer.from('abc') }]) {
   const temporaryRoot = path.join(projectRoot, 'tmp', 'ops-readiness-20261003');
@@ -324,7 +335,7 @@ const shellQuote = (text) => `'${text.replaceAll("'", "'\\''")}'`;
 const bashPath = (text) => process.platform === 'win32'
   ? text.replaceAll('\\', '/').replace(/^([a-z]):/i, (_, drive) => `/${drive.toLowerCase()}`)
   : text;
-for (const mode of ['adjacent', 'source-first', 'failed-export', 'failed-inventory']) {
+for (const mode of ['adjacent', 'source-first', 'failed-export', 'failed-inventory', 'protected-full']) {
   test(`backup.sh ${mode} uses the operational helper and rotates only after success`, async (t) => {
     const f = await fixture(t);
     const installed = path.join(f.root, 'installed');
@@ -380,6 +391,7 @@ for (const mode of ['adjacent', 'source-first', 'failed-export', 'failed-invento
     if (mode === 'source-first') await writeFile(path.join(releaseRoot, 'infra/scripts/backup-objects.mjs'), helper('source-first'));
     const oldSets = ['objects-set-20200101T000000Z-1', 'objects-set-20200102T000000Z-2'];
     for (const name of oldSets) await mkdir(path.join(f.backupRoot, name), { recursive: true });
+    if (mode === 'protected-full') await mkdir(path.join(f.backupRoot, 'full-set-20200101T000000Z-1'));
     await writeFile(path.join(f.backupRoot, 'objects-legacy.tar.gz'), 'legacy');
     const otherStage = '.objects-set-20200103T000000Z-3.staging';
     await mkdir(path.join(f.backupRoot, otherStage));
@@ -401,6 +413,10 @@ for (const mode of ['adjacent', 'source-first', 'failed-export', 'failed-invento
       assert.equal(sets.length, 3);
       assert.ok(sets.includes(oldSets[0]) && sets.includes(oldSets[1]));
       assert.match(result.stderr, /OBJECT_BACKUP_FAIL: retention inventory failed/);
+    } else if (mode === 'protected-full') {
+      assert.equal(sets.length, 2);
+      assert.ok(sets.includes(oldSets[0]));
+      assert.ok(!sets.includes(oldSets[1]));
     } else {
       assert.equal(sets.length, 1);
       assert.equal(await readFile(path.join(f.backupRoot, sets[0], 'fixture-helper'), 'utf8'), mode);

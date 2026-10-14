@@ -19,6 +19,34 @@
 
 仓库侧源文件：`infra/compose/docker-compose.monitor.yml`、`infra/scripts/traffic-report.sh`、`infra/nginx/portainer.conf`。
 
+## 监控权限收敛（源码候选；R05 仍待运行验收）
+
+候选只挂 CPU/内存/磁盘 I/O/接口计数需要的 `/proc/{stat,meminfo,vmstat,diskstats,loadavg,uptime,net/dev}` 文件与 CPU sys metadata；不挂整棵 `/proc`、`/sys` 或主机根目录，不共享 PID。`/host/root` 改挂 root-owned、`0555`、同根文件系统的空目录 `/opt/monitor/root-filesystem`，只供容量 statvfs。原 `/:/host/root:ro` 会经 `/host/root/run/docker.sock` 留下 Docker API 别名，整棵 proc 又有 PID/root magic links；只移除显式 socket 并不足以收口，候选一并消除这些目录入口。既有 SMTP mount/配置卷保留，额外 `SYS_ADMIN/SYS_PTRACE` 与 unconfined 移除，改用 init。Docker/进程/容器 namespace 采集不在这次基础 charts 范围，容器管理沿已有 Portainer；不能从 YAML 推断图表仍正常。
+
+[Netdata 官方 proc 输入](https://github.com/netdata/netdata/blob/master/src/collectors/proc.plugin/README.md)、[mountinfo reader](https://github.com/netdata/netdata/blob/master/src/collectors/proc.plugin/proc_self_mountinfo.c) 与 [diskspace collector](https://github.com/netdata/netdata/blob/master/src/collectors/diskspace.plugin/plugin_diskspace.c)（2026-10-14 核对）支持这个源码推论：reader 在 host-root mountinfo 不存在时回退到 `/host/proc/self/mountinfo`，按记录的 mount-point 调 statvfs。因此 `prepare-monitor-view.py` 只生成主机 `/` 的单条 mount metadata，将容量路径指向 `/host/root`；不把 kernel mountinfo 或主机文件树塞入探针目录。其图表标识可能从旧 `/` 改为 `/host/root`，stock `disk.space` 容量告警需实测继续注册和投递。
+
+Root 启动仍保留：[官方 entrypoint](https://github.com/netdata/netdata/blob/master/packaging/docker/run.sh) 会初始化 `/etc/netdata` stock 配置、写容器 hostname 后再切用户；[官方 Docker 文档](https://learn.netdata.cloud/docs/netdata-agent/installation/docker) 不支持直接指定 `user:`。现有配置卷与 `/opt/monitor/msmtprc` root-owned `0600` 的 SMTP 访问边界也未完成非 root 迁移。本轮不猜实际镜像/卷 owner、运行身份或盲目 drop 全部默认 cap；精确 image 与 SMTP 访问仍待核。候选仍能读专门授权的 SMTP credential，不能说所有 Secret 不可读；它移除的是主机其他 runtime/socket 和根文件树入口，不另建 daemon/proxy。
+
+### 前置检查与执行
+
+1. 单独安排 monitor 重建窗口，保存已安装 Compose 与原镜像 ID/RepoDigest、卷名、告警配置权限；不显示 `/opt/monitor/msmtprc` 或 notification 文件。确认原镜像本地保留可回退。在既有 `/opt/monitor` 私有目录中，先通过项目 SSH 边界运行同版本 `python3 <release>/infra/scripts/prepare-monitor-view.py --confirm`，再 `--check`。它只创建/校验空容量目录与非敏感 metadata，不停服务；拒绝 symlink、非 root owner、组/世界可写目录、非空/异 device 探针与 metadata 漂移，不清文件或 chmod 已有目录来强制放行。探针不允许承载其他数据；每次重建先检查，主机 root mount 改变时需重新生成单条 metadata。Compose `create_host_path:false` 拒绝自动造缺失路径。
+2. 只读 `docker image inspect <实际镜像ID> --format '{{json .RepoDigests}}'`，核对实际 RepoDigest 与本地缓存；不要猜 digest、用 image config ID 或发布 SHA 代替。2026-10-14 元数据调查取得 `netdata/netdata@sha256:689145f603fed0ca341b4d8a0fb9910cd9d8c0590b0530cd24ae1912a9c7f8f3`，候选 Compose 默认固定为它，未拉镜像或改生产。原 stable 可变标签不能确保重建沿用已检查的 collector/entrypoint，因此移除该默认回退；若维护时已有新的实测摘要，通过私有操作配置的 `NETDATA_IMAGE` 指定同一已保留 cached image，再重做其必要运行验收。固定摘要只证明镜像内容身份，不能代替卷内配置、SMTP、运行用户和图表观察。
+3. 仅在核定相同 cached image 与权限配置后，沿既有 monitor Compose 重建 `netdata`，使用 `--pull never --no-deps`；保留三监控卷和 vnStat。不要使用 `down -v`。SMTP 安装在当前 image 的事实及镜像可回退须当次核对，不能随便切到干净上游 stable 后假定 msmtp 存在。
+
+### 回滚步骤与验证
+
+原 Compose/镜像值原位恢复，`up -d --pull never --no-deps netdata`，保留原卷与 SMTP 权限；回到原 full-root Compose 也回到原已知风险，不声称安全控制仍在。候选与回退分别核 CPU、RAM、根盘容量/剩余、eth0 流量 chart 时间戳与少量采样；比较探针 statvfs 的容量/可用块与主机 `/`，核新的 rootFS chart 上 stock 告警仍注册、SMTP mount 可访问、通知路由保持。候选实际 inspect 不得有 `/`/整棵 proc/sys、host PID、daemon socket mount；从容器确认 `/host/root/run/docker.sock`、`/host/root/var/run/docker.sock`、`/host/proc/1/root` 等别名不存在，不调用任何 Docker 写 API。真实测试发信属于已有运维授权内的单次必要投递，未授权不发；不以 healthy 代替图表/告警验收。最后从原导航点入 monitor，核匿名拒绝与认证后图表加载，不保存凭据或容器 env。实际 image/权限/指标文件绑定、图表、告警与认证未核前，R05 保持候选、未关闭。
+
+## 扫描器与数据网络分离（R06，源码候选）
+
+前置检查：安排单独网络重建维护窗口并查原部署/回退说明；保留旧 Compose/镜像/卷和当前 network inspect 元数据。确认无正在提交的上传或任务，API/Worker `app_net` 及既有 proxy 路径可达。只改 YAML 不会改变运行中网络。
+
+执行：沿既有发布事务在该窗口重建网络，`data_net` 改 internal；API/Worker 新接 internal `scan_net`，ClamAV 仅接 `scan_net` 和专用 `scanner_update_net` 更新出口，不再接数据网。API/Worker 保留 app_net/provider 出口，parser/embedding/retrieval 网络保持原隔离。Compose 不能原位把现有 network 的 internal 属性切换；未经窗口不得常规 `up` 碰运气或手工 disconnect 活跃生产容器。
+
+回滚：恢复此前精确 release/Compose 的网络定义，通过同一维护窗口重建旧网络，保留 DB/对象/ClamAV 数据卷，不删除业务数据或迁移账本；按原发布守卫重启并核最小产品路径。
+
+验证：inspect 应显示 data/scan internal，scanner 只接 scan/update；以少量已有上传检查 API/Worker 到 3310 的扫描，核病毒库更新成功与实际日期。受控 scanner→Postgres/Redis/S3 连接应失败，API/Worker→数据/扫描成功；核既有 Gateway/proxy 可达但不为验证发起模型付费请求。无生产网络重建及上述实际观察证据前，R06 只记候选。
+
 ## 部署 / 重建步骤
 
 1. 上传 compose：`scp infra/compose/docker-compose.monitor.yml` → `/opt/monitor/docker-compose.monitor.yml`
@@ -161,9 +189,9 @@ XGS_CONFIG_ROOT=/e/Miscellaneous/XGS \
 ## 安全说明
 
 - Netdata 只绑 127.0.0.1，公网唯一入口是带 basic_auth 的 nginx 路径。
-- 容器通过 `/host/proc`、`/host/sys` 只读挂载采集宿主机指标，挂载 docker.sock 只读用于容器清单。
+- 当前旧部署的 socket/PID/capability 权限是历史运行事实；上方候选使用单文件指标与空 rootFS 探针，移除 full-root/proc/socket 别名。部署与真实观察以 CURRENT 为准。
 - vnStat 容器用 host 网络仅为读网卡计数器，不监听任何端口。
-- 统计口径：宿主 `du` 必须加 `-x`。netdata 把宿主 `/` 只读挂到 `/host/root`，未加 `-x` 会递归进整个宿主
+- 历史统计口径：宿主 `du` 必须加 `-x`。旧 netdata 把宿主 `/` 只读挂到 `/host/root`，未加 `-x` 会递归进整个宿主
   文件系统，把 `/var/lib/docker` 从真实 38G 虚报为 67G（2026-09-17 实测）。
 - `query_profiler_*` 属 *user-level* 设置，写进 ClickHouse config.d 会让容器启动失败
   （`Code: 137 UNKNOWN_ELEMENT_IN_CONFIG`），须置于 users.xml 的 `<profiles>`；开发栈改用表级 TTL。
