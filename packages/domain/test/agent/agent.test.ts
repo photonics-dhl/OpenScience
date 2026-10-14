@@ -311,17 +311,17 @@ async function makeSourceIndexRecovery() {
   Object.assign(task, { kind: 'search.index', error: 'indivisible block exceeds embedding token limit', result: null,
     payload: { artifactId, versionId, sourceTaskId: sourceId, sourceExecutionAttempt: 1, sourceMapRef },
     idempotencyKey: `system:search-index:${sourceId}:1:${versionId}:${sourceMapRef.serializedSha256}` });
-  const prisma = (deps as any).prisma;
+  const prisma = (deps as AgentDeps).prisma;
   // The shared fake lacks these producer queries; keep their full source predicates visible.
-  prisma.artifact.findFirst = vi.fn(async ({ where }) => {
+  prisma.artifact.findFirst = vi.fn(async ({ where }: NonNullable<Parameters<typeof prisma.artifact.findFirst>[0]>) => {
     expect(where).toEqual({ id: artifactId, workspaceId: ro.workspaceId, deletedAt: null, bytesPurgedAt: null, blobSha256: sourceMapRef.contentHash });
     return { id: artifactId };
   });
-  prisma.ingestionTask.findFirst = vi.fn(async ({ where }) => {
+  prisma.ingestionTask.findFirst = vi.fn(async ({ where }: NonNullable<Parameters<typeof prisma.ingestionTask.findFirst>[0]>) => {
     expect(where).toEqual({ agentTaskId: sourceId, artifactId, state: 'confirmed', batch: { researchObjectId: ro.id } });
     return { id: 'confirmed-ingestion' };
   });
-  prisma.version.findFirst = vi.fn(async ({ where }) => {
+  prisma.version.findFirst = vi.fn(async ({ where }: NonNullable<Parameters<typeof prisma.version.findFirst>[0]>) => {
     expect(where).toEqual({ id: versionId, researchObjectId: ro.id,
       manifest: { entries: { some: { artifactId, blobSha256: sourceMapRef.contentHash } } } });
     return { id: versionId, commit: { idempotencyKey: 'ingestion-confirm:confirmed-ingestion' } };
@@ -1299,7 +1299,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   it('rearms only a receipted manual PNG review blocked before any provider call', async () => {
     const { deps, user, ro, db } = await makeDeps(1);
     db.users.find(candidate => candidate.id === user.id)!.platformRole = 'platform_admin';
-    const prisma = (deps as { prisma: any }).prisma;
+    const prisma = (deps as AgentDeps).prisma;
     prisma.$executeRaw = async () => 1;
     prisma.$queryRaw = async () => [{ deleted_at: null }];
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -1312,10 +1312,10 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       provenance: { reviewSourceAssetId: 'original-png' } });
     db.auditLogs.push({ action: 'presentation_asset.image_review_submitted',
       targetType: 'presentation_asset', targetId: task.id, actorId: user.id });
-    prisma.auditLog.findFirst = async ({ where }: any) => db.auditLogs.find(audit =>
-      audit.action === where.action && audit.targetId === where.targetId && audit.actorId === where.actorId) ?? null;
-    prisma.auditLog.count = async ({ where }: any) => db.auditLogs.filter(audit =>
-      audit.action === where.action && audit.requestId === where.requestId).length;
+    prisma.auditLog.findFirst = async ({ where }: NonNullable<Parameters<typeof prisma.auditLog.findFirst>[0]>) => db.auditLogs.find(audit =>
+      audit.action === where!.action && audit.targetId === where!.targetId && audit.actorId === where!.actorId) ?? null;
+    prisma.auditLog.count = async ({ where }: NonNullable<Parameters<typeof prisma.auditLog.count>[0]>) => db.auditLogs.filter(audit =>
+      audit.action === where!.action && audit.requestId === where!.requestId).length;
     db.auditLogs.push({ action: 'ai.gateway.call', requestId: task.id });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id }))
       .rejects.toThrow(/not safe to resume/i);
@@ -1331,8 +1331,8 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
 
   it('prevents retrying a failed image source after a separate saved-PNG review is created', async () => {
     const { deps, user, ro, db, redis } = await makeDeps(1);
-    (deps as { prisma: any }).prisma.$executeRaw = async () => 1;
-    (deps as { prisma: any }).prisma.$queryRaw = async () => [{ deleted_at: null }];
+    (deps as AgentDeps).prisma.$executeRaw = async () => 1;
+    (deps as AgentDeps).prisma.$queryRaw = async () => [{ deleted_at: null }];
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id,
       kind: 'presentation.generate', payload: { schemaVersion: 1, kind: 'image' } });
