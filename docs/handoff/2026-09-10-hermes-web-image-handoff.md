@@ -12,7 +12,7 @@
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已clean正常push **8271fc105a3f725925f6d728ab0df2d6b3ba841d**（parent ec3b9133）；唯一新增Worker native-image-review测试68+/10−，9/9及第7段High GO已收，包含已审art33/33修订。一次精确Media **38631891402** 已in_progress且headSha匹配；owner唯一取终态新日志，暂无新源码写权。后继71项对比的Web两项/R12负例不搬、本树已审sceneFixture保留。业务/R12/部署/Provider冻结。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation@**8271fc105a3f725925f6d728ab0df2d6b3ba841d**的CI已推进至ingestion admin-autofunds夹具缺runtime。owner已STARTED唯一局部写权：packages/domain/test/ingestion-service.test.ts内exact `requires credit for non-admin remediation but auto-funds a current platform admin` 用例的server deps；不改makeDeps全局/其他81例/legacy result。跑原auto-funds与后继review-only preflight recovery两个grep、独立High，均过后单提交push及一次新精确CI；第二组若失败先报范围。业务/R12/Web/workflow/部署/Provider冻结。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
@@ -41,7 +41,7 @@
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
 - R04已审序列：599e8e0c class supplier、cb0a0d53 host socket、3cd8401f task-store、eac6e41d Domain、54e7f364 API、ec3b9133 art、8271fc10 Worker review共七段独立gpt-6.1 High GO/P0P1P2=0；后四段437/437、176/176、33/33、9/9。原High/总回执在架构树tmp/r04-class-supplier-{high,final-receipt}.md，后继比对在tmp/r04-later-fixture-{comparison.json,deltas.log}。root已核新单文件差额、clean/upstream、High及CI身份；synthetic Host仅测试运输替身，不证明生产Native/科研质量。整体新CI待终态，R04未部署、泛型callback既有P2未关闭。
-- 精确Linux **38629063510@54e7** 终态failure、其他5jobs成功：完整default self/Worker closure、broker27、新旧installer恢复、部署341零skip、Worker822、Domain485、API6file214及API类型均通过；后继Domain art-style两文件33例中29pass/4fail，缺runtime导致新image资格拒绝及continuation不推进。原两消费者等价，canonical 12f58927仅fixture deps补合法runtime一行。owner唯一日志tmp/r04-ci-54e7f364-skill-path.log，root仅核终态/SHA；未跑后继不称绿，R04未部署。前序eac的API11fail已关闭，历史日志保留。
+- 精确Linux **38631891402@8271** 终态failure、其他5jobs成功：完整default self/Worker closure、broker27、installer恢复、部署341零skip、Worker822、Domain485、API214/类型、art33、新Native review组合54及后继恢复/失败图禁止重试/admin-submit均过。后续ingestion单grep 1fail/81未选，初始createIngestionBatch缺runtime，尚未到额度断言；与canonical相同且历史caf CI也曾失败，不是只读差额漏报。owner唯一日志tmp/r04-ci-8271fc10-skill-path.log，root仅终态/SHA；后继preflight/Web未执行，不称完整绿，R04未部署。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
 ## 研究生命周期角色与入口
