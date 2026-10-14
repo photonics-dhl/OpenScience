@@ -8,7 +8,7 @@
 - 2026-10-14：cb9双库备份/53迁移/原发布及一次真实首图全部完成，image FINAL RELEASED。Guide→Native计划→2.5图自动返回并保存供应商原ID、私有入库成功；像素审核BLOCKED，未公开/重画/冒称用户认可。新链平台gross3/fund3，旧失败Guide1点单列；供应商仅6coins报价已证，API无实际扣费字段。原任务/公开版本/SourceMap/旧图保护15/15，完整链16m51.616s，不冒称稳定快速。上游跨字段表达矛盾已定位并转入上述限定修复；架构一次只读SDK/OOM取证已结束。精确对象、授权及窗口只见CURRENT。
 - 2026-10-14：R09源收取后UI已实际STARTED接入，无冲突且保留P03/P04 WIP，继续已认可P07四视图；原77项/82模块零环不代替新UI验收。R01 Native调用认证/首轮绑定与R13安全Fastify日志源码均已独立High并按路径逐字集成，整改计划和历史阶段图亦收取；Linux当前SDK/凭据及完整Worker类型仍有缺口，未部署，日志修复不等于OOM根因关闭。范围/源提交与检查限度见CURRENT。
 - 2026-10-14：视频51e精确Media六jobs全成功，4权限竞态、父链259、Worker227及原Agent检查、Worker/API/Web类型、Guide六例与恢复均实际通过，原独立High有效；代码已精确集成，workflow写权交回root。尚未部署或生成商业成片；独立High已准复用原干净媒体集成树准备媒体专用候选，精确组合CI已启动；生产仍未改变，避免未就绪架构候选混入本次媒体发布。商业预算/LTX资格仍待已问信息，不重复询问。
-- 2026-10-14：媒体隔离候选84的组合Media38514277609已6/6通过；canonical 2f736a76 的Media38514750533真实失败仅发生在API entrypoint-startup的旧ai-gateway/dist未刷新（9项同一 `createGatewayRecoveryReaders is not a function`，其余205项及PG/4browser通过）。已在该测试前补 `@openscience/ai-gateway... build`，待同SHA重跑，故仍不部署；架构R02/R08/R12 owner随后因模型usage limit阻断，R04继续NO-GO。
+- 2026-10-14：媒体隔离候选84的组合Media38514277609已6/6通过；canonical 2f736a76 的Media38514750533真实失败仅发生在API entrypoint-startup的9项 `createGatewayRecoveryReaders is not a function`，其余205项及PG/4browser通过。`8dbf2de1`新增API测试前Gateway构建且在Media38520072441中真实执行成功，但失败仍在；根因现闭合为入口测试自定义Gateway mock漏出新导出，已补 `apps/api/test/entrypoint-startup.test.ts` 最小夹具，待精确重跑，故仍不部署；架构R02/R08/R12 owner随后因模型usage limit阻断，R04继续NO-GO。
 - 2026-10-14：UI owner 本轮续作因模型容量 systemError 终止，已保存此前 P03/P04/P07 证据与续点；不把容量失败当验收通过，也不重做已完成交付，待可用高推理模型继续剩余 UI 验收。
 
 - 2026-10-14：Synclip公开Docs及用户截图已合并原能力台账；Veo公开价、LTX管理员API、配音与平台点分别记录。有限supplier预算和沿LTX时账户资格/5-10-15秒费率尚无已存证明，已一次询问；不重复索取公开文档或API Key。

@@ -21,7 +21,7 @@ async function start(runtime: unknown, runtimeEnv: Record<string, string | undef
     '@openscience/domain': { nativeAgentRuntimeFromEnv: () => runtime },
     '@openscience/storage': { createStorageAdapter: () => ({}), createClamAvScanner: () => ({}) },
     '@openscience/observability': { createLogger: () => log },
-    '@openscience/ai-gateway': { SynclipSpoolImageProvider: SpoolImage, createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
+    '@openscience/ai-gateway': { SynclipSpoolImageProvider: SpoolImage, createGatewayRecoveryReaders: () => ({}), createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
       expect(env).toBe(runtimeEnv); readiness.prerequisites = prerequisites;
       return async () => { readiness.reads++; return readiness.available; };
     } },
