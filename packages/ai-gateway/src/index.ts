@@ -1,4 +1,6 @@
 export { AiGatewayError, type AiGatewayErrorCode } from './errors';
+export { createConfiguredGateway, createGatewayRecoveryReaders, type GatewayFactoryCallbacks, type GatewayRecoveryReaders,
+  type GatewayImageSubmission, type GatewayIllustrationSubmission } from './factory';
 export { ImageUsageLimitError, isImageUsageLimit, validateImageBytes, MiniMaxImageProvider, type ImageRecoveryState, type ImageRequest, type ImageProvider, type ImageProviderResult, type ImageResult, type MiniMaxImageConfig } from './image';
 export {
   AiGateway,

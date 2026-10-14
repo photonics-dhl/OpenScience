@@ -4,29 +4,23 @@ import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceRe
 import { runNativePaperTask } from './native-agent/paper-task';
 import { runNativeSourceReviewTask } from './native-agent/source-review-task';
 import { isDeepStrictEqual } from 'node:util';
-import { sceneImageEnabledFromEnv } from '@openscience/config';
+import { loadGatewayConfig, sceneImageEnabledFromEnv } from '@openscience/config';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { Prisma, type AgentTask } from '@prisma/client';
 import {
   AiGateway,
-  AnthropicCompatProvider,
-  MiniMaxCodingPlanVisionProvider,
-  MiniMaxImageProvider,
-  CodexSpoolImageProvider,
-  SynclipSpoolImageProvider,
+  createConfiguredGateway,
+  type GatewayImageSubmission,
+  type GatewayIllustrationSubmission,
   createNativeVideoReadinessReader,
   type NativeVideoReadinessReader,
-  CodexSolImageReviewProvider,
   CODEX_SOL_REVIEW_PROVIDER,
   CODEX_SOL_REVIEW_MODEL,
   MutableProviderKillSwitch,
-  OpenAiCompatProvider,
   NATIVE_IMAGE_REQUEST_MAX_BYTES,
   type ExternalProcessingPolicy,
-  type ImageProvider,
   type ScienceReviewInput,
-  type MiniMaxVisionPricing,
   type ProviderCapabilityPolicy,
 } from '@openscience/ai-gateway';
 import {
@@ -105,8 +99,8 @@ function isRecoverableNativeImageProcessingTask(task: Pick<AgentTask, 'status' |
 }
 
 const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAttempt: number }>();
-type SpoolSubmission = NonNullable<ConstructorParameters<typeof CodexSpoolImageProvider>[0]['withSubmission']>;
-type IllustrationSubmission = NonNullable<ConstructorParameters<typeof CodexSolImageReviewProvider>[0]['withIllustrationSubmission']>;
+type SpoolSubmission = GatewayImageSubmission;
+type IllustrationSubmission = GatewayIllustrationSubmission;
 type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
 
 /** Called after the existing image/task/asset binder; missing audits grant no submission permission. */
@@ -1284,7 +1278,7 @@ function buildIngestionExternalProcessingPolicy(prisma: Pick<Prisma.TransactionC
 /** Shared dependency assembly used by the real Worker entry and automatic run scheduler. */
 export function createWorkerDeps(input: Pick<WorkerDeps, 'prisma' | 'redis' | 'storage' | 'audit'>, env: NodeJS.ProcessEnv = process.env): WorkerDeps {
   const nativeAgentRuntime = nativeAgentRuntimeFromEnv(env);
-  const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && synclipImageConfigured(env);
+  const nativeSceneImageEnabled = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() === 'synclip' && sceneImageEnabledFromEnv(env);
   return { ...input,
     nativeAgentRuntime, nativeSceneImageEnabled, sceneImageEnabled: sceneImageEnabledFromEnv(env),
     videoEnabled: env.HERMES_VIDEO_ENABLED === 'true',
@@ -1495,12 +1489,6 @@ export function createNativeImageReviewSubmission(prisma: WorkerDeps['prisma'],
   };
 }
 
-function synclipImageConfigured(env: NodeJS.ProcessEnv): boolean {
-  return env.AI_ENABLED === 'true' && env.SYNCLIP_IMAGE_ENABLED === 'true'
-    && Boolean(env.SYNCLIP_IMAGE_INBOX_DIR?.trim()) && Boolean(env.SYNCLIP_IMAGE_RESULTS_DIR?.trim())
-    && !(env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).includes('synclip');
-}
-
 export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
@@ -1510,112 +1498,10 @@ export function buildGateway(
   spoolSubmissions?: { image: SpoolSubmission; illustration?: IllustrationSubmission; nativeImageReview?: NativeImageReviewSubmission },
   illustrationReviewPolicy?: ExternalProcessingPolicy,
 ): AiGateway {
-  const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
-  const fallbackModels = (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  const models = [primaryModel, ...fallbackModels];
-  const keys = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].filter(
-    (key, index, all): key is string => Boolean(key) && all.indexOf(key) === index,
-  );
-  const configuredKeys = keys.length > 0 ? keys : [''];
-  const buildProvider = (apiKey: string, keyIndex: number, model: string, modelIndex: number) => {
-    const configuredMode = env.MINIMAX_API_MODE ?? 'auto';
-    const tokenPlan = configuredMode === 'anthropic' || (configuredMode === 'auto' && apiKey.startsWith('sk-cp-'));
-    const baseUrl = tokenPlan
-      ? env.MINIMAX_TOKEN_PLAN_BASE_URL ?? 'https://api.minimax.io/anthropic'
-      : env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
-    const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
-    const config = { baseUrl, apiKey, model };
-    return tokenPlan
-      ? new AnthropicCompatProvider(name, config, fetcher)
-      : new OpenAiCompatProvider(name, config, fetcher);
-  };
-  const providers = configuredKeys.flatMap((apiKey, keyIndex) => models.map((model, modelIndex) => buildProvider(apiKey, keyIndex, model, modelIndex)));
-  const pixelReviewModel = env.MINIMAX_IMAGE_REVIEW_MODEL?.trim();
-  const nativeImageReviewProvider = pixelReviewModel ? buildProvider(configuredKeys[0]!, 0, pixelReviewModel, 0) : undefined;
-
-  const imageApiKey = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].map(key => key?.trim()).find(Boolean);
-  const disabledImageProviders = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map(value => value.trim()).filter(Boolean));
-  const buildImageProvider = (kind: string | undefined): ImageProvider | undefined => {
-    if (kind === 'synclip') {
-      return synclipImageConfigured(env)
-        ? new SynclipSpoolImageProvider({ inboxDir: env.SYNCLIP_IMAGE_INBOX_DIR!.trim(), resultsDir: env.SYNCLIP_IMAGE_RESULTS_DIR!.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
-    }
-    if (kind === 'codex') {
-      return env.AI_ENABLED === 'true' && env.CODEX_IMAGE_INBOX_DIR?.trim() && env.CODEX_IMAGE_RESULTS_DIR?.trim() && !disabledImageProviders.has('codex-image')
-        ? new CodexSpoolImageProvider({ inboxDir: env.CODEX_IMAGE_INBOX_DIR.trim(), resultsDir: env.CODEX_IMAGE_RESULTS_DIR.trim(), withSubmission: spoolSubmissions?.image }) : undefined;
-    }
-    if (kind === undefined || kind === 'minimax') {
-      return env.AI_ENABLED === 'true' && env.MINIMAX_IMAGE_ENABLED === 'true' && imageApiKey
-        ? new MiniMaxImageProvider('minimax-image', { baseUrl: imageOrigin(env), apiKey: imageApiKey, model: 'image-01' }, fetcher) : undefined;
-    }
-    return undefined;
-  };
-  // The fallback provider is an explicit operator decision: no provider is ever
-  // selected automatically, and the gateway only advances to it for a definitive
-  // non-submission (allowance exhausted or unavailable), never after an uncertain
-  // attempt that may already have been submitted.
-  const primaryImageKind = env.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax';
-  const fallbackImageKind = primaryImageKind === 'synclip' ? undefined : env.HERMES_SCENE_IMAGE_FALLBACK_PROVIDER?.trim() || undefined;
-  const imageProviders = [
-    buildImageProvider(primaryImageKind),
-    fallbackImageKind && fallbackImageKind !== primaryImageKind ? buildImageProvider(fallbackImageKind) : undefined,
-  ].filter((provider): provider is ImageProvider => provider !== undefined);
-  if (fallbackImageKind && imageProviders.length < 2) {
-    console.warn(`image fallback provider '${fallbackImageKind}' is configured but unavailable or disabled; running with ${imageProviders.length} provider(s)`);
-  }
-  if (fallbackImageKind && imageProviders.length > 1) {
-    console.warn(`image fallback is configured but primary '${primaryImageKind}' cannot report a definitive non-submission; the fallback will not trigger`);
-  }
-  const visionPrimaryKey = env.MINIMAX_API_KEY?.trim();
-  const visionBackupKey = env.MINIMAX_API_KEY_2?.trim();
-  const ocrProviders = env.AI_ENABLED === 'true' && env.MINIMAX_VISION_ENABLED === 'true' && visionPrimaryKey
-    ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
-        baseUrl: visionOrigin(env),
-        apiKey: visionPrimaryKey,
-        ...(visionBackupKey && visionBackupKey !== visionPrimaryKey ? { backupApiKey: visionBackupKey } : {}),
-        model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
-        timeoutMs: 120_000,
-        pricing: visionPricing(env),
-        maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
-      }, fetcher)]
-    : [];
-  const illustrationImageReviewProvider = env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true'
-    && env.CODEX_SOL_REVIEW_INBOX_DIR?.trim() && env.CODEX_SOL_REVIEW_RESULTS_DIR?.trim()
-    && spoolSubmissions?.illustration
-    ? new CodexSolImageReviewProvider({ inboxDir: env.CODEX_SOL_REVIEW_INBOX_DIR.trim(),
-        resultsDir: env.CODEX_SOL_REVIEW_RESULTS_DIR.trim(),
-        withIllustrationSubmission: spoolSubmissions.illustration })
-    : undefined;
-  if (env.AI_ENABLED === 'true' && env.CODEX_SOL_IMAGE_REVIEW_ENABLED === 'true' && !illustrationImageReviewProvider)
-    throw new Error('CODEX_SOL_IMAGE_REVIEW_ENABLED requires authorized image review spool paths');
-  const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
-  const killSwitch: ProviderCapabilityPolicy = {
-    async isEnabled(provider, capability) {
-      if (staticallyDisabled.has(provider)) return { enabled: false, reason: 'operator_disabled' };
-      return runtimeCapabilityPolicy.isEnabled(provider, capability);
-    },
-  };
-  const ocrLimits = {
-    maxPages: optionalBoundedInteger(env.LLM_OCR_MAX_PAGES, 4, 'LLM_OCR_MAX_PAGES'),
-    maxPageBytes: optionalBoundedInteger(env.LLM_OCR_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'LLM_OCR_MAX_PAGE_BYTES'),
-    maxTotalBytes: optionalBoundedInteger(env.LLM_OCR_MAX_TOTAL_BYTES, 8 * 1024 * 1024, 'LLM_OCR_MAX_TOTAL_BYTES'),
-  };
-  return new AiGateway({
-    providers,
-    ocrProviders,
-    imageProviders,
-    illustrationImageReviewProvider,
-    nativeImageReviewProvider,
-    audit,
-    logger: console,
-    killSwitch,
-    externalProcessingPolicy,
-    illustrationReviewPolicy,
-    ocrLimits,
-    authorizeIllustrationReview: spoolSubmissions?.illustration
-      ? input => spoolSubmissions.illustration!(input, async () => undefined)
-      : undefined,
-    nativeImageReviewSubmission: spoolSubmissions?.nativeImageReview,
+  return createConfiguredGateway(loadGatewayConfig(env), {
+    fetcher, audit, externalProcessingPolicy, runtimeCapabilityPolicy, logger: console,
+    imageSubmission: spoolSubmissions?.image, illustrationSubmission: spoolSubmissions?.illustration,
+    nativeImageReviewSubmission: spoolSubmissions?.nativeImageReview, illustrationReviewPolicy,
   });
 }
 
@@ -1652,48 +1538,6 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
       papersDir: scansciPapersDir,
     }),
   });
-}
-
-function imageOrigin(env: NodeJS.ProcessEnv): string {
-  const region = env.MINIMAX_IMAGE_REGION ?? 'global';
-  if (region === 'global') return 'https://api.minimax.io';
-  if (region === 'cn') return 'https://api.minimaxi.com';
-  throw new Error('MINIMAX_IMAGE_REGION must be global or cn');
-}
-
-function visionOrigin(env: NodeJS.ProcessEnv): string {
-  // Vision uses the same Coding Plan credential as text. An unset region must not
-  // send a configured China-plan key to the global endpoint.
-  let textOrigin: string | undefined;
-  try { textOrigin = new URL(env.MINIMAX_TOKEN_PLAN_BASE_URL ?? '').origin; } catch { /* default global */ }
-  const region = env.MINIMAX_VISION_REGION ?? (textOrigin === 'https://api.minimaxi.com' ? 'cn' : 'global');
-  if (region === 'global') return 'https://api.minimax.io';
-  if (region === 'cn') return 'https://api.minimaxi.com';
-  throw new Error('MINIMAX_VISION_REGION must be global or cn');
-}
-
-function visionPricing(env: NodeJS.ProcessEnv): MiniMaxVisionPricing | undefined {
-  const rawCost = env.MINIMAX_VISION_USD_MICROS_PER_PAGE;
-  if (rawCost === undefined || rawCost.trim() === '') return undefined;
-  const usdMicrosPerPage = Number(rawCost);
-  if (!Number.isSafeInteger(usdMicrosPerPage) || usdMicrosPerPage < 0 || usdMicrosPerPage > 1_000_000_000) {
-    throw new Error('MINIMAX_VISION_USD_MICROS_PER_PAGE must be a non-negative integer');
-  }
-  const version = env.MINIMAX_VISION_PRICING_VERSION ?? '';
-  const effectiveDate = env.MINIMAX_VISION_PRICING_EFFECTIVE_DATE ?? '';
-  const serviceTier = env.MINIMAX_VISION_SERVICE_TIER ?? '';
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(version) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(serviceTier)) {
-    throw new Error('MiniMax vision pricing metadata is incomplete or invalid');
-  }
-  return { usdMicrosPerPage, version, effectiveDate, serviceTier };
-}
-
-function optionalBoundedInteger(raw: string | undefined, maximum: number, name: string): number {
-  if (raw === undefined || raw.trim() === '') return maximum;
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new Error(`${name} must be an integer between 1 and ${maximum}`);
-  return value;
 }
 
 // 主进程入口；被测试 import 时不启动
