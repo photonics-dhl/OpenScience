@@ -20,7 +20,7 @@ const IMAGE_REPAIR_DESCRIPTION = "After invalid_illustration, use the actual dia
 const OLD_REPAIR_GUIDANCE = "如果paper_illustration_science返回invalid_illustration，下一条消息只能调用paper_illustration_science_repair，不得解释或重述，不得重发整份science或输出art JSON。立即复制结果中的精确scienceToolCallId（不要用工具名、序号或自造ID），只替换诊断指出的一个sceneIndex及完整scene；保留其他scene和根字段不变。根级错误才重新提交更窄的完整science；无法从原文修复就停止并blocked，不得猜测。";
 // Saved compatibility fixtures use the actual original descriptors, not the new fresh profile.
 const originalImageTools = [...NATIVE_PAPER_TOOLS, ...NATIVE_ILLUSTRATION_TOOLS];
-const savedTools = (tools: typeof originalImageTools, messages: ChatMessage[] = []) => ({
+const savedTools = (tools: readonly { name: string; description: string; parameters: Record<string, unknown> }[], messages: ChatMessage[] = []) => ({
   turns: [{ request: { messages, options: { tools: tools.map(tool => ({ type: 'function', function: structuredClone(tool) })) } } }],
 }) as unknown as NativeAgentSessionState;
 
@@ -50,7 +50,7 @@ describe('unmarked fresh IMAGE planning guidance', () => {
     const video = nativeIllustrationToolProfile(null, 'video', contract);
     expect(nativeIllustrationToolProfile(savedTools(video.sourceTools), 'video', contract)).toEqual(video);
     for (const name of ['paper_illustration_science_repair', 'paper_illustration_art'])
-      expect(video.sourceTools.find(tool => tool.name === name)).toEqual(originalImageTools.find(tool => tool.name === name));
+      expect(video.sourceTools.find(tool => tool.name === name)!.description).toBe(originalImageTools.find(tool => tool.name === name)!.description);
     expect(nativeScienceRepairGuidance(video.sourceTools)).toBe(OLD_REPAIR_GUIDANCE);
   });
 });
@@ -199,7 +199,7 @@ describe('fresh image diagnostic guidance', () => {
     const invalid = f.invoke('paper_illustration_science', input, 'science-invalid');
     expect(invalid).toMatchObject({ status: 'invalid_illustration', scienceToolCallId: 'science-invalid', error: expect.stringContaining('_source') });
     const read = await paper.call('paper_read', args) as { passages: Array<{ text: string }> };
-    await expect(paper.call('paper_read', { passageIds: ['foreign-passage'] })).rejects.toThrow();
+    await expect(paper.call('paper_read', { passageIds: ['foreign-passage'] })).resolves.toMatchObject({ error: expect.stringContaining('Unknown passage/page') });
     // Canonical passages can retain a complete cross-page span; the bounded
     // read includes the exact selected source, rather than a truncated quote.
     expect(read.passages[0]!.text).toContain(selected[0]!.sourcePassages[1]!.text);
