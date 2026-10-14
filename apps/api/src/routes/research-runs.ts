@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ingestionClaimSelectionSchema } from './ingestion-claim-selection-schema';
 import { MAX_INGESTION_CLAIMS, findFirstImageContinuation } from '@openscience/domain';
-import { authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
+import { authorizeHermesGenerationGrant, cancelHermesResearchRun, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, retryHermesGeneration, type HermesSourceReviewDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import type { StorageAdapter } from '@openscience/storage';
 import { requireCurrentUser } from './session-guard';
@@ -42,6 +42,7 @@ const generationGrantSchema = z.object({
   ]),
 }).strict();
 const generationRetrySchema = z.object({ expectedVersion: z.number().int().positive() }).strict();
+export const hermesRunCancelBodySchema = z.object({ expectedVersion: z.number().int().positive() }).strict();
 const artStyleContinuationSchema = z.object({
   expectedVersion: z.number().int().positive(), versionId: z.string().uuid(), imageAssetId: z.string().uuid(),
   sceneIndex: z.number().int().min(0).max(5), style: z.string().trim().min(1).max(100),
@@ -114,6 +115,18 @@ export function registerResearchRunRoutes(app: FastifyInstance, deps: Omit<Herme
     if (!user) return;
     const { id, runId } = readParamsSchema.parse(req.params);
     return reply.send({ run: await getHermesResearchRun(deps, { actorId: user.userId, researchObjectId: id, runId }) });
+  });
+
+  app.post('/research-objects/:id/hermes-runs/:runId/cancel', async (req, reply) => {
+    void reply.header('Cache-Control', 'private, no-store');
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id, runId } = readParamsSchema.parse(req.params);
+    const body = hermesRunCancelBodySchema.parse(req.body);
+    const run = await cancelHermesResearchRun(deps, {
+      actorId: user.userId, researchObjectId: id, runId, expectedVersion: body.expectedVersion,
+    }, auditCtx(req));
+    return reply.send({ run });
   });
 
   app.post('/research-objects/:id/hermes-runs/:runId/source-review', async (req, reply) => {

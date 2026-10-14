@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, requirePresentationWriteScope, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
+import { AgentError, buildInterestContext, cancelAgentTask, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, requirePresentationWriteScope, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -49,6 +49,9 @@ const genericTaskBody = z.object({
   }
 });
 export const agentTaskBodySchema = z.union([workspaceGuideTaskBody, genericTaskBody]);
+export const agentTaskCancelBodySchema = z.object({
+  expectedExecutionAttempt: z.number().int().nonnegative(),
+}).strict();
 
 function identityStateFromRow(row: Record<string, unknown>) {
   return validateResearchIdentityProfileState({
@@ -180,6 +183,16 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!user) return;
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return reply.send({ task: await retryAgentTask(deps, { userId: user.userId, taskId: id }, auditCtx(req)) });
+  });
+
+  app.post('/agent/tasks/:id/cancel', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = agentTaskCancelBodySchema.parse(req.body);
+    return reply.send({ task: await cancelAgentTask(deps, {
+      userId: user.userId, taskId: id, expectedExecutionAttempt: body.expectedExecutionAttempt,
+    }, auditCtx(req)) });
   });
 
   // P1D-4：R0-R4 审批（§9.4 + §15 ToolApproval）

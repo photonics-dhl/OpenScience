@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentSessionBodySchema, agentTaskBodySchema } from '../src/routes/agent';
+import { agentSessionBodySchema, agentTaskBodySchema, agentTaskCancelBodySchema } from '../src/routes/agent';
 
 const validGuide = {
   sessionId: '00000000-0000-4000-8000-000000000001',
@@ -15,6 +15,17 @@ const validGuide = {
 };
 
 describe('agent task payload boundary', () => {
+  it('accepts only a non-negative execution generation for owner cancellation', () => {
+    expect(agentTaskCancelBodySchema.parse({ expectedExecutionAttempt: 0 })).toEqual({ expectedExecutionAttempt: 0 });
+    expect(agentTaskCancelBodySchema.parse({ expectedExecutionAttempt: 3 })).toEqual({ expectedExecutionAttempt: 3 });
+    for (const body of [
+      {},
+      { expectedExecutionAttempt: -1 },
+      { expectedExecutionAttempt: 1.5 },
+      { expectedExecutionAttempt: '1' },
+      { expectedExecutionAttempt: 0, reason: 'user' },
+    ]) expect(() => agentTaskCancelBodySchema.parse(body)).toThrow();
+  });
   it('preserves explicit first-image intent only on an exact saved research scope', () => {
     const request = { ...validGuide, payload: { ...validGuide.payload, goal: 'Generate one image explaining this paper.',
       route: 'research-object-edit', executionIntent: 'first-image', context: { tasks: [], researchObjects: [],

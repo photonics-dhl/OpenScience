@@ -253,6 +253,44 @@ describe('Hermes research run API contract', () => {
   });
 });
 
+describe('Hermes research run cancellation API contract', () => {
+  it('requires strict owner generation input and returns applied/alreadyApplied/409 without private execution data', async () => {
+    const f = await fixture();
+    const created = await f.app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies: f.cookies,
+      headers: { 'idempotency-key': 'cancel-run-key' }, payload: { ingestionTaskIds: [INGESTION_ID] } });
+    expect(created.statusCode, created.body).toBe(202);
+    const runId = created.json().run.id as string;
+    const url = `/research-objects/${RO_ID}/hermes-runs/${runId}/cancel`;
+    expect((await f.app.inject({ method: 'POST', url, payload: { expectedVersion: 1 } })).statusCode).toBe(401);
+    expect((await f.app.inject({ method: 'POST', url, cookies: f.cookies, payload: { expectedVersion: 1, reason: 'user' } })).statusCode).toBe(400);
+    expect((await f.app.inject({ method: 'POST', url, cookies: f.cookies, payload: { expectedVersion: 0 } })).statusCode).toBe(400);
+
+    const request = { method: 'POST' as const, url, cookies: f.cookies, payload: { expectedVersion: 1 } };
+    const applied = await f.app.inject(request);
+    expect(applied.statusCode, applied.body).toBe(200);
+    expect(applied.json().run).toMatchObject({ outcome: 'applied', status: 'stopped', version: 2 });
+    expect(applied.body).not.toMatch(/nativeAgentExecution|privateCheckpoint|unit/);
+    const replay = await f.app.inject(request);
+    expect(replay.statusCode, replay.body).toBe(200);
+    expect(replay.json().run).toMatchObject({ outcome: 'alreadyApplied', status: 'stopped', version: 2 });
+    const stale = await f.app.inject({ ...request, payload: { expectedVersion: 99 } });
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect(f.db.hermesResearchRuns[0]).toMatchObject({ status: 'stopped', version: 2 });
+  });
+
+  it('enforces the run owner write role before cancellation', async () => {
+    const f = await fixture();
+    const created = await f.app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs`, cookies: f.cookies,
+      headers: { 'idempotency-key': 'cancel-role-key' }, payload: { ingestionTaskIds: [INGESTION_ID] } });
+    const runId = created.json().run.id as string;
+    f.db.memberships[0].role = 'viewer';
+    const response = await f.app.inject({ method: 'POST', url: `/research-objects/${RO_ID}/hermes-runs/${runId}/cancel`, cookies: f.cookies,
+      payload: { expectedVersion: 1 } });
+    expect(response.statusCode, response.body).toBe(403);
+    expect(f.db.hermesResearchRuns[0]).toMatchObject({ status: 'running', version: 1 });
+  });
+});
+
 describe('existing Hermes run query output contract', () => {
   it('defaults to image and independently retrieves video in the same actor/RO/source scope', async () => {
     const f = await fixture();
