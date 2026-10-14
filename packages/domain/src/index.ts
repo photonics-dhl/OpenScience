@@ -296,6 +296,7 @@ export {
   type IngestionClaimSelection,
 } from './ingestion/claim-evidence-bridge';
 export {
+  isExplicitFirstImageRequest,
   parseWorkspaceGuidePayload,
   type WorkspaceGuidePayload,
   type WorkspaceWritingCitation,
