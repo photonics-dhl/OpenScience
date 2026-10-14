@@ -275,7 +275,12 @@ class BrokerStopArtifactTests(unittest.TestCase):
     def test_active_socket_stop_is_exact_and_repeated_delivery_is_inert(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock.bind(str(self.task / 'worker.sock'))
+            previous = Path.cwd()
+            try:
+                os.chdir(self.task)
+                sock.bind('worker.sock')
+            finally:
+                os.chdir(previous)
             (self.task / 'worker.sock').chmod(0o666)
             commands = []
             fake = lambda argv, **kwargs: commands.append(argv)
@@ -290,7 +295,12 @@ class BrokerStopArtifactTests(unittest.TestCase):
     def test_queued_unit_is_not_cleaned_until_systemd_job_ends(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock.bind(str(self.task / 'worker.sock'))
+            previous = Path.cwd()
+            try:
+                os.chdir(self.task)
+                sock.bind('worker.sock')
+            finally:
+                os.chdir(previous)
             (self.task / 'worker.sock').chmod(0o666)
             host_broker.pin_bridge(self.inbox, self.bridges, INSTANCE, producer_uid=0)
             commands = []
@@ -313,7 +323,12 @@ class BrokerStopArtifactTests(unittest.TestCase):
     def test_ended_stop_receipt_is_idempotent_without_another_systemctl_call(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock.bind(str(self.task / 'worker.sock'))
+            previous = Path.cwd()
+            try:
+                os.chdir(self.task)
+                sock.bind('worker.sock')
+            finally:
+                os.chdir(previous)
             (self.task / 'worker.sock').chmod(0o666)
             host_broker.pin_bridge(self.inbox, self.bridges, INSTANCE, producer_uid=0)
             commands = []
