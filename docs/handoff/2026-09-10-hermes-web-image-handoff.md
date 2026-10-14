@@ -12,7 +12,7 @@
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已clean正常push **a133b3e6c5af68006b84ba3d8326680f139c98ca**，精确Media38634342000六jobs全绿。root已接续只读canonical整合范围/P2分析与独立High：仅写owner ignored tmp/r04-canonical-integration-scope.md及review回执，tracked冻结；列最小R04提交/依赖、已含fixture、R01/R12交叉与generic callback残余，明确candidate=self不等于40e8跨版本回退兼容。不整包merge、不部署/Provider。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：a133b3e6精确Media六绿及只读整合scope独立High GO已收。当前准备针对canonical8371d49f的六路径patch，唯一写owner ignored tmp/r04-canonical-integration.patch及patch-review.md；tracked两树冻结、root随后应用提交。四core路径为deploy-lock/deploy.test/transaction原hook与Media workflow正向R04增量，保留canonical原检查；另仅presentation scene一行及ingestion两行。cb broker/3cd trash依R12/cleanup不搬，API/art/Native review已等价不重复。最终patch须独立High，实际合成SHA/default-self/CI尚未验证；不部署/Provider。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
@@ -40,7 +40,7 @@
 
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
-- R04已审序列：599e8e0c class supplier、cb0a0d53 host socket、3cd8401f task-store、eac6e41d Domain、54e7f364 API、ec3b9133 art、8271fc10 Worker review、a133b3e6 ingestion共八段独立gpt-6.1 High GO/P0P1P2=0；后五段437/437、176/176、33/33、9/9、16选中通过。High/总回执在架构树tmp/r04-class-supplier-{high,final-receipt}.md，后继比对在tmp/r04-later-fixture-{comparison.json,deltas.log}。root已核新单文件两行、clean/upstream、High及CI身份；synthetic Host不证明生产Native/科研质量，增量通过不替代完整CI。R04未部署、泛型callback既有P2未关闭。
+- R04已审序列及验证完整留架构树tmp/r04-class-supplier-{high,final-receipt}.md（八段High GO），后继71项比对留tmp/r04-later-fixture-{comparison.json,deltas.log}，最小收取scope与独立High在tmp/r04-canonical-integration-scope.md。callback P2为default generic DI供应者证明覆盖债务；task-store input.authorize当前真实supplier仍在whole-module闭包，未证线上bypass，旧opaque/P1反例已修不能复活。此限制不自动阻断有界收取；真实pair若依赖changed/unbounded外部持久reader supplier则不得放行。40e8/84与canonical受保护模块有diff，candidate=self六绿不能证明跨版本兼容，当前无生产GO。
 - 精确Linux **38634342000@a133b3e6** completed/success，6/6 jobs通过；root已独立核终态/SHA，owner唯一日志tmp/r04-ci-a133b3e6-skill-path.log。真实core/search生成/build/双musl后完整installed verifier default-self/Worker closure、新旧installer恢复均过；broker27、部署341零skip、Worker822、Domain485、API214/类型、art33、Worker review54、ingestion原grep1+15选中、Web类型/build/unit及72+6+6+34浏览器均过，末Web preflight1选中通过。ingestion非全82、failure-only evidence上传条件skip非必需检查跳过。此前所有失败记录保留；此为候选整体CI通过，不等于canonical集成、跨版本配对或生产GO。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
