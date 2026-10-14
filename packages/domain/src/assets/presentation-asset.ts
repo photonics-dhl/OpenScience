@@ -488,6 +488,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
         ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
         : null;
       if (existingTask && !existingTask.deletedAt) return;
+      await requirePresentationWriteScope(tx, input);
       const current = await requireStoryboardBase(tx, payload);
       if (current?.nativeIdentity !== privatePlanningParent.identity
         || current.nativePlanningContract !== 'video-optional-audio-v1'
