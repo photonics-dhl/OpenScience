@@ -10,7 +10,8 @@ import subprocess
 import uuid
 from unittest.mock import patch
 import host_broker
-from host_broker import pin_bridge, secure_open_directory, validated_instance, cleanup_ended, private_caller
+from host_broker import (pin_bridge, secure_open_directory, validated_instance, cleanup_ended,
+                         private_caller, consume_stop, stop_unit)
 from types import SimpleNamespace
 
 INSTANCE = 'af36958a-d6d0-4666-a69c-e3c60170b17f-1'
@@ -218,6 +219,146 @@ class InstanceTests(unittest.TestCase):
         self.assertEqual(validated_instance(INSTANCE),INSTANCE)
         for value in ['../other','task;id',INSTANCE+' --property=User=root',INSTANCE.replace('-1','-0'),INSTANCE.upper()]:
             with self.subTest(value=value), self.assertRaises(ValueError): validated_instance(value)
+
+    def test_stop_unit_uses_only_the_validated_fixed_instance(self):
+        commands = []
+        stop_unit(INSTANCE, lambda argv, **kwargs: commands.append((argv, kwargs)))
+        self.assertEqual(commands[0][0], ['systemctl', 'stop', f'openscience-hermes@{INSTANCE}.service'])
+        with self.assertRaises(ValueError): stop_unit(INSTANCE + ' --property=User=root', lambda *_a, **_k: None)
+
+    def test_duplicate_stop_json_fields_are_rejected(self):
+        with self.assertRaises(ValueError):
+            host_broker._decode_object(b'{"taskId":"x","taskId":"y"}', 'invalid')
+
+
+@unittest.skipUnless(os.name == 'posix' and hasattr(os, 'geteuid') and os.geteuid() == 0,
+                     'Requires Linux root-owned temporary directories')
+class BrokerStopArtifactTests(unittest.TestCase):
+    """Exact stop artifact tests use a fake systemctl callback only."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='native-broker-stop-', dir=Path.cwd())
+        self.root = Path(self.temp.name)
+        self.inbox = self.root / 'inbox'; self.bridges = self.root / 'bridges'
+        self.inbox.mkdir(mode=0o700); self.bridges.mkdir(mode=0o700)
+        self.task = self.inbox / INSTANCE; self.task.mkdir(mode=0o700)
+        identity = {'taskId': INSTANCE.rsplit('-', 1)[0], 'executionAttempt': 1}
+        (self.task / 'request.json').write_text(json.dumps(identity)); (self.task / 'request.json').chmod(0o600)
+        (self.task / 'caller.credential').write_text('b' * 64); (self.task / 'caller.credential').chmod(0o600)
+        (self.task / host_broker.STOP_FILE).write_text(json.dumps(identity)); (self.task / host_broker.STOP_FILE).chmod(0o600)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_before_start_without_socket_creates_no_restart_tombstone(self):
+        commands = []
+        self.assertTrue(consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0))
+        self.assertEqual(commands, [])
+
+    def test_poll_once_consumes_before_start_stop_without_starting_unit(self):
+        commands = []
+        host_broker.poll_once(self.root, lambda argv, **kwargs: commands.append(argv))
+        self.assertFalse(any(command[1] == 'start' for command in commands))
+        self.assertTrue((self.bridges / INSTANCE / 'ended').exists())
+        self.assertFalse(self.task.exists())
+        bridge = self.bridges / INSTANCE
+        self.assertEqual(set(path.name for path in bridge.iterdir()),
+                         {'ended', 'request.json', 'caller.credential', host_broker.STOP_FILE})
+        self.assertFalse(self.task.exists())
+        self.assertTrue(consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0))
+        self.assertEqual(commands, [])
+
+    def test_active_socket_stop_is_exact_and_repeated_delivery_is_inert(self):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.bind(str(self.task / 'worker.sock'))
+            (self.task / 'worker.sock').chmod(0o666)
+            commands = []
+            fake = lambda argv, **kwargs: commands.append(argv)
+            self.assertTrue(consume_stop(self.root, INSTANCE, fake, producer_uid=0))
+            self.assertEqual(commands, [['systemctl', 'stop', f'openscience-hermes@{INSTANCE}.service']])
+            self.assertTrue((self.bridges / INSTANCE / host_broker.STOP_SENT).exists())
+            self.assertTrue(consume_stop(self.root, INSTANCE, fake, producer_uid=0))
+            self.assertEqual(commands, [['systemctl', 'stop', f'openscience-hermes@{INSTANCE}.service']])
+        finally:
+            sock.close()
+
+    def test_queued_unit_is_not_cleaned_until_systemd_job_ends(self):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.bind(str(self.task / 'worker.sock'))
+            (self.task / 'worker.sock').chmod(0o666)
+            host_broker.pin_bridge(self.inbox, self.bridges, INSTANCE, producer_uid=0)
+            commands = []
+
+            def queued(argv, **kwargs):
+                commands.append(argv)
+                if argv[1] == 'show':
+                    return SimpleNamespace(stdout='ActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=123')
+                return SimpleNamespace(stdout='')
+
+            self.assertTrue(consume_stop(self.root, INSTANCE, queued, producer_uid=0))
+            self.assertFalse(cleanup_ended(self.root, INSTANCE, queued, lambda _path: self.fail('not notified'), producer_uid=0))
+            self.assertTrue((self.bridges / INSTANCE / host_broker.STOP_SENT).exists())
+            self.assertFalse((self.bridges / INSTANCE / 'ended').exists())
+            self.assertEqual([command[:2] for command in commands], [
+                ['systemctl', 'stop'], ['systemctl', 'show']])
+        finally:
+            sock.close()
+
+    def test_ended_stop_receipt_is_idempotent_without_another_systemctl_call(self):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.bind(str(self.task / 'worker.sock'))
+            (self.task / 'worker.sock').chmod(0o666)
+            host_broker.pin_bridge(self.inbox, self.bridges, INSTANCE, producer_uid=0)
+            commands = []
+            fake = lambda argv, **kwargs: commands.append(argv)
+            self.assertTrue(consume_stop(self.root, INSTANCE, fake, producer_uid=0))
+            bridge = self.bridges / INSTANCE
+            (bridge / 'ended').touch(mode=0o444)
+            # Simulate cleanup having removed only the producer-side IPC while
+            # retaining the root-owned stopped receipt.
+            for name in ('request.json', 'caller.credential', host_broker.STOP_FILE):
+                (self.task / name).unlink()
+            self.task.rmdir()
+            self.assertTrue(consume_stop(self.root, INSTANCE, fake, producer_uid=0))
+            self.assertEqual([command[:2] for command in commands], [['systemctl', 'stop']])
+        finally:
+            sock.close()
+
+    def test_stop_artifact_rejects_wrong_uid_mode_hardlink_and_symlink(self):
+        path = self.task / host_broker.STOP_FILE
+        for kind in ('wrong-uid', 'wrong-mode', 'hardlink', 'symlink'):
+            with self.subTest(kind=kind):
+                if path.exists() or path.is_symlink():
+                    path.unlink()
+                link = self.task / 'stop-link'
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                identity = {'taskId': INSTANCE.rsplit('-', 1)[0], 'executionAttempt': 1}
+                path.write_text(json.dumps(identity)); path.chmod(0o600)
+                if kind == 'wrong-uid':
+                    os.chown(path, 1, -1)
+                elif kind == 'wrong-mode':
+                    path.chmod(0o644)
+                elif kind == 'hardlink':
+                    os.link(path, link)
+                elif kind == 'symlink':
+                    path.unlink(); path.symlink_to(self.task / 'request.json')
+                with self.assertRaises((OSError, ValueError)):
+                    consume_stop(self.root, INSTANCE, lambda *_args, **_kwargs: self.fail('must not stop'), producer_uid=0)
+
+    def test_wrong_stop_identity_or_extra_file_does_not_stop_peer(self):
+        (self.task / host_broker.STOP_FILE).write_text(json.dumps({'taskId': 'other', 'executionAttempt': 1}))
+        commands = []
+        with self.assertRaises(ValueError): consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0)
+        self.assertEqual(commands, [])
+
+        (self.task / host_broker.STOP_FILE).write_text(json.dumps({'taskId': INSTANCE.rsplit('-', 1)[0], 'executionAttempt': 1}))
+        (self.task / 'extra').write_text('preserve')
+        with self.assertRaises(ValueError): consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0)
+        self.assertEqual(commands, [])
 
 
 if __name__ == '__main__': unittest.main()
