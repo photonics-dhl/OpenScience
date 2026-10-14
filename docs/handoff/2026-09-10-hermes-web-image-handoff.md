@@ -1,6 +1,11 @@
 # Hermes / 论文视觉叙事 CURRENT
 > 交付基线是 `.worktrees/onchip-video-release` / `release/onchip-production-line`；root `main` 仅导航。本页是三线唯一活跃状态，历史细节留在 Git。
 
+## 2026-10-14 coordination checkpoint
+- Canonical is clean before docs sync and now contains UI `5e7b430a` (`2553a0c2`) followed by `b2756b42` (`1eab71a8`), then R12 `ae5e4af7`/`6b8c263c`/`765281a2` (source `d15f27c4`/`d8f3f39a`/`537d8077`). These are source integrations only; no deploy or Provider call. UI independent High is GO with no High findings; its focused fallback fix is verified by diff/check and existing screenshots, while known typecheck, Vitest alias/fixture, and Prettier baseline blockers remain. R12 owner evidence is six Domain suites 548/548 plus tsc/lint and independent High GO; canonical rerun is blocked by missing local `vitest`, so owner evidence remains the test record.
+- R04 remains NO-GO and has no commit: owner receipt records 211 tests (205 pass, 6 platform skips), missing Prisma musl engine and unproven bounded Worker provenance. Its three WIP infra files remain outside canonical. Do not infer deployment or runtime readiness from source receipts.
+- Video 71e parent is under a no-Provider/no-commercial-video boundary. Existing same-parent private revision task `591e9fd8-14ed-4ef4-885f-0f6ade1d386d` was observed at 10% with no confirmed Provider request; its latest coordinating turn hit model capacity. Preserve task/attempt/receipt and only observe read-only. Retry at most once after reliable capacity recovery; until then do not resubmit, approve, call Synclip/Provider, audio, or video production.
+
 ## 目标与边界
 - 依据开发规格：真实 NousResearch Hermes 先理解全文、提炼 Claims/Evidence，再规划视觉叙事并交 Synclip；论文是事实来源，不以 Codex 手稿代替科学能力。
 - 目标仍是 2–3 篇真实论文的凝练、用户确认、配图与公开展示；三篇整体验收、普通用户旅程、完整视频、整站审美尚未完成。
