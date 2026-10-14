@@ -75,7 +75,7 @@ async function fixture(native = true) {
     authorizeIllustrationReview: input => requireIllustrationReviewSubmission(prisma, input),
     nativeImageReviewSubmission: createNativeImageReviewSubmission(prisma, () => ({ taskId: owner.id, executionAttempt: owner.executionAttempt })) });
   const generateImage = vi.fn(); Object.assign(gateway, { generateImage });
-  const handler = createPresentationGenerationHandler({ gateway });
+  const handler = createPresentationGenerationHandler({ gateway, nativeAgent: { gateway, inboxRoot: '/unused-test-socket', runtime, renderPages: async () => [] } });
   const task = () => ({ id: owner.id, executionAttempt: db.agentTasks.find(value => value.id === owner.id)!.executionAttempt,
     retryCount: db.agentTasks.find(value => value.id === owner.id)!.retryCount, payload }) as never;
   return { prisma, db, deps, handler, task, owner, fetcher, generateImage, parent, asset, runtime, gateway, evidenceIdentity, approvedParent };
