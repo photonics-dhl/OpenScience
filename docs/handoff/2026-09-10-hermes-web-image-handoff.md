@@ -12,7 +12,7 @@
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：已交四视图、单文件媒体保留修订bd2719e0及隔离40e8完整Media绿回执；暂停源码写入。下一步仅收root实际发布后站内观察/截图并独立核对已认可P03/P04/四视图，未收到证据时真实等待；不重复拉CI、不SSH/Provider/部署。隔离源码root单写。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation当前599e8e0c，两文件class supplier来源证明High GO，实际Linux self已过；后续host broker测试因三个绝对socket路径超长失败，root新增唯一test_host_broker.py夹具写权复用原相对bind模式，业务/R12不变。新delta High后新精确SHA一次完整Linux；owner单取日志。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已交3cd8401f；R04/class、host socket、task-store夹具三段High与真实Linux已收。当前仅Domain三测试native-video-parents/presentation-asset/native-image-review有条件写权：先核消费者等价，再复用canonical已有runtime/历史marker最小修订，独立High与定向验收后新精确CI一次；业务/R12/其余文件冻结，owner单取日志。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
@@ -40,8 +40,8 @@
 
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
-- R04独立树599e8e0c39d831223ea1d096abd687561f2eba94（父d52deb64）：仅production-deploy-lock.mjs与deploy.test.mjs，class readonly字段→constructor opts→真实new/factory来源证明；未知/动态/重赋值fail-closed，沿原verifiedVendorModules边界。full218/212pass/0fail/6Windows skip、独立High GO零项/14反正例0 mismatch。High与final receipt在架构树tmp/r04-class-supplier-{high,final-receipt}.md；整体尚不宣称完整CI/部署GO。
-- 精确Linux38618912332@599e8：Prisma双generate/musl与完整安装default self/Worker AST/vendor读取检查已success；后继sudo test_host_broker.py 27 tests/3 errors为AF_UNIX path too long，后面的deploy/source恢复未执行，整体红。原日志仅owner取一次tmp/r04-ci-599e8e0c-skill-path.log；root已派原测试单文件三个case复用既有相对bind/finally恢复cwd，保留真实taskID/权限/断言，High后新SHA一次全workflow。不把夹具失败称容量/基础设施不可用。
+- R04独立树已推3cd8401fbaed41da3c2f1a599aa1a624c93b2a08，前序599e8e0c class supplier两文件High GO、cb0a0d53 host socket三case改相对bind/finally恢复cwd增量High GO、3cd task-store Tx mock及scope身份断言增量High GO；后者本机18/18。三段独立gpt-6.1 High回执在架构树tmp/r04-class-supplier-high.md，最终总回执同前缀final-receipt.md。生产/R12未改变，整体CI未绿。
+- 精确Linux38622678560@3cd已终态failure：其他5jobs成功，skill-path真实full-default self/Worker closure、broker27、old/current source restore、部署组合341零skip、Worker12files822/822均通过；后继Domain5files480/485，5fail均native-video-parents runtime资格夹具。root已定位canonical既有3cff5edf该文件仅补1行nativeAgentRuntime；另原ea0885a9 presentation-asset与caf7b280 native-image-review已修合同须先核等价才复用。owner唯一日志tmp/r04-ci-3cd8401f-skill-path.log；后继未跑不能称完整CI，通过源码不等于部署。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
 ## 研究生命周期角色与入口
