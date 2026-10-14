@@ -35,6 +35,14 @@ import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgent
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
+/**
+ * Persistent owner-stop marker.  It is intentionally stored in the existing
+ * task error column so an owned stop does not require a new enum or migration.
+ * Keep this value stable: recovery and retry predicates use it as an absorbing
+ * generation fence.
+ */
+export const AGENT_TASK_OWNED_STOP_REASON = '[blocked] Execution stopped by its owner';
+export const OWNED_STOP_REASON = AGENT_TASK_OWNED_STOP_REASON;
 export const AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'presentation.figure-audit', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
@@ -77,6 +85,22 @@ export interface AgentTaskView {
   error: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** Derived public marker; no private provider/checkpoint data is exposed. */
+  stopReason?: 'user';
+}
+
+export type AgentTaskCancelOutcome = AgentTaskView & {
+  outcome: 'applied' | 'alreadyApplied' | 'terminal';
+};
+
+/** Pure predicate shared by task recovery, retry and worker callbacks. */
+export function isOwnedStopped(value: { error?: string | null } | string | null | undefined): boolean {
+  return (typeof value === 'string' ? value : value?.error) === AGENT_TASK_OWNED_STOP_REASON;
+}
+
+/** Alias for callers that only have the persisted error string. */
+export function isOwnedStopReason(value: string | null | undefined): boolean {
+  return value === AGENT_TASK_OWNED_STOP_REASON;
 }
 
 export interface AgentSessionView {
@@ -207,6 +231,10 @@ function evaluateAgentTaskRetryEligibility(
   } else if (task.kind === 'source.retrieve') {
     return { authorityValid: false, canRetry: false };
   }
+  // An owner stop is an absorbing generation fence. Keep this explicit even
+  // though the marker has a [blocked] prefix: selected historical recovery
+  // branches intentionally allow other blocked errors to resume.
+  if (isOwnedStopped(task)) return { authorityValid: true, canRetry: false };
   // Two explicit recoveries; the storage layer independently enforces its attempt budget.
   if (task.retryCount < 2 && isRetryableSourceSearchIndex(task)) {
     return { authorityValid: true, canRetry: Boolean(researchObject) };
@@ -862,7 +890,10 @@ export async function submitDeterministicPresentationTask(
 
 export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
-  if (!task || task.deletedAt || task.dispatchedAt != null) return false;
+  // Only pending rows are durable outbox entries. A stale dispatch acknowledgement
+  // may still leave a queue item behind, but it can never enqueue a stopped or
+  // terminal task from this entry point.
+  if (!task || task.deletedAt || task.status !== 'pending' || isOwnedStopped(task) || task.dispatchedAt != null) return false;
   await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
   const acknowledgedAt = new Date();
   await deps.prisma.agentTask.updateMany({
@@ -872,6 +903,142 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
       updatedAt: new Date(Math.max(acknowledgedAt.getTime(), task.updatedAt.getTime() + 1)) },
   });
   return true;
+}
+
+type OwnedStopTaskMutation = {
+  task: AgentTask;
+  applied: boolean;
+};
+
+/**
+ * Apply the existing task-generation stop fence inside a caller's transaction.
+ * The caller must have already proved actor/scope ownership. This helper is
+ * exported for the run stop primitive so both paths share the same CAS and
+ * marker; it never writes credits, payloads, results, assets or trash rows.
+ */
+export async function stopAgentTaskInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { taskId: string; expectedExecutionAttempt: number; allowFailed?: boolean },
+): Promise<OwnedStopTaskMutation> {
+  const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
+  if (!task || task.deletedAt) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  if (isOwnedStopped(task)) return { task, applied: false };
+  if (task.executionAttempt !== input.expectedExecutionAttempt) {
+    throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+  }
+  if (task.status === 'succeeded' || (task.status === 'failed' && !input.allowFailed)) {
+    return { task, applied: false };
+  }
+  if (task.status !== 'pending' && task.status !== 'running' && task.status !== 'failed') {
+    return { task, applied: false };
+  }
+  const changed = await tx.agentTask.updateMany({
+    where: {
+      id: task.id,
+      deletedAt: null,
+      status: task.status,
+      executionAttempt: input.expectedExecutionAttempt,
+      updatedAt: task.updatedAt,
+    },
+    data: {
+      status: 'failed',
+      error: AGENT_TASK_OWNED_STOP_REASON,
+      // The old worker must lose authority even when it was already failed and
+      // a recovery path might otherwise rearm that same generation.
+      executionAttempt: { increment: 1 },
+    },
+  });
+  if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', '任务已被其他执行代际修改');
+  const updated = await tx.agentTask.findUnique({ where: { id: task.id } });
+  if (!updated) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  return { task: updated, applied: true };
+}
+
+interface OwnedAgentTaskScope {
+  task: Prisma.AgentTaskGetPayload<{
+    include: { session: { include: { researchObject: { include: { workspace: { include: { members: true } } } } } } };
+  }>;
+  workspaceId: string | null;
+}
+
+async function requireOwnedAgentTaskScope(
+  tx: Prisma.TransactionClient,
+  taskId: string,
+  userId: string,
+): Promise<OwnedAgentTaskScope> {
+  const task = await tx.agentTask.findUnique({ where: { id: taskId }, include: retryAuthorityInclude(userId) });
+  if (!task || isInternalJournalTask(task) || task.deletedAt || task.session.deletedAt
+    || task.session.status !== 'active' || task.session.userId !== userId) {
+    throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  }
+  const researchObject = task.session.researchObject;
+  if (!task.session.researchObjectId) return { task, workspaceId: null };
+  if (!researchObject || researchObject.id !== task.session.researchObjectId || researchObject.deletedAt
+    || researchObject.workspace.status !== 'active'
+    || !researchObject.workspace.members.some((membership) => membership.userId === userId)) {
+    throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  }
+  return { task, workspaceId: researchObject.workspace.id };
+}
+
+/**
+ * Owner-scoped, generation-bound task stop. Existing terminal failures and
+ * successes are returned unchanged; only pending/running rows are publicly
+ * stoppable. A prior owned stop accepts its old generation idempotently.
+ */
+export async function cancelAgentTask(
+  deps: AgentDeps,
+  input: { userId: string; taskId: string; expectedExecutionAttempt: number },
+  ctx: AuditContext = {},
+): Promise<AgentTaskCancelOutcome> {
+  if (!Number.isInteger(input.expectedExecutionAttempt) || input.expectedExecutionAttempt < 0) {
+    throw new AgentError('VALIDATION_ERROR', '任务执行代际必须是非负整数');
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = await deps.prisma.$transaction(async (tx) => {
+        await lockTrashReferences(tx);
+        const scope = await requireOwnedAgentTaskScope(tx, input.taskId, input.userId);
+        if (scope.workspaceId) {
+          try { await lockLiveResearchObject(tx, scope.task.session.researchObjectId!); }
+          catch (error) { throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在', error); }
+        }
+        const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
+        if (!task || task.deletedAt) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        if (isOwnedStopped(task)) {
+          if (input.expectedExecutionAttempt !== task.executionAttempt
+            && input.expectedExecutionAttempt !== task.executionAttempt - 1) {
+            throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+          }
+          return { task, outcome: 'alreadyApplied' as const };
+        }
+        if (task.executionAttempt !== input.expectedExecutionAttempt) {
+          throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+        }
+        if (task.status === 'succeeded') {
+          return { task, outcome: 'terminal' as const };
+        }
+        const canStopFailed = task.status === 'failed' && evaluateAgentTaskRetryEligibility(task as AgentTaskRetrySnapshot, input.userId).canRetry;
+        if (task.status === 'failed' && !canStopFailed) return { task, outcome: 'terminal' as const };
+        const stopped = await stopAgentTaskInTransaction(tx, {
+          taskId: task.id, expectedExecutionAttempt: input.expectedExecutionAttempt, allowFailed: canStopFailed,
+        });
+        if (!stopped.applied) return { task: stopped.task, outcome: 'terminal' as const };
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'agent.task.cancel', workspaceId: scope.workspaceId,
+          targetType: 'agent_task', targetId: task.id,
+          metadata: { previousStatus: task.status, previousExecutionAttempt: task.executionAttempt,
+            executionAttempt: stopped.task.executionAttempt, reason: AGENT_TASK_OWNED_STOP_REASON },
+        }, ctx);
+        return { task: stopped.task, outcome: 'applied' as const };
+      }, { isolationLevel: 'Serializable' });
+      return { ...taskToView(result.task), outcome: result.outcome };
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt >= 2) throw error;
+      await waitForSerializableRetry(attempt);
+    }
+  }
+  throw new AgentError('ILLEGAL_TRANSITION', '任务停止事务无法序列化');
 }
 
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
@@ -1241,6 +1408,10 @@ async function markTaskProgressOnce(
     throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
   }
 
+  // An owner stop is an absorbing fence. A callback that omits its generation
+  // must not rewrite the stop marker or synchronize a backing workflow state.
+  if (isOwnedStopped(task)) return taskToView(task);
+
   // 消费者幂等：终态 succeeded 后 skip（§16 重放不重复副作用）
   if (from === 'succeeded') return taskToView(task);
 
@@ -1534,5 +1705,6 @@ export function taskToView(task: {
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
     canRetry, result,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
+    ...(isOwnedStopped(task) ? { stopReason: 'user' as const } : {}),
   };
 }

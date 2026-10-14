@@ -5,7 +5,7 @@ import type { AuditContext } from '@openscience/observability';
 import { recordAudit } from '../workspace/audit';
 import { requireActiveMembership } from '../workspace/helpers';
 import { now } from '../workspace/types';
-import { lockTrashReferences } from '../trash/trash';
+import { lockLiveResearchObject, lockTrashReferences } from '../trash/trash';
 import { confirmIngestionClaimEvidenceBridge, previewIngestionClaimEvidenceBridge, type IngestionClaimSelection } from '../ingestion/claim-evidence-bridge';
 import { MAX_INGESTION_CLAIMS } from '../ingestion/reviewed-claim-suggestions';
 import { ensureHermesIngestionReview, materializeHermesIngestion, initializeHermesNativeSourceReviewInTransaction, recoverHermesSourceReviewInTransaction, reviewHermesSavedCompositionInTransaction, inspectIngestionParserRecovery, retryIngestionTaskInTransaction, type IngestionDeps } from '../ingestion/ingestion-service';
@@ -13,7 +13,8 @@ import { inspectHermesSourceReviewRecovery, inspectInitialHermesSourceReview, in
   requireNoPrivateSourceReanalysisWriter, inspectNativeSourceReviewInitializationRecovery,
   NATIVE_REVIEW_INITIALIZATION_ERROR, NATIVE_REVIEW_INITIALIZATION_RECOVERY, inspectNativeSourceReviewPreflightRecovery,
   NATIVE_REVIEW_PREFLIGHT_ERROR, NATIVE_REVIEW_PREFLIGHT_RECOVERY, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
-import { dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction, type AgentDeps } from './agent';
+import { AGENT_TASK_OWNED_STOP_REASON, dispatchAgentTask, findOrCreateAgentSessionInTransaction, persistAgentTaskInTransaction,
+  stopAgentTaskInTransaction, type AgentDeps } from './agent';
 import { HermesVideoUnavailableError, isHermesVideoReady, readHermesAudioAuditionPolicy, requireHermesVideoReady, isHermesVideoRun, type HermesVideoReadinessDeps, type HermesAudioAuditionPolicy } from './video-readiness';
 import { ONCHIP_FIELD_SAMPLING_PROFILE, ONCHIP_SCENE_ROLES, ONCHIP_SOURCE_CONTENT_HASH, CONTENT_DRIVEN_PROFILE, CONTENT_DRIVEN_IMAGE_PROFILE, VISUAL_NARRATIVE_PROFILE, requireNativeVideoStoryboard, requireNativeVideoSceneImage, requireVideoGenerationParents } from '../assets/video';
 import { HERMES_IMAGE_RENDER_RECOVERY_ACTION, NARRATIVE_PIXEL_REPLAN, NARRATIVE_PIXEL_PLAN_REVISION, NARRATIVE_TECHNICAL_RECOVERY, NARRATIVE_TECHNICAL_REVIEW_FOLLOWUP, STORYBOARD_SOURCE_SUPPORT_INVALID, readNarrativeSourceSupportParent, readNarrativeTechnicalRecoverySource, readNarrativeTechnicalReviewFollowupSource, copyNarrativeImageForReview, parsePresentationGenerationPayload, readNarrativeImageRenderSource, readNarrativeImageReplanSource, readNarrativePixelReplanSource, readNarrativePixelReplanAuthority, readNarrativePixelBlockedPlan, readStoppedStoryboardImageRevision, requirePresentationWriteScope, requireHermesImageRenderRecoveryAuthority, requireStoryboardRevisionTask, transitionHermesPresentationAsset, type ImageReviewNotSubmittedInput, type HermesPresentationAuthority, type PresentationGenerationPayload } from '../assets/presentation-asset';
@@ -156,6 +157,14 @@ export interface HermesResearchRunView {
     availableAssetStatus?: string;
     error: string | null;
   }>;
+}
+
+export const HERMES_RUN_OWNED_STOP_REASON = AGENT_TASK_OWNED_STOP_REASON;
+export type HermesResearchRunCancelOutcome = HermesResearchRunView & { outcome: 'applied' | 'alreadyApplied' | 'terminal' };
+
+async function waitForRunCancellationRetry(attempt: number): Promise<void> {
+  const delay = [10, 25, 50][attempt] ?? 50;
+  await new Promise<void>((resolve) => setTimeout(resolve, delay));
 }
 
 type RunRow = Prisma.HermesResearchRunGetPayload<{ include: typeof RUN_INCLUDE }>;
@@ -474,6 +483,7 @@ export async function getHermesResearchRun(
   const authority = await requireActiveMembership(deps.prisma, ro.workspaceId, input.actorId)
     .catch((cause) => { throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found', { cause }); });
   const projectReadinessHold = (view: HermesResearchRunView) => projectHermesVideoReadinessHold(deps, run, view);
+  if (run.error === HERMES_RUN_OWNED_STOP_REASON) return projectReadinessHold(toView(run));
   if (run.maxAgentTasks === 2 && await deps.prisma.auditLog.findFirst({ where: {
     action: FIRST_IMAGE_CONTINUATION, targetType: 'hermes_research_run', targetId: run.id, actorId: run.actorId,
   } })) return projectReadinessHold({ ...toView(run), canRetryGeneration: false });
@@ -2621,6 +2631,9 @@ export async function retryHermesGeneration(deps: HermesResearchRunDeps, input: 
         if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.researchObjectId) {
           throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
         }
+        if (run.error === HERMES_RUN_OWNED_STOP_REASON) {
+          throw new HermesResearchRunError('SOURCE_NOT_READY', 'This research run was stopped by its owner');
+        }
         if (run.maxAgentTasks === 2) throw new HermesResearchRunError('SOURCE_NOT_READY', 'Art style continuation has no automatic replacement or recovery allowance');
         const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
         const membership = ro ? await requireActiveMembership(tx, ro.workspaceId, input.actorId).catch(() => null) : null;
@@ -3776,6 +3789,85 @@ async function moveRun(
     targetType: 'hermes_research_run', targetId: run.id, metadata: { from: run.status, to,
       ...(run.profile === VISUAL_NARRATIVE_PROFILE ? { executor: 'hermes', authorizedByUserId: run.actorId } : {}) } }, {});
   return to;
+}
+
+/**
+ * Owner-scoped run stop. Only child tasks carrying the existing, explicit
+ * hermesRunAuthority binding are fenced; shared source-ingestion work is left
+ * running when ownership cannot be proved. No content, ledger or receipt row
+ * is deleted or rewritten.
+ */
+export async function cancelHermesResearchRun(
+  deps: HermesResearchRunDeps,
+  input: { actorId: string; researchObjectId: string; runId: string; expectedVersion: number },
+  ctx: AuditContext = {},
+): Promise<HermesResearchRunCancelOutcome> {
+  if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
+    throw new HermesResearchRunError('VALIDATION_ERROR', 'Run cancellation requires a positive expected version');
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await deps.prisma.$transaction(async tx => {
+        await lockTrashReferences(tx);
+        const run = await tx.hermesResearchRun.findUnique({ where: { id: input.runId }, include: RUN_INCLUDE });
+        if (!run || run.actorId !== input.actorId || run.researchObjectId !== input.researchObjectId) {
+          throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
+        }
+        const ro = await tx.researchObject.findUnique({ where: { id: run.researchObjectId } });
+        if (!ro || ro.deletedAt || ro.status !== 'draft') throw new HermesResearchRunError('NOT_FOUND', 'Hermes research run not found');
+        const authority = await requireActiveMembership(tx, ro.workspaceId, input.actorId)
+          .catch(() => null);
+        if (!authority || !WRITE_ROLES.has(authority.membership.role)) {
+          throw new HermesResearchRunError('FORBIDDEN', 'Research run cancellation permission is unavailable');
+        }
+        await lockLiveResearchObject(tx, ro.id);
+        if (run.error === HERMES_RUN_OWNED_STOP_REASON) {
+          if (input.expectedVersion !== run.version && input.expectedVersion !== run.version - 1) {
+            throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before cancelling');
+          }
+          return { ...toView(run), outcome: 'alreadyApplied' as const };
+        }
+        if (run.status === 'succeeded') return { ...toView(run), outcome: 'terminal' as const };
+        if (run.version !== input.expectedVersion) {
+          throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before cancelling');
+        }
+        const stepTaskIds = run.steps.flatMap(step => step.agentTaskId ? [step.agentTaskId] : []);
+        const tasks = stepTaskIds.length ? await tx.agentTask.findMany({ where: { id: { in: stepTaskIds } } }) : [];
+        const fencedTaskIds: string[] = [];
+        for (const task of tasks) {
+          const authorityBinding = jsonRecord(jsonRecord(task.payload).hermesRunAuthority);
+          const boundStep = run.steps.find(step => step.agentTaskId === task.id);
+          if (!boundStep || authorityBinding.runId !== run.id || authorityBinding.stage !== boundStep.stage
+            || authorityBinding.ordinal !== boundStep.ordinal || !['pending', 'running', 'failed'].includes(task.status)
+            || task.error === HERMES_RUN_OWNED_STOP_REASON) continue;
+          const stopped = await stopAgentTaskInTransaction(tx, {
+            taskId: task.id, expectedExecutionAttempt: task.executionAttempt, allowFailed: true,
+          });
+          if (stopped.applied) fencedTaskIds.push(task.id);
+        }
+        const changed = await tx.hermesResearchRun.updateMany({ where: {
+          id: run.id, actorId: input.actorId, researchObjectId: input.researchObjectId,
+          version: input.expectedVersion, status: run.status,
+        }, data: { status: 'stopped', error: HERMES_RUN_OWNED_STOP_REASON, version: { increment: 1 } } });
+        if (changed.count !== 1) throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run changed; reload before cancelling');
+        for (const step of run.steps) {
+          if (step.status === 'succeeded') continue;
+          await tx.hermesResearchStep.updateMany({ where: { id: step.id, runId: run.id, status: step.status },
+            data: { status: 'stopped', error: HERMES_RUN_OWNED_STOP_REASON } });
+        }
+        await recordAudit(deps, tx, { actorId: input.actorId, workspaceId: ro.workspaceId,
+          action: 'hermes.research_run.cancel', targetType: 'hermes_research_run', targetId: run.id,
+          metadata: { previousStatus: run.status, previousVersion: run.version, version: run.version + 1,
+            reason: HERMES_RUN_OWNED_STOP_REASON, fencedTaskIds } }, ctx);
+        const updated = await tx.hermesResearchRun.findUniqueOrThrow({ where: { id: run.id }, include: RUN_INCLUDE });
+        return { ...toView(updated), outcome: 'applied' as const };
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if ((error as { code?: unknown }).code !== 'P2034' || attempt >= 2) throw error;
+      await waitForRunCancellationRetry(attempt);
+    }
+  }
+  throw new HermesResearchRunError('CONCURRENT_UPDATE', 'Hermes run cancellation could not be serialized');
 }
 
 export async function reconcileHermesResearchRuns(

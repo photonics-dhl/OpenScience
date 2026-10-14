@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
-  claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
+  AGENT_TASK_OWNED_STOP_REASON, AGENT_TASK_QUEUE, cancelAgentTask, claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask, dispatchAgentTask,
   isNativeImagePlanningContractTask,
   persistAgentTaskInTransaction, type AgentDeps,
@@ -1778,5 +1778,62 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await markTaskProgress(deps, { taskId: task.id, status: 'running' });
     await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: '[blocked] parser rejected unsafe content' });
     expect(db.ingestionTasks[0].state).toBe('failed_blocked');
+  });
+});
+
+describe('owner task stop fence', () => {
+  it('stops a pending generation before dispatch and preserves the paid row', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract',
+      payload: { manuscriptText: 'keep this payload' }, dispatch: false });
+    const before = structuredClone(db.agentTasks[0]);
+    const debitCount = db.usageLedger.length;
+    const stopped = await cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 0 });
+    expect(stopped).toMatchObject({ outcome: 'applied', status: 'failed', stopReason: 'user', canRetry: false });
+    expect(db.agentTasks[0]).toMatchObject({ status: 'failed', error: AGENT_TASK_OWNED_STOP_REASON, executionAttempt: 1,
+      payload: before.payload, result: before.result });
+    expect(db.usageLedger).toHaveLength(debitCount);
+    expect(redis.lists.get(AGENT_TASK_QUEUE) ?? []).toEqual([]);
+    await expect(dispatchAgentTask(deps, task.id)).resolves.toBe(false);
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/not retryable/i);
+  });
+
+  it('replays the original generation idempotently and rejects a different generation', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, dispatch: false });
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 0 }))
+      .resolves.toMatchObject({ outcome: 'applied' });
+    const snapshot = structuredClone(db.agentTasks[0]);
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 0 }))
+      .resolves.toMatchObject({ outcome: 'alreadyApplied', executionAttempt: 1 });
+    expect(db.agentTasks[0]).toEqual(snapshot);
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 9 }))
+      .rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+  });
+
+  it('competes with a claim and only stops the current execution generation', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, dispatch: false });
+    await claimAgentTask(deps, task.id);
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 0 }))
+      .rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 1 }))
+      .resolves.toMatchObject({ outcome: 'applied', executionAttempt: 2 });
+    expect(db.agentTasks[0]).toMatchObject({ status: 'failed', error: AGENT_TASK_OWNED_STOP_REASON, executionAttempt: 2 });
+  });
+
+  it('does not stop a succeeded task or expose another user’s task', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, dispatch: false });
+    await claimAgentTask(deps, task.id);
+    await markTaskProgress(deps, { taskId: task.id, status: 'succeeded', expectedExecutionAttempt: 1, result: { ok: true } });
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 1 }))
+      .resolves.toMatchObject({ outcome: 'terminal', status: 'succeeded' });
+    await expect(cancelAgentTask(deps, { userId: 'other-user', taskId: task.id, expectedExecutionAttempt: 1 }))
+      .rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
   });
 });
