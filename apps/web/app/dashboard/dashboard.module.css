@@ -904,7 +904,9 @@
  .headingTitleRow { align-items: flex-start; gap: 12px; }
  .desk .heading .welcome { font-size: 16px; }
  .createResearch { min-height: 44px; padding: 8px 12px; font-size: 13px; }
- .currentSurface { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 20px 16px; }
+ .currentSurface { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'hermes' 'research'; gap: 20px; padding: 20px 16px; }
+ .desk .currentResearch { grid-area: research; }
+ .desk .hermesConversation { grid-area: hermes; }
  .currentResearch { gap: 12px; }
  .desk .currentResearch h2.currentTitle { font-size: 25px; }
  .currentSummary { font-size: 16px; }

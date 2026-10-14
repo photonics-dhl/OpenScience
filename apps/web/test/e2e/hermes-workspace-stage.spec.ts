@@ -382,6 +382,11 @@ async function closeTo(page: Page, opener: Locator, escape = false, placement: '
 async function enterEditor(page: Page) {
   await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: new RegExp(researchTitle) }).click();
   await expect(page).toHaveURL(new RegExp(roPath + '/edit$'));
+  // The editor now opens on the contribution view. Select the content view
+  // explicitly for tests that exercise the six-field editor and its review
+  // opener; the assertions below remain unchanged.
+  await page.getByRole('button', { name: 'Research content', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(roPath + '/edit\\?view=content$'));
 }
 
 test('only the primary left pointer invokes the toolbar avatar, without capture or drag', async ({ page }) => {
@@ -1084,7 +1089,8 @@ for (const initial of ['hermesTask', 'ingestionTask']) {
       await page.route((url) => url.pathname + url.search === '/api/agent/tasks/guide-task', (route) => { reads.push('guide-task'); return json(route, { task }); });
     }
     const id = initial === 'hermesTask' ? 'guide-task' : 'task-review';
-    await page.goto(baseUrl + roPath + '/edit?' + initial + '=' + id, { waitUntil: 'networkidle' });
+    const query = initial === 'ingestionTask' ? 'view=media&' + initial + '=' + id : initial + '=' + id;
+    await page.goto(baseUrl + roPath + '/edit?' + query, { waitUntil: 'networkidle' });
     await assertConversation(page, 'complementary');
     if (initial === 'hermesTask') {
       await expect(guide(page).locator('[data-hermes-drawer-state="succeeded"]')).toBeVisible();
