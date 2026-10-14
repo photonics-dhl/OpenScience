@@ -528,7 +528,7 @@ describe('ordinary Native video revision parent contract', () => {
       .toEqual(initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1'));
   });
   it.each(['historical-external', 'marked-external', 'marked-native'] as const)(
-    'inherits the actual %s parent contract in one task/debit and retains full Host readiness', async mode => {
+    'inherits the actual %s parent contract in one task/debit and keeps historical Host readiness', async mode => {
       const f = await nativeLocalFixture(mode), parent = structuredClone(f.parentTask);
       const beforeTasks = f.db.agentTasks.length, beforeDebits = f.db.usageLedger.filter(row => row.kind === 'consume').length;
       const task = await submitPresentationGeneration(f as never, f.input);
@@ -537,7 +537,7 @@ describe('ordinary Native video revision parent contract', () => {
         : initialNativeAgentExecution(f.runtime, 'paper-illustration', 'video-optional-audio-v1');
       expect(child.result).toEqual(expected); expect(child.result.nativeAgentExecution).not.toHaveProperty('checkpoint');
       expect(f.db.agentTasks).toHaveLength(beforeTasks + 1); expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(beforeDebits + 1);
-      expect(f.readVideoReadiness.mock.calls).toEqual([mode === 'marked-native' ? ['native-first'] : []]); expect(f.parentTask).toEqual(parent);
+      expect(f.readVideoReadiness.mock.calls).toEqual(mode === 'historical-external' ? [[]] : []); expect(f.parentTask).toEqual(parent);
       const paid = structuredClone(f.db); f.readVideoReadiness.mockClear().mockResolvedValue(false);
       expect((await submitPresentationGeneration(f as never, f.input)).id).toBe(task.id);
       expect(f.db).toEqual(paid); expect(f.readVideoReadiness).not.toHaveBeenCalled();
@@ -555,21 +555,36 @@ describe('ordinary Native video revision parent contract', () => {
       await expect(submitPresentationGeneration(f as never, f.input)).rejects.toThrow();
       expect(f.db).toEqual(before); expect(f.readVideoReadiness).not.toHaveBeenCalled();
     });
-  it('refuses valid-but-changed parent execution after readiness instead of inferring a new contract', async () => {
+  it('refuses valid-but-changed parent execution between proof reads instead of inferring a new contract', async () => {
     const f = await nativeLocalFixture('marked-external');
-    f.readVideoReadiness.mockImplementation(async () => {
-      delete (f.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
-      return true;
+    const findParent = f.prisma.presentationAsset.findUnique.bind(f.prisma.presentationAsset); let reads = 0;
+    vi.spyOn(f.prisma.presentationAsset, 'findUnique').mockImplementation(async args => {
+      if (++reads === 2) delete (f.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+      return findParent(args);
     });
     const tasks = f.db.agentTasks.length, debits = f.db.usageLedger.length;
     await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(debits);
   });
-  it('keeps native-first local revisions blocked when complete Host readiness is absent', async () => {
-    const f = await nativeLocalFixture('marked-native'); f.readVideoReadiness.mockResolvedValue(false);
+  it('keeps historical private revisions blocked when complete Host readiness is absent', async () => {
+    const f = await nativeLocalFixture('historical-external'); f.readVideoReadiness.mockResolvedValue(false);
     const before = structuredClone(f.db);
     await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
-    expect(f.db).toEqual(before); expect(f.readVideoReadiness.mock.calls).toEqual([['native-first']]);
+    expect(f.db).toEqual(before); expect(f.readVideoReadiness.mock.calls).toEqual([[]]);
+  });
+  it.each(['full', 'selected'] as const)('rejects a modern %s parent changed at transactional booking without a debit', async scope => {
+    const f = await nativeLocalFixture('marked-external');
+    if (scope === 'full') Reflect.deleteProperty(f.input.storyboard, 'revisionSceneIndex');
+    f.videoEnabled = false; f.readVideoReadiness.mockResolvedValue(false);
+    const findParent = f.prisma.presentationAsset.findUnique.bind(f.prisma.presentationAsset); let reads = 0;
+    vi.spyOn(f.prisma.presentationAsset, 'findUnique').mockImplementation(async args => {
+      if (++reads === 3) delete (f.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+      return findParent(args);
+    });
+    const tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
+    await expect(submitPresentationGeneration(f as never, f.input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(reads).toBeGreaterThanOrEqual(3); expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
+    expect(f.readVideoReadiness).not.toHaveBeenCalled();
   });
   it.each(['deleted-parent', 'contract-drift', 'claim-drift', 'temporarily-unreadable-parent'] as const)(
     'publicly replays the exact paid child after %s without parent/Claim/Host reads or any write', async change => {
