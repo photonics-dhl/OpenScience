@@ -7,13 +7,23 @@ import type { NativeAgentSessionState } from '../src/native-agent/session';
 const runtime = { runtimeId: 'fixture-runtime', skillCatalogueId: 'fixture-skills', model: 'MiniMax-M3' };
 function fixture() {
   const task = { id: 'task', status: 'running', kind: 'sdf.extract', executionAttempt: 1, deletedAt: null as Date | null,
-    session: { trashEntryId: null },
+    session: { kind: 'extract', trashEntryId: null },
     result: { ...initialNativeAgentExecution(runtime), sourceMapRef: { schemaVersion: 1, parserStatus: 'succeeded', artifactId: 'paper',
       contentHash: 'a'.repeat(64), serializedSha256: 'b'.repeat(64), objectKey: `derived/source-maps/${'b'.repeat(64)}.json`, size: 100 } } };
   const objects = new Map<string, Buffer>(); const queuedCleanup: string[] = [];
   let authorized = true; let insideTransaction = false; let loseWrite = false;
+  const trash = { id: 'trash', state: 'trashed', purgeScope: { trashEntryId: 'trash', taskIds: [task.id], artifactIds: [], assetIds: [],
+    taskIdentities: [] as { taskId: string; kind: string; sessionKind: string }[] } };
+  const trashById = (id: string) => {
+    if (!task.deletedAt || id !== trash.id) throw new Error('Missing fixture trash row');
+    return trash;
+  };
   const tx = { $queryRaw: async () => [], $executeRaw: async () => 0,
-    trashEntry: { findFirst: async () => task.deletedAt ? { id: 'trash', state: 'trashed' } : null },
+    trashEntry: { findFirst: async () => task.deletedAt ? trash : null,
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => trashById(where.id),
+      update: async ({ where, data }: { where: { id: string }; data: { purgeScope: typeof trash.purgeScope } }) => {
+        const row = trashById(where.id); row.purgeScope = data.purgeScope; return row;
+      } },
     trashObjectCleanup: { upsert: async ({ where }: { where: { objectKey: string } }) => { queuedCleanup.push(where.objectKey); } },
     agentTask: { findUnique: async () => task, updateMany: async ({ where, data }: {
     where: { result: { equals: unknown }; executionAttempt: number }; data: { result: typeof task.result } }) => {
@@ -36,7 +46,7 @@ function fixture() {
       target: { provider: 'fixture', model: runtime.model, promptHash: 'c'.repeat(64) }, request: { messages: [{ role: 'user', content: 'fixed' }], options: {} }, effectiveOptions: {} }] };
   const completed = () => ({ ...state, turns: [{ ...state.turns[0]!, state: 'completed' as const, response: { text: 'saved', provider: 'fixture', model: runtime.model,
     promptHash: 'c'.repeat(64), finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 } } }] });
-  return { task, objects, queuedCleanup, create, state, completed, revoke: () => { authorized = false; },
+  return { task, trash, objects, queuedCleanup, create, state, completed, revoke: () => { authorized = false; },
     loseWriteAfterDeletion: () => { loseWrite = true; }, get inTransaction() { return insideTransaction; } };
 }
 describe('native private task object store', () => {
@@ -84,6 +94,8 @@ describe('native private task object store', () => {
     const f = fixture(); f.loseWriteAfterDeletion();
     await expect(f.create().compareAndSet(null, f.state)).rejects.toThrow('write acknowledgment');
     expect(f.objects.size).toBe(1); expect(f.queuedCleanup).toEqual([...f.objects.keys()]);
+    expect(f.trash.purgeScope).toEqual({ trashEntryId: 'trash', taskIds: [f.task.id], artifactIds: [], assetIds: [],
+      taskIdentities: [{ taskId: f.task.id, kind: 'sdf.extract', sessionKind: 'extract' }] });
     expect(readNativeAgentExecution(f.task.result)?.checkpoint).toBeUndefined();
   });
   it('registers a failed live-task write for existing private task cleanup without adopting a checkpoint', async () => {
