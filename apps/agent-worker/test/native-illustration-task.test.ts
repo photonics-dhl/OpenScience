@@ -49,8 +49,12 @@ describe('unmarked fresh IMAGE planning guidance', () => {
   it.each([undefined, 'video-optional-audio-v1'] as const)('leaves the original VIDEO descriptors and resumed flags unchanged: %s', contract => {
     const video = nativeIllustrationToolProfile(null, 'video', contract);
     expect(nativeIllustrationToolProfile(savedTools(video.sourceTools), 'video', contract)).toEqual(video);
-    for (const name of ['paper_illustration_science_repair', 'paper_illustration_art'])
-      expect(video.sourceTools.find(tool => tool.name === name)!.description).toBe(originalImageTools.find(tool => tool.name === name)!.description);
+    expect(video.sourceTools.find(tool => tool.name === 'paper_illustration_science_repair')!.description)
+      .toBe(originalImageTools.find(tool => tool.name === 'paper_illustration_science_repair')!.description);
+    const art = video.sourceTools.find(tool => tool.name === 'paper_illustration_art')!.description;
+    expect(art).toBe(originalImageTools.find(tool => tool.name === 'paper_illustration_art')!.description
+      + ' The returned plan also includes inherited video direction and exact video prompts. Preserve science and the complete spoken script. Generate exactly one art object for each scene needing design in the latest accepted science, in the same order. Skip preserved original-paper scenes and unchanged scenes outside the selected local revision. Put a style alternative inside that scene\'s existing styleRecommendations; never add an extra scene for an alternative style. Count from the accepted science, not a prior rejected candidate.');
+    expect(art).not.toContain('complete visible-label list');
     expect(nativeScienceRepairGuidance(video.sourceTools)).toBe(OLD_REPAIR_GUIDANCE);
   });
 });
@@ -134,11 +138,12 @@ describe('saved image explicit trig reader', () => {
       expect(() => nativeIllustrationToolProfile(state, failure === 'video-output' ? 'video' : 'image', marker as never)).toThrow();
     });
 
-  it('keeps fresh unmarked image tools historical and rejects a fresh marked NULL checkpoint', () => {
-    const profile = nativeIllustrationToolProfile(null);
+  it('keeps saved unmarked image tools historical and rejects a fresh marked NULL checkpoint', () => {
+    const profile = nativeIllustrationToolProfile(saved(false));
     expect(profile.sourceExplicitTrig).toBe(false);
     expect(profile.sourceTools).toEqual(saved(false).turns[0]!.request.options.tools!.map(tool => tool.function));
     expect(profile.sourceTools.find(tool => tool.name === 'paper_illustration_science')!.description).not.toContain(suffix);
+    expect(nativeIllustrationToolProfile(null).sourceExplicitTrig).toBe(false);
     expect(() => nativeIllustrationToolProfile(null, 'image', contract)).toThrow();
   });
 
@@ -572,8 +577,8 @@ describe('Native VIDEO art follows its accepted scientific scene list', () => {
   });
 });
 describe('Native designed scenes omit the nullable original reference', () => {
-  it('requires a compact direct science repair call after validator feedback', () => {
-    const description = nativeIllustrationToolProfile(null).sourceTools
+  it('preserves the original saved compact direct science repair call after validator feedback', () => {
+    const description = nativeIllustrationToolProfile(savedTools(originalImageTools)).sourceTools
       .find(tool => tool.name === 'paper_illustration_science_repair')!.description;
     expect(description).toContain('the next assistant message must be exactly one paper_illustration_science_repair tool call');
     expect(description).toContain('no prose, explanation, full-science resubmission or art JSON');
