@@ -1426,7 +1426,7 @@ describe('ordinary inherited Native local revision admission', () => {
       idempotencyKey: 'original-ordinary-local-key' });
     expect(ledger).toEqual(paid); expect(f.deps.prisma.usageLedger.create).not.toHaveBeenCalled();
     expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([['native-first'], ['native-first']]);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it.each(['fresh', 'held'] as const)('admits %s native-only local work using the saved purpose without another debit', async state => {
     const f = await local(); f.setAudio('native-first', ['native', 'native', 'native']);
@@ -1441,29 +1441,31 @@ describe('ordinary inherited Native local revision admission', () => {
     }
     await f.poll();
     expect(f.task).toMatchObject({ status: 'succeeded', executionAttempt: 1, idempotencyKey: 'original-ordinary-local-key' });
-    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual(state === 'held' ? [['native-first'], ['native-first']] : [['native-first']]);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
     expect(execution.claim).toHaveBeenCalledTimes(1); expect(f.handler).toHaveBeenCalledTimes(1);
     expect(ledger).toEqual(paid); expect(f.deps.prisma.usageLedger.create).not.toHaveBeenCalled();
   });
-  it.each(['closed', 'external', 'mode-race', 'identity-race', 'contract-race'] as const)('keeps %s local native-only work held at attempt zero', async change => {
+  it.each(['mode-race', 'identity-race', 'contract-race'] as const)('keeps %s local native-only work held at attempt zero', async change => {
     const f = await local(); f.setAudio('native-first', ['native', 'native', 'native']);
-    if (change === 'external') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
     f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
-    f.deps.readVideoReadiness = vi.fn(async (purpose?: 'native-first') => {
-      if (change === 'mode-race') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
-      if (change === 'identity-race') f.native.parentTask.result.illustrationPrompts[0]!.videoPrompt = 'Changed video prompt';
-      if (change === 'contract-race') Object.assign(f.native.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
-      return change !== 'closed' && purpose === 'native-first';
+    const findParent = f.deps.prisma.presentationAsset.findUnique.bind(f.deps.prisma.presentationAsset); let reads = 0;
+    vi.spyOn(f.deps.prisma.presentationAsset, 'findUnique').mockImplementation(async args => {
+      if (++reads === 2) {
+        if (change === 'mode-race') f.setAudio('external-narration', ['external-narration', 'external-narration', 'external-narration']);
+        if (change === 'identity-race') f.native.parentTask.result.illustrationPrompts[0]!.videoPrompt = 'Changed video prompt';
+        if (change === 'contract-race') Object.assign(f.native.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+      }
+      return findParent(args);
     });
     const held = structuredClone(f.task);
     expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(f.task).toEqual(held);
-    expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([change === 'external' ? [] : ['native-first']]);
+    expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
     expect(await f.outbox()).toBe(0); expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
   });
-  it('admits a newly inherited local row only with default complete Host/TTS readiness', async () => {
+  it('admits a newly inherited private row from parent proof without Host/TTS readiness', async () => {
     const f = await local(), before = structuredClone(f.task);
     expect(await admitPendingVideoTask(f.deps, before as never)).toEqual({ expectedPendingTask: before });
-    expect(f.task).toEqual(before); expect(vi.mocked(f.deps.readVideoReadiness!).mock.calls).toEqual([[]]);
+    expect(f.task).toEqual(before); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled();
   });
   it('releases the inherited local snapshot once under concurrent compatible recovery', async () => {
     const f = await local(); f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
@@ -1480,17 +1482,19 @@ describe('ordinary inherited Native local revision admission', () => {
     expect(f.task).toMatchObject({ error: VIDEO_READINESS_HOLD, executionAttempt: 0 });
     expect(execution.claim).not.toHaveBeenCalled(); expect(f.handler).not.toHaveBeenCalled();
   });
-  it.each(['not-ready', 'unknown-parent', 'deleted-parent', 'unmarked-parent', 'parent-drift'] as const)(
+  it.each(['unknown-parent', 'deleted-parent', 'unmarked-parent', 'parent-drift'] as const)(
     'keeps %s inherited local work held with unchanged result/key/attempt', async change => {
       const f = await local(); f.task.error = VIDEO_READINESS_HOLD; f.lists.set(queueKey, []);
-      if (change === 'not-ready') f.state.ready = false;
       if (change === 'unknown-parent') Object.assign(f.native.parentTask.result.nativeAgentExecution, { planningContract: 'unknown' });
       if (change === 'deleted-parent') f.native.parent.deletedAt = new Date();
       if (change === 'unmarked-parent') delete (f.native.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
-      if (change === 'parent-drift') f.deps.readVideoReadiness = vi.fn(async () => {
-        delete (f.native.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
-        return true;
-      });
+      if (change === 'parent-drift') {
+        const findParent = f.deps.prisma.presentationAsset.findUnique.bind(f.deps.prisma.presentationAsset); let reads = 0;
+        vi.spyOn(f.deps.prisma.presentationAsset, 'findUnique').mockImplementation(async args => {
+          if (++reads === 2) delete (f.native.parentTask.result.nativeAgentExecution as { planningContract?: unknown }).planningContract;
+          return findParent(args);
+        });
+      }
       const held = structuredClone(f.task);
       expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(f.task).toEqual(held);
       expect(await releasePendingVideoTask(f.deps, held as never, 'video-optional-audio-v1')).toBe(false);

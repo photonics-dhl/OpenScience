@@ -1,7 +1,7 @@
 import { Prisma, type AgentTask } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import {
-  HermesVideoUnavailableError, PresentationAssetError, classifyNativeVideoAudio, isHermesVideoTask, isDirectNativeVideoStoryboard, isOrdinaryNativeVideoSceneRevision,
+  HermesVideoUnavailableError, PresentationAssetError, classifyNativeVideoAudio, isHermesVideoTask, isDirectNativeVideoStoryboard, isOrdinaryNativeVideoStoryboardRevision,
   isNativeImagePlanningContractTask,
   parsePresentationGenerationPayload, readNativeAgentExecution, requireHermesVideoReady, requireSceneImageParent, requireStoryboardBase, requireVideoGenerationParents,
   type AgentDeps, type HermesVideoReadinessDeps, type NativeAgentExecution,
@@ -69,7 +69,7 @@ function planningContractHold(task: Pick<AgentTask, 'kind' | 'payload' | 'result
   const rawMarker = (task.result as Record<string, unknown>).nativeAgentExecution;
   if (!rawMarker || typeof rawMarker !== 'object' || Array.isArray(rawMarker)
     || !Object.hasOwn(rawMarker, 'planningContract')) return false;
-  if (!isDirectNativeVideoStoryboard(task.payload) && !isOrdinaryNativeVideoSceneRevision(task.payload)) return false;
+  if (!isDirectNativeVideoStoryboard(task.payload) && !isOrdinaryNativeVideoStoryboardRevision(task.payload)) return false;
   try {
     const marker = readNativeAgentExecution(task.result);
     return marker?.planningContract !== undefined && (!marker.checkpoint || marker.checkpoint.state === 'started');
@@ -81,9 +81,9 @@ function optionalFirstNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
     && readNativeAgentExecution(task.result)?.planningContract === 'video-optional-audio-v1';
 }
 
-function optionalLocalNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
+function optionalPrivateNativePlanRevision(task: VideoTaskAdmissionSnapshot): boolean {
   if (task.kind !== 'presentation.generate' || task.status !== 'pending' || task.deletedAt || task.executionAttempt !== 0 || task.retryCount !== 0
-    || task.error !== null && task.error !== VIDEO_READINESS_HOLD || !isOrdinaryNativeVideoSceneRevision(task.payload)
+    || task.error !== null && task.error !== VIDEO_READINESS_HOLD || !isOrdinaryNativeVideoStoryboardRevision(task.payload)
     || !task.result || typeof task.result !== 'object' || Array.isArray(task.result) || Object.keys(task.result).length !== 1) return false;
   try {
     const marker = readNativeAgentExecution(task.result);
@@ -91,7 +91,7 @@ function optionalLocalNativePlan(task: VideoTaskAdmissionSnapshot): boolean {
   } catch { return false; }
 }
 
-async function requireLocalNativePlanReady(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<void> {
+async function requirePrivateNativePlanRevisionParent(deps: VideoTaskAdmissionDeps, task: VideoTaskAdmissionSnapshot): Promise<void> {
   const read = async () => {
     try {
       const base = await requireStoryboardBase(deps.prisma, parsePresentationGenerationPayload(task.payload));
@@ -106,7 +106,8 @@ async function requireLocalNativePlanReady(deps: VideoTaskAdmissionDeps, task: V
     }
   };
   const parent = await read();
-  await requireHermesVideoReady(deps, parent.purpose);
+  // This proven pristine child prepares a private plan; no Host/audio is consumed.
+  // Reuse the exact parent reread before the original snapshot admission fence.
   if (!isDeepStrictEqual(await read(), parent)) throw new HermesVideoUnavailableError();
 }
 
@@ -226,11 +227,11 @@ export async function releasePendingVideoTask(deps: VideoTaskAdmissionDeps, task
   if (planningContract !== undefined) {
     // Compatible R2 callers release the original untouched row once; generic Host recovery cannot opt in.
     try {
-      if (planningContract !== 'video-optional-audio-v1' || !firstNativePlan(task, VIDEO_READINESS_HOLD) && !optionalLocalNativePlan(task)
+      if (planningContract !== 'video-optional-audio-v1' || !firstNativePlan(task, VIDEO_READINESS_HOLD) && !optionalPrivateNativePlanRevision(task)
         || readNativeAgentExecution(task.result)?.planningContract !== planningContract) return false;
     } catch { return false; }
-    if (optionalLocalNativePlan(task)) {
-      try { await requireLocalNativePlanReady(deps, task); }
+    if (optionalPrivateNativePlanRevision(task)) {
+      try { await requirePrivateNativePlanRevisionParent(deps, task); }
       catch (error) { if (error instanceof HermesVideoUnavailableError) return false; throw error; }
     }
   } else if (planningContractHold(task)) return false;
@@ -270,14 +271,14 @@ export async function admitPendingVideoTask(deps: VideoTaskAdmissionDeps, task: 
   }
   // Intent lookup also awaits DB reads: a non-video result must not reopen an
   // unfenced claim of the poller's earlier payload.
-  const local = optionalLocalNativePlan(current);
+  const local = optionalPrivateNativePlanRevision(current);
   const contractHeld = planningContractHold(current) && !local;
   if (!contractHeld && !await isHermesVideoTask(deps.prisma, task.id)) return { expectedPendingTask: current };
   if (!contractHeld && firstNativePlan(current)) return { expectedPendingTask: current };
   try {
     if (contractHeld) throw new HermesVideoUnavailableError();
     if (local && current.error === VIDEO_READINESS_HOLD) return await releasePendingVideoTask(deps, current, 'video-optional-audio-v1');
-    if (local) await requireLocalNativePlanReady(deps, current);
+    if (local) await requirePrivateNativePlanRevisionParent(deps, current);
     else await requirePersistedVideoReady(deps, current);
   }
   catch (error) {
@@ -338,7 +339,7 @@ async function recoverHeldVideoTasksPage(
         && await releasePendingVideoTask(deps, task, 'video-optional-audio-v1')) released++;
       continue;
     }
-    if (optionalLocalNativePlan(task)) {
+    if (optionalPrivateNativePlanRevision(task)) {
       if (await isHermesVideoTask(deps.prisma, task.id)
         && await releasePendingVideoTask(deps, task, 'video-optional-audio-v1')) released++;
       continue;

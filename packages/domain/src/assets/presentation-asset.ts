@@ -372,16 +372,22 @@ export function isDirectNativeVideoStoryboard(payload: unknown): boolean {
   } catch { return false; }
 }
 
-/** The existing ordinary selected-scene video entry; run/art/fragment paths retain their own authority. */
-export function isOrdinaryNativeVideoSceneRevision(payload: unknown): boolean {
+/** Ordinary parent-bound private planning only; shape alone never proves Native authority. */
+export function isOrdinaryNativeVideoStoryboardRevision(payload: unknown): boolean {
   try {
     const parsed = parsePresentationGenerationPayload(payload), settings = parsed.storyboard;
     return parsed.kind === 'interactive_html' && settings?.output === 'video' && settings.narrative === true
-      && settings.baseAssetId !== undefined && settings.revisionSceneIndex !== undefined
+      && settings.baseAssetId !== undefined
       && parsed.hermesRunAuthority === undefined && settings.narrativeSceneLimit === undefined
       && settings.revisionMode === undefined && settings.revisionTaskId === undefined
       && settings.revisionImageAssetId === undefined && settings.artSceneIndex === undefined;
   } catch { return false; }
+}
+
+/** Preserve the selected-scene predicate for callers that require that narrower scope. */
+export function isOrdinaryNativeVideoSceneRevision(payload: unknown): boolean {
+  return isOrdinaryNativeVideoStoryboardRevision(payload)
+    && parsePresentationGenerationPayload(payload).storyboard?.revisionSceneIndex !== undefined;
 }
 
 export async function submitPresentationGeneration(deps: AgentDeps & HermesVideoReadinessDeps, input: {
@@ -406,6 +412,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   }
   let videoIntent = payload.kind === 'video' || payload.storyboard?.output === 'video';
   let videoReadinessPurpose: 'native-first' | undefined;
+  let privateNativePlanRevision = false;
   let nativeAudioParent: { identity: string; mode: 'external-narration' | 'native-first';
     read: () => Promise<{ identity: string; document: unknown } | undefined> } | undefined;
   const selectNativeAudio = (document: unknown, identity: string,
@@ -424,7 +431,8 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
   }
   if (payload.storyboard?.baseAssetId) {
     const base = await requireStoryboardBase(deps.prisma, payload);
-    if (!replay && isOrdinaryNativeVideoSceneRevision(payload) && base?.nativeIdentity) {
+    if (!replay && isOrdinaryNativeVideoStoryboardRevision(payload) && base?.nativeIdentity) {
+      privateNativePlanRevision = base.nativePlanningContract === 'video-optional-audio-v1';
       selectNativeAudio(base.view.document, base.nativeIdentity, async () => {
         const current = await requireStoryboardBase(deps.prisma, payload);
         return current?.nativeIdentity ? { identity: current.nativeIdentity, document: current.view.document } : undefined;
@@ -455,7 +463,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
         return current?.nativeParent ? { identity: current.identity, document: current.storyboardView.document } : undefined;
       });
   }
-  if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload)) {
+  if (videoIntent && !replay && !isDirectNativeVideoStoryboard(payload) && !privateNativePlanRevision) {
     const audition = payload.video?.purpose === 'audio-audition' ? payload.video : undefined;
     if (audition) {
       const policy = await readHermesAudioAuditionPolicy(deps);
@@ -471,7 +479,19 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       throw new PresentationAssetError('VALIDATION_ERROR', 'Native video parent changed before task booking');
   }
   const session = await createAgentSession(deps, { userId: input.userId, researchObjectId: input.researchObjectId, kind: 'visualization', title: 'Presentation asset generation', idempotencyKey: `presentation-session:${input.userId}:${input.researchObjectId}:${input.versionId}` }, ctx);
+  const privatePlanningParent = privateNativePlanRevision ? nativeAudioParent : undefined;
   const taskInput = { sessionId: session.id, userId: input.userId, kind: 'presentation.generate' as const, payload: payload as unknown as Record<string, unknown>, idempotencyKey: input.idempotencyKey,
+    ...(privatePlanningParent ? { beforePersist: async (tx: Prisma.TransactionClient) => {
+      const existingTask = input.idempotencyKey
+        ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
+        : null;
+      if (existingTask && !existingTask.deletedAt) return;
+      const current = await requireStoryboardBase(tx, payload);
+      if (current?.nativeIdentity !== privatePlanningParent.identity
+        || current.nativePlanningContract !== 'video-optional-audio-v1'
+        || classifyNativeVideoAudio(current.view.document) !== privatePlanningParent.mode)
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Native video parent changed before task booking');
+    } } : {}),
     ...(payload.sceneImage && sceneParentForTask ? { beforePersist: async (tx: Prisma.TransactionClient) => {
       const existingTask = input.idempotencyKey
         ? await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { id: true, deletedAt: true } })
@@ -887,7 +907,7 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
         throw new PresentationAssetError('VALIDATION_ERROR', 'Art revision requires a structured image plan in the same language and narrative scope; legacy paper originals require a re-render plan');
     const identity = JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids });
     let nativePlanningContract: NativeAgentExecution['planningContract'], nativeIdentity: string | undefined;
-    if (isOrdinaryNativeVideoSceneRevision(payload)) {
+    if (isOrdinaryNativeVideoStoryboardRevision(payload)) {
       // The authority validates all Native readers at runtime; legacy image/base callers stay minimal.
       const proof = await requireNativeVideoStoryboard(prisma as Parameters<typeof requireNativeVideoStoryboard>[0], asset, payload);
       nativePlanningContract = readNativeAgentExecution(proof.task.result)?.planningContract;
