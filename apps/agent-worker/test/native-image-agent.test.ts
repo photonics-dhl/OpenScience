@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, access, rm } from 'node:fs/promises';
+import { mkdtemp, access, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiGateway, AnthropicCompatProvider, type ScienceReviewInput } from '@openscience/ai-gateway';
@@ -233,9 +233,11 @@ describe('image Agent original conversation allowance', () => {
   });
 });
 
+const hostCallers = new Map<string, string>();
 function post(socketPath: string, path: string, value: unknown) {
   return new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
-    const request = httpRequest({ socketPath, path, method: 'POST', headers: { 'content-type': 'application/json' } }, response => {
+    const request = httpRequest({ socketPath, path, method: 'POST', headers: { 'content-type': 'application/json',
+      'x-openscience-native-caller': hostCallers.get(socketPath)! } }, response => {
       let text = ''; response.on('data', chunk => { text += chunk; });
       response.on('end', () => resolve({ status: response.statusCode!, body: JSON.parse(text) }));
     });
@@ -267,12 +269,15 @@ async function imageHost() {
     }
     if (initializationError) throw initializationError;
     if (!ready) throw new Error('Host fixture did not publish its request after listening');
+    hostCallers.set(socketPath, await readFile(resolve(root, `${taskId}-1/caller.credential`), 'utf8'));
+    expect((await post(socketPath, '/task/config', { systemPrompt: f.sdk.messages[0]!.content })).status).toBe(200);
     const first = await post(socketPath, '/v1/chat/completions', f.sdk); expect(first.status).toBe(200);
     expect((await post(socketPath, '/task/tools/authorize', { name: 'skill_view', arguments: { name: 'openscience-source-review' } })).status).toBe(200);
     expect((await post(socketPath, '/task/tools/authorize', { name: 'paper_image_view', arguments: {} })).status).toBe(200);
     const view = await post(socketPath, '/task/tools/call', { name: 'paper_image_view', arguments: {} }); expect(view.status).toBe(200);
     const firstMessage = (first.body.choices as Array<{ message: unknown }>)[0]!.message;
-    return { ...f, final, socketPath, receipt, imageRead, firstMessage, revoke: () => { allowed = false; }, cleanup: () => rm(root, { recursive: true, force: true }) };
+    return { ...f, final, socketPath, receipt, imageRead, firstMessage, revoke: () => { allowed = false; }, cleanup: () => {
+      hostCallers.delete(socketPath); return rm(root, { recursive: true, force: true }); } };
   } catch (error) {
     const originalError = initializationError ?? error;
     let stopped = ended;

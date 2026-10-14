@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { chmod, mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { nativeAgentSdkRequest } from '@openscience/ai-gateway';
 import { NativeAgentSessionError, type createNativeAgentSession, type NativeAgentSessionStore } from './session';
 
@@ -44,9 +45,13 @@ export async function runHostedNativeTask(input: {
   const directory = join(input.inboxRoot, instance);
   if (Buffer.byteLength(join(directory, 'worker.sock'), 'utf8') > 107) throw new Error('[blocked] Native Unix socket path exceeds the kernel limit');
   // A claimed execution gets a fresh producer directory. No automatic rebind to an old socket.
-  await mkdir(directory, { mode: 0o755 });
+  await mkdir(directory, { mode: 0o700 });
+  // Business authority/CAS does not identify a socket peer. Only this executor and
+  // its root broker receive this per-attempt capability; it never enters config/CP.
+  const callerCredential = randomBytes(32).toString('hex');
   let slots: Slot[] = [];
   let toolSequence = 0;
+  let firstTurnBound = false;
   let settled = false;
   let resolve!: (result: { finalResponse: string; observedPassageIds: string[] }) => void;
   let reject!: (error: Error) => void;
@@ -68,6 +73,12 @@ export async function runHostedNativeTask(input: {
     }
   }
   const server = createServer(async (req, res) => {
+    const caller = req.headers['x-openscience-native-caller'];
+    if (typeof caller !== 'string' || !/^[a-f0-9]{64}$/u.test(caller)
+      || !timingSafeEqual(Buffer.from(caller), Buffer.from(callerCredential))) {
+      // An unrelated host user cannot terminate a legitimate execution by probing it.
+      return respond(res, 401, { error: { code: 'NATIVE_CALLER_DENIED', message: 'Native caller is unavailable.' } });
+    }
     try {
       if (settled || Date.now() >= input.deadlineAt) blocked();
       await input.authorize();
@@ -76,7 +87,21 @@ export async function runHostedNativeTask(input: {
       }
       if (req.method !== 'POST' || req.headers['content-type']?.split(';')[0] !== 'application/json') blocked();
       const value = await body(req, req.url === '/v1/chat/completions' ? SDK_TRANSPORT_BYTES : Math.min(input.maxInputBytes, 1_048_576));
+      if (req.url === '/task/config') {
+        // The authenticated fixed runtime supplies its actual generated/cached Native
+        // system prompt. The first goal comes exclusively from this Worker's config.
+        // Conflicting bootstrap cannot overwrite paid history or stop a legitimate peer.
+        try {
+          if (!record(value) || typeof value.systemPrompt !== 'string') blocked();
+          await input.session.bindFirstTurn(input.config.goal, value.systemPrompt);
+          firstTurnBound = true;
+          return respond(res, 200, { bound: true });
+        } catch {
+          return respond(res, 409, { error: { code: 'NATIVE_FIRST_TURN_CHANGED', message: 'Native first turn is unavailable.' } });
+        }
+      }
       if (req.url === '/v1/chat/completions') {
+        if (!firstTurnBound) blocked();
         await validateSourceHistory(value);
         const response = await input.session.complete(value);
         slots = (response.choices[0]!.message.tool_calls ?? []).map(call => ({ id: call.id, name: call.function.name, sequence: toolSequence++,
@@ -145,6 +170,9 @@ export async function runHostedNativeTask(input: {
   try {
     await new Promise<void>((yes, no) => { server.once('error', no); server.listen(join(directory, 'worker.sock'), yes); });
     await chmod(join(directory, 'worker.sock'), 0o666);
+    const credential = await open(join(directory, 'caller.credential'), 'wx', 0o600);
+    try { await credential.writeFile(callerCredential); await credential.sync(); }
+    finally { await credential.close(); }
     const file = await open(join(directory, 'request.json'), 'wx', 0o600);
     try { await file.writeFile(JSON.stringify({ taskId: input.config.taskId, executionAttempt: input.executionAttempt })); await file.sync(); }
     finally { await file.close(); }

@@ -14,6 +14,21 @@ ROOT = Path("/opt/openscience-hermes")
 PRODUCER_UID = 1000
 
 
+def private_caller(directory_fd, owner):
+    descriptor = os.open('caller.credential', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size != 64):
+            raise ValueError('Native caller credential is unavailable')
+        value = os.read(descriptor, 65)
+        if not re.fullmatch(rb'[a-f0-9]{64}', value):
+            raise ValueError('Native caller credential is unavailable')
+        return value
+    finally:
+        os.close(descriptor)
+
+
 def validated_instance(name):
     if not isinstance(name, str) or not INSTANCE.fullmatch(name):
         raise ValueError("Invalid native task instance")
@@ -49,6 +64,7 @@ def pin_bridge(inbox, bridges, instance, producer_uid=PRODUCER_UID):
         task_id, attempt = instance.rsplit("-", 1)
         if value != {"taskId": task_id, "executionAttempt": int(attempt)} or type(value.get("executionAttempt")) is not int:
             raise ValueError("Native launch request identity changed")
+        caller = private_caller(task_fd, producer_uid)
         socket_stat = os.stat("worker.sock", dir_fd=task_fd, follow_symlinks=False)
         if not stat.S_ISSOCK(socket_stat.st_mode) or socket_stat.st_uid != producer_uid:
             raise ValueError("Native bridge is not the producer's Unix socket")
@@ -64,6 +80,13 @@ def pin_bridge(inbox, bridges, instance, producer_uid=PRODUCER_UID):
         if not stat.S_ISSOCK(pinned.st_mode) or (pinned.st_dev, pinned.st_ino) != (socket_stat.st_dev, socket_stat.st_ino):
             os.unlink("worker.sock", dir_fd=bridge_fd)
             raise ValueError("Native bridge changed while being pinned")
+        caller_fd = os.open('caller.credential', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=bridge_fd)
+        try:
+            os.fchmod(caller_fd, 0o600)
+            os.write(caller_fd, caller)
+            os.fsync(caller_fd)
+        finally:
+            os.close(caller_fd)
         manifest_fd = os.open('request.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444, dir_fd=bridge_fd)
         try:
             os.write(manifest_fd, body)
@@ -93,9 +116,11 @@ def notify_stopped(path):
             self.sock.settimeout(2)
             self.sock.connect(str(path))
     connection = UnixConnection('openscience-worker', timeout=2)
+    bridge_fd = secure_open_directory(path.parent, 0)
     try:
+        caller = private_caller(bridge_fd, 0).decode('ascii')
         connection.request('POST', '/task/finish', body=b'{"status":"stopped"}',
-                           headers={'Content-Type': 'application/json'})
+                           headers={'Content-Type': 'application/json', 'x-openscience-native-caller': caller})
         response = connection.getresponse()
         body = json.loads(response.read(1024))
         return (response.status == 200 and body == {'received': True}) or (
@@ -103,6 +128,7 @@ def notify_stopped(path):
             and body['error'].get('code') == 'NATIVE_TASK_STOPPED')
     finally:
         connection.close()
+        os.close(bridge_fd)
 
 
 def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, producer_uid=PRODUCER_UID):
@@ -115,7 +141,7 @@ def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, pro
     producer_fd = inbox_fd = None
     try:
         entries = set(os.listdir(bridge_fd))
-        if not entries <= {'worker.sock', 'ended', 'request.json'}:
+        if not entries <= {'worker.sock', 'ended', 'request.json', 'caller.credential'}:
             raise ValueError('Unexpected native bridge contents')
         manifest_fd = os.open('request.json', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=bridge_fd)
         try:
@@ -129,6 +155,7 @@ def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, pro
         finally:
             os.close(manifest_fd)
         if 'ended' not in entries:
+            private_caller(bridge_fd, 0)
             pinned = os.stat('worker.sock', dir_fd=bridge_fd, follow_symlinks=False)
             if not stat.S_ISSOCK(pinned.st_mode):
                 raise ValueError('Native pinned socket changed')
@@ -150,7 +177,7 @@ def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, pro
         if producer_fd is not None:
             info = os.fstat(producer_fd)
             remaining = set(os.listdir(producer_fd))
-            if info.st_uid != producer_uid or info.st_mode & stat.S_IWOTH or not remaining <= {'request.json', 'worker.sock'}:
+            if info.st_uid != producer_uid or info.st_mode & stat.S_IWOTH or not remaining <= {'request.json', 'worker.sock', 'caller.credential'}:
                 raise ValueError('Native producer contents changed')
             if 'request.json' in remaining:
                 request_fd = os.open('request.json', os.O_RDONLY | os.O_NOFOLLOW, dir_fd=producer_fd)
@@ -163,6 +190,9 @@ def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, pro
                         raise ValueError('Native producer identity changed')
                 finally:
                     os.close(request_fd)
+            if 'caller.credential' in remaining:
+                if private_caller(producer_fd, producer_uid) != private_caller(bridge_fd, 0):
+                    raise ValueError('Native producer caller changed')
             if 'worker.sock' in remaining:
                 original = os.stat('worker.sock', dir_fd=producer_fd, follow_symlinks=False)
                 pinned = os.stat('worker.sock', dir_fd=bridge_fd, follow_symlinks=False)
@@ -171,9 +201,13 @@ def cleanup_ended(root, instance, run=subprocess.run, notify=notify_stopped, pro
                 os.unlink('worker.sock', dir_fd=producer_fd)
             if 'request.json' in remaining:
                 os.unlink('request.json', dir_fd=producer_fd)
+            if 'caller.credential' in remaining:
+                os.unlink('caller.credential', dir_fd=producer_fd)
             os.rmdir(instance, dir_fd=inbox_fd)
         if 'worker.sock' in set(os.listdir(bridge_fd)):
             os.unlink('worker.sock', dir_fd=bridge_fd)
+        if 'caller.credential' in set(os.listdir(bridge_fd)):
+            os.unlink('caller.credential', dir_fd=bridge_fd)
         return True
     finally:
         for fd in (producer_fd, inbox_fd, bridge_fd):

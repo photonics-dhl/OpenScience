@@ -75,6 +75,14 @@ def create_task_agent_class(native_agent_type, transport_factory, allowed_tools,
             # Keep the original history; task_runtime reports the normal stopped outcome.
             raise NativeTaskStopped('Native task iteration budget exhausted')
 
+        def _build_system_prompt(self, system_message=None):
+            prompt = super()._build_system_prompt(system_message)
+            bind = getattr(self, '_native_bind_first_turn', None)
+            if bind is not None:
+                bind(prompt)
+                self._native_bind_first_turn = None
+            return prompt
+
         def run_conversation(self, user_message, system_message=None, conversation_history=None, task_id=None, **kwargs):
             result = super().run_conversation(user_message, system_message=system_message,
                 conversation_history=conversation_history, task_id=task_id, **kwargs)

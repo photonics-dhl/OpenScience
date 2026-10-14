@@ -9,7 +9,8 @@ import unittest
 import subprocess
 import uuid
 from unittest.mock import patch
-from host_broker import pin_bridge, secure_open_directory, validated_instance, cleanup_ended
+import host_broker
+from host_broker import pin_bridge, secure_open_directory, validated_instance, cleanup_ended, private_caller
 from types import SimpleNamespace
 
 INSTANCE = 'af36958a-d6d0-4666-a69c-e3c60170b17f-1'
@@ -24,6 +25,8 @@ class BrokerFilesystemTests(unittest.TestCase):
         self.inbox.mkdir(mode=0o700); self.bridges.mkdir(mode=0o700)
         self.task = self.inbox/INSTANCE; self.task.mkdir()
         (self.task/'request.json').write_text(json.dumps({'taskId': INSTANCE.rsplit('-',1)[0], 'executionAttempt': 1}))
+        (self.task/'caller.credential').write_text('a' * 64)
+        (self.task/'caller.credential').chmod(0o600)
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         previous=Path.cwd()
         try:
@@ -41,6 +44,31 @@ class BrokerFilesystemTests(unittest.TestCase):
         bridge=self.bridges/INSTANCE
         self.assertEqual(stat.S_IMODE(bridge.stat().st_mode),0o755)
         self.assertEqual((bridge/'worker.sock').stat().st_ino,(self.task/'worker.sock').stat().st_ino)
+        self.assertEqual((bridge/'caller.credential').read_text(), 'a' * 64)
+        self.assertEqual(stat.S_IMODE((bridge/'caller.credential').stat().st_mode), 0o600)
+        self.assertEqual((bridge/'caller.credential').stat().st_uid, 0)
+        self.assertNotEqual((bridge/'caller.credential').stat().st_ino, (self.task/'caller.credential').stat().st_ino)
+
+    def test_missing_public_symlinked_or_hardlinked_credentials_cannot_launch(self):
+        path = self.task/'caller.credential'
+        for kind in ('missing', 'public', 'symlink', 'hardlink', 'invalid'):
+            with self.subTest(kind=kind):
+                if path.exists() or path.is_symlink(): path.unlink()
+                if kind == 'symlink': path.symlink_to(self.task/'request.json')
+                elif kind != 'missing':
+                    path.write_text('not-a-credential' if kind == 'invalid' else 'a' * 64)
+                    path.chmod(0o644 if kind == 'public' else 0o600)
+                    if kind == 'hardlink': os.link(path, self.task/'credential-link')
+                with self.assertRaises((OSError, ValueError)):
+                    pin_bridge(self.inbox, self.bridges, INSTANCE, producer_uid=0)
+                self.assertFalse((self.bridges/INSTANCE).exists())
+                if kind == 'hardlink': (self.task/'credential-link').unlink()
+
+    def test_caller_file_owner_must_match_the_producer(self):
+        task_fd = os.open(self.task, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            with self.assertRaises(ValueError): private_caller(task_fd, 1000)
+        finally: os.close(task_fd)
 
     def test_root_bridges_parent_cannot_be_group_writable(self):
         self.bridges.chmod(0o770)
@@ -131,7 +159,7 @@ class BrokerFilesystemTests(unittest.TestCase):
             return unlink(name, **kwargs)
         with patch('host_broker.os.unlink', side_effect=interrupted), self.assertRaises(OSError):
             cleanup_ended(self.root,INSTANCE,run,lambda _:True,producer_uid=0)
-        self.assertEqual(set(p.name for p in self.task.iterdir()),{'request.json'})
+        self.assertEqual(set(p.name for p in self.task.iterdir()),{'request.json', 'caller.credential'})
         self.assertTrue(cleanup_ended(self.root,INSTANCE,run,lambda _:True,producer_uid=0))
         self.assertFalse(self.task.exists())
 
@@ -173,6 +201,19 @@ print(json.dumps(result))'''
 
 
 class InstanceTests(unittest.TestCase):
+    def test_stopped_notification_uses_root_private_caller_without_putting_it_in_the_body(self):
+        requests = []
+        response = SimpleNamespace(status=200, read=lambda _limit: b'{"received":true}')
+        with patch.object(host_broker, 'secure_open_directory', return_value=42), \
+                patch.object(host_broker, 'private_caller', return_value=b'a' * 64), \
+                patch.object(host_broker.os, 'close'), \
+                patch.object(host_broker.http.client.HTTPConnection, 'request',
+                    side_effect=lambda *args, **kwargs: requests.append((args, kwargs))), \
+                patch.object(host_broker.http.client.HTTPConnection, 'getresponse', return_value=response):
+            self.assertTrue(host_broker.notify_stopped(Path('/fixture/worker.sock')))
+        self.assertEqual(requests[0][1]['headers']['x-openscience-native-caller'], 'a' * 64)
+        self.assertEqual(requests[0][1]['body'], b'{"status":"stopped"}')
+
     def test_only_fixed_uuid_and_execution_attempt_are_unit_names(self):
         self.assertEqual(validated_instance(INSTANCE),INSTANCE)
         for value in ['../other','task;id',INSTANCE+' --property=User=root',INSTANCE.replace('-1','-0'),INSTANCE.upper()]:
