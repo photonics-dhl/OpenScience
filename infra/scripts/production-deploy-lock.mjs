@@ -493,8 +493,9 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   const scheduler = namedRuntimeFunction(ts, indexFile, 'createCompletedSceneImageRecoveryScheduler');
   const poller = namedRuntimeFunction(ts, indexFile, 'createPollOnce');
   const buildGateway = namedRuntimeFunction(ts, indexFile, 'buildGateway');
+  const inspectRecovery = namedRuntimeFunction(ts, runFile, 'inspectGenerationRecovery');
   const recovery = namedRuntimeFunction(ts, runFile, 'recoverCompletedHermesSceneImageResults');
-  if (!deps || !main || !scheduler || !poller || !buildGateway || !recovery) rollbackCompatibilityUnknown();
+  if (!deps || !main || !scheduler || !poller || !buildGateway || !inspectRecovery || !recovery) rollbackCompatibilityUnknown();
   const nodes = (root, predicate) => {
     const found = [];
     const visit = node => {
@@ -528,7 +529,8 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
     const importSpecifier = declarations[0];
     const importDeclaration = importSpecifier.parent.parent.parent;
     const importedName = (importSpecifier.propertyName ?? importSpecifier.name).text;
-    return ts.isImportDeclaration(importDeclaration) && ts.isStringLiteral(importDeclaration.moduleSpecifier)
+    return ts.isImportDeclaration(importDeclaration) && !importDeclaration.importClause?.isTypeOnly
+      && !importSpecifier.isTypeOnly && ts.isStringLiteral(importDeclaration.moduleSpecifier)
       && importedName === fn?.name?.text && importDeclaration.moduleSpecifier.text === '@openscience/domain';
   };
   const boundToFunction = (identifier, fn) => Boolean(symbolAt(identifier) && functionSymbol(fn)
@@ -538,6 +540,27 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   const variableSymbol = declaration => declaration && ts.isIdentifier(declaration.name) ? symbolAt(declaration.name) : undefined;
   const boundToVariableDeclaration = (identifier, declaration) => Boolean(variableSymbol(declaration)
     && symbolAt(identifier) === variableSymbol(declaration));
+  const runtimeImportBinding = (sourceFile, name, expectedModuleSpecifier) => {
+    const matches = [];
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement) || !statement.importClause || statement.importClause.isTypeOnly
+        || !statement.importClause.namedBindings || !ts.isNamedImports(statement.importClause.namedBindings)) continue;
+      for (const specifier of statement.importClause.namedBindings.elements) {
+        const moduleSpecifier = statement.moduleSpecifier;
+        const moduleMatches = expectedModuleSpecifier && ts.isStringLiteral(moduleSpecifier)
+          ? resolve(dirname(sourceFile.fileName), moduleSpecifier.text) === resolve(dirname(sourceFile.fileName), expectedModuleSpecifier)
+          : !expectedModuleSpecifier;
+        if ((specifier.propertyName ?? specifier.name).text === name && !specifier.isTypeOnly && moduleMatches) matches.push(specifier);
+      }
+    }
+    if (matches.length !== 1) return undefined;
+    return { specifier: matches[0], symbol: checker.getSymbolAtLocation(matches[0].name) };
+  };
+  const sameImportedBinding = (identifier, binding) => {
+    if (!binding?.symbol || !identifier) return false;
+    const direct = checker.getSymbolAtLocation(identifier);
+    return direct === binding.symbol || symbolAt(identifier) === symbolAt(binding.specifier.name);
+  };
   const enclosingFunction = node => {
     for (let current = node; current; current = current.parent) if (functionLike(current)) return current;
     return undefined;
@@ -763,7 +786,8 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
     const symbol = transactionParameterSymbol(item);
     return !!symbol && ts.isIdentifier(identifier) && checker.getSymbolAtLocation(identifier) === symbol;
   };
-  const lockCalls = hasCall(recovery, call => ts.isIdentifier(call.expression) && call.expression.text === 'lockTrashReferences'
+  const lockBinding = runtimeImportBinding(runFile, 'lockTrashReferences', '../trash/trash');
+  const lockCalls = hasCall(recovery, call => ts.isIdentifier(call.expression) && sameImportedBinding(call.expression, lockBinding)
     && call.arguments.length === 1 && ts.isIdentifier(call.arguments[0])
     && ts.isAwaitExpression(call.parent) && transactionCallback(call)
     && transactionUsesParameter(transactionCallback(call), call.arguments[0]) && !hasConstantFalseAncestor(call));
@@ -804,6 +828,11 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   const itemDeclaration = itemDeclarations.length === 1 ? itemDeclarations[0] : undefined;
   const stepBindings = stepDeclarations.filter(declaration => declaration.initializer);
   const stepDeclaration = stepBindings.length === 1 ? stepBindings[0] : undefined;
+  const stepLoopBindings = stepDeclarations.filter(declaration => !declaration.initializer);
+  const inspectStepDeclaration = stepLoopBindings.length === 1 ? stepLoopBindings[0] : undefined;
+  const planDeclarations = lockTransaction?.callback ? nodes(lockTransaction.callback, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === 'plan' && enclosingFunction(node) === lockTransaction.callback) : [];
+  const planDeclaration = planDeclarations.length === 1 ? planDeclarations[0] : undefined;
   const itemLoop = itemDeclaration?.parent && ts.isVariableDeclarationList(itemDeclaration.parent)
     && ts.isForOfStatement(itemDeclaration.parent.parent) && itemDeclaration.parent.parent.initializer === itemDeclaration.parent
     ? itemDeclaration.parent.parent : undefined;
@@ -839,6 +868,17 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
     && stepPredicateValue.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
     && propertyAccess(stepPredicateValue.left, stepPredicateParameter, 'id')
     && propertyAccess(stepPredicateValue.right, itemDeclaration, 'stepId'));
+  const inspectRecoveryCalls = hasCall(recovery, call => isBoundCall(call, inspectRecovery)
+    && lockTransaction && enclosingFunction(call) === lockTransaction.callback
+    && planDeclaration?.initializer && ts.isAwaitExpression(planDeclaration.initializer)
+    && planDeclaration.initializer.expression === call
+    && call.arguments.length === 5
+    && transactionUsesParameter(lockTransaction, call.arguments[0])
+    && boundToVariableDeclaration(call.arguments[1], runDeclaration)
+    && ts.isIdentifier(call.arguments[2]) && call.arguments[2].text === 'undefined'
+    && isBoundMember(call.arguments[3], recoveryDepsParameter, 'inspectImageRecoveryState')
+    && inspectStepDeclaration && propertyAccess(unwrapExpression(call.arguments[4]), inspectStepDeclaration, 'agentTaskId')
+    && !hasConstantFalseAncestor(call));
   const nullLiteral = node => node?.kind === ts.SyntaxKind.NullKeyword;
   const exactObject = (object, expected) => ts.isObjectLiteralExpression(object)
     && object.properties.length === Object.keys(expected).length
@@ -884,8 +924,10 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
     || !lockTransaction || !ts.isBlock(lockTransaction.callback.body)
     || !transactionOptions(lockTransaction)
     || !transactionParameter(lockTransaction) || !transactionParameterSymbol(lockTransaction)
-    || runDeclarations.length !== 1 || !runFetchValid || candidateDeclarations.length !== 1 || pendingDeclarations.length !== 1 || itemDeclarations.length !== 1
-    || !itemFromPending || stepBindings.length !== 1 || !stepFetchValid
+    || !lockBinding || runDeclarations.length !== 1 || !runFetchValid || candidateDeclarations.length !== 1
+    || pendingDeclarations.length !== 1 || itemDeclarations.length !== 1 || !itemFromPending
+    || stepBindings.length !== 1 || stepLoopBindings.length !== 1 || !stepFetchValid || planDeclarations.length !== 1
+    || inspectRecoveryCalls.length !== 1
     || lockTransaction.callback.body.statements[0] !== lockStatement
     || !ts.isExpressionStatement(lockStatement)
     || !updateShape(runUpdates[0], runWhere, runData)

@@ -106,6 +106,30 @@ test('bounded Worker recovery wiring proof rejects unsafe condition or duplicate
   assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   await writeFile(runPath, runOriginal.replace('where: { id: candidate.id }', 'where: { id: candidate.version }'));
   assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('const plan = await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState, step.agentTaskId!);',
+    'const inspectGenerationRecovery = async () => null;\n          const plan = await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState, step.agentTaskId!);'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('        await lockTrashReferences(tx);',
+    '        const lockTrashReferences = async () => undefined;\n        await lockTrashReferences(tx);'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace('import { lockLiveResearchObject, lockTrashReferences } from \'../trash/trash\';',
+    'import { lockLiveResearchObject, type lockTrashReferences } from \'../trash/trash\';'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await mkdir(join(sourceRoot, 'packages/domain/src/trash'), { recursive: true });
+  await writeFile(join(sourceRoot, 'packages/domain/src/trash/fake-trash.ts'), 'export async function lockTrashReferences(_tx: any) {}\n');
+  await writeFile(runPath, runOriginal.replace('../trash/trash', '../trash/fake-trash'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  const planLine = '          const plan = await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState, step.agentTaskId!);';
+  await writeFile(runPath, runOriginal.replace(planLine,
+    '          const plan = { chargeable: [], rearm: [], resume: [] } as any;\n'
+      + '          if (false) await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState, step.agentTaskId!);'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  await writeFile(runPath, runOriginal.replace(planLine,
+    '          if (false) {\n'
+      + '            const plan = await inspectGenerationRecovery(tx, run, undefined, deps.inspectImageRecoveryState, step.agentTaskId!);\n'
+      + '            if (plan && plan.chargeable.length === 0 && plan.rearm.length === 0 && plan.resume.length === 1) pending.push(plan.resume[0]!);\n'
+      + '          }'));
+  assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   await writeFile(runPath, runOriginal.replace('deps.prisma.$transaction(async tx => {',
     'const tx = deps.prisma;\n      counts.resumed += await deps.prisma.$transaction(async inner => {'));
   assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
