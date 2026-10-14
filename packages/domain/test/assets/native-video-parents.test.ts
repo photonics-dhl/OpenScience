@@ -258,6 +258,7 @@ function submissionFixture(f: ListFixture) {
     ? f.prisma.agentSession.findUnique() : findSession(args)) as typeof prisma.agentSession.findUnique;
   let audioPolicyReads = 0, videoPolicyReads = 0;
   const deps = { prisma, redis: { lpush: async () => 1 }, videoEnabled: true,
+    nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' },
     readAudioAuditionReadiness: async () => { audioPolicyReads++; return { audio: auditionAudio, maxEstimatedCoins: 500 }; },
     readVideoReadiness: async () => { videoPolicyReads++; return true; } };
   return { deps, db, reads: () => ({ audioPolicyReads, videoPolicyReads }) };

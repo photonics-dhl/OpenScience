@@ -106,8 +106,13 @@ type EditorView = 'contribution' | 'content' | 'media' | 'materials';
 type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[]; history?: string | string[]; stage?: string | string[]; view?: string | string[] } };
 
 function editorViewFromSearch(searchParams?: EditorPageProps['searchParams']): EditorView {
+  // A source ingestion review is a content review. It takes precedence over
+  // a stale tab query so uploads started from media/materials still open the
+  // six fields and Hermes review action.
+  if (typeof searchParams?.ingestionTask === 'string' && searchParams.ingestionTask.length > 0) return 'content';
   const view = typeof searchParams?.view === 'string' ? searchParams.view : '';
   if (view === 'content' || view === 'media' || view === 'materials') return view;
+  // Ordinary editor visits still use the quieter contribution-first view.
   return searchParams?.stage === 'media' ? 'media' : 'contribution';
 }
 
