@@ -8,6 +8,7 @@ import { seedHistoricalIndependentSourceReview, seedHistoricalSourceReviewRecove
 import { createHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration } from '../../src/agent/research-run';
 import { ensureHermesIngestionReview } from '../../src/ingestion/ingestion-service';
 import { persistDocumentSourceMapReference } from '../../src/research-intelligence/source-map-ref';
+import { nativeAgentRuntimeFromEnv } from '../../src/agent/native-agent-execution';
 
 /** Model recovery producers plus persisted, retired Web history seen in LIVE. */
 export async function privateSourceReanalysisFixture() {
@@ -146,7 +147,13 @@ export async function privateSourceReanalysisFixture() {
     sourceReanalysis: { intent: 'new_paid_private_analysis' as const, sourceRunId: f.ids.run, expectedRunVersion: 22 } };
   verifier.mockClear();
   return { ...f, root, current, reference, storage, objects, verifier, input,
-    deps: { ...f.deps, storage, canRetrySourceReviewBeforeSubmission: verifier } };
+    // The reanalysis helper is a fresh paid paper operation. Give the fixture
+    // the same explicit server-owned Native runtime that production admission
+    // requires; historical rows above remain markerless and are never rebuilt.
+    deps: { ...f.deps, storage, canRetrySourceReviewBeforeSubmission: verifier,
+      nativeAgentRuntime: nativeAgentRuntimeFromEnv({ HERMES_NATIVE_AGENT_ENABLED: 'true',
+        HERMES_NATIVE_RUNTIME_ID: 'fixture-native-runtime', HERMES_NATIVE_SKILL_CATALOGUE_ID: 'fixture-native-catalogue',
+        HERMES_NATIVE_AGENT_MODEL: 'MiniMax-M3' }) } };
 }
 
 export type PrivateSourceReanalysisFixture = Awaited<ReturnType<typeof privateSourceReanalysisFixture>>;
@@ -154,6 +161,9 @@ export type PrivateSourceReanalysisFixture = Awaited<ReturnType<typeof privateSo
 export async function advancePrivateSourceReanalysisToReview(f: PrivateSourceReanalysisFixture, ingestionTaskId: string,
   stage: 'source_review' | 'source_composition' = 'source_review', runKey = 'fresh-normal-narrative') {
   const original = f.db.agentTasks.find(task => f.db.ingestionTasks.find(source => source.id === ingestionTaskId)?.agentTaskId === task.id)!;
+  // This helper deliberately switches the fresh task to the persisted
+  // composition-candidate fixture below. It models the already-recorded
+  // historical source-composition handoff; it is not a new public producer.
   Object.assign(original, { status: 'succeeded', executionAttempt: 1, result: structuredClone(f.anchorResult) });
   if (stage === 'source_composition') {
     delete original.result.scientificReview.semanticStage;

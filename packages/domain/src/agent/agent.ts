@@ -556,6 +556,7 @@ async function persistAgentTaskCoreInTransaction(
   ctx: AuditContext = {},
   billing: 'ai_credit' | 'deterministic' | { sourceReviewReservationTaskId: string; reservationLedgerId: string }
     | { journalGrantJobId: string } = 'ai_credit',
+  historicalSourceOperation = false,
 ): Promise<{ task: AgentTask; replayed: boolean }> {
   await lockTrashReferences(tx);
   const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -649,7 +650,7 @@ async function persistAgentTaskCoreInTransaction(
   const inheritedContract = input.kind === 'presentation.generate' && isOrdinaryNativeVideoStoryboardRevision(input.payload)
     ? (await requireStoryboardBase(tx, parsePresentationGenerationPayload(input.payload)))?.nativePlanningContract : undefined;
   // Only a new direct first video plan opts in, atomically with its task and credit.
-  // Existing rows replay above; other Native entry points retain the historical contract.
+  // Existing rows replay above; other Native entry points keep their prior planning contract.
   const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
@@ -662,6 +663,13 @@ async function persistAgentTaskCoreInTransaction(
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
     throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
+  }
+  // Missing installation is optional when reading old markers, but cannot mint a
+  // fresh markerless task for a Native-only producer. Only the private historical
+  // helpers below can preserve their caller's already-proved legacy source route.
+  if (!historicalSourceOperation && !nativeAgentResult && (input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
+    || input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload) || nativeReviewResult)) {
+    throw new AgentError('ILLEGAL_TRANSITION', 'Native Agent runtime is unavailable');
   }
   try {
     task = await tx.agentTask.create({
@@ -753,7 +761,10 @@ export async function persistHistoricalSourceTaskInTransaction(
   deps: AgentDeps, tx: Prisma.TransactionClient, input: Omit<SubmitAgentTaskInput, 'dispatch'>, ctx: AuditContext = {},
 ) {
   if (input.kind !== 'sdf.extract') throw new AgentError('VALIDATION_ERROR', 'Historical source operation requires sdf.extract');
-  return persistAgentTaskInTransaction({ ...deps, nativeAgentRuntime: undefined }, tx, input, ctx);
+  if (Object.hasOwn(input.payload, 'retryContractVersion')) {
+    throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
+  }
+  return persistAgentTaskCoreInTransaction({ ...deps, nativeAgentRuntime: undefined }, tx, input, ctx, 'ai_credit', true);
 }
 
 /** Package-internal: only one proved-unsubmitted Hermes review can reuse its exact original debit. */
@@ -772,7 +783,7 @@ export async function persistHermesSourceReviewTechnicalTaskInTransaction(
   return persistAgentTaskCoreInTransaction({ ...deps, nativeAgentRuntime: undefined }, tx, { sessionId: input.sessionId, userId: input.userId,
     kind: 'sdf.extract', payload: { artifactId: proof.source.artifactId, researchObjectId: proof.run.researchObjectId },
     idempotencyKey: proof.recoveryKey }, ctx, { sourceReviewReservationTaskId: proof.technicalRecovery.originalTaskId,
-    reservationLedgerId: proof.technicalRecovery.reservationLedgerId });
+    reservationLedgerId: proof.technicalRecovery.reservationLedgerId }, true);
 }
 
 /** Package-internal durable path; callers cannot omit or partially stamp the acquisition contract. */

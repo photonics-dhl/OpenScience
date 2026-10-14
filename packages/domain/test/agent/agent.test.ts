@@ -11,6 +11,7 @@ import { buildInterestContext } from '../../src/research-intelligence/interest-c
 import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../src/assets/native-image-review';
 import { requireSceneImageParent } from '../../src/assets/scene-image';
 import { presentationEvidenceIdentity, readReviewedPresentationEvidence } from '../../src/assets/illustration-source';
+import { nativeAgentRuntimeFromEnv } from '../../src/agent/native-agent-execution';
 
 describe('Native image planning-contract recovery routing', () => {
   const imagePayload = { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } };
@@ -330,6 +331,50 @@ async function makeSourceIndexRecovery() {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it.each(['paper', 'illustration', 'image-review'] as const)(
+    'R02 refuses fresh %s without an available Native runtime before task/funding/debit', async profile => {
+      for (const actor of ['user', 'platform_admin'] as const) {
+        for (const configured of ['missing', 'disabled', 'invalid'] as const) {
+          const f = await makeDeps(actor === 'platform_admin' ? 0 : 1);
+          f.user.platformRole = actor;
+          const runtime = configured === 'invalid' ? { runtimeId: '', skillCatalogueId: 'catalogue', model: 'MiniMax-M3' }
+            : configured === 'disabled' ? nativeAgentRuntimeFromEnv({ HERMES_NATIVE_AGENT_ENABLED: 'false' }) : undefined;
+          const deps = { ...(f.deps as AgentDeps), nativeAgentRuntime: runtime };
+          const session = await createAgentSession(deps, { userId: f.user.id, researchObjectId: f.ro.id,
+            kind: profile === 'paper' ? 'ingestion' : 'visualization' });
+          const artifactId = '11111111-1111-4111-8111-111111111111';
+          f.db.artifacts.push({ id: artifactId, workspaceId: f.ro.workspaceId, blobSha256: 'a'.repeat(64), deletedAt: null });
+          const payload = profile === 'paper' ? { artifactId, researchObjectId: f.ro.id }
+            : profile === 'illustration' ? { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } }
+              : { schemaVersion: 1, kind: 'image', sceneImage: { storyboardAssetId: artifactId, sceneIndex: 0 } };
+          const create = vi.spyOn(deps.prisma.agentTask, 'create');
+          const ledger = vi.spyOn(deps.prisma.usageLedger, 'create');
+          const before = structuredClone(f.db);
+          let error: unknown;
+          try {
+            await persistAgentTaskInTransaction(deps, deps.prisma as never, { userId: f.user.id, sessionId: session.id,
+              kind: profile === 'paper' ? 'sdf.extract' : 'presentation.generate', payload,
+              idempotencyKey: `r02-fresh-${profile}-${actor}-${configured}` });
+          } catch (caught) { error = caught; }
+          expect(create, `${profile}/${actor}/${configured} task creation`).not.toHaveBeenCalled();
+          expect(ledger, `${profile}/${actor}/${configured} funding/debit`).not.toHaveBeenCalled();
+          expect(f.db).toEqual(before);
+          expect(error).toMatchObject({ code: configured === 'invalid' && profile === 'image-review'
+            ? 'VALIDATION_ERROR' : 'ILLEGAL_TRANSITION' });
+        }
+      }
+    });
+  it('R02 public historical-looking keys and payload flags cannot bypass fresh Native admission', async () => {
+    const f = await makeDeps(1), deps = f.deps as AgentDeps;
+    const session = await createAgentSession(deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'ingestion' });
+    const artifactId = '11111111-1111-4111-8111-111111111111';
+    f.db.artifacts.push({ id: artifactId, workspaceId: f.ro.workspaceId, blobSha256: 'a'.repeat(64), deletedAt: null });
+    const create = vi.spyOn(deps.prisma.agentTask, 'create'), ledger = vi.spyOn(deps.prisma.usageLedger, 'create');
+    await expect(persistAgentTaskInTransaction(deps, deps.prisma as never, { userId: f.user.id, sessionId: session.id,
+      kind: 'sdf.extract', payload: { artifactId, researchObjectId: f.ro.id, historicalSourceOperation: true },
+      idempotencyKey: 'ingestion-analysis-compose:historical-review:scientific-review-v4' })).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(create).not.toHaveBeenCalled(); expect(ledger).not.toHaveBeenCalled();
+  });
   it('R2 rejects an unproved full VIDEO parent before task and debit booking', async () => {
     const f = await makeDeps(1);
     const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });

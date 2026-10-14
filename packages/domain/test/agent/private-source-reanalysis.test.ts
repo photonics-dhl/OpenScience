@@ -131,7 +131,7 @@ describe('new paid private source analysis', () => {
     expect(f.db.ingestionTasks[0]).toEqual(old.ingestionTasks[0]);
     expect(f.db.agentTasks.slice(0, old.agentTasks.length)).toEqual(old.agentTasks);
     expect(f.db.usageLedger.slice(0, old.usageLedger.length)).toEqual(old.usageLedger);
-    expect(f.db.agentTasks.at(-1)).toMatchObject({ result: null, kind: 'sdf.extract',
+    expect(f.db.agentTasks.at(-1)).toMatchObject({ result: { nativeAgentExecution: { profile: 'paper-author' } }, kind: 'sdf.extract',
       payload: { artifactId: f.ids.artifact, researchObjectId: f.ids.ro } });
     expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(old.usageLedger.filter(row => row.kind === 'consume').length + 1);
     expect(f.verifier).not.toHaveBeenCalled();

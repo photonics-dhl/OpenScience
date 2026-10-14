@@ -16,15 +16,31 @@ async function start(runtime: unknown, runtimeEnv: Record<string, string | undef
   class SpoolImage {}
   const modules: Record<string, unknown> = {
     '@openscience/auth': { DevOutboxMailer: Mailer, SmtpMailer: Mailer },
-    '@openscience/config': { loadApiEnv: () => loadApiEnv(runtimeEnv) },
+    '@openscience/config': { loadApiEnv: () => {
+      // Keep this isolated entrypoint test usable with a prebuilt workspace
+      // package while the source refactor is being consumed: the API only
+      // needs the image primary to derive Native readiness here.
+      const loaded = loadApiEnv(runtimeEnv) as typeof loadApiEnv extends (...args: never[]) => infer T ? T : never;
+      const ai = loaded.ai as typeof loaded.ai & { imageGateway?: { primary?: string } };
+      return { ...loaded, ai: { ...ai, imageGateway: ai.imageGateway ?? {
+        primary: runtimeEnv.HERMES_SCENE_IMAGE_PROVIDER?.trim() || 'minimax',
+      } } };
+    } },
     '@openscience/database': { createPrismaClient: () => prisma, createRedisClient: () => redis, createPrismaAuditSink: () => ({}) },
     '@openscience/domain': { nativeAgentRuntimeFromEnv: () => runtime },
     '@openscience/storage': { createStorageAdapter: () => ({}), createClamAvScanner: () => ({}) },
     '@openscience/observability': { createLogger: () => log },
-    '@openscience/ai-gateway': { SynclipSpoolImageProvider: SpoolImage, createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
+    '@openscience/ai-gateway': {
+      SynclipSpoolImageProvider: SpoolImage,
+      // API startup now receives read-only recovery readers from the shared
+      // Gateway factory; this test keeps the external constructor boundary
+      // mocked without granting a generator/submission capability.
+      createGatewayRecoveryReaders: () => ({}),
+      createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
       expect(env).toBe(runtimeEnv); readiness.prerequisites = prerequisites;
       return async () => { readiness.reads++; return readiness.available; };
-    } },
+      },
+    },
     '@openscience/search': {},
     './search-runtime': { buildHybridSearchFromEnv: () => undefined },
     './app': { buildApp: async (value: Record<string, unknown>) => { options.push(value); return {
