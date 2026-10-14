@@ -72,15 +72,17 @@ function ProseTextarea({ autoFocus = false, field, label, value, placeholder, on
   );
 }
 
-export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false }: {
+export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
   onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
   readOnly?: boolean;
+  fields?: Array<keyof Omit<SdfCore, 'schemaVersion'>>;
 }) {
   const t = useTranslations('editor');
-  const current = activeField ?? 'problem';
+  const visibleFields = fields?.length ? fields : FIELDS;
+  const current = activeField ?? visibleFields[0] ?? 'problem';
   const hermesStage = useOptionalHermesWorkspaceStage();
   const [editingField, setEditingField] = useState<keyof Omit<SdfCore, 'schemaVersion'> | null>(null);
 
@@ -91,7 +93,7 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
   return (
     <article aria-label={t('coreEdit')} className={styles.core} data-reading-role="body">
       <div className={styles.prose}>
-        {FIELDS.map((field, index) => (
+        {visibleFields.map((field, index) => (
           <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field}>
             <h2 className={styles.sectionHeading}>
               <span aria-hidden="true" className={styles.sectionMarker} />
