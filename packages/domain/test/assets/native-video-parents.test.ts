@@ -321,10 +321,12 @@ describe('native video audio pre-charge selection', () => {
     const deps = { ...ctx.deps, readVideoReadiness, nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } },
       input = localRequest(f, 'local-native-once');
     const task = await submitPresentationGeneration(deps as never, input);
-    expect(readVideoReadiness.mock.calls).toEqual([['native-first']]);
+    expect(readVideoReadiness).not.toHaveBeenCalled();
     expect(ctx.db.agentTasks).toHaveLength(1); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
     expect(record(ctx.db.agentTasks[0]!.result).nativeAgentExecution).toMatchObject({ planningContract: 'video-optional-audio-v1' });
+    record(ctx.db.agentTasks[0]!.result).providerOutcome = 'unknown';
     const paid = structuredClone(ctx.db); f.parent.deletedAt = now;
+    Reflect.deleteProperty(deps, 'nativeAgentRuntime');
     const parentRead = vi.spyOn(ctx.deps.prisma.presentationAsset, 'findUnique').mockRejectedValue(new Error('Parent unavailable'));
     readVideoReadiness.mockClear().mockResolvedValue(false);
     expect((await submitPresentationGeneration(deps as never, input)).id).toBe(task.id);
@@ -332,18 +334,40 @@ describe('native video audio pre-charge selection', () => {
     await expect(submitPresentationGeneration(deps as never, { ...input, idempotencyKey: 'new-local-intent' })).rejects.toThrow();
     expect(ctx.db).toEqual(paid);
   });
-  it.each(['external', 'closed', 'identity-race', 'mode-race', 'contract-race'] as const)('refuses %s local revision before booking', async change => {
+  it.each(['external-narration', 'native-first'] as const)('prepares %s private work with runtime available and commercial Host off', async mode => {
+    const f = await listFixture(); setAudio(f, mode, Array.from({ length: 3 }, () => mode === 'native-first' ? 'native' : 'external-narration'));
+    const ctx = submissionFixture(f), readVideoReadiness = vi.fn(async () => false);
+    const deps = { ...ctx.deps, videoEnabled: false, readVideoReadiness,
+      nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } };
+    await submitPresentationGeneration(deps as never, localRequest(f, 'host-off-' + mode));
+    expect(ctx.db.agentTasks).toHaveLength(1); expect(ctx.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+    expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it.each(['missing', 'invalid'] as const)('rejects %s Native runtime before session/task/ledger/audit writes', async mode => {
     const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
-    if (change === 'external') setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+    const ctx = submissionFixture(f), before = structuredClone(ctx.db), readVideoReadiness = vi.fn(async () => false);
+    const deps = { ...ctx.deps, readVideoReadiness, nativeAgentRuntime: mode === 'missing' ? undefined
+      : { runtimeId: '', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } };
+    await expect(submitPresentationGeneration(deps as never, localRequest(f, 'runtime-' + mode))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness).not.toHaveBeenCalled();
+  });
+  it.each(['identity-race', 'mode-race', 'contract-race'] as const)('refuses %s local revision before booking', async change => {
+    const f = await listFixture(); setAudio(f, 'native-first', ['native', 'native', 'native']);
     const ctx = submissionFixture(f), before = structuredClone(ctx.db);
-    const readVideoReadiness = vi.fn(async (purpose?: 'native-first') => {
-      if (change === 'identity-race') { f.parent.contentHash = '9'.repeat(64); f.parentTask.result.contentHash = f.parent.contentHash; refreshChain(f, [{ asset: f.parent, task: f.parentTask }]); }
-      if (change === 'mode-race') setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
-      if (change === 'contract-race') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
-      return change !== 'closed' && purpose === 'native-first';
+    const readVideoReadiness = vi.fn(async () => false), findParent = ctx.deps.prisma.presentationAsset.findUnique.bind(ctx.deps.prisma.presentationAsset);
+    let reads = 0;
+    vi.spyOn(ctx.deps.prisma.presentationAsset, 'findUnique').mockImplementation(async args => {
+      if (++reads === 2) {
+        if (change === 'identity-race') { f.parent.contentHash = '9'.repeat(64); f.parentTask.result.contentHash = f.parent.contentHash; refreshChain(f, [{ asset: f.parent, task: f.parentTask }]); }
+        if (change === 'mode-race') setAudio(f, 'external-narration', ['external-narration', 'external-narration', 'external-narration']);
+        if (change === 'contract-race') Object.assign(f.parentTask.result.nativeAgentExecution, { planningContract: 'image-source-explicit-trig-v1' });
+      }
+      return findParent(args);
     });
-    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness } as never, localRequest(f, 'blocked-local-' + change))).rejects.toThrow();
-    expect(ctx.db).toEqual(before); expect(readVideoReadiness.mock.calls).toEqual([change === 'external' ? [] : ['native-first']]);
+    await expect(submitPresentationGeneration({ ...ctx.deps, readVideoReadiness,
+      nativeAgentRuntime: { runtimeId: 'current-native', skillCatalogueId: 'current-catalogue', model: 'MiniMax-M3' } } as never,
+      localRequest(f, 'blocked-local-' + change))).rejects.toThrow();
+    expect(ctx.db).toEqual(before); expect(readVideoReadiness).not.toHaveBeenCalled();
   });
 
   it.each(['video', 'scene-image'] as const)('rejects external %s without a preset before all task/ledger/audit writes', async kind => {
