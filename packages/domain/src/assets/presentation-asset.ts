@@ -885,7 +885,8 @@ function hasInvalidStoryboard(asset: {
     return (p?.subtype === 'sourced_storyboard' || asset.generator === 'OpenScience Hermes storyboard planner') && !presentationStoryboardView(asset, ids);
 }
 export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClient, 'presentationAsset'>
-  & Partial<Parameters<typeof requireNativeVideoStoryboard>[0]>, payload: PresentationGenerationPayload) {
+  & Partial<Parameters<typeof requireNativeVideoStoryboard>[0]>, payload: PresentationGenerationPayload,
+  nativeProofReader: typeof requireNativeVideoStoryboard = requireNativeVideoStoryboard) {
     const id = payload.storyboard?.baseAssetId;
     if (!id)
         return undefined;
@@ -909,7 +910,7 @@ export async function requireStoryboardBase(prisma: Pick<Prisma.TransactionClien
     let nativePlanningContract: NativeAgentExecution['planningContract'], nativeIdentity: string | undefined;
     if (isOrdinaryNativeVideoStoryboardRevision(payload)) {
       // The authority validates all Native readers at runtime; legacy image/base callers stay minimal.
-      const proof = await requireNativeVideoStoryboard(prisma as Parameters<typeof requireNativeVideoStoryboard>[0], asset, payload);
+      const proof = await nativeProofReader(prisma as Parameters<typeof requireNativeVideoStoryboard>[0], asset, payload);
       nativePlanningContract = readNativeAgentExecution(proof.task.result)?.planningContract;
       nativeIdentity = JSON.stringify({ identity, task: { id: proof.task.id, payload: proof.task.payload, result: proof.task.result, updatedAt: proof.task.updatedAt } });
     }
