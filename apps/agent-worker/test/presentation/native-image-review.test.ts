@@ -15,7 +15,7 @@ const sha = (value: string | Uint8Array) => createHash('sha256').update(value).d
 const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
 afterEach(() => vi.restoreAllMocks());
 
-async function fixture(native = false) {
+async function fixture(native = true) {
   const { prisma, db } = createFakePrisma();
   seedUser(db, { id: id(1), platformRole: 'platform_admin' });
   db.workspaces.push({ id: id(2), status: 'active' });
