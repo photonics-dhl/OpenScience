@@ -2,8 +2,8 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
-- 2026-10-14：首图本地因果定位及独立High方案审查完成，owner已STARTED原树三Worker文件：仅fresh IMAGE的诊断修订/主旨区分/既有终审一致性引导，保留旧会话、VIDEO、科学校验与首轮goal/system。真实纸源→精确ID修订及新旧恢复测试已先行提交；原CI实际801pass/8fail，其中3个真实引导缺口与5个测试写法问题分开处置，候选GREEN/High待收，无本机等价依赖闭包则走CI。未有新模型或付费运行。
-- 2026-10-14：架构一次只读生产取证已RELEASED；当前完整SDK实物已取得但未执行Agent，R01 credential尚未安装。当前API三样本约1.11–1.18GiB/2GiB、该容器生命周期OOM计数0，既有日志缺route/status，不能关闭历史4次OOM或证明泄漏；Netdata首历史查询未取得。R07 Gateway/config候选来源及独立写权已核清，准继续原调用方职责收口；真实consumer TC缺口/候选High仍待收，新增CI步骤先协调原workflow。精确身份、限度及证据见CURRENT。
+- 2026-10-14：首图本地因果定位及独立High方案审查完成，owner已STARTED原树三Worker文件：仅fresh IMAGE的诊断修订/主旨区分/既有终审一致性引导，保留旧会话、VIDEO、科学校验与首轮goal/system。真实纸源→精确ID修订及新旧恢复测试已先行提交；原CI实际801pass/8fail，其中3个真实引导缺口与5个测试写法问题分开处置，候选源码独立High已GO；新消费者/恢复实际通过，余4个旧profile夹具已仅测试修订并经窄High GO，新精确GREEN仍待收；无本机等价依赖闭包则走CI。未有新模型或付费运行。
+- 2026-10-14：架构一次只读生产取证已RELEASED；当前完整SDK实物已取得但未执行Agent，R01 credential尚未安装。当前API三样本约1.11–1.18GiB/2GiB、该容器生命周期OOM计数0，既有日志缺route/status，不能关闭历史4次OOM或证明泄漏；Netdata首历史查询未取得。R07限定写权已ACK STARTED并进独立High，真实consumer TC缺口仍未关闭。R04新High仍NO-GO（opaque实参无可信供应方、现役createRequire阻断self正例），owner继续修复；ZIP两项资源边界已本地14+4通过，delta High待收，未归因生产OOM。新增CI步骤先协调原workflow。精确身份、限度及证据见CURRENT。
 
 - 2026-10-14：cb9双库备份/53迁移/原发布及一次真实首图全部完成，image FINAL RELEASED。Guide→Native计划→2.5图自动返回并保存供应商原ID、私有入库成功；像素审核BLOCKED，未公开/重画/冒称用户认可。新链平台gross3/fund3，旧失败Guide1点单列；供应商仅6coins报价已证，API无实际扣费字段。原任务/公开版本/SourceMap/旧图保护15/15，完整链16m51.616s，不冒称稳定快速。上游跨字段表达矛盾已定位并转入上述限定修复；架构一次只读SDK/OOM取证已结束。精确对象、授权及窗口只见CURRENT。
 - 2026-10-14：R09源收取后UI已实际STARTED接入，无冲突且保留P03/P04 WIP，继续已认可P07四视图；原77项/82模块零环不代替新UI验收。R01 Native调用认证/首轮绑定与R13安全Fastify日志源码均已独立High并按路径逐字集成，整改计划和历史阶段图亦收取；Linux当前SDK/凭据及完整Worker类型仍有缺口，未部署，日志修复不等于OOM根因关闭。范围/源提交与检查限度见CURRENT。
