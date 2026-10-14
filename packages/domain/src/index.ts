@@ -173,7 +173,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  authorizeHermesGenerationGrant, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, retryHermesGeneration,
+  authorizeHermesGenerationGrant, cancelHermesResearchRun, confirmHermesSourceReview, createHermesResearchRun, createHermesArtStyleContinuation, getHermesImageArtStyleCapability, getHermesVideoCapability, getExistingHermesResearchRun, getHermesResearchRun, reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, retryHermesGeneration,
   requireHermesPresentationTaskAuthority,
   requireStoryboardArtCorrectionAuthorization,
   readInitialSciencePlanningRetryChain,
@@ -183,17 +183,19 @@ export {
   HERMES_AUTHORITY_REARM_MARKER,
   HermesResearchRunError,
   type HermesResearchRunDeps, type HermesSourceReviewDeps, type HermesResearchRunErrorCode, type HermesResearchRunStatus,
-  type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
+  HERMES_RUN_OWNED_STOP_REASON,
+  type HermesResearchRunCancelOutcome, type HermesResearchRunView, type HermesResearchStepStatus, type HermesResearchStage, type HermesSourceReviewInput,
 } from './agent/research-run';
 export { HermesVideoUnavailableError, isHermesVideoReady, requireHermesVideoReady, isHermesVideoRun, isHermesVideoTask, type HermesVideoReadinessDeps } from './agent/video-readiness';
 export { createHermesFirstImageContinuation, findFirstImageContinuation } from './agent/first-image-continuation';
 export {
-  claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
+  claimAgentTask, cancelAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
   submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, enqueueSourceMapSearchIndex,
   isNativeImagePlanningContractTask,
-  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
-  type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
+  isOwnedStopped, isOwnedStopReason, stopAgentTaskInTransaction,
+  AGENT_TASK_QUEUE, AGENT_TASK_OWNED_STOP_REASON, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
+  type AgentDeps, type AgentTaskCancelOutcome, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
   type CreateAgentSessionInput, type SubmitAgentTaskInput,
 } from './agent/agent';
 export { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError } from './agent/search-index-source';
