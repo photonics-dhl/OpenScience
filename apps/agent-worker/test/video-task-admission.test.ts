@@ -465,10 +465,11 @@ describe('ordinary local Native video planning compatibility floor', () => {
     Object.assign(f.task, { idempotencyKey: 'original-local-video-once' });
     return f;
   }
-  it.each(['first-scene', 'later-scene', 'started', 'paid-unknown'] as const)(
+  it.each(['first-scene', 'later-scene', 'base-only', 'started', 'paid-unknown'] as const)(
     'parks owned marked %s local revision before Host or claim and never releases it', async state => {
       const f = localRevision();
       if (state === 'later-scene') (f.task.payload.storyboard as Record<string, unknown>).revisionSceneIndex = 2;
+      if (state === 'base-only') delete (f.task.payload.storyboard as Record<string, unknown>).revisionSceneIndex;
       if (state === 'started') {
         const checkpoint: NativeAgentCheckpointReference = { taskId: f.task.id, objectKey: `derived/native-agent/${'d'.repeat(64)}.json`,
           serializedSha256: 'd'.repeat(64), size: 100, artifactId: 'paper-artifact', documentSha256: 'a'.repeat(64), sourceMapHash: 'b'.repeat(64),
@@ -499,12 +500,11 @@ describe('ordinary local Native video planning compatibility floor', () => {
     expect(await recoverHeldVideoTasks(f.deps)).toBe(0); expect(await releasePendingVideoTask(f.deps, held as never)).toBe(false);
     expect(f.task).toEqual(held); expect(f.deps.readVideoReadiness).not.toHaveBeenCalled(); expect(execution.claim).not.toHaveBeenCalled();
   });
-  it.each(['unmarked', 'unmarked-malformed', 'base-only', 'run', 'scene-limit', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex', 'image', 'sdf'] as const)(
+  it.each(['unmarked', 'unmarked-malformed', 'run', 'scene-limit', 'revisionMode', 'revisionTaskId', 'revisionImageAssetId', 'artSceneIndex', 'image', 'sdf'] as const)(
     'retains the original %s admission without inventing a local contract hold', async change => {
       const f = localRevision(), storyboard = f.task.payload.storyboard as Record<string, unknown>;
       if (change === 'unmarked' || change === 'unmarked-malformed') delete (f.task.result!.nativeAgentExecution as Record<string, unknown>).planningContract;
       if (change === 'unmarked-malformed') (f.task.result!.nativeAgentExecution as Record<string, unknown>).runtimeId = '';
-      if (change === 'base-only') delete storyboard.revisionSceneIndex;
       if (change === 'run') {
         f.task.payload.hermesRunAuthority = { runId: '10000000-0000-4000-8000-000000000003', profile: 'content-driven-v1', stage: 'storyboard', ordinal: 0 };
         f.deps.prisma.hermesResearchRun.findUnique = vi.fn(async () => null) as never;
