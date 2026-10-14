@@ -291,7 +291,7 @@ describe('ordinary-user native illustration through real task/store/asset bounda
     const f = await fixture();
     const value = structuredClone(science);
     value.scenes[0]!.encoding += ' A comparison of the same relation is described in an inset.';
-    let reviewedPrompt = '';
+    let reviewedPrompt = '', reviewGuidanceObserved = false;
     f.fetcher.mockImplementation(async () => {
       const [, request] = f.fetcher.mock.calls.at(-1) as unknown as [unknown, RequestInit];
       const body = JSON.parse(String(request.body)) as {
@@ -316,7 +316,7 @@ describe('ordinary-user native illustration through real task/store/asset bounda
         expect(scene.encoding).toContain('comparison');
         expect(scene.composition).toContain('separate title');
         expect(scene.labels).toEqual(['Connected regions']);
-        expect(body.tools.find(tool => tool.name === 'paper_illustration_review')!.description).toContain('all visible text');
+        reviewGuidanceObserved = body.tools.find(tool => tool.name === 'paper_illustration_review')!.description.includes('all visible text');
         scripted = { planToolCallId: 'art', decision: 'blocked', summary: 'Scripted fixture: inset and title conflict with the approved depiction.',
           corrections: [], issues: [{ sceneIndex: 0, labelIndex: null, kind: 'requires_replan',
             requiredMeaning: 'Resolve the same sourced relation, layout and complete label list before accepting.', sourceIds: ['s0'] }] };
@@ -328,6 +328,7 @@ describe('ordinary-user native illustration through real task/store/asset bounda
       usage: { input_tokens: 20, output_tokens: 20 } }));
     });
     await expect(f.handler(f.deps as never, f.task() as never)).rejects.toThrow(/needs source-grounded revision/u);
+    expect(reviewGuidanceObserved).toBe(true);
     expect(f.owner.result.storyboardReview.decision).toBe('blocked');
     expect(f.owner.result.illustrationPrompts[0].prompt).toBe(reviewedPrompt);
     expect(f.db.presentationAssets).toHaveLength(0);
