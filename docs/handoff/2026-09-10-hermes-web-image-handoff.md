@@ -12,7 +12,7 @@
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
 - UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
 - 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：Node24三文件候选79c1c239已完成High并交回；已完成只读源码核对：无现成的无Provider/新任务编辑入口，回执 tmp/coordination/71e-private-revision-entry.md；当前真实等待，不另造任务；不SSH/写DB/新任务/Provider/部署。
-- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation已推eac6e41d，四段R04及因果夹具High GO；精确Media38626284020后继API旧runtime夹具失败。当前仅apps/api/test/{presentation-assets-routes,private-source-reanalysis}.test.ts写权，按canonical 1c323935先核消费者等价后最小复用；定向验证/独立High后单提交及一次新精确CI。owner单取日志；业务/R12/其余文件冻结，不部署。
+- 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：独立树codex/architecture-remediation基线eac6e41d；API两测试已按canonical 1c323935等价消费者最小复用4+/2−，原176/176与第五段独立High GO/P0P1P2=0已收。唯一源码写权仍apps/api/test/{presentation-assets-routes,private-source-reanalysis}.test.ts；下一步由owner单提交正常push及一次新精确Media，不能复用旧eac红CI宣称整体绿。owner单取日志；业务/R12/其余文件冻结，不部署。
 - 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
