@@ -17,7 +17,7 @@
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
 ## 当前 Git / CI / 发布候选
-- canonical当前已收UI测试修订bd2719e0（后继文档提交以Git为准）；含尚未完成Linux/运行验收的R01/R12/Ops，**不能整包按UI许可发布**。根main只导航；本机依赖缺失仍在，源码clean不等于依赖恢复。
+- canonical最新源码为 **6c7036239856760d8bc2f559196fd5874e6cd89c**（后继文档提交以Git为准），已收R04六路径；此前UI测试bd2719e0保留。push自动触发Media **38640203872**，首次核对queued；不重复dispatch。实际default-self/组合CI待收，不能用a133六绿替代；含尚未完成Linux/运行验收的R01/R12/Ops，**不能整包按UI许可发布**。根main只导航；本机依赖缺失仍在，源码clean不等于依赖恢复。
 - root-owned `C:/Users/Mac/.codex/worktrees/media-reviewed-integration/XGS` / `codex/p04-media-integration` 已从clean、正常push的 **40e8d071592c272a6f53eaa3a440dff9fa72122e** 发布；生产84为祖先。父3118f4a43769b5b601fc019a11f86763f057e314，40e8新增仅已审媒体保留E2E（源bd2719e0，9+/3−）；原3118为26文件536+/383−：23 Web + Node24三文件。实际发布包与canonical尚未ready部分分开。
 - 精确来源：5dd687f6→32b412ef；5e7b430a→ac2fb194；b2756b42→9c69c46c；3cff5edf仅Web→c69ac3b6；235ae555→81e6ff7e；ea0885a9仅Web→edd1c25e；79c1c239三文件patch→3118f4a4。40e8d071=bd2719e0单文件E2E。两层独立High均GO/P0P1P2=0；不取HEAD整份compose/domain index，不带R12/R01/R02 fresh runtime/Gateway/Ops。
 - 隔离scope/3118实际组合与40e8唯一E2E差异的独立High均GO/P0P1P2=0，回执tmp/coordination/ui-release-scope-high.md、tmp/ui-release-3118-retention-high.md。3118旧CI38613196449仅媒体保留compact误选旧selector失败，已按原error-context/源码修正；新精确40e8 Media **38616783173 completed/success，6 jobs全过**：Guide/creation72、layout/focus6、media retention6、后继recovery34全部通过，类型/build/lint/unit/docs通过。root独立仅核终态/SHA；owner唯一skill.log与receipt在tmp/ui-release-40e8-*。本机Playwright缺失未跑、不安装。主ci.yml未触发，不冒称主仓全CI。
