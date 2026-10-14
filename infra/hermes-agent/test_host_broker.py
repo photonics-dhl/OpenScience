@@ -257,7 +257,11 @@ class BrokerStopArtifactTests(unittest.TestCase):
 
     def test_poll_once_consumes_before_start_stop_without_starting_unit(self):
         commands = []
-        host_broker.poll_once(self.root, lambda argv, **kwargs: commands.append(argv))
+        original_consume_stop = host_broker.consume_stop
+        with patch.object(host_broker, 'consume_stop',
+                          side_effect=lambda root, instance, run: original_consume_stop(
+                              root, instance, run, producer_uid=0)):
+            host_broker.poll_once(self.root, lambda argv, **kwargs: commands.append(argv))
         self.assertFalse(any(command[1] == 'start' for command in commands))
         self.assertTrue((self.bridges / INSTANCE / 'ended').exists())
         self.assertFalse(self.task.exists())
@@ -321,6 +325,7 @@ class BrokerStopArtifactTests(unittest.TestCase):
             # retaining the root-owned stopped receipt.
             for name in ('request.json', 'caller.credential', host_broker.STOP_FILE):
                 (self.task / name).unlink()
+            (self.task / 'worker.sock').unlink()
             self.task.rmdir()
             self.assertTrue(consume_stop(self.root, INSTANCE, fake, producer_uid=0))
             self.assertEqual([command[:2] for command in commands], [['systemctl', 'stop']])
@@ -348,6 +353,17 @@ class BrokerStopArtifactTests(unittest.TestCase):
                     path.unlink(); path.symlink_to(self.task / 'request.json')
                 with self.assertRaises((OSError, ValueError)):
                     consume_stop(self.root, INSTANCE, lambda *_args, **_kwargs: self.fail('must not stop'), producer_uid=0)
+
+    def test_task_directory_owner_and_other_writable_bits_are_bound_before_stop(self):
+        commands = []
+        os.chown(self.task, 1, -1)
+        with self.assertRaises(ValueError):
+            consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0)
+        os.chown(self.task, 0, -1)
+        self.task.chmod(0o707)
+        with self.assertRaises(ValueError):
+            consume_stop(self.root, INSTANCE, lambda argv, **kwargs: commands.append(argv), producer_uid=0)
+        self.assertEqual(commands, [])
 
     def test_wrong_stop_identity_or_extra_file_does_not_stop_peer(self):
         (self.task / host_broker.STOP_FILE).write_text(json.dumps({'taskId': 'other', 'executionAttempt': 1}))

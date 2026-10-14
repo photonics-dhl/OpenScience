@@ -186,7 +186,12 @@ def _open_task(root, instance, producer_uid):
     inbox_fd = secure_open_directory(root / 'inbox', producer_uid)
     try:
         task_fd = os.open(instance, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=inbox_fd)
+        task_stat = os.fstat(task_fd)
+        if task_stat.st_uid != producer_uid or task_stat.st_mode & stat.S_IWOTH:
+            raise ValueError('Native task directory ownership changed')
     except BaseException:
+        if 'task_fd' in locals():
+            os.close(task_fd)
         os.close(inbox_fd)
         raise
     return inbox_fd, task_fd
