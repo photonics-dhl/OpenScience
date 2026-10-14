@@ -1825,6 +1825,19 @@ describe('owner task stop fence', () => {
     expect(db.agentTasks[0]).toMatchObject({ status: 'failed', error: AGENT_TASK_OWNED_STOP_REASON, executionAttempt: 2 });
   });
 
+  it('seals a retryable failed generation and synchronizes its ingestion state', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'ingestion' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'source text' }, dispatch: false });
+    db.ingestionTasks.push({ id: 'owned-stop-ingestion', batchId: 'batch', artifactId: 'artifact', agentTaskId: task.id,
+      state: 'parsing', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date() });
+    await claimAgentTask(deps, task.id);
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', expectedExecutionAttempt: 1, error: 'provider timeout' });
+    await expect(cancelAgentTask(deps, { userId: user.id, taskId: task.id, expectedExecutionAttempt: 1 }))
+      .resolves.toMatchObject({ outcome: 'applied', status: 'failed', executionAttempt: 2, stopReason: 'user' });
+    expect(db.ingestionTasks[0]).toMatchObject({ state: 'failed_blocked', error: AGENT_TASK_OWNED_STOP_REASON });
+  });
+
   it('does not stop a succeeded task or expose another user’s task', async () => {
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

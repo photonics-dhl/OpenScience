@@ -1010,7 +1010,7 @@ export async function cancelAgentTask(
           try { await lockLiveResearchObject(tx, scope.task.session.researchObjectId!); }
           catch (error) { throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在', error); }
         }
-        const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
+        const task = await tx.agentTask.findUnique({ where: { id: input.taskId }, include: retryAuthorityInclude(input.userId) });
         if (!task || task.deletedAt) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         if (isOwnedStopped(task)) {
           if (input.expectedExecutionAttempt !== task.executionAttempt
@@ -1039,6 +1039,7 @@ export async function cancelAgentTask(
         }, ctx);
         return { task: stopped.task, outcome: 'applied' as const };
       }, { isolationLevel: 'Serializable' });
+      if (result.outcome === 'applied') await syncIngestionState(deps, result.task.id, 'failed', result.task.error);
       return { ...taskToView(result.task), outcome: result.outcome };
     } catch (error) {
       if (!isSerializableWriteConflict(error) || attempt >= 2) throw error;
