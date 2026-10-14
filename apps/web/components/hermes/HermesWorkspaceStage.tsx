@@ -58,31 +58,8 @@ import type { HermesVisualState } from './hermes-state';
 import { HermesStaticPortrait, HermesVisualAdapter } from './HermesVisualAdapter';
 import { HermesGuideBubble } from './HermesGuideBubble';
 import { HermesPerformanceBubble } from './HermesPerformanceBubble';
-
-interface HermesStagePresentation {
-  anchor: HTMLElement;
-  assistantOpen: boolean;
-  floating?: boolean;
-  usesFallbackAssistant?: boolean;
-  presentation?: 'default' | 'dashboard-seat';
-  invocationRef?: React.MutableRefObject<HTMLElement | null>;
-  onInvoke: () => void;
-  state?: HermesVisualState;
-  suggestion: HermesGuideSuggestion;
-  workspaceId: string;
-}
-
-interface HermesWorkspaceStageContextValue {
-  openCompanion(): void;
-  register(presentation: HermesStagePresentation): () => void;
-  registerAnchor(registration: HermesAnchorRegistration): () => void;
-  requestGuide(target: HermesAnchorId | null): void;
-  setRouteState(state: HermesVisualState): void;
-  setWriting(writing: boolean): void;
-  companionOpen: boolean;
-}
-
-const HermesWorkspaceStageContext = React.createContext<HermesWorkspaceStageContextValue | null>(null);
+import { HermesWorkspaceStageContext, type HermesStagePresentation } from './HermesWorkspaceStageContext';
+export { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : React.useLayoutEffect;
 const neutralSuggestion: HermesGuideSuggestion = { bodyKey: 'guide.neutral.body', kind: 'neutral', titleKey: 'guide.neutral.title' };
 const viewportClass = (): HermesViewportClass => window.innerWidth <= 640 ? 'mobile' : 'desktop';
@@ -297,10 +274,6 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
       </Drawer> : null}
     </HermesWorkspaceStageContext.Provider>
   );
-}
-
-export function useOptionalHermesWorkspaceStage() {
-  return React.useContext(HermesWorkspaceStageContext);
 }
 
 function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fallbackOnInvoke, guideTarget: requestedGuideTarget, navigationOnly, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
