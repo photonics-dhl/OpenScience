@@ -74,7 +74,16 @@ describe('two-task image grant migration (real PostgreSQL)', () => {
       for (const [profile, maximum] of historical) await insert(tx, profile, maximum);
       await expectRejected(tx, () => insert(tx, 'visual-narrative-v1', 2), '23514');
       await apply(tx, forward);
-      await insert(tx, 'visual-narrative-v1', 2);
+      try {
+        await insert(tx, 'visual-narrative-v1', 2);
+      } catch (error) {
+        // The CI baseline replay must prove an actual PostgreSQL rejection,
+        // never an expected-code string in a Vitest assertion or a setup failure.
+        if ((error as { meta?: { code?: string } }).meta?.code === '23514') {
+          console.error('FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN');
+        }
+        throw error;
+      }
       for (const [profile, maximum] of historical) await insert(tx, profile, maximum);
       const rows = await tx.$queryRawUnsafe<Array<{ profile: string | null; max_agent_tasks: number | null }>>(
         'SELECT profile,max_agent_tasks FROM "hermes_research_runs" ORDER BY id',
