@@ -17,7 +17,13 @@ import type { runHostedNativeTask } from '../../src/native-agent/host-task';
 // task CAS, source resolution, materializers, handler and asset transaction run below.
 vi.mock('../../src/native-agent/host-task', () => ({ runHostedNativeTask: async (input: Parameters<typeof runHostedNativeTask>[0]) => {
   const tools = [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object', properties: {} } })), ...input.config.sourceTools];
-  const messages: Array<Record<string, unknown>> = [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }];
+  // The real host reuses the authenticated saved Native system prompt on restart.
+  const systemPrompt = await input.session.systemPrompt() ?? input.config.instructions;
+  const bindFirstTurn = (input.session as typeof input.session & {
+    bindFirstTurn?: (goal: string, systemPrompt: string) => Promise<void>;
+  }).bindFirstTurn;
+  await bindFirstTurn?.(input.config.goal, systemPrompt);
+  const messages: Array<Record<string, unknown>> = [{ role: 'system', content: systemPrompt }, { role: 'user', content: input.config.goal }];
   let sequence = 0;
   for (let turn = 0; turn < 8; turn++) {
     const response = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages,
@@ -280,6 +286,86 @@ describe('automatic original paid Native image admission through the existing Wo
 });
 
 describe('ordinary-user native illustration through real task/store/asset boundaries', () => {
+  it('passes the actual contradictory art reply to a scripted blocked final reviewer without generating an image', async () => {
+    // This proves consumer wiring and a blocked terminal, not LLM semantic detection.
+    const f = await fixture();
+    const value = structuredClone(science);
+    value.scenes[0]!.encoding += ' A comparison of the same relation is described in an inset.';
+    let reviewedPrompt = '';
+    f.fetcher.mockImplementation(async () => {
+      const [, request] = f.fetcher.mock.calls.at(-1) as unknown as [unknown, RequestInit];
+      const body = JSON.parse(String(request.body)) as {
+        tools: Array<{ name: string; description: string }>;
+        messages: Array<{ role: string; content: string | Array<{ type: string; tool_use_id?: string; content?: string }> }>;
+      };
+      const step = f.fetcher.mock.calls.length - 1;
+      let scripted: unknown = responses[step]?.[2];
+      if (step === 1) scripted = value;
+      if (step === 2) scripted = { scienceToolCallId: 'science', scenes: [{
+        layout: 'A single panel with label 0 and a separate title at the top.', treatment: 'Ink on white; no inset or data-like marks.' }] };
+      if (step === 3) {
+        const art = body.messages.flatMap(message => Array.isArray(message.content) ? message.content : [])
+          .find(block => block.type === 'tool_result' && block.tool_use_id === 'art');
+        const reply = JSON.parse(art!.content!) as {
+          document: { scenes: Array<{ illustration: { encoding: string; composition: string; treatment: string; labels: string[] } }> };
+          prompts: Array<{ prompt: string }>;
+        };
+        const scene = reply.document.scenes[0]!.illustration;
+        reviewedPrompt = reply.prompts[0]!.prompt;
+        for (const field of [scene.encoding, scene.composition, scene.treatment, ...scene.labels]) expect(reviewedPrompt).toContain(field);
+        expect(scene.encoding).toContain('comparison');
+        expect(scene.composition).toContain('separate title');
+        expect(scene.labels).toEqual(['Connected regions']);
+        expect(body.tools.find(tool => tool.name === 'paper_illustration_review')!.description).toContain('all visible text');
+        scripted = { planToolCallId: 'art', decision: 'blocked', summary: 'Scripted fixture: inset and title conflict with the approved depiction.',
+          corrections: [], issues: [{ sceneIndex: 0, labelIndex: null, kind: 'requires_replan',
+            requiredMeaning: 'Resolve the same sourced relation, layout and complete label list before accepting.', sourceIds: ['s0'] }] };
+      }
+      const call = responses[step];
+      return new Response(JSON.stringify({ model: 'MiniMax-M3', content: call
+        ? [{ type: 'tool_use', id: call[0], name: call[1], input: scripted }]
+        : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: call ? 'tool_use' : 'end_turn',
+      usage: { input_tokens: 20, output_tokens: 20 } }));
+    });
+    await expect(f.handler(f.deps as never, f.task() as never)).rejects.toThrow(/needs source-grounded revision/u);
+    expect(f.owner.result.storyboardReview.decision).toBe('blocked');
+    expect(f.owner.result.illustrationPrompts[0].prompt).toBe(reviewedPrompt);
+    expect(f.db.presentationAssets).toHaveLength(0);
+    expect(f.generate).not.toHaveBeenCalled(); expect(f.oldReview).not.toHaveBeenCalled();
+    expect(f.db.agentTasks).toHaveLength(2); expect(f.deps.redis.lpush).not.toHaveBeenCalled();
+  });
+  it('resumes a new guided IMAGE session using the original first-turn system, goal, tools and paid receipts', async () => {
+    const f = await fixture();
+    const originalHost = nativeHost.runHostedNativeTask;
+    let originalGoal = '';
+    const host = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementation(async input => {
+      originalGoal = input.config.goal;
+      const complete = input.session.complete;
+      input.session.complete = async raw => { await complete(raw); throw new Error('FIXTURE_AFTER_FIRST_COMPLETED_TURN'); };
+      return originalHost(input);
+    });
+    try { await expect(f.handler(f.deps as never, f.task() as never)).rejects.toThrow('FIXTURE_AFTER_FIRST_COMPLETED_TURN'); }
+    finally { host.mockRestore(); }
+    const cp = readNativeAgentExecution(f.owner.result)!.checkpoint!;
+    expect(cp.state).toBe('completed'); expect(f.fetcher).toHaveBeenCalledOnce();
+    const [, firstRequest] = f.fetcher.mock.calls[0] as unknown as [unknown, RequestInit];
+    const firstBody = JSON.parse(String(firstRequest.body)) as { system: string; tools: Array<{ name: string; description: string }> };
+    expect(firstBody.system).toContain('主旨与代表性案例');
+    expect(firstBody.tools.find(tool => tool.name === 'paper_illustration_science_repair')!.description).toContain('paper_read/paper_view');
+    const completedObjects = [...f.owner.result.nativeAgentObjects];
+    Object.assign(f.owner, { executionAttempt: 2, retryCount: 1 });
+    const observe = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementation(async input => {
+      expect(input.config.goal).toBe(originalGoal);
+      expect(await input.session.systemPrompt()).toBe(firstBody.system);
+      return originalHost(input);
+    });
+    try { await f.handler(f.deps as never, f.task() as never); } finally { observe.mockRestore(); }
+    expect(f.owner.result.nativeAgentObjects.slice(0, completedObjects.length)).toEqual(completedObjects);
+    expect(f.owner.result.storyboardReview.decision).toBe('accepted');
+    expect(f.fetcher).toHaveBeenCalledTimes(5); // first completed turn is replayed without a second paid publication
+    expect(f.db.presentationAssets).toHaveLength(1); expect(f.generate).not.toHaveBeenCalled();
+    expect(f.db.usageLedger.filter(row => Number(row.delta) === -1)).toHaveLength(1);
+  });
   it.each(['noncommercial', 'timing', 'stale-lease'] as const)('keeps the native video executor and timing receipt bound through the real handler: %s', async mode => {
     const f = await fixture(false, true), planned = await f.handler(f.deps as never, f.task() as never);
     await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: planned });
