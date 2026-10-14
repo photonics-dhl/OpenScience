@@ -40,7 +40,7 @@
 
 ## 架构源码与未决验收
 - R02 source-composition已收a3be7786/063daf29，owner历史fixture125/125、七套772/772、domain tsc/ESLint及独立High GO；canonical本机依赖缺失不能伪称复跑通过。R02不属于本轮UI隔离发布差额。
-- R04已审序列：599e8e0c class supplier、cb0a0d53 host socket、3cd8401f task-store、eac6e41d Domain、54e7f364 API、ec3b9133 art、8271fc10 Worker review共七段独立gpt-6.1 High GO/P0P1P2=0；后四段437/437、176/176、33/33、9/9。原High/总回执在架构树tmp/r04-class-supplier-{high,final-receipt}.md，后继比对在tmp/r04-later-fixture-{comparison.json,deltas.log}。root已核新单文件差额、clean/upstream、High及CI身份；synthetic Host仅测试运输替身，不证明生产Native/科研质量。整体新CI待终态，R04未部署、泛型callback既有P2未关闭。
+- R04已审序列：599e8e0c class supplier、cb0a0d53 host socket、3cd8401f task-store、eac6e41d Domain、54e7f364 API、ec3b9133 art、8271fc10 Worker review共七段独立gpt-6.1 High GO/P0P1P2=0；后四段437/437、176/176、33/33、9/9。原High/总回执在架构树tmp/r04-class-supplier-{high,final-receipt}.md，后继比对在tmp/r04-later-fixture-{comparison.json,deltas.log}。root已核新单文件差额、clean/upstream、High及CI身份；synthetic Host仅测试运输替身，不证明生产Native/科研质量。七段已审结果不替代下述完整CI终态，R04未部署、泛型callback既有P2未关闭。
 - 精确Linux **38631891402@8271** 终态failure、其他5jobs成功：完整default self/Worker closure、broker27、installer恢复、部署341零skip、Worker822、Domain485、API214/类型、art33、新Native review组合54及后继恢复/失败图禁止重试/admin-submit均过。后续ingestion单grep 1fail/81未选，初始createIngestionBatch缺runtime，尚未到额度断言；与canonical相同且历史caf CI也曾失败，不是只读差额漏报。owner唯一日志tmp/r04-ci-8271fc10-skill-path.log，root仅终态/SHA；后继preflight/Web未执行，不称完整绿，R04未部署。
 - R12后续提交整体独立High NO-GO（CAS/saveWarnings同事务、API/Worker Native stop、producer围栏、presentation.generate Gateway等仍按架构原计划收敛）；已收旧source不等于新整体ready。R08独立源码候选未部署，R01 SDK/凭据/完整bundle与Ops运行未完成。R13真实OOM根因不因重建容器或日志改进而关闭。详见既有能力台账/整改计划，不新增任务库。
 
