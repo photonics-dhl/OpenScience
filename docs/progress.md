@@ -1,32 +1,12 @@
 # CURRENT Progress Window
 
-> 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
-- 2026-10-14 当前协调：UI 仍在 `235ae5555229d67d32039ccab33eb13a56f8114d` 之后的同一授权修复范围内；Native runtime 定向回归已 32/32 通过，workspace-stage 断言已改为 content 视图下 media 隐藏，等待独立 High 后才提交并触发新的精确 CI。架构 R04 的 default-self/Worker-wiring 修订已完成本地 214 项（208 通过、6 平台跳过），独立 High 进行中，未触碰生产。视频 71e 本轮因模型容量 systemError 结束，未调用 Provider/音频/视频，保留私有草稿与原回执；只有可信容量恢复后才允许一次既定范围的科学分镜重试，仍不部署、不生成商业视频。
-- 2026-10-14 新授权续作：UI 可在独立范围内修复 Native runtime/browser 回归，需新 commit、定向验证和独立 High；随后 root 串行集成并对最新精确 SHA 跑完整 CI、release guard、健康/readback 与首页→Guide→P04 路径，全绿才部署。UI 已 STARTED 只读定位，不安装依赖、不重跑旧 SHA。架构线按最新纠正只处理 R04 default self compatibility 与 bounded Worker wiring closure，R12/R04 WIP、Provider/SSH/生产边界保持；71e 继续禁止 Provider、商业视频和部署。
-- R04 最新只读回执：`r04-delta-default-self.log` 证实 default self 必须在真实 Linux/musl 安装的 `@prisma/engines` artifact 上验收；Windows 本机仅能 fail-closed，不能复制 CLI 私有 binary、放宽 guard 或冒称 wiring closure。`createWorkerDeps`/factory callbacks、recovery-state、scheduler 与 research-run forwarding 仍未闭合；无新 commit，生产未触碰。
-- UI 候选 `c2fcd034` 经独立 High GO 后已串行收取为 canonical `3cff5edf` + `235ae555`（后者补普通 `/edit` 默认 contribution 回归），推送 head `235ae5555229d67d32039ccab33eb13a56f8114d`。精确 CI `38592332890` 终态失败：First image PostgreSQL、hermes-dashboard、auth-dashboard、research-continuation 均成功；`hermes-workspace-stage` 28 pass/1 fail 为 content 视图仍要求 media visible 的旧断言，`skill-path` 3 个 `presentation-asset` 用例为既有 Native Agent runtime unavailable。未执行 release guard、线上回读或部署；UI 只继续修这两个测试合同/fixture 范围，不改 migration/grant、Provider 或生产。
-- 2026-10-14 最新协调：UI 独立修复 `197ef4431f0a74b0179ea0c278e9d99484db8da8` 与架构最小修复 `d966b926` 已串行集成，canonical HEAD `6a445b2269253467d275b06eba9aa026695240d3`，工作树干净且已推送。真实 CI `38588419857` 对代码 SHA `04b1ed2c2d2cb010c115e4ef749cc5120f1596d4` 全量失败：`skill-path` 的 native-video-parents 有 5 项 Native runtime unavailable，`hermes-dashboard` 1 项视口断言失败，`research-continuation` 3 项 fixture/填充失败，`hermes-workspace-stage` 3 项隐藏/未启用失败；release guard、线上回读和部署均未执行，不能以 docs-only HEAD `6a445b22` 冒充 exact-CI 绿灯。UI owner 已收敛回执，不重跑同源 SHA、不 workflow_dispatch、不部署。R12 三提交 `95f935bf`/`c111d3f3`/`098b5ab5+0662b2b` 独立 High 整体 NO-GO：Worker submit/CAS race 与非同事务 saveWarnings，Native stop 尚未由 API/Worker 发布，producer 围栏与 presentation.generate gateway 差额未闭合；仅 `d966b926` 编译回归修复 GO。R04 仍无 commit、NO-GO（211 tests：205 pass、6 platform skips，Prisma musl engine 与 bounded Worker provenance 未闭合），生产不变。71e 已完成独立 High，两处科学修订 GO：超强耦合限定超导量子比特—微波腔，场景1唯一公式为 `v·k = ω(k)`；claims/evidence/source 保留，未调用 Provider/音频/视频、未批准/公开/部署。未决项为 scene3 gap 文案与来源不一致、45s 时长是否相对父 receipt 漂移、`>1000x` 证据被旁白省略，均保留不扩改。
-- 2026-10-14 协调检查点：UI 最终候选已收取并经独立 High GO，canonical 依次集成 `5e7b430a`（`2553a0c2` UI 四视图）和 `b2756b42`（`1eab71a8` CoreEditor 可见字段回退）；截图覆盖 Guide、贡献、Hermes、内容、媒体、材料入口，未部署/未调用 Provider。UI 的既有 typecheck、Vitest alias/fixture、Prettier 基线阻断仍保留，不能当作生产绿灯。R12 已按 UI 顺序收取并集成 `ae5e4af7`/`6b8c263c`/`765281a2`（源 `d15f27c4`/`d8f3f39a`/`537d8077`），owner 六套 Domain 548/548、tsc、lint 与独立 High GO；canonical 本机因 `vitest` 依赖缺失无法复跑，保留 owner 证据。R04 收到 211 tests=205 pass/6 skip、无新提交，保持 NO-GO，三处 infra WIP 仍只在架构工作树。视频 71e 同父私有任务 `591e9fd8-14ed-4ef4-885f-0f6ade1d386d` 已回写私有待审草稿：修正 ultrastrong coupling 的超导量子比特—微波腔边界、scene1 唯一公式 `v·k = ω(k)`，保留 claims/evidence/source 绑定；未调用商业 Provider/音频/视频，独立 High 因容量错误未形成可信结论，未批准/公开；不再重试，等待可信容量恢复。
-- 2026-10-14 UI 上线评估：用户已要求继续，但发布守卫要求“干净、已推送、精确 CI 通过”的 SHA；隔离候选 `197ef443` 已修复缺失 barrel export，但 canonical 尚未集成/推送，domain/web typecheck 仍受 Prisma 类型与旧 dist 阻断，本机缺 Vitest，`docs:lint` 缺 `markdownlint-cli2`，且 contribution 视图字段契约的 P2 风险待证。因此本轮停在发布前验证，不停服务、不部署。
+> 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施/失败/发布留在 Git。
 
-- 2026-10-14：R02 source-composition 收取完成：`a3be7786` + `063daf29`，历史回放夹具 125/125、R02 七套 772/772、domain tsc 与 fixture ESLint 由 owner 通过，独立 gpt-6.1 High GO；root canonical 因缺失本机依赖无法重跑 vitest/tsc/eslint，保留 owner 日志作为候选证据。无关 infra WIP、R08、生产部署均未收取/变更；视频 71e 与 UI 仍按容量恢复后的既定范围继续，Provider/商业视频保持关闭。
-- 2026-10-14：视频 71e 两次受控续作均以 model-capacity systemError 结束，未调用 Provider/音频/商业视频。UI 四视图续作仍在隔离树，已写入既定研究桌面范围但尚未提交或集成；Prettier 未通过，两个 UI Vitest 为路径解析失败，web typecheck 另有既有 `isExplicitFirstImageRequest` 缺失导出，均保持未验收/未部署。
-
-- 2026-10-14：首图本地因果定位及独立High方案审查完成，owner已STARTED原树三Worker文件：仅fresh IMAGE的诊断修订/主旨区分/既有终审一致性引导，保留旧会话、VIDEO、科学校验与首轮goal/system。真实纸源→精确ID修订及新旧恢复测试已先行提交；原CI实际801pass/8fail，其中3个真实引导缺口与5个测试写法问题分开处置，候选源码独立High已GO；新消费者/恢复实际通过，余4个旧profile夹具已仅测试修订并经窄High GO，新精确Media六jobs全绿，Native809/809及lint/类型/浏览器恢复均实际通过；无本机等价依赖闭包则走CI。未有新模型或付费运行。
-- 2026-10-14：R07 Gateway收口、R13 ZIP流式导出及Ops三组源码已独立High GO并精确收取；源别名和本地原测试不代替正式包consumer/Linux运行，root已接原Media工作流补必要覆盖。R04仍NO-GO，真实生产OOM归因、恢复/网络/监控维护和R01凭据切换均未关闭。video交回Domain后架构已实际STARTED R02/R08/R12，保留原任务和未审差额；精确写权/证据见CURRENT。
-
-- 2026-10-14：cb9双库备份/53迁移/原发布及一次真实首图全部完成，image FINAL RELEASED。Guide→Native计划→2.5图自动返回并保存供应商原ID、私有入库成功；像素审核BLOCKED，未公开/重画/冒称用户认可。新链平台gross3/fund3，旧失败Guide1点单列；供应商仅6coins报价已证，API无实际扣费字段。原任务/公开版本/SourceMap/旧图保护15/15，完整链16m51.616s，不冒称稳定快速。上游跨字段表达矛盾已定位并转入上述限定修复；架构一次只读SDK/OOM取证已结束。精确对象、授权及窗口只见CURRENT。
-- 2026-10-14：R09源收取后UI已实际STARTED接入，无冲突且保留P03/P04 WIP，继续已认可P07四视图；原77项/82模块零环不代替新UI验收。R01 Native调用认证/首轮绑定与R13安全Fastify日志源码均已独立High并按路径逐字集成，整改计划和历史阶段图亦收取；Linux当前SDK/凭据及完整Worker类型仍有缺口，未部署，日志修复不等于OOM根因关闭。范围/源提交与检查限度见CURRENT。
-- 2026-10-14：视频51e精确Media六jobs全成功，4权限竞态、父链259、Worker227及原Agent检查、Worker/API/Web类型、Guide六例与恢复均实际通过，原独立High有效；隔离候选84随后沿既有FD9流程完成部署，active/public=`84c2640b2ecf790fdbe89b2d958ea5dc4a13c8b2`、rollback=`cb9f9916eaa5202671080dc31eaa552bb22413e9`，健康容器与journal清除已只读回读。此次仅媒体候选，Native/VIDEO未刷新，Parser/ScanSci/embedding探针按`--no-tests`显式跳过，未生成商业成片或调用Provider；R01/Ops差额仍只阻塞canonical后续发布。商业预算/LTX资格仍待已问信息，不重复询问。
-- 2026-10-14：媒体隔离候选84的组合Media38514277609已6/6通过；`8dbf2de1`补Gateway构建、`e6671ac6`补入口测试mock后，canonical Media38522907213真实六jobs全成功（含API entrypoint、四浏览器与首图PostgreSQL）。R01 Linux/SDK 与 Ops 生产就绪只作用于含这些差异的 canonical，84不含该差额，已沿现有发布流程部署并回读 active/public/healthy；`158dba6c`以 ours merge 收取84祖先，canonical运行时树未带入R01/Ops差异。架构R02/R08/R12 owner此前因模型usage limit阻断，R04继续NO-GO。
-- 2026-10-14：UI owner 本轮续作因模型容量 systemError 终止，已保存此前 P03/P04/P07 证据与续点；不把容量失败当验收通过，也不重做已完成交付，待可用高推理模型继续剩余 UI 验收。
-
-- 2026-10-14：Synclip公开Docs及用户截图已合并原能力台账；Veo公开价、LTX管理员API、配音与平台点分别记录。有限supplier预算和沿LTX时账户资格/5-10-15秒费率尚无已存证明，已一次询问；不重复索取公开文档或API Key。
-- 已验收的不变交付继续保留：首图/迟到恢复/Guide六例及P04组合CI成功，Guide/P04配对上线且从首页可见入口走到原私有v3；两键手动制作文案已生产观察。UI本次P03/P04/P07新设计仍须实际桌面手机与独立High，旧CI不代替新验收。旧Web消费者已退役并可恢复归档，双位置reader保留；未审R08不能随新源码收取冒称部署。
-- 前一次f804图片由用户原供应商ID沿GET恢复，同任务私有图Native accepted，但brief贴合度和用户认可仍分开；供应商用户账单6已记录。指定私有v3去重39→9、30进可恢复回收站，原公开版本/认可图保护已核，不扩大清理。该次与本次cb9的费用/任务分别保留。
-- Native艺术合同与音色块价兼容已有实际CI和应用发布证据；VIDEO host仍旧版关闭，新Native VIDEO计划成功不等于成片。原92df失败/unknown及一次费用保留，不自动重放；当前合法同父修订、科学冲突、声轨/帧与商业资格/预算按CURRENT接续。
-
-- 长期目标仍是2–3篇真实论文的Hermes全文凝练、来源/科学理解、配图与用户质量确认及公开展示；普通用户旅程、完整视频和整站审美尚未完成。候选、已部署、实际观察和用户认可分别记录，不用检查数量替代交付。
-- 2026-10-13：本机出现359份tracked源码缺失，已从HEAD恢复并核对一致；现存依赖部分缺失，docs-sync通过且复用同版本现有工具lint通过。暂停所有归档/清理，视频owner只读报告已完成，6个cache索引缺失使当前完整offline方案不可行；独立High批准的源码快照已完成原Vitest/编译验证，复用只读现有依赖且未修改shared node_modules。没有新安装，远端CI及生产不受影响，精确失败/恢复证据见CURRENT。
-
-历史实施、审查、失败与发布回执均在Git及CURRENT引用的原证据中；此窗口不保存另一套动态任务表。
+- 2026-10-15：最新人类准UI单独修复部署；71e不部署，Provider/商业视频/新收费任务继续关闭。UI与R04/R12没有实际依赖时并行推进，不把未完成架构整包带入UI发布。
+- root已从实际生产84祖先在保留隔离树组装并正常push3118f4a4：23Web+Node24三文件，26文件536+/383−；compose4/4与diffcheck通过，精确Media38613196449已启动，实际组合独立High GO零项。UI owner唯一收日志，root串行发布。canonical caf7b280的fixture修订与38612456058仅收本轮终态，不冒充隔离包精确CI。
+- Web Node22 TransformStream race候选79c1c239已第二High GO，缓存Node24.21隔离有界复现not-reproduced；未部署，不声称线上关闭。原92df是Native输出截断，71e/591e真实已succeeded，旧容量诊断已纠正。
+- 71e三项科学修订方案High GO（few-nanometre gap、恢复35s、限定构型>1000x），尚未写回草稿。视频owner已证无现成无Provider编辑入口；本轮不新任务/DB直写/Provider，保留已审方案。
+- R04受控诊断d52deb64已推、full216/210pass/0fail/6skip与独立High GO；Linux38612878746失败明确closure-candidate supplier来源语法缺口，owner已STARTED最小静态来源证明修复。旧run双Prisma generate/musl断言已过，self verifier未过；R04整体与R12仍NO-GO，不部署。
+- 最新本地生产回执仍为84c2640b（2026-10-14 18:05+08）、rollback cb9，healthy/无journal；Native/IMAGE ea81保留、VIDEO59a关闭。新发布前须fresh回读，旧CI/服务healthy不证明新UI或科学质量。
+- 原图GET恢复、指定v3可恢复去重、公开/认可图保护与平台/供应商费用记录保留；Native accepted与用户质量认可分开。原Guide/P04已上线证据保留，后继四视图须真实入口验收。
+- 全部本机archive/cleanup/prune继续冻结，tracked恢复不等于依赖恢复；无安装/store修复/整拷node_modules。三篇真实论文全流程、普通用户旅程、完整视频与整站审美仍未完成。
