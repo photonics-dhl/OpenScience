@@ -116,7 +116,9 @@ async function fixture(native = true) {
   let fetchCalls = 0;
   const fetcher = vi.fn(async () => {
     fetchCalls += 1;
-    expect(activeTransactions).toBe(0);
+    // Native task-store.publish starts the provider request from inside its
+    // Serializable authority transaction; retain that production contract.
+    expect(activeTransactions).toBe(1);
     const content = fetchCalls === 1
       ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: 'openscience-source-review' } },
         { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }]
