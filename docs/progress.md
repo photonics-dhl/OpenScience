@@ -2,6 +2,8 @@
 
 > 业务摘要；精确版本、CI、资产、写权与下一步见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)。历史细节留在 Git。
 
+- 2026-10-14：R02 source-composition 收取完成：`a3be7786` + `063daf29`，历史回放夹具 125/125、R02 七套 772/772、domain tsc 与 fixture ESLint 由 owner 通过，独立 gpt-6.1 High GO；root canonical 因缺失本机依赖无法重跑 vitest/tsc/eslint，保留 owner 日志作为候选证据。无关 infra WIP、R08、生产部署均未收取/变更；视频 71e 与 UI 仍按容量恢复后的既定范围继续，Provider/商业视频保持关闭。
+
 - 2026-10-14：首图本地因果定位及独立High方案审查完成，owner已STARTED原树三Worker文件：仅fresh IMAGE的诊断修订/主旨区分/既有终审一致性引导，保留旧会话、VIDEO、科学校验与首轮goal/system。真实纸源→精确ID修订及新旧恢复测试已先行提交；原CI实际801pass/8fail，其中3个真实引导缺口与5个测试写法问题分开处置，候选源码独立High已GO；新消费者/恢复实际通过，余4个旧profile夹具已仅测试修订并经窄High GO，新精确Media六jobs全绿，Native809/809及lint/类型/浏览器恢复均实际通过；无本机等价依赖闭包则走CI。未有新模型或付费运行。
 - 2026-10-14：R07 Gateway收口、R13 ZIP流式导出及Ops三组源码已独立High GO并精确收取；源别名和本地原测试不代替正式包consumer/Linux运行，root已接原Media工作流补必要覆盖。R04仍NO-GO，真实生产OOM归因、恢复/网络/监控维护和R01凭据切换均未关闭。video交回Domain后架构已实际STARTED R02/R08/R12，保留原任务和未审差额；精确写权/证据见CURRENT。
 
