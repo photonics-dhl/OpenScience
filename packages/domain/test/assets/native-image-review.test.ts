@@ -17,7 +17,9 @@ const identity = (requestId = 'native-task') => ({ requestId, contentHash: 'a'.r
 const completed = (requestId = 'native-task') => ({ mode: 'model-native', state: 'completed', executionAttempt: 1,
   ...identity(requestId), promptHash: 'c'.repeat(64), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', review: review(requestId) });
 
-async function fixture(nativeAgentRuntime?: { runtimeId: string; skillCatalogueId: string; model: string }) {
+async function fixture(nativeAgentRuntime: { runtimeId: string; skillCatalogueId: string; model: string } = {
+  runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3',
+}) {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db, { id: 'native-review-user' });
   db.workspaces.push({ id: 'native-ws', type: 'team', name: 'Lab', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
