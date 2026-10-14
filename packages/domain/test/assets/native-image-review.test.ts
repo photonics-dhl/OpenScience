@@ -109,6 +109,8 @@ describe('server-owned native image review role', () => {
   it.each(['started', 'completed'])('never upgrades a legacy %s single-shot checkpoint', async state => {
     const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
     const f = await fixture(); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    // Historical single-shot tasks predate the Native Agent execution marker.
+    f.row.result = { nativeImageReview: { mode: 'model-native', state: 'not_started' } };
     await startNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, identity: identity(f.task.id),
       target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'c'.repeat(64) } });
     if (state === 'completed') await completeNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1, review: review(f.task.id) as never });
@@ -154,6 +156,8 @@ describe('server-owned native image review role', () => {
   });
   it('starts once under the exact execution lease and keeps uncertainty across a new lease', async () => {
     const f = await fixture(); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    // Exercise the legacy single-shot lease using its persisted historical shape.
+    f.row.result = { nativeImageReview: { mode: 'model-native', state: 'not_started' } };
     const input = { taskId: f.task.id, executionAttempt: 1, identity: identity(f.task.id),
       target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', promptHash: 'c'.repeat(64) } };
     await startNativeImageReview(f.prisma, input);
@@ -197,7 +201,8 @@ describe('server-owned native image review role', () => {
   });
   it('mints a private not-started role only for a newly created scene-image task', async () => {
     const f = await fixture();
-    expect(f.row.result).toEqual({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
+    expect(f.row.result.nativeImageReview).toEqual({ mode: 'model-native', state: 'not_started' });
+    expect(readNativeAgentExecution(f.row.result)?.profile).toBe('image-review');
     expect(f.task.result).toBeNull();
   });
 
