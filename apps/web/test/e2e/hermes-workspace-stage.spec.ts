@@ -834,6 +834,7 @@ test.describe('short desktop Hermes conversation', () => {
       // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
       await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
     } finally {
+      console.log('Conversation reading diagnostic:', JSON.stringify(diagnostic));
       await test.info().attach('conversation-reading-diagnostic', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
     }
     const after = await pane.evaluate((node) => ({ scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }));
