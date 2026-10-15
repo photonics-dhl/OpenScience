@@ -466,7 +466,11 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   });
   await page.route('**/api/temporary-documents/document-1/download/access-1', (route) => {
     finalDownloads += 1;
-    return route.fulfill({ contentType: 'application/pdf', body: '%PDF-final' });
+    const body = Buffer.from('%PDF-final');
+    return route.fulfill({ contentType: 'application/pdf', body, headers: {
+      'Content-Disposition': 'attachment; filename="openscience-source-document-1.pdf"',
+      'Content-Length': String(body.byteLength),
+    } });
   });
   await page.goto(`${baseUrl}/dashboard`);
   await page.getByText('Materials and tools', { exact: true }).click();
@@ -493,7 +497,11 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   releaseFullText?.();
   await selecting;
   await expect(page.getByRole('button', { name: /download source/i })).toBeVisible({ timeout: 4_000 });
+  const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: /download source/i }).press('Enter');
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe('openscience-source-document-1.pdf');
+  expect(await download.failure()).toBeNull();
   await expect.poll(() => finalDownloads).toBe(1);
   expect(submissions).toBe(2);
   expect(callerKeys[0]).toBeTruthy();
