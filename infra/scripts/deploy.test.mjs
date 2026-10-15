@@ -77,6 +77,55 @@ test('rollback verifier diagnostics are opt-in, bounded and preserve rejection',
   assert.equal(JSON.parse(events[2].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')).code, 'ENOENT');
 });
 
+test('comparison diagnostics locate real two-root differences without printing values or permitting rollback', async () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  await mkdir(join(projectRoot, 'tmp'), { recursive: true });
+  const root = await mkdtemp(join(projectRoot, 'tmp/r04-comparison-'));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  for (const directory of [candidate, previous]) {
+    await mkdir(join(directory, 'packages/domain/src'), { recursive: true });
+    await writeFile(join(directory, 'packages/domain/src/reader.ts'), `export function readPersisted() { return ${JSON.stringify(directory + '/PRIVATE_MARKER')}; }`);
+  }
+  const options = { candidateRoot: candidate, rollbackRoot: previous, compilerRoot: projectRoot,
+    roots: [['packages/domain/src/reader.ts', 'readPersisted']] };
+  const events = [], originalError = console.error;
+  try {
+    console.error = value => events.push(value);
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.equal(events.length, 0);
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders({ ...options, diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    const report = JSON.parse(events.find(value => value.startsWith('ROLLBACK_COMPARISON_DIAGNOSTIC ')).slice('ROLLBACK_COMPARISON_DIAGNOSTIC '.length));
+    assert.equal(report.differences, 1);
+    assert.equal(report.entries[0].key, 'module:packages/domain/src/reader.ts');
+    assert.equal(report.entries[0].candidateRootAtDifference, true);
+    assert.equal(report.entries[0].rollbackRootAtDifference, true);
+    assert.ok(report.entries[0].jsonOffset > 0);
+    assert.doesNotMatch(events.join('\n'), /PRIVATE_MARKER|r04-comparison-|private-paper|runtime\.js/);
+    console.error = () => { throw new Error('private-paper'); };
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders({ ...options, diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    for (const directory of [candidate, previous]) await writeFile(join(directory, 'packages/domain/src/reader.ts'), 'export function readPersisted() { return "same"; }');
+    events.length = 0;
+    console.error = value => events.push(value);
+    await deployLock.verifyApplicationRollbackReaders({ ...options, diagnostics: true });
+    assert.equal(events.length, 0);
+  } finally { console.error = originalError; }
+});
+
+test('comparison diagnostics bound missing keys and multiple differences without exposing arbitrary keys or values', async () => {
+  const helperSource = deployLockSource.match(/function rollbackComparisonDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(helperSource);
+  const describe = runInNewContext(`${helperSource}; rollbackComparisonDiagnostic`, { resolve });
+  const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 5 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
+  const report = describe(current, [], '/candidate', '/rollback');
+  assert.equal(report.differences, 6);
+  assert.equal(report.entries.length, 4);
+  assert.equal(report.truncated, true);
+  assert.equal(report.entries[0].key, '[redacted-key]');
+  assert.equal(report.entries[0].candidatePresent, true);
+  assert.equal(report.entries[0].rollbackPresent, false);
+  assert.doesNotMatch(JSON.stringify(report), /PRIVATE_KEY|PRIVATE_VALUE|candidateLength|jsonOffset/);
+});
+
 test('bounded Worker recovery wiring proof accepts the current construction path', () => {
   assert.equal(deployLock.verifyWorkerRecoveryWiring({ sourceRoot: fileURLToPath(new URL('../../', import.meta.url)) }), true);
 });

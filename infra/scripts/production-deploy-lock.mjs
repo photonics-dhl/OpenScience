@@ -1192,6 +1192,42 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   return true;
 }
 
+function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot) {
+  const left = new Map(current), right = new Map(previous);
+  const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
+  const entries = [];
+  let differences = 0;
+  const safeKey = key => typeof key === 'string' && key.length <= 240 && !key.includes('..')
+    && /^(?:module:|configuration:|package:|prisma-vendor:)?(?:apps|packages|infra|node_modules)\/[A-Za-z0-9@_./:+-]+$/u.test(key)
+    ? key : '[redacted-key]';
+  const rootAt = (value, root, offset) => {
+    const encoded = JSON.stringify(resolve(root)).slice(1, -1);
+    if (!encoded) return false;
+    for (let index = value.indexOf(encoded); index !== -1; index = value.indexOf(encoded, index + encoded.length)) {
+      if (offset >= index && offset < index + encoded.length) return true;
+    }
+    return false;
+  };
+  for (const key of keys) {
+    const hasLeft = left.has(key), hasRight = right.has(key);
+    const a = hasLeft ? JSON.stringify(left.get(key)) : undefined;
+    const b = hasRight ? JSON.stringify(right.get(key)) : undefined;
+    if (hasLeft === hasRight && a === b) continue;
+    differences += 1;
+    if (entries.length === 4) continue;
+    const entry = { key: safeKey(key), candidatePresent: hasLeft, rollbackPresent: hasRight };
+    if (typeof a === 'string' && typeof b === 'string') {
+      let offset = 0;
+      while (offset < a.length && offset < b.length && a[offset] === b[offset]) offset += 1;
+      Object.assign(entry, { jsonOffset: offset, candidateLength: a.length, rollbackLength: b.length,
+        candidateRootAtDifference: rootAt(a, candidateRoot, offset), rollbackRootAtDifference: rootAt(b, rollbackRoot, offset) });
+    }
+    entries.push(entry);
+  }
+  return { entries, truncated: differences > entries.length, differences };
+}
+
+
 export async function verifyApplicationRollbackReaders({ candidateRoot, rollbackRoot, compilerRoot = candidateRoot, roots = APPLICATION_ROLLBACK_READERS, diagnostics = false }) {
   // A healthy release/runtime marker cannot prove that persisted paid work stays
   // readable. Never execute rollback code or grant downgrade from a live empty query.
@@ -1222,7 +1258,13 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
     stage = 'closure-rollback';
     const previous = rollbackReaderClosure(ts, resolve(rollbackRoot), roots, vendorPackages);
     stage = 'comparison';
-    if (JSON.stringify(current) !== JSON.stringify(previous)) rollbackCompatibilityUnknown();
+    if (JSON.stringify(current) !== JSON.stringify(previous)) {
+      if (diagnostics === true) {
+        try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
+        catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }
+      }
+      rollbackCompatibilityUnknown();
+    }
   } catch (error) {
     if (diagnostics === true) {
       try {
