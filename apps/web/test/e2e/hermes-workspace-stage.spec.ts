@@ -7,7 +7,7 @@ const hostSelector = '[data-hermes-avatar-anchor="true"]';
 const inputSelector = '[data-hermes-input-owner="true"]';
 const rigSelector = '[data-hermes-rig="live2d-wanko"]';
 const canvasSelector = '[data-hermes-live2d-canvas="true"]';
-const slotSelector = '.hermes-conversation-transcript > [data-hermes-conversation-companion="true"]';
+const slotSelector = '[data-hermes-conversation-companion="true"]';
 const roPath = '/research-objects/ro-hermes';
 const researchTitle = 'Coherent transport at the attosecond frontier';
 const requests = new WeakMap<Page, { writes: string[]; unmocked: string[]; errors: string[] }>();
@@ -311,7 +311,9 @@ async function assertConversation(page: Page, role: 'dialog' | 'complementary' =
   const stage = page.locator(stageSelector);
   await expect(stage).toHaveAttribute('data-hermes-in-conversation', 'true');
   await expect(stage).toHaveAttribute('data-hermes-compact', 'false');
-  expect(await stage.getAttribute('data-hermes-avatar')).toBeNull();
+  if (await slot.getAttribute('data-hermes-conversation-compact') === 'true') {
+    await expect(stage).toHaveAttribute('data-hermes-avatar', 'true');
+  } else expect(await stage.getAttribute('data-hermes-avatar')).toBeNull();
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
   await expect(stage).toBeVisible();
   await expect(stage).toHaveCSS('opacity', '1');
@@ -394,7 +396,7 @@ test('plain editor visits keep the contribution view as the default', async ({ p
   await page.goto(baseUrl + '/dashboard', { waitUntil: 'networkidle' });
   await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: new RegExp(researchTitle) }).click();
   await expect(page).toHaveURL(new RegExp(roPath + '/edit$'));
-  await expect(page.getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('navigation', { name: 'Research sections', exact: true }).getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
   await expect(page.locator('[data-workbench-section="content"]')).toHaveAttribute('aria-hidden', 'true');
 });
 
@@ -691,8 +693,9 @@ test('Hermes opens an empty editor conversation with its full companion visible'
         viewport: { width: innerWidth, height: innerHeight },
         scrollTop: pane.scrollTop, clientHeight: pane.clientHeight, scrollHeight: pane.scrollHeight,
         pane: bounds(pane),
-        companion: bounds(pane.querySelector('[data-hermes-conversation-companion="true"]')!),
-        stage: bounds(pane.querySelector('[data-hermes-workspace-stage="true"]')!),
+        header: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-header')!),
+        companion: bounds(pane.closest('.hermes-conversation')!.querySelector('[data-hermes-conversation-companion="true"]')!),
+        stage: bounds(pane.closest('.hermes-conversation')!.querySelector('[data-hermes-workspace-stage="true"]')!),
         composer: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-composer textarea')!),
       };
     });
@@ -705,8 +708,8 @@ test('Hermes opens an empty editor conversation with its full companion visible'
   console.log('Empty conversation geometry:', JSON.stringify(observations));
   for (const geometry of observations) {
     expect(geometry.scrollTop, `Empty ${geometry.viewport.width}px conversation must start with Hermes`).toBe(0);
-    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.pane.top);
-    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.pane.bottom);
+    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.header.top);
+    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.header.bottom);
     expect(geometry.composer.bottom).toBeLessThanOrEqual(geometry.viewport.height);
   }
 });
@@ -729,22 +732,32 @@ test.describe('short desktop Hermes conversation', () => {
       return {
         viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
         pane: bounds(pane),
-        slot: bounds(pane.querySelector('[data-hermes-conversation-companion="true"]')!),
-        stage: bounds(pane.querySelector('[data-hermes-workspace-stage="true"]')!),
+        header: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-header')!),
+        slot: bounds(pane.closest('.hermes-conversation')!.querySelector('[data-hermes-conversation-companion="true"]')!),
+        stage: bounds(pane.closest('.hermes-conversation')!.querySelector('[data-hermes-workspace-stage="true"]')!),
         composer: bounds(pane.closest('.hermes-conversation')!.querySelector('.hermes-conversation-composer textarea')!),
       };
     });
     await test.info().attach('short-conversation-geometry', { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
     console.log('Short conversation geometry:', JSON.stringify(geometry));
     await page.screenshot({ path: test.info().outputPath('short-conversation-1536x681.png'), fullPage: false });
-    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.pane.top);
-    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.pane.bottom);
-    expect(geometry.stage.left).toBeGreaterThanOrEqual(geometry.pane.left);
-    expect(geometry.stage.right).toBeLessThanOrEqual(geometry.pane.right);
-    expect(geometry.stage.width).toBeGreaterThanOrEqual(90);
+    expect(geometry.stage.top).toBeGreaterThanOrEqual(geometry.header.top);
+    expect(geometry.stage.bottom).toBeLessThanOrEqual(geometry.header.bottom);
+    expect(geometry.stage.left).toBeGreaterThanOrEqual(geometry.header.left);
+    expect(geometry.stage.right).toBeLessThanOrEqual(geometry.header.right);
+    expect(geometry.stage.width).toBe(64);
     expect(geometry.composer.top).toBeGreaterThanOrEqual(0);
     expect(geometry.composer.bottom).toBeLessThanOrEqual(geometry.viewport.height);
     await expect(guide(page).locator('.hermes-conversation-composer textarea')).toBeEditable();
+    for (const width of [1536, 1440, 1280]) {
+      await page.setViewportSize({ width, height: 681 });
+      await assertConversation(page, 'complementary');
+      await expect(page.locator('.hermes-assistant-overlay')).toHaveCount(0);
+      const field = page.locator('#sdf-field-problem');
+      await field.click();
+      await expect(field).toBeFocused();
+      expect((await field.boundingBox())!.width).toBeGreaterThan(600);
+    }
     await closeTo(page, opener, false, 'document-flow');
   });
 
@@ -759,7 +772,7 @@ test.describe('short desktop Hermes conversation', () => {
     await assertConversation(page, 'complementary');
     await guide(page).locator('.hermes-conversation-composer textarea').click();
     await page.setViewportSize({ width: 1536, height: 681 });
-    await assertConversation(page, 'dialog');
+    await assertConversation(page, 'complementary');
     await expect(guide(page).locator('.hermes-conversation-composer textarea')).toHaveValue('Preview publishing the current private draft as an update.');
     await closeTo(page, opener, false, 'document-flow');
   });
@@ -794,32 +807,91 @@ test.describe('short desktop Hermes conversation', () => {
     const selection = await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; });
     const pane = guide(page).locator('.hermes-conversation-transcript');
     await pane.hover();
-    await page.mouse.wheel(0, -500);
-    await expect.poll(() => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeGreaterThanOrEqual(64);
-    const reading = await pane.evaluate((node) => {
+    const observeWheel = () => pane.evaluateHandle((node) => {
+      const preWheelTop = node.scrollTop, target = Math.max(0, preWheelTop - 500);
+      const events: Array<{ top: number; at: number }> = [];
+      const onScroll = () => events.push({ top: node.scrollTop, at: performance.now() });
+      node.addEventListener('scroll', onScroll);
+      const registeredAt = performance.now();
+      return {
+        snapshot: () => ({ preWheelTop, target, registeredAt, events, top: node.scrollTop, at: performance.now() }),
+        remove: () => node.removeEventListener('scroll', onScroll),
+      };
+    });
+    let wheel: Awaited<ReturnType<typeof observeWheel>> | null = null;
+    let wheelCleanupError: unknown;
+    const sampleWheel = () => wheel!.evaluate((observation) => observation.snapshot());
+    const captureReading = () => pane.evaluate((node) => {
       const bounds = node.getBoundingClientRect();
       const range = document.caretRangeFromPoint(bounds.left + 24, bounds.top + 8)!;
       if (range.startContainer.nodeType !== Node.TEXT_NODE || !node.contains(range.startContainer)) throw new Error('A visible research text anchor is required');
-      return { text: range.startContainer.textContent!, character: range.startOffset, offset: range.getBoundingClientRect().top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight };
+      const rect = range.getBoundingClientRect();
+      return { text: range.startContainer.textContent!, character: range.startOffset, offset: rect.top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+        at: performance.now(), paneTop: bounds.top, range: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height } };
     });
-    await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
-    await page.setViewportSize({ width: 1536, height: 681 });
-    await assertConversation(page, 'dialog');
-    await expect(input).toBeFocused();
-    await expect(input).toHaveValue('Refine this paragraph next.');
-    expect(await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; })).toEqual(selection);
-    const textOffset = () => pane.evaluate((node, saved) => {
+    let reading: Awaited<ReturnType<typeof captureReading>>;
+    const sampleReading = () => pane.evaluate((node, saved) => {
       const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
       let text: Node | null;
       while ((text = walker.nextNode())) {
         if (text.textContent !== saved.text) continue;
         const range = document.createRange(); range.setStart(text, saved.character); range.collapse(true);
-        return range.getBoundingClientRect().top - node.getBoundingClientRect().top;
+        const rect = range.getBoundingClientRect(), bounds = node.getBoundingClientRect();
+        return { at: performance.now(), character: saved.character, offset: rect.top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+          paneTop: bounds.top, range: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height } };
       }
       throw new Error('The same research text must remain in the conversation');
     }, reading);
-    // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
-    await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
+    const diagnostic = { wheel: null as Awaited<ReturnType<typeof sampleWheel>> | null, wheelCompleted: null as Awaited<ReturnType<typeof sampleWheel>> | null,
+      wheelCleanupError: null as string | null, before: null as Awaited<ReturnType<typeof captureReading>> | null,
+      beforeResize: null as Awaited<ReturnType<typeof sampleReading>> | null, modalReads: [] as Array<Awaited<ReturnType<typeof sampleReading>>>, selection,
+      timingLimit: 'Wheel registration and polling add protocol reads; the post-screenshot sample adds one read before resize. This run cannot reconstruct the original failed wheel ordering.' };
+    const textOffset = async () => {
+      const sample = await sampleReading();
+      diagnostic.modalReads.push(sample);
+      return sample.offset;
+    };
+    try {
+      // Registration returns before sending the wheel; it does not await the scroll event.
+      wheel = await observeWheel();
+      diagnostic.wheel = await sampleWheel();
+      expect(diagnostic.wheel.preWheelTop, 'The reading-continuity wheel needs upward scrolling space').toBeGreaterThan(0);
+      await page.mouse.wheel(0, -500);
+      await expect.poll(async () => {
+        const observed = await sampleWheel();
+        diagnostic.wheel = observed;
+        return observed.events.some((event) => event.top < observed.preWheelTop && Math.abs(event.top - observed.target) <= 1)
+          && Math.abs(observed.top - observed.target) <= 1;
+      }).toBe(true);
+      diagnostic.wheelCompleted = diagnostic.wheel;
+      await expect.poll(() => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeGreaterThanOrEqual(64);
+      diagnostic.before = reading = await captureReading();
+      await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
+      diagnostic.beforeResize = await sampleReading();
+      await page.setViewportSize({ width: 1536, height: 681 });
+      await assertConversation(page, 'complementary');
+      await expect(input).toBeFocused();
+      await expect(input).toHaveValue('Refine this paragraph next.');
+      expect(await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; })).toEqual(selection);
+      // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
+      await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
+    } finally {
+      try {
+        if (wheel) diagnostic.wheel = await wheel.evaluate((observation) => { observation.remove(); return observation.snapshot(); });
+      } catch (error) {
+        wheelCleanupError = error;
+        diagnostic.wheelCleanupError = String(error);
+      } finally {
+        try { await wheel?.dispose(); } catch (error) {
+          wheelCleanupError ??= error;
+          diagnostic.wheelCleanupError ??= String(error);
+        } finally {
+          console.log('Conversation reading diagnostic:', JSON.stringify(diagnostic));
+          await test.info().attach('conversation-reading-diagnostic', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+        }
+      }
+    }
+    if (wheelCleanupError) throw wheelCleanupError;
     const after = await pane.evaluate((node) => ({ scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }));
     const observations = { before: { ...reading, text: reading.text.slice(reading.character, reading.character + 64) }, after: { ...after, offset: await textOffset() }, selection };
     await test.info().attach('resized-conversation-reading', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
@@ -827,7 +899,7 @@ test.describe('short desktop Hermes conversation', () => {
     await page.screenshot({ path: test.info().outputPath('conversation-after-resize.png'), fullPage: false });
     const modal = await guide(page).elementHandle();
     await page.setViewportSize({ width: 1536, height: 900 });
-    await expect(page.getByRole('dialog', { name: 'Hermes research guide', exact: true })).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Hermes research guide', exact: true })).toBeVisible();
     expect(await modal!.evaluate((node) => node.isConnected)).toBe(true);
     await expect(input).toBeFocused();
     await closeTo(page, opener, false, 'document-flow');
@@ -856,7 +928,19 @@ for (const follow of [true, false]) {
     const completed: AgentTaskView = { ...running, status: 'succeeded', progress: 100,
       result: { summary, nextSteps: [], needsMoreInformation: true },
     };
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 640 }]) {
+    const savedDraftTitle = 'Interaction research notes';
+    if (!follow) {
+      const savedWritingTask: AgentTaskView = { ...running, id: 'saved-writing-task', sessionId: 'saved-writing-session',
+        status: 'succeeded', progress: 100, createdAt: '2026-10-07T00:00:00.000Z', updatedAt: '2026-10-07T00:00:00.000Z',
+        result: { summary: 'Saved private research note.', nextSteps: [], needsMoreInformation: false,
+          writingDraft: { title: savedDraftTitle, kind: 'note',
+            body: 'This private note compares how bound and free electrons respond to an optical field. It records the working question for the next revision.',
+            sourceTaskId: 'saved-source-task', sourceStatus: 'user_edited', citations: [] },
+        },
+      };
+      await mockGet(page, '/api/agent/tasks?actionable=false&kind=workspace.guide', { tasks: [savedWritingTask] });
+    }
+    for (const viewport of [{ width: 1440, height: follow ? 900 : 681 }, { width: 390, height: follow ? 640 : 500 }]) {
       let release!: () => void;
       const completion = new Promise<void>((resolve) => { release = resolve; });
       let reads = 0;
@@ -885,6 +969,21 @@ for (const follow of [true, false]) {
         const pane = guide(page).locator('.hermes-conversation-transcript');
         const distance = () => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
         await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
+        if (!follow) {
+          await expect(pane.getByRole('article', { name: savedDraftTitle, exact: true })).toBeVisible();
+          const geometry = await pane.evaluate((node) => ({
+            viewport: { width: innerWidth, height: innerHeight },
+            taskState: node.closest('[data-hermes-drawer-state]')?.getAttribute('data-hermes-drawer-state'),
+            clientHeight: node.clientHeight, scrollHeight: node.scrollHeight, scrollTop: node.scrollTop,
+            distance: node.scrollHeight - node.scrollTop - node.clientHeight,
+            visibleDraftTitle: node.querySelector('h3')?.textContent,
+          }));
+          console.info('Restored reader precondition:', JSON.stringify(geometry));
+          await test.info().attach(`reader-precondition-${viewport.width}`, {
+            body: Buffer.from(JSON.stringify(geometry, null, 2)), contentType: 'application/json',
+          });
+          expect(geometry.scrollHeight - geometry.clientHeight, 'Reader history must overflow before the wheel interaction').toBeGreaterThanOrEqual(64);
+        }
         await pane.hover();
         await page.mouse.wheel(0, 1000);
         await expect.poll(distance).toBeLessThanOrEqual(1);
@@ -1130,6 +1229,7 @@ test('existing RO overview and files consume their real entries and keep the sam
   try {
     await enterEditor(page);
     await assertAvatar(page);
+    await page.locator('[data-object-header="true"]').getByText('More', { exact: true }).click();
     await page.getByRole('link', { name: 'Research details', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(roPath + '/overview$'));
     await expect(page.getByRole('heading', { name: researchTitle, exact: true })).toBeVisible();

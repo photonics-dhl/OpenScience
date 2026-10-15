@@ -72,13 +72,14 @@ function ProseTextarea({ autoFocus = false, field, label, value, placeholder, on
   );
 }
 
-export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields }: {
+export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields, headingLabels }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
   onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
   readOnly?: boolean;
   fields?: Array<keyof Omit<SdfCore, 'schemaVersion'>>;
+  headingLabels?: Partial<Record<keyof Omit<SdfCore, 'schemaVersion'>, string>>;
 }) {
   const t = useTranslations('editor');
   const visibleFields = fields?.length ? fields : FIELDS;
@@ -99,11 +100,11 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
           <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field}>
             <h2 className={styles.sectionHeading}>
               <span aria-hidden="true" className={styles.sectionMarker} />
-              {readOnly ? <span>{t(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => {
+              {readOnly ? <span>{headingLabels?.[field] ?? t(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => {
                 setEditingField(field);
                 onSelectField(field);
                 window.requestAnimationFrame(() => document.getElementById(`sdf-field-${field}`)?.focus());
-              }}>{t(field)}</button>}
+              }}>{headingLabels?.[field] ?? t(field)}</button>}
             </h2>
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
               {readOnly ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading" data-read-only="true">{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (

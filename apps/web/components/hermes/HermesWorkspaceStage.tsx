@@ -373,7 +373,8 @@ function HermesWorkspaceStage({ fallbackWorkspaceId, fallbackAssistantOpen, fall
   // The dashboard opts into a full-body seat; an open conversation still owns
   // the same portal and renderer. Every other research route keeps its avatar.
   const dashboardSeat = presentation?.presentation === 'dashboard-seat' && /^\/dashboard\/?$/.test(pathname) && !conversationAnchor;
-  const avatar = avatarSurface && !conversationAnchor && !dashboardSeat;
+  const avatar = (avatarSurface && !conversationAnchor && !dashboardSeat)
+    || conversationAnchor?.dataset.hermesConversationCompact === 'true';
   const stageSize = conversationAnchor ? conversationPlacement!.size
     : dashboardSeat ? Math.min(180, Math.max(120, Math.min(anchorRect?.width ?? 180, anchorRect?.height ?? 180)))
       : avatar ? 64 : compact ? 120 : resolveHermesFloatingSize(viewportSize.width, viewportSize.height, true);
