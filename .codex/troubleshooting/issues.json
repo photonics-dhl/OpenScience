@@ -527,6 +527,19 @@
       "verification": "Raw local result, strict-locator output, trace and error context are retained under tmp/hermes-voice-dialogue/ci-main87*. All4 creation cases pass in that run. Independent High confirmed the two matching alert nodes and the limit on unexecuted retry assertions. No claim of local87/87 is made; final production-mode conclusions remain in PR116 checks.",
       "files": ["apps/web/test/e2e/hermes-source-parsing.spec.ts"],
       "prevention": "Assertions about a specific business alert should identify that alert without depending on the absence of framework accessibility announcers. Keep local development and production-mode evidence separate."
+    },
+    {
+      "id": "issue-026",
+      "title": "Upstream index placeholder failed Markdown lint in the PR merge tree",
+      "date": "2026-10-16",
+      "status": "resolved",
+      "tags": ["troubleshooting/ci", "troubleshooting/env"],
+      "description": "Journal CI38774142639 passed its behavior and browser steps, then Documentation consistency failed MD033 at project_index.md5 on an inline phase element.",
+      "root_cause": "The earlier local candidate index did not contain this placeholder. CI checked merge d234ced, combining voice ec6d13c0 with the newer delivery documentation59c7a5d8. That upstream index contained the unquoted filename pattern operations-v2-<phase>-*.ndjson, which Markdown interpreted as HTML. The upstream change is restricted to four state documents; business source code is unchanged.",
+      "solution": "Merge the already-committed upstream documentation into the isolated voice candidate and wrap only this filename pattern in inline code. Preserve upstream CURRENT, progress and capability-registry contents exactly, and leave the canonical worktree's uncommitted owner changes untouched. Cancel the superseded media run that would meet the same documentation failure, then run normal CI on the corrected pushed merge.",
+      "verification": "The failed Journal log and checkout merge identity are retained in tmp/voice/ci-ec6d-journal.log. Git confirms the upstream delta from77b1c157 contains only four Markdown state documents. Exact comparison after normal checkout EOL conversion confirms only two code quotes were added around one filename token; CURRENT, progress and capability-registry remain identical to upstream, and apps/packages/infra/workflows are unchanged from ec6d13c0. Local docs-sync, Markdown lint and diff checks pass; final exact-head conclusions remain in PR116 checks.",
+      "files": ["project_index.md"],
+      "prevention": "Treat angle-bracket placeholders inside filenames as code. When CI tests a newer PR merge tree, compare its checked-out base with the locally validated source before attributing a failure to the feature."
     }
   ],
   "last_updated": "2026-10-16"
