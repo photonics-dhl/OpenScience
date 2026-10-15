@@ -508,5 +508,9 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   expect(callerKeys[1]).toBeTruthy();
   expect(callerKeys[1]).not.toBe(callerKeys[0]);
   expect(downloadLinks).toBe(1);
-  expect(await page.locator('text=/provider|account|CARSI|ScanSci/i').count()).toBe(0);
+  const acquisition = page.locator('[data-literature-acquisition]');
+  await expect(acquisition).toHaveCount(1);
+  await expect(acquisition.getByText('Ultrafast response', { exact: true })).toBeVisible();
+  expect(await page.locator('text=/provider|CARSI|ScanSci/i').count()).toBe(0);
+  expect(await acquisition.locator('text=/provider|account|CARSI|ScanSci/i').count()).toBe(0);
 });
