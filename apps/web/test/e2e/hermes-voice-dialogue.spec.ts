@@ -17,6 +17,8 @@ async function fixture(page: Page, options: { unknown?: boolean; delayedPermissi
   let releaseTranscript: (() => void) | undefined;
   let waitingForTranscript = false;
   let releaseSession: (() => void) | undefined;
+  let capabilitiesAvailable = true;
+  let capabilitiesFail = false;
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: 'http://127.0.0.1:3010' }]);
   await page.addInitScript(({ delayed }) => {
     const state = { requests: 0, stopped: 0, plays: 0, pauses: 0, grant: () => {} };
@@ -55,8 +57,11 @@ async function fixture(page: Page, options: { unknown?: boolean; delayedPermissi
     if (path === '/api/ingestion') return json({ tasks: [] });
     if (path === '/api/agent/tasks' && request.method() === 'GET') return json({ tasks: [] });
     if (path === '/api/csrf-token') return json({ csrfToken: 'voice-csrf' });
-    if (path === '/api/agent/voice/capabilities') return json({ available: true, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000,
-      voices: [{ id: 'returned-en-voice', name: 'English', languages: ['en-US'], creditsPerRequest: 1 }] });
+    if (path === '/api/agent/voice/capabilities') {
+      if (capabilitiesFail) return route.abort('timedout');
+      return json({ available: capabilitiesAvailable, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000,
+        voices: capabilitiesAvailable ? [{ id: 'returned-en-voice', name: 'English', languages: ['en-US'], creditsPerRequest: 1 }] : [] });
+    }
     if (path === '/api/agent/sessions' && request.method() === 'POST') {
       observed.sessions += 1; observed.sessionKeys.push(request.headers()['idempotency-key']);
       if (options.failFirstSession && observed.sessions === 1) return json({ error: { code: 'SESSION_UNAVAILABLE', message: 'Session creation unavailable' } }, 500);
@@ -89,6 +94,7 @@ async function fixture(page: Page, options: { unknown?: boolean; delayedPermissi
   await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Voice input', exact: true })).toBeEnabled();
   return { observed, recognize: () => { recognized = true; }, waiting: () => waitingForTranscript,
+    disableVoice: () => { capabilitiesAvailable = false; }, failCapabilities: () => { capabilitiesFail = true; },
     release: () => releaseTranscript?.(), releaseSession: () => releaseSession?.(), changeAccount: async () => {
       userId = 'voice-other';
       await page.evaluate(() => window.dispatchEvent(new Event('openscience-session-changed')));
@@ -241,6 +247,58 @@ test('a session prerequisite failure retains the recording for a safe retry befo
   await page.getByRole('button', { name: /^Send/ }).click();
   await expect.poll(() => observed.guideBodies.length).toBe(1);
   expect(observed.guideBodies).toMatchObject([{ kind: 'workspace.guide', payload: { goal: 'Existing draft\nExplain the optical result' } }]);
+  expect(observed.unmocked).toEqual([]);
+});
+
+test('an existing transcription remains editable after reopening with voice unavailable', async ({ page }) => {
+  const { observed, recognize, disableVoice } = await fixture(page);
+  await page.getByRole('button', { name: 'Voice input', exact: true }).click();
+  await page.getByRole('button', { name: /Stop recording/ }).click();
+  await page.getByRole('button', { name: 'Transcribe · 1 AI point', exact: true }).click();
+  await expect(page.getByText('Recognizing speech…', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  disableVoice(); recognize();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByText('Voice is unavailable. You can keep typing.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Voice input', exact: true })).toHaveCount(0);
+  const transcript = page.getByRole('textbox', { name: 'Review and edit the transcript' });
+  await expect(transcript).toHaveValue('Explain the optical result');
+  await transcript.fill('Edited after voice became unavailable');
+  await page.getByRole('button', { name: 'Use in message', exact: true }).click();
+  await expect(page.locator('#hermes-guide-goal')).toHaveValue('Edited after voice became unavailable');
+  expect(observed.transcriptions).toBe(1); expect(observed.guideBodies).toHaveLength(0);
+  expect(observed.unmocked).toEqual([]);
+});
+
+test('an unknown paid submission remains queryable after reopening with voice unavailable', async ({ page }) => {
+  const { observed, disableVoice } = await fixture(page, { unknown: true });
+  await page.getByRole('button', { name: 'Voice input', exact: true }).click();
+  await page.getByRole('button', { name: /Stop recording/ }).click();
+  await page.getByRole('button', { name: 'Transcribe · 1 AI point', exact: true }).click();
+  await expect(page.getByText(/submission is unconfirmed/)).toBeVisible();
+  await expect.poll(() => observed.queryKeys.length).toBe(1);
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click(); disableVoice();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByText('Voice is unavailable. You can keep typing.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Check original submission', exact: true }).click();
+  await expect.poll(() => observed.queryKeys.length).toBe(2);
+  expect(observed.postKeys).toHaveLength(1); expect(new Set(observed.queryKeys)).toEqual(new Set(observed.postKeys));
+  expect(observed.unmocked).toEqual([]);
+});
+
+test('an existing private reply remains playable after the capability read fails on reopen', async ({ page }) => {
+  const { observed, failCapabilities } = await fixture(page);
+  await page.locator('#hermes-guide-goal').fill('Give a short answer');
+  await page.getByRole('button', { name: /^Send/ }).click();
+  await page.getByRole('button', { name: 'Read reply · 1 AI point', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Play reply', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close Hermes', exact: true }).click(); failCapabilities();
+  await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByText('Voice is unavailable. You can keep typing.', { exact: true })).toBeVisible();
+  expect((await microphoneState(page)).plays).toBe(0); expect(observed.audioGets).toBe(0);
+  await page.getByRole('button', { name: 'Play reply', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop playback', exact: true }).click();
+  expect((await microphoneState(page)).plays).toBe(1); expect(observed.replies).toBe(1);
   expect(observed.unmocked).toEqual([]);
 });
 

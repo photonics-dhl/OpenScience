@@ -476,6 +476,23 @@
         "apps/api/test/entrypoint-startup.test.ts"
       ],
       "prevention": "When a shared surface adds an optional read, declare its disabled state in strict entry fixtures. Keep Native task fixtures aligned with the current runtime contract, and distinguish fixture drift from production regressions using the unchanged guard and an existing passing fixture."
+    },
+    {
+      "id": "issue-023",
+      "title": "Unavailable voice admission UI forced a restored short desktop conversation into a modal",
+      "date": "2026-10-15",
+      "status": "resolved",
+      "tags": ["troubleshooting/ci", "troubleshooting/ui"],
+      "description": "CI38761423539 workspace browser cases passed28/29; the existing docked-conversation continuity case switched from complementary to dialog before the requested viewport resize.",
+      "root_cause": "The unavailable voice surface still rendered disabled recording and TTS buttons plus a long-reply notice. On restoring a long saved reply, composer height increased from224 to282px and the existing minimum-fit calculation grew from530.09 to588.09px, exceeding the measured542.73px available. The existing adaptive expansion correctly reacted to unnecessary unavailable-state content.",
+      "solution": "Gate only fresh recording/TTS admission controls and the long-reply notice on capabilities.available. Keep the compact unavailable hint and all existing jobs, transcript review, same-key query recovery and private playback independent of capability availability. Preserve Drawer thresholds, roles and original layout assertions.",
+      "verification": "Reproduced the exact CI failure locally before editing. The original failure plus two short-desktop cases pass3/3; reading offset changes by0.765625px within the original1px assertion and caret selection is preserved. Original10 plus three unavailable/reopen recovery cases pass13/13, with one paid POST, same query key and no automatic send/play assertions retained. TypeScript, lint and diff checks pass; independent High delta review found no material issue. Final integration conclusions remain in PR116 checks.",
+      "files": [
+        "apps/web/components/hermes/HermesVoiceControls.tsx",
+        "apps/web/test/e2e/hermes-voice-dialogue.spec.ts",
+        "apps/web/test/e2e/hermes-workspace-stage.spec.ts"
+      ],
+      "prevention": "Measure optional UI in restored-result and constrained-window states. Hide unavailable admission noise while preserving already paid work; do not change adaptive layout thresholds or weaken accessibility and continuity assertions to accommodate it."
     }
   ],
   "last_updated": "2026-10-15"

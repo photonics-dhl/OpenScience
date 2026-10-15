@@ -256,7 +256,7 @@ export function HermesVoiceControls({ scope, locale, draft, disabled, sourceTask
 
   return <section className={styles.controls} aria-label={t('label')} data-hermes-voice="true">
     <div className={styles.actions}>
-      {recording === 'idle' && <button type="button" className={styles.secondary} onClick={() => void startRecording()} disabled={!enabled || !supported || disabled || paidBusy} aria-describedby="hermes-voice-cost">
+      {recording === 'idle' && capabilities?.available && <button type="button" className={styles.secondary} onClick={() => void startRecording()} disabled={!enabled || !supported || disabled || paidBusy} aria-describedby="hermes-voice-cost">
         <Mic size={16} aria-hidden="true" />{t('start')}
       </button>}
       {recording === 'requesting' && <button type="button" className={styles.secondary} onClick={cancelLocal}>{t('cancelPermission')}</button>}
@@ -269,13 +269,13 @@ export function HermesVoiceControls({ scope, locale, draft, disabled, sourceTask
         <button type="button" className={styles.secondary} onClick={cancelLocal}>{t('discard')}</button>
       </>}
       {preparingSession && <span role="status">{t('preparingSession')}</span>}
-      {replySource && !readyReply && <button type="button" className={styles.secondary} disabled={!enabled || !voice || disabled || paidBusy || preparingSession || replyTooLong || !canReadReply(replySource, capabilities?.replyMaxUtf8Bytes ?? 1000)}
+      {replySource && capabilities?.available && !readyReply && <button type="button" className={styles.secondary} disabled={!enabled || !voice || disabled || paidBusy || preparingSession || replyTooLong || !canReadReply(replySource, capabilities?.replyMaxUtf8Bytes ?? 1000)}
         onClick={() => { if (voice) void submit('reply', (key, signal) => createVoiceReply(replySource.id, voice.id, key, signal)); }}>
         <Volume2 size={16} aria-hidden="true" />{t('readReply')}
       </button>}
     </div>
     <p className={styles.hint} id="hermes-voice-cost">{!capabilities?.available ? t('unavailable') : !supported ? t('unsupported') : t('cost')}</p>
-    {replyTooLong && <p className={styles.hint}>{t('replyTooLong')}</p>}
+    {replyTooLong && capabilities?.available && <p className={styles.hint}>{t('replyTooLong')}</p>}
     {replySource && capabilities?.available && !voice && <p className={styles.hint}>{t('noVoice')}</p>}
     {(['transcription', 'reply'] as const).map(operation => {
       const job = jobs[operation]; if (!job || (job.state === 'known' && job.task?.status === 'succeeded' && !(operation === 'transcription' && !readVoiceTranscript(job.task)))) return null;
