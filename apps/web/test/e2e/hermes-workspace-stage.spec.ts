@@ -928,7 +928,7 @@ for (const follow of [true, false]) {
     const completed: AgentTaskView = { ...running, status: 'succeeded', progress: 100,
       result: { summary, nextSteps: [], needsMoreInformation: true },
     };
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 640 }]) {
+    for (const viewport of [{ width: 1440, height: follow ? 900 : 681 }, { width: 390, height: follow ? 640 : 500 }]) {
       let release!: () => void;
       const completion = new Promise<void>((resolve) => { release = resolve; });
       let reads = 0;

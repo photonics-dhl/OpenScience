@@ -359,9 +359,15 @@ function HermesAssistantDrawerContent({
   useEffect(() => {
     const saved = hostFocus.current;
     hostFocus.current = null;
-    if (!open || !saved?.node.isConnected) return;
-    saved.node.focus({ preventScroll: true });
-    if (saved.selection && saved.node instanceof HTMLTextAreaElement) saved.node.setSelectionRange(...saved.selection);
+    if (!open) return;
+    if (saved?.node.isConnected) {
+      saved.node.focus({ preventScroll: true });
+      if (saved.selection && saved.node instanceof HTMLTextAreaElement) saved.node.setSelectionRange(...saved.selection);
+      return;
+    }
+    if (!inlineConversation && conversationHost?.isConnected && !conversationHost.contains(document.activeElement)) {
+      conversationHost.querySelector<HTMLButtonElement>('.hermes-conversation-close')?.focus({ preventScroll: true });
+    }
   }, [open, inlineConversation, conversationHost]);
   useClientLayoutEffect(() => {
     conversationOpen.current = open;
