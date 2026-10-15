@@ -667,6 +667,8 @@ export class AiGateway {
         return { ...result, provider: provider.name, promptHash };
       } catch (e) {
         lastError = e;
+        // Submission authority denial is terminal, including when the owner rejects inside submitProvider.
+        if (e instanceof AiGatewayError && e.code === 'OCR_EXTERNAL_PROCESSING_DENIED') throw e;
         const failure = textProviderFailure(e);
         const responseDetails = e instanceof TextProviderError ? e.details : undefined;
         // A completed response exhausted its output allowance; another provider

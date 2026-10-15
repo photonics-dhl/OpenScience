@@ -9,6 +9,7 @@ on:
     paths:
       - 'apps/agent-worker/src/reviewer.ts'
       - 'apps/agent-worker/test/reviewer.test.ts'
+      - 'apps/agent-worker/test/r12-worker-cancel.test.ts'
       - 'packages/domain/src/review/publish-review.ts'
       - 'packages/domain/test/review/publish-review.test.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
@@ -317,6 +318,7 @@ on:
     paths:
       - 'apps/agent-worker/src/reviewer.ts'
       - 'apps/agent-worker/test/reviewer.test.ts'
+      - 'apps/agent-worker/test/r12-worker-cancel.test.ts'
       - 'packages/domain/src/review/publish-review.ts'
       - 'packages/domain/test/review/publish-review.test.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
@@ -727,10 +729,10 @@ jobs:
           node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; await verifyApplicationRollbackReaders({ candidateRoot: process.env.GITHUB_WORKSPACE, rollbackRoot: process.env.GITHUB_WORKSPACE, diagnostics: true });"
       - name: Verify Domain warning adoption under owned cancellation
         run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/review/publish-review.test.ts
-      - name: Verify Worker warning adoption uses the original claim
-        run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/reviewer.test.ts
-      - name: Lint warning adoption sources and regression tests
-        run: npx pnpm@9.15.0 exec eslint packages/domain/src/review/publish-review.ts apps/agent-worker/src/reviewer.ts packages/domain/test/review/publish-review.test.ts apps/agent-worker/test/reviewer.test.ts
+      - name: Verify Worker warning adoption and structured submission claims
+        run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/reviewer.test.ts test/r12-worker-cancel.test.ts
+      - name: Lint warning adoption and structured submission changes
+        run: npx pnpm@9.15.0 exec eslint packages/domain/src/review/publish-review.ts apps/agent-worker/src/reviewer.ts packages/domain/test/review/publish-review.test.ts apps/agent-worker/test/reviewer.test.ts packages/ai-gateway/src/gateway.ts apps/agent-worker/test/r12-worker-cancel.test.ts packages/ai-gateway/test/structured-retry-budget.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts test/gateway-factory.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Lint Synclip image Gateway sources and tests

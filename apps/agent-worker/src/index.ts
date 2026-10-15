@@ -10,6 +10,8 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { Prisma, type AgentTask } from '@prisma/client';
 import {
   AiGateway,
+  AiGatewayError,
+  type StructuredGenerationOptions,
   createConfiguredGateway,
   type GatewayImageSubmission,
   type GatewayIllustrationSubmission,
@@ -26,7 +28,7 @@ import {
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
   recoverCompletedHermesSceneImageResults, type HermesResearchRunDeps,
-  AGENT_TASK_QUEUE, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
+  AGENT_TASK_QUEUE, AGENT_TASK_OWNED_STOP_REASON, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
   parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
   purgeExpiredTrash,
   lockTrashReferences,
@@ -102,6 +104,81 @@ const spoolTaskExecution = new AsyncLocalStorage<{ taskId: string; executionAtte
 type SpoolSubmission = GatewayImageSubmission;
 type IllustrationSubmission = GatewayIllustrationSubmission;
 type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
+
+type OrdinaryStructuredKind = 'review.analyze' | 'visualization.plan' | 'workspace.guide' | 'presentation.figure-audit';
+type StructuredClaim = { id: string; executionAttempt: number; payload: Record<string, unknown> };
+
+/** Bind tests and internal adapters to the same original claim context as the poller. */
+export function runWithWorkerExecution<T>(execution: { taskId: string; executionAttempt: number }, run: () => Promise<T>): Promise<T> {
+  return spoolTaskExecution.run({ ...execution }, run);
+}
+
+/** Only the four unowned structured consumers use this adapter; Native/media retain their own owners. */
+export function createTaskScopedGateway(
+  gateway: AiGateway, prisma: WorkerDeps['prisma'], task: StructuredClaim, kind: OrdinaryStructuredKind,
+): AiGateway {
+  const denied = () => new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Worker structured submission lost its original claim');
+  if (!task || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(task.id)
+    || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt < 1
+    || !task.payload || typeof task.payload !== 'object' || Array.isArray(task.payload)
+    || !['review.analyze', 'visualization.plan', 'workspace.guide', 'presentation.figure-audit'].includes(kind)) throw denied();
+  const claim = { taskId: task.id, executionAttempt: task.executionAttempt, payload: structuredClone(task.payload) };
+  const requireClaim = () => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== claim.taskId || execution.executionAttempt !== claim.executionAttempt) throw denied();
+  };
+  return new Proxy(gateway, {
+    get(target, property, receiver) {
+      const method = Reflect.get(target, property, receiver);
+      if (typeof method !== 'function') return method;
+      if (property !== 'completeStructured' && property !== 'completeStructuredWithMetadata') return method.bind(target);
+      return async (...args: unknown[]) => {
+        requireClaim();
+        const raw = args[2];
+        if (raw !== undefined && (!raw || typeof raw !== 'object' || Array.isArray(raw))) throw denied();
+        const options = { ...(raw as StructuredGenerationOptions | undefined) };
+        if (options.withProviderSubmission !== undefined
+          || (options.beforeEachProviderCall !== undefined && typeof options.beforeEachProviderCall !== 'function')) throw denied();
+        const before = options.beforeEachProviderCall;
+        args[2] = {
+          ...options,
+          beforeEachProviderCall: async () => { requireClaim(); await before?.(); requireClaim(); },
+          withProviderSubmission: async (_ordinal, _target, submit) => {
+            requireClaim();
+            let sent: ReturnType<typeof submit> | undefined;
+            try {
+              await prisma.$transaction(async tx => {
+                await lockTrashReferences(tx);
+                const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM agent_tasks WHERE id = ${claim.taskId}::uuid FOR UPDATE`;
+                if (!Array.isArray(locked) || locked.length !== 1 || locked[0]?.id !== claim.taskId) throw denied();
+                const live = await tx.agentTask.findUnique({ where: { id: claim.taskId },
+                  include: { session: { include: { researchObject: true } } } });
+                const session = live?.session;
+                if (!live || live.id !== claim.taskId || live.kind !== kind || live.status !== 'running' || live.deletedAt !== null
+                  || live.executionAttempt !== claim.executionAttempt || live.error === AGENT_TASK_OWNED_STOP_REASON
+                  || !isDeepStrictEqual(live.payload ?? {}, claim.payload)
+                  || !session || session.id !== live.sessionId || !session.userId || session.status !== 'active' || session.deletedAt !== null
+                  || (session.researchObjectId === null
+                    ? kind === 'review.analyze' || kind === 'presentation.figure-audit' || session.researchObject !== null
+                    : !session.researchObject || session.researchObject.id !== session.researchObjectId || session.researchObject.deletedAt !== null)
+                  || (typeof claim.payload.researchObjectId === 'string' && claim.payload.researchObjectId !== session.researchObjectId)) throw denied();
+                requireClaim();
+                // Start under both locks; never hold this transaction for the model response.
+                sent = submit(); void sent.catch(() => undefined);
+              }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 10_000, timeout: 30_000 });
+            } catch {
+              // A read-only transaction failure after start cannot pay again or replace the original Promise.
+              if (!sent) throw denied();
+            }
+            if (!sent) throw denied();
+            return sent;
+          },
+        } satisfies StructuredGenerationOptions;
+        return method.apply(target, args);
+      };
+    },
+  });
+}
 
 /** Called after the existing image/task/asset binder; missing audits grant no submission permission. */
 export async function requireHistoricalImageReviewPayer(prisma: Prisma.TransactionClient, input: ScienceReviewInput): Promise<void> {
@@ -911,15 +988,15 @@ export function createHandlers(
       await enqueueFigureAuditFromResult(deps, task, result);
       return result;
     },
-    'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
-    'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
+    'review.analyze': async (deps, task) => reviewAnalyzeHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'review.analyze'), deps, task),
+    'visualization.plan': async (deps, task) => visualizationPlanHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'visualization.plan'), task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
         runtime: nativeAgentRuntimeFromEnv(process.env),
         semanticSearchFor: options.nativeSemanticSearch,
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
-    'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
-    'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
+    'presentation.figure-audit': async (deps, task) => createPresentationFigureAuditHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'presentation.figure-audit'))(deps, task),
+    'workspace.guide': async (deps, task) => workspaceGuideHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'workspace.guide'), deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) => {
         const run = searchIndexTail.then(async () => options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task), operation => _deps.prisma.$transaction(async tx => {
