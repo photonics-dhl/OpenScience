@@ -1,7 +1,7 @@
 import { expect, test, type Page } from 'playwright/test';
 
 async function setup(page: Page, loseResponse = false) {
-  const writes: Array<{ path: string; key?: string; body: any }> = [];
+  const writes: Array<{ path: string; key?: string; body: unknown }> = [];
   let runCreated = false;
   const ro = { id: 'created-paper', workspaceId: 'workspace', title: 'paper', status: 'draft', visibility: 'private', version: 1 };
   const source = { id: 'source-pdf', researchObjectId: ro.id, logicalPath: 'paper.pdf', state: 'queued', retryCount: 0, artifactId: 'artifact', agentTaskId: 'analysis', error: null };
@@ -25,6 +25,7 @@ async function setup(page: Page, loseResponse = false) {
     }
     expect(method, `Unexpected write ${method} ${url.pathname}`).toBe('GET');
     const get = `${path}${url.search}`;
+    if (get === '/api/agent/voice/capabilities') return route.fulfill({ json: { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] } });
     if (get === '/api/auth/me') return route.fulfill({ json: { userId: 'owner', email: 'author@example.invalid', displayName: 'Researcher', status: 'email_verified', level: 'free' } });
     if (get === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'fixture-token' } });
     if (get === '/api/workspaces') return route.fulfill({ json: { workspaces: [{ id: 'workspace', name: 'Personal research', role: 'owner' }] } });
