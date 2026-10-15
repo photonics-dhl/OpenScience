@@ -2,6 +2,7 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施/失败/发布留在 Git。
 
+- 2026-10-15：按用户要求整理[服务器运维交接](runbooks/server-handover.md)及含凭证的私有压缩包；访问/配置/源码/备份位置与账号签收差额分别列明，产物/验证见CURRENT。仅只读采集与本机归档，未部署或完成接收人签收。
 - 2026-10-15：视频V1 reader-stage已完成独立High、真实完整双roots配对与六job CI，原双库备份/发布事务成功，独立active/source/容器挂载/公网身份一致。V1保留旧fresh输出，未消费新规划许可；后继V2仅两选择器臂交换，行为RED→GREEN及语义类型通过，受影响三个原源码oracle实际RED→GREEN与注释修正均已同一High最终0/0/0。root已收四路径并推送，原actual V2→已发布V1完整installed pair、Media六job和Video一job已全绿，root独核精确提交/终态；architecture唯一原log采集窗口已归还。最新原始人类明确本轮暂不部署或激活writer，原新私有科学修订目标保留但不消费额度。架构已收风险/回退说明与通俗图；代码和双版本CI已就绪，直接停点为这条暂停要求，不能用笼统风险冒称新技术失败。
 - 图片原PNG/失败记录与后继真实gpt-image-2.5目标均保留。I1原单个完整兼容证明继续，fresh/store/旧reader反向与局部Gateway/terminal/inspector证据复用；新真实authorize短路差额仅在该闭包修复，expiry/valid-model/saved-final三项通过，同一High局部零项。decoder/store/Domain等完整模块投影与负控只是conditional组成证据，整体仍UNWIRED/UNKNOWN，Host/Gateway/Provider/import余项和tagged保留未闭合；无新图片CI/部署/Provider窗口，不把视频兼容当图片验收。
 - UI已认可视觉首组已收取、原Media六job与实际完整双版本pair全部成功，并经新双库备份按原流程独立发布。独立线上身份/三应用挂载/公网精确SHA与首页均通过；UI owner正沿首页→Guide→P04→原RO四分区→Hermes只读回读和保存真实PNG。首组不等整UI或科学质量；媒体/材料既定差额、P05有限认可边界保持，实际视觉仍待。

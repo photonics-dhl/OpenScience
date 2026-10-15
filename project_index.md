@@ -646,6 +646,7 @@ Chat生图操作：`infra/chatgpt-browser/runner.cjs`在空编辑器先选择原
 | `infra/scripts/evaluate-scansci-upstream-mcp.{sh,test.mjs}` | 上游 `v1.13.1` 官方 MCP 有界 ECS 正向试点：wheel hash、17 tools、真实 OA PDF、exact trap cleanup | **TASK 1 ECS ACCEPTED**；24,671,920 bytes / `d57dc94c…f484a`，临时容器/卷 `0/0` |
 | `docs/runbooks/hermes-capability-registry.md` | 当前产品目的→代码调用→实际产物→已知缺口；Synclip公开/API管理员合同、供应商计价与账户资格边界；工具选型与定向High审查 | **CURRENT能力定位入口**；版本见handoff，旧PRODUCTION/评测表为历史，不证明当前调用或质量 |
 | `docs/runbooks/server-capabilities.md` | 服务器现有服务、镜像、缓存和复用边界 | **CURRENT服务器能力入口** |
+| `docs/runbooks/server-handover.md` | 服务器运维交接材料、原SSH包装器快速登录、配置/凭证归档边界、外部账号与签收、备份恢复差额 | 运维接管手册；私有交付产物与执行证据仅见CURRENT，凭证不入Git |
 | `docs/runbooks/chatgpt-browser.md` | 服务器 ChatGPT 浏览器的登录、任务恢复、容量、安全与回滚操作 | **CURRENT浏览器运行手册** |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、对象逻辑导出、权限/release 校验与隔离恢复边界；含历史双库演练和 remote stdin guard | 当前安装/恢复与异机副本状态见顶部 CURRENT；历史演练不代替当前对象恢复 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
