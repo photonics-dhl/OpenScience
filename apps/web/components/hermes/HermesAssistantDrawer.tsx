@@ -332,6 +332,37 @@ function HermesAssistantDrawerContent({
     selection: { start: number; end: number; direction: 'forward' | 'backward' | 'none' } | null;
   } | null>(null);
   const inlineConversation = embedded || (docked && wide && (pageOwnedAnchor || !shortPane));
+  const [conversationHost, setConversationHost] = useState<HTMLDivElement | null>(null);
+  const hostFocus = useRef<{ node: HTMLElement; selection?: [number, number, 'forward' | 'backward' | 'none'] } | null>(null);
+  useClientLayoutEffect(() => {
+    const host = document.createElement('div');
+    host.style.display = 'contents';
+    setConversationHost(host);
+    return () => { host.remove(); };
+  }, []);
+  const attachConversationSeat = useCallback((seat: HTMLDivElement | null) => {
+    if (!conversationHost) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && conversationHost.contains(active)) {
+      hostFocus.current = {
+        node: active,
+        selection: active instanceof HTMLTextAreaElement
+          ? [active.selectionStart, active.selectionEnd, active.selectionDirection] : undefined,
+      };
+    }
+    // Ref attachment precedes Drawer autofocus. Only the seat changes across
+    // breakpoints; React keeps the same content portal and its action state.
+    if (seat) {
+      if (conversationHost.parentNode !== seat) seat.appendChild(conversationHost);
+    } else conversationHost.remove();
+  }, [conversationHost]);
+  useEffect(() => {
+    const saved = hostFocus.current;
+    hostFocus.current = null;
+    if (!open || !saved?.node.isConnected) return;
+    saved.node.focus({ preventScroll: true });
+    if (saved.selection && saved.node instanceof HTMLTextAreaElement) saved.node.setSelectionRange(...saved.selection);
+  }, [open, inlineConversation, conversationHost]);
   useClientLayoutEffect(() => {
     conversationOpen.current = open;
     if (conversationOpener.current?.owner !== currentOwner) conversationOpener.current = null;
@@ -817,18 +848,7 @@ function HermesAssistantDrawerContent({
     return null;
   };
 
-  const drawer = (
-    <Drawer
-      inline={inlineConversation}
-      className={`hermes-assistant-shell hermes-conversation-shell research-product${embedded ? ' guide-embedded-conversation' : ''}${pageOwnedAnchor ? ' hermes-workbench-conversation' : ''}`}
-      hideCloseButton
-      closeLabel={t('guide.close')}
-      label={t('guide.dialogLabel')}
-      onClose={() => onOpenChange(false)}
-      open={open}
-      overlayClassName="hermes-assistant-overlay"
-      side="right"
-    >
+  const conversation = (
       <section className="hermes-conversation" data-hermes-drawer-state={busy ? 'working' : task?.status ?? 'ready'}>
         <header className="hermes-conversation-header">
           {pageOwnedAnchor && <div data-hermes-conversation-companion="true" data-hermes-conversation-compact="true" aria-live="off" />}
@@ -912,7 +932,16 @@ function HermesAssistantDrawerContent({
           {guideStored && !goal && <span className="sr-only">{t('guide.browserSessionDraft')}</span>}
         </form>
       </section>
-    </Drawer>
   );
-  return inlineConversation || typeof document === 'undefined' ? drawer : createPortal(drawer, document.body);
+  const drawer = <Drawer
+    inline={inlineConversation}
+    className={`hermes-assistant-shell hermes-conversation-shell research-product${embedded ? ' guide-embedded-conversation' : ''}${pageOwnedAnchor ? ' hermes-workbench-conversation' : ''}`}
+    hideCloseButton closeLabel={t('guide.close')} label={t('guide.dialogLabel')}
+    onClose={() => onOpenChange(false)} open={open}
+    overlayClassName="hermes-assistant-overlay" side="right"
+  ><div ref={attachConversationSeat} style={{ display: 'contents' }}>{conversationHost ? null : conversation}</div></Drawer>;
+  return <>
+    {inlineConversation || typeof document === 'undefined' ? drawer : createPortal(drawer, document.body)}
+    {open && conversationHost ? createPortal(conversation, conversationHost) : null}
+  </>;
 }

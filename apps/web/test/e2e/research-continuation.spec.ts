@@ -198,9 +198,9 @@ test('the confirmed paper is included in the next commit through the editor', as
     await route.fulfill({ json: { commit: { versionId: 'committed-version', versionNo: 2, commitId: 'new-commit' } } });
   });
   await page.goto('/research-objects/journey-ro/edit?ingestionTask=journey-task');
-  const assistant = page.getByRole('dialog', { name: 'Hermes research guide', exact: true });
+  const assistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
   await expect(assistant).toBeVisible();
-  await expect(assistant).toHaveAttribute('aria-modal', 'true');
+  await expect(assistant).not.toHaveAttribute('aria-modal');
   await assistant.getByRole('button', { name: 'Close Hermes', exact: true }).click();
   await expect(assistant).toHaveCount(0);
   await page.locator('#sdf-field-problem').fill(editedCore.problem);
@@ -208,7 +208,7 @@ test('the confirmed paper is included in the next commit through the editor', as
   expect(commits).toBe(0);
   await page.locator('[data-hermes-input-owner="true"]').click();
   await expect(assistant).toBeVisible();
-  await expect(assistant).toHaveAttribute('aria-modal', 'true');
+  await expect(assistant).not.toHaveAttribute('aria-modal');
   await assistant.getByLabel('Send an instruction to Hermes').fill('Review media for this saved research');
   await assistant.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => submitted).toEqual({ version: 2, message: 'Draft saved', artifacts, sdfCore: editedCore });
@@ -244,9 +244,9 @@ test('a foreign imported paper cannot be silently attached or committed', async 
   await expect(page.locator('[data-sdf-node] textarea')).toHaveCount(0);
   await expect(page.getByText(foreignCore.problem, { exact: true })).toHaveCount(0);
   await expect(page.locator('a[href="/api/artifacts/artifact-journey/download"]')).toHaveCount(0);
-  const assistant = page.getByRole('dialog', { name: 'Hermes research guide', exact: true });
+  const assistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
   await expect(assistant).toBeVisible();
-  await expect(assistant).toHaveAttribute('aria-modal', 'true');
+  await expect(assistant).not.toHaveAttribute('aria-modal');
   await expect(page.locator('[data-sdf-node="1"] [data-read-only="true"]')).toHaveText(core.problem);
   await expect(assistant.getByText('This analysis does not belong to the current Research Object or material, so its content was not loaded.', { exact: true })).toBeVisible();
   await assistant.getByLabel('Send an instruction to Hermes').fill('Review media for this saved research');

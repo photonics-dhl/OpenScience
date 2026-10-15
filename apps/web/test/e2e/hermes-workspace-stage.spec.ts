@@ -396,7 +396,7 @@ test('plain editor visits keep the contribution view as the default', async ({ p
   await page.goto(baseUrl + '/dashboard', { waitUntil: 'networkidle' });
   await page.locator('section[aria-labelledby="research-list-title"]').getByRole('link', { name: new RegExp(researchTitle) }).click();
   await expect(page).toHaveURL(new RegExp(roPath + '/edit$'));
-  await expect(page.getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('navigation', { name: 'Research sections', exact: true }).getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
   await expect(page.locator('[data-workbench-section="content"]')).toHaveAttribute('aria-hidden', 'true');
 });
 
@@ -1202,6 +1202,7 @@ test('existing RO overview and files consume their real entries and keep the sam
   try {
     await enterEditor(page);
     await assertAvatar(page);
+    await page.locator('[data-object-header="true"]').getByText('More', { exact: true }).click();
     await page.getByRole('link', { name: 'Research details', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(roPath + '/overview$'));
     await expect(page.getByRole('heading', { name: researchTitle, exact: true })).toBeVisible();
