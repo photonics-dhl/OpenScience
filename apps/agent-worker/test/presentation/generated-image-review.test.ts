@@ -5,6 +5,33 @@ import { nativeImageReviewPromptHash, type ScienceReviewInput } from '@openscien
 import { readStoredGeneratedImageReview, reviewGeneratedImage } from '../../src/presentation/generated-image-review';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
+it('preserves exact strings from a tagged derived final and retains its derived receipt hash', async () => {
+  const input = pixelInput(); Object.assign(input.illustrationContext, { imageReviewMode: 'agent-native' });
+  const decision = { decision: 'blocked', summary: '  Label "A"\\B\nneeds a qualifier.  ', repairInstruction: null };
+  const text = JSON.stringify(decision);
+  const nativeAgent = vi.fn(async () => ({ imageResultPolicy: 'image-review-tool-final-v1' as const,
+    text, promptHash: 'a'.repeat(64), responseHash: hash(text), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3',
+    validatedFinal: { policy: 'image-review-tool-final-v1' as const, rawCheckpoint: 'b'.repeat(64), turnOrdinal: 2,
+      resultToolCallId: 'r1', text, responseHash: hash(text) } }));
+  const reviewScientific = vi.fn();
+  expect(await reviewGeneratedImage({ reviewScientific } as never, input as never, nativeAgent))
+    .toMatchObject({ ...decision, responseHash: hash(text) });
+  expect(nativeAgent).toHaveBeenCalledOnce(); expect(reviewScientific).not.toHaveBeenCalled();
+});
+it.each(['policy', 'text', 'hash', 'rawCheckpoint'])('rejects a changed tagged final %s with no fallback', async change => {
+  const input = pixelInput(); Object.assign(input.illustrationContext, { imageReviewMode: 'agent-native' });
+  const text = JSON.stringify({ decision: 'accepted', summary: 'Source checked.', repairInstruction: null });
+  const result = { imageResultPolicy: 'image-review-tool-final-v1', text, promptHash: 'a'.repeat(64), responseHash: hash(text),
+    provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', validatedFinal: { policy: 'image-review-tool-final-v1',
+      rawCheckpoint: 'b'.repeat(64), turnOrdinal: 2, resultToolCallId: 'r1', text, responseHash: hash(text) } };
+  if (change === 'policy') result.imageResultPolicy = 'invented';
+  if (change === 'text') result.validatedFinal.text += ' ';
+  if (change === 'hash') result.validatedFinal.responseHash = 'c'.repeat(64);
+  if (change === 'rawCheckpoint') result.validatedFinal.rawCheckpoint = '';
+  const reviewScientific = vi.fn();
+  await expect(reviewGeneratedImage({ reviewScientific } as never, input as never, async () => result as never)).rejects.toThrow();
+  expect(reviewScientific).not.toHaveBeenCalled();
+});
 it('retains full source text above the historical browser budget for a native Hermes review', async () => {
   const input = pixelInput();
   Object.assign(input.illustrationContext, { imageReviewMode: 'model-native' });

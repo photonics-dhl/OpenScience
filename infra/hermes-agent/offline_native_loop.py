@@ -12,21 +12,113 @@ import os
 from pathlib import Path
 import socket
 import sys
+sys.dont_write_bytecode = True
 import tempfile
 import subprocess
+import select
+import time
+import tomllib
+import threading
+import traceback
+
+
+@contextlib.contextmanager
+def native_loop_directory(retain):
+    if retain:
+        directory = Path(tempfile.mkdtemp(prefix="ni-", dir=os.getcwd())).resolve(strict=True)
+        print(json.dumps({"retainedFixtureDirectory": str(directory)}), file=sys.stderr)
+        yield str(directory)
+    else:
+        with tempfile.TemporaryDirectory(prefix="native-loop-", dir=os.getcwd()) as directory:
+            yield directory
+
+
+@contextlib.contextmanager
+def native_diagnostics(buffer, directory, retain):
+    try:
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            yield
+    except BaseException:
+        if retain:
+            buffer.write(traceback.format_exc())
+        raise
+    finally:
+        if retain:
+            (directory / "sdk-diagnostics.log").write_text(buffer.getvalue(), encoding="utf-8")
+
+
+@contextlib.contextmanager
+def image_worker_bridge(script, node_modules, directory, configuration=None, typescript=None):
+    """Optional real candidate Worker test driver; never substitute SDK/Provider output here."""
+    if script is None:
+        yield None
+        return
+    diagnostic_path = directory / "image-worker-stderr.log"
+    with diagnostic_path.open("wb") as diagnostics:
+        process = subprocess.Popen(["node", str(script), str(directory / "image-worker"),
+            str(node_modules) if node_modules else "", str(configuration) if configuration else "", str(typescript) if typescript else ""],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=diagnostics,
+            env={"PATH": "/usr/bin:/bin", "NODE_PATH": str(node_modules) if node_modules else ""})
+        pending = b""
+        exchange_lock = threading.Lock()
+        def exchange_locked(value):
+            nonlocal pending
+            assert process.poll() is None, "Candidate image Worker fixture exited"
+            process.stdin.write((json.dumps(value) + "\n").encode("utf-8"))
+            process.stdin.flush()
+            deadline = time.monotonic() + 30
+            while b"\n" not in pending:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
+                    detail = diagnostic_path.read_bytes()[-4000:].decode("utf-8", errors="replace")
+                    raise TimeoutError("Candidate image Worker fixture did not return its bounded receipt: " + detail)
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    detail = diagnostic_path.read_bytes()[-4000:].decode("utf-8", errors="replace")
+                    raise AssertionError("Candidate image Worker fixture closed without a receipt: " + detail)
+                pending += chunk
+                assert len(pending) <= 4 * 1024 * 1024, "Candidate fixture reply exceeds its test transport budget"
+            line, pending = pending.split(b"\n", 1)
+            return json.loads(line)
+        def exchange(value):
+            # Native read-only tools can run together; one pipe exchange must
+            # retain its own reply rather than consuming the other tool's line.
+            with exchange_lock:
+                return exchange_locked(value)
+        try:
+            yield exchange
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
 
 
 def main():
     gateway_script = Path(sys.argv[1]).resolve(strict=True) if len(sys.argv) >= 2 else None
-    node_modules = Path(sys.argv[2]).resolve(strict=True) if len(sys.argv) == 3 else None
-    with tempfile.TemporaryDirectory(prefix="native-loop-", dir=os.getcwd()) as directory:
+    node_modules = Path(sys.argv[2]).resolve(strict=True) if len(sys.argv) >= 3 else None
+    image_gateway_script = Path(sys.argv[3]).resolve(strict=True) if len(sys.argv) >= 4 else None
+    image_verdict = sys.argv[4] if len(sys.argv) >= 5 else "blocked"
+    assert image_verdict in ("accepted", "blocked")
+    image_configuration = Path(sys.argv[5]).resolve(strict=True) if len(sys.argv) >= 6 else None
+    image_typescript = Path(sys.argv[6]).resolve(strict=True) if len(sys.argv) >= 7 else None
+    sdk_source = Path(sys.argv[7] if len(sys.argv) >= 8 else "/opt/hermes-agent").resolve(strict=True)
+    assert sdk_source.is_dir()
+    bridge_env = {"PATH": "/usr/bin:/bin", "NODE_PATH": str(node_modules) if node_modules else ""}
+    if image_configuration:
+        bridge_env["XGS_IMAGE_TEST_CONFIG"] = str(image_configuration)
+    if image_typescript:
+        bridge_env["XGS_IMAGE_TEST_TYPESCRIPT"] = str(image_typescript)
+    with native_loop_directory(bool(image_gateway_script)) as directory:
         task_home = Path(directory)
         # No host profile, supplier keys, project env or proxy is inherited.
         os.environ.clear()
         os.environ.update(HERMES_HOME=str(task_home), HOME=str(task_home), PATH="/usr/bin:/bin", PYTHONUNBUFFERED="1",
                           HERMES_TELEMETRY_ENABLED="false", HERMES_NO_AUTO_UPDATE="1")
-        source = Path("/opt/hermes-agent")
-        sys.path.insert(0, str(source))
+        sys.path.insert(0, str(sdk_source))
 
         def no_network(*_args, **_kwargs):
             raise AssertionError("Offline native loop attempted a network connection")
@@ -38,12 +130,27 @@ def main():
         (skill / "references").mkdir(parents=True)
         (skill / "SKILL.md").write_text("---\nname: paper-method\ndescription: Verify quantities at their stated locations.\n---\nRead references/geometry.md before comparing field thresholds.\n")
         (skill / "references" / "geometry.md").write_text("Compare material-edge and centre values only after identifying their different locations.\n")
+        if image_gateway_script:
+            # Create before the installed SDK's first skill discovery/cache.
+            review_skill = task_home / "skills" / "science" / "openscience-source-review"
+            review_skill.mkdir(parents=True)
+            (review_skill / "SKILL.md").write_text("---\nname: openscience-source-review\ndescription: Offline image transport fixture only.\n---\nCompare the fixture pixels with their bound source.\n")
         captured = []
         invoked = []
         diagnostics = io.StringIO()
-        with contextlib.redirect_stdout(diagnostics), contextlib.redirect_stderr(diagnostics):
+        with native_diagnostics(diagnostics, task_home, bool(image_gateway_script)):
             import httpx
+            import run_agent
+            import hermes_cli
             from run_agent import AIAgent
+            actual_sdk_module = Path(run_agent.__file__).resolve(strict=True)
+            assert actual_sdk_module.is_relative_to(sdk_source), "Loaded a different SDK source directory"
+            actual_sdk_version = getattr(hermes_cli, "__version__", None)
+            actual_sdk_version_source = Path(hermes_cli.__file__).resolve(strict=True)
+            if not isinstance(actual_sdk_version, str) or not actual_sdk_version:
+                actual_sdk_version_source = sdk_source / "pyproject.toml"
+                actual_sdk_version = tomllib.loads(actual_sdk_version_source.read_text())["project"]["version"]
+            assert isinstance(actual_sdk_version, str) and actual_sdk_version
             from tools.registry import registry
             from toolsets import create_custom_toolset
             from task_agent import NativeTaskStopped, SkillScope, create_task_agent_class, guard_registered_tools
@@ -87,7 +194,7 @@ def main():
                         response_content.append({"type": "text", "text": message["content"]})
                     node = subprocess.run(["node", str(gateway_script)], input=json.dumps({"request": body, "responseContent": response_content, "ordinal": ordinal}),
                         text=True, capture_output=True, timeout=20,
-                        env={"PATH": "/usr/bin:/bin", "NODE_PATH": str(node_modules) if node_modules else ""})
+                        env=bridge_env)
                     assert node.returncode == 0, node.stderr
                     return httpx.Response(200, json=json.loads(node.stdout))
                 return httpx.Response(200, json={"id": f"offline-{ordinal}", "object": "chat.completion", "created": 0,
@@ -141,7 +248,7 @@ def main():
                 actual_ids = [m["tool_call_id"] for m in body["messages"] if m.get("role") == "tool"]
                 if gateway_script and (first or actual_ids == duplicate_ids):
                     node = subprocess.run(["node", str(gateway_script)], input=json.dumps({"request": body, "responseContent": content, "ordinal": len(duplicate_requests) - 1}),
-                        text=True, capture_output=True, timeout=20, env={"PATH": "/usr/bin:/bin", "NODE_PATH": str(node_modules) if node_modules else ""})
+                        text=True, capture_output=True, timeout=20, env=bridge_env)
                     assert node.returncode == 0, node.stderr
                     return httpx.Response(200, json=json.loads(node.stdout))
                 return httpx.Response(200, json={"id": "duplicates", "object": "chat.completion", "created": 0, "model": "MiniMax-M3",
@@ -193,7 +300,7 @@ def main():
                 registry.register(name=entry.name, toolset=entry.toolset, schema=entry.schema, handler=original,
                     check_fn=entry.check_fn, requires_env=entry.requires_env, is_async=entry.is_async)
             png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=")
-            image_identity = {"requestId": "offline-image-review", "contentHash": hashlib.sha256(png).hexdigest(),
+            image_identity = {"requestId": "fd319e9b-071f-4adb-a45f-25ebdbd47674" if image_gateway_script else "offline-image-review", "contentHash": hashlib.sha256(png).hexdigest(),
                 "sourceEvidenceIdentity": "1" * 64, "parentIdentity": "2" * 64}
             image_receipt = {"status": "image_view_ready", **image_identity}
             image_schema = {"name": "paper_image_view",
@@ -201,64 +308,114 @@ def main():
                 "parameters": {"type": "object", "additionalProperties": False, "properties": {}, "required": []}}
             def image_view(args, **_kwargs):
                 assert args == {}
+                if image_gateway_script:
+                    result = bridge({"kind": "tool-call", "name": "paper_image_view", "arguments": args})["result"]
+                    assert result == image_receipt
+                    return json.dumps(result, separators=(",", ":"))
                 return json.dumps(image_receipt, separators=(",", ":"))
             registry.register(name=image_schema["name"], toolset="openscience-sources", schema=image_schema, handler=image_view)
             image_allowed = {"skills_list", "skill_view", "paper_image_view"}
             create_custom_toolset("openscience-image-task", "Saved image and native skills", tools=sorted(image_allowed))
-            image_requests = []
-            image_authorizations = []
-            image_releases = []
-            image_decision = json.dumps({"decision": "blocked", "summary": "Offline transport fixture only.", "repairInstruction": None})
-            image_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-            def saved_pixels(call_id, args, result):
-                assert call_id == "saved-image-view" and args == {} and result == image_receipt
-                image_releases.append(call_id)
-                return [{"type": "text", "text": "Actual saved image; it is not a style reference. " + json.dumps(image_identity)},
-                    {"type": "image_url", "image_url": {"url": image_url}}]
-            def image_handler(request):
-                body = json.loads(request.content)
-                image_requests.append(body)
-                assert request.url.host == "openscience-worker"
-                assert body["model"] == "MiniMax-M3.1"
-                assert {tool["function"]["name"] for tool in body["tools"]} == image_allowed
-                first = len(image_requests) == 1
-                assert len(image_requests) <= 2, "Saved-image SDK loop made an unexpected extra request"
-                message = {"role": "assistant", "content": None if first else image_decision}
-                if first:
-                    message["tool_calls"] = [
-                        {"id": "image-method-read", "type": "function", "function": {
-                            "name": "skill_view", "arguments": json.dumps({"name": "paper-method"})}},
-                        {"id": "saved-image-view", "type": "function", "function": {
-                            "name": "paper_image_view", "arguments": "{}"}},
-                    ]
-                else:
-                    receipts = [m for m in body["messages"] if m.get("role") == "tool"]
-                    assert {m["tool_call_id"] for m in receipts} == {"image-method-read", "saved-image-view"}
-                    saved = next(m for m in receipts if m["tool_call_id"] == "saved-image-view")
-                    assert json.loads(saved["content"]) == image_receipt
-                    parts = [part for m in body["messages"] if isinstance(m.get("content"), list) for part in m["content"]]
-                    pixels = [part for part in parts if part.get("type") == "image_url"]
-                    assert len(pixels) == 1 and pixels[0]["image_url"]["url"] == image_url
-                    assert any(part.get("type") == "text" and json.dumps(image_identity) in part.get("text", "") for part in parts)
-                return httpx.Response(200, json={"id": "offline-image", "object": "chat.completion", "created": 0,
-                    "model": "MiniMax-M3.1", "choices": [{"index": 0, "message": message,
-                        "finish_reason": "tool_calls" if first else "stop"}],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
-            image_cls = create_task_agent_class(AIAgent, lambda: httpx.MockTransport(image_handler), image_allowed, page_images=saved_pixels)
-            image_agent = image_cls(base_url="http://openscience-worker/v1", api_key="openscience-task-transport", provider="openai",
-                api_mode="chat_completions", model="MiniMax-M3.1", max_iterations=4, max_tokens=4096,
-                enabled_toolsets=["openscience-image-task"], quiet_mode=True, verbose_logging=False,
-                save_trajectories=False, persist_session=False, skip_memory=True, skip_context_files=True, session_id="offline-image-loop")
-            assert image_agent.valid_tool_names == image_allowed
-            guard_registered_tools(registry, image_allowed, lambda name, args: image_authorizations.append(name), SkillScope(task_home / "skills"))
-            image_result = image_agent.run_conversation("Inspect the saved-image transport fixture.",
-                system_message="Read the method and view the saved image, then return the fixture decision.", task_id="offline-image-loop")
-            assert image_result.get("final_response") == image_decision
-            assert len(image_requests) == 2 and image_releases == ["saved-image-view"]
-            assert image_authorizations == ["skill_view", "paper_image_view"]
-            image_agent.client.close()
+            with image_worker_bridge(image_gateway_script, node_modules, task_home, image_configuration, image_typescript) as bridge:
+                image_requests = []
+                image_authorizations = []
+                image_releases = []
+                image_model = "MiniMax-M3" if bridge else "MiniMax-M3.1"
+                image_decision = json.dumps({"decision": image_verdict, "summary": 'Offline "quoted" transport fixture\\only.\nNo scientific verdict.',
+                    "repairInstruction": None}, separators=(",", ":")) if bridge else json.dumps({"decision": "blocked", "summary": "Offline transport fixture only.", "repairInstruction": None})
+                configured = bridge({"kind": "config", "decision": json.loads(image_decision)}) if bridge else None
+                if configured:
+                    image_identity = configured["imageIdentity"]
+                    assert image_identity["contentHash"] == hashlib.sha256(png).hexdigest()
+                    image_receipt = {"status": "image_view_ready", **image_identity}
+                    assert configured["config"]["model"] == image_model
+                image_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+                def saved_pixels(call_id, args, result):
+                    assert call_id == "saved-image-view" and args == {} and result == image_receipt
+                    image_releases.append(call_id)
+                    if bridge:
+                        released = bridge({"kind": "tool-images", "callId": call_id, "arguments": args, "result": result})
+                        pixels = [part for part in released["content"] if part.get("type") == "image_url"]
+                        assert len(pixels) == 1 and pixels[0]["image_url"]["url"] == image_url
+                        return released["content"]
+                    return [{"type": "text", "text": "Actual saved image; it is not a style reference. " + json.dumps(image_identity)},
+                        {"type": "image_url", "image_url": {"url": image_url}}]
+                def image_handler(request):
+                    body = json.loads(request.content)
+                    image_requests.append(body)
+                    assert request.url.host == "openscience-worker"
+                    assert body["model"] == image_model
+                    assert {tool["function"]["name"] for tool in body["tools"]} == image_allowed
+                    first = len(image_requests) == 1
+                    assert len(image_requests) <= 2, "Saved-image SDK loop made an unexpected extra request"
+                    if bridge:
+                        received = bridge({"kind": "complete", "request": body, "ordinal": len(image_requests) - 1,
+                            "imageIdentity": image_identity, "decision": json.loads(image_decision)})
+                        response = received["sdkResponse"]
+                        assert received["proof"]["descriptorMatchesSentBody"] is True
+                        if not first:
+                            assert received["proof"]["rawStopReason"] == "tool_use"
+                            assert received["proof"]["rawCheckpointRetained"] is True
+                            assert received["proof"]["validatedFinalRetained"] is True
+                            assert response["choices"][0]["finish_reason"] == "stop"
+                            projected = response["choices"][0]["message"]
+                            assert projected["content"] == image_decision
+                            assert "tool_calls" not in projected and "reasoning_details" not in projected
+                        return httpx.Response(200, json=response)
+                    message = {"role": "assistant", "content": None if first else image_decision}
+                    if first:
+                        message["tool_calls"] = [
+                            {"id": "image-method-read", "type": "function", "function": {
+                                "name": "skill_view", "arguments": json.dumps({"name": "paper-method"})}},
+                            {"id": "saved-image-view", "type": "function", "function": {
+                                "name": "paper_image_view", "arguments": "{}"}},
+                        ]
+                    else:
+                        receipts = [m for m in body["messages"] if m.get("role") == "tool"]
+                        assert {m["tool_call_id"] for m in receipts} == {"image-method-read", "saved-image-view"}
+                        saved = next(m for m in receipts if m["tool_call_id"] == "saved-image-view")
+                        assert json.loads(saved["content"]) == image_receipt
+                        parts = [part for m in body["messages"] if isinstance(m.get("content"), list) for part in m["content"]]
+                        pixels = [part for part in parts if part.get("type") == "image_url"]
+                        assert len(pixels) == 1 and pixels[0]["image_url"]["url"] == image_url
+                        assert any(part.get("type") == "text" and json.dumps(image_identity) in part.get("text", "") for part in parts)
+                    return httpx.Response(200, json={"id": "offline-image", "object": "chat.completion", "created": 0,
+                        "model": "MiniMax-M3.1", "choices": [{"index": 0, "message": message,
+                            "finish_reason": "tool_calls" if first else "stop"}],
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+                image_cls = create_task_agent_class(AIAgent, lambda: httpx.MockTransport(image_handler), image_allowed, page_images=saved_pixels)
+                image_agent = image_cls(base_url="http://openscience-worker/v1", api_key="openscience-task-transport", provider="openai",
+                    api_mode="chat_completions", model=image_model,
+                    max_iterations=configured["config"]["maxTurns"] if configured else 4,
+                    max_tokens=configured["config"]["maxOutputTokens"] if configured else 4096,
+                    enabled_toolsets=["openscience-image-task"], quiet_mode=True, verbose_logging=False,
+                    save_trajectories=False, persist_session=False, skip_memory=True, skip_context_files=True,
+                    session_id=configured["config"]["taskId"] if configured else "offline-image-loop")
+                assert image_agent.valid_tool_names == image_allowed
+                def authorize_image_tool(name, args):
+                    image_authorizations.append(name)
+                    if bridge:
+                        assert bridge({"kind": "tool-authorize", "name": name, "arguments": args})["authorized"] is True
+                guard_registered_tools(registry, image_allowed, authorize_image_tool, SkillScope(task_home / "skills"))
+                image_result = image_agent.run_conversation(configured["config"]["goal"] if configured else "Inspect the saved-image transport fixture.",
+                    system_message=configured["config"]["instructions"] if configured else "Read the method and view the saved image, then return the fixture decision.",
+                    task_id=configured["config"]["taskId"] if configured else "offline-image-loop")
+                assert image_result.get("final_response") == image_decision
+                assert len(image_requests) == 2 and image_releases == ["saved-image-view"]
+                assert sorted(image_authorizations) == ["paper_image_view", "skill_view"] if bridge else image_authorizations == ["skill_view", "paper_image_view"]
+                if bridge:
+                    finished = bridge({"kind": "finish", "finalResponse": image_result["final_response"]})
+                    assert finished["hostFinished"] is True and finished["domainAdopted"] == image_verdict
+                    assert finished["sdkRequests"] == 2 and finished["supplierVisualCalls"] == 1
+                    assert finished["terminalToolsExecuted"] == 0 and finished["continuationRequests"] == 0
+                    assert finished["additionalReservations"] == 0 and finished["externalProviderCalls"] == 0
+                image_agent.client.close()
 
-        print(json.dumps({"runtime": "actual installed run_agent.AIAgent", "version": "0.10.0", "modelRequests": len(captured),
+        print(json.dumps({"runtime": "actual installed run_agent.AIAgent", "version": actual_sdk_version,
+                          "retainedFixtureDirectory": str(task_home) if image_gateway_script else None,
+                          "fixtureArtifactsRetained": bool(image_gateway_script),
+                          "sdkSourceDirectory": str(sdk_source), "actualSdkModule": str(actual_sdk_module),
+                          "actualSdkVersionSource": str(actual_sdk_version_source), "modelRequests": len(captured),
                           "externalProviderCalls": 0, "nativeToolCalls": [entry["name"] for entry in primary_invoked],
                           "fullReferenceRead": True, "sourceRead": True, "continuationPreserved": True, "clientRebuild": True,
                           "gatewayRoundTrip": bool(gateway_script),
@@ -267,6 +424,8 @@ def main():
                           "savedImageSdkLoop": True, "savedImageModelRequests": len(image_requests),
                           "savedImageToolCalls": image_authorizations, "fixturePngInModelRequest": True,
                           "savedImageIdentityPreserved": True,
+                          "imageToolFinalCrossLayer": bool(image_gateway_script),
+                          "imageToolFinalDecision": image_verdict if image_gateway_script else None,
                           "scientificQualityValidated": False}))
 
 

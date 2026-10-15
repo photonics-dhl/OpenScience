@@ -130,7 +130,7 @@ export async function renderingFixture() {
   return { ...f, image };
 }
 
-export async function completeImage(f: Awaited<ReturnType<typeof renderingFixture>>) {
+export async function completeImage(f: Awaited<ReturnType<typeof renderingFixture>>, tagged = false) {
   if (f.image.executionAttempt === 0) await claimAgentTask(f.deps, f.image.id);
   const executionAttempt = f.image.executionAttempt;
   const parent = await requireSceneImageParent(f.prisma, f.image.payload);
@@ -152,4 +152,15 @@ export async function completeImage(f: Awaited<ReturnType<typeof renderingFixtur
       contentType: 'image/png', parentIdentity: parent.identity, sourceEvidenceIdentity: f.sourceEvidenceIdentity,
       storyboardAssetId: f.parent.id, storyboardContentHash: f.parent.result.contentHash, sceneIndex: 0, imageReview: review } });
   f.db.presentationAssetClaims.push({ presentationAssetId: f.image.id, claimId: id(6) });
+  if (tagged) {
+    const result = f.image.result, cp = result.nativeAgentExecution.checkpoint;
+    result.nativeAgentExecution.imageResultPolicy = 'image-review-tool-final-v1';
+    result.nativeImageReview.imageResultPolicy = 'image-review-tool-final-v1';
+    result.nativeImageReview.reservationLedgerId = f.db.usageLedger.find(entry => entry.idempotencyKey === `agent-task-reserve:${f.image.id}`)!.id;
+    Object.assign(f.db.presentationAssets.find(asset => asset.id === f.image.id)!.provenance,
+      { subtype: 'storyboard_scene_image', sceneImage: f.image.payload.sceneImage });
+    Object.assign(cp, { imageResultPolicy: 'image-review-tool-final-v1', received: 'decoded', finishReason: 'other', hasToolCalls: true,
+      responseHash: 'd'.repeat(64), validatedFinal: { policy: 'image-review-tool-final-v1', rawCheckpoint: 'e'.repeat(64),
+        turnOrdinal: cp.turnCount - 1, resultToolCallId: 'result-1', responseHash: review.responseHash } });
+  }
 }

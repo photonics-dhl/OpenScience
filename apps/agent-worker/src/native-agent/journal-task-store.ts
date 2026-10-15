@@ -51,7 +51,7 @@ export function createJournalNativeTaskStore(input: { prisma: WorkspaceDeps['pri
       || binding.runtimeId !== input.execution.runtimeId || binding.skillCatalogueId !== input.execution.skillCatalogueId
       || binding.model !== input.execution.model) blocked();
     const turn = next.turns.at(-1);
-    if (!turn || (paidCompletion ? turn.state !== 'completed' : turn.state !== 'started')) blocked();
+    if (!turn || turn.state === 'received' || (paidCompletion ? turn.state !== 'completed' : turn.state !== 'started')) blocked();
     const bytes = Buffer.from(JSON.stringify(next));
     if (bytes.length > MAX_BYTES) blocked();
     const hash = sha(bytes);

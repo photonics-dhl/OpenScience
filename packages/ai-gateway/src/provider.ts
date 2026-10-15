@@ -12,6 +12,8 @@ import {
 } from './ocr';
 import { ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS } from './science-review-protocol';
+import { restoreNativeImageReviewTurn, decodeNativeImageReviewBody, NATIVE_IMAGE_REVIEW_MAX_RESPONSE_BYTES,
+  type PreparedNativeImageReviewTurn, type ReceivedImageReviewReply } from './native-image-review';
 
 /** AI Provider 抽象（§9.3：Provider SDK 只存在于 ai-gateway 包内）。 */
 
@@ -241,6 +243,8 @@ export interface Provider {
   preflightNativeImages?(opts: CompleteOptions): void;
   /** Native Agent requests must be deterministically valid before persisting started. */
   preflightNativeTools?(opts: CompleteOptions): void;
+  preflightNativeImageReview?(prepared: PreparedNativeImageReviewTurn): void;
+  completeNativeImageReview?(prepared: PreparedNativeImageReviewTurn): Promise<ReceivedImageReviewReply>;
   complete(opts: CompleteOptions): Promise<ProviderResult>;
 }
 
@@ -365,9 +369,11 @@ export class AnthropicCompatProvider implements Provider {
 
   get supportsImageInput(): boolean { return NATIVE_IMAGE_MODELS.test(this.model); }
 
-  private requestBody(opts: CompleteOptions): { body: string; hasImages: boolean } {
+  private requestBody(opts: CompleteOptions, toolChoice?: PreparedNativeImageReviewTurn['toolChoice']): { body: string; hasImages: boolean } {
     const snapshot = snapshotChatMessages(opts.messages);
     const tools = snapshotToolDefinitions(opts.tools);
+    if (!toolChoice && tools?.some(tool => tool.function.name === 'image_review_result'))
+      throw new TextProviderError('provider_error', 'Image review result requires its prepared native route');
     const hasImages = snapshot.some(message => message.images !== undefined);
     if (hasImages && (!this.supportsImageInput || opts.model !== this.model)) {
       throw new TextProviderError('provider_error', 'Provider model cannot inspect native images');
@@ -383,6 +389,7 @@ export class AnthropicCompatProvider implements Provider {
         messages,
         ...(tools ? { tools: tools.map(tool => ({ name: tool.function.name,
           ...(tool.function.description !== undefined ? { description: tool.function.description } : {}), input_schema: tool.function.parameters })) } : {}),
+        ...(toolChoice ? { tool_choice: toolChoice } : {}),
         temperature: opts.temperature,
         max_tokens: opts.maxTokens ?? 4096,
         ...(opts.thinking ? { thinking: { type: opts.thinking } } : {}),
@@ -397,6 +404,46 @@ export class AnthropicCompatProvider implements Provider {
 
   preflightNativeImages(opts: CompleteOptions): void { this.requestBody(opts); }
   preflightNativeTools(opts: CompleteOptions): void { this.requestBody(opts); textTimeout(opts); }
+
+  private nativeImageReviewRequest(prepared: PreparedNativeImageReviewTurn): { body: string; timeout: number } {
+    const { messages, ...saved } = prepared;
+    const snapshot = restoreNativeImageReviewTurn({ ...saved, messagesFrom: 'request.messages' }, messages);
+    if (snapshot.target.provider !== this.name || snapshot.target.model !== this.model || !this.supportsImageInput)
+      throw new TextProviderError('provider_error', 'Native image review provider changed');
+    const opts: CompleteOptions = { model: snapshot.target.model, messages: snapshot.messages,
+      tools: snapshot.tools, ...snapshot.generation };
+    return { body: this.requestBody(opts, snapshot.toolChoice).body, timeout: textTimeout(opts) };
+  }
+
+  preflightNativeImageReview(prepared: PreparedNativeImageReviewTurn): void { this.nativeImageReviewRequest(prepared); }
+
+  /** Exactly one HTTP attempt. Invalid received bytes are returned for durable capture before validation. */
+  async completeNativeImageReview(prepared: PreparedNativeImageReviewTurn): Promise<ReceivedImageReviewReply> {
+    const { body, timeout } = this.nativeImageReviewRequest(prepared);
+    const dispatcher = timeout > 300000 ? new Agent({ headersTimeout: timeout, bodyTimeout: timeout }) : undefined;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': this.cfg.apiKey, 'anthropic-version': '2023-06-01' },
+        body, signal: controller.signal, ...(dispatcher ? { dispatcher } : {}),
+      });
+      const captured = await boundedNativeImageReviewBody(res);
+      const decoded = captured.truncated || Object.hasOwn(captured, 'rawBodyBase64') ? undefined : decodeNativeImageReviewBody(captured.body, this.name);
+      return Object.freeze({ policy: prepared.policy, provider: this.name, status: res.status, body: captured.body,
+        ...(Object.hasOwn(captured, 'rawBodyBase64') ? { rawBodyBase64: captured.rawBodyBase64 } : {}),
+        ...(decoded ? { decoded } : {}) });
+    } catch (error) {
+      const transport = textTransportFailure(error);
+      if (controller.signal.aborted || error instanceof Error && error.name === 'AbortError')
+        throw new TextProviderError('provider_timeout', `Provider ${this.name} timed out`, undefined, undefined, transport?.transportCode);
+      if (error instanceof TextProviderError) throw error;
+      if (transport) throw new TextProviderError(transport.code, `Provider ${this.name} transport failed`, undefined, undefined, transport.transportCode);
+      throw new TextProviderError('provider_error', `Provider ${this.name} request failed`);
+    } finally {
+      clearTimeout(timer); await dispatcher?.destroy().catch(() => undefined);
+    }
+  }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     opts = { ...opts, messages: snapshotChatMessages(opts.messages), ...(opts.tools !== undefined ? { tools: snapshotToolDefinitions(opts.tools) } : {}) };
@@ -483,6 +530,29 @@ export class AnthropicCompatProvider implements Provider {
       clearTimeout(timer);
       await dispatcher?.destroy().catch(() => undefined);
     }
+  }
+}
+
+async function boundedNativeImageReviewBody(response: Response): Promise<{ body: string; truncated: boolean; rawBodyBase64?: string }> {
+  if (!response.body) return { body: '', truncated: false };
+  const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let length = 0; let truncated = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      const remaining = NATIVE_IMAGE_REVIEW_MAX_RESPONSE_BYTES - length;
+      if (value.byteLength > remaining) {
+        chunks.push(value.subarray(0, remaining)); length += remaining; truncated = true;
+        await reader.cancel().catch(() => undefined); break;
+      }
+      chunks.push(value); length += value.byteLength;
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = Buffer.concat(chunks, length);
+  try {
+    return { body: new TextDecoder('utf-8', { fatal: true }).decode(bytes), truncated };
+  } catch {
+    // Received bytes remain paid evidence; decoding cannot invent replacement characters or lose the receipt.
+    return { body: '', rawBodyBase64: bytes.toString('base64'), truncated };
   }
 }
 

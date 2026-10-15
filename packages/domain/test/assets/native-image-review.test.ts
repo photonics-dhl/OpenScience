@@ -17,6 +17,78 @@ const identity = (requestId = 'native-task') => ({ requestId, contentHash: 'a'.r
 const completed = (requestId = 'native-task') => ({ mode: 'model-native', state: 'completed', executionAttempt: 1,
   ...identity(requestId), promptHash: 'c'.repeat(64), provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', review: review(requestId) });
 
+const policy = 'image-review-tool-final-v1' as const;
+function taggedResult() {
+  const envelope = { mode: 'agent-native', state: 'prepared', ...identity(), imageResultPolicy: policy,
+    preparedAt: 1, deadlineAt: 300001, executionAttempt: 1, runtimeId: 'installed', skillCatalogueId: 'science',
+    provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', reservationLedgerId: 'original-charge',
+    maxTurns: 4, maxOutputTokens: 32768, maxTotalOutputTokens: 32768, maxInputBytes: 1000 };
+  const checkpoint = { taskId: 'native-task', objectKey: `derived/native-agent/${'e'.repeat(64)}.json`, serializedSha256: 'e'.repeat(64), size: 100,
+    sourceKind: 'illustration-image', imageIdentity: identity(), executionAttempt: 1, turnCount: 2, state: 'completed',
+    target: { provider: envelope.provider, model: envelope.model, promptHash: 'c'.repeat(64) }, imageResultPolicy: policy,
+    received: 'decoded', responseHash: 'd'.repeat(64), finishReason: 'other', hasToolCalls: true };
+  return { nativeImageReview: envelope, nativeAgentExecution: { kind: 'hermes-agent', profile: 'image-review',
+    runtimeId: envelope.runtimeId, skillCatalogueId: envelope.skillCatalogueId, model: envelope.model, imageResultPolicy: policy, checkpoint } };
+}
+
+describe('tagged raw image receipts and derived final adoption', () => {
+  it('reads decoded raw facts and a distinct compact final without rewriting the raw hash', () => {
+    const result = taggedResult();
+    Object.assign(result.nativeAgentExecution.checkpoint, { validatedFinal: { policy, rawCheckpoint: 'f'.repeat(64),
+      turnOrdinal: 1, resultToolCallId: 'result-1', responseHash: 'a'.repeat(64) } });
+    expect(readNativeAgentExecution(result)?.checkpoint).toEqual(result.nativeAgentExecution.checkpoint);
+  });
+  it('reads a definite raw-only receipt without fabricated decoded facts', () => {
+    const result = taggedResult(), cp = result.nativeAgentExecution.checkpoint as Record<string, unknown>;
+    cp.received = 'raw-only'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls;
+    expect(readNativeAgentExecution(result)?.checkpoint).toEqual(cp);
+    cp.responseHash = 'd'.repeat(64);
+    expect(() => readNativeAgentExecution(result)).toThrow();
+  });
+  it('accepts the shared 200-character result tool ID bound and rejects an oversized compact proof', () => {
+    const result = taggedResult(), final = { policy, rawCheckpoint: 'f'.repeat(64), turnOrdinal: 1,
+      resultToolCallId: 'i'.repeat(200), responseHash: 'a'.repeat(64) };
+    Object.assign(result.nativeAgentExecution.checkpoint, { validatedFinal: final });
+    expect(readNativeAgentExecution(result)?.checkpoint?.validatedFinal?.resultToolCallId).toBe(final.resultToolCallId);
+    final.resultToolCallId += 'i'; expect(() => readNativeAgentExecution(result)).toThrow();
+  });
+  it('keeps a tagged initial nonvisual generic completion readable but nonterminal', () => {
+    const result = taggedResult(), cp = result.nativeAgentExecution.checkpoint as Record<string, unknown>;
+    delete cp.received; cp.turnCount = 1; cp.finishReason = 'tool_calls';
+    expect(readNativeAgentExecution(result)?.checkpoint).toEqual(cp);
+  });
+  it.each(['marker', 'envelope', 'checkpoint', 'raw-stop', 'no-tools', 'final-turn', 'full-text', 'raw-only-final'])(
+    'refuses an inconsistent tagged receipt: %s', change => {
+      const result = taggedResult(), cp = result.nativeAgentExecution.checkpoint as Record<string, unknown>;
+      const final = { policy, rawCheckpoint: 'f'.repeat(64), turnOrdinal: 1, resultToolCallId: 'result-1', responseHash: 'a'.repeat(64) };
+      cp.validatedFinal = final;
+      if (change === 'marker') result.nativeAgentExecution.imageResultPolicy = 'unknown' as typeof policy;
+      if (change === 'envelope') delete (result.nativeImageReview as Record<string, unknown>).imageResultPolicy;
+      if (change === 'checkpoint') delete cp.imageResultPolicy;
+      if (change === 'raw-stop') cp.finishReason = 'stop';
+      if (change === 'no-tools') cp.hasToolCalls = false;
+      if (change === 'final-turn') final.turnOrdinal = 0;
+      if (change === 'full-text') Object.assign(final, { text: 'private text must not enter compact reference' });
+      if (change === 'raw-only-final') { cp.received = 'raw-only'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+      expect(() => readNativeAgentExecution(result)).toThrow();
+    });
+  it('atomically adopts only the derived response hash, preserving the original raw receipt', async () => {
+    const result = taggedResult(), cp = result.nativeAgentExecution.checkpoint;
+    Object.assign(cp, { validatedFinal: { policy, rawCheckpoint: 'f'.repeat(64), turnOrdinal: 1,
+      resultToolCallId: 'result-1', responseHash: 'a'.repeat(64) } });
+    const task = { id: 'native-task', status: 'running', deletedAt: null, executionAttempt: 2, result };
+    const updateMany = async () => ({ count: 1 });
+    const tx = { agentTask: { findUnique: async () => task, updateMany } } as never;
+    await expect(completeNativeImageReview(tx, { taskId: task.id, executionAttempt: 2, review: review() as never })).rejects.toThrow();
+    const derived = { ...review(), responseHash: 'a'.repeat(64) };
+    const adopted = await completeNativeImageReview(tx, { taskId: task.id, executionAttempt: 2, review: derived as never });
+    expect(adopted.review).toEqual(derived);
+    expect(cp.responseHash).toBe('d'.repeat(64)); expect(cp.finishReason).toBe('other'); expect(cp.hasToolCalls).toBe(true);
+    expect(nativeImage.nativeImageReviewMatches(adopted, identity(), derived, { ...result, nativeImageReview: adopted })).toBe(true);
+    expect(nativeImage.nativeImageReviewMatches(adopted, identity(), review(), { ...result, nativeImageReview: adopted })).toBe(false);
+  });
+});
+
 async function fixture(nativeAgentRuntime?: { runtimeId: string; skillCatalogueId: string; model: string }) {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db, { id: 'native-review-user' });
@@ -37,12 +109,46 @@ async function fixture(nativeAgentRuntime?: { runtimeId: string; skillCatalogueI
 }
 
 describe('server-owned native image review role', () => {
+  it.each(['lost-final-cas', 'invalid-schema', 'raw-only', 'started', 'raw-deadline', 'legacy-invalid'])(
+    'offers only deterministic receipt recovery after %s', async state => {
+      const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+      const f = await fixture(runtime), result = taggedResult(), cp = result.nativeAgentExecution.checkpoint as Record<string, unknown>;
+      result.nativeImageReview.requestId = f.task.id; cp.taskId = f.task.id;
+      (cp.imageIdentity as Record<string, unknown>).requestId = f.task.id;
+      Object.assign(f.row, { status: 'failed', executionAttempt: 1, error: 'database write conflict', result });
+      if (state === 'invalid-schema') f.row.error = '[blocked] Native Agent terminal image result invalid';
+      if (state === 'raw-only') { cp.received = 'raw-only'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+      if (state === 'started') { cp.state = 'started'; delete cp.received; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+      if (state === 'raw-deadline') f.row.error = '[blocked] Native Agent original deadline expired';
+      if (state === 'legacy-invalid') {
+        delete (result.nativeAgentExecution as Record<string, unknown>).imageResultPolicy;
+        delete (result.nativeImageReview as Record<string, unknown>).imageResultPolicy;
+        delete cp.imageResultPolicy; delete cp.received; cp.finishReason = 'stop'; cp.hasToolCalls = false;
+        f.row.error = 'Native image review response invalid JSON; explicit review retry required';
+      }
+      const before = structuredClone({ result: f.row.result, ledger: f.db.usageLedger });
+      if (state === 'lost-final-cas') {
+        await retryAgentTask(f.deps, { taskId: f.task.id, userId: f.input.userId });
+        expect(f.row.status).toBe('pending'); expect(f.row.retryCount).toBe(1);
+      } else await expect(retryAgentTask(f.deps, { taskId: f.task.id, userId: f.input.userId })).rejects.toThrow();
+      expect(f.row.result).toEqual(before.result); expect(f.db.usageLedger).toEqual(before.ledger);
+    });
   it('selects the actual image Agent only on fresh server-owned task creation without a second debit', async () => {
     const f = await fixture({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' });
     expect(readNativeAgentExecution(f.row.result)?.profile).toBe('image-review');
+    expect(readNativeAgentExecution(f.row.result)?.imageResultPolicy).toBe(policy);
     expect(f.row.result).toMatchObject({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
     await submitAgentTask(f.deps, f.input);
     expect(f.db.usageLedger.filter(entry => entry.kind === 'consume')).toHaveLength(1);
+  });
+
+  it('replays the exact old untagged row before initialization without changing its result or charge', async () => {
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(runtime);
+    delete (f.row.result as { nativeAgentExecution: { imageResultPolicy?: string } }).nativeAgentExecution.imageResultPolicy;
+    const before = structuredClone({ result: f.row.result, ledger: f.db.usageLedger });
+    await submitAgentTask(f.deps, f.input);
+    expect(f.row.result).toEqual(before.result); expect(f.db.usageLedger).toEqual(before.ledger);
   });
 
   it('prepares one immutable image conversation envelope from the existing task reservation', async () => {
@@ -81,6 +187,8 @@ describe('server-owned native image review role', () => {
   it.each(['valid', 'started', 'tool-calls', 'length', 'wrong-provider', 'wrong-prompt', 'wrong-response', 'wrong-image'])('consumes only the exact final Agent CP: %s', async change => {
     const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
     const f = await fixture(runtime); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
+    // This is the historical stop/text contract; fresh tasks above exercise explicit tool-final opt-in.
+    delete (f.row.result as { nativeAgentExecution: { imageResultPolicy?: string } }).nativeAgentExecution.imageResultPolicy;
     await nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1,
       identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000, target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' } });
     const cp: Record<string, unknown> = { taskId: f.task.id, sourceKind: 'illustration-image', imageIdentity: identity(f.task.id),

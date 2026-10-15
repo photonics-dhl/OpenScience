@@ -12,6 +12,7 @@ export type NativeImageReviewCompleted = Omit<NativeImageReviewStarted, 'state'>
   state: 'completed'; review: GeneratedImageReview;
 };
 export type AgentNativeImageReviewPrepared = ImageReviewIdentity & {
+  imageResultPolicy?: 'image-review-tool-final-v1';
   mode: 'agent-native'; state: 'prepared'; preparedAt: number; deadlineAt: number; executionAttempt: number;
   runtimeId: string; skillCatalogueId: string; provider: string; model: string; reservationLedgerId: string;
   maxTurns: 4; maxOutputTokens: 32768; maxTotalOutputTokens: 32768; maxInputBytes: number;
@@ -44,8 +45,12 @@ export function readNativeImageReviewCheckpoint(result: unknown): NativeImageRev
   if (!record(value)) return fail();
   if (value.mode === 'agent-native') {
     const fields = [...imageIdentityKeys, 'mode', 'state', 'preparedAt', 'deadlineAt', 'executionAttempt', 'runtimeId', 'skillCatalogueId',
-      'provider', 'model', 'reservationLedgerId', 'maxTurns', 'maxOutputTokens', 'maxTotalOutputTokens', 'maxInputBytes'];
+      'provider', 'model', 'reservationLedgerId', 'maxTurns', 'maxOutputTokens', 'maxTotalOutputTokens', 'maxInputBytes',
+      ...(Object.hasOwn(value, 'imageResultPolicy') ? ['imageResultPolicy'] : [])];
     if (!['prepared', 'completed'].includes(String(value.state)) || !exact(value, [...fields, ...(value.state === 'completed' ? ['review'] : [])])
+      || Object.hasOwn(value, 'imageResultPolicy') && value.imageResultPolicy !== 'image-review-tool-final-v1'
+      || value.imageResultPolicy !== (record(result.nativeAgentExecution) ? result.nativeAgentExecution.imageResultPolicy : undefined)
+      || value.imageResultPolicy !== undefined && (!record(result.nativeAgentExecution) || result.nativeAgentExecution.profile !== 'image-review')
       || ![value.requestId, value.runtimeId, value.skillCatalogueId, value.reservationLedgerId].every(text)
       || typeof value.parentIdentity !== 'string' || !value.parentIdentity
       || ![value.contentHash, value.sourceEvidenceIdentity].every(hash) || !nativeImageReviewProvider(value.provider, value.model)
@@ -85,9 +90,11 @@ export function nativeImageReviewMatches(checkpoint: NativeImageReviewCheckpoint
     const execution = readNativeImageAgentExecution(owningTaskResult);
     const cp = execution?.checkpoint;
     const answer = record(review) ? review : undefined;
-    if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || !answer
+    const responseHash = execution?.imageResultPolicy ? cp?.validatedFinal?.responseHash : cp?.responseHash;
+    if (!cp || cp.state !== 'completed' || !responseHash || !answer
+      || !execution?.imageResultPolicy && (cp.finishReason !== 'stop' || cp.hasToolCalls)
       || ['provider', 'model', 'promptHash'].some(key => answer[key] !== cp.target[key as keyof typeof cp.target])
-      || answer.responseHash !== cp.responseHash) return false;
+      || answer.responseHash !== responseHash) return false;
   }
   return checkpoint?.state === 'completed'
     && Object.entries(expected).every(([key, value]) => checkpoint[key as keyof ImageReviewIdentity] === value)
@@ -107,16 +114,25 @@ export function imageReviewHasNoSubmission(result: unknown): boolean {
 export function readNativeImageAgentExecution(result: unknown): NativeAgentExecution | undefined {
   if (!record(result) || !record(result.nativeAgentExecution) || result.nativeAgentExecution.profile !== 'image-review') return undefined;
   const marker = result.nativeAgentExecution;
-  if (!exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : [])])
+  if (!exact(marker, ['kind', 'profile', 'runtimeId', 'skillCatalogueId', 'model', ...(Object.hasOwn(marker, 'checkpoint') ? ['checkpoint'] : []),
+    ...(Object.hasOwn(marker, 'imageResultPolicy') ? ['imageResultPolicy'] : [])])
+    || Object.hasOwn(marker, 'imageResultPolicy') && marker.imageResultPolicy !== 'image-review-tool-final-v1'
     || marker.kind !== 'hermes-agent' || ![marker.runtimeId, marker.skillCatalogueId, marker.model].every(text)) return fail();
   const envelope = readNativeImageReviewCheckpoint(result);
   if (!envelope || (envelope.mode === 'model-native' ? envelope.state !== 'not_started' || marker.checkpoint !== undefined
-    : marker.runtimeId !== envelope.runtimeId || marker.skillCatalogueId !== envelope.skillCatalogueId || marker.model !== envelope.model)) return fail();
+    : marker.runtimeId !== envelope.runtimeId || marker.skillCatalogueId !== envelope.skillCatalogueId || marker.model !== envelope.model
+      || marker.imageResultPolicy !== envelope.imageResultPolicy)) return fail();
   if (marker.checkpoint !== undefined) {
     const cp = marker.checkpoint;
+    const tagged = marker.imageResultPolicy === 'image-review-tool-final-v1';
+    const rawOnly = record(cp) && cp.received === 'raw-only';
     if (envelope.mode !== 'agent-native' || !record(cp) || !['started', 'completed'].includes(String(cp.state))
       || !exact(cp, ['taskId', 'objectKey', 'serializedSha256', 'size', 'sourceKind', 'imageIdentity', 'executionAttempt', 'turnCount', 'state', 'target',
-        ...(cp.state === 'completed' ? ['responseHash', 'finishReason', 'hasToolCalls'] : [])])
+        ...(tagged ? ['imageResultPolicy'] : []), ...(Object.hasOwn(cp, 'received') ? ['received'] : []),
+        ...(Object.hasOwn(cp, 'validatedFinal') ? ['validatedFinal'] : []),
+        ...(cp.state === 'completed' && !rawOnly ? ['responseHash', 'finishReason', 'hasToolCalls'] : [])])
+      || cp.imageResultPolicy !== marker.imageResultPolicy
+      || Object.hasOwn(cp, 'received') && (!tagged || cp.state !== 'completed' || !['decoded', 'raw-only'].includes(String(cp.received)))
       || cp.taskId !== envelope.requestId || cp.sourceKind !== 'illustration-image' || !record(cp.imageIdentity)
       || !exact(cp.imageIdentity, imageIdentityKeys) || imageIdentityKeys.some(key => (cp.imageIdentity as Record<string, unknown>)[key] !== envelope[key])
       || !hash(cp.serializedSha256) || cp.objectKey !== `derived/native-agent/${cp.serializedSha256}.json`
@@ -124,8 +140,17 @@ export function readNativeImageAgentExecution(result: unknown): NativeAgentExecu
       || cp.executionAttempt !== envelope.executionAttempt || !Number.isSafeInteger(cp.turnCount) || Number(cp.turnCount) < 1 || Number(cp.turnCount) > envelope.maxTurns
       || !record(cp.target) || !exact(cp.target, ['provider', 'model', 'promptHash']) || !hash(cp.target.promptHash)
       || cp.target.provider !== envelope.provider || cp.target.model !== envelope.model
-      || (cp.state === 'completed' && (!hash(cp.responseHash) || typeof cp.hasToolCalls !== 'boolean'
+      || (cp.state === 'completed' && !rawOnly && (!hash(cp.responseHash) || typeof cp.hasToolCalls !== 'boolean'
         || !['stop', 'length', 'tool_calls', 'other', 'unknown'].includes(String(cp.finishReason))))) return fail();
+    if (Object.hasOwn(cp, 'validatedFinal')) {
+      const final = cp.validatedFinal;
+      if (!tagged || cp.state !== 'completed' || cp.received !== 'decoded' || cp.finishReason !== 'other' || cp.hasToolCalls !== true
+        || !record(final) || !exact(final, ['policy', 'rawCheckpoint', 'turnOrdinal', 'resultToolCallId', 'responseHash'])
+        || final.policy !== marker.imageResultPolicy || !hash(final.rawCheckpoint) || final.rawCheckpoint === cp.serializedSha256
+        || final.turnOrdinal !== Number(cp.turnCount) - 1
+        || !text(final.resultToolCallId)
+        || !hash(final.responseHash)) return fail();
+    }
   }
   return structuredClone(marker) as unknown as NativeAgentExecution;
 }
@@ -158,6 +183,7 @@ export async function prepareAgentNativeImageReview(tx: Pick<Prisma.TransactionC
     || marker.runtimeId !== input.runtime.runtimeId || marker.skillCatalogueId !== input.runtime.skillCatalogueId) return fail();
   const preparedAt = Date.now();
   const next: AgentNativeImageReviewPrepared = { mode: 'agent-native', state: 'prepared', ...input.identity,
+    ...(marker.imageResultPolicy ? { imageResultPolicy: marker.imageResultPolicy } : {}),
     preparedAt, deadlineAt: preparedAt + 300000, executionAttempt: input.executionAttempt,
     runtimeId: marker.runtimeId, skillCatalogueId: marker.skillCatalogueId, ...input.target, reservationLedgerId,
     maxTurns: 4, maxOutputTokens: 32768, maxTotalOutputTokens: 32768, maxInputBytes: input.maxInputBytes };
@@ -195,11 +221,13 @@ export async function completeNativeImageReview(tx: Pick<Prisma.TransactionClien
   if (checkpoint?.mode === 'agent-native') {
     const marker = readNativeImageAgentExecution(task?.result);
     const cp = marker?.checkpoint as NativeAgentImageCheckpointReference | undefined;
+    const responseHash = marker?.imageResultPolicy ? cp?.validatedFinal?.responseHash : cp?.responseHash;
     if (!task || task.deletedAt || task.status !== 'running' || task.executionAttempt !== input.executionAttempt || checkpoint.state !== 'prepared'
-      || !cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+      || !cp || cp.state !== 'completed' || !responseHash
+      || !marker?.imageResultPolicy && (cp.finishReason !== 'stop' || cp.hasToolCalls)
       || input.review.requestId !== task.id || imageIdentityKeys.some(key => input.review[key] !== checkpoint[key])
       || ['provider', 'model', 'promptHash'].some(key => input.review[key as keyof GeneratedImageReview] !== cp.target[key as keyof typeof cp.target])
-      || input.review.responseHash !== cp.responseHash) return fail();
+      || input.review.responseHash !== responseHash) return fail();
     const next: AgentNativeImageReviewCompleted = { ...checkpoint, state: 'completed', review: input.review };
     const result = { ...task.result as Record<string, unknown>, nativeImageReview: next };
     readNativeImageReviewCheckpoint(result);

@@ -3,7 +3,7 @@ import { chmod, mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { nativeAgentSdkRequest } from '@openscience/ai-gateway';
-import { NativeAgentSessionError, type createNativeAgentSession, type NativeAgentSessionStore } from './session';
+import { NativeAgentSessionError, nativeImageReviewFinal, type createNativeAgentSession, type NativeAgentSessionStore } from './session';
 
 type Config = { taskId: string; runtimeId: string; skillCatalogueId: string; model: string;
   goal: string; instructions: string; maxTurns: number; maxOutputTokens: number;
@@ -79,7 +79,8 @@ export async function runHostedNativeTask(input: {
       if (req.url === '/v1/chat/completions') {
         await validateSourceHistory(value);
         const response = await input.session.complete(value);
-        slots = (response.choices[0]!.message.tool_calls ?? []).map(call => ({ id: call.id, name: call.function.name, sequence: toolSequence++,
+        const message = response.choices[0]!.message;
+        slots = ('tool_calls' in message ? message.tool_calls ?? [] : []).map(call => ({ id: call.id, name: call.function.name, sequence: toolSequence++,
           args: JSON.parse(call.function.arguments), authorized: false, called: false }));
         return respond(res, 200, response);
       }
@@ -114,6 +115,15 @@ export async function runHostedNativeTask(input: {
       if (req.url === '/task/finish') {
         if (value.status === 'completed' && typeof value.finalResponse === 'string') {
           const state = await input.store.read(); const last = state?.turns.at(-1);
+          if (state?.binding.sourceKind === 'illustration-image'
+            && state.binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1') {
+            const final = nativeImageReviewFinal(state);
+            if (!state.validatedFinal || state.binding.taskId !== input.config.taskId
+              || state.binding.model !== input.config.model || last?.target.model !== input.config.model
+              || final.text !== value.finalResponse || slots.length) blocked();
+            settled = true; respond(res, 200, { received: true });
+            return resolve({ finalResponse: final.text, observedPassageIds: input.paper.observedPassageIds });
+          }
           // Native run_conversation trims its returned presentation text. Retain the original paid bytes.
           if (!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || !last.response.text.trim()
             || last.response.text.trim() !== value.finalResponse

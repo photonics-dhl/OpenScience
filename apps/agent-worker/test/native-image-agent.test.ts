@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiGateway, AnthropicCompatProvider, type ScienceReviewInput } from '@openscience/ai-gateway';
 import type { AgentNativeImageReviewPrepared, NativeAgentImageCheckpointReference } from '@openscience/domain';
-import { createNativeAgentSession, type NativeAgentSessionState } from '../src/native-agent/session';
+import { createNativeAgentSession, finalizeNativeImageReviewState, nativeImageReviewFinal,
+  type NativeAgentSessionState } from '../src/native-agent/session';
 import { NATIVE_IMAGE_REVIEW_TOOLS, runNativeImageReviewTask, validateNativeImageReviewHistory } from '../src/native-agent/illustration-task';
 import { runHostedNativeTask } from '../src/native-agent/host-task';
 
@@ -19,12 +20,14 @@ const tools = [{ name: 'skills_list', description: 'List methods.', parameters: 
   { name: 'skill_view', description: 'Read a method.', parameters: { type: 'object', properties: {} } }, ...NATIVE_IMAGE_REVIEW_TOOLS];
 
 async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean; firstOutput?: number; firstStatus?: 529;
-  doubleView?: boolean; toolsAfterView?: boolean; skillName?: string; skillSuccess?: boolean; runtimeId?: string } = {}) {
+  doubleView?: boolean; toolsAfterView?: boolean; skillName?: string; skillSuccess?: boolean; runtimeId?: string;
+  toolFinal?: boolean; terminalContent?: unknown[]; terminalStop?: string; terminalWire?: string } = {}) {
   const preparedAt = Date.now();
   const envelope: AgentNativeImageReviewPrepared = { mode: 'agent-native', state: 'prepared', preparedAt, deadlineAt: preparedAt + 300000,
     requestId: taskId, contentHash: sha(pixels), sourceEvidenceIdentity: 'b'.repeat(64), parentIdentity: 'approved-parent', executionAttempt: 1,
     runtimeId: options.runtimeId ?? 'installed', skillCatalogueId: 'catalogue', provider: 'minimax-key-1-model-1', model: 'MiniMax-M3', reservationLedgerId: 'original-task-charge',
-    maxTurns: 4, maxOutputTokens: 32768, maxTotalOutputTokens: 32768, maxInputBytes: 64000000 };
+    maxTurns: 4, maxOutputTokens: 32768, maxTotalOutputTokens: 32768, maxInputBytes: 64000000,
+    ...(options.toolFinal ? { imageResultPolicy: 'image-review-tool-final-v1' as const } : {}) };
   const request: ScienceReviewInput = { requestId: taskId, prompt: 'Check the approved direction against the source.',
     authorizationContext: { taskId, actorId: 'actor', workspaceId: 'ws' },
     illustrationContext: { executionAttempt: 1, claimContent: 'same-claims', baseIdentity: envelope.parentIdentity, imageReviewMode: 'agent-native' },
@@ -36,12 +39,15 @@ async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean;
   const fetcher = vi.fn(async (_url: string, _init: RequestInit) => {
     void _url; void _init;
     if (options.firstStatus && fetcher.mock.calls.length === 1) return new Response('overloaded', { status: options.firstStatus });
+    if (options.terminalWire !== undefined && fetcher.mock.calls.length > 1) return new Response(options.terminalWire, { status: 200 });
     return new Response(JSON.stringify({ model: envelope.model, content: fetcher.mock.calls.length === 1
       ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: options.skillName ?? 'openscience-source-review' } },
         { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} },
         ...(options.doubleView ? [{ type: 'tool_use', id: 'view-2', name: 'paper_image_view', input: {} }] : [])]
       : options.toolsAfterView ? [{ type: 'tool_use', id: 'skill-2', name: 'skill_view', input: { name: 'openscience-source-review' } }]
-        : [{ type: 'text', text: answer }], stop_reason: fetcher.mock.calls.length === 1 || options.toolsAfterView ? 'tool_use' : 'end_turn',
+        : options.terminalContent ?? (options.toolFinal ? [{ type: 'tool_use', id: 'result-1', name: 'image_review_result',
+          input: JSON.parse(answer) }] : [{ type: 'text', text: answer }]),
+      stop_reason: fetcher.mock.calls.length === 1 || options.toolsAfterView ? 'tool_use' : options.terminalStop ?? (options.toolFinal ? 'tool_use' : 'end_turn'),
       usage: { input_tokens: 20, output_tokens: fetcher.mock.calls.length === 1 ? options.firstOutput ?? 20 : 8 } }));
   });
   const gateway = new AiGateway({ providers: [new AnthropicCompatProvider(envelope.provider,
@@ -54,6 +60,7 @@ async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean;
   const memoryStore = { read: async () => state,
     compareAndSet: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
     complete: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
+    finalize: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
     publish: async <T>(_state: unknown, submit: () => Promise<T>) => submit() };
   const imageIdentity = { requestId: taskId, contentHash: envelope.contentHash,
     sourceEvidenceIdentity: envelope.sourceEvidenceIdentity, parentIdentity: envelope.parentIdentity };
@@ -76,7 +83,8 @@ async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean;
   const persist = (next: NativeAgentSessionState) => {
     state = next; stored = Buffer.from(JSON.stringify(next)); const last = next.turns.at(-1)!;
     row.result.nativeAgentExecution.checkpoint = { taskId, objectKey: `derived/native-agent/${sha(stored)}.json`, serializedSha256: sha(stored), size: stored.length,
-      sourceKind: 'illustration-image', imageIdentity, executionAttempt: 1, turnCount: next.turns.length, state: last.state, target: last.target,
+      sourceKind: 'illustration-image', imageIdentity, executionAttempt: 1, turnCount: next.turns.length,
+      state: last.state === 'received' ? 'completed' : last.state, target: last.target,
       ...(last.state === 'completed' ? { responseHash: sha(last.response.text), finishReason: last.response.finishReason,
         hasToolCalls: Boolean(last.response.toolCalls?.length) } : {}) };
   };
@@ -94,6 +102,108 @@ async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean;
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('actual image Agent final checkpoint consumer', () => {
+  it('saves the raw tool-use receipt and projects a separate JSON final without executing the result tool', async () => {
+    const f = await fixture({ toolFinal: true, initialOnly: true });
+    const state = f.state;
+    const first = state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial tool receipt missing');
+    const firstMessage = { role: 'assistant', content: first.response.text, tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] };
+    const response = await f.session.complete(f.continuation(firstMessage));
+    expect(response.choices[0]!.finish_reason).toBe('stop');
+    expect(response.choices[0]!.message.content).toBe(f.answer);
+    expect(response.choices[0]!.message.tool_calls).toBeUndefined();
+    expect(response.choices[0]!.message).not.toHaveProperty('reasoning_details');
+    const saved = f.state as NativeAgentSessionState & { validatedFinal?: { text: string; responseHash: string } };
+    expect(saved.validatedFinal).toMatchObject({ text: f.answer, responseHash: sha(f.answer) });
+    expect(saved.turns.at(-1)).toMatchObject({ state: 'completed', received: { status: 200,
+      decoded: { finishReason: 'other', providerStopReason: 'tool_use', text: '' } } });
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+    await expect(f.session.complete(f.sdk)).rejects.toThrow(/terminal|final|consumed/);
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('preserves model-supplied quoted, multiline and padded strings in the structured result', async () => {
+    const decision = { decision: 'blocked', summary: '  Source "A"\\B\nneeds a qualifier.  ', repairInstruction: null };
+    const f = await fixture({ toolFinal: true, initialOnly: true,
+      terminalContent: [{ type: 'tool_use', id: 'result-quoted', name: 'image_review_result', input: decision }] });
+    const first = f.state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial receipt missing');
+    const response = await f.session.complete(f.continuation({ role: 'assistant', content: first.response.text,
+      tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] }));
+    expect(response.choices[0]!.message.content).toBe(JSON.stringify(decision));
+    expect(JSON.parse(response.choices[0]!.message.content)).toEqual(decision);
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    ['wrong tool', [{ type: 'tool_use', id: 'r', name: 'unadvertised', input: {} }]],
+    ['duplicate tool', ['a', 'a'].map(id => ({ type: 'tool_use', id, name: 'image_review_result',
+      input: { decision: 'accepted', summary: 'Same.', repairInstruction: null } }))],
+    ['invalid accepted repair', [{ type: 'tool_use', id: 'r', name: 'image_review_result',
+      input: { decision: 'accepted', summary: 'Same.', repairInstruction: 'Change science.' } }]],
+    ['mixed text', [{ type: 'text', text: 'Also accept this.' }, { type: 'tool_use', id: 'r', name: 'image_review_result',
+      input: { decision: 'blocked', summary: 'Mismatch.', repairInstruction: null } }]],
+    ['missing result', [{ type: 'thinking', thinking: 'No conclusion.' }]],
+  ] as const)('durably retains %s and never continues or projects it', async (_name, terminalContent) => {
+    const f = await fixture({ toolFinal: true, initialOnly: true, terminalContent: [...terminalContent] });
+    const first = f.state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial receipt missing');
+    await expect(f.session.complete(f.continuation({ role: 'assistant', content: first.response.text,
+      tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] }))).rejects.toThrow();
+    expect(f.state.turns.at(-1)).toHaveProperty('received.body');
+    expect(JSON.parse((f.state.turns.at(-1) as { received: { body: string } }).received.body).content).toEqual(terminalContent);
+    expect(f.state).not.toHaveProperty('validatedFinal');
+    await expect(f.newSession().complete(f.sdk)).rejects.toThrow(/terminal/);
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('retains a definitely received undecodable body without fabricating a completion or repeating HTTP', async () => {
+    const f = await fixture({ toolFinal: true, initialOnly: true, terminalWire: '{invalid paid body' });
+    const first = f.state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial receipt missing');
+    await expect(f.session.complete(f.continuation({ role: 'assistant', content: first.response.text,
+      tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] }))).rejects.toThrow();
+    expect(f.state.turns.at(-1)).toMatchObject({ state: 'received', received: { status: 200, body: '{invalid paid body' } });
+    expect(f.state.turns.at(-1)).not.toHaveProperty('response');
+    await expect(finalizeNativeImageReviewState(f.store, f.state)).rejects.toThrow();
+    await expect(f.newSession().complete(f.sdk)).rejects.toThrow(/terminal/);
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('recovers a crash after raw receipt persistence by pure finalization only, even after the model deadline', async () => {
+    const f = await fixture({ toolFinal: true, initialOnly: true });
+    const finalize = vi.spyOn(f.store, 'finalize').mockRejectedValueOnce(new Error('finalization CAS conflict'));
+    const first = f.state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial receipt missing');
+    await expect(f.session.complete(f.continuation({ role: 'assistant', content: first.response.text,
+      tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] }))).rejects.toThrow('CAS conflict');
+    expect(f.state).not.toHaveProperty('validatedFinal');
+    vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);
+    const result = await finalizeNativeImageReviewState(f.store, f.state);
+    expect(result.validatedFinal?.text).toBe(f.answer);
+    expect(finalize).toHaveBeenCalledTimes(2);
+    expect(await finalizeNativeImageReviewState(f.store, result)).toEqual(result);
+    expect(finalize).toHaveBeenCalledTimes(2); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+  it.each(['body', 'message', 'target', 'policy', 'derived-text', 'derived-hash', 'raw-link'])('rejects changed %s in a saved derived final', async change => {
+    const f = await fixture({ toolFinal: true, initialOnly: true });
+    const first = f.state.turns[0];
+    if (first?.state !== 'completed') throw new Error('initial receipt missing');
+    await f.session.complete(f.continuation({ role: 'assistant', content: first.response.text,
+      tool_calls: first.response.toolCalls,
+      reasoning_details: [{ type: 'openscience-provider-content', provider_content: first.response.providerContent }] }));
+    const state = structuredClone(f.state); const last = state.turns.at(-1)!;
+    if (last.state !== 'completed' || !last.received || !state.validatedFinal) throw new Error('final receipt missing');
+    if (change === 'body') last.received.body += ' ';
+    if (change === 'message') last.request.messages[0]!.content += ' ';
+    if (change === 'target') last.target.promptHash = 'f'.repeat(64);
+    if (change === 'policy') last.imageResultPolicy = 'invented' as never;
+    if (change === 'derived-text') state.validatedFinal.text += ' ';
+    if (change === 'derived-hash') state.validatedFinal.responseHash = 'f'.repeat(64);
+    if (change === 'raw-link') state.validatedFinal.rawCheckpoint = 'f'.repeat(64);
+    expect(() => nativeImageReviewFinal(state)).toThrow(); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
   it('materializes a paid final after the original deadline and reclaimed lease without a Host or provider', async () => {
     const f = await fixture(); const calls = f.fetcher.mock.calls.length;
     vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);

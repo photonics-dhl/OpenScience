@@ -176,7 +176,7 @@ function isRetryableSourceSearchIndex(
 /** Known final CP recovery consumes saved bytes only; it never restarts the Agent conversation. */
 function canRecoverAgentNativeImageFinal(task: AgentTaskRetrySnapshot): boolean {
   const envelope = readNativeImageReviewCheckpoint(task.result);
-  const cp = readNativeAgentExecution(task.result)?.checkpoint;
+  const execution = readNativeAgentExecution(task.result), cp = execution?.checkpoint;
   const error = task.error ?? '';
   const expiredAfterFinal = error === '[blocked] Native Agent original deadline expired'
     || error === '[blocked] Native Agent original request deadline expired';
@@ -186,7 +186,10 @@ function canRecoverAgentNativeImageFinal(task: AgentTaskRetrySnapshot): boolean 
     || /^(?:Expected|Unexpected token|Unterminated string|Bad (?:control|escaped) character).*(?:in JSON|not valid JSON)/u.test(error);
   return task.kind === 'presentation.generate' && task.status === 'failed' && task.retryCount === 0
     && envelope?.mode === 'agent-native' && envelope.requestId === task.id && cp?.state === 'completed'
-    && cp.finishReason === 'stop' && cp.hasToolCalls === false
+    && (execution?.imageResultPolicy === 'image-review-tool-final-v1'
+      ? cp.executionAttempt <= task.executionAttempt && cp.received === 'decoded' && cp.finishReason === 'other' && cp.hasToolCalls === true
+        && (Boolean(cp.validatedFinal) || !error.startsWith('[blocked]'))
+      : cp.finishReason === 'stop' && cp.hasToolCalls === false)
     && !invalidResponse && (!error.startsWith('[blocked]') || expiredAfterFinal);
 }
 
@@ -658,7 +661,7 @@ async function persistAgentTaskCoreInTransaction(
         : inheritedContract !== undefined
           ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', inheritedContract)
           : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
-      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
+      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', 'image-review-tool-final-v1') : undefined;
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
     throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
