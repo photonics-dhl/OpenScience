@@ -673,7 +673,7 @@ jobs:
           test "$red_status" -ne 0
           # Vitest prefixes stderr with ANSI SGR resets even when redirected.
           # Strip formatting only; still require the exact observed-error marker.
-          sed -E 's/\x1B\[[0-9;]*m//g' tmp/first-image-grant/red.log | grep -Fxq 'FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN'
+          sed -E 's/\x1B\[[0-9;]*m//g' tmp/first-image-grant/red.log | grep -Fx 'FIRST_IMAGE_GRANT_OLD_CHECK_REJECTED_TWO_TASK_RUN' > /dev/null
       - name: Verify exact grants, invalid values and safe rollback
         shell: bash
         run: |

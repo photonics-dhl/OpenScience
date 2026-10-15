@@ -61,8 +61,10 @@ export function fixture() {
     const row = db.agentTasks.find(task => task.id === args.where?.id);
     const result = args.where?.result as { equals?: unknown } | undefined;
     const payload = args.where?.payload as { equals?: unknown } | undefined;
-    if (payload && !isDeepStrictEqual(row?.payload, payload.equals)
-      || result && !isDeepStrictEqual(row?.result ?? Prisma.DbNull, result.equals)) return { count: 0 };
+    const resultMatches = !result || (result.equals === Prisma.AnyNull
+      ? row?.result == null || row.result === Prisma.DbNull || row.result === Prisma.JsonNull
+      : isDeepStrictEqual(row?.result ?? Prisma.DbNull, result.equals));
+    if (!row || payload && !isDeepStrictEqual(row.payload, payload.equals) || !resultMatches) return { count: 0 };
     return updateTask(args);
   });
   const deps = { prisma, nativeAgentRuntime: { runtimeId: 'installed-hermes', skillCatalogueId: 'science-skills', model: 'MiniMax-M3' }, nativeSceneImageEnabled: true, sceneImageEnabled: true, redis: { lpush: vi.fn(async () => 1) },
