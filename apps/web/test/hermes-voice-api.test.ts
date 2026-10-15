@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTaskView } from '../lib/api';
-import { canReadReply, createVoiceReply, findVoiceSubmission, isVoiceReplyReady, mergeVoiceTranscript, readVoiceTranscript, selectReplyVoice, transcribeVoice, voiceTaskAudioUrl } from '../lib/hermes/voice-api';
+import { canReadReply, createVoiceReply, findVoiceSubmission, getVoiceCapabilities, isVoiceReplyReady, mergeVoiceTranscript, readVoiceTranscript, selectReplyVoice, transcribeVoice, voiceTaskAudioUrl } from '../lib/hermes/voice-api';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -9,6 +9,27 @@ const task: AgentTaskView = {
   retryCount: 0, canRetry: false, error: null, result: { operation: 'transcription', transcript: '调整研究摘要' },
   createdAt: '2026-10-15T00:00:00Z', updatedAt: '2026-10-15T00:00:00Z',
 };
+
+describe('optional voice capability read boundary', () => {
+  const unavailable = { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] };
+  const voice = { id: 'returned-voice', name: 'Returned voice', languages: ['zh', 'en'], creditsPerRequest: 1 };
+
+  it.each([
+    {}, null, { ...unavailable, available: 'true' }, { ...unavailable, voices: null },
+    { ...unavailable, voices: [null] }, { ...unavailable, voices: [{ ...voice, languages: 'zh' }] },
+    { ...unavailable, voices: [{ ...voice, id: '' }] }, { ...unavailable, voices: [{ ...voice, creditsPerRequest: 4 }] },
+    { ...unavailable, maxRecordingSeconds: 61 }, { ...unavailable, transcriptionCredits: 2 },
+    { ...unavailable, replyMaxUtf8Bytes: 1001 },
+  ])('rejects malformed successful capability data before it reaches voice rendering: %j', async payload => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(payload)));
+    await expect(getVoiceCapabilities()).rejects.toThrow();
+  });
+
+  it.each([unavailable, { ...unavailable, available: true, voices: [voice] }])('accepts the unchanged unavailable and standard server contracts: %j', async payload => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(payload)));
+    await expect(getVoiceCapabilities()).resolves.toEqual(payload);
+  });
+});
 
 describe('Hermes voice result boundaries', () => {
   it('reads only completed transcription tasks', () => {

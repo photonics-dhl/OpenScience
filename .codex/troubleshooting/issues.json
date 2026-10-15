@@ -493,7 +493,26 @@
         "apps/web/test/e2e/hermes-workspace-stage.spec.ts"
       ],
       "prevention": "Measure optional UI in restored-result and constrained-window states. Hide unavailable admission noise while preserving already paid work; do not change adaptive layout thresholds or weaken accessibility and continuity assertions to accommodate it."
+    },
+    {
+      "id": "issue-024",
+      "title": "Malformed optional voice capabilities crashed the normal Hermes text surface",
+      "date": "2026-10-16",
+      "status": "resolved",
+      "tags": ["troubleshooting/ci", "troubleshooting/ui"],
+      "description": "The media browser group reported nine Guide and managed-illustration failures. Both representative cases reproduce on candidate9ddbbe5c with HTTP200 {} from the capabilities read, followed by an Application error and missing normal text controls.",
+      "root_cause": "Two old permissive browser fixtures return {} for undeclared reads. The optional voice client accepted that successful payload through a TypeScript cast, then selectReplyVoice called voices.find before visibility checks. Guide and presentation implementations are unchanged from77b1c157; their missing controls are consequences of the same renderer crash, not separate intake or image-generation defects.",
+      "solution": "Validate unknown capability data at the existing HTTP read boundary and let malformed responses enter the existing unavailable path. Check usable voice shapes and the existing Domain literal limits matching the recorder and displayed quote; do not invent fallback voices or prices. Explicitly serve only the query-free GET capabilities request with the real unavailable shape in both old fixtures. Preserve original write, source, rights and cost assertions, plus existing paid-task recovery and playback.",
+      "verification": "Representative cases RED2 became GREEN2. Eleven invalid-payload unit cases first failed, then all21 voice-api tests and56 nearby unit tests passed; lint and TypeScript passed. The affected browser run passed56 existing cases (Guide30, managed illustration13, voice13). Two new malformed-response cases first stopped at an unnecessary exact read-count assertion: the legitimate read was aborted and replayed. Their final fixture-only delta passed2/2 after waiting for a read instead of exactly one; actual text send, zero voice POST, zero microphone request and no page-error assertions remain intact. Independent High found no material product issue and confirmed the literal validation checks the existing HTTP contract. Final exact-head integration conclusions remain in PR116 checks; no real provider, microphone or production operation has occurred.",
+      "files": [
+        "apps/web/lib/hermes/voice-api.ts",
+        "apps/web/test/hermes-voice-api.test.ts",
+        "apps/web/test/e2e/hermes-voice-dialogue.spec.ts",
+        "apps/web/test/e2e/guide-workspace.spec.ts",
+        "apps/web/test/e2e/managed-illustration-style.spec.ts"
+      ],
+      "prevention": "An optional HTTP200 response remains untrusted runtime data. A malformed optional capability must leave normal text operations usable; test that behavior without freezing incidental read counts or weakening paid-request assertions."
     }
   ],
-  "last_updated": "2026-10-15"
+  "last_updated": "2026-10-16"
 }

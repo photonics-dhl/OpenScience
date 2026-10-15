@@ -9,8 +9,22 @@ export interface HermesVoiceCapabilities {
 }
 
 const base = '/api/agent/voice';
-export function getVoiceCapabilities(signal?: AbortSignal): Promise<HermesVoiceCapabilities> {
-  return apiRequest(`${base}/capabilities`, { cache: 'no-store', signal });
+export async function getVoiceCapabilities(signal?: AbortSignal): Promise<HermesVoiceCapabilities> {
+  const value = await apiRequest<unknown>(`${base}/capabilities`, { cache: 'no-store', signal });
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Voice capabilities are unavailable');
+  const candidate = value as Record<string, unknown>;
+  // The UI quotes these fixed server limits and standard prices before admission.
+  if (typeof candidate.available !== 'boolean' || candidate.maxRecordingSeconds !== 60
+    || candidate.transcriptionCredits !== 1 || candidate.replyMaxUtf8Bytes !== 1000
+    || !Array.isArray(candidate.voices) || !candidate.voices.every(voice => {
+      if (!voice || typeof voice !== 'object' || Array.isArray(voice)) return false;
+      const preset = voice as Record<string, unknown>;
+      return typeof preset.id === 'string' && Boolean(preset.id.trim())
+        && typeof preset.name === 'string' && Boolean(preset.name.trim()) && preset.creditsPerRequest === 1
+        && Array.isArray(preset.languages) && preset.languages.length > 0
+        && preset.languages.every(language => typeof language === 'string' && Boolean(language.trim()));
+    })) throw new Error('Voice capabilities are unavailable');
+  return value as HermesVoiceCapabilities;
 }
 export function transcribeVoice(sessionId: string, file: Blob, idempotencyKey: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   const body = new FormData(); body.set('sessionId', sessionId); body.set('file', file, 'hermes-recording.wav');

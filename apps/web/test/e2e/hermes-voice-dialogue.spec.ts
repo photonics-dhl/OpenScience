@@ -10,8 +10,8 @@ const makeTask = (id: string, kind: string, result: Record<string, unknown> | nu
   error: null, createdAt: '2026-10-15T00:00:00Z', updatedAt: '2026-10-15T00:00:00Z',
 });
 
-async function fixture(page: Page, options: { unknown?: boolean; delayedPermission?: boolean; summary?: string; holdTranscript?: boolean; holdSession?: boolean; failFirstSession?: boolean } = {}) {
-  const observed = { sessions: 0, sessionKeys: [] as string[], transcriptions: 0, replies: 0, guideBodies: [] as unknown[], queryKeys: [] as string[], postKeys: [] as string[], audioGets: 0, unmocked: [] as string[] };
+async function fixture(page: Page, options: { unknown?: boolean; delayedPermission?: boolean; summary?: string; holdTranscript?: boolean; holdSession?: boolean; failFirstSession?: boolean; malformedCapabilities?: 'empty' | 'null' } = {}) {
+  const observed = { sessions: 0, sessionKeys: [] as string[], capabilityReads: 0, transcriptions: 0, replies: 0, guideBodies: [] as unknown[], queryKeys: [] as string[], postKeys: [] as string[], audioGets: 0, unmocked: [] as string[] };
   let recognized = false;
   let userId = 'voice-user';
   let releaseTranscript: (() => void) | undefined;
@@ -58,6 +58,8 @@ async function fixture(page: Page, options: { unknown?: boolean; delayedPermissi
     if (path === '/api/agent/tasks' && request.method() === 'GET') return json({ tasks: [] });
     if (path === '/api/csrf-token') return json({ csrfToken: 'voice-csrf' });
     if (path === '/api/agent/voice/capabilities') {
+      observed.capabilityReads += 1;
+      if (options.malformedCapabilities) return json(options.malformedCapabilities === 'null' ? null : {});
       if (capabilitiesFail) return route.abort('timedout');
       return json({ available: capabilitiesAvailable, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000,
         voices: capabilitiesAvailable ? [{ id: 'returned-en-voice', name: 'English', languages: ['en-US'], creditsPerRequest: 1 }] : [] });
@@ -92,7 +94,10 @@ async function fixture(page: Page, options: { unknown?: boolean; delayedPermissi
   });
   await page.goto('/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Open conversation', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Voice input', exact: true })).toBeEnabled();
+  if (options.malformedCapabilities) {
+    await expect.poll(() => observed.capabilityReads).toBeGreaterThan(0);
+    await expect(page.getByText('Voice is unavailable. You can keep typing.', { exact: true })).toBeVisible();
+  } else await expect(page.getByRole('button', { name: 'Voice input', exact: true })).toBeEnabled();
   return { observed, recognize: () => { recognized = true; }, waiting: () => waitingForTranscript,
     disableVoice: () => { capabilitiesAvailable = false; }, failCapabilities: () => { capabilitiesFail = true; },
     release: () => releaseTranscript?.(), releaseSession: () => releaseSession?.(), changeAccount: async () => {
@@ -301,6 +306,23 @@ test('an existing private reply remains playable after the capability read fails
   expect((await microphoneState(page)).plays).toBe(1); expect(observed.replies).toBe(1);
   expect(observed.unmocked).toEqual([]);
 });
+
+for (const malformedCapabilities of ['empty', 'null'] as const) {
+  test(`a malformed HTTP200 ${malformedCapabilities} capability response leaves normal text usable`, async ({ page }) => {
+    const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+    const { observed } = await fixture(page, { malformedCapabilities });
+    await expect(page.getByRole('button', { name: 'Voice input', exact: true })).toHaveCount(0);
+    const composer = page.locator('#hermes-guide-goal');
+    await expect(composer).toBeEditable();
+    await composer.fill('Continue with my text message');
+    await page.getByRole('button', { name: /^Send/ }).click();
+    await expect(page.getByText('This is the optical result.', { exact: true })).toBeVisible();
+    expect(observed.guideBodies).toMatchObject([{ kind: 'workspace.guide', payload: { goal: 'Continue with my text message' } }]);
+    expect(observed.transcriptions).toBe(0); expect(observed.replies).toBe(0);
+    expect((await microphoneState(page)).requests).toBe(0);
+    expect(errors).toEqual([]); expect(observed.unmocked).toEqual([]);
+  });
+}
 
 test('a long Chinese reply remains readable and cannot be silently truncated into speech', async ({ page }) => {
   const { observed } = await fixture(page, { summary: '研'.repeat(334) });
