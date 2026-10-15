@@ -794,9 +794,21 @@ test.describe('short desktop Hermes conversation', () => {
     const selection = await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; });
     const pane = guide(page).locator('.hermes-conversation-transcript');
     await pane.hover();
-    await page.mouse.wheel(0, -500);
-    await expect.poll(() => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeGreaterThanOrEqual(64);
-    const reading = await pane.evaluate((node) => {
+    const observeWheel = () => pane.evaluateHandle((node) => {
+      const preWheelTop = node.scrollTop, target = Math.max(0, preWheelTop - 500);
+      const events: Array<{ top: number; at: number }> = [];
+      const onScroll = () => events.push({ top: node.scrollTop, at: performance.now() });
+      node.addEventListener('scroll', onScroll);
+      const registeredAt = performance.now();
+      return {
+        snapshot: () => ({ preWheelTop, target, registeredAt, events, top: node.scrollTop, at: performance.now() }),
+        remove: () => node.removeEventListener('scroll', onScroll),
+      };
+    });
+    let wheel: Awaited<ReturnType<typeof observeWheel>> | null = null;
+    let wheelCleanupError: unknown;
+    const sampleWheel = () => wheel!.evaluate((observation) => observation.snapshot());
+    const captureReading = () => pane.evaluate((node) => {
       const bounds = node.getBoundingClientRect();
       const range = document.caretRangeFromPoint(bounds.left + 24, bounds.top + 8)!;
       if (range.startContainer.nodeType !== Node.TEXT_NODE || !node.contains(range.startContainer)) throw new Error('A visible research text anchor is required');
@@ -804,6 +816,7 @@ test.describe('short desktop Hermes conversation', () => {
       return { text: range.startContainer.textContent!, character: range.startOffset, offset: rect.top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
         at: performance.now(), paneTop: bounds.top, range: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height } };
     });
+    let reading: Awaited<ReturnType<typeof captureReading>>;
     const sampleReading = () => pane.evaluate((node, saved) => {
       const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
       let text: Node | null;
@@ -816,14 +829,30 @@ test.describe('short desktop Hermes conversation', () => {
       }
       throw new Error('The same research text must remain in the conversation');
     }, reading);
-    const diagnostic = { before: reading, beforeResize: null as Awaited<ReturnType<typeof sampleReading>> | null, modalReads: [] as Array<Awaited<ReturnType<typeof sampleReading>>>, selection,
-      timingLimit: 'The post-screenshot sample adds one read before resize; a pass alone does not resolve the original wheel ordering.' };
+    const diagnostic = { wheel: null as Awaited<ReturnType<typeof sampleWheel>> | null, wheelCompleted: null as Awaited<ReturnType<typeof sampleWheel>> | null,
+      wheelCleanupError: null as string | null, before: null as Awaited<ReturnType<typeof captureReading>> | null,
+      beforeResize: null as Awaited<ReturnType<typeof sampleReading>> | null, modalReads: [] as Array<Awaited<ReturnType<typeof sampleReading>>>, selection,
+      timingLimit: 'Wheel registration and polling add protocol reads; the post-screenshot sample adds one read before resize. This run cannot reconstruct the original failed wheel ordering.' };
     const textOffset = async () => {
       const sample = await sampleReading();
       diagnostic.modalReads.push(sample);
       return sample.offset;
     };
     try {
+      // Registration returns before sending the wheel; it does not await the scroll event.
+      wheel = await observeWheel();
+      diagnostic.wheel = await sampleWheel();
+      expect(diagnostic.wheel.preWheelTop, 'The reading-continuity wheel needs upward scrolling space').toBeGreaterThan(0);
+      await page.mouse.wheel(0, -500);
+      await expect.poll(async () => {
+        const observed = await sampleWheel();
+        diagnostic.wheel = observed;
+        return observed.events.some((event) => event.top < observed.preWheelTop && Math.abs(event.top - observed.target) <= 1)
+          && Math.abs(observed.top - observed.target) <= 1;
+      }).toBe(true);
+      diagnostic.wheelCompleted = diagnostic.wheel;
+      await expect.poll(() => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight)).toBeGreaterThanOrEqual(64);
+      diagnostic.before = reading = await captureReading();
       await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
       diagnostic.beforeResize = await sampleReading();
       await page.setViewportSize({ width: 1536, height: 681 });
@@ -834,9 +863,22 @@ test.describe('short desktop Hermes conversation', () => {
       // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
       await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
     } finally {
-      console.log('Conversation reading diagnostic:', JSON.stringify(diagnostic));
-      await test.info().attach('conversation-reading-diagnostic', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+      try {
+        if (wheel) diagnostic.wheel = await wheel.evaluate((observation) => { observation.remove(); return observation.snapshot(); });
+      } catch (error) {
+        wheelCleanupError = error;
+        diagnostic.wheelCleanupError = String(error);
+      } finally {
+        try { await wheel?.dispose(); } catch (error) {
+          wheelCleanupError ??= error;
+          diagnostic.wheelCleanupError ??= String(error);
+        } finally {
+          console.log('Conversation reading diagnostic:', JSON.stringify(diagnostic));
+          await test.info().attach('conversation-reading-diagnostic', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+        }
+      }
     }
+    if (wheelCleanupError) throw wheelCleanupError;
     const after = await pane.evaluate((node) => ({ scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }));
     const observations = { before: { ...reading, text: reading.text.slice(reading.character, reading.character + 64) }, after: { ...after, offset: await textOffset() }, selection };
     await test.info().attach('resized-conversation-reading', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
