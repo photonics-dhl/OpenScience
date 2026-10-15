@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { AiGateway } from '../src/gateway';
+import { AiGatewayError } from '../src/errors';
 import type { Provider } from '../src/provider';
 
 describe('bounded rejected response repair', () => {
+  it('keeps submission authority denial terminal instead of trying another provider or ordinal', async () => {
+    let submissions = 0; let attempts = 0;
+    const provider = (name: string): Provider => ({ name, model: name, complete: async () => {
+      submissions++; return { text: '{"ok":true}', model: name, usage: { inputTokens: 1, outputTokens: 1 } };
+    } });
+    const gateway = new AiGateway({ providers: [provider('first'), provider('second')] });
+    await expect(gateway.completeStructured((value): value is { ok: true } => Boolean(value), [], {
+      maxRetries: 2,
+      withProviderSubmission: async () => {
+        attempts++;
+        throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'claimed submission was revoked');
+      },
+    })).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(attempts).toBe(1); expect(submissions).toBe(0);
+  });
+
   it('binds each original or repair submission to the Gateway-owned ordinal', async () => {
     const ordinals: number[] = []; let calls = 0;
     const provider: Provider = { name: 'fixture', model: 'fixture', complete: async () => ({

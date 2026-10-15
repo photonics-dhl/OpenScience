@@ -10,6 +10,8 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { Prisma, type AgentTask } from '@prisma/client';
 import {
   AiGateway,
+  AiGatewayError,
+  type StructuredGenerationOptions,
   createConfiguredGateway,
   type GatewayImageSubmission,
   type GatewayIllustrationSubmission,
@@ -103,80 +105,79 @@ type SpoolSubmission = GatewayImageSubmission;
 type IllustrationSubmission = GatewayIllustrationSubmission;
 type NativeImageReviewSubmission = NonNullable<ConstructorParameters<typeof AiGateway>[0]['nativeImageReviewSubmission']>;
 
-/**
- * Re-read the live task immediately before a Worker-owned model call.  The
- * Domain stop CAS changes executionAttempt and stores the stable owned-stop
- * marker, so a queued/late callback cannot submit another generation after the
- * stop wins.  This is deliberately a read fence: an already invoked provider
- * request remains in flight and its receipt is handled by the existing
- * provider/native checkpoint path.
- */
-export async function assertWorkerExecutionCurrent(
-  prisma: Pick<AgentDeps['prisma'], 'agentTask'>,
-  execution: { taskId: string; executionAttempt: number },
-): Promise<void> {
-  const task = await prisma.agentTask.findUnique({
-    where: { id: execution.taskId },
-    select: { status: true, executionAttempt: true, deletedAt: true, error: true },
-  });
-  if (!task || task.deletedAt || task.status !== 'running' || task.executionAttempt !== execution.executionAttempt
-    || task.error === AGENT_TASK_OWNED_STOP_REASON) {
-    throw new Error('[blocked] worker execution was stopped or superseded');
-  }
+type OrdinaryStructuredKind = 'review.analyze' | 'visualization.plan' | 'workspace.guide' | 'presentation.figure-audit';
+type StructuredClaim = { id: string; executionAttempt: number; payload: Record<string, unknown> };
+
+/** Bind tests and internal adapters to the same original claim context as the poller. */
+export function runWithWorkerExecution<T>(execution: { taskId: string; executionAttempt: number }, run: () => Promise<T>): Promise<T> {
+  return spoolTaskExecution.run({ ...execution }, run);
 }
 
-/** Testable boundary used by handler adapters that run inside the poll lease. */
-export function runWithWorkerExecution<T>(
-  execution: { taskId: string; executionAttempt: number },
-  run: () => Promise<T>,
-): Promise<T> {
-  return spoolTaskExecution.run(execution, run);
-}
-
-/**
- * Bind ordinary structured/text/OCR calls to the current claimed task.  The
- * Gateway's own retry loop invokes beforeEachProviderCall before every provider
- * attempt; wrapping that hook here closes retries/fallbacks after an owned
- * stop without mutating a shared Gateway or leaking task state across lanes.
- */
-export function createTaskScopedGateway(gateway: AiGateway, prisma: WorkerDeps['prisma']): AiGateway {
-  const scoped = new Proxy(gateway, {
+/** Only the four unowned structured consumers use this adapter; Native/media retain their own owners. */
+export function createTaskScopedGateway(
+  gateway: AiGateway, prisma: WorkerDeps['prisma'], task: StructuredClaim, kind: OrdinaryStructuredKind,
+): AiGateway {
+  const denied = () => new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Worker structured submission lost its original claim');
+  if (!task || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(task.id)
+    || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt < 1
+    || !task.payload || typeof task.payload !== 'object' || Array.isArray(task.payload)
+    || !['review.analyze', 'visualization.plan', 'workspace.guide', 'presentation.figure-audit'].includes(kind)) throw denied();
+  const claim = { taskId: task.id, executionAttempt: task.executionAttempt, payload: structuredClone(task.payload) };
+  const requireClaim = () => {
+    const execution = spoolTaskExecution.getStore();
+    if (!execution || execution.taskId !== claim.taskId || execution.executionAttempt !== claim.executionAttempt) throw denied();
+  };
+  return new Proxy(gateway, {
     get(target, property, receiver) {
-      const value = Reflect.get(target, property, receiver);
-      if (typeof value !== 'function') return value;
-      if (property !== 'completeStructured' && property !== 'completeStructuredWithMetadata'
-        && property !== 'complete' && property !== 'ocr' && property !== 'reviewScientific'
-        && property !== 'nativeAgentComplete') return value.bind(target);
+      const method = Reflect.get(target, property, receiver);
+      if (typeof method !== 'function') return method;
+      if (property !== 'completeStructured' && property !== 'completeStructuredWithMetadata') return method.bind(target);
       return async (...args: unknown[]) => {
-        const execution = spoolTaskExecution.getStore();
-        if (!execution) return value.apply(target, args);
-        await assertWorkerExecutionCurrent(prisma, execution);
-        if (property === 'completeStructured' || property === 'completeStructuredWithMetadata') {
-          const options = (args[2] && typeof args[2] === 'object' ? args[2] : {}) as Record<string, unknown>;
-          const before = options.beforeEachProviderCall as (() => Promise<void>) | undefined;
-          const withSubmission = options.withProviderSubmission as ((ordinal: number, target: unknown, submit: () => Promise<unknown>) => Promise<unknown>) | undefined;
-          args[2] = {
-            ...options,
-            beforeEachProviderCall: async () => {
-              await assertWorkerExecutionCurrent(prisma, execution);
-              await before?.();
-              await assertWorkerExecutionCurrent(prisma, execution);
-            },
-            ...(withSubmission ? { withProviderSubmission: async (ordinal: number, target: unknown, submit: () => Promise<unknown>) => {
-              await assertWorkerExecutionCurrent(prisma, execution);
-              const result = await withSubmission(ordinal, target, async () => {
-                await assertWorkerExecutionCurrent(prisma, execution);
-                return submit();
-              });
-              return result;
-            } } : {}),
-          };
-        }
-        return value.apply(target, args);
+        requireClaim();
+        const raw = args[2];
+        if (raw !== undefined && (!raw || typeof raw !== 'object' || Array.isArray(raw))) throw denied();
+        const options = { ...(raw as StructuredGenerationOptions | undefined) };
+        if (options.withProviderSubmission !== undefined
+          || (options.beforeEachProviderCall !== undefined && typeof options.beforeEachProviderCall !== 'function')) throw denied();
+        const before = options.beforeEachProviderCall;
+        args[2] = {
+          ...options,
+          beforeEachProviderCall: async () => { requireClaim(); await before?.(); requireClaim(); },
+          withProviderSubmission: async (_ordinal, _target, submit) => {
+            requireClaim();
+            let sent: ReturnType<typeof submit> | undefined;
+            try {
+              await prisma.$transaction(async tx => {
+                await lockTrashReferences(tx);
+                const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM agent_tasks WHERE id = ${claim.taskId}::uuid FOR UPDATE`;
+                if (!Array.isArray(locked) || locked.length !== 1 || locked[0]?.id !== claim.taskId) throw denied();
+                const live = await tx.agentTask.findUnique({ where: { id: claim.taskId },
+                  include: { session: { include: { researchObject: true } } } });
+                const session = live?.session;
+                if (!live || live.id !== claim.taskId || live.kind !== kind || live.status !== 'running' || live.deletedAt !== null
+                  || live.executionAttempt !== claim.executionAttempt || live.error === AGENT_TASK_OWNED_STOP_REASON
+                  || !isDeepStrictEqual(live.payload ?? {}, claim.payload)
+                  || !session || session.id !== live.sessionId || !session.userId || session.status !== 'active' || session.deletedAt !== null
+                  || (session.researchObjectId === null
+                    ? kind === 'review.analyze' || kind === 'presentation.figure-audit' || session.researchObject !== null
+                    : !session.researchObject || session.researchObject.id !== session.researchObjectId || session.researchObject.deletedAt !== null)
+                  || (typeof claim.payload.researchObjectId === 'string' && claim.payload.researchObjectId !== session.researchObjectId)) throw denied();
+                requireClaim();
+                // Start under both locks; never hold this transaction for the model response.
+                sent = submit(); void sent.catch(() => undefined);
+              }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 10_000, timeout: 30_000 });
+            } catch {
+              // A read-only transaction failure after start cannot pay again or replace the original Promise.
+              if (!sent) throw denied();
+            }
+            if (!sent) throw denied();
+            return sent;
+          },
+        } satisfies StructuredGenerationOptions;
+        return method.apply(target, args);
       };
     },
   });
-  return scoped;
 }
 
 /** Called after the existing image/task/asset binder; missing audits grant no submission permission. */
@@ -530,10 +531,9 @@ export function createHandlers(
       return { echoed: true };
     },
     'sdf.extract': async (deps, task) => {
-      const taskGateway = createTaskScopedGateway(gateway, deps.prisma);
       const artifactId = typeof task.payload.artifactId === 'string' ? task.payload.artifactId : null;
       if (!artifactId) {
-        const result = await extractHandler(taskGateway, task);
+        const result = await extractHandler(gateway, task);
         await enqueueFigureAuditFromResult(deps, task, result);
         return result;
       }
@@ -917,7 +917,7 @@ export function createHandlers(
           const reviewer = nativeSourceCorrection ?? nativeReviewer; const bindingInput = nativeReviewerInput;
           if (!reviewer || (!nativeSourceCorrection && !bindingInput) || !isDeepStrictEqual(sourceMapRef, reviewer.sourceMapRef))
             throw new Error('[blocked] Native independent source binding is unavailable');
-          const result = await runNativeSourceReviewTask({ gateway: taskGateway, deps: { ...deps, storage: deps.storage! },
+          const result = await runNativeSourceReviewTask({ gateway, deps: { ...deps, storage: deps.storage! },
             task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
             sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, sourceAgentTaskId: reviewer.sourceAgentTaskId,
             authorCheckpointSha256: reviewer.authorCheckpointSha256, sourceResult: reviewer.sourceResult, inboxRoot: options.nativeAgentInboxRoot!,
@@ -937,7 +937,7 @@ export function createHandlers(
           await enqueueFigureAuditFromResult(deps, task, result); return result;
         }
         if (nativeReviewer) throw new Error('[blocked] Native reviewer cannot execute as its author');
-        const result = await runNativePaperTask({ gateway: taskGateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
+        const result = await runNativePaperTask({ gateway, deps: { ...deps, storage: deps.storage! }, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest?.result },
           sourceMap: parsed.sourceMap, sourceMapRef: sourceMapRef!, inboxRoot: options.nativeAgentInboxRoot!,
           authorize: async tx => {
             await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt });
@@ -952,7 +952,7 @@ export function createHandlers(
         });
         await enqueueFigureAuditFromResult(deps, task, result); return result;
       }
-      const extracted = await extractHandler(taskGateway, { payload: { manuscriptText } }, {
+      const extracted = await extractHandler(gateway, { payload: { manuscriptText } }, {
           sourceMap: parsed.sourceMap,
           previousResult: reusableExtractionResult,
           requireReusableSemanticStage,
@@ -988,17 +988,15 @@ export function createHandlers(
       await enqueueFigureAuditFromResult(deps, task, result);
       return result;
     },
-    'review.analyze': async (deps, task) => reviewAnalyzeHandler(createTaskScopedGateway(gateway, deps.prisma), deps, task, {
-      beforePersist: () => assertWorkerExecutionCurrent(deps.prisma, { taskId: task.id, executionAttempt: task.executionAttempt }),
-    }),
-    'visualization.plan': async (deps, task) => visualizationPlanHandler(createTaskScopedGateway(gateway, deps.prisma), task), // P1E-1
+    'review.analyze': async (deps, task) => reviewAnalyzeHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'review.analyze'), deps, task),
+    'visualization.plan': async (deps, task) => visualizationPlanHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'visualization.plan'), task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
       ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
         runtime: nativeAgentRuntimeFromEnv(process.env),
         semanticSearchFor: options.nativeSemanticSearch,
         renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
-    'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
-    'workspace.guide': async (deps, task) => workspaceGuideHandler(createTaskScopedGateway(gateway, deps.prisma), deps, task),
+    'presentation.figure-audit': async (deps, task) => createPresentationFigureAuditHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'presentation.figure-audit'))(deps, task),
+    'workspace.guide': async (deps, task) => workspaceGuideHandler(createTaskScopedGateway(gateway, deps.prisma, task, 'workspace.guide'), deps, task),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) => {
         const run = searchIndexTail.then(async () => options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task), operation => _deps.prisma.$transaction(async tx => {

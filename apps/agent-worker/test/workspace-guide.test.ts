@@ -3,7 +3,7 @@ import type { AiGateway } from '@openscience/ai-gateway';
 import { buildInterestContext } from '@openscience/domain';
 import { fixture as firstImageFixture } from '../../../packages/domain/test/agent/first-image-continuation-fixture';
 
-import { createHandlers } from '../src/index';
+import { createHandlers, runWithWorkerExecution } from '../src/index';
 import {
   workspaceGuideHandler,
   workspaceGuideResultGuard,
@@ -406,8 +406,14 @@ describe('workspace.guide handler', () => {
   it('registers workspace.guide instead of falling through to demo.echo', async () => {
     const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
     const handlers = createHandlers(gateway);
-
-    await expect(handlers['workspace.guide']!(trustedDeps() as never, { id: 'guide-1', payload })).resolves.toEqual(result);
+    const id = 'af36958a-d6d0-4666-a69c-e3c60170b17f';
+    const deps = trustedDeps();
+    deps.prisma.agentTask.findUnique.mockResolvedValue({ id, kind: 'workspace.guide', payload,
+      status: 'running', executionAttempt: 1, deletedAt: null, error: null, sessionId: 'session-1',
+      session: { id: 'session-1', userId: 'user-1', status: 'active', deletedAt: null, researchObjectId: null, researchObject: null },
+    } as never);
+    await expect(runWithWorkerExecution({ taskId: id, executionAttempt: 1 }, () =>
+      handlers['workspace.guide']!(deps as never, { id, payload, executionAttempt: 1 }))).resolves.toEqual(result);
     expect(gateway.completeStructured).toHaveBeenCalledOnce();
   });
 });
