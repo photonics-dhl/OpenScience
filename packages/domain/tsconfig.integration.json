@@ -8,7 +8,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "test/retrieval/provider-state.integration.test.ts"
+    "test/retrieval/provider-state.integration.test.ts",
+    "test/agent/ordinary-paid-postgres.integration.test.ts"
   ],
   "exclude": ["node_modules", "dist", "dist-integration"]
 }

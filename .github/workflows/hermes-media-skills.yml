@@ -14,6 +14,9 @@ on:
       - 'packages/domain/test/review/publish-review.test.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
       - 'packages/database/test/first-image-grant-migration.integration.test.ts'
+      - 'packages/domain/test/agent/ordinary-paid-postgres.integration.test.ts'
+      - 'packages/domain/test/agent/fixtures/ordinary-paid-postgres-child.cjs'
+      - 'packages/domain/tsconfig.integration.json'
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
@@ -325,6 +328,9 @@ on:
       - 'packages/domain/test/review/publish-review.test.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
       - 'packages/database/test/first-image-grant-migration.integration.test.ts'
+      - 'packages/domain/test/agent/ordinary-paid-postgres.integration.test.ts'
+      - 'packages/domain/test/agent/fixtures/ordinary-paid-postgres-child.cjs'
+      - 'packages/domain/tsconfig.integration.json'
       - '.agents/skills/openscience-handdraw-*/**'
       - '.agents/skills/openscience-scientific-visual-clarity/**'
       - '.agents/skills/openscience-research-illustration/**'
@@ -681,6 +687,19 @@ jobs:
           npx pnpm@9.15.0 --filter @openscience/database exec vitest run --config vitest.integration.config.ts test/first-image-grant-migration.integration.test.ts | tee tmp/first-image-grant/green.log
       - name: Lint the migration regression test
         run: npx pnpm@9.15.0 exec eslint packages/database/test/first-image-grant-migration.integration.test.ts
+      - name: Build and verify ordinary paid work on the real test database
+        shell: bash
+        env:
+          NODE_ENV: test
+        run: |
+          set -o pipefail
+          node -e "require('./packages/domain/test/agent/fixtures/ordinary-paid-postgres-child.cjs').validatedTestUrl()"
+          npx pnpm@9.15.0 --filter '@openscience/agent-worker...' build
+          node packages/database/dist/migrate-cli.js deploy
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run --config vitest.integration.config.ts test/agent/ordinary-paid-postgres.integration.test.ts | tee tmp/first-image-grant/ordinary-paid.log
+          npx pnpm@9.15.0 --filter @openscience/domain exec tsc -p tsconfig.integration.json --noEmit
+          npx pnpm@9.15.0 exec eslint packages/domain/test/agent/ordinary-paid-postgres.integration.test.ts packages/domain/test/agent/fixtures/ordinary-paid-postgres-child.cjs
+          node --check packages/domain/test/agent/fixtures/ordinary-paid-postgres-child.cjs
       - name: Preserve real PostgreSQL regression evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -692,7 +711,7 @@ jobs:
 
   skill-path:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7-alpine
