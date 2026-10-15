@@ -928,6 +928,18 @@ for (const follow of [true, false]) {
     const completed: AgentTaskView = { ...running, status: 'succeeded', progress: 100,
       result: { summary, nextSteps: [], needsMoreInformation: true },
     };
+    const savedDraftTitle = 'Interaction research notes';
+    if (!follow) {
+      const savedWritingTask: AgentTaskView = { ...running, id: 'saved-writing-task', sessionId: 'saved-writing-session',
+        status: 'succeeded', progress: 100, createdAt: '2026-10-07T00:00:00.000Z', updatedAt: '2026-10-07T00:00:00.000Z',
+        result: { summary: 'Saved private research note.', nextSteps: [], needsMoreInformation: false,
+          writingDraft: { title: savedDraftTitle, kind: 'note',
+            body: 'This private note compares how bound and free electrons respond to an optical field. It records the working question for the next revision.',
+            sourceTaskId: 'saved-source-task', sourceStatus: 'user_edited', citations: [] },
+        },
+      };
+      await mockGet(page, '/api/agent/tasks?actionable=false&kind=workspace.guide', { tasks: [savedWritingTask] });
+    }
     for (const viewport of [{ width: 1440, height: follow ? 900 : 681 }, { width: 390, height: follow ? 640 : 500 }]) {
       let release!: () => void;
       const completion = new Promise<void>((resolve) => { release = resolve; });
@@ -957,6 +969,21 @@ for (const follow of [true, false]) {
         const pane = guide(page).locator('.hermes-conversation-transcript');
         const distance = () => pane.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
         await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
+        if (!follow) {
+          await expect(pane.getByRole('article', { name: savedDraftTitle, exact: true })).toBeVisible();
+          const geometry = await pane.evaluate((node) => ({
+            viewport: { width: innerWidth, height: innerHeight },
+            taskState: node.closest('[data-hermes-drawer-state]')?.getAttribute('data-hermes-drawer-state'),
+            clientHeight: node.clientHeight, scrollHeight: node.scrollHeight, scrollTop: node.scrollTop,
+            distance: node.scrollHeight - node.scrollTop - node.clientHeight,
+            visibleDraftTitle: node.querySelector('h3')?.textContent,
+          }));
+          console.info('Restored reader precondition:', JSON.stringify(geometry));
+          await test.info().attach(`reader-precondition-${viewport.width}`, {
+            body: Buffer.from(JSON.stringify(geometry, null, 2)), contentType: 'application/json',
+          });
+          expect(geometry.scrollHeight - geometry.clientHeight, 'Reader history must overflow before the wheel interaction').toBeGreaterThanOrEqual(64);
+        }
         await pane.hover();
         await page.mouse.wheel(0, 1000);
         await expect.poll(distance).toBeLessThanOrEqual(1);
