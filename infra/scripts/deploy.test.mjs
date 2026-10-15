@@ -204,8 +204,11 @@ test('bounded Worker recovery wiring proof rejects unsafe condition or duplicate
   await writeFile(runPath, runOriginal.replace('        await lockTrashReferences(tx);',
     '        const lockTrashReferences = async () => undefined;\n        await lockTrashReferences(tx);'));
   assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
-  await writeFile(runPath, runOriginal.replace('import { lockLiveResearchObject, lockTrashReferences } from \'../trash/trash\';',
-    'import { lockLiveResearchObject, type lockTrashReferences } from \'../trash/trash\';'));
+  const lockImport = "import { lockTrashReferences } from '../trash/trash';";
+  assert.ok(runOriginal.includes(lockImport));
+  const typeOnlyLockSource = runOriginal.replace(lockImport, "import { type lockTrashReferences } from '../trash/trash';");
+  assert.notEqual(typeOnlyLockSource, runOriginal);
+  await writeFile(runPath, typeOnlyLockSource);
   assert.throws(() => deployLock.verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot: projectRoot }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   await mkdir(join(sourceRoot, 'packages/domain/src/trash'), { recursive: true });
   await writeFile(join(sourceRoot, 'packages/domain/src/trash/fake-trash.ts'), 'export async function lockTrashReferences(_tx: any) {}\n');
@@ -923,7 +926,7 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   await writeFile(join(enginePackageRoot, engine), Buffer.from('trusted-engine-fixture'));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
   for (const directory of [candidate, previous]) {
-    const generated = join(directory, 'packages/search/generated/client');
+    const generated = join(directory, 'packages/prisma-fixture/generated/client');
     await mkdir(join(generated, 'runtime'), { recursive: true });
     await writeFile(join(generated, 'runtime/library.js'), await readFile(join(upstreamPackageRoot, 'runtime/library.js')));
     await writeFile(join(generated, engine), await readFile(join(enginePackageRoot, engine)));
@@ -936,7 +939,7 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   const collect = runInNewContext(`${collectorSource}; rollbackReaderClosure`, { resolve, relative, dirname, join, existsSync, readFileSync,
     builtinModules, APPLICATION_ROLLBACK_READERS: [], verifyPrismaVendorRuntime: deployLock.verifyPrismaVendorRuntime,
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } });
-  const ts = trusted('typescript'), roots = [['packages/search/generated/client/index.js']], vendorPackages = { upstreamPackageRoot, enginePackageRoot };
+  const ts = trusted('typescript'), roots = [['packages/prisma-fixture/generated/client/index.js']], vendorPackages = { upstreamPackageRoot, enginePackageRoot };
   const current = JSON.stringify(collect(ts, candidate, roots, vendorPackages));
   assert.equal(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
   const core = join(candidate, 'node_modules/.prisma/client');
@@ -949,7 +952,7 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
     ['native', 'linux-musl']);
   await rm(join(core, engine));
   assert.throws(() => deployLock.verifyPrismaVendorRuntime({ sourceRoot: candidate, runtimeFile: join(core, 'runtime/library.js'), ...vendorPackages }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
-  const generated = join(previous, 'packages/search/generated/client');
+  const generated = join(previous, 'packages/prisma-fixture/generated/client');
   await writeFile(join(generated, 'runtime/library.js'), 'module.exports = {forged:true};');
   assert.throws(() => collect(ts, previous, roots, vendorPackages), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   await writeFile(join(generated, 'runtime/library.js'), await readFile(join(upstreamPackageRoot, 'runtime/library.js')));
