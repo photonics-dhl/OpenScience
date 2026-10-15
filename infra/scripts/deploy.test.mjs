@@ -726,7 +726,11 @@ function videoPairRuntime(ts, text) {
 }
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
-  const components = videoPairSourceComponents(), actual = await videoIngressProgram(), left = videoPairContext(actual);
+  const components = videoPairSourceComponents(), current = await videoIngressProgram();
+  const materializer = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const actual = await videoIngressProgram(new Map([[materializer,
+    execFileSync('git', ['show', `e75f2764ded1074f4d307d34dca833517f0d3696:${materializer}`], { cwd: current.projectRoot, encoding: 'utf8' })]]));
+  const left = videoPairContext(actual);
   const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
   const original = await videoIngressProgram(new Map(files.map(file => [file,
     execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
@@ -747,18 +751,19 @@ test('video pair source projection preserves actual old runtime context and fini
 test('video pair source closure distinguishes a capable writer from dropping its readers', async () => {
   const components = videoPairSourceComponents(), actual = await videoIngressProgram();
   const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
-  const writer = await videoIngressProgram(new Map([[file, source => source
-    .replace('approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt', 'approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt')
-    .replace('(approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt)', '(approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt)')]]));
-  const candidate = components.model(writer.ts, videoPairContext(writer)), rollback = components.model(actual.ts, videoPairContext(actual));
+  const reader = await videoIngressProgram(new Map([[file,
+    execFileSync('git', ['show', `e75f2764ded1074f4d307d34dca833517f0d3696:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })]]));
+  const candidate = components.model(actual.ts, videoPairContext(actual)), rollback = components.model(reader.ts, videoPairContext(reader));
   assert.equal(candidate.fresh, 'approved');
+  assert.equal(rollback.fresh, 'legacy');
   assert.equal(components.closure(candidate, rollback).status, 'conditional');
   for (const [key, { text }] of candidate.projected)
-    assert.deepEqual(videoPairRuntime(writer.ts, text), videoPairRuntime(actual.ts, rollback.projected.get(key).text), key);
+    assert.deepEqual(videoPairRuntime(actual.ts, text), videoPairRuntime(reader.ts, rollback.projected.get(key).text), key);
   const files = [file, 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
   const old = await videoIngressProgram(new Map(files.map(path => [path,
     execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
   const original = components.model(old.ts, videoPairContext(old));
+  assert.equal(original.fresh, 'legacy');
   assert.equal(components.closure(candidate, original).reason, 'ROLLBACK_FAMILY_NOT_CLOSED');
   assert.equal(components.closure(original, rollback).reason, 'READER_CAPABILITY_REMOVED');
 });
@@ -769,7 +774,7 @@ test('video pair source projection consumes genuine imported aliases but not arb
   const aliased = await videoIngressProgram(new Map([[file, source => source.replaceAll('compileApprovedShotPrompt', 'approvedCompiler')
     .replace('compileShotPrompt, approvedCompiler, compileHistorical', 'compileShotPrompt, compileApprovedShotPrompt as approvedCompiler, compileHistorical')]]));
   const model = components.model(aliased.ts, videoPairContext(aliased));
-  assert.equal(model.fresh, 'legacy');
+  assert.equal(model.fresh, original.fresh);
   for (const [key, { text }] of model.projected)
     assert.deepEqual(videoPairRuntime(aliased.ts, text), videoPairRuntime(actual.ts, original.projected.get(key).text), key);
   const escaped = await videoIngressProgram(new Map([[file, source => source.replace('  const nativeVideo = input.nativeVideo === true;',
