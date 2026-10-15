@@ -459,14 +459,14 @@
     },
     {
       "id": "issue-022",
-      "title": "Voice capability reads exposed stale strict browser and Journal runtime fixtures",
+      "title": "Voice integration exposed stale browser, Journal and API bootstrap fixtures",
       "date": "2026-10-15",
-      "status": "in_progress",
+      "status": "resolved",
       "tags": ["troubleshooting/ci", "troubleshooting/env"],
       "description": "PR116 media browser jobs rejected GET /api/agent/voice/capabilities as undeclared. Journal CI separately failed one shared-source database case with Native Agent runtime is unavailable.",
       "root_cause": "Opening the existing Hermes drawer now makes a legitimate read-only capabilities request. Four strict browser fixtures lacked its unavailable response and deliberately threw, causing subsequent renderer/navigation teardown errors. The Journal case supplied storage and Redis but omitted nativeAgentRuntime; the production Native-only guard is byte-identical to the release base, and a neighboring passing PostgreSQL fixture supplies that runtime identity. The API CommonJS entrypoint harness also replaced the complete Gateway module but omitted its new optional voice factory, causing all nine original boot cases to fail with a missing function.",
       "solution": "Add only the exact query-free GET capabilities fixture returning available=false and no voices; preserve unknown-request, write and browser-error assertions. Add the same synthetic runtime identity as the passing Journal fixture to the one local sharedDeps object. Extend the existing startup module stub with the optional disabled voice factory and verify configured injection plus sanitized failure/text fallback. Do not weaken production admission or enable a real provider.",
-      "verification": "Initial CI38758804655 browser failures and CI38758804611 Journal RED1/72 retained in ignored tmp/voice logs. The identical browser error was reproduced locally before editing; corrected entry4/4, voice10/10 and unchanged layout2/2 pass in local installed Chrome/dev mode. Startup harness RED9 became GREEN11 after the factory stub and two optional-voice boot cases. Targeted lint and diff checks pass. Voice PostgreSQL6/6 and video CI passed on the original candidate. Independent High found no masking or weakened assertions; corrected production CI is pending.",
+      "verification": "Initial CI38758804655 browser failures and CI38758804611 Journal RED1/72 retained in ignored tmp/voice logs. The identical browser error was reproduced locally before editing; corrected entry4/4, voice10/10 and unchanged layout2/2 pass in local installed Chrome/dev mode. Startup harness RED9 became GREEN11 after the factory stub and two optional-voice boot cases. Targeted lint and diff checks pass. Corrected Journal CI38760344823 passed in full; voice PostgreSQL6/6 and video CI passed on the original unchanged production implementation. Independent High found no masking or weakened assertions. Final exact-head integration conclusions are maintained by PR116 checks, separate from these fixed fixture causes and from unperformed production activation.",
       "files": [
         "apps/web/test/e2e/auth-dashboard.spec.ts",
         "apps/web/test/e2e/hermes-dashboard.spec.ts",

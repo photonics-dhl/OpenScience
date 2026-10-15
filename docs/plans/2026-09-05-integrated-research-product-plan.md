@@ -275,9 +275,9 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 - 分工：语音工作树内 Domain、Web 与主线程 API/Worker/Gateway 各自限定路径；独立 High 覆核新增权限、付费恢复与媒体边界。总控 CURRENT/progress/index/registry 保持原 owner，集成时交精确差异与证据。
 - 最小验证：Gateway ASR + 受影响 TTS；Domain 幂等/权限/恢复；API 文件及越权合同；Worker 真实生产者离线纵向链；Web 录音 WAV、拒绝/撤权/迟到结果与实际入口浏览器 fixture。真实供应商、真实麦克风、质量与生产观察须另记事实，不能由 mock 推导。
 
-语音候选实现检查点：录音/停止→显式识别→可编辑文字→原 Hermes 输入及发送链、同一已保存回答的点播/停止均已接线；能力未配置时原文字操作可用。Gateway220项、Domain语音/原Agent214项、API6项、Worker6项本地通过；Web43项单元/相邻检查复用有效结果，新增两处恢复缺陷均先复现失败、修复后4项相关浏览器用例通过。所有媒体/供应商响应仍为合成夹具。独立 High 对供应商边界、撤权/并发/迟到回执及两项前端修复复核无未决实质问题。
+语音候选实现检查点：录音/停止→显式识别→可编辑文字→原 Hermes 输入及发送链、同一已保存回答的点播/停止均已接线；能力未配置时原文字操作可用。Gateway220项、Domain语音/原Agent214项、API6项、启动11项、Worker6项本地通过；Web43项单元/相邻检查复用有效结果，两处恢复缺陷先复现后修复，最终语音浏览器10项、原入口4项及原布局2项通过。所有媒体/供应商响应仍为合成夹具。独立 High 对供应商边界、撤权/并发/迟到回执、前端恢复及后续测试夹具修正复核无未决实质问题。
 
-发布请求沿现有 R12 模式在短授权事务内启动一次 HTTP，提交释放全局/行锁后再等响应；不能在等待供应商时占住现有 Trash 全局锁。真实 PostgreSQL 触发器验收已接入既有 media workflow 的隔离 PostgreSQL 服务，包含同会话写入不被慢 HTTP 阻塞、task/session/RO 删除后原付费回执只更新 result，以及撤权先后胜负；本机无数据库，执行结果仍待该 CI，模拟锁测试不替代它。
+发布请求沿现有 R12 模式在短授权事务内启动一次 HTTP，提交释放全局/行锁后再等响应；不能在等待供应商时占住现有 Trash 全局锁。既有 media workflow 的隔离 PostgreSQL 服务已实测新增6项通过（CI38758804655），包含同会话写入不被慢 HTTP 阻塞、task/session/RO 删除后原付费回执只更新 result，以及撤权先后胜负；本机没有数据库，未将模拟锁测试当作真实触发器证据。原严格浏览器、Journal Native配置和API启动mock的夹具缺口已定向修正，原因与复现见既有故障记录 issue-022；修正后的Journal完整CI38760344823通过。最终候选完整检查结论见[PR116 checks](https://github.com/photonics-dhl/OpenScience/pull/116/checks)，与实际供应商/生产验收分开。
 
 base Compose 仅增 API/Worker 的私有只读目录和默认空文件路径；未读本机/生产 key、未发真实供应商请求、未部署。激活/同 key 副本权限与轮换、兼容回退读者及最小真实入口验收见[部署手册语音段](../runbooks/deployment.md#hermes-语音候选启用默认关闭尚未部署验收)。总控 CURRENT/progress/index/能力台账仍由原 owner 在集成后同步，不能把候选或 CI 成功写成用户已验收。
 
