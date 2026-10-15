@@ -21,7 +21,7 @@ import { parseIllustrationBrief, projectIllustrationEvidence, requireIllustratio
 import { readVisualNarrativeSource } from '../assets/illustration-source';
 import { parseStoryboardDocument, presentationStoryboardView } from '../assets/storyboard';
 import { presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, readStoredGeneratedImageReview, requireAcceptedSceneImageReview } from '../assets/scene-image';
-import { imageReviewHasNoSubmission } from '../assets/native-image-review';
+import { imageReviewHasNoSubmission, readNativeImageAgentExecution, readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { publicEvidenceRow } from '../research-intelligence/claim-evidence-service';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { inspectHermesSourceCompositionRecovery, inspectHermesRecoveredSourceComposition, inspectHermesSavedCompositionCandidate, SOURCE_COMPOSITION_RECOVERY_ACTION } from '../ingestion/source-composition-recovery';
@@ -2261,7 +2261,44 @@ async function inspectGenerationRecovery(
         }
         plan.preserved.push({ stepId: step.id, taskId: task.id, assetId: asset.id });
       } else {
-        if (native) return null; // Existing saved-image review recovery owns this separate state.
+        if (native) {
+          // Only the original two-task continuation may resume this already durable tagged final.
+          // CP-R may resume only pure validation; the Worker must verify saved bytes before any Host path.
+          const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution);
+          if (!Object.hasOwn(rawMarker, 'imageResultPolicy') || rawMarker.imageResultPolicy !== 'image-review-tool-final-v1') return null;
+          const execution = readNativeImageAgentExecution(task.result), cp = execution?.checkpoint;
+          const envelope = readNativeImageReviewCheckpoint(task.result);
+          if (!firstImage || run.maxAgentTasks !== 2 || task.status !== 'failed' || ![1, 2].includes(task.executionAttempt)
+            || task.retryCount !== 0 || asset.status !== 'draft' || asset.deletedAt || !asset.objectKey
+            || execution?.imageResultPolicy !== 'image-review-tool-final-v1' || !cp || cp.state !== 'completed'
+            || cp.received !== 'decoded' || cp.finishReason !== 'other' || cp.hasToolCalls !== true || envelope?.mode !== 'agent-native'
+            || cp.executionAttempt > task.executionAttempt
+            || cp.imageIdentity?.requestId !== task.id || cp.imageIdentity.contentHash !== asset.contentHash
+            || cp.imageIdentity.sourceEvidenceIdentity !== provenance?.sourceEvidenceIdentity
+            || cp.imageIdentity.parentIdentity !== parent.identity
+            || task.error?.startsWith('[blocked]') && (!cp.validatedFinal
+              || task.error !== '[blocked] Native Agent original deadline expired'
+                && task.error !== '[blocked] Native Agent original request deadline expired')
+            || task.error === 'Native image review response invalid JSON; explicit review retry required'
+            || task.error === 'Native image review response failed schema validation; explicit review retry required'
+            || task.error === 'structured output is not JSON' || task.error === 'Unexpected end of JSON input'
+            || /^(?:Expected|Unexpected token|Unterminated string|Bad (?:control|escaped) character).*(?:in JSON|not valid JSON)/u.test(task.error ?? '')
+            || !['failed', 'running'].includes(step.status)
+            || step.presentationAssetId !== null && step.presentationAssetId !== asset.id
+            || !inspectImageRecoveryState) return null;
+          if (envelope.state === 'completed' && !readStoredGeneratedImageReview(provenance?.imageReview, {
+            requestId: task.id, contentHash: asset.contentHash!, sourceEvidenceIdentity: envelope.sourceEvidenceIdentity,
+            parentIdentity: parent.identity }, task.result)) return null;
+          const booking = await tx.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${task.id}` } });
+          const metadata = jsonRecord(booking?.metadata);
+          if (!booking || booking.id !== envelope.reservationLedgerId || booking.userId !== run.actorId || booking.resource !== 'ai_credit'
+            || booking.kind !== 'consume' || Number(booking.delta) !== -1 || metadata.taskId !== task.id
+            || metadata.kind !== task.kind || metadata.policy !== 'charged-on-submit'
+            || await inspectImageRecoveryState(task.id).catch(() => 'unsafe') !== 'completed') return null;
+          plan.resume.push({ stepId: step.id, ordinal: step.ordinal, taskId: task.id, expectedResult: task.result!,
+            expectedExecutionAttempt: task.executionAttempt, expectedPayload: task.payload, expectedError: task.error });
+          continue;
+        }
         if (task.status !== 'failed' || task.executionAttempt !== 1 || task.retryCount !== 0
           || task.result !== null || task.error?.startsWith('[blocked]') || !inspectImageRecoveryState
           || await inspectImageRecoveryState(task.id) !== 'completed') return null;

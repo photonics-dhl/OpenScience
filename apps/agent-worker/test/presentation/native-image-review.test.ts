@@ -3,19 +3,24 @@ import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { claimAgentTask, createAgentSession, getAgentTask, markTaskProgress, retryAgentTask, submitAgentTask } from '../../../../packages/domain/src/agent/agent';
-import { requireSceneImageParent, prepareAgentNativeImageReview } from '@openscience/domain';
+import { requireSceneImageParent, prepareAgentNativeImageReview, readNativeAgentExecution, presentationClaimContent, initialNativeAgentExecution } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider, NATIVE_IMAGE_REQUEST_MAX_BYTES, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { createNativeAgentSession, type NativeAgentSessionState } from '../../src/native-agent/session';
+import { createNativeAgentSession, type NativeAgentSessionStore } from '../../src/native-agent/session';
+import { createNativeTaskStore } from '../../src/native-agent/task-store';
+import * as nativeHost from '../../src/native-agent/host-task';
 import { NATIVE_IMAGE_REVIEW_TOOLS, validateNativeImageReviewHistory } from '../../src/native-agent/illustration-task';
 import { createNativeImageReviewSubmission } from '../../src/index';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
+import { generatedImageReviewAttachment } from '../../src/presentation/generated-image-review';
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/QWQAAAAASUVORK5CYII=', 'base64');
+// Exact untagged final text only: no private thinking or task identity.
+const LEGACY_INVALID_FINAL = "{\"decision\":\"accepted\",\"summary\":\"图像忠实地对应已批准分镜：单一暖白纸面（one ground）、水平单行贯通布局，中心波形以同一条暗靛蓝正弦曲线作为唯一焦点贯通左右两侧，明示同一类光子准粒子同时承担两端过程，符合\"禁止两侧使用不同物理对象\"的约束。左端\"自由电子 e⁻\"带方向箭头轨迹，下方次级标注\"PINEM · 切伦科夫 · EELS\"；右端\"束缚电子\"以双能级（两横线+纵向双箭头）置于金纳米立方体-金膜轮廓之间，下方次级标注\"自发辐射 · 强耦合\"与\"金纳米立方/金膜间隙\"；中线下方准确写出算符 f, f† 与响应 ε, μ。9 个批准标签字符级核对全部一致：f 后为正确 † 剑号、ε 与 μ 为斜体希腊字母、e⁻ 含上标负号、MQED / PINEM / EELS 拉丁字母顺序正确。颜色仅用作单一语义（波形深靛），金色仅赋予金纳米腔，背景纯白无面板/框线，符合 article:minimal 与\"one focal point\"。无定量曲线、无自由电子-新极化激元等未经原文报告的物理关系；\"金纳米立方/金膜间隙\"仅以一行文字标注代表算例，未添加额外数值或图。可选改进：右上角有一个微小的孤立墨渍，不在任何标签或关系路径上，不影响阅读，留作下次清理。\",\"summary\":\"本图像通过像素级核对：单一焦点波形贯通左右、9 个批准标签字符全部正确、双能级与金纳米立方/膜间隙几何一致、颜色单一语义、无定量曲线或新增物理关系，约束与原作主张忠实。无阻塞缺陷。右上角有微小孤立墨渍，不在阅读路径上，不构成阻塞，仅作可选清理建议。\",\"repairInstruction\":null}";
 afterEach(() => vi.restoreAllMocks());
 
-async function fixture(native = false) {
+async function fixture(native = false, toolFinal = false) {
   const { prisma, db } = createFakePrisma();
   seedUser(db, { id: id(1), platformRole: 'platform_admin' });
   db.workspaces.push({ id: id(2), status: 'active' });
@@ -47,6 +52,8 @@ async function fixture(native = false) {
   const submitted = await submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload,
     idempotencyKey: 'native-review', dispatch: false });
   const owner = db.agentTasks.find(task => task.id === submitted.id)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
+  // Tagged fixtures use the trusted future writer; I1 fresh tasks remain untagged.
+  if (native && toolFinal) owner.result = { ...owner.result, ...initialNativeAgentExecution(runtime, 'image-review', 'image-review-tool-final-v1') };
   const approvedParent = (await requireSceneImageParent(prisma, payload as never))!;
   const asset = { id: owner.id, researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', objectKey: 'saved.png', contentHash: sha(bytes),
     provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: owner.id, contentType: 'image/png',
@@ -82,54 +89,241 @@ async function fixture(native = false) {
 }
 
 // Persist a real two-turn image-role SDK history; only the remote HTTP boundary is mocked.
-async function paidAgentFinal() {
-  const f = await fixture(true);
+async function paidAgentFinal(options: { toolFinal?: boolean; crashBeforeFinal?: boolean; decision?: 'accepted' | 'blocked';
+  revokeBeforeFinal?: 'membership' | 'parent' | 'source' | 'lease'; loggerFailure?: 'info' | 'audit-error';
+  wireResponse?: Buffer; expectInvalid?: boolean; legacyText?: string } = {}) {
+  const f = await fixture(true, options.toolFinal);
   const identity = { requestId: f.owner.id, contentHash: sha(bytes), sourceEvidenceIdentity: f.evidenceIdentity, parentIdentity: f.approvedParent.identity };
   const envelope = await f.prisma.$transaction(tx => prepareAgentNativeImageReview(tx, { taskId: f.owner.id, executionAttempt: 1,
     identity, runtime: f.runtime, target: f.gateway.resolveNativeImageReviewTarget(), maxInputBytes: NATIVE_IMAGE_REQUEST_MAX_BYTES }));
   const request: ScienceReviewInput = { requestId: f.owner.id, prompt: 'Check the shown field direction against its approved source.',
     authorizationContext: { taskId: f.owner.id, actorId: id(1), workspaceId: id(2) },
-    illustrationContext: { imageReviewMode: 'agent-native', executionAttempt: 1, baseIdentity: identity.parentIdentity },
+    illustrationContext: { imageReviewMode: 'agent-native', executionAttempt: 1, baseIdentity: identity.parentIdentity,
+      claimContent: presentationClaimContent(f.db.claimNodes as never) },
     source: { kind: 'illustration-image', researchObjectId: id(3), versionId: id(4), candidateHash: identity.contentHash,
       sourceEvidenceIdentity: identity.sourceEvidenceIdentity },
-    attachments: [{ bytes, fileName: 'saved.png', mediaType: 'image/png', pageNumber: 1, width: 1, height: 1, sha256: identity.contentHash }] };
-  let state: NativeAgentSessionState | null = null; let calls = 0;
-  const answer = JSON.stringify({ decision: 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null });
+    attachments: [generatedImageReviewAttachment(bytes, identity.contentHash, 'image/png')] };
+  let calls = 0;
+  const answer = options.legacyText ?? JSON.stringify({ decision: options.decision ?? 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null });
   const provider = new AnthropicCompatProvider(envelope.provider, { apiKey: 'fixture', baseUrl: 'https://offline.invalid', model: envelope.model },
-    async () => { calls++; return new Response(JSON.stringify({ model: envelope.model,
+    async () => { calls++;
+      if (calls === 2) {
+        if (options.revokeBeforeFinal === 'membership') f.db.memberships[0].role = 'viewer';
+        if (options.revokeBeforeFinal === 'parent') f.parent.contentHash = 'e'.repeat(64);
+        if (options.revokeBeforeFinal === 'source') f.db.evidenceRecords[0].exactQuote = 'Changed while model ran';
+        if (options.revokeBeforeFinal === 'lease') f.db.agentTasks[0].executionAttempt = 2;
+        if (options.wireResponse) return new Response(options.wireResponse, { status: 200 });
+      }
+      return new Response(JSON.stringify({ model: envelope.model,
       content: calls === 1 ? [{ type: 'tool_use', id: 'skill-1', name: 'skill_view', input: { name: 'openscience-source-review' } },
-        { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }] : [{ type: 'text', text: answer }],
-      stop_reason: calls === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } })); });
-  const store = { read: async () => state, compareAndSet: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
-    complete: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); }, publish: async <T>(_old: unknown, submit: () => Promise<T>) => submit() };
+        { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }] : options.toolFinal
+        ? [{ type: 'tool_use', id: 'result-1', name: 'image_review_result', input: JSON.parse(answer) }] : [{ type: 'text', text: answer }],
+      stop_reason: calls === 1 || options.toolFinal ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } })); });
+  const objects = new Map<string, Buffer>();
+  const checkpoints: Array<Record<string, unknown>> = [];
+  const updateMany = f.prisma.agentTask.updateMany.bind(f.prisma.agentTask);
+  vi.spyOn(f.prisma.agentTask, 'updateMany').mockImplementation(async args => {
+    const changed = await updateMany(args);
+    const result = (args.data as { result?: Record<string, unknown> }).result;
+    if (changed.count === 1 && result?.nativeAgentExecution && 'checkpoint' in (result.nativeAgentExecution as object))
+      checkpoints.push(structuredClone(result));
+    return changed;
+  });
+  Object.assign(f.deps.storage, {
+    getObject: async (key: string) => { const body = objects.get(key) ?? bytes; return { size: body.length, body: Readable.from([body]) }; },
+    headObject: async (key: string) => objects.has(key) ? { size: objects.get(key)!.length } : null,
+    putObject: async (key: string, body: Uint8Array) => { objects.set(key, Buffer.from(body)); },
+  });
+  const authorize = (tx: Parameters<typeof requireIllustrationReviewSubmission>[0]) => requireIllustrationReviewSubmission(tx, request);
+  const store: NativeAgentSessionStore = createNativeTaskStore({ ...f.deps, taskId: f.owner.id, executionAttempt: 1,
+    execution: readNativeAgentExecution(f.owner.result)!, storage: f.deps.storage as never, authorize, authorizeFinal: authorize });
+  if (options.crashBeforeFinal) {
+    const finalize = store.finalize;
+    if (!finalize) throw new Error('Fixture requires the real pure-final store');
+    let failOnce = true;
+    store.finalize = async (previous, next) => {
+      if (failOnce) { failOnce = false; throw new Error('Temporary database write conflict'); }
+      return finalize(previous, next);
+    };
+  }
   const binding = { taskId: f.owner.id, sourceKind: 'illustration-image' as const, imageReview: envelope, runtimeId: envelope.runtimeId,
     skillCatalogueId: envelope.skillCatalogueId, model: envelope.model, allowedTools: ['skills_list', 'skill_view', 'paper_image_view'],
     maxTurns: envelope.maxTurns, maxOutputTokens: envelope.maxOutputTokens, maxTotalOutputTokens: envelope.maxTotalOutputTokens,
     maxInputBytes: envelope.maxInputBytes, deadlineAt: envelope.deadlineAt, contextWindowTokens: 512000,
     generation: { thinking: 'adaptive' as const, temperature: 0.1 } };
   const session = createNativeAgentSession({ gateway: new AiGateway({ providers: [provider], illustrationReviewPolicy: async () => true,
-    authorizeIllustrationReview: async () => undefined }), binding, store, authorize: async () => undefined, imageReviewInput: request,
+    authorizeIllustrationReview: async () => undefined,
+    ...(options.loggerFailure ? {
+      audit: { record: async () => { if (calls === 2 && options.loggerFailure === 'audit-error') throw new Error('Audit failed'); } },
+      logger: { warn: () => undefined, info: () => { if (calls === 2 && options.loggerFailure === 'info') throw new Error('Logger info failed'); },
+        error: () => { if (calls === 2 && options.loggerFailure === 'audit-error') throw new Error('Logger error failed'); } },
+    } : {}),
+  }), binding, store, authorize: async () => undefined, imageReviewInput: request,
     validateImageHistory: (messages, final) => validateNativeImageReviewHistory(messages, identity, final) });
   const tools = [{ name: 'skills_list', description: 'List methods.', parameters: { type: 'object', properties: {} } },
     { name: 'skill_view', description: 'Read a method.', parameters: { type: 'object', properties: {} } }, ...NATIVE_IMAGE_REVIEW_TOOLS];
   const sdk = { model: envelope.model, max_tokens: 32768, tools: tools.map(tool => ({ type: 'function', function: tool })),
     messages: [{ role: 'system', content: 'Read-only check.' }, { role: 'user', content: request.prompt }] };
   const first = await session.complete(sdk) as { choices: Array<{ message: unknown }> };
-  await session.complete({ ...sdk, messages: [...sdk.messages, first.choices[0]!.message,
+  const finish = session.complete({ ...sdk, messages: [...sdk.messages, first.choices[0]!.message,
     { role: 'tool', tool_call_id: 'skill-1', content: JSON.stringify({ success: true, content: 'Fixed source-review method.' }) },
     { role: 'tool', tool_call_id: 'view-1', content: JSON.stringify({ status: 'image_view_ready', ...identity }) },
     { role: 'user', content: [{ type: 'image_url', image_url: { url: `data:image/png;base64,${bytes.toString('base64')}` } }] }] });
+  if (options.crashBeforeFinal) await expect(finish).rejects.toThrow('Temporary database write conflict');
+  else if (options.revokeBeforeFinal || options.expectInvalid) await expect(finish).rejects.toThrow();
+  else await finish;
   const history = await store.read(); const last = history!.turns.at(-1)!;
-  if (last.state !== 'completed') throw new Error('fixture must contain a final paid turn');
-  const serialized = Buffer.from(JSON.stringify(history)); const hash = sha(serialized); const objectKey = `derived/native-agent/${hash}.json`;
-  f.owner.result.nativeAgentExecution.checkpoint = { taskId: f.owner.id, sourceKind: 'illustration-image', imageIdentity: identity,
-    objectKey, serializedSha256: hash, size: serialized.length, executionAttempt: 1, turnCount: history!.turns.length,
-    state: 'completed', target: last.target, responseHash: sha(last.response.text), finishReason: last.response.finishReason, hasToolCalls: false };
-  f.deps.storage.getObject = async (key?: string) => { const body = key === objectKey ? serialized : bytes; return { body: Readable.from([body]), size: body.length }; };
-  return { ...f, envelope, calls: () => calls };
+  if (last.state !== 'completed' && !(options.expectInvalid && last.state === 'received')) throw new Error('fixture must contain a final paid turn');
+  return { ...f, envelope, calls: () => calls, objects, store, history, request, checkpoints };
 }
 
+// The offline reverse-version driver consumes these actual producer/store bytes.
+export const nativeImageReviewFixture = { fixture, paidAgentFinal, legacyInvalidFinal: LEGACY_INVALID_FINAL };
+
 describe('real Worker native image review persistence and replay', () => {
+  it('keeps the exact historical716 invalid final untagged, invalid and ineligible without another paid call', async () => {
+    expect(LEGACY_INVALID_FINAL.length).toBe(716);
+    expect(sha(LEGACY_INVALID_FINAL)).toBe('b10688c0b13ac2a0359e9b204b464af601eeb17ccc515434b5e7e54ce4e8d895');
+    const f = await paidAgentFinal({ legacyText: LEGACY_INVALID_FINAL });
+    const original = structuredClone(f.db.agentTasks[0].result.nativeAgentExecution);
+    const ledger = structuredClone(f.db.usageLedger);
+    let failure: unknown;
+    try { await f.handler(f.deps as never, f.task()); } catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(SyntaxError);
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, status: 'failed', error: (failure as Error).message });
+    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: f.owner.id })).canRetry).toBe(false);
+    const retained = f.db.agentTasks[0].result.nativeAgentExecution;
+    expect(retained).toEqual(original); expect(retained.imageResultPolicy).toBeUndefined();
+    expect(retained.checkpoint.responseHash).toBe(sha(LEGACY_INVALID_FINAL));
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.db.usageLedger).toEqual(ledger); expect(f.calls()).toBe(2);
+    expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it('retains unsafe aggregate token usage as raw paid evidence without deriving or adopting a final', async () => {
+    const body = Buffer.from(JSON.stringify({ model: 'MiniMax-M3', content: [{ type: 'tool_use', id: 'r1', name: 'image_review_result',
+      input: { decision: 'accepted', summary: 'Fixture only.', repairInstruction: null } }], stop_reason: 'tool_use',
+      usage: { input_tokens: Number.MAX_SAFE_INTEGER, output_tokens: 1 } }));
+    const f = await paidAgentFinal({ toolFinal: true, wireResponse: body, expectInvalid: true });
+    const cp = f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    expect(cp).toMatchObject({ received: 'decoded', finishReason: 'other', hasToolCalls: true });
+    expect(cp.validatedFinal).toBeUndefined();
+    const raw = JSON.parse(f.objects.get(cp.objectKey)!.toString('utf8'));
+    expect(raw.turns.at(-1).received.body).toBe(body.toString('utf8'));
+    expect(raw.turns.at(-1).response.usage).toEqual({ inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 1 });
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/terminal image result/);
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it('saves original invalid UTF-8 bytes as raw-only and never turns replacement text into an accepted review', async () => {
+    const body = Buffer.concat([Buffer.from('{"model":"MiniMax-M3","content":[{"type":"tool_use","id":"r1","name":"image_review_result","input":{"decision":"accepted","summary":"'),
+      Buffer.from([0xff]), Buffer.from('","repairInstruction":null}}],"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}')]);
+    const f = await paidAgentFinal({ toolFinal: true, wireResponse: body, expectInvalid: true });
+    const cp = f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    expect(cp).toMatchObject({ state: 'completed', received: 'raw-only' });
+    expect(cp.validatedFinal).toBeUndefined(); expect(cp.responseHash).toBeUndefined();
+    const raw = JSON.parse(f.objects.get(cp.objectKey)!.toString('utf8'));
+    expect(raw.turns.at(-1)).toMatchObject({ state: 'received', received: { body: '', rawBodyBase64: body.toString('base64') } });
+    expect(raw.turns.at(-1)).not.toHaveProperty('response');
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow(/terminal image receipt/);
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it('preserves an explicitly encoded legitimate U+FFFD character through raw receipt, derived JSON and adoption', async () => {
+    const summary = 'A legitimate \uFFFD character supplied by the fixture.';
+    const body = Buffer.from(JSON.stringify({ model: 'MiniMax-M3', content: [{ type: 'tool_use', id: 'r1', name: 'image_review_result',
+      input: { decision: 'accepted', summary, repairInstruction: null } }], stop_reason: 'tool_use',
+      usage: { input_tokens: 1, output_tokens: 1 } }));
+    const f = await paidAgentFinal({ toolFinal: true, wireResponse: body });
+    const result = await f.handler(f.deps as never, f.task());
+    expect(result).toMatchObject({ imageReview: { decision: 'accepted', summary } });
+    const cp = f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    const raw = JSON.parse(f.objects.get(`derived/native-agent/${cp.validatedFinal.rawCheckpoint}.json`)!.toString('utf8'));
+    expect(raw.turns.at(-1).received.body).toBe(body.toString('utf8'));
+    expect(raw.turns.at(-1).received).not.toHaveProperty('rawBodyBase64');
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it.each(['info', 'audit-error'] as const)('durably saves paid raw bytes through real Worker store despite %s observability failure', async loggerFailure => {
+    const f = await paidAgentFinal({ toolFinal: true, loggerFailure });
+    const cp = f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    expect(cp).toMatchObject({ received: 'decoded', finishReason: 'other', responseHash: sha(''), hasToolCalls: true });
+    expect(f.objects.has(`derived/native-agent/${cp.validatedFinal.rawCheckpoint}.json`)).toBe(true);
+    const raw = JSON.parse(f.objects.get(`derived/native-agent/${cp.validatedFinal.rawCheckpoint}.json`)!.toString('utf8'));
+    expect(raw.turns.at(-1).received.body).toContain('image_review_result');
+    expect(raw.turns.at(-1).received.decoded.providerStopReason).toBe('tool_use');
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it.each(['accepted', 'blocked'] as const)('adopts a tagged %s final through the real store, handler and Domain CAS with no new model/image', async decision => {
+    const f = await paidAgentFinal({ toolFinal: true, decision });
+    const ledger = structuredClone(f.db.usageLedger);
+    const cp = f.db.agentTasks.find(row => row.id === f.owner.id)!.result.nativeAgentExecution.checkpoint;
+    expect(cp).toMatchObject({ received: 'decoded', finishReason: 'other', hasToolCalls: true,
+      responseHash: sha(''), validatedFinal: { policy: 'image-review-tool-final-v1', turnOrdinal: 1 } });
+    expect(f.objects.has(`derived/native-agent/${cp.validatedFinal.rawCheckpoint}.json`)).toBe(true);
+    vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);
+    const result = await f.handler(f.deps as never, f.task());
+    expect(result).toMatchObject({ imageReview: { decision, responseHash: cp.validatedFinal.responseHash } });
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview.decision).toBe(decision);
+    expect(await f.handler(f.deps as never, f.task())).toEqual(result);
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it('recovers CP-R after a failed pure-final CAS through retry, handler and original task after deadline', async () => {
+    const f = await paidAgentFinal({ toolFinal: true, crashBeforeFinal: true });
+    const ledger = structuredClone(f.db.usageLedger);
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.validatedFinal).toBeUndefined();
+    await markTaskProgress(f.deps as never, { taskId: f.owner.id, status: 'failed', error: 'Temporary database write conflict' });
+    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: f.owner.id })).canRetry).toBe(true);
+    await retryAgentTask(f.deps as never, { userId: id(1), taskId: f.owner.id }); await claimAgentTask(f.deps as never, f.owner.id);
+    vi.spyOn(Date, 'now').mockReturnValue(f.envelope.deadlineAt + 1);
+    const result = await f.handler(f.deps as never, f.task());
+    expect(result).toMatchObject({ imageReview: { decision: 'accepted' } });
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint.validatedFinal).toBeDefined();
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+  it.each(['missing-reference', 'missing-object'] as const)('hard-stops a rearmed tagged task with %s before a fully configured Host or Gateway', async change => {
+    const f = await paidAgentFinal({ toolFinal: true });
+    f.db.agentTasks[0].executionAttempt = 2;
+    if (change === 'missing-reference') delete f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    else f.objects.clear();
+    const host = vi.spyOn(nativeHost, 'runHostedNativeTask').mockRejectedValue(new Error('HOST MUST NOT START'));
+    const handler = createPresentationGenerationHandler({ gateway: f.gateway,
+      nativeAgent: { gateway: f.gateway, runtime: f.runtime, inboxRoot: 'tmp/first-image/never-open-host',
+        renderPages: async () => { throw new Error('PDF renderer must not run for image recovery'); } } });
+    await expect(handler(f.deps as never, f.task())).rejects.toThrow(change === 'missing-reference' ? /deterministic/ : /checkpoint/);
+    expect(host).not.toHaveBeenCalled(); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+    expect(f.calls()).toBe(2);
+  });
+  it.each(['membership', 'parent', 'source'] as const)('refuses pure CP-R recovery after %s changes, preserving raw evidence', async change => {
+    const f = await paidAgentFinal({ toolFinal: true, crashBeforeFinal: true });
+    const before = structuredClone(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint);
+    if (change === 'membership') f.db.memberships[0].role = 'viewer';
+    if (change === 'parent') f.parent.contentHash = 'e'.repeat(64);
+    if (change === 'source') f.db.evidenceRecords[0].exactQuote = 'Changed evidence';
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow();
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint).toEqual(before);
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it('rolls back tagged image adoption and replays the same derived proof after a lost final CAS', async () => {
+    const f = await paidAgentFinal({ toolFinal: true });
+    const checkpoint = structuredClone(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint);
+    const updateMany = vi.spyOn(f.prisma.agentTask, 'updateMany').mockResolvedValueOnce({ count: 0 });
+    await expect(f.handler(f.deps as never, f.task())).rejects.toThrow();
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.db.agentTasks[0].result.nativeAgentExecution.checkpoint).toEqual(checkpoint);
+    updateMany.mockRestore();
+    expect(await f.handler(f.deps as never, f.task())).toMatchObject({ imageReview: { decision: 'accepted' } });
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
+  it.each(['membership', 'parent', 'source', 'lease'] as const)('keeps paid CP-R but refuses finalization when %s changes during HTTP', async change => {
+    const f = await paidAgentFinal({ toolFinal: true, revokeBeforeFinal: change });
+    const cp = f.db.agentTasks[0].result.nativeAgentExecution.checkpoint;
+    expect(cp).toMatchObject({ state: 'completed', received: 'decoded', finishReason: 'other', hasToolCalls: true });
+    expect(cp.validatedFinal).toBeUndefined(); expect(f.objects.has(cp.objectKey)).toBe(true);
+    expect(f.db.presentationAssets.find(row => row.id === f.owner.id)!.provenance.imageReview).toBeUndefined();
+    expect(f.calls()).toBe(2); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generateImage).not.toHaveBeenCalled();
+  });
   it('retries a failed paid final through the public API and actually materializes it with zero additional provider calls', async () => {
     const f = await paidAgentFinal(); const ledger = structuredClone(f.db.usageLedger);
     await markTaskProgress(f.deps as never, { taskId: f.owner.id, status: 'failed', error: 'Temporary database write conflict' });

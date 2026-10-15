@@ -8,6 +8,79 @@ import { readVisualNarrativeSource } from '../../src/assets/illustration-source'
 import { completeImage, fixture, id, plannedFixture, renderingFixture } from './first-image-continuation-fixture';
 
 describe('current Hermes first-image continuation', () => {
+  it.each(['absent', 'absent-malformed', 'own-undefined', 'own-null', 'own-unknown', 'envelope-only',
+    'exact-malformed-envelope', 'exact-mismatch-envelope'] as const)('recovery policy routing preserves old refusal: %s', async change => {
+    const f = await renderingFixture();
+    await completeImage(f, change.startsWith('exact-') || change === 'envelope-only');
+    Object.assign(f.db.presentationAssets.find(asset => asset.id === f.image.id)!.provenance,
+      { subtype: 'storyboard_scene_image', sceneImage: f.image.payload.sceneImage });
+    Object.assign(f.image, { status: 'failed', error: 'database write conflict' });
+    Object.assign(f.db.hermesResearchSteps.find(step => step.stage === 'scene_image')!, { status: 'failed', presentationAssetId: f.image.id });
+    f.db.hermesResearchRuns[0].status = 'failed';
+    const saved = f.image.result;
+    if (change === 'absent-malformed') saved.nativeAgentExecution.unrecognized = 'old-refused-shape';
+    if (change === 'own-undefined') saved.nativeAgentExecution.imageResultPolicy = undefined;
+    if (change === 'own-null') saved.nativeAgentExecution.imageResultPolicy = null;
+    if (change === 'own-unknown') saved.nativeAgentExecution.imageResultPolicy = 'unknown';
+    if (change === 'envelope-only') delete saved.nativeAgentExecution;
+    if (change === 'exact-malformed-envelope') saved.nativeImageReview.unrecognized = true;
+    if (change === 'exact-mismatch-envelope') delete saved.nativeImageReview.imageResultPolicy;
+    const before = structuredClone({ ledger: f.db.usageLedger, result: saved, tasks: f.db.agentTasks.map(task => task.id) });
+    const inspectImageRecoveryState = vi.fn(async () => 'completed' as const);
+    const result = await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState });
+    expect(result.resumed).toBe(0);
+    expect(result.errors).toBe(change.startsWith('exact-') ? 1 : 0);
+    expect(inspectImageRecoveryState).not.toHaveBeenCalled();
+    expect(f.db.usageLedger).toEqual(before.ledger);
+    expect(f.db.agentTasks.map(task => task.id)).toEqual(before.tasks);
+    expect(f.db.agentTasks.find(task => task.id === f.image.id)!.result).toEqual(before.result);
+  });
+  it.each(['saved-final', 'final-before-adoption', 'lost-final-cas'] as const)('recovers the original tagged receipt without a new reservation: %s', async state => {
+    const f = await renderingFixture();
+    expect(f.image.result.nativeAgentExecution).not.toHaveProperty('imageResultPolicy');
+    expect(f.parent.result.nativeAgentExecution).not.toHaveProperty('imageResultPolicy');
+    await completeImage(f, true);
+    Object.assign(f.image, { status: 'failed', error: state === 'saved-final' ? '[blocked] Native Agent original deadline expired' : 'database write conflict' });
+    if (state === 'lost-final-cas') delete f.image.result.nativeAgentExecution.checkpoint.validatedFinal;
+    if (state !== 'saved-final') {
+      f.image.result.nativeImageReview.state = 'prepared'; delete f.image.result.nativeImageReview.review;
+      delete f.db.presentationAssets.find(asset => asset.id === f.image.id)!.provenance.imageReview;
+    }
+    const slot = f.db.hermesResearchSteps.find(s => s.stage === 'scene_image')!;
+    Object.assign(slot, { status: 'failed', presentationAssetId: f.image.id });
+    f.db.hermesResearchRuns[0].status = 'failed';
+    const before = structuredClone({ ledger: f.db.usageLedger, result: f.image.result, payload: f.image.payload, tasks: f.db.agentTasks.map(t => t.id) });
+    const recover = { ...f.deps, inspectImageRecoveryState: async () => 'completed' as const };
+    expect((await recoverCompletedHermesSceneImageResults(recover)).resumed).toBe(1);
+    expect(f.image.status).toBe('pending'); expect(f.image.retryCount).toBe(1);
+    expect(f.db.usageLedger).toEqual(before.ledger); expect(f.image.result).toEqual(before.result); expect(f.image.payload).toEqual(before.payload);
+    expect(f.db.agentTasks.map(t => t.id)).toEqual(before.tasks);
+    expect((await recoverCompletedHermesSceneImageResults(recover)).resumed).toBe(0);
+    expect(await claimAgentTask(f.deps, f.image.id)).toMatchObject({ executionAttempt: 2 });
+    await requireHermesPresentationTaskAuthority(f.prisma, { taskId: f.image.id, actorId: id(1), payload: f.image.payload,
+      authority: f.image.payload.hermesRunAuthority });
+  });
+  it.each(['untagged', 'raw-deadline', 'raw-only', 'bad-schema', 'hash', 'parent', 'reservation', 'source', 'max9', 'started'])(
+    'does not rearm an existing image asset for %s', async change => {
+      const f = await renderingFixture(); await completeImage(f, change !== 'untagged');
+      Object.assign(f.image, { status: 'failed', error: 'database write conflict' });
+      const cp = f.image.result.nativeAgentExecution.checkpoint;
+      if (change === 'raw-deadline' || change === 'bad-schema') delete cp.validatedFinal;
+      if (change === 'raw-deadline') f.image.error = '[blocked] Native Agent original deadline expired';
+      if (change === 'bad-schema') f.image.error = '[blocked] Native Agent terminal image result invalid';
+      if (change === 'raw-only') { cp.received = 'raw-only'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; delete cp.validatedFinal; }
+      if (change === 'hash') cp.validatedFinal.responseHash = 'f'.repeat(64);
+      if (change === 'parent') cp.imageIdentity.parentIdentity = 'changed';
+      if (change === 'reservation') f.db.usageLedger = f.db.usageLedger.filter(entry => entry.idempotencyKey !== `agent-task-reserve:${f.image.id}`);
+      if (change === 'source') f.db.claimNodes[0].statement = 'Changed science';
+      if (change === 'max9') f.db.hermesResearchRuns[0].maxAgentTasks = 9;
+      if (change === 'started') { cp.state = 'started'; delete cp.received; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; delete cp.validatedFinal; }
+      Object.assign(f.db.hermesResearchSteps.find(s => s.stage === 'scene_image')!, { status: 'failed', presentationAssetId: f.image.id });
+      f.db.hermesResearchRuns[0].status = 'failed';
+      const ledger = structuredClone(f.db.usageLedger);
+      expect((await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState: async () => 'completed' })).resumed).toBe(0);
+      expect(f.image.status).toBe('failed'); expect(f.db.usageLedger).toEqual(ledger);
+    });
   it('advances a real Native terminal plan into one image and completes with an unadopted private draft', async () => {
     const f = await renderingFixture();
     expect(f.db.agentTasks.filter(t => t.kind === 'presentation.generate')).toHaveLength(2);

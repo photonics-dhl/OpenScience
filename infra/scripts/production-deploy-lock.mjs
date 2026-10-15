@@ -2750,6 +2750,2247 @@ function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, roll
   } catch { return false; }
 }
 
+// The image discriminator belongs to the persisted server initializer. A
+// producer-only transition is safe only when every byte-consuming runtime and
+// dependency entry is unchanged. This component also supplies the real bound
+// call for the legacy-domain extension proof; it grants no source-only release.
+function finiteImageProducerTerms(ts, context) {
+  const { program, checker, root } = context;
+  const fail = node => { throw { reason: 'IMAGE_PRODUCER_BINDING_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const nodes = (scope, predicate) => {
+    const found = []; const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (predicate(node)) found.push(node);
+      ts.forEachChild(node, visit);
+    }; visit(scope); return found;
+  };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => { let value = checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value); return value; };
+  const source = name => { const parsed = program.getSourceFile(resolve(root, name)); need(parsed && !parsed.isDeclarationFile, parsed); return parsed; };
+  const domain = source('packages/domain/src/agent/native-agent-execution.ts');
+  const initializer = one(domain.statements.filter(node => ts.isFunctionDeclaration(node)
+    && node.name?.text === 'initialNativeAgentExecution'), domain);
+  const target = symbol(initializer.name);
+  need(target && initializer.body && initializer.parameters.length === 3, initializer);
+  const producerSource = source('packages/domain/src/agent/agent.ts');
+  const producer = one(producerSource.statements.filter(node => ts.isFunctionDeclaration(node)
+    && node.name?.text === 'persistAgentTaskCoreInTransaction'), producerSource);
+  const calls = [];
+  // Resolve all runtime references, including imports/re-exports and aliases.
+  // An opaque forwarding callback or computed profile is not another trusted
+  // image writer and cannot borrow this opt-in proof.
+  for (const parsed of program.getSourceFiles()) {
+    if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(root, parsed.fileName).replaceAll('\\', '/'))) continue;
+    for (const node of nodes(parsed, ts.isIdentifier)) {
+      if (symbol(node) !== target) continue;
+      const parent = node.parent;
+      if (node === initializer.name || ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) continue;
+      need(ts.isCallExpression(parent) && parent.expression === node && !parent.questionDotToken
+        && !parent.arguments.some(ts.isSpreadElement), node);
+      need(parent.arguments.length >= 1 && parent.arguments.length <= 3, parent);
+      const profile = parent.arguments[1];
+      need(!profile || ts.isStringLiteral(profile), parent);
+      if (profile?.text === 'image-review') calls.push(parent);
+    }
+  }
+  const call = one(calls, producer);
+  need(nodes(producer, node => node === call).length === 1, call);
+  const conditional = call.parent;
+  need(ts.isConditionalExpression(conditional) && conditional.whenTrue === call
+    && ts.isIdentifier(conditional.condition) && conditional.condition.text === 'nativeReviewResult'
+    && ts.isIdentifier(conditional.whenFalse) && conditional.whenFalse.text === 'undefined', call);
+  const reviewSymbol = symbol(conditional.condition);
+  const review = one(reviewSymbol?.declarations?.filter(ts.isVariableDeclaration) ?? [], conditional);
+  need(review.initializer && ts.isCallExpression(review.initializer)
+    && ts.isIdentifier(review.initializer.expression) && review.initializer.expression.text === 'initialNativeImageReviewResult', review);
+  const reviewFunction = one(symbol(review.initializer.expression)?.declarations?.filter(ts.isFunctionDeclaration) ?? [], review);
+  need(reviewFunction.getSourceFile() === source('packages/domain/src/assets/scene-image.ts')
+    && review.initializer.arguments.length === 2, review);
+  const replay = one(nodes(producer, node => ts.isIfStatement(node) && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === 'idempotencyKey'), producer);
+  const replayReturn = one(nodes(replay, node => ts.isReturnStatement(node) && node.expression
+    && ts.isObjectLiteralExpression(node.expression) && node.expression.properties.some(property => ts.isPropertyAssignment(property)
+      && property.name.getText() === 'replayed' && property.initializer.kind === ts.SyntaxKind.TrueKeyword)), replay);
+  need(replay.end < review.pos && replayReturn.pos < call.pos, replay);
+  need(call.arguments.length === 2 || call.arguments.length === 3 && ts.isStringLiteral(call.arguments[2])
+    && call.arguments[2].text === 'image-review-tool-final-v1', call);
+  need(ts.isPropertyAccessExpression(call.arguments[0]) && call.arguments[0].name.text === 'nativeAgentRuntime'
+    && ts.isIdentifier(call.arguments[0].expression) && symbol(call.arguments[0].expression) === symbol(producer.parameters[0].name), call);
+  // No guessed string replacements: preserve this actual Program's original
+  // nodes and omit only the one trusted optional argument.
+  const transformed = ts.transform(producerSource, [transformation => {
+    const visit = node => node === call ? ts.factory.updateCallExpression(node, node.expression, node.typeArguments, node.arguments.slice(0, 2))
+      : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter({ removeComments: true }).printFile(transformed.transformed[0]); }
+  finally { transformed.dispose(); }
+  return { kind: call.arguments.length === 3 ? 'tagged' : 'absent', initializer, producer, call, replay, reviewFunction,
+    source: producerSource, text, nodes, symbol };
+}
+
+// A conditional constructor lemma, not a persistence/context compatibility
+// grant. It follows the actual bound discriminator at every marker writer and
+// the Session's new raw-turn constructors before legacy erasure is considered.
+function finiteImageProtocolPartition(ts, context) {
+  const producer = finiteImageProducerTerms(ts, context), { program, checker, root } = context;
+  const { nodes, symbol } = producer;
+  const fail = node => { throw { reason: 'IMAGE_PROTOCOL_PARTITION_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const file = name => { const source = program.getSourceFile(resolve(root, name)); need(source && !source.isDeclarationFile, source); return source; };
+  const fn = (source, name) => one(nodes(source, node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const variable = (scope, name) => one(nodes(scope, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name), scope);
+  const unwrap = raw => { let node = raw; while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)
+    || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const path = node => {
+    node = unwrap(node);
+    if (ts.isIdentifier(node)) return { base:symbol(node), parts:[] };
+    if (ts.isPropertyAccessExpression(node) && !node.questionDotToken) { const parent = path(node.expression);
+      return parent ? { base:parent.base, parts:[...parent.parts,node.name.text] } : undefined; }
+    return undefined;
+  };
+  const receiver = (node, base, parts) => { const value = path(node);
+    return value && value.base === base && JSON.stringify(value.parts) === JSON.stringify(parts); };
+  const eq = (node, base, parts, literal, operator = ts.SyntaxKind.EqualsEqualsEqualsToken) => {
+    node = unwrap(node); return ts.isBinaryExpression(node) && node.operatorToken.kind === operator
+      && receiver(node.left, base, parts) && ts.isStringLiteral(unwrap(node.right)) && unwrap(node.right).text === literal;
+  };
+  const conjuncts = node => { node = unwrap(node); return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    ? [...conjuncts(node.left), ...conjuncts(node.right)] : [node]; };
+  const guarded = (node, accepts) => {
+    for (let current = node.parent; current; current = current.parent) {
+      if (ts.isIfStatement(current) && node.pos >= current.thenStatement.pos && node.end <= current.thenStatement.end && accepts(current.expression)) return current;
+      if (ts.isConditionalExpression(current) && node.pos >= current.whenTrue.pos && node.end <= current.whenTrue.end && accepts(current.condition)) return current;
+    }
+    return undefined;
+  };
+  const property = node => (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node))
+    && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) ? node.name.text : undefined;
+  const marked = variable(producer.initializer,'marked');
+  need(Boolean(marked.parent.flags & ts.NodeFlags.Const) && ts.isBinaryExpression(marked.initializer)
+    && marked.initializer.operatorToken.kind === ts.SyntaxKind.GreaterThanEqualsToken
+    && ts.isPropertyAccessExpression(marked.initializer.left)
+    && ts.isIdentifier(marked.initializer.left.expression) && marked.initializer.left.expression.text === 'arguments'
+    && marked.initializer.left.name.text === 'length'
+    && ts.isNumericLiteral(marked.initializer.right) && marked.initializer.right.text === '3'
+    && !(symbol(marked.initializer.left.expression)?.declarations ?? []).length,marked);
+  const sessionSource = file('apps/agent-worker/src/native-agent/session.ts'), session = fn(sessionSource,'createNativeAgentSession');
+  const binding = variable(session,'binding'), bindingSymbol = symbol(binding.name);
+  need(ts.isCallExpression(binding.initializer) && ts.isIdentifier(binding.initializer.expression)
+    && binding.initializer.expression.text === 'structuredClone' && binding.initializer.arguments.length === 1
+    && !(symbol(binding.initializer.expression)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile)
+    && receiver(binding.initializer.arguments[0], symbol(session.parameters[0].name), ['binding']), binding);
+  const tagged = condition => {
+    const clauses = conjuncts(condition);
+    return clauses.some(node => eq(node,bindingSymbol,['sourceKind'],'illustration-image'))
+      && clauses.some(node => eq(node,bindingSymbol,['imageReview','imageResultPolicy'],'image-review-tool-final-v1'));
+  };
+  const complete = fn(session,'completeOnce');
+  const terminal = variable(complete,'terminal');
+  const terminalGuard = guarded(terminal,tagged);
+  need(terminalGuard && ts.isAwaitExpression(terminal.initializer) && ts.isCallExpression(terminal.initializer.expression), terminal);
+  const read = fn(session,'read');
+  need(symbol(terminal.initializer.expression.expression) === symbol(read.name), terminal);
+  const sdk = one(nodes(complete,node => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && node.expression.text === 'nativeAgentSdkRequest'),complete);
+  need(terminalGuard.end < sdk.pos,terminal);
+  const common = variable(complete,'common'), rawGuard = guarded(common,tagged);
+  need(rawGuard && ts.isObjectLiteralExpression(common.initializer),common);
+  const rawWriters = nodes(session,node => ['imageResultPolicy','effectiveRequest','received'].includes(property(node))
+    || property(node) === 'state' && ts.isPropertyAssignment(node) && ts.isStringLiteral(unwrap(node.initializer)) && unwrap(node.initializer).text === 'received');
+  need(rawWriters.length >= 5,common);
+  for (const writer of rawWriters) need(guarded(writer,tagged) === rawGuard,writer);
+  // New raw constructors may not be reached via a mutated/aliased snapshot.
+  for (const node of nodes(session,ts.isIdentifier)) {
+    if (symbol(node) !== bindingSymbol || node === binding.name) continue;
+    const parent = node.parent;
+    need(!(ts.isVariableDeclaration(parent) && parent.initializer === node),node);
+    let access = node;
+    while (ts.isPropertyAccessExpression(access.parent) && access.parent.expression === access) access = access.parent;
+    const operation = access.parent;
+    need(!(ts.isBinaryExpression(operation) && operation.left === access
+      && operation.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && operation.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+      && !ts.isDeleteExpression(operation),operation);
+  }
+  const imageSource = file('packages/domain/src/assets/native-image-review.ts');
+  const prepare = fn(imageSource,'prepareAgentNativeImageReview'), marker = variable(prepare,'marker');
+  need(ts.isCallExpression(marker.initializer)
+    && symbol(marker.initializer.expression) === symbol(fn(imageSource,'readNativeImageAgentExecution').name),marker);
+  const persist = fn(file('apps/agent-worker/src/native-agent/task-store.ts'),'persist');
+  const illustration = fn(file('apps/agent-worker/src/native-agent/illustration-task.ts'),'runNativeImageReviewTask');
+  const materialize = variable(illustration,'materialize');
+  need(ts.isArrowFunction(materialize.initializer),materialize);
+  const final = variable(materialize.initializer,'final'), tag = variable(materialize.initializer,'tagged');
+  const envelope = variable(illustration,'envelope');
+  need(eq(tag.initializer,symbol(envelope.name),['imageResultPolicy'],'image-review-tool-final-v1'),tag);
+  need(ts.isConditionalExpression(final.initializer) && ts.isIdentifier(final.initializer.condition)
+    && symbol(final.initializer.condition) === symbol(tag.name)
+    && ts.isIdentifier(final.initializer.whenFalse) && final.initializer.whenFalse.text === 'undefined',final);
+  const writers = [];
+  for (const source of program.getSourceFiles()) {
+    if (source.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(root,source.fileName).replaceAll('\\','/'))) continue;
+    writers.push(...nodes(source,node => property(node) === 'imageResultPolicy'));
+  }
+  // Exactly the five actual protocol transfers are supported. A new spread or
+  // override is still retained by the complete residual comparison, never
+  // inferred harmless from its property name or file.
+  need(writers.length === 5,producer.initializer);
+  for (const writer of writers) {
+    if (nodes(producer.initializer,node => node === writer).length) {
+      const contract = symbol(producer.initializer.parameters[2].name);
+      need(receiver(writer.initializer,contract,[]) && guarded(writer,condition => {
+        const terms = conjuncts(condition);
+        return terms.some(node => receiver(node,symbol(marked.name),[]))
+          && terms.some(node => eq(node,symbol(producer.initializer.parameters[1].name),[],'image-review'));
+      }),writer);
+    } else if (nodes(prepare,node => node === writer).length) {
+      need(receiver(writer.initializer,symbol(marker.name),['imageResultPolicy'])
+        && guarded(writer,node => receiver(node,symbol(marker.name),['imageResultPolicy'])),writer);
+    } else if (nodes(persist,node => node === writer).length) {
+      const storeBinding = variable(persist,'binding');
+      need(receiver(writer.initializer,symbol(storeBinding.name),['imageReview','imageResultPolicy'])
+        && guarded(writer,node => receiver(node,symbol(storeBinding.name),['imageReview','imageResultPolicy'])),writer);
+    } else if (nodes(common,node => node === writer).length) {
+      need(ts.isStringLiteral(unwrap(writer.initializer)) && unwrap(writer.initializer).text === 'image-review-tool-final-v1',writer);
+    } else if (nodes(materialize.initializer,node => node === writer).length) {
+      need(ts.isStringLiteral(unwrap(writer.initializer)) && unwrap(writer.initializer).text === 'image-review-tool-final-v1'
+        && guarded(writer,node => receiver(node,symbol(final.name),[])),writer);
+    } else fail(writer);
+  }
+  return { status:'conditional', producer, session, binding, terminalGuard, rawGuard, writers,
+    outstanding:['persisted decoder/source binding','shared modes/attempt/paid CAS','legacy runtime residual/import initialization','tagged reader retention'] };
+}
+
+// The new provider -> protocol -> provider edge changes initialization order.
+// Inspect the actual SCC's eager statements, not only its method declarations.
+// This is another conditional lemma; legacy consumer erasure is still separate.
+function finiteImageInitializationTerms(ts, context) {
+  const { program, checker, root } = context;
+  const fail = node => { throw { reason: 'IMAGE_INITIALIZATION_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const symbol = node => { let value = checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value); return value; };
+  const provider = program.getSourceFile(resolve(root,'packages/ai-gateway/src/provider.ts'));
+  const protocol = program.getSourceFile(resolve(root,'packages/ai-gateway/src/native-image-review.ts'));
+  need(provider && protocol,provider);
+  const graph = new Map();
+  const collect = source => {
+    if (graph.has(source)) return;
+    need(graph.size < 128,source);
+    const imports = []; graph.set(source,imports);
+    for (const statement of source.statements) {
+      if (!(ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) || !statement.moduleSpecifier
+        || statement.isTypeOnly || statement.importClause?.isTypeOnly) continue;
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings) && bindings.elements.length && bindings.elements.every(node => node.isTypeOnly)) continue;
+      const dependency = (symbol(statement.moduleSpecifier)?.declarations ?? []).find(ts.isSourceFile);
+      if (dependency && !dependency.isDeclarationFile) { imports.push(dependency); collect(dependency); }
+      else need(!statement.moduleSpecifier.text.startsWith('.'),statement);
+    }
+  }; collect(provider);
+  const reaches = (from,target,seen = new Set()) => {
+    if (from === target) return true;
+    if (seen.has(from)) return false; seen.add(from);
+    return (graph.get(from) ?? []).some(dependency => reaches(dependency,target,seen));
+  };
+  const sources = [...graph.keys()].filter(source => reaches(source,provider));
+  need(sources.includes(protocol) && (graph.get(provider) ?? []).includes(protocol),provider);
+  const members = new Set(sources), freezerProofs = [];
+  const unwrap = raw => { let node = raw;
+    while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node))) node = node.expression;
+    return node;
+  };
+  const intrinsic = (node,name) => ts.isIdentifier(node) && node.text === name
+    && !(symbol(node)?.declarations ?? []).some(declaration => !declaration.getSourceFile().isDeclarationFile);
+  const key = node => (ts.isIdentifier(node) || ts.isStringLiteral(node)) && !['__proto__','prototype','constructor'].includes(node.text);
+  const exactShape = (actual,expected) => {
+    const canonical = node => { const children = []; ts.forEachChild(node,child => { children.push(canonical(child)); });
+      return [node.kind,ts.isIdentifier(node) || ts.isLiteralExpression(node) ? node.text
+        : ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) ? node.operator : null,children]; };
+    const source = ts.createSourceFile('owned-freezer.ts',expected,ts.ScriptTarget.ES2022,true);
+    need(source.parseDiagnostics.length === 0 && source.statements.length === 1,actual);
+    need(JSON.stringify(canonical(actual)) === JSON.stringify(canonical(source.statements[0])),actual);
+  };
+  const freezer = declaration => {
+    need(ts.isFunctionDeclaration(declaration) && declaration.name && declaration.parameters.length === 1 && declaration.body,declaration);
+    // The grammar has no imported/user callback, accessor, spread, mutation of
+    // another receiver or ambient allocation. All recursion is on values of
+    // the one owned literal supplied below.
+    const name = declaration.name.text, parameter = declaration.parameters[0];
+    need(ts.isIdentifier(parameter.name) && !parameter.initializer && !parameter.dotDotDotToken,declaration);
+    const argument = parameter.name.text;
+    exactShape(declaration.body, `{ if (${argument} && typeof ${argument} === 'object') {
+      Object.values(${argument}).forEach(${name}); Object.freeze(${argument}); } return ${argument}; }`);
+    const inspect = node => {
+      if (ts.isIdentifier(node) && node.text === 'Object') need(intrinsic(node,'Object'),node);
+      if (ts.isIdentifier(node) && node.text === name && node !== declaration.name
+        && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node))
+        need(symbol(node) === symbol(declaration.name),node);
+      ts.forEachChild(node,inspect);
+    }; inspect(declaration.body); freezerProofs.push(declaration);
+  };
+  const visiting = new Set();
+  // Allocating an operand without effects does not make its coercion safe.
+  // Keep arithmetic in the Number-literal grammar actually used by these
+  // constants: BigInt operations can throw, and objects/functions can invoke
+  // arbitrary conversion bodies. Never evaluate candidate code for this proof.
+  const numericConstant = raw => {
+    const node = unwrap(raw);
+    if (ts.isNumericLiteral(node)) return true;
+    if (ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusToken,ts.SyntaxKind.MinusToken].includes(node.operator))
+      return numericConstant(node.operand);
+    return ts.isBinaryExpression(node) && [ts.SyntaxKind.PlusToken,ts.SyntaxKind.MinusToken,ts.SyntaxKind.AsteriskToken,
+      ts.SyntaxKind.SlashToken,ts.SyntaxKind.AsteriskAsteriskToken].includes(node.operatorToken.kind)
+      && numericConstant(node.left) && numericConstant(node.right);
+  };
+  const pure = raw => {
+    const node = unwrap(raw); need(node,node);
+    if (ts.isLiteralExpression(node) || ts.isNoSubstitutionTemplateLiteral(node)
+      || [ts.SyntaxKind.TrueKeyword,ts.SyntaxKind.FalseKeyword,ts.SyntaxKind.NullKeyword].includes(node.kind)) return;
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return;
+    if (ts.isNewExpression(node) && intrinsic(node.expression,'Set') && node.arguments?.length === 1
+      && ts.isArrayLiteralExpression(node.arguments[0])) { pure(node.arguments[0]); return; }
+    if (ts.isArrayLiteralExpression(node)) { for (const element of node.elements) pure(element); return; }
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const property of node.properties) {
+        need(ts.isPropertyAssignment(property) && key(property.name),property); pure(property.initializer);
+      } return;
+    }
+    if (ts.isBinaryExpression(node) && [ts.SyntaxKind.PlusToken,ts.SyntaxKind.MinusToken,ts.SyntaxKind.AsteriskToken,
+      ts.SyntaxKind.SlashToken,ts.SyntaxKind.AsteriskAsteriskToken].includes(node.operatorToken.kind)) { need(numericConstant(node),node); return; }
+    if (ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusToken,ts.SyntaxKind.MinusToken].includes(node.operator)) { need(numericConstant(node),node); return; }
+    if (ts.isIdentifier(node)) {
+      const declaration = symbol(node)?.valueDeclaration;
+      // Hoisted function references are safe; imported cyclic values/classes
+      // are not read speculatively while the provider is still initializing.
+      if (declaration && ts.isFunctionDeclaration(declaration)) return;
+      need(declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+        && !members.has(declaration.getSourceFile()) && !visiting.has(declaration),node);
+      visiting.add(declaration); pure(declaration.initializer); visiting.delete(declaration); return;
+    }
+    if (ts.isCallExpression(node) && node.arguments.length === 1 && !node.questionDotToken && !node.typeArguments?.length) {
+      pure(node.arguments[0]);
+      if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'freeze'
+        && intrinsic(node.expression.expression,'Object')) return;
+      if (ts.isIdentifier(node.expression)) {
+        const declaration = symbol(node.expression)?.valueDeclaration;
+        need(declaration && declaration.getSourceFile() === node.getSourceFile(),node);
+        freezer(declaration); return;
+      }
+    }
+    fail(node);
+  };
+  for (const source of sources) for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isTypeAliasDeclaration(statement)
+      || ts.isInterfaceDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
+    if (ts.isVariableStatement(statement)) {
+      need(Boolean(statement.declarationList.flags & ts.NodeFlags.Const),statement);
+      for (const declaration of statement.declarationList.declarations) { need(declaration.initializer,declaration); pure(declaration.initializer); }
+    } else if (ts.isClassDeclaration(statement)) {
+      for (const clause of statement.heritageClauses ?? []) if (clause.token === ts.SyntaxKind.ExtendsKeyword)
+        for (const base of clause.types) need(intrinsic(base.expression,'Error'),base);
+      for (const member of statement.members) {
+        need(!member.name || !ts.isComputedPropertyName(member.name),member);
+        need(!ts.isClassStaticBlockDeclaration(member) && !member.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.StaticKeyword),member);
+      }
+    } else fail(statement);
+  }
+  need(freezerProofs.length === 1,protocol);
+  return { status:'conditional', sources, freezer:freezerProofs[0],
+    outstanding:['actual import/dependency closure and legacy reachability','unchanged caller/runtime residual'] };
+}
+
+// Actual store modes and the captured image attempt. A rearmed task may read
+// an old final, but the only Host/Session entry still requires its original
+// envelope attempt. Paid completion retains that captured attempt after loss
+// of live authority; finalization is a distinct mode, never a paid bypass.
+function finiteImageStoreFlowTerms(ts, context) {
+  const partition = finiteImageProtocolPartition(ts,context), { program,root } = context;
+  const { nodes,symbol } = partition.producer;
+  const fail = node => { throw { reason:'IMAGE_STORE_FLOW_UNKNOWN',node }; };
+  const need = (condition,node) => { if (!condition) fail(node); };
+  const one = (values,node) => { need(values.length === 1,node); return values[0]; };
+  const fn = (source,name) => one(nodes(source,node => ts.isFunctionDeclaration(node) && node.name?.text === name),source);
+  const variable = (scope,name) => one(nodes(scope,node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name),scope);
+  const property = (object,name) => one(object.properties.filter(node => ts.isPropertyAssignment(node)
+    && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && node.name.text === name),object).initializer;
+  const routeSource = program.getSourceFile(resolve(root,'apps/agent-worker/src/native-agent/illustration-task.ts'));
+  const storeSource = program.getSourceFile(resolve(root,'apps/agent-worker/src/native-agent/task-store.ts'));
+  const route = fn(routeSource,'runNativeImageReviewTask'), factory = fn(storeSource,'createNativeTaskStore');
+  const readPath = node => {
+    while (ts.isAsExpression(node) || ts.isNonNullExpression(node) || ts.isParenthesizedExpression(node)) node = node.expression;
+    if (ts.isIdentifier(node)) return [symbol(node),[]];
+    if (ts.isPropertyAccessExpression(node) && !node.questionDotToken) {
+      const parent = readPath(node.expression); return parent && [parent[0],[...parent[1],node.name.text]];
+    }
+    return undefined;
+  };
+  const path = (node,base,parts) => { const value = readPath(node);
+    return value && value[0] === base && JSON.stringify(value[1]) === JSON.stringify(parts); };
+  const routeInput = symbol(route.parameters[0].name), storeInput = symbol(factory.parameters[0].name);
+  const envelope = variable(route,'envelope'), execution = variable(route,'execution');
+  const storeVariable = variable(route,'store'); const create = storeVariable.initializer;
+  need(ts.isCallExpression(create) && symbol(create.expression) === symbol(factory.name)
+    && create.arguments.length === 1 && ts.isObjectLiteralExpression(create.arguments[0]),create);
+  need(path(property(create.arguments[0],'executionAttempt'),routeInput,['task','executionAttempt'])
+    && path(property(create.arguments[0],'taskId'),routeInput,['task','id']),create);
+  const executionProperty = create.arguments[0].properties.filter(ts.isShorthandPropertyAssignment);
+  need(executionProperty.length === 1 && context.checker.getShorthandAssignmentValueSymbol(executionProperty[0]) === symbol(execution.name),create);
+  const session = variable(route,'session'), sessionCall = session.initializer;
+  need(ts.isCallExpression(sessionCall) && sessionCall.arguments.length === 1 && ts.isObjectLiteralExpression(sessionCall.arguments[0])
+    && symbol(sessionCall.expression) === symbol(partition.session.name),session);
+  const alternatives = node => ts.isParenthesizedExpression(node) ? alternatives(node.expression)
+    : ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.BarBarToken
+      ? [...alternatives(node.left),...alternatives(node.right)] : [node];
+  const guards = route.body.statements.filter(node => ts.isIfStatement(node)
+    && alternatives(node.expression).filter(item => ts.isBinaryExpression(item) && item.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+      && path(item.left,routeInput,['task','executionAttempt']) && path(item.right,symbol(envelope.name),['executionAttempt'])).length === 1
+    && ts.isExpressionStatement(node.thenStatement) && ts.isCallExpression(node.thenStatement.expression)
+    && symbol(node.thenStatement.expression.expression) === symbol(fn(routeSource,'stopped').name));
+  const guard = one(guards,route);
+  need(guard.end < session.pos && storeVariable.end < guard.pos && !guard.elseStatement,guard);
+  const guardBody = ts.isBlock(guard.thenStatement) ? guard.thenStatement.statements : [guard.thenStatement];
+  need(guardBody.length === 1 && ts.isExpressionStatement(guardBody[0]) && ts.isCallExpression(guardBody[0].expression)
+    && symbol(guardBody[0].expression.expression) === symbol(fn(routeSource,'stopped').name),guard);
+  // The task is a fresh literal passed only to this call, not the queue's
+  // mutable task object. Its scalar attempt cannot be changed by an awaited
+  // Prisma/storage callback holding the original outer task.
+  const entryCalls = [];
+  for (const source of program.getSourceFiles()) {
+    if (source.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(root,source.fileName).replaceAll('\\','/'))) continue;
+    for (const node of nodes(source,ts.isIdentifier)) if (symbol(node) === symbol(route.name)) {
+      const parent = node.parent;
+      if (node === route.name || ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) continue;
+      need(ts.isCallExpression(parent) && parent.expression === node, node); entryCalls.push(parent);
+    }
+  }
+  const entry = one(entryCalls,route);
+  need(entry.arguments.length === 1 && ts.isObjectLiteralExpression(entry.arguments[0]),entry);
+  const task = property(entry.arguments[0],'task');
+  need(ts.isObjectLiteralExpression(task) && task.properties.length === 3
+    && ['id','executionAttempt','result'].every(name => property(task,name)),task);
+  for (const node of nodes(route,item => ts.isPropertyAccessExpression(item) && path(item,routeInput,['task']))) {
+    need(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node
+      && ['id','executionAttempt','result'].includes(node.parent.name.text),node);
+    const value = node.parent, operation = value.parent;
+    need(!(ts.isBinaryExpression(operation) && operation.left === value && operation.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && operation.operatorToken.kind <= ts.SyntaxKind.LastAssignment) && !ts.isDeleteExpression(operation),operation);
+  }
+  const update = fn(factory,'update'), persist = fn(factory,'persist'), reference = variable(persist,'reference');
+  need(update.parameters.length === 3 && ts.isIdentifier(update.parameters[2].name),update);
+  const modes = new Map(), modeSymbol = symbol(update.parameters[2].name);
+  const returned = one(factory.body.statements.filter(ts.isReturnStatement),factory);
+  need(ts.isObjectLiteralExpression(returned.expression) && !returned.expression.properties.some(ts.isSpreadAssignment),returned);
+  for (const [member,mode] of [['compareAndSet','start'],['complete','paid'],['finalize','final']]) {
+    const value = property(returned.expression,member);
+    need(ts.isArrowFunction(value) && value.parameters.length === 2 && ts.isCallExpression(value.body)
+      && symbol(value.body.expression) === symbol(update.name) && value.body.arguments.length === 3,value);
+    need(value.body.arguments.slice(0,2).every((argument,index) => path(argument,symbol(value.parameters[index].name),[]))
+      && ts.isStringLiteral(value.body.arguments[2]) && value.body.arguments[2].text === mode,value);
+    modes.set(member,{ mode,node:value });
+  }
+  need(nodes(factory,node => ts.isCallExpression(node) && symbol(node.expression) === symbol(update.name)).length === 3,update);
+  for (const node of nodes(factory,ts.isIdentifier)) if (symbol(node) === symbol(update.name) && node !== update.name)
+    need(ts.isCallExpression(node.parent) && node.parent.expression === node,node);
+  const cas = one(nodes(update,node => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && node.expression.text === 'compareNativeAgentCheckpoint'),update);
+  need(cas.arguments.length === 2 && ts.isObjectLiteralExpression(cas.arguments[1]),cas);
+  need(path(property(cas.arguments[1],'executionAttempt'),storeInput,['executionAttempt'])
+    && path(property(cas.arguments[1],'expectedExecution'),storeInput,['execution']),cas);
+  const paid = property(cas.arguments[1],'paidCompletion');
+  need(ts.isBinaryExpression(paid) && paid.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && path(paid.left,modeSymbol,[]) && ts.isStringLiteral(paid.right) && paid.right.text === 'paid',paid);
+  const finalFlags = cas.arguments[1].properties.filter(ts.isSpreadAssignment);
+  need(finalFlags.length === 1,cas);
+  let flag = finalFlags[0].expression;
+  while (ts.isParenthesizedExpression(flag)) flag = flag.expression;
+  need(ts.isConditionalExpression(flag),flag);
+  const when = flag.condition;
+  need(ts.isBinaryExpression(when) && when.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && path(when.left,modeSymbol,[]) && ts.isStringLiteral(when.right) && when.right.text === 'final'
+    && ts.isObjectLiteralExpression(flag.whenTrue) && flag.whenTrue.properties.length === 1
+    && property(flag.whenTrue,'validatedFinalization').kind === ts.SyntaxKind.TrueKeyword
+    && ts.isObjectLiteralExpression(flag.whenFalse) && flag.whenFalse.properties.length === 0,flag);
+  const attempt = property(reference.initializer,'executionAttempt'), binding = variable(persist,'binding');
+  need(ts.isConditionalExpression(attempt) && ts.isBinaryExpression(attempt.condition)
+    && attempt.condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && path(attempt.condition.left,symbol(binding.name),['sourceKind'])
+    && ts.isStringLiteral(attempt.condition.right) && attempt.condition.right.text === 'illustration-image'
+    && path(attempt.whenTrue,symbol(binding.name),['imageReview','executionAttempt'])
+    && path(attempt.whenFalse,storeInput,['executionAttempt']),attempt);
+  return { status:'conditional',partition,route,factory,entry,guard,create,session,update,persist,reference,cas,modes,
+    outstanding:['all private constructors and decoder binding','exact CAS/byte runtime residual','tagged capability retention'] };
+}
+
+// Specialize the one initializer over its actual retained call domain. No
+// image caller supplies a third argument in I1; the new image alternative is
+// therefore unreachable when marked, while all other profiles preserve the
+// original planning-contract rejection and result. Compare the remainder to
+// the actual rollback function rather than a frozen application template.
+function finiteImageInitializerProjection(ts,context,rollbackContext) {
+  const model = finiteImageProducerTerms(ts,context), previous = finiteImageProducerTerms(ts,rollbackContext);
+  const { nodes,symbol } = model;
+  const fail = node => { throw { reason:'IMAGE_INITIALIZER_RESIDUAL_UNKNOWN',node }; };
+  const need = (condition,node) => { if (!condition) fail(node); };
+  need(model.kind === 'absent' && previous.kind === 'absent',model.call);
+  const fn = model.initializer, old = previous.initializer;
+  const profile = symbol(fn.parameters[1].name), contract = symbol(fn.parameters[2].name);
+  need(ts.isIdentifier(old.parameters[2].name),old);
+  const oldName = old.parameters[2].name.text;
+  need(!nodes(fn,node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === oldName).length,fn);
+  const unwrap = raw => { let node = raw; while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node))) node = node.expression; return node; };
+  const same = (node,value) => ts.isIdentifier(unwrap(node)) && symbol(unwrap(node)) === value;
+  const equal = (node,value,literal) => { node = unwrap(node);
+    return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+      && same(node.left,value) && ts.isStringLiteral(unwrap(node.right)) && unwrap(node.right).text === literal;
+  };
+  const marked = nodes(fn,node => ts.isVariableDeclaration(node) && node.name.text === 'marked');
+  need(marked.length === 1,fn); const markedSymbol = symbol(marked[0].name);
+  const guard = fn.body.statements[1];
+  need(ts.isIfStatement(guard) && ts.isBinaryExpression(guard.expression)
+    && guard.expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    && same(guard.expression.left,markedSymbol),guard);
+  const rejected = unwrap(guard.expression.right);
+  need(ts.isPrefixUnaryExpression(rejected) && rejected.operator === ts.SyntaxKind.ExclamationToken,rejected);
+  const alternatives = unwrap(rejected.operand);
+  need(ts.isBinaryExpression(alternatives) && alternatives.operatorToken.kind === ts.SyntaxKind.BarBarToken,alternatives);
+  const newChoice = unwrap(alternatives.right);
+  need(ts.isBinaryExpression(newChoice) && newChoice.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    && equal(newChoice.left,profile,'image-review') && equal(newChoice.right,contract,'image-review-tool-final-v1'),newChoice);
+  const oldChoice = unwrap(alternatives.left);
+  need(ts.isBinaryExpression(oldChoice) && oldChoice.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    && equal(oldChoice.left,profile,'paper-illustration'),oldChoice);
+  const spreads = nodes(fn,node => ts.isSpreadAssignment(node) && ts.isConditionalExpression(unwrap(node.expression)));
+  const replacements = new Map();
+  for (const spread of spreads) {
+    const expression = unwrap(spread.expression), condition = unwrap(expression.condition), yes = unwrap(expression.whenTrue), no = unwrap(expression.whenFalse);
+    if (!ts.isBinaryExpression(condition) || condition.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken
+      || !same(condition.left,markedSymbol)) continue;
+    need(ts.isObjectLiteralExpression(yes) && yes.properties.length === 1 && ts.isObjectLiteralExpression(no) && !no.properties.length,spread);
+    const property = yes.properties[0];
+    need(ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && same(property.initializer,contract),property);
+    if (equal(condition.right,profile,'image-review')) {
+      need(property.name.text === 'imageResultPolicy',property); replacements.set(spread,null);
+    } else if (equal(condition.right,profile,'paper-illustration')) {
+      need(property.name.text === 'planningContract',property); replacements.set(spread,marked[0].name);
+    } else fail(spread);
+  }
+  need(replacements.size === 2,fn);
+  const factory = ts.factory;
+  const transformed = ts.transform(fn,[transformation => {
+    const visit = node => {
+      if (node === newChoice) return factory.createFalse();
+      if (replacements.has(node)) {
+        const condition = replacements.get(node); if (!condition) return undefined;
+        const expression = unwrap(node.expression);
+        let value = factory.updateConditionalExpression(expression,condition,expression.questionToken,
+          ts.visitNode(expression.whenTrue,visit),expression.colonToken,expression.whenFalse);
+        if (ts.isParenthesizedExpression(node.expression)) value = factory.updateParenthesizedExpression(node.expression,value);
+        return factory.updateSpreadAssignment(node,value);
+      }
+      if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === oldName && same(node.initializer,contract))
+        return factory.createShorthandPropertyAssignment(oldName);
+      if (ts.isIdentifier(node) && symbol(node) === contract) return factory.createIdentifier(oldName);
+      let result = ts.visitEachChild(node,visit,transformation);
+      if (ts.isBinaryExpression(result) && result.operatorToken.kind === ts.SyntaxKind.BarBarToken
+        && unwrap(result.right).kind === ts.SyntaxKind.FalseKeyword) return result.left;
+      if (ts.isPrefixUnaryExpression(result) && result.operator === ts.SyntaxKind.ExclamationToken) {
+        const operand = unwrap(result.operand);
+        if (ts.isBinaryExpression(operand) && operand.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken)
+          return factory.createBinaryExpression(ts.visitNode(factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,operand.left),visit),
+            ts.SyntaxKind.BarBarToken,ts.visitNode(factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,operand.right),visit));
+        if (ts.isBinaryExpression(operand) && operand.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken)
+          return factory.updateBinaryExpression(operand,operand.left,factory.createToken(ts.SyntaxKind.ExclamationEqualsEqualsToken),operand.right);
+      }
+      return result;
+    };
+    return node => ts.visitNode(node,visit);
+  }]);
+  let text, projected;
+  try { projected=transformed.transformed[0]; text = ts.createPrinter({ removeComments:true }).printNode(ts.EmitHint.Unspecified,projected,fn.getSourceFile()); }
+  finally { transformed.dispose(); }
+  return { status:'conditional',source:fn.getSourceFile(),node:fn,projected,text,rollback:old,
+    outstanding:['strict reader/context residual and actual complete collection'] };
+}
+
+// Session specialization is inductive over owned old private turns: the old
+// constructors/replay prefix emit only started/completed turns and never the
+// new top-level fields. The actual tagged constructor partition is checked
+// first; an unknown receiver/call/effect is not a false predicate.
+function finiteImageSessionProjection(ts,context,rollbackContext) {
+  const partition = finiteImageProtocolPartition(ts,context), { nodes,symbol } = partition.producer;
+  const fail = node => { throw { reason:'IMAGE_SESSION_RESIDUAL_UNKNOWN',node }; };
+  const need = (condition,node) => { if (!condition) fail(node); };
+  const source = partition.session.getSourceFile();
+  const old = rollbackContext.program.getSourceFile(resolve(rollbackContext.root,'apps/agent-worker/src/native-agent/session.ts'));
+  need(old && !old.isDeclarationFile,source);
+  const read = nodes(partition.session,node => ts.isFunctionDeclaration(node) && node.name?.text === 'read');
+  need(read.length === 1,partition.session);
+  const state = nodes(read[0],node => ts.isVariableDeclaration(node) && node.name.text === 'state');
+  need(state.length === 1 && ts.isAwaitExpression(state[0].initializer) && ts.isCallExpression(state[0].initializer.expression),read[0]);
+  const invocation = state[0].initializer.expression;
+  const parts = node => ts.isIdentifier(node) ? [symbol(node),[]]
+    : ts.isPropertyAccessExpression(node) ? ((parent) => parent && [parent[0],[...parent[1],node.name.text]])(parts(node.expression)) : undefined;
+  const at = (node,base,path) => { const value = parts(node); return value && value[0] === base && JSON.stringify(value[1]) === JSON.stringify(path); };
+  need(at(invocation.expression,symbol(partition.session.parameters[0].name),['store','read']) && !invocation.arguments.length,invocation);
+  const absent = new Set(['imageResultPolicy','effectiveRequest','received','validatedFinal']);
+  const UNKNOWN = { known:false,pure:false };
+  const constant = value => ({ known:true,pure:true,value });
+  const evaluate = (raw,turn) => {
+    let node = raw; while (ts.isParenthesizedExpression(node)) node = node.expression;
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return constant(true);
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return constant(false);
+    if (ts.isStringLiteral(node)) return constant(node.text);
+    if (ts.isIdentifier(node) && node.text === 'undefined' && !(symbol(node)?.declarations ?? []).length) return constant(undefined);
+    if (ts.isPropertyAccessExpression(node) && at(node.expression,turn,[])) {
+      if (absent.has(node.name.text)) return constant(undefined);
+      return { known:false,pure:true,oldState:node.name.text === 'state' };
+    }
+    if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
+      const value = evaluate(node.operand,turn); return value.known ? constant(!value.value) : { known:false,pure:value.pure };
+    }
+    if (!ts.isBinaryExpression(node)) return UNKNOWN;
+    const left = evaluate(node.left,turn), operator = node.operatorToken.kind;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken && left.known && !left.value
+      || operator === ts.SyntaxKind.BarBarToken && left.known && left.value) return left;
+    const right = evaluate(node.right,turn);
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken) {
+      if (left.known) return right;
+      if (right.known && !right.value && left.pure) return constant(false);
+    }
+    if (operator === ts.SyntaxKind.BarBarToken && left.known && !left.value) return right;
+    if ([ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(operator)) {
+      let equal;
+      if (left.known && right.known) equal = left.value === right.value;
+      else if (left.oldState && right.known && right.value === 'received') equal = false;
+      if (equal !== undefined) return constant(operator === ts.SyntaxKind.EqualsEqualsEqualsToken ? equal : !equal);
+    }
+    return { known:false,pure:left.pure && right.pure };
+  };
+  const erased = new Set([partition.terminalGuard,partition.rawGuard]);
+  for (const statement of read[0].body.statements) {
+    if (!ts.isIfStatement(statement) || !ts.isCallExpression(statement.expression)) continue;
+    const call = statement.expression;
+    if (!ts.isPropertyAccessExpression(call.expression) || call.expression.name.text !== 'some'
+      || !at(call.expression.expression,symbol(state[0].name),['turns']) || call.arguments.length !== 1
+      || !ts.isArrowFunction(call.arguments[0]) || call.arguments[0].parameters.length !== 1) continue;
+    const callback = call.arguments[0], subject = symbol(callback.parameters[0].name), value = evaluate(callback.body,subject);
+    if (value.known && !value.value && value.pure) erased.add(statement);
+  }
+  need(erased.size === 3,read[0]);
+  const topNames = statement => ts.isFunctionDeclaration(statement) ? [statement.name?.text]
+    : ts.isVariableStatement(statement) ? statement.declarationList.declarations.map(node => node.name.text) : [];
+  const oldNames = new Set(old.statements.flatMap(topNames)), removed = new Map();
+  for (const statement of source.statements) {
+    const names = topNames(statement); if (!names.length || names.some(name => oldNames.has(name))) continue;
+    if (ts.isVariableStatement(statement)) need(statement.declarationList.declarations.every(node => ts.isIdentifier(node.name)
+      && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))),statement);
+    else need(ts.isFunctionDeclaration(statement),statement);
+    erased.add(statement);
+    if (ts.isFunctionDeclaration(statement)) removed.set(symbol(statement.name),statement);
+    else for (const declaration of statement.declarationList.declarations) removed.set(symbol(declaration.name),statement);
+  }
+  const insideErasure = node => { for (let current = node;current;current = current.parent) if (erased.has(current)) return true; return false; };
+  for (const node of nodes(source,ts.isIdentifier)) if (!insideErasure(node) && removed.has(symbol(node))) {
+    need(ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent),node);
+  }
+  const transformed = ts.transform(source,[transformation => {
+    const visit = node => erased.has(node) ? undefined : ts.visitEachChild(node,visit,transformation);
+    return node => ts.visitNode(node,visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter({ removeComments:true }).printFile(transformed.transformed[0]); }
+  finally { transformed.dispose(); }
+  return { status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,erased,removed,
+    outstanding:['whole private constructor/store context','external helper references and import effects','complete original canonical comparison'] };
+}
+
+// Finite persisted-JSON decoder specialization. Only bound marker/envelope/CP
+// receivers carry ABSENT facts; a property with the same spelling on another
+// object is not a protocol field. Reads must remain behind the real JSON/null
+// guards. The resulting whole functions still need original canonical equality.
+function finiteImageDecoderProjection(ts,context,rollbackContext) {
+  const partition = finiteImageProtocolPartition(ts,context), { nodes,symbol } = partition.producer;
+  const fail = node => { throw { reason:'IMAGE_DECODER_RESIDUAL_UNKNOWN',node }; };
+  const need = (condition,node) => { if (!condition) fail(node); };
+  const source = context.program.getSourceFile(resolve(context.root,'packages/domain/src/assets/native-image-review.ts'));
+  const old = rollbackContext.program.getSourceFile(resolve(rollbackContext.root,'packages/domain/src/assets/native-image-review.ts'));
+  need(source && old,source);
+  const named = (name) => { const values = source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    need(values.length === 1,source); return values[0]; };
+  const unwrap = raw => { let node = raw; while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const recordDeclaration = nodes(source,node => ts.isVariableDeclaration(node) && node.name.text === 'record');
+  need(recordDeclaration.length === 1,source);
+  const recordSymbol = symbol(recordDeclaration[0].name);
+  const reader = named('readNativeImageAgentExecution'), envelopeReader = named('readNativeImageReviewCheckpoint');
+  const rootKinds = new Map([[symbol(reader.parameters[0].name),'result'],[symbol(envelopeReader.parameters[0].name),'result']]);
+  const kindCache = new Map(), resolving = new Set();
+  const infer = raw => {
+    const node = unwrap(raw); if (!node) return undefined;
+    if (ts.isIdentifier(node)) {
+      const value = symbol(node); if (rootKinds.has(value)) return rootKinds.get(value);
+      if (kindCache.has(value)) return kindCache.get(value);
+      const declaration = value?.valueDeclaration;
+      if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer || resolving.has(declaration)) return undefined;
+      resolving.add(declaration); const result = infer(declaration.initializer); resolving.delete(declaration);
+      kindCache.set(value,result); return result;
+    }
+    if (ts.isCallExpression(node)) {
+      if (symbol(node.expression) === symbol(reader.name)) return 'marker';
+      if (symbol(node.expression) === symbol(envelopeReader.name)) return 'envelope';
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      const base = infer(node.expression);
+      if (base === 'result' && node.name.text === 'nativeAgentExecution') return 'marker';
+      if (base === 'result' && node.name.text === 'nativeImageReview') return 'envelope';
+      if (base === 'marker' && node.name.text === 'checkpoint') return 'cp';
+    }
+    return undefined;
+  };
+  const path = (raw,seen = new Set()) => {
+    const node = unwrap(raw);
+    if (ts.isIdentifier(node)) {
+      const value = symbol(node), declaration = value?.valueDeclaration;
+      if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer && !seen.has(declaration)
+        && ts.isPropertyAccessExpression(unwrap(declaration.initializer))) return path(declaration.initializer,new Set(seen).add(declaration));
+      return value && [value,[]];
+    }
+    if (ts.isPropertyAccessExpression(node)) { const parent = path(node.expression,seen); return parent && [parent[0],[...parent[1],node.name.text]]; }
+    return undefined;
+  };
+  const same = (a,b) => { const left = path(a), right = path(b);
+    return left && right && left[0] === right[0] && JSON.stringify(left[1]) === JSON.stringify(right[1]); };
+  const flatten = (node,operator) => { node = unwrap(node); return ts.isBinaryExpression(node) && node.operatorToken.kind === operator
+    ? [...flatten(node.left,operator),...flatten(node.right,operator)] : [node]; };
+  const recordTest = (node,value) => ts.isCallExpression(unwrap(node)) && symbol(unwrap(node).expression) === recordSymbol
+    && unwrap(node).arguments.length === 1 && same(unwrap(node).arguments[0],value);
+  const positive = (condition,value) => flatten(condition,ts.SyntaxKind.AmpersandAmpersandToken)
+    .some(node => recordTest(node,value) || same(node,value) && infer(value) !== 'result');
+  const negative = (condition,value) => flatten(condition,ts.SyntaxKind.BarBarToken).some(raw => {
+    const node = unwrap(raw); return ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken
+      && (recordTest(node.operand,value) || same(node.operand,value) && infer(value) !== 'result');
+  });
+  const aborts = node => {
+    if (ts.isReturnStatement(node) || ts.isThrowStatement(node)) return true;
+    return ts.isBlock(node) && node.statements.length > 0 && aborts(node.statements.at(-1));
+  };
+  const assured = (value,at) => {
+    for (let current = at;current?.parent;current = current.parent) {
+      const parent = current.parent;
+      if (ts.isBinaryExpression(parent) && parent.right === current) {
+        if (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && positive(parent.left,value)
+          || parent.operatorToken.kind === ts.SyntaxKind.BarBarToken && negative(parent.left,value)) return true;
+      }
+      if (ts.isConditionalExpression(parent) && (parent.whenTrue === current && positive(parent.condition,value)
+        || parent.whenFalse === current && negative(parent.condition,value))) return true;
+      if (ts.isIfStatement(parent) && parent.thenStatement === current && positive(parent.expression,value)) return true;
+      if (ts.isBlock(parent)) {
+        for (const statement of parent.statements) {
+          if (statement === current || statement.pos >= current.pos) break;
+          if (ts.isIfStatement(statement) && !statement.elseStatement && negative(statement.expression,value) && aborts(statement.thenStatement)) return true;
+        }
+      }
+    }
+    return false;
+  };
+  const fields = { marker:new Set(['imageResultPolicy']),envelope:new Set(['imageResultPolicy']),
+    cp:new Set(['imageResultPolicy','received','validatedFinal']) };
+  const facts = new Map(), erased = new Set(), factory = ts.factory;
+  const intrinsic = (node,name) => ts.isIdentifier(node) && node.text === name
+    && (symbol(node)?.declarations ?? []).every(declaration => declaration.getSourceFile().isDeclarationFile);
+  const valueOf = node => {
+    node = unwrap(node);
+    if (ts.isIdentifier(node) && node.text === 'undefined' && !(symbol(node)?.declarations ?? []).length) return [true,undefined];
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return [true,true];
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return [true,false];
+    if (ts.isStringLiteral(node)) return [true,node.text];
+    return [false];
+  };
+  const literal = value => value === undefined ? factory.createIdentifier('undefined')
+    : typeof value === 'string' ? factory.createStringLiteral(value) : value ? factory.createTrue() : factory.createFalse();
+  const boolean = raw => {
+    const node = unwrap(raw);
+    return node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword
+      || ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken
+      || ts.isCallExpression(node) && symbol(node.expression) === recordSymbol
+      || ts.isBinaryExpression(node) && ([ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(node.operatorToken.kind)
+        || [ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind) && boolean(node.left) && boolean(node.right));
+  };
+  const truthContext = node => {
+    const parent = node.parent;
+    if (!parent) return false;
+    if (ts.isIfStatement(parent) && parent.expression === node || ts.isConditionalExpression(parent) && parent.condition === node
+      || ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken) return true;
+    return ts.isParenthesizedExpression(parent) || ts.isBinaryExpression(parent)
+      && [ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)
+      ? truthContext(parent) : false;
+  };
+  const pure = raw => {
+    const node = unwrap(raw);
+    if (ts.isIdentifier(node) || ts.isLiteralExpression(node) || [ts.SyntaxKind.TrueKeyword,ts.SyntaxKind.FalseKeyword].includes(node.kind)) return true;
+    if (ts.isPropertyAccessExpression(node)) return Boolean(infer(node.expression)) && (node.questionDotToken || assured(node.expression,node));
+    if (ts.isCallExpression(node) && symbol(node.expression) === recordSymbol && node.arguments.length === 1) return pure(node.arguments[0]);
+    if (ts.isBinaryExpression(node) && [ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)) return pure(node.left) && pure(node.right);
+    if (ts.isPrefixUnaryExpression(node)) return node.operator === ts.SyntaxKind.ExclamationToken && pure(node.operand);
+    return false;
+  };
+  const pureRecord = recordDeclaration[0].initializer;
+  need(ts.isArrowFunction(pureRecord) && pureRecord.parameters.length === 1,pureRecord);
+  // Check the actual predicate's bound parameter and intrinsic calls; its name
+  // alone cannot authorize erasing a call with getters or ambient effects.
+  const parameter = symbol(pureRecord.parameters[0].name), body = unwrap(pureRecord.body);
+  need(ts.isCallExpression(body) && intrinsic(body.expression,'Boolean') && body.arguments.length === 1,body);
+  const terms = flatten(body.arguments[0],ts.SyntaxKind.AmpersandAmpersandToken);
+  need(terms.length === 3 && ts.isIdentifier(terms[0]) && symbol(terms[0]) === parameter,body);
+  const type = terms[1], array = terms[2];
+  need(ts.isBinaryExpression(type) && type.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && ts.isTypeOfExpression(type.left) && symbol(type.left.expression) === parameter
+    && ts.isStringLiteral(type.right) && type.right.text === 'object',type);
+  need(ts.isPrefixUnaryExpression(array) && array.operator === ts.SyntaxKind.ExclamationToken
+    && ts.isCallExpression(array.operand) && ts.isPropertyAccessExpression(array.operand.expression)
+    && intrinsic(array.operand.expression.expression,'Array') && array.operand.expression.name.text === 'isArray'
+    && array.operand.arguments.length === 1 && symbol(array.operand.arguments[0]) === parameter,array);
+  const hashDeclaration = nodes(source,node => ts.isVariableDeclaration(node) && node.name.text === 'hash');
+  need(hashDeclaration.length === 1,source);
+  const hashPredicate = hashDeclaration[0].initializer;
+  need(ts.isArrowFunction(hashPredicate) && hashPredicate.parameters.length === 1,hashPredicate);
+  const hashTerms = flatten(hashPredicate.body,ts.SyntaxKind.AmpersandAmpersandToken);
+  const hashParameter = symbol(hashPredicate.parameters[0].name);
+  need(hashTerms.length === 2 && ts.isBinaryExpression(hashTerms[0])
+    && hashTerms[0].operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && ts.isTypeOfExpression(hashTerms[0].left) && symbol(hashTerms[0].left.expression) === hashParameter
+    && ts.isStringLiteral(hashTerms[0].right) && hashTerms[0].right.text === 'string'
+    && ts.isCallExpression(hashTerms[1]) && ts.isPropertyAccessExpression(hashTerms[1].expression)
+    && ts.isRegularExpressionLiteral(hashTerms[1].expression.expression)
+    && hashTerms[1].expression.expression.text === '/^[a-f0-9]{64}$/u'
+    && hashTerms[1].expression.name.text === 'test' && hashTerms[1].arguments.length === 1
+    && symbol(hashTerms[1].arguments[0]) === hashParameter,hashPredicate);
+  const completedHash = nodes(reader,node => ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken
+    && ts.isCallExpression(node.operand) && symbol(node.operand.expression) === symbol(hashDeclaration[0].name)
+    && node.operand.arguments.length === 1 && ts.isPropertyAccessExpression(node.operand.arguments[0])
+    && infer(node.operand.arguments[0].expression) === 'cp' && node.operand.arguments[0].name.text === 'responseHash');
+  need(completedHash.length === 1,reader);
+  const hashCheck = completedHash[0];
+  const completedCondition = hashCheck.parent?.parent;
+  need(completedCondition,hashCheck);
+  // The complete decoder runtime is compared below/by the enclosing pair. This
+  // local refinement additionally ties the nonempty-hash fact to its actual
+  // completed branch, never to a similarly named unchecked object.
+  let hashDominated = false;
+  for (let node=hashCheck;node?.parent && node !== reader;node=node.parent) {
+    const parent=node.parent;
+    if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && parent.right === node) {
+      hashDominated ||= flatten(parent.left,ts.SyntaxKind.AmpersandAmpersandToken).some(term => ts.isBinaryExpression(term)
+        && term.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken && ts.isPropertyAccessExpression(term.left)
+        && infer(term.left.expression) === 'cp' && term.left.name.text === 'state' && ts.isStringLiteral(term.right) && term.right.text === 'completed');
+    }
+  }
+  need(hashDominated,hashCheck);
+  const aliases = new Map(), aliasGuards = new Set(), hashGuards = new Map();
+  for (const declaration of nodes(source,node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'responseHash')) {
+    const init=unwrap(declaration.initializer);
+    need(ts.isConditionalExpression(init) && ts.isPropertyAccessExpression(unwrap(init.condition))
+      && infer(unwrap(init.condition).expression) === 'marker' && unwrap(init.condition).name.text === 'imageResultPolicy',declaration);
+    const raw=unwrap(init.whenFalse);
+    need(ts.isPropertyAccessExpression(raw) && raw.questionDotToken && infer(raw.expression) === 'cp' && raw.name.text === 'responseHash',raw);
+    const references=nodes(source,node => ts.isIdentifier(node) && symbol(node) === symbol(declaration.name) && node !== declaration.name);
+    need(references.length === 2,declaration);
+    const guard=references.find(node => ts.isPrefixUnaryExpression(node.parent) && node.parent.operator === ts.SyntaxKind.ExclamationToken)?.parent;
+    need(guard, declaration);
+    let condition=guard;
+    while (ts.isBinaryExpression(condition.parent) && condition.parent.operatorToken.kind === ts.SyntaxKind.BarBarToken
+      || ts.isParenthesizedExpression(condition.parent)) condition=condition.parent;
+    const clauses=flatten(condition,ts.SyntaxKind.BarBarToken), index=clauses.indexOf(guard);
+    need(index > 1 && clauses.slice(0,index).some(term => ts.isPrefixUnaryExpression(term) && same(term.operand,raw.expression))
+      && clauses.slice(0,index).some(term => ts.isBinaryExpression(term) && term.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+        && ts.isPropertyAccessExpression(term.left) && same(term.left.expression,raw.expression) && term.left.name.text === 'state'
+        && ts.isStringLiteral(term.right) && term.right.text === 'completed'),guard);
+    need(ts.isIfStatement(condition.parent) && condition.parent.expression === condition,condition);
+    hashGuards.set(condition.parent,raw.expression);
+    aliases.set(symbol(declaration.name),raw); aliasGuards.add(guard);
+  }
+  need(aliases.size === 2,source);
+  const transformed = ts.transform(source,[transformation => {
+    const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return node;
+      if (aliasGuards.has(node)) return literal(false);
+      if (ts.isVariableDeclaration(node) && aliases.has(symbol(node.name))) return undefined;
+      if (ts.isIdentifier(node) && aliases.has(symbol(node))) {
+        const raw=aliases.get(symbol(node));
+        need(assured(raw.expression,node),node);
+        return factory.createPropertyAccessExpression(raw.expression,'responseHash');
+      }
+      if (ts.isIdentifier(node) && facts.has(symbol(node))) {
+        const parent = node.parent;
+        if (!(ts.isVariableDeclaration(parent) && parent.name === node || ts.isPropertyAccessExpression(parent) && parent.name === node
+          || ts.isPropertyAssignment(parent) && parent.name === node)) return literal(facts.get(symbol(node)));
+      }
+      if (ts.isPropertyAccessExpression(node) && fields[infer(node.expression)]?.has(node.name.text)
+        && (node.questionDotToken || assured(node.expression,node))) { erased.add(node); return literal(undefined); }
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression)
+        && intrinsic(node.expression.expression,'Object') && node.expression.name.text === 'hasOwn' && node.arguments.length === 2
+        && ts.isStringLiteral(node.arguments[1]) && fields[infer(node.arguments[0])]?.has(node.arguments[1].text)
+        && assured(node.arguments[0],node)) { erased.add(node); return literal(false); }
+      if (ts.isBinaryExpression(node) && [ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)) {
+        const left = ts.visitNode(node.left,visit), known = valueOf(left);
+        if (known[0] && (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ? !known[1] : known[1])) return left;
+        const right = ts.visitNode(node.right,visit), other = valueOf(right);
+        if (known[0]) return right;
+        if (other[0] && !other[1] && (truthContext(node) || boolean(node.left))) {
+          if (node.operatorToken.kind === ts.SyntaxKind.BarBarToken) return left;
+          if (pure(node.left)) return literal(false);
+        }
+        if (other[0] && other[1] === true && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+          && (truthContext(node) || boolean(node.left))) return left;
+        return factory.updateBinaryExpression(node,left,node.operatorToken,right);
+      }
+      if (ts.isConditionalExpression(node)) {
+        const condition = ts.visitNode(node.condition,visit), known = valueOf(condition);
+        if (known[0]) return ts.visitNode(known[1] ? node.whenTrue : node.whenFalse,visit);
+        const yes = ts.visitNode(node.whenTrue,visit), no = ts.visitNode(node.whenFalse,visit);
+        const a = valueOf(yes), b = valueOf(no);
+        if (a[0] && b[0] && a[1] === b[1] && pure(node.condition)) return yes;
+        return factory.updateConditionalExpression(node,condition,node.questionToken,yes,node.colonToken,no);
+      }
+      if (ts.isIfStatement(node)) {
+        const condition = ts.visitNode(node.expression,visit), known = valueOf(condition);
+        if (known[0]) return known[1] ? ts.visitNode(node.thenStatement,visit) : node.elseStatement && ts.visitNode(node.elseStatement,visit);
+        let normalized=condition;
+        if (hashGuards.has(node)) {
+          const clauses=flatten(condition,ts.SyntaxKind.BarBarToken), cp=hashGuards.get(node);
+          const finish=clauses.findIndex(term => ts.isBinaryExpression(term) && ts.isPropertyAccessExpression(term.left)
+            && same(term.left.expression,cp) && term.left.name.text === 'finishReason');
+          need(finish >= 0 && ts.isPropertyAccessExpression(clauses[finish+1])
+            && same(clauses[finish+1].expression,cp) && clauses[finish+1].name.text === 'hasToolCalls',node);
+          // The only reordered operand is a local primitive (!answer), whose
+          // initializer and lack of writes are checked below. The two cloned
+          // checkpoint property reads retain their original relative order.
+          if (finish > 0 && ts.isPrefixUnaryExpression(clauses[finish-1]) && ts.isIdentifier(clauses[finish-1].operand)) {
+            const answer=clauses[finish-1].operand, declaration=symbol(answer)?.valueDeclaration;
+            need(declaration && ts.isVariableDeclaration(declaration) && ts.isConditionalExpression(declaration.initializer)
+              && ts.isCallExpression(declaration.initializer.condition)
+              && symbol(declaration.initializer.condition.expression) === recordSymbol
+              && declaration.initializer.condition.arguments.length === 1
+              && same(declaration.initializer.condition.arguments[0],declaration.initializer.whenTrue)
+              && valueOf(declaration.initializer.whenFalse)[0] && valueOf(declaration.initializer.whenFalse)[1] === undefined,declaration);
+            need((declaration.parent.flags & ts.NodeFlags.Const) !== 0,declaration);
+            const [test]=clauses.splice(finish-1,1); clauses.splice(finish+1,0,test);
+          }
+          normalized=clauses.reduce((left,right) => factory.createBinaryExpression(left,ts.SyntaxKind.BarBarToken,right));
+        }
+        return factory.updateIfStatement(node,normalized,ts.visitNode(node.thenStatement,visit),node.elseStatement && ts.visitNode(node.elseStatement,visit));
+      }
+      let result = ts.visitEachChild(node,visit,transformation);
+      if (ts.isParenthesizedExpression(result) && valueOf(result.expression)[0]) return result.expression;
+      if (ts.isPrefixUnaryExpression(result) && result.operator === ts.SyntaxKind.ExclamationToken) {
+        const value = valueOf(result.operand); if (value[0]) return literal(!value[1]);
+      }
+      if (ts.isBinaryExpression(result) && [ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(result.operatorToken.kind)) {
+        const left = valueOf(result.left), right = valueOf(result.right);
+        if (left[0] && right[0]) return literal(result.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ? left[1] === right[1] : left[1] !== right[1]);
+      }
+      if (ts.isVariableDeclaration(result) && ts.isIdentifier(result.name) && result.initializer) {
+        const value = valueOf(result.initializer);
+        if (value[0] && typeof value[1] !== 'string' && nodes(node.initializer,child => erased.has(child)).length) {
+          facts.set(symbol(node.name),value[1]); return undefined;
+        }
+      }
+      if (ts.isVariableStatement(result) && !result.declarationList.declarations.length) return undefined;
+      if (ts.isArrayLiteralExpression(result)) return factory.updateArrayLiteralExpression(result,result.elements.filter(element =>
+        !(ts.isSpreadElement(element) && ts.isArrayLiteralExpression(unwrap(element.expression)) && !unwrap(element.expression).elements.length)));
+      if (ts.isObjectLiteralExpression(result)) return factory.updateObjectLiteralExpression(result,result.properties.filter(property =>
+        !(ts.isSpreadAssignment(property) && ts.isObjectLiteralExpression(unwrap(property.expression)) && !unwrap(property.expression).properties.length)));
+      return result;
+    };
+    return node => ts.visitNode(node,visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter({ removeComments:true }).printFile(transformed.transformed[0]); }
+  finally { transformed.dispose(); }
+  return { status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,
+    outstanding:['completed-CP hash alias refinement','strict full module runtime comparison','all caller/private constructor context'] };
+}
+
+function finiteImageStoreProjection(ts,context,rollbackContext) {
+  const flow=finiteImageStoreFlowTerms(ts,context), { nodes,symbol }=flow.partition.producer;
+  const source=flow.factory.getSourceFile();
+  const old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,'apps/agent-worker/src/native-agent/task-store.ts'));
+  const fail=node=>{throw {reason:'IMAGE_STORE_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  need(old,source);
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const variable=(scope,name)=>one(nodes(scope,node=>ts.isVariableDeclaration(node)&&ts.isIdentifier(node.name)&&node.name.text===name),scope);
+  const oldFactory=one(old.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createNativeTaskStore'),old);
+  const oldUpdate=one(nodes(oldFactory,node=>ts.isFunctionDeclaration(node)&&node.name?.text==='update'),oldFactory);
+  need(oldUpdate.parameters.length===3 && ts.isIdentifier(oldUpdate.parameters[2].name),oldUpdate);
+  const paidName=oldUpdate.parameters[2].name.text, mode=symbol(flow.update.parameters[2].name);
+  const returned=one(flow.factory.body.statements.filter(ts.isReturnStatement),flow.factory);
+  const read=one(returned.expression.properties.filter(node=>ts.isMethodDeclaration(node)&&node.name.text==='read'),returned);
+  const rootKinds=new Map([[symbol(flow.factory.parameters[0].name),'input'],
+    [symbol(flow.persist.parameters[0].name),'state'],[symbol(flow.update.parameters[1].name),'state'],
+    [symbol(variable(read,'state').name),'state'],[symbol(variable(read,'cp').name),'cp'],
+    [symbol(variable(read,'turn').name),'turn'],[symbol(variable(flow.persist,'turn').name),'turn']]);
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const cache=new Map(),active=new Set();
+  const infer=raw=>{
+    const node=unwrap(raw);if(!node)return undefined;
+    if(ts.isIdentifier(node)){
+      const value=symbol(node);if(rootKinds.has(value))return rootKinds.get(value);
+      if(cache.has(value))return cache.get(value);
+      const declaration=value?.valueDeclaration;
+      if(!declaration||!ts.isVariableDeclaration(declaration)||!declaration.initializer||active.has(declaration))return undefined;
+      active.add(declaration);const kind=infer(declaration.initializer);active.delete(declaration);cache.set(value,kind);return kind;
+    }
+    if(ts.isPropertyAccessExpression(node)){
+      const parent=infer(node.expression);
+      if(parent==='input'&&node.name.text==='execution')return 'marker';
+      if(parent==='state'&&node.name.text==='binding')return 'binding';
+      if(parent==='binding'&&node.name.text==='imageReview')return 'envelope';
+    }
+    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='readNativeAgentExecution')return 'marker';
+    return undefined;
+  };
+  const absence={state:new Set(['validatedFinal']),turn:new Set(['imageResultPolicy','effectiveRequest','received']),
+    envelope:new Set(['imageResultPolicy']),marker:new Set(['imageResultPolicy']),cp:new Set(['imageResultPolicy','received','validatedFinal'])};
+  const some=one(nodes(read,node=>ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)
+    &&node.expression.name.text==='some'&&ts.isPropertyAccessExpression(node.expression.expression)
+    &&infer(node.expression.expression.expression)==='state'&&node.expression.expression.name.text==='turns'),read);
+  need(some.arguments.length===1&&ts.isArrowFunction(some.arguments[0])&&some.arguments[0].parameters.length===1,some);
+  rootKinds.set(symbol(some.arguments[0].parameters[0].name),'turn');
+  const sourceVariable=variable(flow.persist,'source'), sourceSymbol=symbol(sourceVariable.name);
+  const sourceUses=nodes(flow.factory,node=>ts.isIdentifier(node)&&symbol(node)===sourceSymbol&&node!==sourceVariable.name);
+  need(sourceUses.length===1&&ts.isSpreadAssignment(sourceUses[0].parent),sourceVariable);
+  const referenceAttempt=one(flow.reference.initializer.properties.filter(node=>ts.isPropertyAssignment(node)&&node.name.text==='executionAttempt'),flow.reference);
+  const facts=new Map(), factory=ts.factory;
+  const deepImport=one(nodes(source,node=>ts.isImportSpecifier(node)&&node.name.text==='isDeepStrictEqual'),source);
+  need(ts.isImportDeclaration(deepImport.parent.parent.parent)&&deepImport.parent.parent.parent.moduleSpecifier.text==='node:util',deepImport);
+  const known=raw=>{
+    const node=unwrap(raw);
+    if(node?.kind===ts.SyntaxKind.TrueKeyword)return [true,true];
+    if(node?.kind===ts.SyntaxKind.FalseKeyword)return [true,false];
+    if(ts.isIdentifier(node)&&node.text==='undefined'&&!(symbol(node)?.declarations??[]).length)return [true,undefined];
+    if(ts.isStringLiteral(node))return [true,node.text];
+    return [false];
+  };
+  const literal=value=>value===undefined?factory.createIdentifier('undefined'):value?factory.createTrue():factory.createFalse();
+  const pure=raw=>{
+    const node=unwrap(raw);
+    if(ts.isIdentifier(node)||ts.isStringLiteral(node)||[ts.SyntaxKind.TrueKeyword,ts.SyntaxKind.FalseKeyword].includes(node.kind))return true;
+    if(ts.isPropertyAccessExpression(node))return Boolean(infer(node.expression));
+    if(ts.isPrefixUnaryExpression(node))return node.operator===ts.SyntaxKind.ExclamationToken&&pure(node.operand);
+    if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind))return pure(node.left)&&pure(node.right);
+    return false;
+  };
+  const boolean=raw=>{const node=unwrap(raw);return [ts.SyntaxKind.TrueKeyword,ts.SyntaxKind.FalseKeyword].includes(node.kind)
+    ||ts.isPrefixUnaryExpression(node)&&node.operator===ts.SyntaxKind.ExclamationToken
+    ||ts.isBinaryExpression(node)&&([ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(node.operatorToken.kind)
+      ||[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)&&boolean(node.left)&&boolean(node.right));};
+  const flatten=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.BarBarToken
+    ?[...flatten(node.left),...flatten(node.right)]:[raw];};
+  const turnGuard=one(read.body.statements.filter(node=>ts.isIfStatement(node)&&flatten(node.expression).some(term=>
+    ts.isPrefixUnaryExpression(term)&&infer(term.operand)==='turn')),read);
+  const persistGuard=one(flow.persist.body.statements.filter(node=>ts.isIfStatement(node)&&flatten(node.expression).some(term=>
+    ts.isPrefixUnaryExpression(term)&&infer(term.operand)==='turn')),flow.persist);
+  const turnMissing=one(flatten(turnGuard.expression).filter(node=>ts.isPrefixUnaryExpression(node)&&infer(node.operand)==='turn'),turnGuard);
+  const within=(node,scope)=>node.pos>=scope.pos&&node.end<=scope.end;
+  const admitted=node=>within(node,flow.persist)&&node.pos>=persistGuard.end
+    ||within(node,read)&&(node.pos>=turnGuard.end||within(node,some.arguments[0])
+      ||within(node,turnGuard.expression)&&node.pos>=turnMissing.end);
+  const sameSource=variable(read,'sameSource');
+  need(flatten(turnGuard.expression).some(term=>ts.isPrefixUnaryExpression(term)&&symbol(term.operand)===symbol(sameSource.name)),turnGuard);
+  const projectedSource=new Map();
+  const transformed=ts.transform(source,[transformation=>{
+    const visit=node=>{
+      if(ts.isTypeNode(node)||ts.isInterfaceDeclaration(node)||ts.isTypeAliasDeclaration(node))return node;
+      if(node===flow.modes.get('finalize').node.parent)return undefined;
+      if(ts.isIdentifier(node)&&symbol(node)===mode)return factory.createIdentifier(paidName);
+      if(ts.isIdentifier(node)&&facts.has(symbol(node))&&!(ts.isVariableDeclaration(node.parent)&&node.parent.name===node))return facts.get(symbol(node));
+      if(node===referenceAttempt)return factory.updatePropertyAssignment(node,node.name,unwrap(node.initializer).whenFalse);
+      if(ts.isPropertyAccessExpression(node)&&absence[infer(node.expression)]?.has(node.name.text)&&admitted(node))return literal(undefined);
+      if(ts.isStringLiteral(node)&&node.text==='imageResultPolicy'&&ts.isArrayLiteralExpression(node.parent)
+        &&node.parent.parent&&ts.isPropertyAccessExpression(node.parent.parent)&&node.parent.parent.name.text==='some')return undefined;
+      if(ts.isBinaryExpression(node)&&ts.isIdentifier(node.left)&&symbol(node.left)===mode){
+        need(node.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken&&ts.isStringLiteral(node.right),node);
+        if(node.right.text==='final')return literal(false);
+        if(node.right.text==='paid')return factory.createIdentifier(paidName);
+        if(node.right.text==='start')return factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,factory.createIdentifier(paidName));
+        fail(node);
+      }
+      if(ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken
+        &&ts.isPropertyAccessExpression(node.left)&&infer(node.left.expression)==='turn'&&node.left.name.text==='state'
+        &&ts.isStringLiteral(node.right)&&node.right.text==='received'&&admitted(node))return literal(false);
+      if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&symbol(node.expression)===symbol(flow.update.name)){
+        const mode=node.arguments[2];need(ts.isStringLiteral(mode)&&['start','paid'].includes(mode.text),node);
+        return factory.updateCallExpression(node,node.expression,node.typeArguments,[...node.arguments.slice(0,2),literal(mode.text==='paid')]);
+      }
+      if(ts.isCallExpression(node)&&symbol(node.expression)===symbol(deepImport.name)){
+        const args=node.arguments.map(argument=>ts.visitNode(argument,visit));
+        if(args.length===2&&args.every(argument=>known(argument)[0]&&known(argument)[1]===undefined))return literal(true);
+        return factory.updateCallExpression(node,node.expression,node.typeArguments,args);
+      }
+      if(ts.isSpreadAssignment(node)&&ts.isIdentifier(node.expression)&&symbol(node.expression)===sourceSymbol){
+        need(projectedSource.has(sourceSymbol),node);return factory.updateSpreadAssignment(node,factory.createParenthesizedExpression(projectedSource.get(sourceSymbol)));
+      }
+      if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)){
+        const left=ts.visitNode(node.left,visit),a=known(left);
+        if(a[0])return (node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken?Boolean(a[1]):!a[1])?ts.visitNode(node.right,visit):left;
+        const right=ts.visitNode(node.right,visit),b=known(right);
+        if(b[0]&&boolean(node.left)){
+          if(node.operatorToken.kind===ts.SyntaxKind.BarBarToken&&!b[1]||node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken&&b[1])return left;
+          if(pure(node.left))return literal(Boolean(b[1]));
+        }
+        return factory.updateBinaryExpression(node,left,node.operatorToken,right);
+      }
+      if(ts.isConditionalExpression(node)){
+        const condition=ts.visitNode(node.condition,visit),value=known(condition);
+        if(value[0])return ts.visitNode(value[1]?node.whenTrue:node.whenFalse,visit);
+        return factory.updateConditionalExpression(node,condition,node.questionToken,ts.visitNode(node.whenTrue,visit),node.colonToken,ts.visitNode(node.whenFalse,visit));
+      }
+      if(ts.isIfStatement(node)){
+        const condition=ts.visitNode(node.expression,visit),value=known(condition);
+        if(value[0])return value[1]?ts.visitNode(node.thenStatement,visit):node.elseStatement&&ts.visitNode(node.elseStatement,visit);
+        let residual=condition;
+        if(node===turnGuard){
+          const clauses=flatten(condition),missing=clauses.findIndex(term=>ts.isPrefixUnaryExpression(term)&&infer(term.operand)==='turn');
+          need(missing>=0,condition);
+          const next=clauses[missing+1];
+          need(ts.isBinaryExpression(next)&&next.operatorToken.kind===ts.SyntaxKind.ExclamationEqualsEqualsToken
+            &&ts.isPropertyAccessExpression(unwrap(next.left))&&infer(unwrap(next.left).expression)==='turn'&&unwrap(next.left).name.text==='state'
+            &&ts.isPropertyAccessExpression(next.right)&&infer(next.right.expression)==='cp'&&next.right.name.text==='state',next);
+          const optional=factory.createPropertyAccessChain(unwrap(next.left).expression,factory.createToken(ts.SyntaxKind.QuestionDotToken),'state');
+          clauses.splice(missing,2,factory.updateBinaryExpression(next,optional,next.operatorToken,next.right));
+          residual=clauses.reduce((left,right)=>factory.createBinaryExpression(left,ts.SyntaxKind.BarBarToken,right));
+        }
+        const then=ts.visitNode(node.thenStatement,visit),otherwise=node.elseStatement&&ts.visitNode(node.elseStatement,visit);
+        if(ts.isBinaryExpression(condition)&&condition.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken
+          &&ts.isPropertyAccessExpression(condition.left)&&infer(condition.left.expression)==='binding'&&condition.left.name.text==='sourceKind'
+          &&ts.isStringLiteral(condition.right)&&condition.right.text==='illustration-image'&&ts.isBlock(then)&&then.statements.length===1){
+          const guard=then.statements[0];
+          if(ts.isIfStatement(guard)&&ts.isBinaryExpression(guard.expression)&&guard.expression.operatorToken.kind===ts.SyntaxKind.ExclamationEqualsEqualsToken
+            &&ts.isPropertyAccessExpression(guard.expression.left)&&infer(guard.expression.left.expression)==='cp'&&guard.expression.left.name.text==='sourceKind'
+            &&ts.isStringLiteral(guard.expression.right)&&guard.expression.right.text==='illustration-image'){
+            need(node.parent===read.body&&node.pos>=turnGuard.end&&!otherwise,node);
+            need(ts.isExpressionStatement(guard.thenStatement)&&ts.isCallExpression(guard.thenStatement.expression)
+              &&ts.isIdentifier(guard.thenStatement.expression.expression)&&guard.thenStatement.expression.expression.text==='blocked'&&!guard.elseStatement,guard);
+            return undefined;
+          }
+        }
+        return factory.updateIfStatement(node,residual,then,otherwise);
+      }
+      let result=ts.visitEachChild(node,visit,transformation);
+      if(ts.isParenthesizedExpression(result)&&known(result.expression)[0])return result.expression;
+      if(ts.isPrefixUnaryExpression(result)&&result.operator===ts.SyntaxKind.ExclamationToken){const value=known(result.operand);if(value[0])return literal(!value[1]);}
+      if(ts.isBinaryExpression(result)&&[ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(result.operatorToken.kind)){
+        const a=known(result.left),b=known(result.right);if(a[0]&&b[0])return literal(result.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken?a[1]===b[1]:a[1]!==b[1]);
+      }
+      if(ts.isVariableDeclaration(result)&&ts.isIdentifier(result.name)&&result.initializer){
+        if(symbol(node.name)===sourceSymbol){projectedSource.set(sourceSymbol,result.initializer);return undefined;}
+        const value=known(result.initializer);if(value[0]&&typeof value[1]!=='string') {facts.set(symbol(node.name),result.initializer);return undefined;}
+      }
+      if(ts.isVariableStatement(result)&&!result.declarationList.declarations.length)return undefined;
+      if(ts.isPropertyAssignment(result)&&result.name.text==='paidCompletion'&&ts.isIdentifier(result.initializer)&&result.initializer.text===paidName)
+        return factory.createShorthandPropertyAssignment(result.name);
+      if(ts.isCallExpression(result)&&node===some&&known(unwrap(result.arguments[0].body))[0]){
+        need(known(unwrap(result.arguments[0].body))[1]===false,node);return literal(false);
+      }
+      if(ts.isObjectLiteralExpression(result))return factory.updateObjectLiteralExpression(result,result.properties.filter(property=>
+        !(ts.isSpreadAssignment(property)&&ts.isObjectLiteralExpression(unwrap(property.expression))&&!unwrap(property.expression).properties.length)));
+      return result;
+    };
+    return node=>ts.visitNode(node,visit);
+  }]);
+  let text;
+  try{text=ts.createPrinter({removeComments:true}).printFile(transformed.transformed[0]);}finally{transformed.dispose();}
+  return {status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,flow,
+    outstanding:['private state producer/loader partition','old optional-turn equivalence','read same-source implication','full store/runtime and CAS comparison']};
+}
+
+function finiteImageExecutionProjection(ts,context,rollbackContext) {
+  const initial=finiteImageInitializerProjection(ts,context,rollbackContext);
+  const flow=finiteImageStoreFlowTerms(ts,context),{nodes,symbol}=flow.partition.producer;
+  const source=initial.source,old=initial.rollback.getSourceFile();
+  const fail=node=>{throw {reason:'IMAGE_EXECUTION_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const named=name=>one(source.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name),source);
+  const read=named('readNativeAgentExecution'),cas=named('compareNativeAgentCheckpoint'),terminal=named('nativeAgentTerminalResult');
+  const roots=new Map([[symbol(cas.parameters[1].name),'input'],[symbol(terminal.parameters[0].name),'task']]);
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const cache=new Map(),active=new Set();
+  const infer=raw=>{
+    const node=unwrap(raw);if(!node)return undefined;
+    if(ts.isIdentifier(node)){
+      const value=symbol(node);if(roots.has(value))return roots.get(value);if(cache.has(value))return cache.get(value);
+      const declaration=value?.valueDeclaration;
+      if(!declaration||!ts.isVariableDeclaration(declaration)||!declaration.initializer||active.has(declaration))return undefined;
+      active.add(declaration);const kind=infer(declaration.initializer);active.delete(declaration);cache.set(value,kind);return kind;
+    }
+    if(ts.isCallExpression(node)&&symbol(node.expression)===symbol(read.name))return 'marker';
+    if(ts.isPropertyAccessExpression(node)){
+      const parent=infer(node.expression);
+      if(parent==='task'&&node.name.text==='result')return 'result';
+      if(parent==='result'&&node.name.text==='nativeImageReview')return 'envelope';
+      if(parent==='input'&&node.name.text==='next')return 'cp';
+    }
+    return undefined;
+  };
+  const calls=[];
+  for(const parsed of context.program.getSourceFiles()){
+    if(parsed.isDeclarationFile||!/^(?:apps|packages)\//u.test(relative(context.root,parsed.fileName).replaceAll('\\','/')))continue;
+    for(const node of nodes(parsed,ts.isIdentifier))if(symbol(node)===symbol(cas.name)){
+      if(node===cas.name||ts.isImportSpecifier(node.parent)||ts.isExportSpecifier(node.parent))continue;
+      need(ts.isCallExpression(node.parent)&&node.parent.expression===node,node);calls.push(node.parent);
+    }
+  }
+  need(calls.length===1&&calls[0]===flow.cas,cas);
+  const blocked=named('blocked');
+  need(blocked.body.statements.length===1&&ts.isThrowStatement(blocked.body.statements[0]),blocked);
+  const aborts=node=>ts.isReturnStatement(node)||ts.isThrowStatement(node)
+    ||ts.isExpressionStatement(node)&&ts.isCallExpression(node.expression)&&symbol(node.expression.expression)===symbol(blocked.name)
+    ||ts.isBlock(node)&&node.statements.length>0&&aborts(node.statements.at(-1));
+  const same=(left,right)=>ts.isIdentifier(unwrap(left))&&ts.isIdentifier(unwrap(right))&&symbol(unwrap(left))===symbol(unwrap(right));
+  const terms=(raw,operator)=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===operator
+    ?[...terms(node.left,operator),...terms(node.right,operator)]:[node];};
+  const negative=(condition,value)=>terms(condition,ts.SyntaxKind.BarBarToken).some(term=>ts.isPrefixUnaryExpression(term)
+    &&term.operator===ts.SyntaxKind.ExclamationToken&&same(term.operand,value));
+  const positive=(condition,value)=>terms(condition,ts.SyntaxKind.AmpersandAmpersandToken).some(term=>same(term,value)
+    ||ts.isBinaryExpression(term)&&ts.isPropertyAccessExpression(term.left)&&same(term.left.expression,value)
+      &&term.left.name.text==='profile'&&term.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken);
+  const nonnull=(value,at)=>{
+    for(let current=at;current?.parent;current=current.parent){
+      const parent=current.parent;
+      if(ts.isBinaryExpression(parent)&&parent.right===current&&parent.operatorToken.kind===ts.SyntaxKind.BarBarToken&&negative(parent.left,value))return true;
+      if(ts.isIfStatement(parent)&&parent.thenStatement===current&&positive(parent.expression,value))return true;
+      if(ts.isBlock(parent))for(const statement of parent.statements){
+        if(statement===current||statement.pos>=current.pos)break;
+        if(ts.isIfStatement(statement)&&!statement.elseStatement&&negative(statement.expression,value)&&aborts(statement.thenStatement))return true;
+      }
+    }
+    return false;
+  };
+  const factory=ts.factory;
+  const literal=value=>value===undefined?factory.createIdentifier('undefined'):typeof value==='string'?factory.createStringLiteral(value):value?factory.createTrue():factory.createFalse();
+  const known=raw=>{const node=unwrap(raw);if(node.kind===ts.SyntaxKind.TrueKeyword)return [true,true];if(node.kind===ts.SyntaxKind.FalseKeyword)return [true,false];
+    if(ts.isIdentifier(node)&&node.text==='undefined'&&!(symbol(node)?.declarations??[]).length)return [true,undefined];
+    if(ts.isStringLiteral(node))return [true,node.text];return [false];};
+  const pure=raw=>{
+    const node=unwrap(raw);if(ts.isIdentifier(node)||ts.isStringLiteral(node))return true;
+    if(ts.isPropertyAccessExpression(node))return Boolean(infer(node.expression));
+    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='record'&&node.arguments.length===1)return pure(node.arguments[0]);
+    if(ts.isPrefixUnaryExpression(node)&&node.operator===ts.SyntaxKind.ExclamationToken)return pure(node.operand);
+    if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken,ts.SyntaxKind.EqualsEqualsEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(node.operatorToken.kind))return pure(node.left)&&pure(node.right);
+    return false;
+  };
+  const truth=node=>{const parent=node.parent;if(!parent)return false;
+    if(ts.isIfStatement(parent)&&parent.expression===node||ts.isConditionalExpression(parent)&&parent.condition===node
+      ||ts.isPrefixUnaryExpression(parent)&&parent.operator===ts.SyntaxKind.ExclamationToken)return true;
+    return ts.isParenthesizedExpression(parent)||ts.isBinaryExpression(parent)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)?truth(parent):false;};
+  const transformed=ts.transform(source,[transformation=>{
+    const visit=node=>{
+      if(node===initial.node)return initial.projected;
+      if(ts.isTypeNode(node)||ts.isInterfaceDeclaration(node)||ts.isTypeAliasDeclaration(node))return node;
+      if(ts.isPropertyAccessExpression(node)&&((infer(node.expression)==='marker'&&(node.questionDotToken||nonnull(node.expression,node))
+        ||infer(node.expression)==='envelope')&&node.name.text==='imageResultPolicy'
+        ||infer(node.expression)==='input'&&node.name.text==='validatedFinalization'||infer(node.expression)==='cp'&&node.name.text==='validatedFinal'))return literal(undefined);
+      if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&ts.isIdentifier(node.expression.expression)
+        &&node.expression.expression.text==='Object'&&node.expression.name.text==='hasOwn'&&node.arguments.length===2
+        &&infer(node.arguments[0])==='envelope'&&ts.isStringLiteral(node.arguments[1])&&node.arguments[1].text==='imageResultPolicy')return literal(false);
+      if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)){
+        const left=ts.visitNode(node.left,visit),a=known(left);
+        if(a[0])return (node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken?Boolean(a[1]):!a[1])?ts.visitNode(node.right,visit):left;
+        const right=ts.visitNode(node.right,visit),b=known(right);
+        if(b[0]&&truth(node)){
+          if(node.operatorToken.kind===ts.SyntaxKind.BarBarToken&&!b[1])return left;
+          if(node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken&&!b[1]&&pure(node.left))return literal(false);
+        }
+        const choice=unwrap(node.right);
+        if(node.operatorToken.kind===ts.SyntaxKind.BarBarToken&&ts.isConditionalExpression(choice)
+          &&ts.isPropertyAccessExpression(choice.condition)&&infer(choice.condition.expression)==='marker'
+          &&choice.condition.name.text==='imageResultPolicy'){
+          const clauses=raw=>{const value=unwrap(raw);return ts.isBinaryExpression(value)&&value.operatorToken.kind===ts.SyntaxKind.BarBarToken
+            ?[...clauses(value.left),...clauses(value.right)]:[raw];};
+          return [...clauses(left),...clauses(right)].reduce((a,b)=>factory.createBinaryExpression(a,ts.SyntaxKind.BarBarToken,b));
+        }
+        return factory.updateBinaryExpression(node,left,node.operatorToken,right);
+      }
+      if(ts.isConditionalExpression(node)){
+        const condition=ts.visitNode(node.condition,visit),value=known(condition);
+        if(value[0])return ts.visitNode(value[1]?node.whenTrue:node.whenFalse,visit);
+        return factory.updateConditionalExpression(node,condition,node.questionToken,ts.visitNode(node.whenTrue,visit),node.colonToken,ts.visitNode(node.whenFalse,visit));
+      }
+      if(ts.isIfStatement(node)){
+        const condition=ts.visitNode(node.expression,visit),value=known(condition);
+        if(value[0])return value[1]?ts.visitNode(node.thenStatement,visit):node.elseStatement&&ts.visitNode(node.elseStatement,visit);
+        return factory.updateIfStatement(node,condition,ts.visitNode(node.thenStatement,visit),node.elseStatement&&ts.visitNode(node.elseStatement,visit));
+      }
+      let result=ts.visitEachChild(node,visit,transformation);
+      if(ts.isParenthesizedExpression(result)&&known(result.expression)[0])return result.expression;
+      if(ts.isParenthesizedExpression(result)&&ts.isBinaryExpression(result.expression)
+        &&result.expression.operatorToken.kind===ts.SyntaxKind.BarBarToken&&ts.isBinaryExpression(node.parent)
+        &&node.parent.operatorToken.kind===ts.SyntaxKind.BarBarToken){
+        // Regrouping OR preserves both evaluation order and returned value.
+        // It only removes the grouping introduced by the erased tag choice.
+        return result.expression;
+      }
+      if(ts.isPrefixUnaryExpression(result)&&result.operator===ts.SyntaxKind.ExclamationToken){const value=known(result.operand);if(value[0])return literal(!value[1]);}
+      if(ts.isBinaryExpression(result)&&[ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(result.operatorToken.kind)){
+        const a=known(result.left),b=known(result.right);if(a[0]&&b[0])return literal(result.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken?a[1]===b[1]:a[1]!==b[1]);
+      }
+      return result;
+    };
+    return node=>ts.visitNode(node,visit);
+  }]);
+  let text;try{text=ts.createPrinter({removeComments:true}).printFile(transformed.transformed[0]);}finally{transformed.dispose();}
+  return {status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,
+    outstanding:['bound old marker/envelope/CP partition','private-store final mode unreachable','whole runtime/dependency comparison and tagged retention']};
+}
+
+function finiteImageIllustrationProjection(ts,context,rollbackContext) {
+  const flow=finiteImageStoreFlowTerms(ts,context),{nodes,symbol}=flow.partition.producer;
+  const source=flow.route.getSourceFile(),old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,'apps/agent-worker/src/native-agent/illustration-task.ts'));
+  const fail=node=>{throw {reason:'IMAGE_ILLUSTRATION_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const variable=(scope,name)=>one(nodes(scope,node=>ts.isVariableDeclaration(node)&&node.name.text===name),scope);
+  need(old,source);
+  const envelope=variable(flow.route,'envelope'),execution=variable(flow.route,'execution'),materialize=variable(flow.route,'materialize').initializer;
+  const roots=new Map([[symbol(envelope.name),'envelope'],[symbol(execution.name),'marker'],
+    [symbol(materialize.parameters[0].name),'state'],[symbol(variable(flow.route,'saved').name),'state'],[symbol(variable(flow.route,'completed').name),'state']]);
+  const factory=ts.factory,facts=new Map();
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const property=(node,name)=>ts.isPropertyAccessExpression(unwrap(node))&&unwrap(node).name.text===name;
+  const literal=value=>value===undefined?factory.createIdentifier('undefined'):typeof value==='string'?factory.createStringLiteral(value):value?factory.createTrue():factory.createFalse();
+  const known=raw=>{const node=unwrap(raw);if(node.kind===ts.SyntaxKind.TrueKeyword)return [true,true];if(node.kind===ts.SyntaxKind.FalseKeyword)return [true,false];
+    if(ts.isIdentifier(node)&&node.text==='undefined'&&!(symbol(node)?.declarations??[]).length)return [true,undefined];
+    if(ts.isStringLiteral(node))return [true,node.text];return [false];};
+  const root=node=>ts.isIdentifier(unwrap(node))?roots.get(symbol(unwrap(node))):undefined;
+  const truth=node=>{const parent=node.parent;if(!parent)return false;
+    if(ts.isIfStatement(parent)&&parent.expression===node||ts.isConditionalExpression(parent)&&parent.condition===node
+      ||ts.isPrefixUnaryExpression(parent)&&parent.operator===ts.SyntaxKind.ExclamationToken)return true;
+    return ts.isParenthesizedExpression(parent)||ts.isBinaryExpression(parent)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)?truth(parent):false;};
+  const foldOr=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.BarBarToken
+    ?[...foldOr(node.left),...foldOr(node.right)]:[raw];};
+  const transformed=ts.transform(source,[transformation=>{
+    const visit=node=>{
+      if(ts.isTypeNode(node)||ts.isInterfaceDeclaration(node)||ts.isTypeAliasDeclaration(node))return node;
+      if(node.pos<flow.route.pos||node.end>flow.route.end){return ts.visitEachChild(node,visit,transformation);}
+      if(ts.isIdentifier(node)&&facts.has(symbol(node))&&!(ts.isVariableDeclaration(node.parent)&&node.parent.name===node)
+        &&!(ts.isPropertyAccessExpression(node.parent)&&node.parent.name===node))return literal(facts.get(symbol(node)));
+      if(ts.isPropertyAccessExpression(node)&&((['envelope','marker'].includes(root(node.expression))&&node.name.text==='imageResultPolicy')
+        ||root(node.expression)==='state'&&node.name.text==='validatedFinal'))return literal(undefined);
+      if(ts.isPropertyAccessExpression(node)&&known(node.expression)[0]&&known(node.expression)[1]===undefined&&node.questionDotToken)return literal(undefined);
+      if(ts.isPropertyAssignment(node)&&node.parent===flow.create.arguments[0]){
+        if(node.name.text==='authorizeFinal'){
+          need(ts.isArrowFunction(node.initializer),node);return undefined;
+        }
+        if(node.name.text==='executionAttempt')return factory.updatePropertyAssignment(node,node.name,factory.createPropertyAccessExpression(envelope.name,'executionAttempt'));
+      }
+      if(ts.isBinaryExpression(node)&&[ts.SyntaxKind.AmpersandAmpersandToken,ts.SyntaxKind.BarBarToken,ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind)){
+        const left=ts.visitNode(node.left,visit),a=known(left);
+        if(a[0]){
+          if(node.operatorToken.kind===ts.SyntaxKind.QuestionQuestionToken)return a[1]===undefined?ts.visitNode(node.right,visit):left;
+          return (node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken?Boolean(a[1]):!a[1])?ts.visitNode(node.right,visit):left;
+        }
+        const right=ts.visitNode(node.right,visit),b=known(right);
+        if(b[0]&&truth(node)&&node.operatorToken.kind===ts.SyntaxKind.BarBarToken&&!b[1])return left;
+        if(b[0]&&truth(node)&&node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken&&!b[1]&&ts.isIdentifier(unwrap(node.left)))return literal(false);
+        return factory.updateBinaryExpression(node,left,node.operatorToken,right);
+      }
+      if(ts.isConditionalExpression(node)){
+        const condition=ts.visitNode(node.condition,visit),value=known(condition);
+        if(value[0])return ts.visitNode(value[1]?node.whenTrue:node.whenFalse,visit);
+        return factory.updateConditionalExpression(node,condition,node.questionToken,ts.visitNode(node.whenTrue,visit),node.colonToken,ts.visitNode(node.whenFalse,visit));
+      }
+      if(ts.isIfStatement(node)){
+        const condition=ts.visitNode(node.expression,visit),value=known(condition);
+        if(value[0])return value[1]?ts.visitNode(node.thenStatement,visit):node.elseStatement&&ts.visitNode(node.elseStatement,visit);
+        let result=condition;
+        if(nodes(node.expression,child=>ts.isIdentifier(child)&&facts.has(symbol(child))).length){
+          const clauses=foldOr(condition);result=clauses.reduce((left,right)=>factory.createBinaryExpression(left,ts.SyntaxKind.BarBarToken,right));
+        }
+        return factory.updateIfStatement(node,result,ts.visitNode(node.thenStatement,visit),node.elseStatement&&ts.visitNode(node.elseStatement,visit));
+      }
+      let result=ts.visitEachChild(node,visit,transformation);
+      if(ts.isParenthesizedExpression(result)&&known(result.expression)[0])return result.expression;
+      if(ts.isParenthesizedExpression(result)&&ts.isBinaryExpression(node.expression)
+        &&node.expression.operatorToken.kind===ts.SyntaxKind.QuestionQuestionToken&&property(node.expression.left,'text')
+        &&property(unwrap(node.expression.left).expression,'validatedFinal')
+        &&root(unwrap(unwrap(node.expression.left).expression).expression)==='state')return result.expression;
+      if(ts.isPropertyAccessExpression(result)&&result.questionDotToken&&known(result.expression)[0]&&known(result.expression)[1]===undefined)return literal(undefined);
+      if(ts.isPrefixUnaryExpression(result)&&result.operator===ts.SyntaxKind.ExclamationToken){const value=known(result.operand);if(value[0])return literal(!value[1]);}
+      if(ts.isBinaryExpression(result)&&[ts.SyntaxKind.EqualsEqualsEqualsToken,ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(result.operatorToken.kind)){
+        const a=known(result.left),b=known(result.right);if(a[0]&&b[0])return literal(result.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken?a[1]===b[1]:a[1]!==b[1]);
+      }
+      if(ts.isVariableDeclaration(result)&&ts.isIdentifier(result.name)&&result.initializer){
+        const value=known(result.initializer);if(value[0]&&typeof value[1]!=='string'){facts.set(symbol(node.name),value[1]);return undefined;}
+      }
+      if(ts.isVariableStatement(result)&&!result.declarationList.declarations.length)return undefined;
+      if(ts.isObjectLiteralExpression(result))return factory.updateObjectLiteralExpression(result,result.properties.filter(item=>
+        !(ts.isSpreadAssignment(item)&&ts.isObjectLiteralExpression(unwrap(item.expression))&&!unwrap(item.expression).properties.length)));
+      return result;
+    };
+    return node=>ts.visitNode(node,visit);
+  }]);
+  let text;try{text=ts.createPrinter({removeComments:true}).printFile(transformed.transformed[0]);}finally{transformed.dispose();}
+  return {status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,
+    outstanding:['strict source/marker and old private-state partition','read-only attempt capture equivalence','whole runtime/import comparison and tagged retention']};
+}
+
+function finiteImageHostProjection(ts,context,rollbackContext) {
+  const partition=finiteImageProtocolPartition(ts,context),{nodes,symbol}=partition.producer;
+  const source=context.program.getSourceFile(resolve(context.root,'apps/agent-worker/src/native-agent/host-task.ts'));
+  const old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,'apps/agent-worker/src/native-agent/host-task.ts'));
+  const fail=node=>{throw {reason:'IMAGE_HOST_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  need(source&&old,source);
+  const fn=one(source.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='runHostedNativeTask'),source);
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const path=(raw,base,parts)=>{
+    const node=unwrap(raw);if(!parts.length)return ts.isIdentifier(node)&&symbol(node)===base;
+    return ts.isPropertyAccessExpression(node)&&node.name.text===parts.at(-1)&&path(node.expression,base,parts.slice(0,-1));
+  };
+  const input=symbol(fn.parameters[0].name);
+  const state=one(nodes(fn,node=>ts.isVariableDeclaration(node)&&node.name.text==='state'&&ts.isAwaitExpression(node.initializer)
+    &&ts.isCallExpression(node.initializer.expression)&&path(node.initializer.expression.expression,input,['store','read'])
+    &&node.parent.parent.parent?.statements?.some(statement=>ts.isIfStatement(statement)
+      &&nodes(statement.expression,child=>ts.isPropertyAccessExpression(child)&&child.name.text==='imageResultPolicy').length)),fn);
+  const stateSymbol=symbol(state.name);
+  const guards=nodes(fn,node=>ts.isIfStatement(node)&&ts.isBinaryExpression(node.expression)
+    &&node.expression.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken
+    &&ts.isBinaryExpression(node.expression.right)&&path(node.expression.right.left,stateSymbol,['binding','imageReview','imageResultPolicy'])
+    &&node.expression.right.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken&&ts.isStringLiteral(node.expression.right.right)
+    &&node.expression.right.right.text==='image-review-tool-final-v1');
+  const guard=one(guards,fn);
+  const left=guard.expression.left;
+  need(ts.isBinaryExpression(left)&&left.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken
+    &&path(left.left,stateSymbol,['binding','sourceKind'])&&ts.isStringLiteral(left.right)&&left.right.text==='illustration-image'
+    &&state.end<=guard.pos&&!guard.elseStatement,guard);
+  const message=one(nodes(fn,node=>ts.isVariableDeclaration(node)&&node.name.text==='message'),fn);
+  const receiver=unwrap(message.initializer);
+  need(ts.isPropertyAccessExpression(receiver)&&receiver.name.text==='message'&&ts.isElementAccessExpression(unwrap(receiver.expression))
+    &&ts.isNumericLiteral(unwrap(receiver.expression).argumentExpression)&&unwrap(receiver.expression).argumentExpression.text==='0',message);
+  const response=unwrap(unwrap(receiver.expression).expression);
+  need(ts.isPropertyAccessExpression(response)&&response.name.text==='choices'&&ts.isIdentifier(response.expression),message);
+  const responseDeclaration=symbol(response.expression)?.valueDeclaration;
+  need(responseDeclaration&&ts.isVariableDeclaration(responseDeclaration)&&ts.isAwaitExpression(responseDeclaration.initializer)
+    &&ts.isCallExpression(responseDeclaration.initializer.expression)&&path(responseDeclaration.initializer.expression.expression,input,['session','complete']),message);
+  const references=nodes(fn,node=>ts.isIdentifier(node)&&symbol(node)===symbol(message.name)&&node!==message.name);
+  need(references.length===2,message);
+  const selection=one(nodes(fn,node=>ts.isConditionalExpression(node)&&ts.isBinaryExpression(node.condition)
+    &&node.condition.operatorToken.kind===ts.SyntaxKind.InKeyword&&ts.isStringLiteral(node.condition.left)
+    &&node.condition.left.text==='tool_calls'&&ts.isIdentifier(node.condition.right)&&symbol(node.condition.right)===symbol(message.name)),fn);
+  need(ts.isBinaryExpression(selection.whenTrue)&&selection.whenTrue.operatorToken.kind===ts.SyntaxKind.QuestionQuestionToken
+    &&path(selection.whenTrue.left,symbol(message.name),['tool_calls'])&&ts.isArrayLiteralExpression(selection.whenTrue.right)
+    &&selection.whenTrue.right.elements.length===0&&ts.isArrayLiteralExpression(selection.whenFalse)&&selection.whenFalse.elements.length===0,selection);
+  const bridge=context.program.getSourceFile(resolve(context.root,'packages/ai-gateway/src/native-agent-bridge.ts'));
+  const sdk=one(bridge.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='nativeAgentSdkResponse'),bridge);
+  const sdkReturn=one(sdk.body.statements.filter(ts.isReturnStatement),sdk);
+  const property=(object,name)=>one(object.properties.filter(node=>ts.isPropertyAssignment(node)&&node.name.text===name),object).initializer;
+  need(ts.isObjectLiteralExpression(sdkReturn.expression),sdkReturn);
+  const choices=property(sdkReturn.expression,'choices');
+  need(ts.isArrayLiteralExpression(choices)&&choices.elements.length===1&&ts.isObjectLiteralExpression(choices.elements[0]),choices);
+  const sdkMessage=property(choices.elements[0],'message');
+  need(ts.isObjectLiteralExpression(sdkMessage),sdkMessage);
+  for(const item of sdkMessage.properties){
+    if(ts.isPropertyAssignment(item)){need(['role','content'].includes(item.name.text),item);continue;}
+    need(ts.isSpreadAssignment(item)&&ts.isParenthesizedExpression(item.expression)&&ts.isConditionalExpression(item.expression.expression),item);
+    const choice=item.expression.expression;
+    need(ts.isObjectLiteralExpression(choice.whenTrue)&&choice.whenTrue.properties.length===1
+      &&ts.isPropertyAssignment(choice.whenTrue.properties[0])&&['tool_calls','reasoning_details'].includes(choice.whenTrue.properties[0].name.text)
+      &&ts.isObjectLiteralExpression(choice.whenFalse)&&choice.whenFalse.properties.length===0,item);
+  }
+  const factory=ts.factory;
+  const transformed=ts.transform(source,[transformation=>{
+    const visit=node=>{
+      if(node===guard||node===message)return undefined;
+      if(node===selection)return factory.createBinaryExpression(factory.createPropertyAccessExpression(message.initializer,'tool_calls'),
+        ts.SyntaxKind.QuestionQuestionToken,factory.createArrayLiteralExpression());
+      let result=ts.visitEachChild(node,visit,transformation);
+      if(ts.isVariableStatement(result)&&!result.declarationList.declarations.length)return undefined;
+      return result;
+    };return node=>ts.visitNode(node,visit);
+  }]);
+  let text;try{text=ts.createPrinter({removeComments:true}).printFile(transformed.transformed[0]);}finally{transformed.dispose();}
+  return {status:'conditional',source,text,ast:transformed.transformed[0],rollback:old,
+    outstanding:['Session only returns original owned SDK response on ABSENT','private state/Host input binding','whole context/import comparison and tagged retention']};
+}
+
+function finiteImageSdkOptionTerms(ts,context) {
+  const partition=finiteImageProtocolPartition(ts,context),{nodes,symbol}=partition.producer;
+  const fail=node=>{throw {reason:'IMAGE_SDK_OPTION_DOMAIN_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const bridge=context.program.getSourceFile(resolve(context.root,'packages/ai-gateway/src/native-agent-bridge.ts'));
+  const sdk=one(bridge.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='nativeAgentSdkRequest'),bridge);
+  const options=one(nodes(sdk,node=>ts.isVariableDeclaration(node)&&node.name.text==='options'),sdk),optionSymbol=symbol(options.name);
+  need(Boolean(options.parent.flags&ts.NodeFlags.Const)&&ts.isObjectLiteralExpression(options.initializer)&&options.initializer.properties.length===1,options);
+  const spread=options.initializer.properties[0];
+  need(ts.isSpreadAssignment(spread)&&ts.isParenthesizedExpression(spread.expression)&&ts.isConditionalExpression(spread.expression.expression),spread);
+  const choice=spread.expression.expression;
+  need(ts.isObjectLiteralExpression(choice.whenTrue)&&choice.whenTrue.properties.length===1
+    &&ts.isShorthandPropertyAssignment(choice.whenTrue.properties[0])&&choice.whenTrue.properties[0].name.text==='tools'
+    &&ts.isObjectLiteralExpression(choice.whenFalse)&&choice.whenFalse.properties.length===0,choice);
+  const assignments=[];
+  for(const node of nodes(sdk,ts.isIdentifier))if(symbol(node)===optionSymbol&&node!==options.name){
+    const parent=node.parent;
+    if(ts.isShorthandPropertyAssignment(parent)){
+      need(context.checker.getShorthandAssignmentValueSymbol(parent)===optionSymbol&&ts.isReturnStatement(parent.parent.parent),node);continue;
+    }
+    need(ts.isPropertyAccessExpression(parent)&&parent.expression===node&&['maxTokens','temperature','topP'].includes(parent.name.text)
+      &&ts.isBinaryExpression(parent.parent)&&parent.parent.left===parent&&parent.parent.operatorToken.kind===ts.SyntaxKind.EqualsToken,parent);
+    assignments.push(parent.name.text);
+  }
+  need(assignments.length===3&&new Set(assignments).size===3,sdk);
+  const sites=[],create=partition.session,target=symbol(create.name);
+  for(const parsed of context.program.getSourceFiles()){
+    if(parsed.isDeclarationFile||!/^(?:apps|packages)\//u.test(relative(context.root,parsed.fileName).replaceAll('\\','/')))continue;
+    for(const node of nodes(parsed,ts.isIdentifier))if(symbol(node)===target){
+      const parent=node.parent;if(node===create.name||ts.isImportSpecifier(parent)||ts.isExportSpecifier(parent))continue;
+      let type=false;for(let cursor=parent;cursor;cursor=cursor.parent)if(ts.isTypeNode(cursor)){type=true;break;}if(type)continue;
+      need(ts.isCallExpression(parent)&&parent.expression===node&&parent.arguments.length===1&&ts.isObjectLiteralExpression(parent.arguments[0]),node);
+      const object=parent.arguments[0];need(!object.properties.some(ts.isSpreadAssignment),object);
+      const bindingProperty=one(object.properties.filter(item=>(ts.isShorthandPropertyAssignment(item)||ts.isPropertyAssignment(item))&&item.name.text==='binding'),object);
+      const bound=ts.isShorthandPropertyAssignment(bindingProperty)?context.checker.getShorthandAssignmentValueSymbol(bindingProperty):symbol(bindingProperty.initializer);
+      const binding=bound?.valueDeclaration;
+      need(binding&&ts.isVariableDeclaration(binding)&&ts.isObjectLiteralExpression(binding.initializer),bindingProperty);
+      const generation=one(binding.initializer.properties.filter(item=>ts.isPropertyAssignment(item)&&item.name.text==='generation'),binding).initializer;
+      need(ts.isObjectLiteralExpression(generation)&&generation.properties.every(item=>ts.isPropertyAssignment(item)&&ts.isIdentifier(item.name)
+        &&['thinking','temperature','topP'].includes(item.name.text)),generation);
+      // A later spread/override of generation on the binding is not consumed.
+      for(const item of binding.initializer.properties)if(ts.isSpreadAssignment(item)){
+        let expression=item.expression;while(ts.isParenthesizedExpression(expression))expression=expression.expression;
+        need(ts.isConditionalExpression(expression)&&ts.isObjectLiteralExpression(expression.whenTrue)&&ts.isObjectLiteralExpression(expression.whenFalse)
+          &&[...expression.whenTrue.properties,...expression.whenFalse.properties].every(field=>ts.isPropertyAssignment(field)&&field.name.text==='contextWindowTokens'),item);
+      }
+      sites.push({call:parent,binding,generation});
+    }
+  }
+  need(sites.length>0,create);
+  const bounded=one(nodes(create,node=>ts.isVariableDeclaration(node)&&node.name.text==='boundedOptions'),create);
+  need(ts.isObjectLiteralExpression(bounded.initializer),bounded);
+  const fields=bounded.initializer.properties;
+  need(fields.length===5&&ts.isSpreadAssignment(fields[0])&&ts.isSpreadAssignment(fields[1])
+    &&ts.isIdentifier(fields[0].expression)&&fields[0].expression.text==='options'
+    &&ts.isPropertyAccessExpression(fields[1].expression)&&fields[1].expression.name.text==='generation'
+    &&fields.slice(2).every(field=>ts.isPropertyAssignment(field)&&['maxTokens','maxRequestBytes','timeoutMs'].includes(field.name.text)),bounded);
+  return {status:'conditional',sdk,options,assignments,sites,bounded,
+    keys:['tools','maxTokens','temperature','topP','thinking','maxRequestBytes','timeoutMs'],
+    outstanding:['actual allowed-tool constructor/history domain','binding mutation/escape closure','shared Gateway/Provider runtime context']};
+}
+
+function finiteImageRecoveryProjections(ts,context,rollbackContext) {
+  const partition=finiteImageProtocolPartition(ts,context),{nodes,symbol}=partition.producer;
+  const fail=node=>{throw {reason:'IMAGE_RECOVERY_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const factory=ts.factory;
+  const agent=context.program.getSourceFile(resolve(context.root,'packages/domain/src/agent/agent.ts'));
+  const recover=one(agent.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='canRecoverAgentNativeImageFinal'),agent);
+  const execution=one(nodes(recover,node=>ts.isVariableDeclaration(node)&&node.name.text==='execution'),recover);
+  const cp=one(nodes(recover,node=>ts.isVariableDeclaration(node)&&node.name.text==='cp'),recover);
+  need(ts.isCallExpression(execution.initializer)&&ts.isIdentifier(execution.initializer.expression)
+    &&execution.initializer.expression.text==='readNativeAgentExecution'&&execution.initializer.arguments.length===1
+    &&ts.isPropertyAccessExpression(execution.initializer.arguments[0])&&execution.initializer.arguments[0].name.text==='result'
+    &&symbol(execution.initializer.arguments[0].expression)===symbol(recover.parameters[0].name),execution);
+  need(ts.isPropertyAccessExpression(cp.initializer)&&cp.initializer.questionDotToken&&cp.initializer.name.text==='checkpoint'
+    &&symbol(cp.initializer.expression)===symbol(execution.name),cp);
+  const choice=one(nodes(recover,node=>ts.isConditionalExpression(node)&&ts.isBinaryExpression(node.condition)
+    &&ts.isPropertyAccessExpression(node.condition.left)&&node.condition.left.name.text==='imageResultPolicy'
+    &&symbol(node.condition.left.expression)===symbol(execution.name)),recover);
+  need(choice.condition.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken&&ts.isStringLiteral(choice.condition.right)
+    &&choice.condition.right.text==='image-review-tool-final-v1',choice);
+  need(nodes(recover,node=>ts.isIdentifier(node)&&symbol(node)===symbol(execution.name)).length===3,execution);
+  const flatten=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken
+    ?[...flatten(node.left),...flatten(node.right)]:[raw];};
+  const transformAgent=transformation=>{
+    const visit=node=>{
+      if(node===execution)return undefined;
+      if(node===cp)return factory.updateVariableDeclaration(node,node.name,node.exclamationToken,node.type,
+        factory.createPropertyAccessChain(execution.initializer,factory.createToken(ts.SyntaxKind.QuestionDotToken),'checkpoint'));
+      if(node===choice)return choice.whenFalse;
+      if(ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken&&ts.isParenthesizedExpression(node.right)
+        &&node.right.expression===choice){
+        const left=ts.visitNode(node.left,visit);return [...flatten(left),...flatten(choice.whenFalse)]
+          .reduce((a,b)=>factory.createBinaryExpression(a,ts.SyntaxKind.AmpersandAmpersandToken,b));
+      }
+      return ts.visitEachChild(node,visit,transformation);
+    };return node=>ts.visitNode(node,visit);
+  };
+  const run=context.program.getSourceFile(resolve(context.root,'packages/domain/src/agent/research-run.ts'));
+  const inspector=one(run.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='inspectGenerationRecovery'),run);
+  const raw=one(nodes(inspector,node=>ts.isVariableDeclaration(node)&&node.name.text==='rawMarker'),inspector);
+  const block=raw.parent.parent.parent;
+  need(ts.isBlock(block)&&ts.isIfStatement(block.parent)&&block.parent.thenStatement===block&&!block.parent.elseStatement
+    &&ts.isIdentifier(block.parent.expression)&&block.parent.expression.text==='native',raw);
+  const json=one(run.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='jsonRecord'),run);
+  need(json.parameters.length===1&&json.body.statements.length===1&&ts.isReturnStatement(json.body.statements[0])
+    &&ts.isConditionalExpression(json.body.statements[0].expression),json);
+  const jsonBody=json.body.statements[0].expression,jsonParameter=symbol(json.parameters[0].name);
+  const conjunctions=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken
+    ?[...conjunctions(node.left),...conjunctions(node.right)]:[node];};
+  const jsonTerms=conjunctions(jsonBody.condition);
+  need(jsonTerms.length===3&&symbol(jsonTerms[0])===jsonParameter&&ts.isBinaryExpression(jsonTerms[1])
+    &&jsonTerms[1].operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken&&ts.isTypeOfExpression(jsonTerms[1].left)
+    &&symbol(jsonTerms[1].left.expression)===jsonParameter&&ts.isStringLiteral(jsonTerms[1].right)&&jsonTerms[1].right.text==='object'
+    &&ts.isPrefixUnaryExpression(jsonTerms[2])&&jsonTerms[2].operator===ts.SyntaxKind.ExclamationToken
+    &&ts.isCallExpression(jsonTerms[2].operand)&&ts.isPropertyAccessExpression(jsonTerms[2].operand.expression)
+    &&ts.isIdentifier(jsonTerms[2].operand.expression.expression)&&jsonTerms[2].operand.expression.expression.text==='Array'
+    &&!(symbol(jsonTerms[2].operand.expression.expression)?.declarations??[]).some(node=>!node.getSourceFile().isDeclarationFile)
+    &&jsonTerms[2].operand.expression.name.text==='isArray'&&jsonTerms[2].operand.arguments.length===1
+    &&symbol(jsonTerms[2].operand.arguments[0])===jsonParameter&&symbol(unwrap(jsonBody.whenTrue))===jsonParameter
+    &&ts.isObjectLiteralExpression(jsonBody.whenFalse)&&!jsonBody.whenFalse.properties.length,json);
+  const outer=raw.initializer;
+  need(ts.isCallExpression(outer)&&symbol(outer.expression)===symbol(json.name)&&outer.arguments.length===1
+    &&ts.isPropertyAccessExpression(outer.arguments[0])&&outer.arguments[0].name.text==='nativeAgentExecution',raw);
+  const inner=outer.arguments[0].expression;
+  need(ts.isCallExpression(inner)&&symbol(inner.expression)===symbol(json.name)&&inner.arguments.length===1
+    &&ts.isPropertyAccessExpression(inner.arguments[0])&&inner.arguments[0].name.text==='result'
+    &&ts.isIdentifier(inner.arguments[0].expression)&&inner.arguments[0].expression.text==='task',raw);
+  need(block.statements[0]===raw.parent.parent&&raw.parent.declarations.length===1&&ts.isIfStatement(block.statements[1]),block);
+  const guard=block.statements[1],condition=guard.expression;
+  need(!guard.elseStatement&&ts.isReturnStatement(guard.thenStatement)&&guard.thenStatement.expression.kind===ts.SyntaxKind.NullKeyword
+    &&ts.isBinaryExpression(condition)&&condition.operatorToken.kind===ts.SyntaxKind.BarBarToken&&ts.isPrefixUnaryExpression(condition.left)
+    &&condition.left.operator===ts.SyntaxKind.ExclamationToken&&ts.isCallExpression(condition.left.operand),guard);
+  const own=condition.left.operand;
+  need(ts.isPropertyAccessExpression(own.expression)&&ts.isIdentifier(own.expression.expression)&&own.expression.expression.text==='Object'
+    &&own.expression.name.text==='hasOwn'&&own.arguments.length===2&&symbol(own.arguments[0])===symbol(raw.name)
+    &&ts.isStringLiteral(own.arguments[1])&&own.arguments[1].text==='imageResultPolicy'
+    &&ts.isBinaryExpression(condition.right)&&condition.right.operatorToken.kind===ts.SyntaxKind.ExclamationEqualsEqualsToken
+    &&ts.isPropertyAccessExpression(condition.right.left)&&symbol(condition.right.left.expression)===symbol(raw.name)
+    &&condition.right.left.name.text==='imageResultPolicy'&&ts.isStringLiteral(condition.right.right)
+    &&condition.right.right.text==='image-review-tool-final-v1',guard);
+  const transformRun=transformation=>{
+    const visit=node=>node===block.parent?factory.updateIfStatement(node,node.expression,factory.createReturnStatement(factory.createNull()),undefined)
+      :ts.visitEachChild(node,visit,transformation);return node=>ts.visitNode(node,visit);
+  };
+  const projected=new Map();
+  for(const [source,transform] of [[agent,transformAgent],[run,transformRun]]){
+    const result=ts.transform(source,[transform]);let text;
+    try{text=ts.createPrinter({removeComments:true}).printFile(result.transformed[0]);}finally{result.dispose();}
+    const key=relative(context.root,source.fileName).replaceAll('\\','/');
+    const old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,key));need(old,source);
+    projected.set(key,{source,text,ast:result.transformed[0],rollback:old});
+  }
+  return {status:'conditional',partition,projected,
+    outstanding:['actual old JSON decoder/source partition','full runtime/import context comparison','tagged rearm/paid/final recovery retention']};
+}
+
+function finiteImageAllowedToolTerms(ts,context) {
+  const options=finiteImageSdkOptionTerms(ts,context),{nodes,symbol}=options.sites.length?finiteImageProducerTerms(ts,context):{};
+  const fail=node=>{throw {reason:'IMAGE_ALLOWED_TOOL_DOMAIN_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const domain=(values=[],paper=false,history=false)=>({values:new Set(values),paper,history});
+  const union=values=>{const result=domain();for(const value of values){need(value,undefined);for(const name of value.values)result.values.add(name);result.paper||=value.paper;result.history||=value.history;}return result;};
+  const active=new Set(),history=[];
+  const declaration=node=>symbol(node)?.valueDeclaration;
+  const ownReturns=fn=>nodes(fn,ts.isReturnStatement).filter(node=>{
+    let parent=node.parent;while(parent&&!ts.isFunctionLike(parent))parent=parent.parent;return parent===fn;
+  });
+  const parameterValue=(node,env)=>{const value=env.get(symbol(node));return value&&value.node?value:undefined;};
+  const savedState=(raw,env)=>{
+    const node=unwrap(raw);if(!node)return false;
+    if(ts.isIdentifier(node)){
+      const supplied=parameterValue(node,env);if(supplied)return savedState(supplied.node,supplied.env);
+      const value=declaration(node);return value&&ts.isVariableDeclaration(value)&&value.initializer?savedState(value.initializer,env):false;
+    }
+    if(ts.isAwaitExpression(node)&&ts.isCallExpression(node.expression)&&ts.isPropertyAccessExpression(node.expression.expression)
+      &&node.expression.expression.name.text==='read'&&ts.isIdentifier(node.expression.expression.expression)){
+      const store=declaration(node.expression.expression.expression);
+      return store&&ts.isVariableDeclaration(store)&&ts.isCallExpression(store.initializer)&&ts.isIdentifier(store.initializer.expression)
+        &&['createNativeTaskStore','createJournalNativeTaskStore'].includes(store.initializer.expression.text);
+    }
+    return false;
+  };
+  const field=(raw,key,env)=>{
+    const node=unwrap(raw);need(node,raw);
+    if(ts.isIdentifier(node)){
+      const supplied=parameterValue(node,env);if(supplied)return field(supplied.node,key,supplied.env);
+      const value=declaration(node);need(value&&ts.isVariableDeclaration(value)&&value.initializer,node);
+      return field(value.initializer,key,env);
+    }
+    if(ts.isObjectLiteralExpression(node)){
+      need(node.properties.every(item=>(ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item)||ts.isSpreadAssignment(item))
+        &&!(item.name&&ts.isComputedPropertyName(item.name))),node);
+      for(const item of [...node.properties].reverse()){
+        if(ts.isSpreadAssignment(item))return key==='name'?names(item.expression,env):field(item.expression,key,env);
+        if((ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item))&&item.name.text===key)
+          return names(ts.isShorthandPropertyAssignment(item)?context.checker.getShorthandAssignmentValueSymbol(item)?.valueDeclaration?.initializer:item.initializer,env);
+      }
+      fail(node);
+    }
+    if(ts.isConditionalExpression(node))return union([field(node.whenTrue,key,env),field(node.whenFalse,key,env)]);
+    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)){
+      const fn=declaration(node.expression);need(fn&&ts.isFunctionDeclaration(fn)&&fn.body,node);
+      need(!nodes(fn,child=>ts.isBinaryExpression(child)&&child.operatorToken.kind>=ts.SyntaxKind.FirstAssignment&&child.operatorToken.kind<=ts.SyntaxKind.LastAssignment
+        ||ts.isDeleteExpression(child)||ts.isPrefixUnaryExpression(child)&&[ts.SyntaxKind.PlusPlusToken,ts.SyntaxKind.MinusMinusToken].includes(child.operator)
+        ||ts.isPostfixUnaryExpression(child)).length,fn);
+      const next=new Map(env);fn.parameters.forEach((parameter,index)=>{need(ts.isIdentifier(parameter.name)&&node.arguments[index],parameter);
+        next.set(symbol(parameter.name),{node:node.arguments[index],env});});
+      return union(ownReturns(fn).map(statement=>field(statement.expression,key,next)));
+    }
+    fail(node);
+  };
+  const names=(raw,env=new Map())=>{
+    const node=unwrap(raw);need(node,raw);
+    if(ts.isStringLiteral(node))return domain([node.text]);
+    if(ts.isIdentifier(node)){
+      const supplied=env.get(symbol(node));if(supplied?.values)return supplied;if(supplied?.node)return names(supplied.node,supplied.env);
+      const value=declaration(node);need(value&&!active.has(value),node);active.add(value);
+      try{
+        if(ts.isVariableDeclaration(value)&&value.initializer)return names(value.initializer,env);
+        if(ts.isBindingElement(value)){
+          const parent=value.parent.parent;need(ts.isObjectBindingPattern(value.parent)&&ts.isVariableDeclaration(parent)&&parent.initializer,value);
+          return field(parent.initializer,value.propertyName?.text??value.name.text,env);
+        }
+        fail(node);
+      }finally{active.delete(value);}
+    }
+    if(ts.isArrayLiteralExpression(node))return union(node.elements.map(item=>names(ts.isSpreadElement(item)?item.expression:item,env)));
+    if(ts.isObjectLiteralExpression(node))return field(node,'name',env);
+    if(ts.isConditionalExpression(node))return union([names(node.whenTrue,env),names(node.whenFalse,env)]);
+    if(ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.QuestionQuestionToken)return union([names(node.left,env),names(node.right,env)]);
+    if(ts.isPropertyAccessExpression(node)){
+      if(node.name.text==='name'||node.name.text==='function')return names(node.expression,env);
+      if(node.name.text==='allowedTools'&&ts.isPropertyAccessExpression(node.expression)&&node.expression.name.text==='binding'&&savedState(node.expression.expression,env)){
+        history.push(node);return domain([],false,true);
+      }
+      return field(node.expression,node.name.text,env);
+    }
+    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='structuredClone'&&node.arguments.length===1)
+      return names(node.arguments[0],env);
+    if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&['map','filter','find'].includes(node.expression.name.text)){
+      const callback=node.arguments[0];need(node.arguments.length===1&&callback&&ts.isArrowFunction(callback)&&callback.parameters.length===1&&ts.isIdentifier(callback.parameters[0].name),node);
+      need(!nodes(callback,child=>ts.isBinaryExpression(child)&&child.operatorToken.kind>=ts.SyntaxKind.FirstAssignment&&child.operatorToken.kind<=ts.SyntaxKind.LastAssignment
+        ||ts.isDeleteExpression(child)||ts.isPrefixUnaryExpression(child)&&[ts.SyntaxKind.PlusPlusToken,ts.SyntaxKind.MinusMinusToken].includes(child.operator)
+        ||ts.isPostfixUnaryExpression(child)).length,callback);
+      const parameter=symbol(callback.parameters[0].name),body=unwrap(callback.body);
+      if(node.expression.name.text==='filter'&&ts.isCallExpression(body)&&ts.isPropertyAccessExpression(body.expression)&&body.expression.name.text==='startsWith'
+        &&ts.isPropertyAccessExpression(body.expression.expression)&&body.expression.expression.name.text==='name'
+        &&ts.isPropertyAccessExpression(body.expression.expression.expression)&&body.expression.expression.expression.name.text==='function'
+        &&symbol(body.expression.expression.expression.expression)===parameter&&body.arguments.length===1
+        &&ts.isStringLiteral(body.arguments[0])&&body.arguments[0].text==='paper_')return domain([],true);
+      const input=names(node.expression.expression,env);
+      if(node.expression.name.text!=='map')return input;
+      const next=new Map(env);next.set(parameter,input);
+      return ts.isBlock(body)?union(ownReturns(callback).map(statement=>names(statement.expression,next))):names(body,next);
+    }
+    fail(node);
+  };
+  const results=options.sites.map(site=>{
+    const property=site.binding.initializer.properties.find(item=>(ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item))&&item.name.text==='allowedTools');
+    need(property,site.binding);
+    const value=ts.isShorthandPropertyAssignment(property)?context.checker.getShorthandAssignmentValueSymbol(property)?.valueDeclaration:undefined;
+    const result=names(value?value.name:property.initializer);
+    need(!result.values.has('image_review_result'),property);
+    return {site,result};
+  });
+  return {status:'conditional',options,results,history,
+    outstanding:['saved names fixed point through owned original private constructors','no mutation/escape in tool definitions or binding','Gateway/Provider/import and global residual composition']};
+}
+
+function finiteImageLegacyFamilyClosure(ts,context) {
+  const partition=finiteImageProtocolPartition(ts,context),tools=finiteImageAllowedToolTerms(ts,context);
+  const {nodes,symbol}=partition.producer;
+  const fail=node=>{throw {reason:'IMAGE_LEGACY_FAMILY_NOT_CLOSED',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  need(partition.producer.kind==='absent',partition.producer.call);
+  const session=partition.session,binding=one(nodes(session,node=>ts.isVariableDeclaration(node)&&node.name.text==='binding'),session);
+  const outside=node=>!(node.pos>=partition.rawGuard.pos&&node.end<=partition.rawGuard.end);
+  const started=one(nodes(session,node=>ts.isVariableDeclaration(node)&&node.name.text==='started'&&outside(node)),session);
+  const completed=one(nodes(session,node=>ts.isVariableDeclaration(node)&&node.name.text==='completed'&&outside(node)),session);
+  const property=(object,name)=>one(object.properties.filter(item=>(ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item))&&item.name.text===name),object);
+  const initial=unwrap(started.initializer);
+  need(ts.isBinaryExpression(initial)&&initial.operatorToken.kind===ts.SyntaxKind.QuestionQuestionToken&&ts.isObjectLiteralExpression(initial.right),started);
+  const value=initial.right,bound=property(value,'binding'),turns=property(value,'turns').initializer;
+  need(ts.isShorthandPropertyAssignment(bound)&&context.checker.getShorthandAssignmentValueSymbol(bound)===symbol(binding.name)
+    &&!value.properties.some(item=>ts.isSpreadAssignment(item)||item.name&&ts.isComputedPropertyName(item.name)),value);
+  need(ts.isArrayLiteralExpression(turns)&&turns.elements.length===2&&ts.isSpreadElement(turns.elements[0])&&ts.isObjectLiteralExpression(turns.elements[1]),turns);
+  const first=turns.elements[1];
+  need(first.properties.length===4&&['state','target','request','effectiveOptions'].every(name=>property(first,name))
+    &&ts.isStringLiteral(property(first,'state').initializer)&&property(first,'state').initializer.text==='started',first);
+  const result=unwrap(completed.initializer);
+  need(ts.isObjectLiteralExpression(result)&&result.properties.length===2&&ts.isSpreadAssignment(result.properties[0])
+    &&symbol(result.properties[0].expression)===symbol(started.name),completed);
+  const finalTurns=property(result,'turns').initializer;
+  need(ts.isArrayLiteralExpression(finalTurns)&&finalTurns.elements.length===2&&ts.isSpreadElement(finalTurns.elements[0])
+    &&ts.isObjectLiteralExpression(finalTurns.elements[1]),finalTurns);
+  const final=finalTurns.elements[1];
+  need(ts.isStringLiteral(property(final,'state').initializer)&&property(final,'state').initializer.text==='completed',final);
+  for(const item of final.properties){
+    if(ts.isSpreadAssignment(item)){
+      const choice=unwrap(item.expression);need(ts.isConditionalExpression(choice)&&ts.isObjectLiteralExpression(choice.whenTrue)
+        &&choice.whenTrue.properties.length===1&&choice.whenTrue.properties[0].name.text==='rejectedAttempt'
+        &&ts.isObjectLiteralExpression(choice.whenFalse)&&choice.whenFalse.properties.length===0,item);
+    }else need((ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item))
+      &&['state','target','request','effectiveOptions','response'].includes(item.name.text),item);
+  }
+  for(const [name,state]of[['compareAndSet',started],['complete',completed]]){
+    const calls=nodes(session,node=>ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)&&node.expression.name.text===name
+      &&node.arguments.length===2&&symbol(node.arguments[1])===symbol(state.name)&&outside(node));
+    need(calls.length===1,state);
+  }
+  // Every saved-name input is a recurrence over these owned private snapshots.
+  // Fresh constants and the original paper_ filter are the only name seeds;
+  // neither a recurrence nor an exact replay can invent the reserved name.
+  const seeds=new Set();
+  for(const row of tools.results){for(const name of row.result.values)seeds.add(name);need(!row.result.values.has('image_review_result'),row.site.binding);}
+  need(seeds.size>0&&!seeds.has('image_review_result'),session);
+  return {status:'conditional',partition,tools,constructors:{started,completed,binding},
+    reachable:['legacy','refused'],nameSeeds:[...seeds],historyEdges:tools.history,
+    transitions:[{from:'birth',to:'legacy',kind:'trusted-absent',node:partition.producer.call},
+      {from:'legacy',to:'legacy',kind:'private-start',node:started},
+      {from:'legacy',to:'legacy',kind:'paid-complete',node:completed},
+      {from:'legacy',to:'refused',kind:'existing-decoder-authority-or-response-refusal',node:session}],
+    outstanding:['strict retained Session/store/Host/caller/ordinary-provider runtime premise','new declaration reference and import initialization closure','actual successful default collector composition']};
+}
+
+function finiteImageTransportProjections(ts,context,rollbackContext) {
+  const family=finiteImageLegacyFamilyClosure(ts,context),{nodes,symbol}=family.partition.producer;
+  const fail=node=>{throw {reason:'IMAGE_TRANSPORT_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const unwrap=raw=>{let node=raw;while(node&&(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node)))node=node.expression;return node;};
+  const file=key=>{const source=context.program.getSourceFile(resolve(context.root,key));need(source,undefined);return source;};
+  const gateway=file('packages/ai-gateway/src/gateway.ts'),provider=file('packages/ai-gateway/src/provider.ts');
+  const owner=(source,name)=>one(source.statements.filter(node=>ts.isClassDeclaration(node)&&node.name?.text===name),source);
+  const methods=(source,name)=>source.members.filter(node=>ts.isMethodDeclaration(node)&&node.name.text===name);
+  const gatewayClass=owner(gateway,'AiGateway'),providerClass=owner(provider,'AnthropicCompatProvider');
+  const native=one(methods(gatewayClass,'nativeAgentComplete'),gatewayClass),complete=one(methods(gatewayClass,'completeWithControls'),gatewayClass);
+  const input=symbol(native.parameters[1].name),nativeGuard=native.body.statements[0];
+  const root=(node,base)=>ts.isIdentifier(unwrap(node))&&symbol(unwrap(node))===base;
+  const toolSome=(raw,base)=>{
+    const node=unwrap(raw);if(!ts.isCallExpression(node)||!ts.isPropertyAccessExpression(node.expression)||node.expression.name.text!=='some'
+      ||!ts.isPropertyAccessExpression(node.expression.expression)||node.expression.expression.name.text!=='tools'
+      ||!root(node.expression.expression.expression,base)||node.arguments.length!==1)return false;
+    const callback=node.arguments[0];if(!ts.isArrowFunction(callback)||callback.parameters.length!==1)return false;
+    const condition=unwrap(callback.body),parameter=symbol(callback.parameters[0].name);
+    return ts.isBinaryExpression(condition)&&condition.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken
+      &&ts.isPropertyAccessExpression(condition.left)&&condition.left.name.text==='name'&&ts.isPropertyAccessExpression(condition.left.expression)
+      &&condition.left.expression.name.text==='function'&&root(condition.left.expression.expression,parameter)
+      &&ts.isStringLiteral(condition.right)&&condition.right.text==='image_review_result';
+  };
+  need(ts.isIfStatement(nativeGuard)&&ts.isBinaryExpression(nativeGuard.expression)
+    &&nativeGuard.expression.operatorToken.kind===ts.SyntaxKind.BarBarToken&&toolSome(nativeGuard.expression.left,input),nativeGuard);
+  const own=nativeGuard.expression.right;
+  need(ts.isCallExpression(own)&&ts.isPropertyAccessExpression(own.expression)&&own.expression.name.text==='some'
+    &&ts.isCallExpression(own.expression.expression)&&ts.isPropertyAccessExpression(own.expression.expression.expression)
+    &&ts.isIdentifier(own.expression.expression.expression.expression)&&own.expression.expression.expression.expression.text==='Object'
+    &&!(symbol(own.expression.expression.expression.expression)?.declarations??[]).some(node=>!node.getSourceFile().isDeclarationFile)
+    &&own.expression.expression.expression.name.text==='keys'&&own.expression.expression.arguments.length===1
+    &&root(own.expression.expression.arguments[0],input)&&own.arguments.length===1&&ts.isArrowFunction(own.arguments[0]),own);
+  const keyTest=own.arguments[0],includes=unwrap(keyTest.body);
+  need(keyTest.parameters.length===1&&ts.isCallExpression(includes)&&ts.isPropertyAccessExpression(includes.expression)
+    &&includes.expression.name.text==='includes'&&ts.isArrayLiteralExpression(includes.expression.expression)
+    &&includes.expression.expression.elements.every(value=>ts.isStringLiteral(value)&&!family.tools.options.keys.includes(value.text))
+    &&includes.arguments.length===1&&root(includes.arguments[0],symbol(keyTest.parameters[0].name)),own);
+  const gatewayCalls=nodes(gateway,node=>ts.isCallExpression(node)&&symbol(node.expression)===symbol(complete.name));
+  need(gatewayCalls.length>0,complete);
+  for(const call of gatewayCalls){
+    const opts=call.arguments[1];need(opts,call);
+    if(ts.isObjectLiteralExpression(opts)){
+      need(opts.properties.every(item=>ts.isPropertyAssignment(item)&&(ts.isIdentifier(item.name)||ts.isStringLiteral(item.name))&&item.name.text!=='tools'),opts);continue;
+    }
+    let method=call.parent;while(method&&!ts.isMethodDeclaration(method))method=method.parent;
+    need(method&&['nativeAgentComplete','complete'].includes(method.name.text)&&root(opts,symbol(method.parameters[1].name)),call);
+    if(method===native)continue;
+    const first=method.body.statements[0];
+    need(ts.isExpressionStatement(first)&&ts.isCallExpression(first.expression)&&ts.isPropertyAccessExpression(first.expression.expression)
+      &&first.expression.expression.name.text==='rejectUnboundTools'&&first.expression.arguments.length===2
+      &&root(first.expression.arguments[1],symbol(method.parameters[1].name)),first);
+  }
+  const reject=one(methods(gatewayClass,'rejectUnboundTools'),gatewayClass),rejectGuard=reject.body.statements[0];
+  const alternatives=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.BarBarToken
+    ?[...alternatives(node.left),...alternatives(node.right)]:[node];};
+  need(ts.isIfStatement(rejectGuard)&&ts.isThrowStatement(rejectGuard.thenStatement.statements?.[0]),rejectGuard);
+  const toolReject=alternatives(rejectGuard.expression)[0];
+  need(ts.isBinaryExpression(toolReject)&&toolReject.operatorToken.kind===ts.SyntaxKind.ExclamationEqualsEqualsToken
+    &&ts.isPropertyAccessExpression(toolReject.left)&&toolReject.left.name.text==='tools'
+    &&root(toolReject.left.expression,symbol(reject.parameters[1].name))&&ts.isIdentifier(toolReject.right)&&toolReject.right.text==='undefined',rejectGuard);
+  const body=one(methods(providerClass,'requestBody'),providerClass);
+  need(body.parameters.length===2&&ts.isIdentifier(body.parameters[1].name),body);
+  const choice=symbol(body.parameters[1].name),tools=one(nodes(body,node=>ts.isVariableDeclaration(node)&&node.name.text==='tools'),body);
+  const guard=one(body.body.statements.filter(node=>ts.isIfStatement(node)&&ts.isBinaryExpression(node.expression)
+    &&node.expression.operatorToken.kind===ts.SyntaxKind.AmpersandAmpersandToken&&ts.isPrefixUnaryExpression(node.expression.left)
+    &&node.expression.left.operator===ts.SyntaxKind.ExclamationToken&&root(node.expression.left.operand,choice)),body);
+  const toolCheck=guard.expression.right;
+  need(ts.isCallExpression(toolCheck)&&ts.isPropertyAccessExpression(toolCheck.expression)&&toolCheck.expression.name.text==='some'
+    &&root(toolCheck.expression.expression,symbol(tools.name))&&toolCheck.arguments.length===1,toolCheck);
+  const callback=toolCheck.arguments[0];
+  need(ts.isArrowFunction(callback)&&callback.parameters.length===1&&ts.isBinaryExpression(callback.body)
+    &&callback.body.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken&&ts.isPropertyAccessExpression(callback.body.left)
+    &&callback.body.left.name.text==='name'&&ts.isPropertyAccessExpression(callback.body.left.expression)
+    &&callback.body.left.expression.name.text==='function'&&root(callback.body.left.expression.expression,symbol(callback.parameters[0].name))
+    &&ts.isStringLiteral(callback.body.right)&&callback.body.right.text==='image_review_result',callback);
+  const bodyCalls=nodes(providerClass,node=>ts.isCallExpression(node)&&symbol(node.expression)===symbol(body.name));
+  for(const call of bodyCalls){
+    need(call.arguments.length===1||call.arguments.length===2,call);
+    if(call.arguments.length===2){
+      let method=call.parent;while(method&&!ts.isMethodDeclaration(method))method=method.parent;
+      need(method?.name.text==='nativeImageReviewRequest',call);
+    }
+  }
+  for(const parsed of context.program.getSourceFiles()){
+    if(parsed.isDeclarationFile||!/^(?:apps|packages)\//u.test(relative(context.root,parsed.fileName).replaceAll('\\','/')))continue;
+    for(const node of nodes(parsed,ts.isIdentifier))if(symbol(node)===symbol(body.name)&&node!==body.name){
+      let type=false;for(let parent=node.parent;parent;parent=parent.parent)if(ts.isTypeNode(parent)){type=true;break;}if(type)continue;
+      const parent=node.parent;
+      need(ts.isPropertyAccessExpression(parent)&&parent.name===node&&ts.isCallExpression(parent.parent)
+        &&parent.parent.expression===parent&&bodyCalls.includes(parent.parent),node);
+    }
+  }
+  const choiceSpreads=nodes(body,node=>ts.isSpreadAssignment(node)&&ts.isConditionalExpression(unwrap(node.expression))
+    &&root(unwrap(node.expression).condition,choice));
+  need(choiceSpreads.length===1,body);
+  const conditional=unwrap(choiceSpreads[0].expression);
+  need(ts.isObjectLiteralExpression(conditional.whenFalse)&&conditional.whenFalse.properties.length===0,conditional);
+  const projected=new Map(),factory=ts.factory;
+  for(const source of[gateway,provider]){
+    const result=ts.transform(source,[transformation=>{
+      const visit=node=>{
+        if(node===nativeGuard||node===guard||node===choiceSpreads[0])return undefined;
+        let output=ts.visitEachChild(node,visit,transformation);
+        if(node===body)output=factory.updateMethodDeclaration(output,output.modifiers,output.asteriskToken,output.name,output.questionToken,
+          output.typeParameters,[output.parameters[0]],output.type,output.body);
+        return output;
+      };return node=>ts.visitNode(node,visit);
+    }]);
+    let text;try{text=ts.createPrinter({removeComments:true}).printFile(result.transformed[0]);}finally{result.dispose();}
+    const key=relative(context.root,source.fileName).replaceAll('\\','/'),old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,key));
+    need(old,source);projected.set(key,{source,text,ast:result.transformed[0],rollback:old});
+  }
+  return {status:'conditional',family,projected,methods:{native,body},gatewayCalls,bodyCalls,
+    outstanding:['new prepared-method/declaration no-untagged-reference closure','old caller/Provider argument binding and strict global context','import initialization and actual default collector pair']};
+}
+
+function finiteImageConsumerProjections(ts,context,rollbackContext) {
+  const family=finiteImageLegacyFamilyClosure(ts,context),flow=finiteImageStoreFlowTerms(ts,context),{nodes,symbol}=family.partition.producer;
+  const fail=node=>{throw {reason:'IMAGE_CONSUMER_RESIDUAL_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const one=(values,node)=>{need(values.length===1,node);return values[0];};
+  const source=key=>{const value=context.program.getSourceFile(resolve(context.root,key));need(value,undefined);return value;};
+  const review=source('apps/agent-worker/src/presentation/generated-image-review.ts'),journal=source('apps/agent-worker/src/native-agent/journal-task-store.ts');
+  const fn=one(review.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='reviewGeneratedImage'),review);
+  const result=one(nodes(fn,node=>ts.isVariableDeclaration(node)&&node.name.text==='result'),fn),decision=one(nodes(fn,node=>ts.isVariableDeclaration(node)&&node.name.text==='decision'),fn);
+  const guard=one(fn.body.statements.filter(node=>ts.isIfStatement(node)&&ts.isBinaryExpression(node.expression)&&node.expression.operatorToken.kind===ts.SyntaxKind.InKeyword
+    &&ts.isStringLiteral(node.expression.left)&&node.expression.left.text==='imageResultPolicy'&&symbol(node.expression.right)===symbol(result.name)),fn);
+  need(!decision.initializer&&ts.isExpressionStatement(guard.elseStatement)&&ts.isBinaryExpression(guard.elseStatement.expression)
+    &&guard.elseStatement.expression.operatorToken.kind===ts.SyntaxKind.EqualsToken&&symbol(guard.elseStatement.expression.left)===symbol(decision.name),guard);
+  const value=guard.elseStatement.expression.right;
+  need(ts.isCallExpression(value)&&ts.isIdentifier(value.expression)&&value.expression.text==='parseDecision'&&value.arguments.length===1
+    &&ts.isCallExpression(value.arguments[0])&&ts.isIdentifier(value.arguments[0].expression)&&value.arguments[0].expression.text==='parseStructuredJson'
+    &&value.arguments[0].arguments.length===1&&ts.isPropertyAccessExpression(value.arguments[0].arguments[0])
+    &&symbol(value.arguments[0].arguments[0].expression)===symbol(result.name)&&value.arguments[0].arguments[0].name.text==='text',guard);
+  const callbackCalls=[];
+  for(const parsed of context.program.getSourceFiles()){
+    if(parsed.isDeclarationFile||!/^(?:apps|packages)\//u.test(relative(context.root,parsed.fileName).replaceAll('\\','/')))continue;
+    for(const node of nodes(parsed,ts.isIdentifier))if(symbol(node)===symbol(fn.name)){
+      if(node===fn.name||ts.isImportSpecifier(node.parent)||ts.isExportSpecifier(node.parent))continue;
+      need(ts.isCallExpression(node.parent)&&node.parent.expression===node,node);callbackCalls.push(node.parent);
+    }
+  }
+  const call=one(callbackCalls,fn),callback=call.arguments[2];
+  need(ts.isConditionalExpression(callback)&&ts.isArrowFunction(callback.whenTrue)&&ts.isBlock(callback.whenTrue.body)
+    &&ts.isIdentifier(callback.whenFalse)&&callback.whenFalse.text==='undefined',callback);
+  const returned=callback.whenTrue.body.statements.at(-1);
+  need(ts.isReturnStatement(returned)&&ts.isCallExpression(returned.expression)&&symbol(returned.expression.expression)===symbol(flow.route.name),returned);
+  const fiveFields=expression=>ts.isObjectLiteralExpression(expression)&&expression.properties.length===5
+    &&expression.properties.every(item=>(ts.isPropertyAssignment(item)||ts.isShorthandPropertyAssignment(item))
+      &&['text','promptHash','responseHash','provider','model'].includes(item.name.text))
+    &&new Set(expression.properties.map(item=>item.name.text)).size===5;
+  const codex=source('packages/ai-gateway/src/codex-sol-review.ts');
+  const codexClass=one(codex.statements.filter(node=>ts.isClassDeclaration(node)&&node.name?.text==='CodexSolImageReviewProvider'),codex);
+  const output=one(codexClass.members.filter(node=>ts.isMethodDeclaration(node)&&node.name.text==='output'),codexClass);
+  const codexResult=one(output.body.statements.filter(node=>ts.isReturnStatement(node)&&fiveFields(node.expression)),output);
+  const gatewaySource=source('packages/ai-gateway/src/gateway.ts');
+  const gatewayClass=one(gatewaySource.statements.filter(node=>ts.isClassDeclaration(node)&&node.name?.text==='AiGateway'),gatewaySource);
+  const controlled=one(gatewayClass.members.filter(node=>ts.isMethodDeclaration(node)&&node.name.text==='reviewScientificControlled'),gatewayClass);
+  const firstMode=controlled.body.statements[0];
+  need(ts.isIfStatement(firstMode)&&ts.isBlock(firstMode.thenStatement),firstMode);
+  const modelResult=one(firstMode.thenStatement.statements.filter(node=>ts.isReturnStatement(node)&&fiveFields(node.expression)),firstMode);
+  // The real production Gateway constructor supplies only this existing
+  // read-only historical image provider. Other model review output is the
+  // five-field literal above; model JSON remains inside text in both cases.
+  const constructorCalls=[];
+  for(const parsed of context.program.getSourceFiles())if(!parsed.isDeclarationFile&&/^(?:apps|packages)\//u.test(relative(context.root,parsed.fileName).replaceAll('\\','/')))
+    constructorCalls.push(...nodes(parsed,node=>ts.isNewExpression(node)&&symbol(node.expression)===symbol(gatewayClass.name)));
+  need(constructorCalls.length>0,gatewayClass);
+  for(const creation of constructorCalls){
+    need(creation.arguments?.length===1&&ts.isObjectLiteralExpression(creation.arguments[0]),creation);
+    need(creation.arguments[0].properties.every(item=>(ts.isShorthandPropertyAssignment(item)||ts.isPropertyAssignment(item))
+      &&(ts.isIdentifier(item.name)||ts.isStringLiteral(item.name))),creation);
+    const supplied=creation.arguments[0].properties.filter(item=>item.name.text==='illustrationImageReviewProvider');
+    // Text/OCR-only source self-tests supply no image reviewer; the existing
+    // Gateway then refuses historical image mode instead of returning a value.
+    if(!supplied.length)continue;
+    const provider=one(supplied,creation);need(ts.isShorthandPropertyAssignment(provider),provider);
+    const declared=context.checker.getShorthandAssignmentValueSymbol(provider)?.valueDeclaration;
+    need(declared&&ts.isVariableDeclaration(declared)&&ts.isConditionalExpression(declared.initializer),provider);
+    const choice=declared.initializer;
+    need(ts.isNewExpression(choice.whenTrue)&&symbol(choice.whenTrue.expression)===symbol(codexClass.name)
+      &&ts.isIdentifier(choice.whenFalse)&&choice.whenFalse.text==='undefined',choice);
+  }
+  const journalFn=one(journal.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createJournalNativeTaskStore'),journal);
+  const save=one(nodes(journalFn,node=>ts.isFunctionDeclaration(node)&&node.name?.text==='save'),journalFn);
+  const turn=one(nodes(save,node=>ts.isVariableDeclaration(node)&&node.name.text==='turn'),save);
+  const raw=one(nodes(save,node=>ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.EqualsEqualsEqualsToken
+    &&ts.isPropertyAccessExpression(node.left)&&symbol(node.left.expression)===symbol(turn.name)&&node.left.name.text==='state'
+    &&ts.isStringLiteral(node.right)&&node.right.text==='received'),save);
+  const unwrap=raw=>{let node=raw;while(ts.isParenthesizedExpression(node))node=node.expression;return node;};
+  const alternatives=raw=>{const node=unwrap(raw);return ts.isBinaryExpression(node)&&node.operatorToken.kind===ts.SyntaxKind.BarBarToken
+    ?[...alternatives(node.left),...alternatives(node.right)]:[raw];};
+  let journalGuard=raw;while(journalGuard.parent&&!ts.isIfStatement(journalGuard))journalGuard=journalGuard.parent;
+  need(ts.isIfStatement(journalGuard),raw);
+  const clauses=alternatives(journalGuard.expression);
+  need(clauses[1]===raw&&ts.isPrefixUnaryExpression(clauses[0])&&clauses[0].operator===ts.SyntaxKind.ExclamationToken
+    &&symbol(clauses[0].operand)===symbol(turn.name),journalGuard);
+  const projected=new Map(),factory=ts.factory;
+  for(const current of[review,journal]){
+    const transformation=ts.transform(current,[transformation=>{
+      const visit=node=>{
+        if(node===guard)return undefined;
+        if(node===decision.parent.parent)return factory.createVariableStatement(node.modifiers,factory.createVariableDeclarationList([
+          factory.updateVariableDeclaration(decision,decision.name,decision.exclamationToken,decision.type,value)],ts.NodeFlags.Const));
+        if(node===journalGuard)return factory.updateIfStatement(node,clauses.filter(clause=>clause!==raw)
+          .reduce((a,b)=>factory.createBinaryExpression(a,ts.SyntaxKind.BarBarToken,b)),node.thenStatement,node.elseStatement);
+        return ts.visitEachChild(node,visit,transformation);
+      };return node=>ts.visitNode(node,visit);
+    }]);
+    let text;try{text=ts.createPrinter({removeComments:true}).printFile(transformation.transformed[0]);}finally{transformation.dispose();}
+    const key=relative(context.root,current.fileName).replaceAll('\\','/'),old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,key));
+    need(old,current);projected.set(key,{source:current,text,ast:transformation.transformed[0],rollback:old});
+  }
+  return {status:'conditional',family,projected,callback:call,journalGuard,resultConstructors:{codexResult,modelResult,constructorCalls},
+    outstanding:['full legacy native materializer five-field result comparison','journal source binding and old turn history','strict shared runtime/import context and tagged retention']};
+}
+
+function finiteImageDeclarationClosure(ts,context,rollbackContext,projected,initialization) {
+  const producer=finiteImageProducerTerms(ts,context),{nodes}=producer;
+  const fail=node=>{throw {reason:'IMAGE_DECLARATION_CONTEXT_UNKNOWN',node};};
+  const need=(condition,node)=>{if(!condition)fail(node);};
+  const original=node=>ts.getOriginalNode(node);
+  const symbol=node=>{
+    node=original(node);if(!node?.parent)return undefined;
+    let value=ts.isShorthandPropertyAssignment(node.parent)?context.checker.getShorthandAssignmentValueSymbol(node.parent):context.checker.getSymbolAtLocation(node);
+    if(value?.flags&ts.SymbolFlags.Alias)value=context.checker.getAliasedSymbol(value);return value;
+  };
+  const declarations=new Map(),byNode=new Map(),classNames=new Set();
+  const name=node=>node.name&&ts.isIdentifier(node.name)?node.name.text:undefined;
+  const top=source=>source.statements.flatMap(statement=>ts.isVariableStatement(statement)?[...statement.declarationList.declarations]
+    :ts.isFunctionDeclaration(statement)?[statement]:[]);
+  const add=(node,source,kind)=>{
+    const value=symbol(node.name);need(value&&!declarations.has(value),node);
+    need(!nodes(node,ts.isDecorator).length,node);
+    if(kind==='method'){
+      need(!node.modifiers?.some(item=>item.kind===ts.SyntaxKind.StaticKeyword)&&!ts.isComputedPropertyName(node.name),node);classNames.add(name(node));
+    }else if(ts.isVariableDeclaration(node)){
+      need(Boolean(node.parent.flags&ts.NodeFlags.Const)&&node.initializer,node);
+      need(ts.isArrowFunction(node.initializer)||ts.isFunctionExpression(node.initializer)||initialization.sources.includes(source),node);
+    }
+    const record={node,source,kind,symbol:value,references:[]};declarations.set(value,record);byNode.set(node,record);
+  };
+  for(const model of projected.values()){
+    const old=model.rollback,oldNames=new Set(top(old).map(name));
+    for(const node of top(model.source))if(name(node)&&!oldNames.has(name(node)))add(node,model.source,'top');
+    for(const node of model.source.statements)if(ts.isClassDeclaration(node)){
+      const previous=old.statements.find(item=>ts.isClassDeclaration(item)&&name(item)===name(node));need(previous,node);
+      const methods=new Set(previous.members.filter(ts.isMethodDeclaration).map(name));
+      for(const member of node.members)if(ts.isMethodDeclaration(member)&&name(member)&&!methods.has(name(member)))add(member,model.source,'method');
+    }
+  }
+  const namespaces=new Map();
+  const exportsOf=specifier=>{
+    const module=context.checker.getSymbolAtLocation(specifier);if(!module)return undefined;
+    const entries=context.checker.getExportsOfModule(module);
+    return entries.some(entry=>{const target=entry.flags&ts.SymbolFlags.Alias?context.checker.getAliasedSymbol(entry):entry;return declarations.has(target);})?entries:undefined;
+  };
+  const sources=[...context.program.getSourceFiles()].filter(source=>!source.isDeclarationFile&&/^(?:apps|packages)\//u.test(relative(context.root,source.fileName).replaceAll('\\','/')));
+  for(const source of sources)for(const statement of source.statements){
+    if(ts.isImportDeclaration(statement)&&!statement.importClause?.isTypeOnly&&statement.importClause?.namedBindings
+      &&ts.isNamespaceImport(statement.importClause.namedBindings)&&exportsOf(statement.moduleSpecifier))namespaces.set(symbol(statement.importClause.namedBindings.name),statement);
+  }
+  const edges=[],live=[];
+  const receiverProperties=(raw,seen=new Set())=>{
+    let node=original(raw);while(ts.isParenthesizedExpression(node)||ts.isAsExpression(node)||ts.isNonNullExpression(node))node=node.expression;
+    const properties=context.checker.getTypeAtLocation(node).getProperties();
+    if(properties.some(member=>classNames.has(member.name)))return properties;
+    if(ts.isIdentifier(node)){
+      const value=symbol(node)?.valueDeclaration;
+      if(value&&ts.isVariableDeclaration(value)&&value.initializer&&!seen.has(value))return receiverProperties(value.initializer,new Set(seen).add(value));
+    }
+    return properties;
+  };
+  const walk=(node,owner)=>{
+    if(ts.isTypeNode(node)||ts.isInterfaceDeclaration(node)||ts.isTypeAliasDeclaration(node)||ts.isImportDeclaration(node)||ts.isExportDeclaration(node))return;
+    owner=byNode.get(original(node))??owner;
+    if(ts.isIdentifier(node)){
+      const value=symbol(node),target=declarations.get(value),parent=original(node).parent;
+      if(target&&original(node)!==target.node.name){
+        const declarationName=ts.isVariableDeclaration(parent)&&parent.name===original(node)||ts.isFunctionDeclaration(parent)&&parent.name===original(node)
+          ||ts.isMethodDeclaration(parent)&&parent.name===original(node);
+        if(!declarationName){
+          const edge={from:owner,to:target,node};edges.push(edge);target.references.push(edge);if(!owner)live.push(edge);
+        }
+      }
+      if(namespaces.has(value)&&!owner){
+        need(ts.isPropertyAccessExpression(parent)&&parent.expression===original(node),node);
+      }
+    }
+    if(!owner&&ts.isElementAccessExpression(node)){
+      const properties=receiverProperties(node.expression);
+      need(!(ts.isStringLiteral(node.argumentExpression)&&classNames.has(node.argumentExpression.text)),node);
+      if(properties.some(member=>classNames.has(member.name)))need(ts.isStringLiteral(node.argumentExpression)&&!classNames.has(node.argumentExpression.text),node);
+    }
+    if(!owner&&ts.isPropertyAccessExpression(node)&&classNames.has(node.name.text)){
+      const value=symbol(node.name);need(value&&declarations.has(value),node);
+    }
+    if(!owner&&ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)
+      &&['getPrototypeOf','getOwnPropertyNames','getOwnPropertyDescriptors','ownKeys'].includes(node.expression.name.text)){
+      for(const argument of node.arguments){const properties=receiverProperties(argument);
+        need(!properties.some(member=>classNames.has(member.name)),node);}
+    }
+    if(!owner&&ts.isCallExpression(node)&&(node.expression.kind===ts.SyntaxKind.ImportKeyword||ts.isIdentifier(node.expression)&&node.expression.text==='require')){
+      if(node.arguments.length===1&&ts.isStringLiteral(node.arguments[0]))need(!exportsOf(node.arguments[0]),node);
+    }
+    ts.forEachChild(node,child=>walk(child,owner));
+  };
+  for(const source of sources){const key=relative(context.root,source.fileName).replaceAll('\\','/');walk(projected.get(key)?.ast??source,undefined);}
+  need(!live.length,live[0]?.node);
+  const factory=ts.factory,result=new Map();
+  for(const[key,model]of projected){
+    const transformed=ts.transform(model.ast,[transformation=>{
+      const visit=node=>{
+        if(byNode.has(original(node)))return undefined;
+        if(ts.isExportSpecifier(node)&&declarations.has(symbol(node.name)))return undefined;
+        let value=ts.visitEachChild(node,visit,transformation);
+        if(ts.isVariableStatement(value)&&!value.declarationList.declarations.length)return undefined;
+        if(ts.isExportDeclaration(value)&&value.exportClause&&ts.isNamedExports(value.exportClause)&&!value.exportClause.elements.length)return undefined;
+        return value;
+      };return node=>ts.visitNode(node,visit);
+    }]);
+    let text;try{text=ts.createPrinter({removeComments:true}).printFile(transformed.transformed[0]);}finally{transformed.dispose();}
+    result.set(key,{...model,text,ast:transformed.transformed[0]});
+  }
+  return {status:'conditional',projected:result,declarations,edges,
+    outstanding:['retained full-module/dependency equality','actual static import/eager initialization and caller escape premise','successful default collector provenance']};
+}
+
+function finiteImageLegacySourceModel(ts,context,rollbackContext) {
+  const initialization=finiteImageInitializationTerms(ts,context),projected=new Map();
+  const add=model=>{const key=relative(context.root,model.source.fileName).replaceAll('\\','/');
+    if(projected.has(key))throw {reason:'IMAGE_PROJECTION_OVERLAP_UNKNOWN',node:model.source};projected.set(key,model);};
+  for(const model of[
+    finiteImageSessionProjection(ts,context,rollbackContext),finiteImageDecoderProjection(ts,context,rollbackContext),
+    finiteImageStoreProjection(ts,context,rollbackContext),finiteImageExecutionProjection(ts,context,rollbackContext),
+    finiteImageIllustrationProjection(ts,context,rollbackContext),finiteImageHostProjection(ts,context,rollbackContext),
+  ])add(model);
+  for(const model of[
+    finiteImageRecoveryProjections(ts,context,rollbackContext),finiteImageTransportProjections(ts,context,rollbackContext),
+    finiteImageConsumerProjections(ts,context,rollbackContext),
+  ])for(const value of model.projected.values())add(value);
+  const bridge=context.program.getSourceFile(resolve(context.root,'packages/ai-gateway/src/native-agent-bridge.ts'));
+  const index=context.program.getSourceFile(resolve(context.root,'packages/ai-gateway/src/index.ts'));
+  for(const source of[bridge,index,initialization.freezer.getSourceFile()]){
+    const key=relative(context.root,source.fileName).replaceAll('\\','/'),old=rollbackContext.program.getSourceFile(resolve(rollbackContext.root,key));
+    if(!old)throw {reason:'IMAGE_LEGACY_CONTEXT_MODULE_MISSING',node:source};add({source,text:source.text,ast:source,rollback:old});
+  }
+  const closure=finiteImageDeclarationClosure(ts,context,rollbackContext,projected,initialization);
+  return {status:'conditional',initialization,closure,projected:closure.projected,
+    outstanding:['every projected module runtime equals actual rollback','all remaining entries strictly equal and justified builtin imports','actual full default collector and original private/callback binding composition']};
+}
+
+function finiteImageCollectedContexts(ts,current,previous,candidateRoot,rollbackRoot,roots) {
+  const left=rollbackProofContexts.get(current),right=rollbackProofContexts.get(previous);
+  if(roots!==APPLICATION_ROLLBACK_READERS||!left||!right||left.ts!==ts||right.ts!==ts||left.roots!==roots||right.roots!==roots
+    ||left.root!==candidateRoot||right.root!==rollbackRoot||left.program.getTypeChecker()!==left.checker||right.program.getTypeChecker()!==right.checker)return undefined;
+  return {left,right};
+}
+
+function finiteImageProjectedRuntime(ts,context,key,model) {
+  const path=resolve(context.root,key);
+  if(context.modules.get(path)!==model.source||context.program.getSourceFile(path)!==model.source)
+    throw {reason:'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED',node:model.source};
+  const compiled=ts.transpileModule(model.text,{fileName:path,reportDiagnostics:true,
+    compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}});
+  if(compiled.diagnostics?.some(item=>item.category===ts.DiagnosticCategory.Error))throw {reason:'IMAGE_PROJECTED_RUNTIME_INVALID',node:model.source};
+  const emitted=ts.createSourceFile('runtime.js',compiled.outputText,ts.ScriptTarget.ES2022,true,ts.ScriptKind.JS);
+  if(emitted.parseDiagnostics.length)throw {reason:'IMAGE_PROJECTED_RUNTIME_INVALID',node:model.source};
+  const imports=source=>source.statements.filter(node=>(ts.isImportDeclaration(node)||ts.isExportDeclaration(node))&&node.moduleSpecifier
+    &&ts.isStringLiteral(node.moduleSpecifier)).map(node=>node.moduleSpecifier.text);
+  return {canonical:context.canonical(emitted),imports:imports(emitted)};
+}
+
+// Reader retention is exact. Only the actual trusted fresh initializer call
+// may change between the capable deployed I1 and its writer descendant. The
+// original raw readers/finalizers and every dependency stay in this comparison.
+function finiteImageCapableSourceModel(ts,left,right,current,previous) {
+  const candidate=finiteImageProtocolPartition(ts,left),rollback=finiteImageProtocolPartition(ts,right);
+  const key=relative(left.root,candidate.producer.source.fileName).replaceAll('\\','/');
+  if(key!==relative(right.root,rollback.producer.source.fileName).replaceAll('\\','/'))throw {reason:'IMAGE_CAPABLE_SOURCE_CHANGED'};
+  const a=new Map(current),b=new Map(previous),moduleKey=`module:${key}`;
+  for(const entry of new Set([...a.keys(),...b.keys()]))if(!a.has(entry)||!b.has(entry)
+    ||entry!==moduleKey&&JSON.stringify(a.get(entry))!==JSON.stringify(b.get(entry)))throw {reason:'IMAGE_READER_CAPABILITY_OR_CONTEXT_CHANGED'};
+  if(!a.has(moduleKey)||!b.has(moduleKey))throw {reason:'IMAGE_CAPABLE_SOURCE_MISSING'};
+  return {status:'conditional',key,candidate,rollback,
+    outstanding:['normalized whole producer module equality','original successful full default collector provenance']};
+}
+
+function finiteImageCapablePairCompatibility(ts,current,previous,candidateRoot,rollbackRoot,roots) {
+  try{
+    const captured=finiteImageCollectedContexts(ts,current,previous,candidateRoot,rollbackRoot,roots);if(!captured)return false;
+    const {left,right}=captured;
+    const {key,candidate,rollback}=finiteImageCapableSourceModel(ts,left,right,current,previous);
+    const x=finiteImageProjectedRuntime(ts,left,key,{source:candidate.producer.source,text:candidate.producer.text});
+    const y=finiteImageProjectedRuntime(ts,right,key,{source:rollback.producer.source,text:rollback.producer.text});
+    return JSON.stringify(x.canonical)===JSON.stringify(y.canonical);
+  }catch{return false;}
+}
+
+function finiteImageFirstPairCompatibility(ts,current,previous,candidateRoot,rollbackRoot,roots) {
+  try{
+    const captured=finiteImageCollectedContexts(ts,current,previous,candidateRoot,rollbackRoot,roots);if(!captured)return false;
+    const {left,right}=captured;
+    const candidate=finiteImageLegacySourceModel(ts,left,right),a=new Map(current),b=new Map(previous);
+    const affected=new Set([...candidate.projected.keys()].map(key=>`module:${key}`)),runtime=new Map();
+    for(const[key,model]of candidate.projected){
+      const moduleKey=`module:${key}`,path=resolve(right.root,key);
+      if(!a.has(moduleKey)||!b.has(moduleKey)||right.modules.get(path)!==model.rollback||right.program.getSourceFile(path)!==model.rollback)return false;
+      const value=finiteImageProjectedRuntime(ts,left,key,model);runtime.set(key,value);
+      if(JSON.stringify(value.canonical)!==JSON.stringify(b.get(moduleKey)))return false;
+    }
+    for(const key of new Set([...a.keys(),...b.keys()])){
+      if(affected.has(key))continue;
+      if(a.has(key)&&b.has(key)){if(JSON.stringify(a.get(key))!==JSON.stringify(b.get(key)))return false;continue;}
+      // Derive only a dropped core import from the original captured module.
+      // No module/package/vendor/configuration entry is omitted, and even a
+      // core import must already exist in the actual old runtime's closure.
+      const match=/^(.*):external:(node:[A-Za-z0-9_/-]+)$/u.exec(key);
+      if(!a.has(key)||b.has(key)||a.get(key)!=='node-builtin'||!match||!candidate.projected.has(match[1])
+        ||!builtinModules.includes(match[2].slice(5))&&!builtinModules.includes(match[2]))return false;
+      const model=candidate.projected.get(match[1]),compiled=ts.transpileModule(model.source.text,
+        {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}});
+      const original=ts.createSourceFile('runtime.js',compiled.outputText,ts.ScriptTarget.ES2022,true,ts.ScriptKind.JS);
+      if(!original.statements.some(node=>ts.isImportDeclaration(node)&&node.moduleSpecifier.text===match[2])
+        ||runtime.get(match[1]).imports.includes(match[2])
+        ||![...b].some(([name,value])=>name.endsWith(`:external:${match[2]}`)&&value==='node-builtin'))return false;
+    }
+    const ingress=proveNativeVideoReceiptIngress(ts,right.program,right.root);
+    if(ingress.reason!=='OTHER_PERSISTENCE_ORIGINS_UNPROVEN'||ingress.storeGraph.status!=='conditional'||ingress.privateStoreChain.status!=='conditional')return false;
+    return true;
+  }catch{return false;}
+}
+
 function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot) {
   const left = new Map(current), right = new Map(previous);
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
@@ -2818,7 +5059,9 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
     stage = 'comparison';
     if (JSON.stringify(current) !== JSON.stringify(previous)
       && !(roots === APPLICATION_ROLLBACK_READERS
-        && finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots))) {
+        && (finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
         catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }

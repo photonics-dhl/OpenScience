@@ -17,7 +17,8 @@ import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage 
 import type { PresentationClaim } from '../presentation/chart-generator';
 import { projectVisualNarrativeSource, type VisualNarrativeSource } from '../scientific-writing-source';
 import { createNativeTaskStore } from './task-store';
-import { createNativeAgentSession, type NativeAgentSessionState } from './session';
+import { createNativeAgentSession, nativeImageReviewFinal, finalizeNativeImageReviewState, type NativeAgentSessionState } from './session';
+import type { NativeToolFinalImageReviewResult } from '../presentation/generated-image-review';
 import { runHostedNativeTask } from './host-task';
 import { nativeSkillReads } from './paper-task';
 import { NATIVE_PAPER_TOOLS, LEGACY_NATIVE_PAPER_TOOLS, createNativePaperTools, type NativePaperImage, type NativeSemanticSearch } from './paper-tools';
@@ -52,7 +53,7 @@ export async function runNativeImageReviewTask(input: {
   gateway?: AiGateway; deps: AgentDeps & { storage: StorageAdapter }; task: { id: string; executionAttempt: number; result: unknown };
   request: ScienceReviewInput; envelope: AgentNativeImageReviewPrepared; inboxRoot?: string; runtime?: NativeAgentRuntimeConfig; completedOnly?: boolean;
   authorize: (tx: Prisma.TransactionClient) => Promise<unknown>;
-}): Promise<ScienceReviewProviderResult> {
+}): Promise<ScienceReviewProviderResult | NativeToolFinalImageReviewResult> {
   const envelope = structuredClone(input.envelope);
   const attachment = input.request.attachments?.[0];
   nativeImageReviewMessages(input.request);
@@ -61,7 +62,7 @@ export async function runNativeImageReviewTask(input: {
     || input.request.source.candidateHash !== envelope.contentHash || input.request.source.sourceEvidenceIdentity !== envelope.sourceEvidenceIdentity
     || input.request.illustrationContext?.baseIdentity !== envelope.parentIdentity || input.request.illustrationContext.imageReviewMode !== 'agent-native') stopped();
   const execution = readNativeAgentExecution(input.task.result);
-  if (execution?.profile !== 'image-review') stopped();
+  if (execution?.profile !== 'image-review' || execution.imageResultPolicy !== envelope.imageResultPolicy) stopped();
   const imageIdentity = { requestId: envelope.requestId, contentHash: envelope.contentHash,
     sourceEvidenceIdentity: envelope.sourceEvidenceIdentity, parentIdentity: envelope.parentIdentity };
   const receipt = { status: 'image_view_ready', ...imageIdentity };
@@ -70,13 +71,17 @@ export async function runNativeImageReviewTask(input: {
     const current = await tx.agentTask.findUniqueOrThrow({ where: { id: input.task.id } });
     const checkpoint = readNativeImageReviewCheckpoint(current.result);
     if (checkpoint?.mode !== 'agent-native' || !isDeepStrictEqual(agentNativeImageReviewEnvelope(checkpoint), envelope)) stopped();
-    if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
+    if (envelope.imageResultPolicy === 'image-review-tool-final-v1') {
+      if (await requireAgentNativeImageReviewReservation(tx, current.id) !== envelope.reservationLedgerId) stopped();
+      if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
+        || Date.now() >= envelope.deadlineAt)) stopped();
+    } else if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
       || Date.now() >= envelope.deadlineAt || await requireAgentNativeImageReviewReservation(tx, current.id) !== envelope.reservationLedgerId)) stopped();
   };
   const readAuthority = () => input.deps.prisma.$transaction(tx => authorize(tx), { isolationLevel: 'Serializable' });
   await readAuthority();
-  const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: envelope.executionAttempt,
-    execution, authorize: tx => authorize(tx, true) });
+  const store = createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt,
+    execution, authorize: tx => authorize(tx, true), authorizeFinal: tx => authorize(tx) });
   const saved = await store.read();
   const binding = { taskId: input.task.id, sourceKind: 'illustration-image' as const, imageReview: envelope,
     runtimeId: envelope.runtimeId, skillCatalogueId: envelope.skillCatalogueId, model: envelope.model,
@@ -84,10 +89,12 @@ export async function runNativeImageReviewTask(input: {
     maxTotalOutputTokens: envelope.maxTotalOutputTokens, maxInputBytes: envelope.maxInputBytes, deadlineAt: envelope.deadlineAt,
     ...(envelope.model === 'MiniMax-M3' ? { contextWindowTokens: 512000 } : {}),
     generation: { thinking: 'adaptive' as const, temperature: 0.1 } };
-  const materialize = (state: NativeAgentSessionState): ScienceReviewProviderResult => {
+  const materialize = (state: NativeAgentSessionState): ScienceReviewProviderResult | NativeToolFinalImageReviewResult => {
     if (!isDeepStrictEqual(state.binding, binding)) stopped();
     const last = state.turns.at(-1);
-    if (last?.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length
+    const tagged = envelope.imageResultPolicy === 'image-review-tool-final-v1';
+    const final = tagged ? nativeImageReviewFinal(state) : undefined;
+    if (last?.state !== 'completed' || (tagged ? !state.validatedFinal : last.response.finishReason !== 'stop' || last.response.toolCalls?.length)
       || last.target.provider !== envelope.provider || last.target.model !== envelope.model || last.response.model !== envelope.model
       || last.response.provider !== envelope.provider || last.response.promptHash !== last.target.promptHash) stopped();
     let calls = 0; let spent = 0;
@@ -109,10 +116,16 @@ export async function runNativeImageReviewTask(input: {
     const pixels = messages.flatMap(message => message.images ?? []);
     if (pixels.some(image => image.mediaType !== attachment.mediaType
       || createHash('sha256').update(Buffer.from(image.data, 'base64')).digest('hex') !== envelope.contentHash)) stopped();
-    return { text: last.response.text, provider: last.target.provider, model: last.target.model,
-      promptHash: last.target.promptHash, responseHash: createHash('sha256').update(last.response.text).digest('hex') };
+    return { text: final?.text ?? last.response.text, provider: last.target.provider, model: last.target.model,
+      promptHash: last.target.promptHash, responseHash: final?.responseHash ?? createHash('sha256').update(last.response.text).digest('hex'),
+      ...(final ? { imageResultPolicy: 'image-review-tool-final-v1' as const, validatedFinal: final } : {}) };
   };
   const prior = saved?.turns.at(-1);
+  if (saved && envelope.imageResultPolicy === 'image-review-tool-final-v1'
+    && (saved.validatedFinal || prior?.state === 'received' || (prior?.state === 'completed' && prior.received)))
+    return materialize(await finalizeNativeImageReviewState(store, saved));
+  if (envelope.imageResultPolicy === 'image-review-tool-final-v1' && input.task.executionAttempt !== envelope.executionAttempt)
+    throw new Error('[blocked] Recovered image review has no deterministic final receipt');
   if (saved && prior?.state === 'completed' && prior.response.finishReason === 'stop' && !prior.response.toolCalls?.length) return materialize(saved);
   if (saved?.turns.at(-1)?.state === 'started') throw new Error('[blocked] Original image Agent submission outcome is unknown');
   if (input.completedOnly) throw new Error('[blocked] Image Agent has no completed final receipt');
@@ -143,7 +156,8 @@ export async function runNativeImageReviewTask(input: {
       }, { isolationLevel: 'Serializable' }) } });
   await readAuthority(); const completed = await store.read();
   const final = completed?.turns.at(-1);
-  if (!completed || final?.state !== 'completed' || final.response.text !== native.finalResponse) stopped();
+  if (!completed || final?.state !== 'completed'
+    || (completed.validatedFinal?.text ?? final.response.text) !== native.finalResponse) stopped();
   return materialize(completed);
 }
 const scienceSceneSchema = (domain: Record<string, unknown>, originalRefRequired = true) => {

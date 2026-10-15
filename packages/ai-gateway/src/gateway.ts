@@ -26,7 +26,8 @@ import {
 } from './ocr';
 import { TextProviderError, snapshotChatMessages, type ChatMessage, type Provider, type ProviderResult, type TextGenerationOptions, type TextTransportErrorCode } from './provider';
 import { ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS, type ScienceReviewInput, type ScienceReviewProvider, type ScienceReviewProviderResult, type SourceReviewNotSubmittedProof } from './science-review-protocol';
-import { nativeImageReviewMessages, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
+import { nativeImageReviewMessages, prepareNativeImageReviewDescriptor, restoreNativeImageReviewTurn,
+  type PreparedNativeImageReviewTurn, type ReceivedImageReviewReply, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
 
 /** 调用日志（§9.3 + §17 脱敏：只记元数据，绝不记 prompt/附件/密钥）。 */
 export interface GatewayCallLog {
@@ -106,6 +107,12 @@ type TextExecutionControls = {
 export type NativeAgentExecutionControls = Required<Pick<TextExecutionControls, 'beforeProviderAttempt' | 'submitProvider'>> & {
   /** Trusted Worker envelope, never an SDK/client-selected role or provider. */
   imageReview?: { input: ScienceReviewInput; target: Pick<NativeImageReviewTarget, 'provider' | 'model'> };
+};
+export type NativeImageReviewRole = NonNullable<NativeAgentExecutionControls['imageReview']>;
+export type NativeImageReviewExecutionControls = {
+  imageReview: NativeImageReviewRole;
+  beforeProviderAttempt: () => Promise<void>;
+  submitProvider: (target: NativeImageReviewTarget, submit: () => Promise<ReceivedImageReviewReply>) => Promise<ReceivedImageReviewReply>;
 };
 
 export type StructuredGenerationOptions = TextGenerationOptions & {
@@ -500,6 +507,9 @@ export class AiGateway {
 
   /** Actual native Agent turns: authority and durable ownership are required; uncertainty cannot select a second provider. */
   async nativeAgentComplete(messages: ChatMessage[], opts: TextGenerationOptions, controls: NativeAgentExecutionControls): Promise<GatewayCompletion> {
+    if (opts.tools?.some(tool => tool.function.name === 'image_review_result')
+      || Object.keys(opts).some(key => ['toolChoice', 'tool_choice', 'imageResultPolicy', 'policy'].includes(key)))
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Image review result requires its prepared native route');
     if (typeof controls?.beforeProviderAttempt !== 'function' || typeof controls?.submitProvider !== 'function') {
       throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native agent submission authority is required');
     }
@@ -536,6 +546,88 @@ export class AiGateway {
       }, selected);
     }
     return this.completeWithControls(messages, opts, { ...controls, primaryProviderOnly: true, nativeAgent: true });
+  }
+
+  private snapshotNativeImageReviewRole(messages: ChatMessage[], role: NativeImageReviewRole, requireImage: boolean) {
+    const target = this.resolveNativeImageReviewTarget(); const source = role?.input?.source;
+    if (!source || role.input.illustrationContext?.imageReviewMode !== 'agent-native'
+      || !('kind' in source) || source.kind !== 'illustration-image' || !this.authorizeIllustrationReview
+      || target.provider !== role.target?.provider || target.model !== role.target?.model
+      || role.input.requestId !== role.input.authorizationContext.taskId)
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review envelope changed');
+    const snapshot: ScienceReviewInput = { ...role.input, source: Object.freeze({ ...source }),
+      authorizationContext: Object.freeze({ ...role.input.authorizationContext }),
+      illustrationContext: Object.freeze({ ...role.input.illustrationContext }),
+      attachments: role.input.attachments?.map(image => Object.freeze({ ...image, bytes: Buffer.from(image.bytes) })) };
+    nativeImageReviewMessages(snapshot);
+    const attachment = snapshot.attachments![0]!; const actual = snapshotChatMessages(messages);
+    const images = actual.flatMap(message => message.images ?? []);
+    if (images.length > 1 || requireImage && images.length !== 1 || images.some(image => image.mediaType !== attachment.mediaType
+      || createHash('sha256').update(Buffer.from(image.data, 'base64')).digest('hex') !== attachment.sha256))
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent received pixels outside its saved image');
+    return { snapshot, actual };
+  }
+
+  private async authorizeNativeImageReview(snapshot: ScienceReviewInput): Promise<void> {
+    if (await this.illustrationReviewPolicy?.(snapshot.authorizationContext) !== true)
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native Agent image review denied');
+    await this.authorizeIllustrationReview!(snapshot);
+  }
+
+  /** Pure synchronous snapshot/preflight, before the owner writes a started checkpoint. */
+  prepareNativeImageReviewTurn(messages: ChatMessage[], opts: TextGenerationOptions, role: NativeImageReviewRole): PreparedNativeImageReviewTurn {
+    const { actual } = this.snapshotNativeImageReviewRole(messages, role, true);
+    const provider = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+    if (!provider.preflightNativeImageReview || !provider.completeNativeImageReview)
+      throw new AiGatewayError('SCHEMA_VALIDATION', 'Prepared native image review transport unavailable');
+    const prepared = prepareNativeImageReviewDescriptor(actual, opts, role.target);
+    provider.preflightNativeImageReview(prepared);
+    return prepared;
+  }
+
+  /** Saved fields, original authority and a single publication closure; no provider fallback. */
+  async executeNativeImageReviewTurn(prepared: PreparedNativeImageReviewTurn, controls: NativeImageReviewExecutionControls): Promise<ReceivedImageReviewReply> {
+    if (typeof controls?.beforeProviderAttempt !== 'function' || typeof controls?.submitProvider !== 'function' || !controls.imageReview)
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native image review submission authority is required');
+    const { messages, ...saved } = prepared;
+    prepared = restoreNativeImageReviewTurn({ ...saved, messagesFrom: 'request.messages' }, messages);
+    const { snapshot } = this.snapshotNativeImageReviewRole(prepared.messages, controls.imageReview, true);
+    const provider = this.nativeImageReviewProvider ?? this.providers[this.primaryIndex];
+    if (provider.name !== prepared.target.provider || provider.model !== prepared.target.model
+      || !provider.preflightNativeImageReview || !provider.completeNativeImageReview)
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Saved native image review provider changed');
+    const totalStart = Date.now();
+    provider.preflightNativeImageReview(prepared);
+    if (!(await this.providerEnabled(provider.name, 'text')).enabled)
+      throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Native image review provider disabled');
+    await this.authorizeNativeImageReview(snapshot);
+    await controls.beforeProviderAttempt();
+    let submitted = false;
+    const submit = async (): Promise<ReceivedImageReviewReply> => {
+      if (submitted) throw new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Provider submission already invoked');
+      submitted = true;
+      const attemptStart = Date.now(); let received: ReceivedImageReviewReply | undefined; let failure: unknown;
+      try { received = await provider.completeNativeImageReview!(prepared); return received; }
+      catch (error) { failure = error; throw error; }
+      finally {
+        const raw = received?.decoded;
+        await this.record({ operation: 'scientific_review', provider: provider.name, model: provider.model,
+          inputTokens: raw?.usage.inputTokens ?? null, outputTokens: raw?.usage.outputTokens ?? null,
+          estimatedInputTokens: null, estimatedOutputTokens: null, estimatedCostUsdMicros: null, actualCostUsdMicros: null,
+          currency: 'USD', pricingVersion: null, pricingEffectiveDate: null, serviceTier: null,
+          latencyMs: Date.now() - attemptStart, totalLatencyMs: Date.now() - totalStart, promptHash: prepared.target.promptHash,
+          inputContentHash: 'kind' in snapshot.source ? snapshot.source.sourceEvidenceIdentity : null,
+          pageNumbers: [], pageCount: 1, selectionReason: 'source_grounded_illustration_review',
+          outcome: received && received.status === 200 && raw ? 'succeeded' : 'failed',
+          error: failure ? textProviderFailure(failure) : received?.status !== 200 ? 'provider_http' : raw ? null : 'provider_response_shape',
+          fallbackReason: null, retryCount: 0, ...(raw?.finishReason ? { finishReason: raw.finishReason } : {}),
+          ...(prepared.generation.thinking ? { requestedThinking: prepared.generation.thinking } : {}),
+          maxOutputTokens: prepared.generation.maxTokens,
+          ...(failure instanceof TextProviderError && failure.transportCode ? { transportCode: failure.transportCode } : {}),
+        }).catch(() => undefined); // Observability must not mask the paid receipt or the original transport failure.
+      }
+    };
+    return controls.submitProvider(prepared.target, submit);
   }
 
   /** Non-secret identity only; resolving a role never submits or rotates a provider. */
