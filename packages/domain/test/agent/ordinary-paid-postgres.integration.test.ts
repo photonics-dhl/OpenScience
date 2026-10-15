@@ -11,7 +11,9 @@ import type { AgentDeps } from '../../src/agent/agent';
 
 type Write = { phase: string; count: number };
 type Event = { type: string; phase?: string; count?: number; writes?: Write[];
-  backendPid?: number; childPid?: number; error?: unknown; code?: string | null };
+  backendPid?: number; childPid?: number; error?: unknown; code?: string | null;
+  taskId?: string; workspaceId?: string; userId?: string; membershipId?: string };
+type MembershipScope = { workspaceId: string; userId: string };
 type Domain = typeof import('../../src/index');
 type Support = {
   validatedTestUrl(): string;
@@ -52,8 +54,9 @@ class FixtureChild {
   backendPid = 0;
   responseReleased = false;
 
-  constructor(taskId: string, mode: string) {
-    this.process = fork(childFile, [taskId, mode], { env: { ...process.env, DATABASE_URL: support.validatedTestUrl() },
+  constructor(taskId: string, mode: string, membership?: MembershipScope) {
+    this.process = fork(childFile, [taskId, mode, ...(membership ? [membership.workspaceId, membership.userId] : [])],
+      { env: { ...process.env, DATABASE_URL: support.validatedTestUrl() },
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
     this.process.on('message', event => { this.events.push(event as Event); this.notify(); });
     this.process.on('error', error => { this.events.push({ type: 'failure', error: support.safeError(error) }); this.notify(); });
@@ -118,7 +121,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   for (const release of releases.splice(0)) release();
-  for (const child of children) for (const token of ['response', 'terminal', 'commit', 'resume', 'start']) child.send(token);
+  for (const child of children) for (const token of ['response', 'terminal', 'commit', 'resume', 'start', 'membership-read-release']) child.send(token);
   await Promise.allSettled(pending.splice(0));
   for (const child of children) {
     // Cleanup termination is never counted as A/N1's observed SIGKILL evidence.
@@ -142,8 +145,8 @@ async function seed(): Promise<Seed> {
   return { taskId, sessionId, userId, payload, ledger: await db.usageLedger.findMany({ where: { userId }, orderBy: { id: 'asc' } }) };
 }
 
-async function launch(f: Seed, mode: string) {
-  const child = new FixtureChild(f.taskId, mode); await child.ready();
+async function launch(f: Seed, mode: string, membership?: MembershipScope) {
+  const child = new FixtureChild(f.taskId, mode, membership); await child.ready();
   assert.equal(new Set([dbPid, cancelPid, observerPid, child.backendPid]).size, 4);
   child.send('start'); return child;
 }
@@ -479,6 +482,42 @@ describe('ordinary publication membership', () => {
     assert.equal(facts.receipt.attempts[0]!.responseJson, undefined);
     if (facts.receipt.attempts[0]!.state === 'unknown')
       assert.deepEqual(JSON.parse(facts.receipt.attempts[0]!.failureJson!), { code: 'publication_unconfirmed' });
+    assert.equal(child.committed('prepare'), 1); assert.equal(child.committed('terminal'), 0);
+  }));
+});
+
+describe('ordinary publication and membership removal ordering', () => {
+  it('R-first: refuses a call when removal commits after the publication member read but before submit', () => safeCase(async () => {
+    const f = await seedMembershipTask();
+    const child = await launch(f, 'membership-read-revoke', { workspaceId: f.workspaceId, userId: f.userId });
+    const { binding, original } = await membershipPrepared(f, child);
+    const member = await observer.membership.findUniqueOrThrow({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } });
+    child.send('resume');
+    const read = await child.wait('publication-membership-read', 'publication');
+    assert.equal(read.taskId, f.taskId); assert.equal(read.backendPid, child.backendPid);
+    assert.equal(read.workspaceId, f.workspaceId); assert.equal(read.userId, f.userId); assert.equal(read.membershipId, member.id);
+    assert.equal(child.committed('prepare'), 1); assert.equal(child.calls(), 0);
+    await runtime.domain.removeMember(support.deps(cancelling), f.ownerId, f.workspaceId, f.userId);
+    assert.equal(await observer.membership.findUnique({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } }), null);
+    const audits = await observer.auditLog.findMany({ where: { action: 'workspace.member.remove', workspaceId: f.workspaceId,
+      actorId: f.ownerId, targetType: 'user', targetId: f.userId } });
+    assert.equal(audits.length, 1); assert.deepEqual(audits[0]!.metadata, { role: 'author' });
+    assert.deepEqual(await membershipBindings(f), binding); assert.equal(child.calls(), 0);
+    console.info(JSON.stringify({ event: 'read-then-removal-commit-visible', taskId: f.taskId, workspaceId: f.workspaceId,
+      removedActorId: f.userId, membershipId: member.id, childBackendPid: child.backendPid, observerPid, auditId: audits[0]!.id }));
+    // Complete an unwanted baseline call normally, so only the designated calls oracle is meaningful RED.
+    child.send('response'); child.send('terminal'); child.send('membership-read-release'); await child.completed();
+    assert.equal(child.calls(), 0, 'concurrent membership ordering: removal committed before submit must prevent dispatch');
+    assert.ok(child.events.some(event => event.type === 'publication-denied' && event.code === 'OCR_EXTERNAL_PROCESSING_DENIED'));
+    const rollbacks = child.events.filter(event => event.type === 'rollback');
+    assert.ok(rollbacks.length > 0);
+    assert.ok(rollbacks.every(event => ['WORKSPACE_NOT_FOUND', 'OCR_EXTERNAL_PROCESSING_DENIED'].includes(event.code ?? '')));
+    assert.equal(child.events.some(event => event.type === 'body-saved' || event.type === 'terminal-success'), false);
+    const facts = await membershipCustody(f, original);
+    assert.equal(facts.task.status, 'failed'); assert.equal(facts.task.error, runtime.domain.ORDINARY_STRUCTURED_HOLD);
+    assert.deepEqual(facts.view.result ?? {}, {}); assert.equal(facts.receipt.attempts[0]!.state, 'unknown');
+    assert.equal(facts.receipt.attempts[0]!.responseJson, undefined);
+    assert.deepEqual(JSON.parse(facts.receipt.attempts[0]!.failureJson!), { code: 'publication_unconfirmed' });
     assert.equal(child.committed('prepare'), 1); assert.equal(child.committed('terminal'), 0);
   }));
 });

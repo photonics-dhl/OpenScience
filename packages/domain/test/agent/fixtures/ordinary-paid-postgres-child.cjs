@@ -58,7 +58,8 @@ function phaseOf(data) {
 }
 
 // Observe only: original receiver/arguments/count/options and the real commit are retained.
-function observeClient(client, taskId, { emit = () => {}, afterWrite = async () => {}, afterCommit = async () => {} } = {}) {
+function observeClient(client, taskId, { emit = () => {}, afterWrite = async () => {}, afterCommit = async () => {},
+  afterMembershipRead } = {}) {
   return new Proxy(client, { get(target, property) {
     const value = Reflect.get(target, property);
     if (property !== '$transaction') return typeof value === 'function' ? value.bind(target) : value;
@@ -69,6 +70,15 @@ function observeClient(client, taskId, { emit = () => {}, afterWrite = async () 
       try {
         result = await target.$transaction(async tx => callback(new Proxy(tx, { get(actual, key) {
           const member = Reflect.get(actual, key);
+          if (key === 'membership' && afterMembershipRead) return new Proxy(member, { get(delegate, operation) {
+            const method = Reflect.get(delegate, operation);
+            if (operation !== 'findUnique') return typeof method === 'function' ? method.bind(delegate) : method;
+            return async (...args) => {
+              const found = await Reflect.apply(method, delegate, args);
+              await afterMembershipRead(args[0], found);
+              return found;
+            };
+          } });
           if (key !== 'agentTask') return typeof member === 'function' ? member.bind(actual) : member;
           return new Proxy(member, { get(delegate, operation) {
             const method = Reflect.get(delegate, operation);
@@ -124,13 +134,27 @@ async function main() {
     if (resume) { waiting.delete(message.token); resume(); } else tokens.add(message.token);
   });
   const emit = event => { if (process.connected) process.send(event); };
-  let requestStarted = false, publishCommitted = false;
+  let requestStarted = false, publishCommitted = false, prepareCommitted = false, publicationReadHeld = false;
   const taskId = process.argv[2], mode = process.argv[3];
-  assert.ok(taskId && ['prepare-crash', 'claim-crash', 'ordinary', 'hold-terminal', 'hold-model', 'membership-publication'].includes(mode));
-  const membershipPublication = mode === 'membership-publication';
+  assert.ok(taskId && ['prepare-crash', 'claim-crash', 'ordinary', 'hold-terminal', 'hold-model', 'membership-publication',
+    'membership-read-revoke'].includes(mode));
+  const readRevocation = mode === 'membership-read-revoke';
+  const membershipPublication = mode === 'membership-publication' || readRevocation;
+  const expectedMembership = readRevocation ? { workspaceId: process.argv[4], userId: process.argv[5] } : null;
+  if (expectedMembership) assert.ok(expectedMembership.workspaceId && expectedMembership.userId);
   try {
     const pid = await warm(client);
     const observed = observeClient(client, taskId, { emit,
+      ...(readRevocation ? { afterMembershipRead: async (query, found) => {
+        if (!prepareCommitted) return;
+        assert.deepEqual(query?.where?.workspaceId_userId, expectedMembership);
+        assert.ok(found?.id); assert.equal(found.workspaceId, expectedMembership.workspaceId);
+        assert.equal(found.userId, expectedMembership.userId); assert.equal(publicationReadHeld, false);
+        publicationReadHeld = true;
+        emit({ type: 'publication-membership-read', phase: 'publication', taskId, backendPid: pid,
+          workspaceId: found.workspaceId, userId: found.userId, membershipId: found.id });
+        await gate('membership-read-release');
+      } } : {}),
       afterWrite: async event => {
         if (mode === 'hold-terminal' && event.phase === 'terminal' && event.count === 1) {
           emit({ type: 'terminal-held' }); await gate('commit');
@@ -138,6 +162,7 @@ async function main() {
       },
       afterCommit: async writes => {
         if (writes.some(w => w.phase === 'prepare' && w.count === 1)) {
+          prepareCommitted = true;
           emit({ type: 'prepare-committed' });
           if (mode === 'prepare-crash' || membershipPublication) await gate('resume');
         }
