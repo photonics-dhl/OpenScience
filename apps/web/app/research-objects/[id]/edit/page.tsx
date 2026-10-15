@@ -1305,12 +1305,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
             {activeView === 'content' && readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
 
-            {activeView === 'materials' ? <details className={styles.disclosure} open>
-              <summary>{tw('supportingMaterials')}</summary>
-              <div className={styles.supportingBody}>
-            <details className={styles.subDisclosure}>
-              <summary><span>{t('artifacts')}</span><small>{artifacts.length}</small></summary>
-              <div className={styles.disclosureBody}>
+            {activeView === 'materials' ? <section className={styles.materials} aria-label={tw('materialsRecords')}>
+            <section className={styles.materialsSources}>
+              <header className={styles.materialsHeader}><h2>{tw('originalMaterials')}</h2><span>{artifacts.length}</span></header>
+              <div>
                 <ArtifactUploader workspaceId={workspaceId} researchObjectId={roId} artifacts={artifacts} onArtifactsChange={setArtifacts} onIngestionStarted={(task) => {
                   setIngestionTasks((current) => [...current.filter((candidate) => candidate.id !== task.id), { ...task, confirmation: null }]);
                   setSelectedIngestionTaskId(task.id);
@@ -1320,7 +1318,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
                 }} />
 
               </div>
-            </details>
+            </section>
             {!ingestionReviewActive && (extracting || extractError || missingFields.length > 0 || suggestions.some((suggestion) => suggestion.status === 'pending')) ? <details className={styles.subDisclosure}>
               <summary><span>{tw('pendingSuggestions')}</span></summary>
               <div className={styles.disclosureBody}>
@@ -1344,20 +1342,29 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               </div>
             </details> : null}
 
-            {publishedVersions.length > 0 && <details className={styles.subDisclosure}>
-              <summary><span>{th('publicationHistory')}</span></summary>
+            {versions.length > 0 && <section>
+              <header className={styles.materialsHeader}><h2>{tw('versions')}</h2></header>
               <div className={styles.versionList}>
-                {publishedVersions.slice(0, 8).map((version) => (
+                {[...versions.filter((version) => version.status === 'draft').slice(0, 1), ...publishedVersions].slice(0, 8).map((version) => (
                   <button key={version.versionId} onClick={() => handleVersionSelect(version.versionId)} type="button">
-                    <span>{versionLabels.label(version)}</span><time dateTime={version.publishedAt ?? undefined}>{versionLabels.date(version.publishedAt)}</time><span>{t(`versionStatus.${version.status}`)}</span>
+                    <span>{versionLabels.label(version)}</span><time dateTime={(version.status === 'draft' ? version.createdAt : version.publishedAt) ?? undefined}>{versionLabels.date(version.status === 'draft' ? version.createdAt : version.publishedAt)}</time><span>{t(`versionStatus.${version.status}`)}</span>
                   </button>
                 ))}
-                <Link href={`/research-objects/${encodeURIComponent(roId)}/versions`}>{th('publicationHistory')}</Link>
+                <Link href={`/research-objects/${encodeURIComponent(roId)}/versions`}>{tw('versionRecord')}</Link>
               </div>
-            </details>}
-
-              </div>
-            </details> : null}
+            </section>}
+            <section>
+              <header className={styles.materialsHeader}><h2>{tw('changeRecords')}</h2></header>
+              <p className={styles.materialsHint}>{th('body')}</p>
+              <ol className={styles.changeList}>
+                {versions.slice(0, 5).map((version) => <li key={version.versionId}>
+                  <time dateTime={version.createdAt}>{versionLabels.date(version.createdAt)}</time>
+                  <ScientificText as="span" hideSourceMarkers>{versionLabels.summary(version.commitMessage)}</ScientificText>
+                </li>)}
+              </ol>
+              <button type="button" className={styles.secondaryButton} onClick={() => setHistoryOpen(true)}>{th('title')}</button>
+            </section>
+            </section> : null}
             </section>
           </div>
         }

@@ -401,6 +401,9 @@
     }
   },
   "workbench": {
+    "originalMaterials": "Original materials",
+    "versions": "Versions",
+    "changeRecords": "Change history",
     "requestVideo": "Generate a video",
     "requestImage": "Generate an image",
     "hermesScope": "Edit writing, create visuals, prepare publication",
@@ -2086,6 +2089,8 @@
     "retry": "Try again"
   },
   "presentation": {
+    "editorCaption": "Caption",
+    "editorMediaDetails": "Production details",
     "existingImageReview": {
       "action": "Review saved image only",
       "submitting": "Submitting review…",

@@ -57,6 +57,21 @@ it('keeps public media decks free of private retention controls', () => {
   expect(markup).not.toContain('<button');
 });
 
+it('folds only explicitly requested editor captions without losing scientific text or media actions', () => {
+  const props = { title: 'Media', slides: [{ id: 'one', kind: 'image' as const, url: '/image', label: 'Result', description: 'Full scientific caption' }],
+    emptyTitle: 'Empty', emptyBody: 'Empty', previousLabel: 'Previous', nextLabel: 'Next', positionLabel: (current: number, total: number) => `${current}/${total}`,
+    emptyKind: 'image' as const, openImageLabel: 'Open' };
+  const standard = renderToStaticMarkup(<ResearchMediaDeck {...props} />);
+  expect(standard).not.toContain('<details');
+  expect(standard).toContain('Full scientific caption');
+  const editor = renderToStaticMarkup(<ResearchMediaDeck {...props} descriptionLabel="Caption" renderActions={() => <button>Retain media</button>} />);
+  expect(editor).toMatch(/<details[^>]*><summary>Caption<\/summary>/);
+  expect(editor).not.toMatch(/<details[^>]*\sopen/);
+  expect(editor).toContain('Full scientific caption');
+  expect(editor).toContain('Retain media');
+  expect(editor).toContain('href="/image"');
+});
+
 it.each(['image', 'video'] as const)('keeps rejected %s out of the embedded deck but available in the full gallery', kind => {
   const rejected = { ...asset, id: 'rejected-media', kind, status: 'rejected' as const, canApprove: false, canTransition: false };
   const props = { researchObjectId: 'ro', assets: [rejected], claims: [],

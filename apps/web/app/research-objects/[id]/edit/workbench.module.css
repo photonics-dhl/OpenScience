@@ -432,6 +432,32 @@
 }
 
 .contribution:lang(zh), .productSectionHeader h2:lang(zh) { letter-spacing: 0; }
+.materials { display: grid; gap: 40px; padding-block: 28px 40px; }
+.materials > section { min-width: 0; }
+.materialsHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.materialsHeader h2 { margin: 0; font: 600 22px/1.45 var(--font-ui, sans-serif); }
+.materialsHeader > span, .materialsHint { color: var(--craft-muted, #51666c); font-size: 15px; line-height: 1.8; }
+.materialsHint { margin: 0 0 16px; }
+.changeList { list-style: none; margin: 0 0 16px; padding: 0; }
+.changeList li { display: grid; grid-template-columns: minmax(120px, .6fr) minmax(0, 1fr); gap: 16px; padding-block: 16px; border-top: 1px solid var(--craft-rule, #dce5e5); font-size: 15px; line-height: 1.8; }
+.changeList time { color: var(--craft-muted, #51666c); }
+.materialsSources :global(#artifacts) { margin-top: 0; padding-top: 0; border-top: 0; }
+.materialsSources :global(#artifacts h2) { display: none; }
+.productSection :global([data-editor-media='true'] > .grid) { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.productSection :global([data-editor-media='true'] [data-research-media-kind]) { min-width: 0; }
+.productSection :global([data-editor-media='true'] [data-research-media-kind] > h3) { font: 600 18px/1.5 var(--font-ui, sans-serif); }
+.productSection :global([data-editor-media='true'] [data-research-media-kind] > h3::before) { display: none; }
+.productSection :global([data-editor-media='true'] figure > div) { aspect-ratio: 16 / 9; }
+.productSection :global([data-editor-media='true'] [data-research-media-kind='video']) { padding-top: 24px; border-top: 1px solid var(--craft-rule, #dce5e5); }
+.productSection :global([data-editor-media='true'] [data-research-media-kind='video'] figure) { display: grid; grid-template-columns: minmax(160px, 32%) minmax(0, 1fr); align-items: center; }
+.productSection :global([data-editor-media='true'] [data-research-media-kind='video'] video) { max-height: 240px; }
+.productSection :global([data-editor-media='true'] [data-media-production]) { color: var(--craft-muted, #51666c); font-size: 14px; margin-bottom: 12px; }
+.productSection :global([data-editor-media='true'] details > summary) { min-height: 44px; cursor: pointer; }
+.productSection :global([data-editor-media='true'] figure + details) { font-size: 15px; }
+.productSection :global([data-editor-media='true'] figure + details > div) { font-size: 16px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .productSection :global([data-editor-media='true'] [data-research-media-kind='video'] figure) { grid-template-columns: minmax(0, 1fr); }
+}
 .workbenchShell[data-os-surface='workspace'] :global([data-object-header='true'] strong:lang(zh)) { letter-spacing: 0; }
 .workbenchShell .contentSection [data-sdf-node] > h2 > :is(button, span:last-child):lang(zh) { letter-spacing: 0; }
 

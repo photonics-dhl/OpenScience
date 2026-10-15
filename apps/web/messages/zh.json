@@ -401,6 +401,9 @@
     }
   },
   "workbench": {
+    "originalMaterials": "原始资料",
+    "versions": "版本",
+    "changeRecords": "修改记录",
     "requestVideo": "生成视频",
     "requestImage": "生成图片",
     "hermesScope": "改文字、做图解、准备发布",
@@ -2086,6 +2089,8 @@
     "retry": "重新加载"
   },
   "presentation": {
+    "editorCaption": "图注",
+    "editorMediaDetails": "制作信息",
     "existingImageReview": {
       "action": "仅审核已保存图片",
       "submitting": "正在提交审核…",

@@ -25,9 +25,10 @@ interface ResearchMediaDeckProps {
   openImageLabel: string;
   eager?: boolean;
   renderActions?: (slide: ResearchMediaSlide) => ReactNode;
+  descriptionLabel?: string;
 }
 
-export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previousLabel, nextLabel, positionLabel, emptyKind, openImageLabel, eager = false, renderActions }: ResearchMediaDeckProps) {
+export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previousLabel, nextLabel, positionLabel, emptyKind, openImageLabel, eager = false, renderActions, descriptionLabel }: ResearchMediaDeckProps) {
   const [index, setIndex] = useState(0);
   const headingId = useId();
   const multiple = slides.length > 1;
@@ -46,7 +47,7 @@ export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previo
     if (event.key === 'ArrowRight') { event.preventDefault(); next(); }
   };
 
-  return <section className={styles.deck} aria-labelledby={headingId} aria-roledescription={multiple ? 'carousel' : undefined} onKeyDown={onKeyDown} tabIndex={multiple ? 0 : undefined}>
+  return <section className={styles.deck} data-research-media-kind={emptyKind} aria-labelledby={headingId} aria-roledescription={multiple ? 'carousel' : undefined} onKeyDown={onKeyDown} tabIndex={multiple ? 0 : undefined}>
     <h3 className={styles.heading} id={headingId}>{title}</h3>
     {!active ? <div className={styles.frame} data-media-placeholder="true">
       <div className={styles.placeholder} aria-hidden="true"><EmptyIcon /></div>
@@ -58,8 +59,12 @@ export function ResearchMediaDeck({ title, slides, emptyTitle, emptyBody, previo
             ? <video controls playsInline preload="metadata" aria-label={active.label} src={active.url} />
             : <a href={active.url} target="_blank" rel="noreferrer" aria-label={`${active.label} — ${openImageLabel}`}><img src={active.url} alt={active.label} loading={eager ? 'eager' : 'lazy'} /></a>}
         </div>
-        <figcaption className={styles.caption}><ScientificText as="strong" hideSourceMarkers>{active.label}</ScientificText>{active.description ? <ScientificText as="span" hideSourceMarkers>{active.description}</ScientificText> : null}</figcaption>
+        <figcaption className={styles.caption}><ScientificText as="strong" hideSourceMarkers>{active.label}</ScientificText>{active.description && !descriptionLabel ? <ScientificText as="span" hideSourceMarkers>{active.description}</ScientificText> : null}</figcaption>
       </figure>
+      {active.description && descriptionLabel ? <details className={styles.details} key={`caption:${active.id}`}>
+        <summary>{descriptionLabel}</summary>
+        <ScientificText as="div" hideSourceMarkers>{active.description}</ScientificText>
+      </details> : null}
       {renderActions ? <div className="border-t border-os-rule-paper px-4 py-3" key={active.id}>{renderActions(active)}</div> : null}
       {multiple ? <div className={styles.controls} aria-label={title}>
         <button type="button" onClick={previous} aria-label={previousLabel}>←</button>

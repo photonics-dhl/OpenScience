@@ -57,13 +57,14 @@ export interface PresentationWorkbenchProps {
   working?: boolean;
   error?: string;
   resultsOnly?: boolean;
+  editorLayout?: boolean;
 }
 
 const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false, editorLayout = false,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -143,16 +144,16 @@ export function PresentationWorkbench({
       if (!asset) return null;
       const model = displayedSynclipImageModel(asset, canWrite);
       return <div key={asset.id}>
-        {model ? <p className="m-0 mb-2 text-sm leading-6 text-os-muted-paper">{t('generatedBy', { name: model })}</p> : null}
+        {model ? editorLayout ? <details data-media-production="true"><summary>{t('editorMediaDetails')}</summary><p className="m-0 mb-2 text-sm leading-6 text-os-muted-paper">{t('generatedBy', { name: model })}</p></details> : <p className="m-0 mb-2 text-sm leading-6 text-os-muted-paper">{t('generatedBy', { name: model })}</p> : null}
         <MediaAssetActions asset={asset} title={slide.label} canWrite={canWrite} working={working || loading || loadFailed} reviewAction={renderReviewAction?.(asset)} onTransition={onTransition} onDeleted={assetDeleted} />
       </div>;
     };
     return (
-      <div className="min-w-0 text-os-ink" data-presentation-results="true">
+      <div className="min-w-0 text-os-ink" data-presentation-results="true" data-editor-media={editorLayout ? 'true' : undefined}>
         {loading ? <p className="m-0 pb-4 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
         <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,3fr)_minmax(220px,2fr)]">
-          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} renderActions={renderActions} eager />
-          <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} renderActions={renderActions} />
+          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} eager />
+          <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} />
         </div>
         {deletionNotice}
         {canWrite ? <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}

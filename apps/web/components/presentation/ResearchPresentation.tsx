@@ -630,7 +630,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const storyboardHandlers = createPresentationStoryboardHandlers(generate);
   const content = (<>
       {!embedded && <div className={styles.navigation}><ResearchWorkspaceNav active="presentation" objectId={params.id} /></div>}
-      <div className={embedded ? undefined : styles.layout}><div className={styles.content}>
+      <div className={embedded ? undefined : styles.layout} data-private-editor-media={embedded ? 'true' : undefined}><div className={styles.content}>
       {invalidRequestedVersion ? (
         <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
           <p className="border-l-2 border-state-danger pl-4 text-state-danger" role="alert">{t('invalidVersion')}</p>
@@ -704,6 +704,7 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             working={working || styleWorking || reviewPending || pendingRetries.has(`${scopeKey}:${taskId}`)}
             error={error}
             resultsOnly={embedded}
+            editorLayout={embedded}
             onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}
           />
         </>
