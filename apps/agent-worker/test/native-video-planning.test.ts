@@ -813,8 +813,7 @@ describe('native Hermes complete video planning', () => {
     expect(known.saved).toEqual(before);
   });
 
-  it.each(['legacy', 'approved'].flatMap(form => ['video', 'frame', 'resources'].map(field => ({ form, field }))))
-  ('refuses a changed $form optional art receipt $field instead of adopting saved content', ({ form, field }) => {
+  it.each(['legacy', 'approved'].flatMap(form => ['video', 'frame', 'resources'].map(field => ({ form, field }))))('refuses a changed $form optional art receipt $field instead of adopting saved content', ({ form, field }) => {
     const old = recordedOptionalPlan('external-narration', form as 'legacy' | 'approved');
     const receipt = old.messages.find(message => message.role === 'tool' && message.toolCallId === 'old-art')!;
     const changed = JSON.parse(receipt.content);
