@@ -11,6 +11,7 @@ import { Prisma, type AgentTask } from '@prisma/client';
 import {
   AiGateway,
   AiGatewayError,
+  TextProviderError,
   type StructuredGenerationOptions,
   createConfiguredGateway,
   type GatewayImageSubmission,
@@ -27,6 +28,10 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
+  prepareOrdinaryStructuredReceipt, settleOrdinaryStructuredReceipt, readOrdinaryStructuredReceipt,
+  hasOrdinaryStructuredReceipt, isOrdinaryStructuredKind,
+  ORDINARY_STRUCTURED_HOLD,
+  OrdinaryStructuredReceiptConflict, type OrdinaryStructuredReceipt,
   recoverCompletedHermesSceneImageResults, type HermesResearchRunDeps,
   AGENT_TASK_QUEUE, AGENT_TASK_OWNED_STOP_REASON, HERMES_AUTHORITY_REARM_MARKER, persistDocumentSourceMapReference,
   parseDocumentSourceMapReference, loadDocumentSourceMapReference, type AgentDeps,
@@ -118,6 +123,7 @@ export function createTaskScopedGateway(
   gateway: AiGateway, prisma: WorkerDeps['prisma'], task: StructuredClaim, kind: OrdinaryStructuredKind,
 ): AiGateway {
   const denied = () => new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', 'Worker structured submission lost its original claim');
+  const unconfirmed = () => new AiGatewayError('OCR_EXTERNAL_PROCESSING_DENIED', ORDINARY_STRUCTURED_HOLD);
   if (!task || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(task.id)
     || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt < 1
     || !task.payload || typeof task.payload !== 'object' || Array.isArray(task.payload)
@@ -126,6 +132,36 @@ export function createTaskScopedGateway(
   const requireClaim = () => {
     const execution = spoolTaskExecution.getStore();
     if (!execution || execution.taskId !== claim.taskId || execution.executionAttempt !== claim.executionAttempt) throw denied();
+  };
+  const transactionOptions = { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 10_000, timeout: 30_000 };
+  const lockTask = async (tx: Prisma.TransactionClient) => {
+    await lockTrashReferences(tx);
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM agent_tasks WHERE id = ${claim.taskId}::uuid FOR UPDATE`;
+    if (!Array.isArray(locked) || locked.length !== 1 || locked[0]?.id !== claim.taskId) throw denied();
+  };
+  const liveClaim = async (tx: Prisma.TransactionClient) => {
+    await lockTask(tx);
+    const live = await tx.agentTask.findUnique({ where: { id: claim.taskId }, include: { session: { include: { researchObject: true } } } });
+    const session = live?.session;
+    if (!live || live.id !== claim.taskId || live.kind !== kind || live.status !== 'running' || live.deletedAt !== null
+      || live.executionAttempt !== claim.executionAttempt || live.error === AGENT_TASK_OWNED_STOP_REASON
+      || !isDeepStrictEqual(live.payload ?? {}, claim.payload)
+      || !session || session.id !== live.sessionId || !session.userId || session.status !== 'active' || session.deletedAt !== null
+      || (session.researchObjectId === null
+        ? kind === 'review.analyze' || kind === 'presentation.figure-audit' || session.researchObject !== null
+        : !session.researchObject || session.researchObject.id !== session.researchObjectId || session.researchObject.deletedAt !== null)
+      || (typeof claim.payload.researchObjectId === 'string' && claim.payload.researchObjectId !== session.researchObjectId)) throw denied();
+    requireClaim(); return live;
+  };
+  const save = async (prepared: OrdinaryStructuredReceipt, completion: { responseJson: string } | { failureJson: string }) => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await prisma.$transaction(async tx => { await lockTask(tx); await settleOrdinaryStructuredReceipt(tx, prepared, completion); }, transactionOptions);
+        return;
+      } catch (error) {
+        if (attempt >= 2 || (!(error instanceof OrdinaryStructuredReceiptConflict) && (error as { code?: unknown })?.code !== 'P2034')) throw unconfirmed();
+      }
+    }
   };
   return new Proxy(gateway, {
     get(target, property, receiver) {
@@ -140,38 +176,62 @@ export function createTaskScopedGateway(
         if (options.withProviderSubmission !== undefined
           || (options.beforeEachProviderCall !== undefined && typeof options.beforeEachProviderCall !== 'function')) throw denied();
         const before = options.beforeEachProviderCall;
+        const source = { payload: claim.payload, messages: structuredClone(args[1]) };
+        let sourceJson: string | undefined;
+        let reservation: { id: string; userId: string | null; idempotencyKey: string | null; resource: string; delta: bigint; kind: string } | null = null;
         args[2] = {
           ...options,
           beforeEachProviderCall: async () => { requireClaim(); await before?.(); requireClaim(); },
-          withProviderSubmission: async (_ordinal, _target, submit) => {
+          withProviderSubmission: async (ordinal, target, submit) => {
             requireClaim();
+            let prepared: OrdinaryStructuredReceipt;
+            try {
+              // Snapshot the real existing platform reservation, not a supplier invoice.
+              // Serialize source/response data outside all lock-held transactions.
+              if (sourceJson === undefined) {
+                reservation = await prisma.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${claim.taskId}` },
+                  select: { id: true, userId: true, idempotencyKey: true, resource: true, delta: true, kind: true } });
+                sourceJson = JSON.stringify({ ...source, reservation: reservation ? { ...reservation, delta: String(reservation.delta) } : null });
+              }
+              const snapshot = sourceJson;
+              prepared = await prisma.$transaction(async tx => {
+                const live = await liveClaim(tx);
+                if (reservation && (reservation.userId !== live.session.userId || reservation.idempotencyKey !== `agent-task-reserve:${claim.taskId}`
+                  || reservation.resource !== 'ai_credit' || reservation.kind !== 'consume')) throw denied();
+                return prepareOrdinaryStructuredReceipt(tx, { identity: { taskId: claim.taskId, kind,
+                  executionAttempt: claim.executionAttempt, sessionId: live.sessionId, userId: live.session.userId,
+                  researchObjectId: live.session.researchObjectId }, sourceJson: snapshot, ordinal, target });
+              }, transactionOptions);
+            } catch (error) { if (error instanceof AiGatewayError) throw error; throw unconfirmed(); }
+            // Only this positively committed prepare invocation can publish once.
             let sent: ReturnType<typeof submit> | undefined;
             try {
               await prisma.$transaction(async tx => {
-                await lockTrashReferences(tx);
-                const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM agent_tasks WHERE id = ${claim.taskId}::uuid FOR UPDATE`;
-                if (!Array.isArray(locked) || locked.length !== 1 || locked[0]?.id !== claim.taskId) throw denied();
-                const live = await tx.agentTask.findUnique({ where: { id: claim.taskId },
-                  include: { session: { include: { researchObject: true } } } });
-                const session = live?.session;
-                if (!live || live.id !== claim.taskId || live.kind !== kind || live.status !== 'running' || live.deletedAt !== null
-                  || live.executionAttempt !== claim.executionAttempt || live.error === AGENT_TASK_OWNED_STOP_REASON
-                  || !isDeepStrictEqual(live.payload ?? {}, claim.payload)
-                  || !session || session.id !== live.sessionId || !session.userId || session.status !== 'active' || session.deletedAt !== null
-                  || (session.researchObjectId === null
-                    ? kind === 'review.analyze' || kind === 'presentation.figure-audit' || session.researchObject !== null
-                    : !session.researchObject || session.researchObject.id !== session.researchObjectId || session.researchObject.deletedAt !== null)
-                  || (typeof claim.payload.researchObjectId === 'string' && claim.payload.researchObjectId !== session.researchObjectId)) throw denied();
-                requireClaim();
+                const live = await liveClaim(tx);
+                if (live.sessionId !== prepared.identity.sessionId || live.session.userId !== prepared.identity.userId
+                  || live.session.researchObjectId !== prepared.identity.researchObjectId
+                  || !isDeepStrictEqual(readOrdinaryStructuredReceipt(live.result), prepared)) throw denied();
                 // Start under both locks; never hold this transaction for the model response.
                 sent = submit(); void sent.catch(() => undefined);
-              }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 10_000, timeout: 30_000 });
+              }, transactionOptions);
             } catch {
-              // A read-only transaction failure after start cannot pay again or replace the original Promise.
-              if (!sent) throw denied();
+              if (!sent) {
+                await save(prepared, { failureJson: JSON.stringify({ code: 'publication_unconfirmed' }) });
+                throw unconfirmed();
+              }
             }
             if (!sent) throw denied();
-            return sent;
+            let response: Awaited<typeof sent>;
+            try { response = await sent; }
+            catch (error) {
+              const failureJson = JSON.stringify(error instanceof TextProviderError ? { code: error.code,
+                httpStatus: error.httpStatus, transportCode: error.transportCode, details: error.details } : { code: 'provider_unconfirmed' });
+              await save(prepared, { failureJson }); throw unconfirmed();
+            }
+            let responseJson: string;
+            try { responseJson = JSON.stringify(response); } catch { throw unconfirmed(); }
+            await save(prepared, { responseJson });
+            return response;
           },
         } satisfies StructuredGenerationOptions;
         return method.apply(target, args);
@@ -1275,6 +1335,7 @@ export async function createPollOnce(
       });
       return true;
     } catch (e) {
+      if (e instanceof OrdinaryStructuredReceiptConflict) { processingEntryDeferred = true; throw e; }
       if (!claimed && processingEntryDeferred) throw e;
       if (handlerCompleted && (e as { code?: unknown })?.code === 'P2034') {
         const current = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
@@ -1285,8 +1346,17 @@ export async function createPollOnce(
           processingEntryDeferred = true;
           return true;
         }
-        const retryable = await prepareAgentTaskForCrashRecovery(deps, taskId);
-        if (!retryable) throw e;
+        let retryable: boolean;
+        try { retryable = await prepareAgentTaskForCrashRecovery(deps, taskId); }
+        catch (error) {
+          if (isOrdinaryStructuredKind(claimed?.kind ?? '')) processingEntryDeferred = true;
+          throw error;
+        }
+        if (!retryable) {
+          const held = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+          if (held && isOrdinaryStructuredKind(held.kind) && hasOrdinaryStructuredReceipt(held.result)) return true;
+          throw e;
+        }
         processingEntryRequeued = true;
         await deps.redis.multi()
           .lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId)

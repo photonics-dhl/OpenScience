@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
@@ -12,6 +14,110 @@ import { prepareAgentNativeImageReview, completeNativeImageReview } from '../../
 import { requireSceneImageParent } from '../../src/assets/scene-image';
 import { presentationEvidenceIdentity, readReviewedPresentationEvidence } from '../../src/assets/illustration-source';
 import { nativeAgentRuntimeFromEnv } from '../../src/agent/native-agent-execution';
+import { prepareOrdinaryStructuredReceipt, settleOrdinaryStructuredReceipt,
+  ORDINARY_STRUCTURED_HOLD } from '../../src/agent/ordinary-structured-receipt';
+
+describe('ordinary paid evidence lifecycle', () => {
+  async function ordinary(claim = true) {
+    const f = await makeDeps();
+    const deps = f.deps as unknown as AgentDeps;
+    const session = await createAgentSession(f.deps, { userId: f.user.id, researchObjectId: f.ro.id, kind: 'visualization' });
+    const task = await submitAgentTask(f.deps, { userId: f.user.id, sessionId: session.id, kind: 'visualization.plan',
+      payload: { concept: 'original source' }, dispatch: false });
+    if (claim) await claimAgentTask(f.deps, task.id);
+    const row = f.db.agentTasks.find(value => value.id === task.id)!;
+    // The common legacy fake ignores JSON filters. This local boundary models
+    // real result CAS instead of accepting a race that PostgreSQL would reject.
+    const write = deps.prisma.agentTask.updateMany.bind(deps.prisma.agentTask);
+    deps.prisma.agentTask.updateMany = ((args: Prisma.AgentTaskUpdateManyArgs) => {
+      const equals = (args.where?.result as { equals?: unknown } | undefined)?.equals;
+      if (equals !== undefined && !(equals === Prisma.AnyNull ? row.result == null : isDeepStrictEqual(row.result, equals)))
+        return Promise.resolve({ count: 0 });
+      return write(args);
+    }) as unknown as typeof deps.prisma.agentTask.updateMany;
+    const prepare = () => deps.prisma.$transaction(tx => prepareOrdinaryStructuredReceipt(tx, {
+      identity: { taskId: row.id, sessionId: row.sessionId, userId: f.user.id, researchObjectId: f.ro.id,
+        kind: 'visualization.plan', executionAttempt: row.executionAttempt }, sourceJson: '{"payload":"original"}', ordinal: 0,
+      target: { provider: 'fixture', model: 'configured', promptHash: 'a'.repeat(64) },
+    }));
+    return { ...f, deps, row, prepare };
+  }
+
+  it('holds unknown evidence without another claim, retry, credit entry or public result', async () => {
+    const f = await ordinary(); await f.prepare(); const ledger = structuredClone(f.db.usageLedger);
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, f.row.id)).toBe(false);
+    expect(f.row).toMatchObject({ status: 'failed', error: ORDINARY_STRUCTURED_HOLD, executionAttempt: 1 });
+    expect(await claimAgentTask(f.deps, f.row.id)).toBeNull();
+    await expect(retryAgentTask(f.deps, { userId: f.user.id, taskId: f.row.id })).rejects.toThrow();
+    const view = await getAgentTask(f.deps, { userId: f.user.id, taskId: f.row.id });
+    expect(view.result).toEqual({}); expect(view.canRetry).toBe(false);
+    const listed = await listAgentTasks(f.deps, { userId: f.user.id });
+    expect(listed.find(task => task.id === f.row.id)?.result).toEqual({});
+    expect(f.db.usageLedger).toEqual(ledger);
+  });
+
+  it('merges completed server evidence on success while ignoring a forged incoming namespace', async () => {
+    const f = await ordinary(); const cp = await f.prepare();
+    await f.deps.prisma.$transaction(tx => settleOrdinaryStructuredReceipt(tx, cp, { responseJson: '{"text":"paid"}' }));
+    const saved = structuredClone(f.row.result.ordinaryStructuredReceipt);
+    const view = await markTaskProgress(f.deps, { taskId: f.row.id, expectedExecutionAttempt: 1,
+      status: 'succeeded', result: { plan: 'accepted', ordinaryStructuredReceipt: 'forged' } });
+    expect(f.row.result.ordinaryStructuredReceipt).toEqual(saved);
+    expect(view.result).toEqual({ plan: 'accepted' });
+  });
+
+  it('saves late completion after stop, preserves the stop and refuses adoption', async () => {
+    const f = await ordinary(); const cp = await f.prepare();
+    await cancelAgentTask(f.deps, { taskId: f.row.id, userId: f.user.id, expectedExecutionAttempt: 1 });
+    await f.deps.prisma.$transaction(tx => settleOrdinaryStructuredReceipt(tx, cp, { responseJson: '{"text":"late paid"}' }));
+    await expect(markTaskProgress(f.deps, { taskId: f.row.id, expectedExecutionAttempt: 1,
+      status: 'succeeded', result: { plan: 'late' } })).rejects.toThrow();
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, f.row.id)).toBe(false);
+    expect(f.row).toMatchObject({ status: 'failed', error: AGENT_TASK_OWNED_STOP_REASON, executionAttempt: 2 });
+    expect(f.row.result.ordinaryStructuredReceipt.attempts[0].responseJson).toBe('{"text":"late paid"}');
+  });
+
+  it.each(['claim', 'crash', 'terminal'])('does not let an absent-marker %s snapshot overwrite a committed intent', async writer => {
+    const f = await ordinary(writer !== 'claim');
+    // This concurrent committed writer is outside the losing transaction. The
+    // general fake rolls back the entire DB, so use a controlled no-rollback
+    // callback boundary for this CAS scheduling test (not a PostgreSQL proof).
+    f.deps.prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => run(f.deps.prisma)) as typeof f.deps.prisma.$transaction;
+    const update = f.deps.prisma.agentTask.updateMany.bind(f.deps.prisma.agentTask);
+    let injected = false;
+    f.deps.prisma.agentTask.updateMany = args => {
+      if (!injected && args.where?.id === f.row.id && args.data.status === (writer === 'claim' ? 'running' : writer === 'crash' ? 'pending' : 'succeeded')) {
+        injected = true; f.row.result = { ordinaryStructuredReceipt: { committed: 'concurrent owner' } };
+      }
+      return update(args);
+    };
+    if (writer === 'claim') expect(await claimAgentTask(f.deps, f.row.id)).toBeNull();
+    if (writer === 'crash') expect(await prepareAgentTaskForCrashRecovery(f.deps, f.row.id)).toBe(false);
+    if (writer === 'terminal') await expect(markTaskProgress(f.deps, { taskId: f.row.id,
+      expectedExecutionAttempt: 1, status: 'succeeded', result: { plan: 'old' } })).rejects.toThrow();
+    expect(injected).toBe(true); expect(f.row.result).toEqual({ ordinaryStructuredReceipt: { committed: 'concurrent owner' } });
+    expect(f.row.status).not.toBe('succeeded');
+  });
+
+  it('a losing recovery hold cannot block a new unrelated generation without that receipt', async () => {
+    const f = await ordinary(); await f.prepare();
+    const update = f.deps.prisma.agentTask.updateMany.bind(f.deps.prisma.agentTask); let changed = false;
+    f.deps.prisma.agentTask.updateMany = args => {
+      if (!changed && args.data.error === ORDINARY_STRUCTURED_HOLD) {
+        changed = true; Object.assign(f.row, { executionAttempt: 2, status: 'pending', result: { fresh: true } });
+      }
+      return update(args);
+    };
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, f.row.id)).toBe(true);
+    expect(f.row).toMatchObject({ executionAttempt: 2, status: 'pending', error: null, result: { fresh: true } });
+  });
+
+  it('receipt-only evidence does not preserve a public product when its session was deleted', async () => {
+    const f = await ordinary(); await f.prepare();
+    f.db.agentSessions.find(session => session.id === f.row.sessionId)!.deletedAt = new Date();
+    await expect(getAgentTask(f.deps, { userId: f.user.id, taskId: f.row.id })).rejects.toThrow();
+  });
+});
 
 describe('Native image planning-contract recovery routing', () => {
   const imagePayload = { kind: 'interactive_html', storyboard: { output: 'image', narrative: true } };

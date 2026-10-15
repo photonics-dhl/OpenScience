@@ -16,6 +16,9 @@ import { recordAudit } from '../workspace/audit';
 import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
 import { AgentError } from './errors';
+import { hasOrdinaryStructuredReceipt, isOrdinaryStructuredKind, ordinaryStructuredResultEquals,
+  ordinaryStructuredTerminalResult, ordinaryStructuredPublicResult, OrdinaryStructuredReceiptConflict,
+  ORDINARY_STRUCTURED_HOLD, ORDINARY_STRUCTURED_RECEIPT_KEY } from './ordinary-structured-receipt';
 import type { InterestContext } from '../research-intelligence/types';
 import { buildInterestContext, validateInterestContext } from '../research-intelligence/interest-context';
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
@@ -1065,7 +1068,30 @@ export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50)
 
 /** Convert only a crash-interrupted claim back to pending before its processing-list entry is requeued. */
 export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  // Compare the full snapshot even before an intent exists: a stale reset must
+  // lose to a just-prepared paid request, then reread rather than requeue it.
+  let task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ordinary = task;
+    if (!ordinary || ordinary.deletedAt) return false;
+    if (!isOrdinaryStructuredKind(ordinary.kind)) break;
+    if (isOwnedStopped(ordinary) || ordinary.status === 'succeeded') return false;
+    const receipt = hasOrdinaryStructuredReceipt(ordinary.result);
+    if (receipt && !['pending', 'running'].includes(ordinary.status)) return false;
+    if (!receipt && ordinary.status === 'pending') return true;
+    if (!receipt && ordinary.status !== 'running'
+      && !(ordinary.status === 'failed' && ordinary.error === '[retryable] worker interrupted')) return false;
+    const changed = await deps.prisma.agentTask.updateMany({ where: { id: taskId, kind: ordinary.kind, deletedAt: null,
+      status: ordinary.status, error: ordinary.error, executionAttempt: ordinary.executionAttempt,
+      result: ordinaryStructuredResultEquals(ordinary.result) },
+      data: receipt ? { status: 'failed', error: ORDINARY_STRUCTURED_HOLD } : { status: 'pending', error: null } });
+    if (changed.count === 1) return !receipt;
+    task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  }
+  if (task && isOrdinaryStructuredKind(task.kind)) {
+    if (!task.deletedAt && !isOwnedStopped(task) && ['pending', 'running'].includes(task.status)) throw new OrdinaryStructuredReceiptConflict();
+    return false;
+  }
   if (!task || task.deletedAt) return false;
   if (isNativeImagePlanningContractTask(task)) return false;
   if (task.status === 'pending') return true;
@@ -1166,8 +1192,22 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?:
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
+        const snapshot = await tx.agentTask.findUnique({ where: { id: taskId } });
+        const ordinary = snapshot && isOrdinaryStructuredKind(snapshot.kind) ? snapshot : undefined;
+        if (ordinary && hasOrdinaryStructuredReceipt(ordinary.result)) {
+          if (!ordinary.deletedAt && !isOwnedStopped(ordinary) && ['pending', 'running'].includes(ordinary.status)) {
+            const held = await tx.agentTask.updateMany({ where: { id: taskId, kind: ordinary.kind, deletedAt: null,
+              status: ordinary.status, error: ordinary.error, executionAttempt: ordinary.executionAttempt,
+              result: ordinaryStructuredResultEquals(ordinary.result) }, data: { status: 'failed', error: ORDINARY_STRUCTURED_HOLD } });
+            if (held.count !== 1) throw new OrdinaryStructuredReceiptConflict();
+          }
+          return null;
+        }
+        if (ordinary && ordinary.status !== 'pending') return null;
         const claimed = await tx.agentTask.updateMany({
           where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
+            ...(ordinary ? { kind: ordinary.kind, executionAttempt: ordinary.executionAttempt,
+              result: ordinaryStructuredResultEquals(ordinary.result) } : {}),
             ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,
               retryCount: expected.retryCount, executionAttempt: expected.executionAttempt,
               payload: { equals: expected.payload === null ? Prisma.AnyNull : expected.payload as Prisma.InputJsonValue },
@@ -1176,12 +1216,14 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?:
               dispatchedAt: expected.dispatchedAt, updatedAt: expected.updatedAt } : {}) },
           data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
         });
-        if (claimed.count !== 1) return null;
+        if (claimed.count !== 1) { if (ordinary) throw new OrdinaryStructuredReceiptConflict(); return null; }
         return tx.agentTask.findUnique({ where: { id: taskId } });
       }, { isolationLevel: 'Serializable' });
       break;
     } catch (error) {
-      if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      if (error instanceof OrdinaryStructuredReceiptConflict) {
+        if (attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
+      } else if (!isSerializableWriteConflict(error) || attempt >= SERIALIZABLE_RETRY_DELAYS_MS.length) throw error;
       await waitForSerializableRetry(attempt);
     }
   }
@@ -1198,8 +1240,9 @@ export async function getAgentTask(
   const task = await deps.prisma.agentTask.findUnique({
     where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
   });
-  const preservedProduct = task?.result && typeof task.result === 'object' && !Array.isArray(task.result)
-    && (task.kind !== 'workspace.guide' || Boolean((task.result as Record<string, unknown>).writingDraft));
+  const product = task ? projectAgentTaskResult(task.result, task.kind) : null;
+  const preservedProduct = product && Object.keys(product).length > 0
+    && (task?.kind !== 'workspace.guide' || Boolean(product.writingDraft));
   if (!task || task.deletedAt || (task.session.deletedAt && !preservedProduct) || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
@@ -1379,6 +1422,7 @@ export async function markTaskProgress(
     expectedExecutionAttempt?: number;
   },
 ): Promise<AgentTaskView> {
+  if (input.result !== undefined) input = { ...input, result: ordinaryStructuredPublicResult(input.result) };
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await markTaskProgressOnce(deps, input);
@@ -1479,14 +1523,14 @@ async function markTaskProgressOnce(
         throw new AgentError('ILLEGAL_TRANSITION', 'Native independent reviewer author changed');
       await requireNativeIllustrationTerminalSource(tx, current);
     }
-    const result = nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
-      await nativeImageReviewTerminalResult(tx, current, input.status, input.result)));
+    const result = ordinaryStructuredTerminalResult(current.result, nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
+      await nativeImageReviewTerminalResult(tx, current, input.status, input.result))));
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },
         status: currentStatus,
-        ...(current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview') || Object.hasOwn(current.result, 'nativeAgentExecution'))
-          ? { result: { equals: current.result as Prisma.InputJsonValue } } : {}),
+        ...(isOrdinaryStructuredKind(current.kind) || (current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview') || Object.hasOwn(current.result, 'nativeAgentExecution')))
+          ? { result: ordinaryStructuredResultEquals(current.result) } : {}),
         ...(input.expectedExecutionAttempt === undefined
           ? {}
           : { executionAttempt: input.expectedExecutionAttempt }),
@@ -1656,6 +1700,7 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   }
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  delete publicResult[ORDINARY_STRUCTURED_RECEIPT_KEY];
   delete publicResult.audioAuditionGrant;
   delete publicResult.audioAudition;
   if (isJsonRecord(rawResult.scientificReview)) {

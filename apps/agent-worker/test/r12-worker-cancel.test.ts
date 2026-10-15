@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { AiGateway, AiGatewayError, type Provider } from '@openscience/ai-gateway';
 import { lockTrashReferences, stopAgentTaskInTransaction, prepareAgentTaskForCrashRecovery, claimAgentTask } from '@openscience/domain';
 import { createTaskScopedGateway, runWithWorkerExecution } from '../src/index';
@@ -39,9 +40,11 @@ function fixture() {
   const events: string[] = []; const observers = new Map<string, Array<() => void>>();
   const emit = (name: string) => { events.push(name); for (const fn of observers.get(name) ?? []) fn(); observers.delete(name); };
   const next = (name: string) => { const event = deferred<void>(); observers.set(name, [...observers.get(name) ?? [], () => event.resolve()]); return event.promise; };
-  type Tx = { releases: Array<() => void>; rows: Set<string>; global: boolean; admission: boolean };
+  type Tx = { releases: Array<() => void>; rows: Set<string>; global: boolean; admission: boolean; wrote: boolean };
   const transactions = new AsyncLocalStorage<Tx>();
-  const controls: { commitError?: Error; queryError?: Error; commitBarrier?: Promise<void>; rawRows?: unknown; admissions: number; failures: unknown[] } = { admissions: 0, failures: [] };
+  const controls: { commitError?: Error; prepareError?: Error; completionError?: Error; queryError?: Error;
+    afterPrepare?: () => Promise<void>; completionFailures?: number;
+    commitBarrier?: Promise<void>; rawRows?: unknown; admissions: number; failures: unknown[] } = { admissions: 0, failures: [] };
   async function lockRow(tx: Tx, id: string) {
     if (!tx.rows.has(id)) { tx.releases.push(await rows.get(id)!.acquire()); tx.rows.add(id); }
   }
@@ -55,7 +58,15 @@ function fixture() {
         try {
           const task = states.get(id);
           if (!task || Object.entries(where).some(([key, value]) => key !== 'session' && key !== 'id'
-            && !isDeepStrictEqual(task[key as keyof typeof task], value))) return { count: 0 };
+            && !(key === 'result' && value && typeof value === 'object' && 'equals' in value
+              ? value.equals === Prisma.AnyNull ? task.result == null : isDeepStrictEqual(task.result, value.equals)
+              : isDeepStrictEqual(task[key as keyof typeof task], value)))) return { count: 0 };
+          if (controls.completionError && (JSON.stringify(data.result) ?? '').includes('responseJson')) {
+            const error = controls.completionError;
+            if (controls.completionFailures !== undefined && --controls.completionFailures <= 0) controls.completionError = undefined;
+            throw error;
+          }
+          if (tx) tx.wrote = true;
           for (const [key, value] of Object.entries(data)) {
             if (key === 'executionAttempt' && value && typeof value === 'object' && 'increment' in value) task.executionAttempt += Number(value.increment);
             else Object.assign(task, { [key]: value });
@@ -68,20 +79,30 @@ function fixture() {
   const prisma = {
     agentTask: taskModel(),
     ingestionTask: { updateMany: async () => ({ count: 0 }) },
+    usageLedger: { findUnique: async () => null },
     $transaction: async <T>(run: (tx: ReturnType<typeof client>) => Promise<T>, options?: { isolationLevel?: string }) => {
-      const state: Tx = { releases: [], rows: new Set(), global: false, admission: false };
-      return transactions.run(state, async () => {
+      const state: Tx = { releases: [], rows: new Set(), global: false, admission: false, wrote: false };
+      const result = await transactions.run(state, async () => {
         try {
           const value = await run(client(state));
           if (state.admission) {
-            expect(options?.isolationLevel).toBe('ReadCommitted'); emit('admission:commit');
-            await controls.commitBarrier;
-            if (controls.commitError) { const error = controls.commitError; controls.commitError = undefined; throw error; }
+            expect(options?.isolationLevel).toBe('ReadCommitted');
+            if (!state.wrote) {
+              controls.admissions++; emit('admission:commit'); await controls.commitBarrier;
+              if (controls.commitError) { const error = controls.commitError; controls.commitError = undefined; throw error; }
+            } else {
+              emit('evidence:commit');
+              if (controls.prepareError) { const error = controls.prepareError; controls.prepareError = undefined; throw error; }
+            }
           }
           return value;
         } catch (error) { controls.failures.push(error); throw error; }
         finally { for (const release of state.releases.reverse()) release(); }
       });
+      if (state.admission && state.wrote && controls.afterPrepare) {
+        const after = controls.afterPrepare; controls.afterPrepare = undefined; await after();
+      }
+      return result;
     },
   };
   function client(tx: Tx) {
@@ -94,7 +115,7 @@ function fixture() {
         expect(tx.global).toBe(true); expect(strings.join('')).toMatch(/SELECT id FROM agent_tasks WHERE id = .*FOR UPDATE/s);
         expect(values).toHaveLength(1); const id = String(values[0]); expect(rows.has(id)).toBe(true);
         if (controls.queryError) throw controls.queryError;
-        tx.admission = true; controls.admissions++; emit('row:request'); await lockRow(tx, id); emit('row:locked');
+        tx.admission = true; emit('row:request'); await lockRow(tx, id); emit('row:locked');
         return Object.hasOwn(controls, 'rawRows') ? controls.rawRows : states.has(id) ? [{ id }] : [];
       },
     };
@@ -119,6 +140,115 @@ function fixture() {
 const outcome = <T>(promise: Promise<T>) => promise.then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
 
 describe('ordinary structured claimed submission admission (simulated locks)', () => {
+  it('does not publish after an uncertain prepare commit, even if another invocation sees its durable intent', async () => {
+    const f = fixture(); f.controls.prepareError = new Error('fixture lost commit acknowledgement');
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.states.get(ID)!.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'prepared' }] } });
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]);
+  });
+
+  it('lets stop win between durable prepare and the locked publication', async () => {
+    const f = fixture(); f.controls.afterPrepare = async () => { await f.stop(); };
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]); expect(f.states.get(ID)).toMatchObject({ status: 'failed', executionAttempt: 2 });
+    expect(f.states.get(ID)!.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'unknown' }] } });
+  });
+
+  it('does not let another same-claim invocation publish the original prepared slot', async () => {
+    const f = fixture(); const started = f.next('submit'); const first = outcome(f.execute()); await started;
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    f.finish(); expect((await first).value).toEqual({ ok: true }); expect(f.calls).toEqual(['fixture']);
+  });
+  it.each(['actor', 'researchObject', 'session'])('does not publish after the prepared %s binding changes', async change => {
+    const f = fixture(); const task = f.states.get(ID)!;
+    f.finish(); // A counterfactual unwanted call must settle, not merely time out.
+    f.controls.afterPrepare = async () => {
+      if (change === 'actor') task.session.userId = 'other-actor';
+      if (change === 'researchObject') { task.session.researchObjectId = 'other-ro'; task.session.researchObject = { id: 'other-ro', deletedAt: null }; }
+      if (change === 'session') { task.sessionId = 'other-session'; task.session.id = 'other-session'; }
+    };
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]);
+    expect(task.result).toMatchObject({ ordinaryStructuredReceipt: { identity: { sessionId: 'session-1', userId: 'user-1', researchObjectId: null } } });
+  });
+
+  it('does not use a real task reservation belonging to a different actor', async () => {
+    const f = fixture(); Object.assign(f.prisma.usageLedger, { findUnique: async () => ({ id: 'old-reservation', userId: 'other-actor',
+      idempotencyKey: `agent-task-reserve:${ID}`, resource: 'ai_credit', kind: 'consume', delta: -1n }) });
+    f.finish();
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]); expect(f.states.get(ID)!.result).toBeNull();
+  });
+
+  it('saves full >128KiB source/response as opaque data and retains the reported model alias', async () => {
+    const f = fixture(); const large = '原文'.repeat(70_000) + '\u0000\ud800';
+    f.claim.payload.concept = large; f.states.get(ID)!.payload.concept = large;
+    Object.assign(f.claim.payload, { objectKey: 'derived/not-owned' }); Object.assign(f.states.get(ID)!.payload, { objectKey: 'derived/not-owned' });
+    const value = { ok: true, text: large, objectKey: 'derived/provider-not-owned' };
+    f.response.resolve({ text: JSON.stringify(value), model: 'reported-alias', usage: { inputTokens: 21, outputTokens: 34 } });
+    expect(await f.execute()).toEqual(value);
+    const cp = (f.states.get(ID)!.result as unknown as { ordinaryStructuredReceipt: { sourceJson: string; attempts: Array<{ target: { model: string }; responseJson: string }> } }).ordinaryStructuredReceipt;
+    expect(Buffer.byteLength(cp.sourceJson)).toBeGreaterThan(131_072);
+    expect(JSON.parse(cp.sourceJson)).toMatchObject({ payload: { concept: large, objectKey: 'derived/not-owned' }, reservation: null });
+    expect(JSON.parse(cp.attempts[0]!.responseJson)).toMatchObject({ text: JSON.stringify(value), model: 'reported-alias', usage: { inputTokens: 21, outputTokens: 34 } });
+    expect(cp.attempts[0]!.target.model).toBe('fixture');
+  });
+
+  it.each(['json', 'schema', 'length'])('saves the returned %s rejection before the Gateway rejects it', async reason => {
+    const f = fixture(); const response = { text: reason === 'json' ? 'invalid JSON' : '{"ok":false}', model: 'fixture',
+      finishReason: reason === 'length' ? 'length' as const : 'stop' as const, usage: { inputTokens: 2, outputTokens: 3 } };
+    f.response.resolve(response);
+    await expect(f.execute(f.scoped(), undefined, { maxRetries: 0 })).rejects.toBeInstanceOf(AiGatewayError);
+    expect(f.states.get(ID)!.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'completed', responseJson: JSON.stringify(response) }] } });
+    expect(f.calls).toEqual(['fixture']);
+  });
+
+  it('allows the original next schema ordinal only after the preceding response was durably saved', async () => {
+    const f = fixture(); let calls = 0;
+    const gateway = new AiGateway({ providers: [{ name: 'repair', model: 'repair', complete: async () => ({
+      text: ++calls === 1 ? 'invalid JSON' : '{"ok":true}', model: 'repair', usage: { inputTokens: 1, outputTokens: 1 },
+    }) }] });
+    const scoped = createTaskScopedGateway(gateway, f.prisma as never, f.claim, KIND);
+    expect(await f.execute(scoped, undefined, { maxRetries: 1 })).toEqual({ ok: true });
+    expect(calls).toBe(2);
+    expect(f.states.get(ID)!.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [
+      { ordinal: 0, state: 'completed' }, { ordinal: 1, state: 'completed' },
+    ] } });
+  });
+
+  it.each([false, true])('completion persistence failure (transient=%s) never reruns a Provider or leaks an unsaved result', async transient => {
+    const f = fixture(); f.controls.completionError = Object.assign(new Error('fixture completion write failure'), { code: 'P2034' });
+    if (transient) f.controls.completionFailures = 1;
+    f.finish(); const result = await outcome(f.execute());
+    if (transient) expect(result.value).toEqual({ ok: true });
+    else {
+      expect(result.error).toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+      expect(f.states.get(ID)!.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'prepared' }] } });
+      f.controls.completionError = undefined;
+      await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    }
+    expect(f.calls).toEqual(['fixture']);
+  });
+
+  it('retains the full late paid response privately after an owned stop', async () => {
+    const f = fixture(); const started = f.next('submit'); const request = outcome(f.execute());
+    await started; await f.stop(); f.finish(); await request;
+    const receipt = (f.states.get(ID)!.result as unknown as { ordinaryStructuredReceipt?: { attempts: Array<{ responseJson?: string }> } })?.ordinaryStructuredReceipt;
+    expect(receipt?.attempts[0]?.responseJson).toBe(JSON.stringify({ text: '{"ok":true}', model: 'fixture',
+      finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } }));
+    expect(f.states.get(ID)).toMatchObject({ status: 'failed', executionAttempt: 2 });
+    expect(f.calls).toEqual(['fixture']);
+  });
+  it('retains the existing platform reservation reference without inventing a supplier invoice or charging again', async () => {
+    const f = fixture(); const entry = { id: 'original-ledger', userId: 'user-1', resource: 'ai_credit', kind: 'consume',
+      idempotencyKey: `agent-task-reserve:${ID}`, delta: -1n };
+    Object.assign(f.prisma.usageLedger, { findUnique: async () => entry }); f.finish();
+    await f.execute();
+    const result = f.states.get(ID)!.result as unknown as { ordinaryStructuredReceipt: { sourceJson: string } };
+    expect(JSON.parse(result.ordinaryStructuredReceipt.sourceJson).reservation).toEqual({ ...entry, delta: '-1' });
+    expect(entry.delta).toBe(-1n); expect(f.calls).toEqual(['fixture']);
+  });
   it.each(['review.analyze', 'visualization.plan', 'workspace.guide', 'presentation.figure-audit'] as const)(
     'admits the original live %s claim with its authoritative source scope', async kind => {
       const f = fixture(); const task = f.states.get(ID)!; task.kind = kind;
@@ -190,7 +320,8 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     const providerError = new Error('original fixture provider failure'); f.response.reject(providerError);
     await new Promise(resolve => setImmediate(resolve)); commit.resolve();
     const result = await request;
-    expect(result.error).toMatchObject({ code: 'ALL_PROVIDERS_FAILED', cause: providerError });
+    expect(result.error).toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(JSON.stringify(f.states.get(ID)!.result)).not.toContain(providerError.message);
     expect(f.calls).toEqual(['fixture']); expect(f.controls.admissions).toBe(1);
   });
 
@@ -241,7 +372,7 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     expect(calls).toBe(1);
   });
 
-  it('denies configured fallback after stop but preserves a legitimate live fallback', async () => {
+  it('does not infer a no-charge witness from an invoked provider failure, with or without stop', async () => {
     for (const stop of [true, false]) {
       const f = fixture(); const calls: string[] = [];
       const gateway = new AiGateway({ providers: [
@@ -249,9 +380,8 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
         { name: 'second', model: 'second', complete: async () => { calls.push('second'); return { text: '{"ok":true}', model: 'second', usage: { inputTokens: 1, outputTokens: 1 } }; } },
       ] });
       const scoped = createTaskScopedGateway(gateway, f.prisma as never, f.claim, KIND);
-      if (stop) await expect(f.execute(scoped)).rejects.toBeInstanceOf(AiGatewayError);
-      else await expect(f.execute(scoped)).resolves.toEqual({ ok: true });
-      expect(calls).toEqual(stop ? ['first'] : ['first', 'second']);
+      await expect(f.execute(scoped)).rejects.toBeInstanceOf(AiGatewayError);
+      expect(calls).toEqual(['first']);
     }
   });
 

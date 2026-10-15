@@ -285,6 +285,7 @@ on:
       - 'packages/domain/src/assets/storyboard-visible-action.ts'
       - 'packages/domain/package.json'
       - 'packages/domain/src/agent/agent.ts'
+      - 'packages/domain/src/agent/ordinary-structured-receipt.ts'
       - 'packages/domain/src/agent/research-run.ts'
       - 'packages/domain/test/agent/private-science-diagnostics.test.ts'
       - 'packages/domain/test/agent/storyboard-science-recovery.test.ts'
@@ -310,6 +311,7 @@ on:
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
+      - 'packages/domain/test/agent/ordinary-structured-receipt.test.ts'
       - 'packages/domain/test/ingestion-service.test.ts'
       - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
@@ -594,6 +596,7 @@ on:
       - 'packages/domain/src/assets/storyboard-visible-action.ts'
       - 'packages/domain/package.json'
       - 'packages/domain/src/agent/agent.ts'
+      - 'packages/domain/src/agent/ordinary-structured-receipt.ts'
       - 'packages/domain/src/agent/research-run.ts'
       - 'packages/domain/test/agent/private-science-diagnostics.test.ts'
       - 'packages/domain/test/agent/storyboard-science-recovery.test.ts'
@@ -619,6 +622,7 @@ on:
       - 'packages/domain/src/index.ts'
       - 'packages/domain/test/assets/presentation-asset.test.ts'
       - 'packages/domain/test/agent/agent.test.ts'
+      - 'packages/domain/test/agent/ordinary-structured-receipt.test.ts'
       - 'packages/domain/test/ingestion-service.test.ts'
       - 'packages/domain/test/helpers/fakes.ts'
       - '.github/workflows/hermes-media-skills.yml'
@@ -727,12 +731,12 @@ jobs:
       - name: Verify rollback readers against the complete installed release
         run: |
           node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; await verifyApplicationRollbackReaders({ candidateRoot: process.env.GITHUB_WORKSPACE, rollbackRoot: process.env.GITHUB_WORKSPACE, diagnostics: true });"
-      - name: Verify Domain warning adoption under owned cancellation
-        run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/review/publish-review.test.ts
+      - name: Verify Domain warning adoption and ordinary paid receipts
+        run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/review/publish-review.test.ts test/agent/ordinary-structured-receipt.test.ts
       - name: Verify Worker warning adoption and structured submission claims
         run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/reviewer.test.ts test/r12-worker-cancel.test.ts
       - name: Lint warning adoption and structured submission changes
-        run: npx pnpm@9.15.0 exec eslint packages/domain/src/review/publish-review.ts apps/agent-worker/src/reviewer.ts packages/domain/test/review/publish-review.test.ts apps/agent-worker/test/reviewer.test.ts packages/ai-gateway/src/gateway.ts apps/agent-worker/test/r12-worker-cancel.test.ts packages/ai-gateway/test/structured-retry-budget.test.ts
+        run: npx pnpm@9.15.0 exec eslint packages/domain/src/review/publish-review.ts apps/agent-worker/src/reviewer.ts packages/domain/test/review/publish-review.test.ts apps/agent-worker/test/reviewer.test.ts packages/ai-gateway/src/gateway.ts apps/agent-worker/test/r12-worker-cancel.test.ts packages/ai-gateway/test/structured-retry-budget.test.ts packages/domain/src/agent/ordinary-structured-receipt.ts packages/domain/test/agent/ordinary-structured-receipt.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts test/gateway-factory.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Lint Synclip image Gateway sources and tests
@@ -793,7 +797,7 @@ jobs:
         run: |
           node --test scripts/index-confirmed-research-sources.test.cjs
           npx pnpm@9.15.0 --filter @openscience/search exec vitest run test/indexing-storage.test.ts
-          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t 'source-index|snapshot dispatch|retries one failed task|uses one authority|R2|existing unmarked R1 first video row|ordinary local video task|existing paid local row'
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/agent.test.ts -t 'source-index|snapshot dispatch|retries one failed task|uses one authority|R2|existing unmarked R1 first video row|ordinary local video task|existing paid local row|ordinary paid evidence lifecycle'
       - run: npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/cascade-orchestrator.test.ts test/parser-recovery-checkpoint.test.ts test/parser-recovery-handler.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/source-parser-recovery.test.ts test/agent/direct-source-review-recovery.test.ts test/agent/saved-source-review-recovery.test.ts test/agent/independent-source-review.test.ts test/agent/source-review-not-submitted.test.ts test/agent/hermes-source-model-routing.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/private-source-reanalysis.test.ts test/agent/source-composition-recovery.test.ts
