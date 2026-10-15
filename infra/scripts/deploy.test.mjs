@@ -686,15 +686,46 @@ test('ordinary rollback compares persisted readers and their runtime helpers wit
 
 // These controls exercise source bindings in the actual production Program.
 // They do not replace genuine successful collectors or installed-root checks.
-async function videoIngressProgram(changes = new Map()) {
+const historicalVideoSources = new Map();
+function historicalVideoSource(projectRoot, sourceRef) {
+  if (historicalVideoSources.has(sourceRef)) return historicalVideoSources.get(sourceRef);
+  const files = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', sourceRef, '--', 'apps', 'packages'],
+    { cwd: projectRoot, encoding: 'utf8' }).split('\0').filter(file =>
+    /\/src\/.*\.(?:[cm]?[jt]sx?)$/u.test(file) || /\/package\.json$/u.test(file));
+  const blobs = execFileSync('git', ['cat-file', '--batch'], { cwd: projectRoot,
+    input: files.map(file => `${sourceRef}:${file}\n`).join(''), maxBuffer: 64 * 1024 * 1024 });
+  const sources = new Map();
+  let offset = 0;
+  for (const file of files) {
+    const end = blobs.indexOf(10, offset), header = blobs.subarray(offset, end).toString('utf8');
+    assert.match(header, /^[a-f0-9]+ blob \d+$/u, `historical source blob must exist: ${file}`);
+    const size = Number(header.split(' ')[2]);
+    sources.set(resolve(projectRoot, file).replaceAll('\\', '/').toLowerCase(),
+      blobs.subarray(end + 1, end + 1 + size).toString('utf8'));
+    offset = end + 1 + size;
+    assert.equal(blobs[offset++], 10, 'historical blob framing must be exact');
+  }
+  assert.equal(offset, blobs.length);
+  const result = { files, sources };
+  historicalVideoSources.set(sourceRef, result);
+  return result;
+}
+
+async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
-  const tracked = execFileSync('git', ['ls-files', '-z', '--', 'apps', 'packages'], { cwd: projectRoot, encoding: 'utf8' })
-    .split('\0').filter(file => /\/src\/.*\.ts$/u.test(file) && !file.endsWith('.d.ts')).map(file => join(projectRoot, file));
+  // Retained fixtures are source-only historical oracles, never installed roots.
+  // Their inventory, manifests and module bytes all come from the same commit.
+  const historical = sourceRef ? historicalVideoSource(projectRoot, sourceRef) : undefined;
+  const files = historical?.files ?? execFileSync('git', ['ls-files', '-z', '--', 'apps', 'packages'],
+    { cwd: projectRoot, encoding: 'utf8' }).split('\0');
+  const tracked = files.filter(file => /\/src\/.*\.ts$/u.test(file) && !file.endsWith('.d.ts')).map(file => join(projectRoot, file));
   const key = filename => resolve(filename).replaceAll('\\', '/').toLowerCase();
+  const ownsSource = filename => ['apps', 'packages'].some(directory => key(filename).startsWith(`${key(join(projectRoot, directory))}/`));
   const changedFiles = [...changes].map(([file, change]) => {
     const filename = join(projectRoot, file);
-    const original = existsSync(filename) ? readFileSync(filename, 'utf8') : '';
+    if (historical) assert.ok(historical.sources.has(key(filename)), `mutation must target historical source: ${file}`);
+    const original = historical ? historical.sources.get(key(filename)) ?? '' : existsSync(filename) ? readFileSync(filename, 'utf8') : '';
     const updated = typeof change === 'function' ? change(original) : change;
     assert.notEqual(updated, original, `mutation must change ${file}`);
     return { filename, updated };
@@ -706,11 +737,15 @@ async function videoIngressProgram(changes = new Map()) {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext };
   const host = ts.createCompilerHost(options);
   const originalRead = host.readFile.bind(host), originalExists = host.fileExists.bind(host);
-  host.readFile = filename => overlays.has(key(filename)) ? overlays.get(key(filename)) : originalRead(filename);
-  host.fileExists = filename => overlays.has(key(filename)) || originalExists(filename);
+  host.readFile = filename => overlays.has(key(filename)) ? overlays.get(key(filename))
+    : historical && ownsSource(filename) ? historical.sources.get(key(filename)) : originalRead(filename);
+  host.fileExists = filename => overlays.has(key(filename))
+    || (historical && ownsSource(filename) ? historical.sources.has(key(filename)) : originalExists(filename));
   const source = host.getSourceFile.bind(host);
   host.getSourceFile = (filename, languageVersion, ...args) => overlays.has(key(filename))
-    ? ts.createSourceFile(filename, overlays.get(key(filename)), languageVersion, true) : source(filename, languageVersion, ...args);
+    ? ts.createSourceFile(filename, overlays.get(key(filename)), languageVersion, true)
+    : historical && ownsSource(filename) ? (host.fileExists(filename)
+      ? ts.createSourceFile(filename, host.readFile(filename), languageVersion, true) : undefined) : source(filename, languageVersion, ...args);
   host.resolveModuleNames = (names, containingFile) => names.map(specifier => {
     let base;
     if (specifier.startsWith('.')) base = resolve(dirname(containingFile), specifier.replace(/\.js$/u, '')).replace(/([\\/])dist([\\/])/u, '$1src$2');
@@ -719,7 +754,7 @@ async function videoIngressProgram(changes = new Map()) {
       const packageRoot = join(projectRoot, 'packages', name);
       if (!subpath.length) base = join(packageRoot, 'src/index');
       else {
-        const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+        const manifest = JSON.parse(host.readFile(join(packageRoot, 'package.json')));
         const entry = manifest.exports?.[`./${subpath.join('/')}`]?.types;
         if (typeof entry !== 'string' || !entry.startsWith('./dist/') || !entry.endsWith('.d.ts')) return undefined;
         base = join(packageRoot, entry.replace('./dist/', 'src/').replace(/\.d\.ts$/u, ''));
@@ -733,9 +768,18 @@ async function videoIngressProgram(changes = new Map()) {
   });
   const program = ts.createProgram([...new Set([...tracked, ...changedFiles.map(item => item.filename)])], options, host);
   assert.equal(program.getSyntacticDiagnostics().length, 0, 'actual Program must parse before a source-proof result');
+  if (historical) for (const file of program.getSourceFiles().filter(file => ownsSource(file.fileName)))
+    assert.equal(file.text, overlays.get(key(file.fileName)) ?? historical.sources.get(key(file.fileName)),
+      'historical Program must contain only selected baseline bytes plus exact mutations');
   for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
     item.updated, 'the real Program must contain the exact mutation before testing its rejection');
   return { ts, program, projectRoot };
+}
+
+// Only legacy video controls opt into the released V1 oracle. All image
+// controls retain the current candidate source by default.
+function historicalVideoIngressProgram(changes = new Map(), sourceRef = 'e75f2764ded1074f4d307d34dca833517f0d3696') {
+  return videoIngressProgram(changes, { sourceRef });
 }
 
 function videoPairSourceComponents() {
@@ -1185,11 +1229,20 @@ test('image capable source pair retains raw/final readers despite an absent fres
     assert.equal(proof(writer.ts,...arrays,writer.projectRoot,current.projectRoot,roots),false,'source-only/copied arrays have no successful collector provenance');
 });
 
+test('current candidate source keeps the legacy video helper conservative', async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram();
+  const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
+  assert.equal(host.text, readFileSync(host.fileName, 'utf8'));
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.reason, 'HOST_HISTORY_CHECK_BYPASS');
+  assert.ok(!result.proven.includes('host-before-session'));
+  assert.equal(result.releaseCompatible, false);
+});
+
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
-  const components = videoPairSourceComponents(), actual = await videoIngressProgram(), left = videoPairContext(actual);
-  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
-  const original = await videoIngressProgram(new Map(files.map(file => [file,
-    execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram(), left = videoPairContext(actual);
+  const original = await historicalVideoIngressProgram(new Map(), 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6');
   const candidate = components.model(actual.ts, left), rollback = components.model(original.ts, videoPairContext(original));
   for (const [key, { text }] of candidate.projected)
     assert.deepEqual(videoPairRuntime(actual.ts, text), videoPairRuntime(original.ts, rollback.projected.get(key).text), key);
@@ -1205,9 +1258,9 @@ test('video pair source projection preserves actual old runtime context and fini
 });
 
 test('video pair source closure distinguishes a capable writer from dropping its readers', async () => {
-  const components = videoPairSourceComponents(), actual = await videoIngressProgram();
+  const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram();
   const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
-  const writer = await videoIngressProgram(new Map([[file, source => source
+  const writer = await historicalVideoIngressProgram(new Map([[file, source => source
     .replace('approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt', 'approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt')
     .replace('(approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt)', '(approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt)')]]));
   const candidate = components.model(writer.ts, videoPairContext(writer)), rollback = components.model(actual.ts, videoPairContext(actual));
@@ -1215,9 +1268,7 @@ test('video pair source closure distinguishes a capable writer from dropping its
   assert.equal(components.closure(candidate, rollback).status, 'conditional');
   for (const [key, { text }] of candidate.projected)
     assert.deepEqual(videoPairRuntime(writer.ts, text), videoPairRuntime(actual.ts, rollback.projected.get(key).text), key);
-  const files = [file, 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
-  const old = await videoIngressProgram(new Map(files.map(path => [path,
-    execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const old = await historicalVideoIngressProgram(new Map(), 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6');
   const original = components.model(old.ts, videoPairContext(old));
   assert.equal(components.closure(candidate, original).reason, 'ROLLBACK_FAMILY_NOT_CLOSED');
   assert.equal(components.closure(original, rollback).reason, 'READER_CAPABILITY_REMOVED');
@@ -1225,23 +1276,21 @@ test('video pair source closure distinguishes a capable writer from dropping its
 
 test('video pair source projection consumes genuine imported aliases but not arbitrary A uses', async () => {
   const components = videoPairSourceComponents(), file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
-  const actual = await videoIngressProgram(), original = components.model(actual.ts, videoPairContext(actual));
-  const aliased = await videoIngressProgram(new Map([[file, source => source.replaceAll('compileApprovedShotPrompt', 'approvedCompiler')
+  const actual = await historicalVideoIngressProgram(), original = components.model(actual.ts, videoPairContext(actual));
+  const aliased = await historicalVideoIngressProgram(new Map([[file, source => source.replaceAll('compileApprovedShotPrompt', 'approvedCompiler')
     .replace('compileShotPrompt, approvedCompiler, compileHistorical', 'compileShotPrompt, compileApprovedShotPrompt as approvedCompiler, compileHistorical')]]));
   const model = components.model(aliased.ts, videoPairContext(aliased));
   assert.equal(model.fresh, 'legacy');
   for (const [key, { text }] of model.projected)
     assert.deepEqual(videoPairRuntime(aliased.ts, text), videoPairRuntime(actual.ts, original.projected.get(key).text), key);
-  const escaped = await videoIngressProgram(new Map([[file, source => source.replace('  const nativeVideo = input.nativeVideo === true;',
+  const escaped = await historicalVideoIngressProgram(new Map([[file, source => source.replace('  const nativeVideo = input.nativeVideo === true;',
     '  const escapedCompiler = compileApprovedShotPrompt;\n  const nativeVideo = input.nativeVideo === true;')]]));
   assert.throws(() => components.model(escaped.ts, videoPairContext(escaped)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN');
 });
 
 test('video pair source refuses the real earlier A writer whose legacy constructor was refactored', async () => {
-  const components = videoPairSourceComponents(), actual = await videoIngressProgram();
-  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
-  const earlier = await videoIngressProgram(new Map(files.map(file => [file,
-    execFileSync('git', ['show', `36e8ce5228bc8d3109de171cc86f17eab3fe7f64:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const components = videoPairSourceComponents();
+  const earlier = await historicalVideoIngressProgram(new Map(), '36e8ce5228bc8d3109de171cc86f17eab3fe7f64');
   assert.throws(() => components.model(earlier.ts, videoPairContext(earlier)), error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE');
 });
 
@@ -1254,18 +1303,18 @@ test('video pair source grammar refuses saved-field adoption, foreign base indic
     ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'prompt = approved;', 'prompt = input.videoPrompts![index]!;'],
     ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'compileApprovedShotPrompt(input.storyboard, scene, locale)', 'compileApprovedShotPrompt(input.storyboard, scene, input.locale!)'],
   ]) {
-    const actual = await videoIngressProgram(new Map([[file, source => source.replaceAll('\r\n', '\n').replace(before, after)]]));
+    const actual = await historicalVideoIngressProgram(new Map([[file, source => source.replaceAll('\r\n', '\n').replace(before, after)]]));
     assert.throws(() => components.model(actual.ts, videoPairContext(actual)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN', before);
   }
 });
 
 test('video pair projection retains changed non-video and request-identity context', async () => {
-  const components = videoPairSourceComponents(), actual = await videoIngressProgram(), baseline = components.model(actual.ts, videoPairContext(actual));
+  const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram(), baseline = components.model(actual.ts, videoPairContext(actual));
   for (const [file, before, after] of [
     ['apps/agent-worker/src/native-agent/illustration-task.ts', "if (!record(args)) throw new Error('object_required');", "if (!record(args)) throw new Error('different_context');"],
     ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'existing.inputHash !== inputHash', 'existing.inputHash === inputHash'],
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, source => source.replace(before, after)]]));
+    const changed = await historicalVideoIngressProgram(new Map([[file, source => source.replace(before, after)]]));
     const model = components.model(changed.ts, videoPairContext(changed));
     assert.notDeepEqual(videoPairRuntime(changed.ts, model.projected.get(file).text), videoPairRuntime(actual.ts, baseline.projected.get(file).text));
   }
@@ -1277,7 +1326,7 @@ test('video pair source family bound rejects a pure constructor that changes sci
     ['storyboard.videoProduction!.visualContinuity', 'scene.visualAction'],
     ["if (!mode) throw new Error('VIDEO_PLAN_UNSUPPORTED');", "if (!mode) throw new Error('different_guard');"],
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, source => {
+    const changed = await historicalVideoIngressProgram(new Map([[file, source => {
       const start = source.indexOf('export function compileApprovedShotPrompt('), end = source.indexOf('\nexport class SynclipVideoSpool', start);
       assert.ok(start >= 0 && end > start);
       return source.slice(0, start) + source.slice(start, end).replace(before, after) + source.slice(end);
@@ -1291,11 +1340,8 @@ test('video pair constructor component extracts actual legacy families without g
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteVideoConstructorTerms('));
   const analyze = runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative });
-  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
-  const legacyRef = 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6';
-  const actual = await videoIngressProgram();
-  const original = await videoIngressProgram(new Map(files.map(file => [file,
-    execFileSync('git', ['show', `${legacyRef}:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const actual = await historicalVideoIngressProgram();
+  const original = await historicalVideoIngressProgram(new Map(), 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6');
   const inspect = ({ ts, program, projectRoot }) => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot });
   const candidate = inspect(actual), previous = inspect(original);
   const json = value => JSON.parse(JSON.stringify(value));
@@ -1326,7 +1372,7 @@ test('video pair constructor component refuses effects and unsupported bindings 
     ['assignment', source => source.replace('  const mode =', '  storyboard.videoProduction = undefined;\n  const mode =')],
     ['unbound helper', source => source.replace("return ['Scientific explainer shot.", "return [String('Scientific explainer shot.') , 'Scientific explainer shot.")],
   ]) {
-    const { ts, program, projectRoot } = await videoIngressProgram(new Map([[file, mutateApproved(mutate)]]));
+    const { ts, program, projectRoot } = await historicalVideoIngressProgram(new Map([[file, mutateApproved(mutate)]]));
     assert.throws(() => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot }),
       error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE', name);
   }
@@ -1334,7 +1380,7 @@ test('video pair constructor component refuses effects and unsupported bindings 
 
 test('video constructor ingress prototype reports genuine bindings and unresolved other consumers without permitting rollback', async () => {
   assert.equal(typeof deployLock.proveNativeVideoReceiptIngress, 'function');
-  const { ts, program, projectRoot } = await videoIngressProgram();
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram();
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
@@ -1413,7 +1459,7 @@ const videoIngressHighMutations = [
 ];
 
 for (const [name, file, mutate, reason, edge] of videoIngressHighMutations) test(`video constructor ingress High regression ${name}`, async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram(new Map([[`apps/agent-worker/src/native-agent/${file}`, mutate]]));
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram(new Map([[`apps/agent-worker/src/native-agent/${file}`, mutate]]));
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, reason, 'the exact binding must reject, not an unrelated analysis exception');
@@ -1436,7 +1482,7 @@ const videoStoreCapabilityMutations = [
 ];
 
 for (const [name, mutate, reason] of videoStoreCapabilityMutations) test(`video store capability rejects ${name}`, async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/paper-task.ts', mutate]]));
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram(new Map([['apps/agent-worker/src/native-agent/paper-task.ts', mutate]]));
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, reason, 'reject the actual receiver/use edge, not an unrelated exception');
@@ -1449,7 +1495,7 @@ for (const alias of [false, true]) test(`video store capability maps actual inst
   const changes = alias ? new Map([['apps/agent-worker/src/native-agent/paper-task.ts', value => value.replace(
     "import { createNativeTaskStore } from './task-store';", "import { createNativeTaskStore as genuineStoreFactory } from './task-store';")
     .replace('const store = createNativeTaskStore(', 'const store = genuineStoreFactory(')]]) : new Map();
-  const { ts, program, projectRoot } = await videoIngressProgram(changes);
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram(changes);
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
   for (const edge of ['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix', 'verified-base', 'store-capability-use'])
@@ -1476,7 +1522,7 @@ const privateStoreChainMutations = [
 ];
 
 for (const [name, mutate, reason] of privateStoreChainMutations) test(`generic private store chain rejects ${name}`, async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/task-store.ts', mutate]]));
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram(new Map([['apps/agent-worker/src/native-agent/task-store.ts', mutate]]));
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.reason, reason, 'the new reference/origin/order boundary must reject the actual injected source');
   assert.ok(!result.proven.includes('generic-private-store-chain'));
@@ -1485,7 +1531,7 @@ for (const [name, mutate, reason] of privateStoreChainMutations) test(`generic p
 });
 
 test('generic private store chain binds actual private references with unresolved complete-module premise', async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram();
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram();
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
   assert.ok(result.proven.includes('generic-private-store-chain'));
@@ -1546,7 +1592,7 @@ const videoIngressRejections = {
 
 for (const [name, file, mutate] of videoIngressMutations) test(`video constructor ingress rejects ${name} from actual source`, async () => {
   assert.equal(typeof deployLock.proveNativeVideoReceiptIngress, 'function');
-  const { ts, program, projectRoot } = await videoIngressProgram(new Map([[file, mutate]]));
+  const { ts, program, projectRoot } = await historicalVideoIngressProgram(new Map([[file, mutate]]));
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.status, 'unknown');
   const [reason, edge] = videoIngressRejections[name];
