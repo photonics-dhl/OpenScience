@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { isExplicitFirstImageRequest } from '@openscience/domain/workspace-guide-contract';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Drawer from '@/components/editor/Drawer';
 import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
@@ -13,6 +13,7 @@ import {
   createWorkspaceGuideSession,
   ApiClientError,
   getAgentTask,
+  getFirstImageRun,
   listAgentTasks,
   listVersions,
   submitWorkspaceGuideTask,
@@ -29,7 +30,8 @@ import { useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
 import { HermesFirstImageResult } from './HermesFirstImageResult';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
-import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal,
+  loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublicationPanel } from '@/components/research/ResearchPublicationPanel';
@@ -82,6 +84,8 @@ export async function createDrawerLiteratureIntent({
 }
 
 export interface HermesAssistantDrawerProps {
+  /** A live user-click action. Mounting, prefilling and restoration never invoke it. */
+  onImageSubmitReady?(submit: (() => void) | null): void;
   onPrepareVersion?(expected: WorkspaceGuidePayload['context']['editorDraft']): Promise<{ versionId: string; assertCurrent(): void }>;
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -253,7 +257,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, sourceReview, onSourceCommand,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, sourceReview, onSourceCommand, onImageSubmitReady,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -294,6 +298,7 @@ function HermesAssistantDrawerContent({
   const [firstImageVersionBinding, setFirstImageVersionBinding] = useState<{ scope: string; versionId: string }>();
   const firstImageViewVersion = firstImageVersionBinding?.scope === versionScope ? firstImageVersionBinding.versionId
     : dashboardContext.presentation?.versionId || requestedVersion || resolvedGuideVersion;
+  const currentImageVersion = useRef(firstImageViewVersion); currentImageVersion.current = firstImageViewVersion;
   const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
   const sessionId = useRef<string | null>(null);
   const deletedSessions = useRef(new Set<string>());
@@ -571,9 +576,18 @@ function HermesAssistantDrawerContent({
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
     offeredAction.current = null; assertPrepared.current = null;
   }, [requestedVersion]);
+  useEffect(() => {
+    const pendingVersion = pendingPayload.current?.executionIntent === 'first-image'
+      ? pendingPayload.current.context.presentation?.versionId : undefined;
+    if (submittingRef.current || !pendingVersion || pendingVersion === firstImageViewVersion) return;
+    // Keep the original receipt under its original version; never reuse it in this one.
+    pendingPayload.current = null; taskKey.current = null; sessionId.current = null; sessionKey.current = null;
+    setSentGoal(''); setTask(null); setError('');
+  }, [firstImageViewVersion, submitting]);
 
   useEffect(() => {
     if (!open) { injectedGoal.current = ''; return; }
+    if (pendingPayload.current?.executionIntent === 'first-image') return;
     const next = initialGoal?.trim() ?? '';
     if (!next || injectedGoal.current === `${currentOwner}:${next}`) return;
     injectedGoal.current = `${currentOwner}:${next}`;
@@ -653,11 +667,22 @@ function HermesAssistantDrawerContent({
     let retryTimer: number | undefined;
     const restore = () => {
       attempts += 1;
+      let savedImage;
+      try {
+        savedImage = viewerId && routeResearchObjectId && firstImageViewVersion
+          ? loadPendingFirstImageSubmission(draftStorage, { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: firstImageViewVersion }) : null;
+      } catch { setError(tc('firstImage.storageError')); return; }
+      if (savedImage && !savedImage.taskId && !initialTaskId) {
+        sessionId.current = savedImage.sessionId; taskKey.current = savedImage.key; pendingPayload.current = savedImage.payload;
+        setGoal(savedImage.payload.goal); setSentGoal(savedImage.payload.goal); setError(tc('firstImage.uncertain'));
+        return;
+      }
+      const exactTaskId = initialTaskId || savedImage?.taskId;
       const loadTasks = initialTaskId
         ? Promise.all([getAgentTask('', initialTaskId), listAgentTasks()]).then(([{ task: exactTask }, { tasks }]) => ({
           tasks: [exactTask, ...tasks.filter((candidate) => candidate.id !== exactTask.id)],
         }))
-        : listAgentTasks();
+        : exactTaskId ? getAgentTask('', exactTaskId).then(({ task: exactTask }) => ({ tasks: [exactTask] })) : listAgentTasks();
       void loadTasks.then(({ tasks: candidates }) => {
           const tasks = candidates.filter((candidate) => !deletedTasks.current.has(candidate.id) && (!candidate.sessionId || !deletedSessions.current.has(candidate.sessionId)));
           if (cancelled || submittingRef.current || sessionId.current || (initialTaskId && dismissedInitialTask.current === initialTaskId)) return;
@@ -671,8 +696,9 @@ function HermesAssistantDrawerContent({
             latestWritingTask.current = { id: restoredWriting.id, createdAt: restoredWriting.createdAt };
             setWritingDraft({ value: restoredWritingResult, taskId: restoredWriting.id }); setWritingDirty(false);
           }
-          const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, initialTaskId);
+          const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, exactTaskId);
           if (restored) {
+            if (savedImage) setSentGoal(savedImage.payload.goal);
             if (restoredWriting && restored.id !== restoredWriting.id) displayOnlyWritingTasks.current.add(restored.id);
             sessionId.current = restored.sessionId;
             setRestoredTask(!(initialTaskAutoApply && restored.id === initialTaskId));
@@ -680,14 +706,14 @@ function HermesAssistantDrawerContent({
           }
         })
         .catch((cause) => {
-          if (cancelled || !initialTaskId) return;
+          if (cancelled || !exactTaskId) return;
           if (attempts < 3) retryTimer = window.setTimeout(restore, 900);
           else setError(cause instanceof Error ? cause.message : t('guide.error'));
         });
     };
     restore();
     return () => { cancelled = true; if (retryTimer) window.clearTimeout(retryTimer); };
-  }, [currentOwner, initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t]);
+  }, [currentOwner, initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t, tc, viewerId, firstImageViewVersion, draftStorage]);
 
   useEffect(() => {
     if (!activeTask || !task || error) return;
@@ -700,10 +726,9 @@ function HermesAssistantDrawerContent({
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [activeTask, error, task, t]);
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitGoal = async (explicitGoal?: string) => {
     const savesWritingDraft = Boolean(writingSaveGoal.current);
-    const normalized = writingSaveGoal.current || goal.trim();
+    const normalized = writingSaveGoal.current || explicitGoal || goal.trim();
     writingSaveGoal.current = '';
     if (!normalized || busy || actionBusy || submittingRef.current) return;
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
@@ -753,6 +778,8 @@ function HermesAssistantDrawerContent({
       onInitialTaskConsumed?.();
     }
     const owner = currentOwner;
+    const entryVersion = currentImageVersion.current;
+    const imageRequest = route === 'research-object-edit' && Boolean(routeResearchObjectId) && isExplicitFirstImageRequest(normalized);
     if (task && result) setTurns((previous) => previous.some((turn) => turn.id === task.id) ? previous : [...previous, { id: task.id, user: sentGoal, summary: result.summary }].slice(-12));
     setSentGoal(normalized); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion(''); offeredAction.current = null; setLocalMessage(''); setPublicUrl('');
@@ -762,6 +789,23 @@ function HermesAssistantDrawerContent({
     setSubmitting(true);
     setTask(null);
     try {
+      if (imageRequest && viewerId && routeResearchObjectId && entryVersion && !pendingPayload.current) {
+        const saved = loadPendingFirstImageSubmission(draftStorage, { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: entryVersion });
+        if (saved?.taskId) {
+          const [{ task: original }, { run }] = await Promise.all([getAgentTask('', saved.taskId), getFirstImageRun(routeResearchObjectId, saved.taskId)]);
+          if (ownerRef.current !== owner || currentImageVersion.current !== entryVersion) return;
+          if (original.id !== saved.taskId || original.kind !== 'workspace.guide'
+            || original.researchObjectId !== routeResearchObjectId || original.sessionId !== saved.sessionId
+            || (run && (run.actorId !== viewerId || run.researchObjectId !== routeResearchObjectId || run.versionId !== entryVersion)))
+            throw new Error(tc('firstImage.scopeChanged'));
+          if (run?.status !== 'succeeded') {
+            sessionId.current = saved.sessionId; setSentGoal(saved.payload.goal); setTask(original); return;
+          }
+        } else if (saved) {
+          sessionId.current = saved.sessionId; taskKey.current = saved.key; pendingPayload.current = saved.payload;
+          setGoal(saved.payload.goal); setSentGoal(saved.payload.goal); throw new Error(tc('firstImage.uncertain'));
+        }
+      }
       const routed = await createDrawerLiteratureIntent({
         createIdempotencyKey: () => crypto.randomUUID(),
         goal: normalized,
@@ -772,10 +816,12 @@ function HermesAssistantDrawerContent({
         setLiteratureIntent(routed);
         return;
       }
+      if (imageRequest && currentImageVersion.current !== entryVersion) throw new Error(tc('firstImage.scopeChanged'));
       if (!sessionId.current) {
         sessionKey.current ??= crypto.randomUUID();
         const response = await createWorkspaceGuideSession(normalized, sessionKey.current, route === 'research-object-edit' ? routeResearchObjectId : undefined);
         if (ownerRef.current !== owner) return;
+        if (imageRequest && currentImageVersion.current !== entryVersion) throw new Error(tc('firstImage.scopeChanged'));
         sessionId.current = response.session.id;
       }
       taskKey.current ??= crypto.randomUUID();
@@ -812,12 +858,25 @@ function HermesAssistantDrawerContent({
       };
       submittedDraft.current = pendingPayload.current.context.editorDraft;
       submittedPresentationVersion.current = pendingPayload.current.context.presentation?.versionId ?? '';
-      const response = await submitWorkspaceGuideTask({
+      const submission = {
         sessionId: sessionId.current,
         idempotencyKey: taskKey.current,
         payload: pendingPayload.current,
-      });
+      };
+      const imageScope = submission.payload.executionIntent === 'first-image' && viewerId && routeResearchObjectId
+        ? { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: submission.payload.context.presentation!.versionId! } : null;
+      const imageVersionIsCurrent = () => !imageScope || currentImageVersion.current === imageScope.versionId
+        || (firstImageVersion === imageScope.versionId && currentImageVersion.current === entryVersion);
+      if (!imageVersionIsCurrent()) throw new Error(tc('firstImage.scopeChanged'));
+      if (imageScope) { goalTouched.current = true; setGoal(submission.payload.goal); }
+      if (imageScope && !savePendingFirstImageSubmission(draftStorage, imageScope,
+        { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload })) throw new Error(tc('firstImage.storageError'));
+      const response = await submitWorkspaceGuideTask(submission);
       if (ownerRef.current !== owner) return;
+      if (imageScope && !savePendingFirstImageSubmission(draftStorage, imageScope,
+        { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload, taskId: response.task.id }))
+        throw new Error(tc('firstImage.storageError'));
+      if (!imageVersionIsCurrent()) return;
       setTask(response.task);
       setRestoredTask(false);
       if (!savesWritingDraft) {
@@ -837,6 +896,15 @@ function HermesAssistantDrawerContent({
       if (ownerRef.current === owner) { submittingRef.current = false; setSubmitting(false); }
     }
   };
+  const submitGoalRef = useRef(submitGoal); submitGoalRef.current = submitGoal;
+  useEffect(() => {
+    if (!onImageSubmitReady) return;
+    if (!viewerId || route !== 'research-object-edit' || !routeResearchObjectId || !taskRestoreReady) {
+      onImageSubmitReady(null); return;
+    }
+    onImageSubmitReady(() => { void submitGoalRef.current(tc('firstImage.command')); });
+    return () => onImageSubmitReady(null);
+  }, [onImageSubmitReady, viewerId, route, routeResearchObjectId, taskRestoreReady, tc, versionScope]);
 
   const actionHref = (step: WorkspaceGuideResult['nextSteps'][number]) => {
     if (step.intent === 'prepare-publication' && step.targetId === routeResearchObjectId && routeResearchObjectId) {
@@ -925,7 +993,7 @@ function HermesAssistantDrawerContent({
           </div>}
         </div>
 
-        <form className="hermes-conversation-composer" onSubmit={submit} ref={composer}>
+        <form className="hermes-conversation-composer" onSubmit={event => { event.preventDefault(); void submitGoal(); }} ref={composer}>
           <label className="sr-only" htmlFor="hermes-guide-goal">{tc('inputLabel')}</label>
           <textarea id="hermes-guide-goal" rows={2} maxLength={2000}
             disabled={busy || actionBusy || Boolean(pendingPayload.current)}

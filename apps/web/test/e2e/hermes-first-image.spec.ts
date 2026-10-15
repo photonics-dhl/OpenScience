@@ -8,7 +8,8 @@ const reply = (route: Route, body: unknown, status = 200) => route.fulfill({ sta
 
 async function setup(page: Page, restore: boolean) {
   const state = { complete: false, unavailableOnce: false, actorId: 'first-image-user', versionId: version,
-    submissions: [] as Record<string, unknown>[], unexpectedWrites: [] as string[], originGets: 0 };
+    submissions: [] as Record<string, unknown>[], submissionKeys: [] as string[],
+    loseResponseOnce: false, withPublishedVersion: false, unexpectedWrites: [] as string[], originGets: 0, exactTaskGets: 0 };
   const task = () => ({ id: guideId, sessionId: uuid(6), researchObjectId: ro, kind: 'workspace.guide',
     status: restore ? 'failed' : 'succeeded', progress: 100, retryCount: 0, canRetry: false, error: restore ? 'Response interrupted' : null,
     createdAt: '2026-10-13T00:00:00Z', updatedAt: '2026-10-13T00:00:00Z',
@@ -24,7 +25,9 @@ async function setup(page: Page, restore: boolean) {
     if (path === '/api/csrf-token') return reply(route, { csrfToken: 'first-image-csrf' });
     if (request.method() === 'POST' && path === '/api/agent/sessions') return reply(route, { session: { id: uuid(6) } }, 201);
     if (request.method() === 'POST' && path === '/api/agent/tasks') {
-      state.submissions.push(request.postDataJSON()); return reply(route, { task: task() }, 201);
+      state.submissions.push(request.postDataJSON()); state.submissionKeys.push(request.headers()['idempotency-key']);
+      if (state.loseResponseOnce) { state.loseResponseOnce = false; return route.abort('connectionreset'); }
+      return reply(route, { task: task() }, 201);
     }
     if (request.method() === 'POST' && path === `/api/research-objects/${ro}/commits`) return reply(route, { commit: { versionId: version, versionNo: 1, commitId: uuid(8) } }, 201);
     if (request.method() === 'PUT' && path === `/api/sdf/${ro}`) return reply(route, { sdf: { core } });
@@ -33,15 +36,19 @@ async function setup(page: Page, restore: boolean) {
     if (path === '/api/research-objects') return reply(route, { researchObjects: [] });
     if (path === '/api/ingestion') return reply(route, { tasks: [] });
     if (path === `/api/research-objects/${ro}`) return reply(route, { researchObject: {
-      id: ro, workspaceId: uuid(9), title: 'First image', status: 'draft', visibility: 'private', version: 1, sdf: { core, nodes: [] } } });
+      id: ro, workspaceId: uuid(9), title: 'First image', status: 'draft', visibility: 'private', version: 1,
+      ...(state.withPublishedVersion ? { publicId: 'OSR-2026-000024' } : {}), sdf: { core, nodes: [] } } });
     if (path.endsWith('/ingestion')) return reply(route, { researchObjectId: ro, version: 1, tasks: [], latestConfirmation: null });
     if (path.endsWith('/authors')) return reply(route, { authors: [] });
-    if (path.endsWith('/versions')) return reply(route, { versions: [{ versionId: state.versionId, versionNo: 1, status: 'draft', publicationNo: null }] });
+    if (path.endsWith('/versions')) return reply(route, { versions: [
+      { versionId: state.versionId, versionNo: state.withPublishedVersion ? 2 : 1, status: 'draft', publicationNo: null },
+      ...(state.withPublishedVersion ? [{ versionId: uuid(21), versionNo: 1, status: 'published', publicationNo: 1 }] : []),
+    ] });
     if (path === `/api/versions/${state.versionId}`) return reply(route, { version: { versionId: state.versionId, snapshot: { core, artifacts: [] } } });
     if (path === `/api/research-objects/${ro}/versions/${state.versionId}/claims`) return reply(route, { claims: [] });
     if (path.endsWith('/record')) return reply(route, { record: { objectId: ro, versionId: state.versionId, versionNo: 1, citation: { title: 'First image' }, sdf: core, claims: [], evidence: [], manifest: [], media: [] } });
     if (path === '/api/agent/tasks') return reply(route, { tasks: restore ? [task()] : [] });
-    if (path === `/api/agent/tasks/${guideId}`) return reply(route, { task: task() });
+    if (path === `/api/agent/tasks/${guideId}`) { state.exactTaskGets++; return reply(route, { task: task() }); }
     if (path.endsWith('/hermes-runs') || path.endsWith(`/hermes-runs/${runId}`)) {
       if (url.searchParams.has('originGuideTaskId')) { expect(url.searchParams.get('originGuideTaskId')).toBe(guideId); state.originGets++; }
       if (state.unavailableOnce) { state.unavailableOnce = false; return reply(route, { error: { message: 'Temporarily unavailable' } }, 503); }
@@ -79,10 +86,96 @@ test('current image request uses the saved-version marker once and shows the rea
   await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
   await expect(page.getByText(/Reply “confirm production”/)).toHaveCount(0);
   state.complete = true;
-  await expect(page.getByAltText('Private first illustration')).toBeVisible();
+  await expect(page.getByAltText('Private first illustration').first()).toBeVisible();
   await expect(page.getByText('Your image is saved as a private draft. It has not been adopted or published.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'View and manage images' })).toHaveAttribute('href', `/research-objects/${ro}/presentation?version=${version}`);
+  await expect(page.getByRole('link', { name: 'View and manage images' })).toHaveAttribute('href', `/research-objects/${ro}/edit?view=media&version=${version}`);
   expect(state.submissions).toHaveLength(1); expect(state.unexpectedWrites).toEqual([]);
+});
+
+test('the visible media shortcut submits through Hermes once without an extra Send', async ({ page }) => {
+  const state = await setup(page, false);
+  await page.goto(`${baseUrl}/research-objects/${ro}/edit?view=media`);
+  const shortcut = page.getByRole('button', { name: 'Generate illustration', exact: true });
+  await expect(shortcut).toBeEnabled();
+  expect(state.submissions).toEqual([]);
+  await shortcut.click();
+  await expect.poll(() => state.submissions.length).toBe(1);
+  expect(state.submissions[0]).toMatchObject({ kind: 'workspace.guide', payload: { executionIntent: 'first-image',
+    context: { presentation: { researchObjectId: ro, versionId: version } } } });
+  await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
+  // The guide already succeeded, but its image child is still running.
+  await shortcut.click();
+  await expect.poll(() => state.originGets).toBeGreaterThan(0);
+  expect(state.submissions).toHaveLength(1);
+  await expect(page.locator('[data-scene-image]')).toHaveCount(0);
+  state.complete = true;
+  await expect(page.getByAltText('Private first illustration').first()).toBeVisible();
+  await expect(shortcut).toHaveCount(0);
+  expect(state.unexpectedWrites).toEqual([]);
+});
+
+for (const priorPrefill of [false, true]) test(`shortcut response loss continues in place with the same goal and receipt; prior prefill=${priorPrefill}`, async ({ page }) => {
+  const state = await setup(page, false); state.loseResponseOnce = true; state.withPublishedVersion = priorPrefill;
+  await page.goto(`${baseUrl}/research-objects/${ro}/edit?view=media`);
+  const input = page.getByLabel('Send an instruction to Hermes', { exact: true });
+  if (priorPrefill) {
+    await page.getByRole('button', { name: 'Preview publication update', exact: true }).click();
+    await expect(input).toHaveValue('Preview publishing the current private draft as an update.');
+    await page.getByRole('button', { name: 'Close Hermes', exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'Generate illustration', exact: true }).click();
+  await expect.poll(() => state.submissions.length).toBe(1);
+  const originalBody = state.submissions[0], originalKey = state.submissionKeys[0];
+  await expect(input).toHaveValue('Generate one image');
+  const resume = page.getByRole('button', { name: 'Continue request', exact: true });
+  await expect(resume).toBeEnabled();
+  // No reload, second shortcut or changed body is needed to continue this operation.
+  await resume.click();
+  await expect.poll(() => state.submissions.length).toBe(2);
+  expect(state.submissionKeys[1]).toBe(originalKey);
+  expect(state.submissions[1]).toEqual(originalBody);
+  await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
+  expect(state.unexpectedWrites).toEqual([]);
+});
+
+test('a lost POST response survives reload and explicit recovery keeps the original key and body', async ({ page }) => {
+  const state = await setup(page, false); state.loseResponseOnce = true;
+  await openResearchConversation(page, version);
+  const input = page.getByLabel('Send an instruction to Hermes', { exact: true });
+  await input.fill('Generate one image explaining this paper.');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => state.submissions.length).toBe(1);
+  const originalBody = state.submissions[0], originalKey = state.submissionKeys[0];
+  await page.reload();
+  await page.locator('[data-hermes-avatar-anchor="true"]').getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByText('The previous submission is unconfirmed. Continue to recover the same request without starting another image task.')).toBeVisible();
+  expect(state.submissions).toHaveLength(1);
+  await page.getByRole('button', { name: 'Continue request', exact: true }).click();
+  await expect.poll(() => state.submissions.length).toBe(2);
+  expect(state.submissionKeys[1]).toBe(originalKey);
+  expect(state.submissions[1]).toEqual(originalBody);
+  await page.reload();
+  await page.locator('[data-hermes-avatar-anchor="true"]').getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect.poll(() => state.exactTaskGets).toBeGreaterThan(0);
+  await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
+  expect(state.submissions).toHaveLength(2);
+  expect(state.unexpectedWrites).toEqual([]);
+});
+
+test('an account change does not restore another account image operation', async ({ page }) => {
+  const state = await setup(page, false);
+  await openResearchConversation(page, version);
+  await page.getByLabel('Send an instruction to Hermes', { exact: true }).fill('Generate one image explaining this paper.');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => state.submissions.length).toBe(1);
+  const gets = state.exactTaskGets;
+  state.actorId = 'another-user'; state.complete = true;
+  await page.reload();
+  await page.locator('[data-hermes-avatar-anchor="true"]').getByRole('button', { name: 'Open conversation', exact: true }).click();
+  await expect(page.getByLabel('Send an instruction to Hermes', { exact: true })).toBeVisible();
+  await expect(page.getByAltText('Private first illustration')).toHaveCount(0);
+  expect(state.exactTaskGets).toBe(gets);
+  expect(state.submissions).toHaveLength(1);
 });
 
 test('restoring a lost guide result and retrying a failed GET never submits another task', async ({ page }) => {
@@ -91,7 +184,7 @@ test('restoring a lost guide result and retrying a failed GET never submits anot
   await page.getByRole('button', { name: 'Refresh original task' }).click();
   await expect(page.getByText('Hermes is planning and checking this illustration.')).toBeVisible();
   state.complete = true;
-  await expect(page.getByAltText('Private first illustration')).toBeVisible();
+  await expect(page.getByAltText('Private first illustration').first()).toBeVisible();
   expect(state.originGets).toBeGreaterThan(1); expect(state.submissions).toEqual([]); expect(state.unexpectedWrites).toEqual([]);
 });
 

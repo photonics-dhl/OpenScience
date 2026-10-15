@@ -26,6 +26,41 @@ const synclipImage: PresentationAsset = {
   contentHash: 'a'.repeat(64), label: 'Scientific image', sourceClaimIds: [], createdAt: '', updatedAt: '',
 };
 
+it('offers the editor first-image shortcut without requiring a manual scene plan', () => {
+  const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+    researchObjectId: 'ro', assets: [], claims: [], canWrite: true, resultsOnly: true, editorLayout: true,
+    version: { versionId: 'v', publicationNo: null, createdAt: '', status: 'draft' },
+    onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(), onAskHermes: vi.fn(),
+  }));
+  expect(markup).toContain('data-first-image-shortcut');
+  expect(markup).not.toContain('data-scene-image=');
+});
+
+it('keeps old approved plans readable without exposing their editor scene-image writes', () => {
+  const plan = { ...synclipImage, id: 'old-plan', kind: 'storyboard' as const, status: 'approved' as const,
+    canGenerateSceneImage: true, storyboard: { document: { schemaVersion: 1, title: 'Retained plan', scenes: [
+      { title: 'One scene', claimIds: [], visualDescription: 'A concept', narration: 'A concept' },
+    ] } } } as unknown as PresentationAsset;
+  const render = (editorLayout: boolean) => renderToStaticMarkup(createElement(PresentationWorkbench, {
+    researchObjectId: 'ro', assets: [plan], claims: [], canWrite: true, resultsOnly: true, editorLayout,
+    version: { versionId: 'v', publicationNo: null, createdAt: '', status: 'draft' },
+    onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(), onGenerateSceneImage: vi.fn(),
+  }));
+  expect(render(true)).toContain('data-active-storyboard="old-plan"');
+  expect(render(true)).not.toContain('data-scene-image=');
+  expect(render(false)).toContain('data-scene-image=');
+});
+
+it.each([{ canWrite: false, assets: [] }, { canWrite: true, assets: [synclipImage] }])(
+  'does not offer the first-image shortcut for read-only or existing-image views', props => {
+    const markup = renderToStaticMarkup(createElement(PresentationWorkbench, {
+      researchObjectId: 'ro', claims: [], resultsOnly: true, editorLayout: true, ...props,
+      version: { versionId: 'v', publicationNo: null, createdAt: '', status: 'draft' },
+      onCreateClaim: vi.fn(), onGenerate: vi.fn(), onTransition: vi.fn(), onAskHermes: vi.fn(),
+    }));
+    expect(markup).not.toContain('data-first-image-shortcut');
+  });
+
 it.each([true, false])('shows the saved Synclip model after fresh loading through resultsOnly=%s without inventing a fallback cause', resultsOnly => {
   for (const model of ['gpt-image-2', 'gpt-image-2.5']) {
     const asset = { ...synclipImage, generatorVersion: model };

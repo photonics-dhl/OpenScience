@@ -301,6 +301,10 @@
   },
   "hermesConversation": {
     "firstImage": {
+      "command": "生成图片",
+      "storageError": "无法保存或恢复操作凭据，请保持当前页面，勿重复发起。",
+      "uncertain": "上次提交结果尚未确认。继续将恢复同一请求，不会另起生图任务。",
+      "scopeChanged": "账号或研究版本已变化，请回到原操作查看结果。",
       "planning": "Hermes 正在规划并核对这张图。",
       "rendering": "正在生成图片并核对实际画面。",
       "ready": "图片已生成，保存为私有草稿，尚未采用或公开。",
@@ -2090,6 +2094,7 @@
   },
   "presentation": {
     "editorCaption": "图注",
+    "generateIllustration": "生成配图",
     "editorMediaDetails": "制作信息",
     "existingImageReview": {
       "action": "仅审核已保存图片",

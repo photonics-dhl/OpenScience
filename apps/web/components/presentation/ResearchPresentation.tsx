@@ -118,7 +118,7 @@ function standaloneUrl(roId: string, versionId: string, taskId?: string): string
   return `/research-objects/${encodeURIComponent(roId)}/presentation?${query.toString()}`;
 }
 
-export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void }) {
+export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes, imageShortcutReady = false }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void; imageShortcutReady?: boolean }) {
   const t = useTranslations('presentation');
   const audioText = useTranslations('hermesAudioAudition');
   const viewerId = useHermesViewerId();
@@ -705,7 +705,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             error={error}
             resultsOnly={embedded}
             editorLayout={embedded}
-            onAskHermes={onAskHermes ?? ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); })}
+            imageShortcutReady={imageShortcutReady}
+            onAskHermes={onAskHermes ?? (embedded ? undefined : ((kind) => { setHermesGoal(t(kind === 'video' ? 'requestVideo' : 'requestImage')); setHermesOpen(true); }))}
           />
         </>
       ) : (

@@ -133,6 +133,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [hermesInitialGoal, setHermesInitialGoal] = useState('');
+  const imageSubmit = useRef<(() => void) | null>(null);
+  const [imageShortcutReady, setImageShortcutReady] = useState(false);
+  const registerImageSubmit = useCallback((submit: (() => void) | null) => {
+    imageSubmit.current = submit;
+    setImageShortcutReady(Boolean(submit));
+  }, []);
   const [contentRefresh, setContentRefresh] = useState(0);
   const sourceReviewRef = useRef<HTMLDetailsElement>(null);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
@@ -1291,7 +1297,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <section className={`${styles.productSection} ${activeView === 'media' ? '' : styles.viewPanelHidden}`} id="workbench-media" data-workbench-section="media" aria-hidden={activeView === 'media' ? undefined : true}>
               <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
               {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
-              {versions[0] && snapshotReady ? <ResearchPresentation key={`${versions[0].versionId}:${contentRefresh}`} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId} /> : null}
+              {versions[0] && snapshotReady ? <ResearchPresentation key={`${versions[0].versionId}:${contentRefresh}`} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId}
+                imageShortcutReady={imageShortcutReady} onAskHermes={(kind) => {
+                  if (kind === 'image') {
+                    setHermesInitialGoal(''); setHermesOpen(true); imageSubmit.current?.();
+                  } else {
+                    setHermesInitialGoal(tw('requestVideo')); setHermesOpen(true);
+                  }
+                }} /> : null}
               {versions.length === 0 ? <div className={styles.mediaFallbackGrid}>
                 <div><h3>{tw('coreImage')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
                 <div><h3>{tw('researchVideo')}</h3><p>{tw('mediaNeedsVersion')}</p></div>
@@ -1376,6 +1389,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               pageOwnedAnchor
               sourceReview={sourceReviewPanel}
               initialGoal={hermesInitialGoal}
+              onImageSubmitReady={registerImageSubmit}
               onSourceCommand={async (command) => {
                 if (/^(?:查看来源|选择来源|切换来源|查看分析|show sources|choose source|review analysis)$/iu.test(command)) {
                   if (sourceReviewRef.current) { sourceReviewRef.current.open = true; sourceReviewRef.current.scrollIntoView({ block: 'start' }); return true; }

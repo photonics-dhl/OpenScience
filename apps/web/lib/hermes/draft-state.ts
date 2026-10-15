@@ -1,6 +1,44 @@
-import type { HermesNarrativeGeneration, StoryboardRequest, WorkspaceGuideResult } from '@/lib/api';
+import type { HermesNarrativeGeneration, StoryboardRequest, WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
+import { parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
 
 const STORAGE_PREFIX = 'openscience:hermes-draft:';
+
+export type FirstImageSubmissionScope = Pick<HermesDraftScope, 'userId' | 'researchObjectId' | 'versionId'>;
+export interface PendingFirstImageSubmission {
+  sessionId: string;
+  key: string;
+  payload: WorkspaceGuidePayload;
+  taskId?: string;
+}
+function firstImageSubmissionKey(scope: FirstImageSubmissionScope): string {
+  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.versionId)}:first-image-submit:v1`;
+}
+function readFirstImageSubmission(value: unknown, scope: FirstImageSubmissionScope): PendingFirstImageSubmission {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid saved image operation');
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).some(k => !['sessionId', 'key', 'payload', 'taskId'].includes(k))
+    || ![v.sessionId, v.key].every(id => typeof id === 'string' && id.length > 0 && id.length <= 200)
+    || (v.taskId !== undefined && (typeof v.taskId !== 'string' || !v.taskId || v.taskId.length > 100)))
+    throw new Error('Invalid saved image operation');
+  const payload = parseWorkspaceGuidePayload(v.payload);
+  if (payload.executionIntent !== 'first-image' || payload.context.presentation?.researchObjectId !== scope.researchObjectId
+    || payload.context.presentation?.versionId !== scope.versionId) throw new Error('Saved image operation scope changed');
+  // Validate without rewriting the original POST body used by its idempotency key.
+  return { sessionId: v.sessionId as string, key: v.key as string, payload: v.payload as WorkspaceGuidePayload, ...(v.taskId ? { taskId: v.taskId as string } : {}) };
+}
+/** Corrupt or inaccessible recovery state must never silently become a new paid operation. */
+export function loadPendingFirstImageSubmission(storage: Storage | null, scope: FirstImageSubmissionScope): PendingFirstImageSubmission | null {
+  const raw = storage?.getItem(firstImageSubmissionKey(scope));
+  return raw == null ? null : readFirstImageSubmission(JSON.parse(raw), scope);
+}
+export function savePendingFirstImageSubmission(storage: Storage | null, scope: FirstImageSubmissionScope, value: PendingFirstImageSubmission): boolean {
+  try {
+    if (!storage) return false;
+    const snapshot = readFirstImageSubmission(value, scope);
+    storage.setItem(firstImageSubmissionKey(scope), JSON.stringify(snapshot));
+    return storage.getItem(firstImageSubmissionKey(scope)) === JSON.stringify(snapshot);
+  } catch { return false; }
+}
 
 export interface HermesDraftScope {
   userId: string;

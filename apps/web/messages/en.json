@@ -301,6 +301,10 @@
   },
   "hermesConversation": {
     "firstImage": {
+      "command": "Generate one image",
+      "storageError": "The operation receipt could not be saved or restored. Keep this page open and do not start another request.",
+      "uncertain": "The previous submission is unconfirmed. Continue to recover the same request without starting another image task.",
+      "scopeChanged": "The account or research version changed. Return to the original operation to view its result.",
       "planning": "Hermes is planning and checking this illustration.",
       "rendering": "Generating the image and checking the actual result.",
       "ready": "Your image is saved as a private draft. It has not been adopted or published.",
@@ -2090,6 +2094,7 @@
   },
   "presentation": {
     "editorCaption": "Caption",
+    "generateIllustration": "Generate illustration",
     "editorMediaDetails": "Production details",
     "existingImageReview": {
       "action": "Review saved image only",

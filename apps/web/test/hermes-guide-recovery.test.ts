@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { resultFromTask, selectRestorableGuide } from '../components/hermes/HermesAssistantDrawer';
 import type { AgentTaskView } from '../lib/api';
+import { loadPendingFirstImageSubmission, savePendingFirstImageSubmission } from '../lib/hermes/draft-state';
+
+it('preserves an uncertain image request and scopes its exact identity to the account and version', () => {
+  const values = new Map<string, string>();
+  const storage = { getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); } } as Storage;
+  const scope = { userId: 'u', researchObjectId: 'ro', versionId: 'v' };
+  const pending = { sessionId: 'session', key: 'original-key', payload: {
+    goal: '生成图片', executionIntent: 'first-image' as const, locale: 'zh' as const,
+    route: 'research-object-edit' as const, target: null,
+    context: { tasks: [], researchObjects: [], presentation: { researchObjectId: 'ro', versionId: 'v' } },
+  } };
+  expect(savePendingFirstImageSubmission(storage, scope, pending)).toBe(true);
+  expect(loadPendingFirstImageSubmission(storage, scope)).toEqual(pending);
+  expect(JSON.stringify(loadPendingFirstImageSubmission(storage, scope)?.payload)).toBe(JSON.stringify(pending.payload));
+  expect(savePendingFirstImageSubmission(null, scope, pending)).toBe(false);
+  expect(savePendingFirstImageSubmission({ ...storage, setItem: () => { throw new Error('Quota exceeded'); } }, scope, pending)).toBe(false);
+  expect(loadPendingFirstImageSubmission(storage, { ...scope, userId: 'other' })).toBeNull();
+  expect(loadPendingFirstImageSubmission(storage, { ...scope, versionId: 'other' })).toBeNull();
+  expect(savePendingFirstImageSubmission(storage, scope, { ...pending, taskId: 'exact-task' })).toBe(true);
+  expect(savePendingFirstImageSubmission(storage, scope, { ...pending, payload: { ...pending.payload,
+    context: { ...pending.payload.context, presentation: { researchObjectId: 'foreign', versionId: 'v' } } } })).toBe(false);
+  expect(loadPendingFirstImageSubmission(storage, scope)?.taskId).toBe('exact-task');
+  values.set([...values.keys()][0], '');
+  expect(() => loadPendingFirstImageSubmission(storage, scope)).toThrow();
+  values.set([...values.keys()][0], '{broken');
+  expect(() => loadPendingFirstImageSubmission(storage, scope)).toThrow();
+});
 
 describe('Hermes guide recovery scope', () => {
   it('reads the persisted run without turning a prior proposal into execution', () => {

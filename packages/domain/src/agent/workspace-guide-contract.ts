@@ -73,7 +73,7 @@ export function isExplicitFirstImageRequest(goal: string): boolean {
   if (!text
     || /[?？\n\r"“”「」]|(?:不要|不需要|别生成|暂不|仅规划|只规划|先规划|如何|怎么|为什么|是否|能否|助手|论文说|视频|公开|发布|每[张幅个]|多张|一组|[二三四五六七八九十2-9]张)|\b(?:not|don't|only|plan|how|why|whether|assistant|said|video|publish|each|multiple|several|images)\b/iu.test(text)) return false;
   return /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?生图(?:[，,：:\s]|$|[。！!])/u.test(text)
-    || /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?(?:生成|画|绘制|制作)(?:一张|一幅|首张|第一张|个|张|幅)?(?:解释性|概念|科学)?(?:图片|配图|插图|图解|图)(?:[，,：:\s]|$|[。！!])/u.test(text)
+    || /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?(?:(?:为|给)(?:这篇论文|这篇研究|本文|论文|这个研究|当前研究|我)\s*)?(?:生成|画|绘制|制作|做)(?:一张|一幅|首张|第一张|个|张|幅)?(?:解释性|概念|科学)?(?:图片|配图|插图|图解|图)(?:[，,：:\s]|$|[。！!])/u.test(text)
     || /^(?:请\s*)?(?:帮我\s*)?(?:直接\s*)?(?:(?:为|给)(?:这篇论文|本文|论文|这个研究|当前研究|我)\s*)?配(?:一张|一幅|张|幅)图(?:[，,：:\s]|$|[。！!])/u.test(text)
     || /^(?:please\s+)?(?:generate|create|draw|make)\s+(?:(?:one|an?|the first)\s+)?(?:image|illustration|diagram)\b/iu.test(text);
 }

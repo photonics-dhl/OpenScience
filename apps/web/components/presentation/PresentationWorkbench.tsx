@@ -58,13 +58,14 @@ export interface PresentationWorkbenchProps {
   error?: string;
   resultsOnly?: boolean;
   editorLayout?: boolean;
+  imageShortcutReady?: boolean;
 }
 
 const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false, editorLayout = false,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false, editorLayout = false, imageShortcutReady = true,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -156,9 +157,13 @@ export function PresentationWorkbench({
           <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} />
         </div>
         {deletionNotice}
+        {canWrite && onAskHermes && imageSlides.length === 0 ? <button type="button" data-first-image-shortcut="true"
+          disabled={working || loading || loadFailed || !imageShortcutReady}
+          className="mt-4 min-h-11 rounded-control bg-accent-primary-strong px-4 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary-strong disabled:opacity-40"
+          onClick={() => onAskHermes('image')}>{t('generateIllustration')}</button> : null}
         {canWrite ? <StoryboardPlans key={`${researchObjectId}:${version.versionId}`} assets={assets} claims={claims}
           canWrite={canWrite} unavailable={working || loading || loadFailed} onGenerateStoryboard={onGenerateStoryboard}
-          onGenerateSceneImage={onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} compact /> : null}
+          onGenerateSceneImage={editorLayout ? undefined : onGenerateSceneImage} onGenerateVideo={onGenerateVideo} onTransition={onTransition} compact /> : null}
         {task && (task.status !== 'succeeded' || task.paused) ? (
           <div className="mt-5 border-t border-os-rule-paper pt-5" data-presentation-task={task.status}>
             <div className="flex items-center justify-between gap-4 text-sm">

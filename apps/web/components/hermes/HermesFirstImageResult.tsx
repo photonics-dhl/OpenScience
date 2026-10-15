@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getCurrentUser, getFirstImageRun, getHermesResearchRun, listPresentationAssets,
   presentationAssetContentUrl, SESSION_CHANGED_EVENT, SESSION_INVALIDATED_EVENT,
@@ -57,6 +57,14 @@ export function HermesFirstImageResult({ actorId, researchObjectId, versionId, g
     };
   }, [actorId, researchObjectId, versionId, guideTaskId, runId, guidePending, scope, attempt]);
   const current = state.scope === scope ? state : undefined;
+  const announcedAsset = useRef('');
+  useEffect(() => {
+    if (!current?.asset) return;
+    const identity = `${scope}:${current.asset.id}`;
+    if (announcedAsset.current === identity) return;
+    announcedAsset.current = identity;
+    window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId, versionId } }));
+  }, [current?.asset, scope, researchObjectId, versionId]);
   if (!current?.run && !current?.error) return null;
   const stopped = current?.run && ['failed', 'stopped'].includes(current.run.status);
   return <div className="hermes-conversation-change" aria-live="polite">
@@ -65,6 +73,6 @@ export function HermesFirstImageResult({ actorId, researchObjectId, versionId, g
     {current?.asset && <img src={presentationAssetContentUrl(researchObjectId, versionId, current.asset.id)}
       alt={current.asset.label} style={{ width: '100%', height: 'auto' }} />}
     {(current?.error || stopped) && <button type="button" onClick={() => setAttempt(n => n + 1)}>{t('refresh')}</button>}
-    {current?.run && <Link className="hermes-conversation-link" href={`/research-objects/${encodeURIComponent(researchObjectId)}/presentation?version=${encodeURIComponent(versionId)}`}>{t('manage')}</Link>}
+    {current?.run && <Link className="hermes-conversation-link" href={`/research-objects/${encodeURIComponent(researchObjectId)}/edit?view=media&version=${encodeURIComponent(versionId)}`}>{t('manage')}</Link>}
   </div>;
 }
