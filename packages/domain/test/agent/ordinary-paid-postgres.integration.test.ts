@@ -23,6 +23,7 @@ type Support = {
   deps(client: PrismaClient): AgentDeps;
   safeError(error: unknown): unknown;
   MESSAGES: unknown[]; PRODUCT: Record<string, unknown>; RESPONSE: Record<string, unknown>;
+  VISUALIZATION_PLAN: Record<string, unknown>; VISUALIZATION_RESPONSE: Record<string, unknown>;
 };
 const childFile = resolve(__dirname, 'fixtures/ordinary-paid-postgres-child.cjs');
 const support = createRequire(__filename)(childFile) as Support;
@@ -337,5 +338,147 @@ describe('ordinary paid receipt actual PostgreSQL and owned process loss', () =>
       executionAttempt: 2, reason: runtime.domain.AGENT_TASK_OWNED_STOP_REASON });
     const view = await runtime.domain.getAgentTask(support.deps(db), { taskId: f.taskId, userId: f.userId });
     assert.deepEqual(view.result ?? {}, {});
+  }));
+});
+
+type MembershipSeed = Seed & { ownerId: string; workspaceId: string; researchObjectId: string; reserve: UsageLedger };
+type Receipt = NonNullable<ReturnType<Domain['readOrdinaryStructuredReceipt']>>;
+
+async function seedMembershipTask(): Promise<MembershipSeed> {
+  const ownerId = randomUUID(), userId = randomUUID();
+  for (const id of [ownerId, userId]) {
+    const actor = await db.user.create({ data: { id, email: `${id}@membership-pg.invalid`, passwordHash: 'not-a-login',
+      displayName: 'Synthetic membership actor', status: 'email_verified', platformRole: 'user' } });
+    assert.equal(actor.platformRole, 'user'); // Never use admin auto-funding to get this fixture past billing.
+  }
+  const workspace = await db.workspace.create({ data: { type: 'team', ownerId, name: 'Synthetic membership boundary' } });
+  await db.membership.createMany({ data: [
+    { id: randomUUID(), workspaceId: workspace.id, userId: ownerId, role: 'owner' },
+    { id: randomUUID(), workspaceId: workspace.id, userId, role: 'author' },
+  ] });
+  const ro = await db.researchObject.create({ data: { workspaceId: workspace.id, createdBy: ownerId,
+    title: 'Private synthetic membership source' } });
+  await db.usageLedger.create({ data: { userId, resource: 'ai_credit', delta: 10n, kind: 'admin_topup',
+    idempotencyKey: `membership-initial-credit:${userId}` } });
+  const session = await runtime.domain.createAgentSession(support.deps(db), { userId, researchObjectId: ro.id,
+    kind: 'visualization', title: 'Synthetic visualization' });
+  const payload = { concept: `Original membership visualization ${randomUUID()}` };
+  // Exercise real member/finite credit/reservation/audit logic; queue scheduling is outside this group.
+  const submitted = await runtime.domain.submitAgentTask(support.deps(db), { userId, sessionId: session.id,
+    kind: 'visualization.plan', payload, idempotencyKey: `membership-task:${randomUUID()}`, dispatch: false });
+  assert.equal(submitted.status, 'pending'); assert.equal(submitted.executionAttempt, 0);
+  const ledger = await db.usageLedger.findMany({ where: { userId }, orderBy: { id: 'asc' } });
+  const reserve = await db.usageLedger.findUniqueOrThrow({ where: { idempotencyKey: `agent-task-reserve:${submitted.id}` } });
+  assert.equal(ledger.length, 2); assert.equal(ledger.reduce((sum, row) => sum + row.delta, 0n), 9n);
+  assert.equal(reserve.kind, 'consume'); assert.equal(reserve.delta, -1n); assert.equal(reserve.userId, userId);
+  assert.deepEqual(reserve.metadata, { taskId: submitted.id, kind: 'visualization.plan', policy: 'charged-on-submit' });
+  const audits = await db.auditLog.findMany({ where: { action: 'agent.task.submit', targetId: submitted.id } });
+  assert.equal(audits.length, 1); assert.equal(audits[0]!.actorId, userId);
+  assert.equal(audits[0]!.workspaceId, workspace.id); assert.equal(audits[0]!.targetType, 'agent_task');
+  assert.deepEqual(audits[0]!.metadata, { kind: 'visualization.plan', sessionId: session.id, creditPolicy: 'charged-on-submit' });
+  return { taskId: submitted.id, sessionId: session.id, userId, payload, ledger, reserve,
+    ownerId, workspaceId: workspace.id, researchObjectId: ro.id };
+}
+
+async function membershipBindings(f: MembershipSeed) {
+  const [task, session, ro, workspace] = await Promise.all([
+    observer.agentTask.findUniqueOrThrow({ where: { id: f.taskId } }),
+    observer.agentSession.findUniqueOrThrow({ where: { id: f.sessionId } }),
+    observer.researchObject.findUniqueOrThrow({ where: { id: f.researchObjectId } }),
+    observer.workspace.findUniqueOrThrow({ where: { id: f.workspaceId } }),
+  ]);
+  assert.equal(task.sessionId, session.id); assert.equal(task.kind, 'visualization.plan'); assert.deepEqual(task.payload, f.payload);
+  assert.equal(session.userId, f.userId); assert.equal(session.researchObjectId, ro.id);
+  assert.equal(ro.workspaceId, workspace.id); assert.equal(workspace.status, 'active');
+  assert.equal(task.deletedAt, null); assert.equal(session.deletedAt, null); assert.equal(ro.deletedAt, null);
+  return { task, session, ro, workspace };
+}
+
+async function membershipPrepared(f: MembershipSeed, child: FixtureChild) {
+  await child.wait('prepare-committed');
+  const binding = await membershipBindings(f);
+  assert.equal(binding.task.status, 'running'); assert.equal(binding.task.executionAttempt, 1);
+  assert.equal(binding.session.status, 'active');
+  const original = runtime.domain.readOrdinaryStructuredReceipt(binding.task.result); assert.ok(original);
+  assert.deepEqual(original.identity, { taskId: f.taskId, kind: 'visualization.plan', executionAttempt: 1,
+    sessionId: f.sessionId, userId: f.userId, researchObjectId: f.researchObjectId });
+  assert.equal(original.attempts.length, 1); assert.equal(original.attempts[0]!.state, 'prepared');
+  const envelope = JSON.parse(original.sourceJson);
+  assert.deepEqual(envelope.payload, f.payload);
+  assert.ok(Array.isArray(envelope.messages) && envelope.messages.length >= 2);
+  assert.equal(envelope.messages.at(-1).role, 'user'); assert.equal(envelope.messages.at(-1).content, f.payload.concept);
+  assert.equal(envelope.messages[0].role, 'system');
+  assert.deepEqual(envelope.reservation, { id: f.reserve.id, userId: f.userId, idempotencyKey: f.reserve.idempotencyKey,
+    resource: 'ai_credit', delta: '-1', kind: 'consume' });
+  assert.equal(child.committed('prepare'), 1);
+  return { binding, original: structuredClone(original) };
+}
+
+async function membershipCustody(f: MembershipSeed, original: Receipt) {
+  const task = await db.agentTask.findUniqueOrThrow({ where: { id: f.taskId } });
+  const receipt = runtime.domain.readOrdinaryStructuredReceipt(task.result); assert.ok(receipt);
+  assert.deepEqual(receipt.identity, original.identity); assert.equal(receipt.sourceJson, original.sourceJson);
+  assert.equal(receipt.attempts.length, 1); assert.equal(receipt.attempts[0]!.ordinal, 0);
+  assert.deepEqual(receipt.attempts[0]!.target, original.attempts[0]!.target);
+  assert.equal(receipt.attempts[0]!.target.provider, 'ordinary-pg-synthetic');
+  assert.equal(receipt.attempts[0]!.target.model, 'requested-pg-model');
+  assert.deepEqual(task.payload, f.payload); assert.equal(task.executionAttempt, 1);
+  assert.deepEqual(await db.usageLedger.findMany({ where: { userId: f.userId }, orderBy: { id: 'asc' } }), f.ledger);
+  assert.equal(await db.usageLedger.count({ where: { userId: f.ownerId } }), 0);
+  assert.equal(await db.agentTask.count({ where: { sessionId: f.sessionId } }), 1);
+  assert.equal(await db.auditLog.count({ where: { action: 'agent.task.submit', targetId: f.taskId } }), 1);
+  const view = await runtime.domain.getAgentTask(support.deps(db), { userId: f.userId, taskId: f.taskId });
+  assert.equal(Object.hasOwn(view.result ?? {}, 'ordinaryStructuredReceipt'), false);
+  assert.equal(JSON.stringify(view).includes('not-an-owned-object'), false);
+  assert.equal(JSON.stringify(view).includes(f.payload.concept), false);
+  return { task, receipt, view };
+}
+
+describe('ordinary publication membership', () => {
+  it('allows one normally submitted author visualization through the actual planner when membership remains', () => safeCase(async () => {
+    const f = await seedMembershipTask(), child = await launch(f, 'membership-publication');
+    const { original } = await membershipPrepared(f, child);
+    const member = await observer.membership.findUniqueOrThrow({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } });
+    assert.equal(member.role, 'author');
+    // Pre-release both tokens: a wrong extra call must settle rather than turn into a timeout.
+    child.send('response'); child.send('terminal'); child.send('resume'); await child.completed();
+    assert.equal(child.calls(), 1); assert.ok(child.events.some(event => event.type === 'publish-committed'));
+    assert.ok(child.events.some(event => event.type === 'terminal-success'));
+    const facts = await membershipCustody(f, original);
+    assert.equal(facts.task.status, 'succeeded'); assert.deepEqual(facts.view.result, { plan: support.VISUALIZATION_PLAN });
+    assert.equal(facts.receipt.attempts[0]!.state, 'completed');
+    assert.equal(facts.receipt.attempts[0]!.responseJson, JSON.stringify(support.VISUALIZATION_RESPONSE));
+    assert.equal(child.committed('settle'), 1); assert.equal(child.committed('terminal'), 1);
+    assert.equal(await observer.auditLog.count({ where: { action: 'workspace.member.remove', workspaceId: f.workspaceId } }), 0);
+  }));
+
+  it('does not dispatch after author removal committed and independently became visible before publication', () => safeCase(async () => {
+    const f = await seedMembershipTask(), child = await launch(f, 'membership-publication');
+    const { binding, original } = await membershipPrepared(f, child);
+    await runtime.domain.removeMember(support.deps(cancelling), f.ownerId, f.workspaceId, f.userId);
+    assert.equal(await observer.membership.findUnique({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } }), null);
+    const audits = await observer.auditLog.findMany({ where: { action: 'workspace.member.remove', workspaceId: f.workspaceId,
+      actorId: f.ownerId, targetType: 'user', targetId: f.userId } });
+    assert.equal(audits.length, 1); assert.deepEqual(audits[0]!.metadata, { role: 'author' });
+    assert.deepEqual(await membershipBindings(f), binding); // No task/session/RO/workspace mutation explains a refusal.
+    console.info(JSON.stringify({ event: 'membership-removal-commit-visible', taskId: f.taskId, workspaceId: f.workspaceId,
+      ownerId: f.ownerId, removedActorId: f.userId, observerPid, auditId: audits[0]!.id, membershipAbsent: true }));
+    child.send('response'); child.send('terminal'); child.send('resume'); await child.completed();
+    // Test-first oracle: current-source misuse must fail here as actual1/expected0, never as timeout/import/SQL.
+    assert.equal(child.calls(), 0, 'ordinary publication membership: revoked author must not dispatch');
+    assert.ok(child.events.some(event => event.type === 'publication-denied' && event.code === 'OCR_EXTERNAL_PROCESSING_DENIED'));
+    const rollbacks = child.events.filter(event => event.type === 'rollback');
+    assert.ok(rollbacks.some(event => ['WORKSPACE_NOT_FOUND', 'OCR_EXTERNAL_PROCESSING_DENIED'].includes(event.code ?? '')));
+    assert.ok(rollbacks.every(event => ['WORKSPACE_NOT_FOUND', 'OCR_EXTERNAL_PROCESSING_DENIED'].includes(event.code ?? '')),
+      'An unrelated SQL/runtime rollback is not membership-denial evidence');
+    assert.equal(child.events.some(event => event.type === 'body-saved' || event.type === 'terminal-success'), false);
+    const facts = await membershipCustody(f, original);
+    assert.equal(facts.task.status, 'failed'); assert.equal(facts.task.error, runtime.domain.ORDINARY_STRUCTURED_HOLD);
+    assert.deepEqual(facts.view.result ?? {}, {});
+    assert.ok(['prepared', 'unknown'].includes(facts.receipt.attempts[0]!.state));
+    assert.equal(facts.receipt.attempts[0]!.responseJson, undefined);
+    if (facts.receipt.attempts[0]!.state === 'unknown')
+      assert.deepEqual(JSON.parse(facts.receipt.attempts[0]!.failureJson!), { code: 'publication_unconfirmed' });
+    assert.equal(child.committed('prepare'), 1); assert.equal(child.committed('terminal'), 0);
   }));
 });

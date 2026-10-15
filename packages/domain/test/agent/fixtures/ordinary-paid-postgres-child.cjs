@@ -8,6 +8,10 @@ const MESSAGES = [{ role: 'user', content: 'Private original source for the ordi
 const PRODUCT = { ok: true, summary: 'Synthetic accepted value' };
 const RESPONSE = { text: JSON.stringify(PRODUCT), model: 'reported-pg-model', finishReason: 'stop',
   usage: { inputTokens: 3, outputTokens: 5 }, providerContent: [{ objectKey: 'not-an-owned-object', text: 'Full synthetic response' }] };
+const VISUALIZATION_PLAN = { explanation: 'Synthetic relationship for the membership fixture.',
+  modelAssumptions: 'A conceptual fixture, not measured research.', script: 'result = 1',
+  parameters: { scale: { value: 1, description: 'Synthetic scale' } }, visualizationType: 'schematic', dependencies: [] };
+const VISUALIZATION_RESPONSE = { ...RESPONSE, text: JSON.stringify(VISUALIZATION_PLAN) };
 
 // This function is also usable by the CI owner before migrate-cli. It loads no client.
 function validatedTestUrl(env = process.env) {
@@ -45,6 +49,7 @@ async function warm(client) {
 function phaseOf(data) {
   if (data.status === 'succeeded') return 'terminal';
   if (data.error === '[blocked] Execution stopped by its owner') return 'stop';
+  if (data.status === 'failed') return 'failure'; // A denial transition is not a second private-response settlement.
   const state = data.result?.ordinaryStructuredReceipt?.attempts?.at(-1)?.state;
   if (state === 'prepared') return 'prepare';
   if (state === 'completed' || state === 'unknown') return 'settle';
@@ -121,7 +126,8 @@ async function main() {
   const emit = event => { if (process.connected) process.send(event); };
   let requestStarted = false, publishCommitted = false;
   const taskId = process.argv[2], mode = process.argv[3];
-  assert.ok(taskId && ['prepare-crash', 'claim-crash', 'ordinary', 'hold-terminal', 'hold-model'].includes(mode));
+  assert.ok(taskId && ['prepare-crash', 'claim-crash', 'ordinary', 'hold-terminal', 'hold-model', 'membership-publication'].includes(mode));
+  const membershipPublication = mode === 'membership-publication';
   try {
     const pid = await warm(client);
     const observed = observeClient(client, taskId, { emit,
@@ -133,7 +139,7 @@ async function main() {
       afterCommit: async writes => {
         if (writes.some(w => w.phase === 'prepare' && w.count === 1)) {
           emit({ type: 'prepare-committed' });
-          if (mode === 'prepare-crash') await gate('resume');
+          if (mode === 'prepare-crash' || membershipPublication) await gate('resume');
         }
         if (requestStarted && !publishCommitted && writes.length === 0) {
           publishCommitted = true; emit({ type: 'publish-committed' });
@@ -146,7 +152,8 @@ async function main() {
     emit({ type: 'claimed', executionAttempt: claim.executionAttempt });
     if (mode === 'claim-crash') await gate('resume');
     const provider = { name: 'ordinary-pg-synthetic', model: 'requested-pg-model', complete: async () => {
-      requestStarted = true; emit({ type: 'provider-start' }); await gate('response'); return RESPONSE;
+      requestStarted = true; emit({ type: 'provider-start' }); await gate('response');
+      return membershipPublication ? VISUALIZATION_RESPONSE : RESPONSE;
     } };
     if (mode === 'hold-model') {
       // Intentional negative control: an actual incorrect holder, never the candidate adapter.
@@ -159,10 +166,26 @@ async function main() {
       return;
     }
     const source = await client.agentTask.findUniqueOrThrow({ where: { id: taskId } });
-    const scoped = worker.createTaskScopedGateway(new gateway.AiGateway({ providers: [provider] }), observed,
-      { id: taskId, executionAttempt: claim.executionAttempt, payload: source.payload }, 'visualization.plan');
-    const value = await worker.runWithWorkerExecution({ taskId, executionAttempt: claim.executionAttempt }, () =>
-      scoped.completeStructured(result => result?.ok === true, MESSAGES));
+    let value;
+    if (membershipPublication) {
+      const handlers = worker.createHandlers(new gateway.AiGateway({ providers: [provider] }));
+      try {
+        value = await worker.runWithWorkerExecution({ taskId, executionAttempt: claim.executionAttempt }, () =>
+          handlers['visualization.plan'](deps(observed), { id: taskId, payload: source.payload,
+            interestContext: source.interestContext, executionAttempt: claim.executionAttempt, retryCount: claim.retryCount }));
+      } catch (error) {
+        if (error?.code !== 'OCR_EXTERNAL_PROCESSING_DENIED') throw error;
+        await domain.markTaskProgress(deps(observed), { taskId, status: 'failed', error: error.message,
+          expectedExecutionAttempt: claim.executionAttempt });
+        emit({ type: 'publication-denied', code: error.code });
+        return;
+      }
+    } else {
+      const scoped = worker.createTaskScopedGateway(new gateway.AiGateway({ providers: [provider] }), observed,
+        { id: taskId, executionAttempt: claim.executionAttempt, payload: source.payload }, 'visualization.plan');
+      value = await worker.runWithWorkerExecution({ taskId, executionAttempt: claim.executionAttempt }, () =>
+        scoped.completeStructured(result => result?.ok === true, MESSAGES));
+    }
     emit({ type: 'body-saved' }); await gate('terminal');
     try {
       await domain.markTaskProgress(deps(observed), { taskId, status: 'succeeded', progress: 100,
@@ -177,7 +200,8 @@ async function main() {
   }
 }
 
-module.exports = { validatedTestUrl, loadRuntime, createClient, warm, observeClient, deps, safeError, MESSAGES, PRODUCT, RESPONSE };
+module.exports = { validatedTestUrl, loadRuntime, createClient, warm, observeClient, deps, safeError,
+  MESSAGES, PRODUCT, RESPONSE, VISUALIZATION_PLAN, VISUALIZATION_RESPONSE };
 if (require.main === module) {
   const report = event => new Promise(done => {
     if (process.connected) process.send(event, done); else { process.exitCode = 1; done(); }
