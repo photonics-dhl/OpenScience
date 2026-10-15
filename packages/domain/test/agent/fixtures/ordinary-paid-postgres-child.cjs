@@ -59,7 +59,7 @@ function phaseOf(data) {
 
 // Observe only: original receiver/arguments/count/options and the real commit are retained.
 function observeClient(client, taskId, { emit = () => {}, afterWrite = async () => {}, afterCommit = async () => {},
-  afterMembershipRead } = {}) {
+  afterMembershipRead, afterMembershipLock } = {}) {
   return new Proxy(client, { get(target, property) {
     const value = Reflect.get(target, property);
     if (property !== '$transaction') return typeof value === 'function' ? value.bind(target) : value;
@@ -70,6 +70,14 @@ function observeClient(client, taskId, { emit = () => {}, afterWrite = async () 
       try {
         result = await target.$transaction(async tx => callback(new Proxy(tx, { get(actual, key) {
           const member = Reflect.get(actual, key);
+          if (key === '$queryRaw' && afterMembershipLock) return async (...args) => {
+            const rows = await Reflect.apply(member, actual, args);
+            const sql = args[0]?.join('')?.replace(/\s+/g, ' ').trim();
+            if (sql === 'SELECT id FROM memberships WHERE workspace_id = ::uuid AND user_id = ::uuid FOR KEY SHARE') {
+              await afterMembershipLock(args.slice(1), rows);
+            }
+            return rows;
+          };
           if (key === 'membership' && afterMembershipRead) return new Proxy(member, { get(delegate, operation) {
             const method = Reflect.get(delegate, operation);
             if (operation !== 'findUnique') return typeof method === 'function' ? method.bind(delegate) : method;
@@ -134,13 +142,14 @@ async function main() {
     if (resume) { waiting.delete(message.token); resume(); } else tokens.add(message.token);
   });
   const emit = event => { if (process.connected) process.send(event); };
-  let requestStarted = false, publishCommitted = false, prepareCommitted = false, publicationReadHeld = false;
+  let requestStarted = false, publishCommitted = false, prepareCommitted = false, publicationReadHeld = false, publicationLockHeld = false;
   const taskId = process.argv[2], mode = process.argv[3];
   assert.ok(taskId && ['prepare-crash', 'claim-crash', 'ordinary', 'hold-terminal', 'hold-model', 'membership-publication',
-    'membership-read-revoke'].includes(mode));
+    'membership-read-revoke', 'membership-publish-first'].includes(mode));
   const readRevocation = mode === 'membership-read-revoke';
-  const membershipPublication = mode === 'membership-publication' || readRevocation;
-  const expectedMembership = readRevocation ? { workspaceId: process.argv[4], userId: process.argv[5] } : null;
+  const publishFirst = mode === 'membership-publish-first';
+  const membershipPublication = mode === 'membership-publication' || readRevocation || publishFirst;
+  const expectedMembership = readRevocation || publishFirst ? { workspaceId: process.argv[4], userId: process.argv[5] } : null;
   if (expectedMembership) assert.ok(expectedMembership.workspaceId && expectedMembership.userId);
   try {
     const pid = await warm(client);
@@ -154,6 +163,14 @@ async function main() {
         emit({ type: 'publication-membership-read', phase: 'publication', taskId, backendPid: pid,
           workspaceId: found.workspaceId, userId: found.userId, membershipId: found.id });
         await gate('membership-read-release');
+      } } : {}),
+      ...(publishFirst ? { afterMembershipLock: async (values, rows) => {
+        assert.equal(prepareCommitted, true); assert.equal(publicationLockHeld, false);
+        assert.deepEqual(values, [expectedMembership.workspaceId, expectedMembership.userId]);
+        assert.equal(rows.length, 1); assert.ok(rows[0]?.id); publicationLockHeld = true;
+        emit({ type: 'publication-membership-locked', phase: 'publication', taskId, backendPid: pid,
+          workspaceId: expectedMembership.workspaceId, userId: expectedMembership.userId, membershipId: rows[0].id });
+        await gate('membership-lock-release');
       } } : {}),
       afterWrite: async event => {
         if (mode === 'hold-terminal' && event.phase === 'terminal' && event.count === 1) {
@@ -211,7 +228,9 @@ async function main() {
       value = await worker.runWithWorkerExecution({ taskId, executionAttempt: claim.executionAttempt }, () =>
         scoped.completeStructured(result => result?.ok === true, MESSAGES));
     }
-    emit({ type: 'body-saved' }); await gate('terminal');
+    emit({ type: 'body-saved' });
+    if (publishFirst) return; // Observe private custody only; post-removal terminal adoption is outside this group.
+    await gate('terminal');
     try {
       await domain.markTaskProgress(deps(observed), { taskId, status: 'succeeded', progress: 100,
         result: value, expectedExecutionAttempt: claim.executionAttempt });

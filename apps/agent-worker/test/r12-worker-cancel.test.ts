@@ -37,7 +37,7 @@ function live(id = ID) {
 function fixture() {
   const states = new Map([[ID, live()], [OTHER, live(OTHER)]]);
   const workspaces = new Map([['workspace-1', { id: 'workspace-1', status: 'active' }]]);
-  const memberships = new Map([['workspace-1:user-1', { workspaceId: 'workspace-1', userId: 'user-1', role: 'author' }]]);
+  const memberships = new Map([['workspace-1:user-1', { id: 'member-1', workspaceId: 'workspace-1', userId: 'user-1', role: 'author' }]]);
   const workspace = { findUnique: async ({ where }: { where: { id: string } }) => structuredClone(workspaces.get(where.id) ?? null) };
   const membership = { findUnique: async ({ where }: { where: { workspaceId_userId: { workspaceId: string; userId: string } } }) => {
     const key = where.workspaceId_userId; return structuredClone(memberships.get(`${key.workspaceId}:${key.userId}`) ?? null);
@@ -50,7 +50,8 @@ function fixture() {
   const transactions = new AsyncLocalStorage<Tx>();
   const controls: { commitError?: Error; prepareError?: Error; completionError?: Error; queryError?: Error;
     afterPrepare?: () => Promise<void>; completionFailures?: number;
-    commitBarrier?: Promise<void>; rawRows?: unknown; admissions: number; failures: unknown[] } = { admissions: 0, failures: [] };
+    commitBarrier?: Promise<void>; rawRows?: unknown; rawMembershipRows?: unknown;
+    membershipLocks: number; admissions: number; failures: unknown[] } = { membershipLocks: 0, admissions: 0, failures: [] };
   async function lockRow(tx: Tx, id: string) {
     if (!tx.rows.has(id)) { tx.releases.push(await rows.get(id)!.acquire()); tx.rows.add(id); }
   }
@@ -119,6 +120,13 @@ function fixture() {
         tx.releases.push(await global.acquire()); tx.global = true; emit('global:locked'); return 1;
       },
       $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        if (strings.join('').includes('FROM memberships')) {
+          expect(tx.global).toBe(true); expect(tx.rows.has(ID)).toBe(true);
+          expect(strings.join('').replace(/\s+/g, ' ').trim()).toBe('SELECT id FROM memberships WHERE workspace_id = ::uuid AND user_id = ::uuid FOR KEY SHARE');
+          expect(values).toEqual(['workspace-1', 'user-1']); controls.membershipLocks++;
+          const member = memberships.get(`${values[0]}:${values[1]}`);
+          return Object.hasOwn(controls, 'rawMembershipRows') ? controls.rawMembershipRows : member ? [{ id: member.id }] : [];
+        }
         expect(tx.global).toBe(true); expect(strings.join('')).toMatch(/SELECT id FROM agent_tasks WHERE id = .*FOR UPDATE/s);
         expect(values).toHaveLength(1); const id = String(values[0]); expect(rows.has(id)).toBe(true);
         if (controls.queryError) throw controls.queryError;
@@ -298,6 +306,25 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     expect(task.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'completed',
       responseJson: JSON.stringify({ text: '{"ok":true}', model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } }),
     }] } });
+  });
+
+  it.each(['valid', 'missing', 'duplicate', 'malformed'])('validates %s authoritative publication member lock rows', async mode => {
+    const f = fixture(); const task = f.states.get(ID)!;
+    task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', workspaceId: 'workspace-1', deletedAt: null };
+    Object.assign(task.payload, { workspaceId: 'untrusted-workspace', userId: 'untrusted-actor' });
+    Object.assign(f.claim.payload, task.payload);
+    if (mode === 'missing') f.controls.rawMembershipRows = [];
+    if (mode === 'duplicate') f.controls.rawMembershipRows = [{ id: 'member-1' }, { id: 'member-2' }];
+    if (mode === 'malformed') f.controls.rawMembershipRows = [null];
+    f.finish(); const result = await outcome(f.execute());
+    expect(f.controls.membershipLocks).toBe(1); // Publication only, never prepare or paid-body save.
+    if (mode === 'valid') { expect(result.value).toEqual({ ok: true }); expect(f.calls).toEqual(['fixture']); }
+    else {
+      expect(result.error).toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' }); expect(f.calls).toEqual([]);
+      expect(task.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'unknown',
+        failureJson: JSON.stringify({ code: 'publication_unconfirmed' }),
+      }] } });
+    }
   });
 
   it('observes stop committed while admission waits on the global lock, before any real provider submit', async () => {

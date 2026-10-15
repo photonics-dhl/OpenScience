@@ -121,7 +121,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   for (const release of releases.splice(0)) release();
-  for (const child of children) for (const token of ['response', 'terminal', 'commit', 'resume', 'start', 'membership-read-release']) child.send(token);
+  for (const child of children) for (const token of ['response', 'terminal', 'commit', 'resume', 'start', 'membership-read-release', 'membership-lock-release']) child.send(token);
   await Promise.allSettled(pending.splice(0));
   for (const child of children) {
     // Cleanup termination is never counted as A/N1's observed SIGKILL evidence.
@@ -519,5 +519,39 @@ describe('ordinary publication and membership removal ordering', () => {
     assert.equal(facts.receipt.attempts[0]!.responseJson, undefined);
     assert.deepEqual(JSON.parse(facts.receipt.attempts[0]!.failureJson!), { code: 'publication_unconfirmed' });
     assert.equal(child.committed('prepare'), 1); assert.equal(child.committed('terminal'), 0);
+  }));
+
+  it('P-first: lets removal wait for the short publication transaction, never the model response', () => safeCase(async () => {
+    const f = await seedMembershipTask();
+    const child = await launch(f, 'membership-publish-first', { workspaceId: f.workspaceId, userId: f.userId });
+    const { original } = await membershipPrepared(f, child);
+    const member = await observer.membership.findUniqueOrThrow({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } });
+    child.send('resume');
+    const held = await child.wait('publication-membership-locked', 'publication');
+    assert.equal(held.taskId, f.taskId); assert.equal(held.backendPid, child.backendPid);
+    assert.equal(held.workspaceId, f.workspaceId); assert.equal(held.userId, f.userId); assert.equal(held.membershipId, member.id);
+    assert.equal(child.calls(), 0); assert.equal(child.responseReleased, false);
+    const removal = outcome(runtime.domain.removeMember(support.deps(cancelling), f.ownerId, f.workspaceId, f.userId));
+    await waitBlocked(cancelPid, child.backendPid);
+    child.send('membership-lock-release');
+    await child.wait('provider-start'); await child.wait('publish-committed');
+    const removed = await removal; assert.equal(removed.error, undefined);
+    assert.equal(await observer.membership.findUnique({ where: { workspaceId_userId: { workspaceId: f.workspaceId, userId: f.userId } } }), null);
+    const audits = await observer.auditLog.findMany({ where: { action: 'workspace.member.remove', workspaceId: f.workspaceId,
+      actorId: f.ownerId, targetType: 'user', targetId: f.userId } });
+    assert.equal(audits.length, 1); assert.deepEqual(audits[0]!.metadata, { role: 'author' });
+    assert.equal(child.calls(), 1); assert.equal(child.responseReleased, false);
+    assert.equal(child.events.some(event => event.type === 'body-saved'), false);
+    console.info(JSON.stringify({ event: 'publish-then-removal-commit-before-response', taskId: f.taskId, workspaceId: f.workspaceId,
+      removedActorId: f.userId, membershipId: member.id, childBackendPid: child.backendPid, cancelPid, observerPid,
+      auditId: audits[0]!.id, responseReleased: child.responseReleased }));
+    child.send('response'); await child.completed();
+    const facts = await membershipCustody(f, original);
+    assert.equal(child.calls(), 1); assert.ok(child.events.some(event => event.type === 'body-saved'));
+    assert.equal(child.events.some(event => event.type === 'terminal-success'), false);
+    assert.equal(facts.task.status, 'running'); assert.deepEqual(facts.view.result ?? {}, {});
+    assert.equal(facts.receipt.attempts[0]!.state, 'completed');
+    assert.equal(facts.receipt.attempts[0]!.responseJson, JSON.stringify(support.VISUALIZATION_RESPONSE));
+    assert.equal(child.committed('prepare'), 1); assert.equal(child.committed('settle'), 1); assert.equal(child.committed('terminal'), 0);
   }));
 });

@@ -215,7 +215,12 @@ export function createTaskScopedGateway(
                 if (live.sessionId !== prepared.identity.sessionId || live.session.userId !== prepared.identity.userId
                   || live.session.researchObjectId !== prepared.identity.researchObjectId
                   || !isDeepStrictEqual(readOrdinaryStructuredReceipt(live.result), prepared)) throw denied();
-                // Start under both locks; never hold this transaction for the model response.
+                if (live.session.researchObjectId !== null) {
+                  const members = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM memberships
+                    WHERE workspace_id = ${live.session.researchObject!.workspaceId}::uuid AND user_id = ${live.session.userId}::uuid FOR KEY SHARE`;
+                  if (!Array.isArray(members) || members.length !== 1 || !members[0]?.id) throw denied();
+                }
+                // Order member removal against submit, without holding the transaction for its response.
                 sent = submit(); void sent.catch(() => undefined);
               }, transactionOptions);
             } catch {
