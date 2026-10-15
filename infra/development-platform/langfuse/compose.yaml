@@ -142,6 +142,7 @@ services:
     <<: *service
     image: clickhouse/clickhouse-server:25.12@sha256:8a790dd3468db22b1d4e7b18a176f378ff5ff6053b9c48dd4ea1fa71a24c5ba6
     user: "101:101"
+    stop_grace_period: 90s
     mem_limit: 3g
     cpus: "1.5"
     environment:

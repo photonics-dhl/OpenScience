@@ -6,4 +6,11 @@
     <size>50M</size>
     <count>3</count>
   </logger>
+  <text_log>
+    <level>warning</level>
+  </text_log>
+  <metric_log>
+    <collect_interval_milliseconds>10000</collect_interval_milliseconds>
+    <flush_interval_milliseconds>60000</flush_interval_milliseconds>
+  </metric_log>
 </clickhouse>
