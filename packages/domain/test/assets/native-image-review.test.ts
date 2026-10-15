@@ -134,11 +134,18 @@ describe('server-owned native image review role', () => {
       expect(f.row.result).toEqual(before.result); expect(f.db.usageLedger).toEqual(before.ledger);
     });
   it('selects the actual image Agent only on fresh server-owned task creation without a second debit', async () => {
-    const f = await fixture({ runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' });
-    expect(readNativeAgentExecution(f.row.result)?.profile).toBe('image-review');
-    expect(readNativeAgentExecution(f.row.result)?.imageResultPolicy).toBe(policy);
+    const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
+    const f = await fixture(runtime);
+    expect(readNativeAgentExecution(f.row.result)).toEqual({ kind: 'hermes-agent', profile: 'image-review', ...runtime });
     expect(f.row.result).toMatchObject({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
-    await submitAgentTask(f.deps, f.input);
+    const persisted = f.row.result as { nativeAgentExecution: Record<string, unknown>; nativeImageReview: Record<string, unknown> };
+    expect(Object.hasOwn(persisted.nativeAgentExecution, 'imageResultPolicy')).toBe(false);
+    expect(Object.hasOwn(persisted.nativeImageReview, 'imageResultPolicy')).toBe(false);
+    const before = structuredClone({ result: f.row.result, ledger: f.db.usageLedger });
+    const replay = await submitAgentTask(f.deps, f.input);
+    expect(replay.id).toBe(f.task.id);
+    expect(f.row.result).toEqual(before.result);
+    expect(f.db.usageLedger).toEqual(before.ledger);
     expect(f.db.usageLedger.filter(entry => entry.kind === 'consume')).toHaveLength(1);
   });
 
@@ -187,7 +194,7 @@ describe('server-owned native image review role', () => {
   it.each(['valid', 'started', 'tool-calls', 'length', 'wrong-provider', 'wrong-prompt', 'wrong-response', 'wrong-image'])('consumes only the exact final Agent CP: %s', async change => {
     const runtime = { runtimeId: 'native-installed', skillCatalogueId: 'catalogue-installed', model: 'MiniMax-M3' };
     const f = await fixture(runtime); Object.assign(f.row, { status: 'running', executionAttempt: 1 });
-    // This is the historical stop/text contract; fresh tasks above exercise explicit tool-final opt-in.
+    // I1 fresh tasks retain the historical stop/text contract; explicit tagged fixtures remain separate.
     delete (f.row.result as { nativeAgentExecution: { imageResultPolicy?: string } }).nativeAgentExecution.imageResultPolicy;
     await nativeImage.prepareAgentNativeImageReview(f.prisma, { taskId: f.task.id, executionAttempt: 1,
       identity: identity(f.task.id), runtime, maxInputBytes: 8_000_000, target: { provider: 'minimax-key-1-model-1', model: 'MiniMax-M3' } });
