@@ -2,18 +2,18 @@
 > 唯一状态入口：`.worktrees/onchip-video-release` / `release/onchip-production-line`；root main 仅导航。历史过程与完整资产表保存在本文件 Git 历史（例如 caf7b280），不得执行旧 next action。
 
 ## 最新授权与执行边界（2026-10-15）
-- 最新人类已明确：**UI 可单独修复并部署；71e 仍不部署**。视频chat原始人类消息01a13cd5-8604-71c2-abcb-51e71f9c3bb7已核：仅准复用Hermes修订链创建一次新的私有规划任务，实际修三项并定向High，保留父任务/Claims/来源/回执。该次规划替代旧no-new-task限制；商业生图/视频/配音Provider、公开与部署仍禁止，不外推其他收费重试。保留视频/生图最终目标。
+- 最新人类已明确UI可独立发布、71e仍不部署；视频chat原始消息01a13cd5-8604-71c2-abcb-51e71f9c3bb7仅准一次新私有Hermes规划修三项/定向High，保留父任务/Claims/来源/回执，禁止商业媒体/公开/部署。图片chat新原始消息01a13cda-648a-73b3-94a5-5668c40fd9c6已核：准R04/UI必要High/CI通过后部署并一次真实gpt-image-2.5验收、保护原图/公开版本；此图像授权替代图片冻结，不受无依赖R12/71e限制，不扩展到商业视频/配音。
 - 目标仍为 2–3 篇真实论文经 NousResearch Hermes 全文理解、Claims/Evidence、凝练、配图、用户质量确认及公开展示；普通用户旅程、完整视频、整站审美仍未完成。Codex 不冒充 Hermes 产物，测试/安装/accepted 不等于科学质量或用户认可。
 - UI 已认可 P03 Guide、P04 研究桌面及既定四视图，最新许可覆盖独立修复与原流程部署；其他页面仍按44页手册逐页认可，不自动整站改写。现有 Guide/P04 旧版本上线证据不能代替新四视图的运行验收。
-- 生图执行恢复时仍须 API-only / gpt-image-2.5，只有结构化明确模型不可用才一次降级 gpt-image-2；不用 chatgpt-web。原一次 cb9 迁移/新 Guide/首图已消费，不再据该许可 POST。其他独立生图目标保留待核授权，当前无 Provider 执行窗口。
+- 本次图片新授权API-only/gpt-image-2.5；仅明确结构化模型不可用才一次降级gpt-image-2，不用chatgpt-web。原cb9迁移/新Guide/首图授权已消费，新验收依本次新授权，不能重发旧task/oncekey。root独占部署/备份/停启，图片owner只读准备后等root交接唯一生成执行权，避免双提交；商业视频/音频/公开仍无窗口。
 - 保护 PDF/SourceMap、认可图片、公开版本、私有原稿、failed/UNCERTAIN/attempt/receipt/oncekey 与费用记录。未知 paid/started 不重放；无可信原ID与供应商查询/幂等合同时不承诺自动恢复。指定私有v3去重已完成，不扩大清理。
 
 ## 总控与当前并行写权
 - root `01a1197c-7a1e-7631-b1c1-2d09b587be9a` 单写 CURRENT/progress/index/registry，串行集成与发布；owner 仅写分配路径、交 commit/实际验证/独立 High/未决项。所有源码/CI/High 至少 gpt-6.1-sol；独立审查不以主线程自审替代。
-- UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：最终提交bd2719e0、精确40e8完整Media绿、独立源码High及发布后证据复核均已收；tmp/ui-40e8-postdeploy-review.md判scope/evidence GO、无新增发布阻断，区分root实际像素观察与owner证据复核。当前源码写权关闭，不重复CI/SSH/Provider/部署；其他页须逐页认可，不编下一页任务。
-- 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：已核直接人类一次私有Hermes规划授权并STARTED，经现有目标私有v3鉴权入口修三项；首次UI提交报Video generation is temporarily unavailable，owner核无新task、最新仍591e。初步定位StoryboardPanel普通video缺narrative:true而误入商业host ready检查，正在核现成Hermes正确入口；未收到新task/产物/High前不称完成。owner只写ignored回执，root独占正式状态；不改源码/直写DB/商业媒体/公开/部署。提交一次即保留ID，不确定先查原任务不重POST。原入口只读报告tmp/coordination/71e-private-revision-entry.md保留为旧限制下的事实，不再称无新任务授权。
+- UI `01a12fc3-b66e-7090-b95e-b7dccfa6ccb8`：40e8已部署/CI六绿/源码与发布后High齐，不重做已完UI。当前先完成本聊天人类所要线上Guide/P04/四分区/Hermes截图，随后只读R04六文件6c→已发布40e8/旧rollback84最小发布scope（tmp/ui-r04-image-release-scope.md）；root独占media-reviewed-integration树写权。无tracked写/其他页面改造/重复CI/SSH/Provider/部署。
+- 视频 `01a0e851-4d6c-7221-9559-b8c56a3413fe`：一次私有规划UI拒绝Video generation is temporarily unavailable，任务/资产/Claims/来源/版本未变，无新task或平台扣费；真实40e8 StoryboardPanel普通VIDEO父修订漏narrative:true，误入商业host就绪检查，现成替代入口不可达。回执tmp/coordination/71e-revision-admission-blocked-20261015.md已收。已派仅ignored两文件修复postimage/patch、定向验证/独立High候选，待STARTED；不改tracked/部署/直写DB/商业媒体/重POST。图片发布授权不外推71e修复上线许可。
 - 架构 `01a134bd-6630-7ae2-beba-0c1d0287b948`：候选5abc1a71的Media38653081778已success六绿、Linux broker55/55零skip。common-only实际两文件patch独立High GO，root已收至f0194de781e5de84b281863091f9ebf5a651c40a并正常推送；实际postimage与已审稿逐文本相同，AST2/diff-check过，最终git diff757+/67−。自动Media38655469978已completed/success六绿，root核精确SHA终态；实际Linux43/43零skip、正常包Domain38/Worker14及default-self/Worker闭包均过，最终唯一日志回执tmp/r12-broker-custody-f0194de7-{skill-path.log,receipt.md}已收。后续仅只读producer提交/ordinary late-paid范围与独立High已STARTED，输出tmp/r12-producer-submission-scope.md；tracked写权仍关闭。原root4/producer3/unit_ended/poll不变，无stop协议；sameUID末端原子保证、overallR12与生产仍NO-GO。
-- 生图 `01a0e831-be19-7813-8379-58313178ff26`：当前Provider冻结、无业务/SSH窗口；已收原首图保护/费用/质量BLOCKED与相关恢复源码回执，既有待交付质量目标保留。
+- 生图 `01a0e831-be19-7813-8379-58313178ff26`：本次新一次真实验收授权已核，owner已STARTED只读准备目标RO aa450f1e/私有v3 96c20e96、现有科学parent/brief/合法入口、原图与公开版本保护/费用、实际Native与IMAGE bundle/timer/fresh.ready及在途或UNCERTAIN。沿原ssh-run只读，不读Secret；root不重复取证。root锁定必要R04最小发布与配对后交接唯一生成权；当前未新增POST。
 - 心跳openscience保留；实际独立执行心跳才递增 tmp/openscience-heartbeat-count.txt，普通人类回合不加。cursor仅运行状态；完成后发有因果的下一指令，以STARTED/实际输出确认，不重复空等待。
 
 ## 当前 Git / CI / 发布候选
