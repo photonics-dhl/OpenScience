@@ -15,6 +15,7 @@ export default function EditorLayout({
   aside,
   workflow,
   workspaceClassName,
+  contentClassName,
 }: {
   header?: ReactNode;
   objectId: string;
@@ -23,6 +24,7 @@ export default function EditorLayout({
   aside: ReactNode;
   workflow?: ReactNode;
   workspaceClassName?: string;
+  contentClassName?: string;
 }) {
   const t = useTranslations('editor');
   const [mobileTab, setMobileTab] = useState<MobileTab>('edit');
@@ -46,7 +48,7 @@ export default function EditorLayout({
         workflow ?? <ResearchWorkspaceNav active="sdf" objectId={objectId} />
       }
     >
-      <div className="min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-6">{main}</div>
+      <div className={contentClassName ?? 'min-h-[calc(100dvh-13.25rem)] px-4 pb-24 pt-5 lg:min-h-[calc(100dvh-10.25rem)] lg:p-6'}>{main}</div>
     </WorkspaceShell>
   );
 }

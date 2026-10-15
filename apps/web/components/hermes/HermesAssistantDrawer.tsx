@@ -253,7 +253,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, onPrepareVersion, sourceReview, onSourceCommand,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, sourceReview, onSourceCommand,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -331,7 +331,7 @@ function HermesAssistantDrawerContent({
     textAnchor: { path: number[]; offset: number; top: number; text: string } | null;
     selection: { start: number; end: number; direction: 'forward' | 'backward' | 'none' } | null;
   } | null>(null);
-  const inlineConversation = embedded || (docked && wide && !shortPane);
+  const inlineConversation = embedded || (docked && wide && (pageOwnedAnchor || !shortPane));
   useClientLayoutEffect(() => {
     conversationOpen.current = open;
     if (conversationOpener.current?.owner !== currentOwner) conversationOpener.current = null;
@@ -345,13 +345,13 @@ function HermesAssistantDrawerContent({
     if (open) return;
     const opener = conversationOpener.current;
     conversationOpener.current = null;
-    if (!opener?.expanded || opener.owner !== currentOwner) return;
+    if (!opener || (!opener.expanded && !pageOwnedAnchor) || opener.owner !== currentOwner) return;
     // The existing modal restores its trigger in a passive effect; restore our original opener afterwards.
     const frame = window.requestAnimationFrame(() => {
       if (!conversationOpen.current && ownerRef.current === opener.owner && opener.node.isConnected) opener.node.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [currentOwner, open]);
+  }, [currentOwner, open, pageOwnedAnchor]);
   useEffect(() => {
     if (embedded || !open || !docked || !wide) {
       if (!open) { setShortPaneOwner(null); conversationView.current = null; }
@@ -369,7 +369,7 @@ function HermesAssistantDrawerContent({
         const currentPane = transcript.current;
         const currentShell = currentPane?.closest<HTMLElement>('.hermes-inline-assistant');
         if (currentPane && currentShell) {
-          const slot = currentPane.querySelector<HTMLElement>('[data-hermes-conversation-companion="true"]');
+          const slot = currentShell.querySelector<HTMLElement>('[data-hermes-conversation-companion="true"]');
           if (!slot) return;
           const paneStyle = getComputedStyle(currentPane), slotStyle = getComputedStyle(slot);
           const minimumHeight = (currentPane.previousElementSibling?.getBoundingClientRect().height ?? 0)
@@ -378,7 +378,7 @@ function HermesAssistantDrawerContent({
             + parseFloat(slotStyle.marginTop) + parseFloat(slotStyle.marginBottom) + parseFloat(slotStyle.minHeight);
           const availableHeight = Math.max(280, window.innerHeight - Math.max(16, currentShell.getBoundingClientRect().top) - 16);
           currentShell.style.setProperty('--hermes-available-height', `${availableHeight}px`);
-          if (availableHeight < minimumHeight) {
+          if (!pageOwnedAnchor && availableHeight < minimumHeight) {
             const bounds = currentPane.getBoundingClientRect(), top = bounds.top;
             const anchorIndex = Array.from(currentPane.children).findIndex((child) => child.getBoundingClientRect().bottom > top);
             const caretDocument = document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
@@ -415,7 +415,7 @@ function HermesAssistantDrawerContent({
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', resize, { passive: true });
     return () => { observer.disconnect(); window.cancelAnimationFrame(frame); window.removeEventListener('resize', resize); window.removeEventListener('scroll', resize); };
-  }, [currentOwner, open, docked, wide, shortPane, embedded]);
+  }, [currentOwner, open, docked, wide, shortPane, embedded, pageOwnedAnchor]);
   useEffect(() => {
     const saved = conversationView.current;
     if (!open || saved?.owner !== currentOwner) { conversationView.current = null; return; }
@@ -820,7 +820,7 @@ function HermesAssistantDrawerContent({
   const drawer = (
     <Drawer
       inline={inlineConversation}
-      className={`hermes-assistant-shell hermes-conversation-shell research-product${embedded ? ' guide-embedded-conversation' : ''}`}
+      className={`hermes-assistant-shell hermes-conversation-shell research-product${embedded ? ' guide-embedded-conversation' : ''}${pageOwnedAnchor ? ' hermes-workbench-conversation' : ''}`}
       hideCloseButton
       closeLabel={t('guide.close')}
       label={t('guide.dialogLabel')}
@@ -831,13 +831,14 @@ function HermesAssistantDrawerContent({
     >
       <section className="hermes-conversation" data-hermes-drawer-state={busy ? 'working' : task?.status ?? 'ready'}>
         <header className="hermes-conversation-header">
+          {pageOwnedAnchor && <div data-hermes-conversation-companion="true" data-hermes-conversation-compact="true" aria-live="off" />}
           <div><h2>Hermes</h2><p>{tc('role')}</p></div>
           <button type="button" className="hermes-conversation-close" onClick={() => onOpenChange(false)} aria-label={t('guide.close')}>×</button>
         </header>
 
         <div className="hermes-conversation-transcript" ref={transcript} style={{ containerType: 'size' }} role="log" aria-label={tc('conversation')} aria-live="polite" aria-relevant="additions text"
           onScroll={(event) => { const pane = event.currentTarget; followTranscript.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 64; }}>
-          <div data-hermes-conversation-companion="true" aria-live="off" />
+          {!pageOwnedAnchor && <div data-hermes-conversation-companion="true" aria-live="off" />}
           <p className="hermes-message hermes-message-assistant">{dashboardContext.editorDraft ? tc('welcomeEditor') : t(suggestion.bodyKey)}</p>
           {sourceReview}
           {turns.map((turn) => <React.Fragment key={turn.id}>

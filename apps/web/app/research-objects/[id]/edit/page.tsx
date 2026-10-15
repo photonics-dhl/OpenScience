@@ -124,6 +124,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const t = useTranslations('editor');
   const tw = useTranslations('workbench');
   const th = useTranslations('editHistory');
+  const creationT = useTranslations('createResearch');
   const versionLabels = useVersionLabels();
   const [historyOpen, setHistoryOpen] = useState(searchParams?.history === 'edit');
   const historyOpenRef = useRef(historyOpen); historyOpenRef.current = historyOpen;
@@ -1229,13 +1230,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   return (
     <EditorLayout
         objectId={roId}
+        contentClassName={styles.mainContent}
         workspaceClassName={`editor-workspace research-product ${styles.workbenchShell} ${hermesOpen ? styles.assistantOpen : ''}`}
         workflow={<div className={styles.workbenchNav}>
-          <span className={styles.navContext}>{tw('navigation')}</span>
-            <span className={styles.navSpacer} />
-            <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={extracting ? 'scanning' : undefined} suggestion={editorSuggestion} workspaceId={roId} />
-          <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
-          <details className={styles.moreMenu}><summary>{th('more')}</summary><div><button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setHistoryOpen(true); }}>{th('title')}</button><ResearchContentManager researchObjectId={params.id} onChanged={(removed) => void refreshManagedContent(removed)} /></div></details>
           <nav className={styles.viewTabs} aria-label={tw('viewsLabel')}>
             {([
               ['contribution', tw('coreContribution')],
@@ -1248,6 +1245,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           </nav>
         </div>}
         header={
+          <div className={styles.objectHeading}>
+          <Link className={styles.returnLink} href="/dashboard"><span aria-hidden="true">←</span>{creationT('backToDesk')}</Link>
           <ObjectHeader
             objectId={roId}
             saveState={serverSaveState === 'saving' ? 'saving' : serverSaveState === 'error' && state.dirty ? 'error' : state.dirty ? 'dirty' : 'saved'}
@@ -1255,14 +1254,24 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             metadata={<><ResearchTypeLabel core={state.core} />{authorNames.length > 0 ? <span className="block">{tw('platformAuthors', { names: authorNames.join(' · ') })}</span> : null}</>}
             version={state.version}
             visibility="private"
-            actions={publishedVersions[0] && objectMeta.publicId ? <><Link className={styles.detailsLink} href={`/research/${encodeURIComponent(objectMeta.publicId)}/v/${publishedVersions[0].publicationNo}`}>{tw('openPublicVersion', { number: publishedVersions[0].publicationNo! })}</Link><button type="button" className={styles.detailsLink} onClick={() => { setHermesInitialGoal(th('previewUpdateCommand')); setHermesOpen(true); }}>{th('previewUpdate')}</button></> : undefined}
+            actions={<>
+              {publishedVersions[0] && objectMeta.publicId ? <button type="button" className={styles.previewButton} onClick={() => { setHermesInitialGoal(th('previewUpdateCommand')); setHermesOpen(true); }}>{th('previewUpdate')}</button> : null}
+              <HermesDockAnchor floating={false} assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={extracting ? 'scanning' : undefined} suggestion={editorSuggestion} workspaceId={roId} />
+              <details className={styles.moreMenu}><summary>{th('more')}</summary><div>
+                <Link className={styles.detailsLink} href={`/research-objects/${encodeURIComponent(roId)}/overview`}>{tw('details')}</Link>
+                {publishedVersions[0] && objectMeta.publicId ? <Link className={styles.detailsLink} href={`/research/${encodeURIComponent(objectMeta.publicId)}/v/${publishedVersions[0].publicationNo}`}>{tw('openPublicVersion', { number: publishedVersions[0].publicationNo! })}</Link> : null}
+                <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setHistoryOpen(true); }}>{th('title')}</button>
+                <ResearchContentManager researchObjectId={params.id} onChanged={(removed) => void refreshManagedContent(removed)} />
+              </div></details>
+            </>}
           />
+          </div>
         }
         outline={null}
         main={
           <div className={styles.document}>
             {(activeView === 'contribution' || draftPrompt || historyMessage || errorMsg) ? <section className={styles.leadSection} aria-label={tw('contribution')}>
-              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} /> : null}
+              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} /> : null}
               {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
