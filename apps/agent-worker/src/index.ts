@@ -178,6 +178,7 @@ export function createTaskScopedGateway(
         const before = options.beforeEachProviderCall;
         const source = { payload: claim.payload, messages: structuredClone(args[1]) };
         let sourceJson: string | undefined;
+        let reservation: { id: string; userId: string | null; idempotencyKey: string | null; resource: string; delta: bigint; kind: string } | null = null;
         args[2] = {
           ...options,
           beforeEachProviderCall: async () => { requireClaim(); await before?.(); requireClaim(); },
@@ -188,13 +189,15 @@ export function createTaskScopedGateway(
               // Snapshot the real existing platform reservation, not a supplier invoice.
               // Serialize source/response data outside all lock-held transactions.
               if (sourceJson === undefined) {
-                const entry = await prisma.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${claim.taskId}` },
+                reservation = await prisma.usageLedger.findUnique({ where: { idempotencyKey: `agent-task-reserve:${claim.taskId}` },
                   select: { id: true, userId: true, idempotencyKey: true, resource: true, delta: true, kind: true } });
-                sourceJson = JSON.stringify({ ...source, reservation: entry ? { ...entry, delta: String(entry.delta) } : null });
+                sourceJson = JSON.stringify({ ...source, reservation: reservation ? { ...reservation, delta: String(reservation.delta) } : null });
               }
               const snapshot = sourceJson;
               prepared = await prisma.$transaction(async tx => {
                 const live = await liveClaim(tx);
+                if (reservation && (reservation.userId !== live.session.userId || reservation.idempotencyKey !== `agent-task-reserve:${claim.taskId}`
+                  || reservation.resource !== 'ai_credit' || reservation.kind !== 'consume')) throw denied();
                 return prepareOrdinaryStructuredReceipt(tx, { identity: { taskId: claim.taskId, kind,
                   executionAttempt: claim.executionAttempt, sessionId: live.sessionId, userId: live.session.userId,
                   researchObjectId: live.session.researchObjectId }, sourceJson: snapshot, ordinal, target });
@@ -205,7 +208,9 @@ export function createTaskScopedGateway(
             try {
               await prisma.$transaction(async tx => {
                 const live = await liveClaim(tx);
-                if (!isDeepStrictEqual(readOrdinaryStructuredReceipt(live.result), prepared)) throw denied();
+                if (live.sessionId !== prepared.identity.sessionId || live.session.userId !== prepared.identity.userId
+                  || live.session.researchObjectId !== prepared.identity.researchObjectId
+                  || !isDeepStrictEqual(readOrdinaryStructuredReceipt(live.result), prepared)) throw denied();
                 // Start under both locks; never hold this transaction for the model response.
                 sent = submit(); void sent.catch(() => undefined);
               }, transactionOptions);

@@ -160,6 +160,26 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
     f.finish(); expect((await first).value).toEqual({ ok: true }); expect(f.calls).toEqual(['fixture']);
   });
+  it.each(['actor', 'researchObject', 'session'])('does not publish after the prepared %s binding changes', async change => {
+    const f = fixture(); const task = f.states.get(ID)!;
+    f.finish(); // A counterfactual unwanted call must settle, not merely time out.
+    f.controls.afterPrepare = async () => {
+      if (change === 'actor') task.session.userId = 'other-actor';
+      if (change === 'researchObject') { task.session.researchObjectId = 'other-ro'; task.session.researchObject = { id: 'other-ro', deletedAt: null }; }
+      if (change === 'session') { task.sessionId = 'other-session'; task.session.id = 'other-session'; }
+    };
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]);
+    expect(task.result).toMatchObject({ ordinaryStructuredReceipt: { identity: { sessionId: 'session-1', userId: 'user-1', researchObjectId: null } } });
+  });
+
+  it('does not use a real task reservation belonging to a different actor', async () => {
+    const f = fixture(); Object.assign(f.prisma.usageLedger, { findUnique: async () => ({ id: 'old-reservation', userId: 'other-actor',
+      idempotencyKey: `agent-task-reserve:${ID}`, resource: 'ai_credit', kind: 'consume', delta: -1n }) });
+    f.finish();
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]); expect(f.states.get(ID)!.result).toBeNull();
+  });
 
   it('saves full >128KiB source/response as opaque data and retains the reported model alias', async () => {
     const f = fixture(); const large = '原文'.repeat(70_000) + '\u0000\ud800';
