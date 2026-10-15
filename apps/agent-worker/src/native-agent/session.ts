@@ -1,5 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
 import { AiGatewayError, TextProviderError, nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse, type AiGateway, type GatewayCompletion,
+  nativeImageReviewSdkFinalProjection, restoreNativeImageReviewTurn, validateNativeImageReviewFinal,
+  type PreparedNativeImageReviewTurn, type ReceivedImageReviewReply, type NativeImageReviewValidatedFinal,
   type ChatMessage, type TextGenerationOptions } from '@openscience/ai-gateway';
 import type { ScienceReviewInput } from '@openscience/ai-gateway';
 import type { AgentNativeImageReviewPrepared } from '@openscience/domain';
@@ -19,11 +22,15 @@ export type NativeAgentSessionBinding = {
 type Target = { provider: string; model: string; promptHash: string };
 type Request = { messages: ChatMessage[]; options: TextGenerationOptions };
 type RejectedAttempt = { httpStatus: 529; maxOutputTokens: number };
-type Turn = { target: Target; request: Request; effectiveOptions: TextGenerationOptions; rejectedAttempt?: RejectedAttempt } &
-  ({ state: 'started' } | { state: 'completed'; response: GatewayCompletion });
+type EffectiveImageRequest = Omit<PreparedNativeImageReviewTurn, 'messages'> & { messagesFrom: 'request.messages' };
+type Turn = { target: Target; request: Request; effectiveOptions: TextGenerationOptions; rejectedAttempt?: RejectedAttempt;
+  imageResultPolicy?: 'image-review-tool-final-v1'; effectiveRequest?: EffectiveImageRequest } &
+  ({ state: 'started' } | { state: 'completed'; response: GatewayCompletion; received?: ReceivedImageReviewReply }
+    | { state: 'received'; received: ReceivedImageReviewReply });
 export interface NativeAgentSessionState {
   kind: 'hermes-native-agent'; binding: NativeAgentSessionBinding;
   initialMessages: ChatMessage[]; turns: Turn[];
+  validatedFinal?: NativeImageReviewValidatedFinal;
 }
 export interface NativeAgentSessionStore {
   read(): Promise<NativeAgentSessionState | null>;
@@ -31,6 +38,8 @@ export interface NativeAgentSessionStore {
   compareAndSet(expected: NativeAgentSessionState | null, next: NativeAgentSessionState): Promise<void>;
   /** CP-only CAS against the exact committed started receipt. No authorization to consume or continue. */
   complete(started: NativeAgentSessionState, completed: NativeAgentSessionState): Promise<void>;
+  /** Pure CP-R -> CP-F CAS, under current consumption authority, never paid-completion authority. */
+  finalize?(received: NativeAgentSessionState, finalized: NativeAgentSessionState): Promise<void>;
   /** Revalidate the committed started receipt and live lease immediately around actual publication. */
   publish<T>(started: NativeAgentSessionState, submit: () => Promise<T>): Promise<T>;
 }
@@ -41,6 +50,48 @@ const semanticCalls = (calls: GatewayCompletion['toolCalls']) => (calls ?? []).m
 const reservedOutput = (turn: Turn) => (turn.state === 'completed' ? turn.response.usage.outputTokens : 0)
   + (turn.rejectedAttempt?.maxOutputTokens ?? 0);
 const reservedCalls = (turn: Turn) => 1 + (turn.rejectedAttempt ? 1 : 0);
+const checkpointSha = (state: NativeAgentSessionState) => createHash('sha256').update(JSON.stringify(state)).digest('hex');
+
+/** Recompute the final from the immutable raw request/reply, never from SDK prose or current defaults. */
+export function nativeImageReviewFinal(state: NativeAgentSessionState): NativeImageReviewValidatedFinal {
+  try { return deriveNativeImageReviewFinal(state); }
+  catch (error) {
+    if (error instanceof NativeAgentSessionError) throw error;
+    blocked('terminal image result invalid');
+  }
+}
+function deriveNativeImageReviewFinal(state: NativeAgentSessionState): NativeImageReviewValidatedFinal {
+  const binding = state.binding; const last = state.turns.at(-1);
+  if (binding.sourceKind !== 'illustration-image' || binding.imageReview.imageResultPolicy !== 'image-review-tool-final-v1'
+    || last?.state !== 'completed' || last.imageResultPolicy !== 'image-review-tool-final-v1' || !last.received?.decoded
+    || !last.effectiveRequest || last.rejectedAttempt || last.effectiveRequest.messagesFrom !== 'request.messages')
+    blocked('terminal image receipt is unavailable');
+  const { validatedFinal: _final, ...rawState } = state; void _final;
+  const prepared = restoreNativeImageReviewTurn(last.effectiveRequest, last.request.messages);
+  if (!isDeepStrictEqual(prepared.target, last.target) || prepared.target.provider !== binding.imageReview.provider
+    || prepared.target.model !== binding.model
+    || !isDeepStrictEqual(last.response, { ...last.received.decoded, provider: last.target.provider, promptHash: last.target.promptHash })
+    || !isDeepStrictEqual(prepared.tools.slice(0, -1), last.request.options.tools)
+    || !isDeepStrictEqual(prepared.generation, Object.fromEntries(Object.entries(last.effectiveOptions).filter(([key]) => key !== 'tools')))
+    || state.turns.length > binding.maxTurns || state.turns.some(turn => turn.state !== 'completed')
+    || state.turns.reduce((sum, turn) => sum + reservedOutput(turn), 0) > binding.maxTotalOutputTokens
+    || state.turns.reduce((sum, turn) => sum + reservedCalls(turn), 0) > binding.maxTurns)
+    blocked('terminal image request identity changed');
+  const result = validateNativeImageReviewFinal(prepared, last.received,
+    { rawCheckpoint: checkpointSha(rawState), turnOrdinal: state.turns.length - 1 });
+  if (state.validatedFinal && !isDeepStrictEqual(state.validatedFinal, result)) blocked('validated image final changed');
+  return result;
+}
+
+/** A received visual turn may only finish deterministically; failure never opens another conversation. */
+export async function finalizeNativeImageReviewState(store: NativeAgentSessionStore, state: NativeAgentSessionState) {
+  const final = nativeImageReviewFinal(state);
+  if (state.validatedFinal) return state;
+  if (!store.finalize) blocked('pure image finalization is unavailable');
+  const next = { ...state, validatedFinal: final };
+  await store.finalize(state, next);
+  return next;
+}
 
 /** Owns SDK transport checkpoints; the installed AIAgent still owns every conversation/tool iteration. */
 export function createNativeAgentSession(input: { gateway: AiGateway; binding: NativeAgentSessionBinding; imageReviewInput?: ScienceReviewInput;
@@ -55,6 +106,11 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
     const state = await input.store.read();
     if (state && (state.kind !== 'hermes-native-agent' || !isDeepStrictEqual(state.binding, binding)
       || !Array.isArray(state.turns) || state.turns.length > binding.maxTurns)) blocked('identity changed');
+    if (state?.turns.some(turn => (turn.imageResultPolicy !== undefined || turn.effectiveRequest !== undefined
+      || turn.state === 'received' || turn.state === 'completed' && turn.received !== undefined)
+      && (binding.sourceKind !== 'illustration-image' || binding.imageReview.imageResultPolicy !== 'image-review-tool-final-v1'
+        || turn.imageResultPolicy !== 'image-review-tool-final-v1' || !turn.effectiveRequest)))
+      blocked('image result policy changed');
     if (state?.turns.some(turn => turn.rejectedAttempt !== undefined && (!turn.rejectedAttempt
       || turn.rejectedAttempt.httpStatus !== 529 || !Number.isSafeInteger(turn.rejectedAttempt.maxOutputTokens)
       || turn.rejectedAttempt.maxOutputTokens <= 0 || turn.rejectedAttempt.maxOutputTokens > binding.maxOutputTokens)))
@@ -96,6 +152,10 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
   }
   async function completeOnce(raw: unknown) {
       await authorize();
+      const terminal = await read();
+      if (terminal?.validatedFinal || terminal?.turns.some(turn => turn.imageResultPolicy === 'image-review-tool-final-v1'
+        && (turn.state === 'completed' || turn.state === 'received')))
+        blocked('terminal image reply cannot continue');
       const { messages, options } = nativeAgentSdkRequest(raw, binding.model);
       let state = await read();
       checkHistory(messages, state);
@@ -113,6 +173,49 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
       const spentBefore = state?.turns.slice(0, cursor).reduce((total, turn) => total + reservedOutput(turn), 0) ?? 0;
       const callsBefore = state?.turns.slice(0, cursor).reduce((total, turn) => total + reservedCalls(turn), 0) ?? 0;
       const callDeadlineAt = Math.min(binding.deadlineAt, now() + 600_000);
+      if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'
+        && messages.some(message => message.images?.length)) {
+        const remaining = binding.maxTotalOutputTokens - spentBefore;
+        if (remaining <= 0 || callsBefore + 1 > binding.maxTurns) blocked('conversation output budget exhausted');
+        const effectiveOptions = { ...options, ...binding.generation, maxTokens: Math.min(options.maxTokens, remaining),
+          maxRequestBytes: binding.maxInputBytes, timeoutMs: Math.max(1, callDeadlineAt - now()) };
+        const role = { input: input.imageReviewInput!, target: { provider: binding.imageReview.provider, model: binding.imageReview.model } };
+        const prepared = input.gateway.prepareNativeImageReviewTurn(messages, effectiveOptions, role);
+        const { messages: _messages, ...descriptor } = prepared; void _messages;
+        let receivedState: NativeAgentSessionState | undefined;
+        await input.gateway.executeNativeImageReviewTurn(prepared, { imageReview: role, beforeProviderAttempt: authorize,
+          submitProvider: async (target, submit) => {
+            await authorize(); state = await read(); checkHistory(messages, state);
+            if (!isDeepStrictEqual(target, prepared.target) || target.model !== binding.model
+              || (state?.turns.length ?? 0) !== cursor || state?.turns.at(-1)?.state === 'started'
+              || (state?.turns[0] && (state.turns[0].target.provider !== target.provider || state.turns[0].target.model !== target.model)))
+              blocked('terminal image submission identity changed');
+            const common = { target, request: { messages, options }, effectiveOptions,
+              imageResultPolicy: 'image-review-tool-final-v1' as const,
+              effectiveRequest: { ...descriptor, messagesFrom: 'request.messages' as const } };
+            const started: NativeAgentSessionState = { kind: 'hermes-native-agent', binding,
+              initialMessages: state?.initialMessages ?? structuredClone(messages),
+              turns: [...(state?.turns ?? []).map(turn => ({ ...turn, request: { ...turn.request, messages: [] } })),
+                { ...common, state: 'started' }] };
+            await input.store.compareAndSet(state, started);
+            const received = await input.store.publish(started, async () => {
+              if (now() >= callDeadlineAt) blocked('original request deadline expired');
+              return submit();
+            });
+            receivedState = { ...started, turns: [...started.turns.slice(0, -1), received.decoded
+              ? { ...common, state: 'completed', received, response: { ...received.decoded, provider: target.provider, promptHash: target.promptHash } }
+              : { ...common, state: 'received', received }] };
+            // Preserve definite received bytes even when their content cannot produce a valid decision.
+            await input.store.complete(started, receivedState);
+            return received;
+          } });
+        if (!receivedState) blocked('terminal image raw receipt is missing');
+        const finalized = await finalizeNativeImageReviewState(input.store, receivedState);
+        const last = finalized.turns.at(-1);
+        if (last?.state !== 'completed') blocked('terminal image raw receipt cannot be projected');
+        cursor++;
+        return nativeImageReviewSdkFinalProjection(finalized.validatedFinal!, last.response, `${binding.taskId}:native-turn:${cursor}`);
+      }
       let retry: { started: NativeAgentSessionState; receipt: RejectedAttempt } | undefined;
       let result: GatewayCompletion;
       let responseAllowance = 0;

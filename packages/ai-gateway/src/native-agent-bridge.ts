@@ -1,4 +1,7 @@
-import { TextProviderError, snapshotChatMessages, type ChatMessage, type TextGenerationOptions } from './provider';
+import { TextProviderError, snapshotChatMessages, type ChatMessage, type TextGenerationOptions, type ProviderResult } from './provider';
+import { createHash } from 'node:crypto';
+import { readNativeImageReviewDecision, nativeImageReviewSdkPromptTokens, NATIVE_IMAGE_REVIEW_RESULT_POLICY,
+  type NativeImageReviewValidatedFinal } from './native-image-review';
 import { snapshotAssistantContent, snapshotToolCalls, snapshotToolDefinitions, validateToolHistory, type ProviderAssistantContent,
   type ChatToolDefinition } from './native-tool-protocol';
 import type { GatewayCompletion } from './gateway';
@@ -104,4 +107,25 @@ export function nativeAgentSdkResponse(completion: GatewayCompletion, requestId:
       total_tokens: (completion.contextInputTokens ?? completion.usage.inputTokens) + completion.usage.outputTokens,
       ...(completion.contextInputTokens === undefined ? {} : { openscience_context_input_tokens: completion.contextInputTokens }) },
   };
+}
+
+/** Application final only. Raw tool/thinking continuity stays in the private received checkpoint. */
+export function nativeImageReviewSdkFinalProjection(final: NativeImageReviewValidatedFinal, raw: ProviderResult, requestId: string):
+  Omit<ReturnType<typeof nativeAgentSdkResponse>, 'choices'> & { choices: Array<{ index: number; finish_reason: 'stop';
+    message: { role: 'assistant'; content: string; tool_calls?: never; reasoning_details?: never } }> } {
+  if (final.policy !== NATIVE_IMAGE_REVIEW_RESULT_POLICY || !/^[a-f0-9]{64}$/u.test(final.rawCheckpoint)
+    || !Number.isSafeInteger(final.turnOrdinal) || final.turnOrdinal < 0 || typeof final.text !== 'string'
+    || !requestId.trim() || raw.providerStopReason !== 'tool_use' || raw.finishReason !== 'other'
+    || raw.text !== '' || raw.toolCalls?.length !== 1 || raw.toolCalls[0].id !== final.resultToolCallId
+    || !final.resultToolCallId.trim() || final.resultToolCallId.length > 200
+    || raw.toolCalls[0].function.name !== 'image_review_result'
+    || !['MiniMax-M3', 'MiniMax-M3.1-Flash-Preview'].includes(raw.model)
+    || final.responseHash !== createHash('sha256').update(final.text).digest('hex')) return invalid();
+  const canonical = JSON.stringify(readNativeImageReviewDecision(JSON.parse(final.text)));
+  if (canonical !== final.text || JSON.stringify(readNativeImageReviewDecision(JSON.parse(raw.toolCalls[0].function.arguments))) !== canonical) return invalid();
+  const promptTokens = nativeImageReviewSdkPromptTokens(raw);
+  return { id: requestId, object: 'chat.completion', created: 0, model: raw.model,
+    choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: final.text } }],
+    usage: { prompt_tokens: promptTokens, completion_tokens: raw.usage.outputTokens, total_tokens: promptTokens + raw.usage.outputTokens,
+      ...(raw.contextInputTokens === undefined ? {} : { openscience_context_input_tokens: raw.contextInputTokens }) } };
 }

@@ -24,6 +24,7 @@ export function nativeAgentRuntimeFromEnv(env: Record<string, string | undefined
 }
 export interface NativeAgentPaperCheckpointReference {
   sourceKind?: never; imageIdentity?: never;
+  imageResultPolicy?: never; received?: never; validatedFinal?: never;
   taskId: string; objectKey: string; serializedSha256: string; size: number;
   artifactId: string; documentSha256: string; sourceMapHash: string;
   executionAttempt: number; turnCount: number; state: 'started' | 'completed';
@@ -37,11 +38,16 @@ export interface NativeAgentImageCheckpointReference {
   executionAttempt: number; turnCount: number; state: 'started' | 'completed';
   target: { provider: string; model: string; promptHash: string };
   responseHash?: string; finishReason?: string; hasToolCalls?: boolean;
+  imageResultPolicy?: 'image-review-tool-final-v1';
+  received?: 'decoded' | 'raw-only';
+  validatedFinal?: { policy: 'image-review-tool-final-v1'; rawCheckpoint: string; turnOrdinal: number;
+    resultToolCallId: string; responseHash: string };
 }
 export type NativeAgentCheckpointReference = NativeAgentPaperCheckpointReference | NativeAgentImageCheckpointReference;
 export interface NativeAgentExecution extends NativeAgentRuntimeConfig {
   kind: 'hermes-agent'; profile: 'paper-understanding' | 'paper-author' | 'paper-source-review' | 'paper-illustration' | 'journal-editor' | 'image-review'; checkpoint?: NativeAgentCheckpointReference;
   planningContract?: 'video-optional-audio-v1' | 'image-source-explicit-trig-v1';
+  imageResultPolicy?: 'image-review-tool-final-v1';
 }
 /** Paper authors may need a bounded continuation to finish source reading and the saved review in one lease. */
 export function nativeAgentMaxTurns(profile: NativeAgentExecution['profile']): 4 | 32 | 48 {
@@ -67,7 +73,7 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
     const cp = marker.checkpoint;
     if (planned.kind !== 'image' || !planned.sceneImage || planned.researchObjectId !== task.session.researchObjectId
       || checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed' || !cp || cp.state !== 'completed'
-      || cp.finishReason !== 'stop' || cp.hasToolCalls) blocked();
+      || (marker.imageResultPolicy ? !cp.validatedFinal : cp.finishReason !== 'stop' || cp.hasToolCalls)) blocked();
     await requirePresentationWriteScope(tx, { userId: task.session.userId, researchObjectId: planned.researchObjectId, versionId: planned.versionId });
     if (planned.hermesRunAuthority) await requireHermesPresentationTaskAuthority(tx, {
       taskId: task.id, actorId: task.session.userId, payload: planned, authority: planned.hermesRunAuthority });
@@ -168,13 +174,16 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
 
 /** Only server configuration initializes a new task. Exact replay must return before this runs. */
 export function initialNativeAgentExecution(runtime: NativeAgentRuntimeConfig | undefined, profile: NativeAgentExecution['profile'] = 'paper-understanding',
-  planningContract?: NativeAgentExecution['planningContract']): { nativeAgentExecution: NativeAgentExecution } | undefined {
+  contract?: NativeAgentExecution['planningContract'] | NativeAgentExecution['imageResultPolicy']): { nativeAgentExecution: NativeAgentExecution } | undefined {
   // Only an explicit trusted producer can opt in; a runtime object must never implicitly select a contract.
   const marked = arguments.length >= 3;
-  if (marked && (profile !== 'paper-illustration' || !nativePlanningContract(planningContract))) blocked();
+  if (marked && !(profile === 'paper-illustration' && nativePlanningContract(contract)
+    || profile === 'image-review' && contract === 'image-review-tool-final-v1')) blocked();
   if (!runtime) return undefined;
   const result = { nativeAgentExecution: { runtimeId: runtime.runtimeId, skillCatalogueId: runtime.skillCatalogueId, model: runtime.model,
-    kind: 'hermes-agent' as const, profile, ...(marked ? { planningContract } : {}) } };
+    kind: 'hermes-agent' as const, profile,
+    ...(marked && profile === 'paper-illustration' ? { planningContract: contract as NativeAgentExecution['planningContract'] } : {}),
+    ...(marked && profile === 'image-review' ? { imageResultPolicy: contract as NativeAgentExecution['imageResultPolicy'] } : {}) } };
   readNativeAgentExecution(profile === 'image-review' ? { ...result, nativeImageReview: { mode: 'model-native', state: 'not_started' } } : result); return result;
 }
 
@@ -209,7 +218,7 @@ export function readNativeAgentExecution(result: unknown): NativeAgentExecution 
 /** Caller holds existing source/authority locks; this helper owns only the exact task-result CAS. */
 export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionClient, 'agentTask'>, input: {
   taskId: string; executionAttempt: number; expected: NativeAgentCheckpointReference | undefined;
-  next: NativeAgentCheckpointReference; paidCompletion: boolean; expectedExecution?: NativeAgentExecution;
+  next: NativeAgentCheckpointReference; paidCompletion: boolean; validatedFinalization?: boolean; expectedExecution?: NativeAgentExecution;
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
@@ -228,7 +237,24 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
   const result = { ...(task.result as Record<string, unknown>), nativeAgentExecution: { ...marker, checkpoint: input.next }, nativeAgentObjects };
   readNativeAgentExecution(result);
   const old = marker.checkpoint;
-  if (input.paidCompletion) {
+  if (input.validatedFinalization) {
+    // Pure CP-R -> CP-F adoption is live-authorized by the caller, never a paid-evidence bypass.
+    // The original receipt/envelope attempt survives lease reclamation; only the task attempt is current.
+    const next = input.next;
+    const envelope = readNativeImageReviewCheckpoint(task.result);
+    if (input.paidCompletion || task.status !== 'running' || task.executionAttempt !== input.executionAttempt
+      || marker.profile !== 'image-review' || marker.imageResultPolicy !== 'image-review-tool-final-v1'
+      || envelope?.mode !== 'agent-native' || envelope.state !== 'prepared'
+      || !old || old.executionAttempt > input.executionAttempt || old.state !== 'completed' || old.received !== 'decoded'
+      || old.finishReason !== 'other' || old.hasToolCalls !== true || old.validatedFinal
+      || !next.validatedFinal || next.validatedFinal.rawCheckpoint !== old.serializedSha256) blocked();
+    const rawIdentity = (cp: NativeAgentCheckpointReference) => {
+      const identity: Partial<NativeAgentCheckpointReference> = { ...cp };
+      delete identity.objectKey; delete identity.serializedSha256; delete identity.size; delete identity.validatedFinal;
+      return identity;
+    };
+    if (!isDeepStrictEqual(rawIdentity(old), rawIdentity(next))) blocked();
+  } else if (input.paidCompletion) {
     // Saving paid evidence grants no right to consume or continue; lease/authority may have changed.
     if (!old || old.state !== 'started' || input.next.state !== 'completed' || old.executionAttempt !== input.executionAttempt
       || ['taskId', 'artifactId', 'documentSha256', 'sourceMapHash', 'executionAttempt', 'turnCount'].some(k =>
@@ -236,9 +262,11 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
       || (marker.profile === 'image-review' && !isDeepStrictEqual((old as NativeAgentImageCheckpointReference).imageIdentity,
         (input.next as NativeAgentImageCheckpointReference).imageIdentity))
       || !isDeepStrictEqual(old.target, input.next.target)) blocked();
+    if (input.next.validatedFinal) blocked(); // A paid snapshot cannot simultaneously consume its result.
   } else {
     if (task.status !== 'running' || task.executionAttempt !== input.executionAttempt || input.next.executionAttempt !== input.executionAttempt
-      || input.next.state !== 'started' || input.next.turnCount !== (old?.turnCount ?? 0) + 1 || old?.state === 'started') blocked();
+      || input.next.state !== 'started' || input.next.turnCount !== (old?.turnCount ?? 0) + 1 || old?.state === 'started'
+      || marker.imageResultPolicy && old?.received !== undefined) blocked();
     if (marker.profile === 'image-review') {
       const envelope = readNativeImageReviewCheckpoint(task.result);
       if (envelope?.mode !== 'agent-native' || envelope.state !== 'prepared' || envelope.executionAttempt !== input.executionAttempt
@@ -294,6 +322,13 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
   if (marker.profile === 'image-review') {
     const checkpoint = readNativeImageReviewCheckpoint(task.result);
     if (status === 'succeeded' && (checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed')) blocked();
+    if (status === 'succeeded') {
+      const cp = marker.checkpoint;
+      const responseHash = marker.imageResultPolicy ? cp?.validatedFinal?.responseHash : cp?.responseHash;
+      if (!cp || cp.state !== 'completed' || !responseHash || checkpoint?.state !== 'completed'
+        || checkpoint.review.responseHash !== responseHash
+        || !marker.imageResultPolicy && (cp.finishReason !== 'stop' || cp.hasToolCalls)) blocked();
+    }
     return { ...(record(incoming) ? incoming : {}), nativeAgentExecution: marker,
       ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
   }

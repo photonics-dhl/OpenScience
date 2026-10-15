@@ -9,9 +9,12 @@ export {
   type StructuredGenerationOptions,
   type GatewayCompletion,
   type NativeAgentExecutionControls,
+  type NativeImageReviewRole,
+  type NativeImageReviewExecutionControls,
 } from './gateway';
 export { type ChatToolDefinition, type ChatToolCall, type ProviderAssistantContent } from './native-tool-protocol';
-export { nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse } from './native-agent-bridge';
+export { nativeAgentSdkRequest, nativeAgentSdkResponse, nativeAgentHasMissingToolCall, nativeAgentHasThinkingOnlyResponse,
+  nativeImageReviewSdkFinalProjection } from './native-agent-bridge';
 export {
   OpenAiCompatProvider,
   AnthropicCompatProvider,
@@ -32,6 +35,10 @@ export {
   type MiniMaxVisionPricing,
 } from './provider';
 export { nativeImageReviewMessages, nativeImageReviewPromptHash, type NativeImageReviewSubmission, type NativeImageReviewTarget } from './native-image-review';
+export { NATIVE_IMAGE_REVIEW_RESULT_POLICY, restoreNativeImageReviewTurn, nativeImageReviewTurnPromptHash,
+  readNativeImageReviewDecision, validateNativeImageReviewFinal,
+  type PreparedNativeImageReviewTurn, type SavedPreparedNativeImageReviewTurn, type ReceivedImageReviewReply,
+  type NativeImageReviewValidatedFinal, type NativeImageReviewDecision } from './native-image-review';
 export { CodexSolImageReviewProvider, type CodexSolReviewConfig } from './codex-sol-review';
 export { CODEX_SOL_REVIEW_PROVIDER, CODEX_SOL_REVIEW_MODEL, CODEX_SOL_REVIEW_EFFORT,
   validateCodexSolReviewRequest, validateCodexSolReviewResult,

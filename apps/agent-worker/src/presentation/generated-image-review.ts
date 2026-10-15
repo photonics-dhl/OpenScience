@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { nativeImageReviewPromptHash, parseStructuredJson, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
+import { nativeImageReviewPromptHash, parseStructuredJson, readNativeImageReviewDecision,
+  type NativeImageReviewValidatedFinal, type ScienceReviewProviderResult, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
 import { nativeImageReviewProvider } from '@openscience/domain';
 import { encodedImageDimensions, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES, ILLUSTRATION_IMAGE_REVIEW_MAX_EDGE,
   ILLUSTRATION_IMAGE_REVIEW_MAX_PIXELS, SCIENCE_REVIEW_MAX_PROMPT_CHARS, type AiGateway, type ScienceReviewInput, type ScienceReviewAttachment } from '@openscience/ai-gateway';
@@ -42,6 +43,10 @@ function parseDecision(value: unknown): Pick<GeneratedImageReview, 'decision' | 
   return { decision: record.decision, summary: record.summary.trim(),
     repairInstruction: typeof record.repairInstruction === 'string' ? record.repairInstruction.trim() : null };
 }
+/** Trusted Worker output, not a public API/SDK option or a rewritten supplier reply. */
+export type NativeToolFinalImageReviewResult = ScienceReviewProviderResult & {
+  imageResultPolicy: 'image-review-tool-final-v1'; validatedFinal: NativeImageReviewValidatedFinal;
+};
 
 /** Uses actual pixels, never the text-only plan reviewer. One spool identity per saved image. */
 export async function reviewGeneratedImage(
@@ -51,7 +56,7 @@ export async function reviewGeneratedImage(
     authorizationContext: ScienceReviewInput['authorizationContext']; illustrationContext: NonNullable<ScienceReviewInput['illustrationContext']>;
     researchObjectId: string; versionId: string; identity: ImageReviewIdentity;
   },
-  nativeAgent?: (request: ScienceReviewInput) => Promise<import('@openscience/ai-gateway').ScienceReviewProviderResult>,
+  nativeAgent?: (request: ScienceReviewInput) => Promise<ScienceReviewProviderResult | NativeToolFinalImageReviewResult>,
 ): Promise<GeneratedImageReview> {
   const { bytes, identity, document, sceneIndex, settings } = input;
   const attachment = generatedImageReviewAttachment(bytes, identity.contentHash, input.contentType);
@@ -97,7 +102,18 @@ ${JSON.stringify({ locale: settings.locale, userRequest: settings.instruction, s
   // Gateway validation already removes provider thinking blocks and code fences.
   // Reuse that parser here so a valid Gateway result is not rejected a second
   // time by a narrower JSON.parse call.
-  const decision = parseDecision(parseStructuredJson(result.text));
+  let decision: Pick<GeneratedImageReview, 'decision' | 'summary' | 'repairInstruction'>;
+  if ('imageResultPolicy' in result) {
+    const tagged = result as NativeToolFinalImageReviewResult;
+    if (!agentMode || tagged.imageResultPolicy !== 'image-review-tool-final-v1'
+      || tagged.validatedFinal?.policy !== tagged.imageResultPolicy || tagged.validatedFinal.text !== result.text
+      || tagged.validatedFinal.responseHash !== result.responseHash
+      || !/^[a-f0-9]{64}$/u.test(tagged.validatedFinal.rawCheckpoint)
+      || !Number.isSafeInteger(tagged.validatedFinal.turnOrdinal) || tagged.validatedFinal.turnOrdinal < 0
+      || !tagged.validatedFinal.resultToolCallId) throw new Error('[blocked] Generated image validated final is invalid');
+    decision = readNativeImageReviewDecision(JSON.parse(result.text));
+    if (JSON.stringify(decision) !== result.text) throw new Error('[blocked] Generated image final is not canonical');
+  } else decision = parseDecision(parseStructuredJson(result.text));
   const native = input.illustrationContext.imageReviewMode !== undefined;
   if ((!agentMode && result.promptHash !== (native ? nativeImageReviewPromptHash(request) : sha256(prompt))) || result.responseHash !== sha256(result.text)
     || (native ? !nativeImageReviewProvider(result.provider, result.model)

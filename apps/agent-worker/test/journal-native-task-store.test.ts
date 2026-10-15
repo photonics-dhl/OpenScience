@@ -30,10 +30,22 @@ function fixture() {
   const completed = (): NativeAgentSessionState => ({ ...state, turns: [{ ...state.turns[0]!, state: 'completed', response: {
     text: 'paid answer', provider: 'minimax', model: runtime.model, promptHash: 'c'.repeat(64), finishReason: 'stop',
     usage: { inputTokens: 1, outputTokens: 1 } } }] });
-  return { task, objects, store, state, completed, revoke: () => { authorized = false; }, get inTransaction() { return inTransaction; } };
+  return { task, objects, storage, tx, store, state, completed, revoke: () => { authorized = false; }, get inTransaction() { return inTransaction; } };
 }
 
 describe('journal native paid checkpoint store', () => {
+  it.each(['start', 'paid'] as const)('rejects an image-only received turn before any %s storage or checkpoint write', async mode => {
+    const f = fixture(); const store = f.store();
+    if (mode === 'paid') await store.compareAndSet(null, f.state);
+    const before = structuredClone(f.task.result);
+    const put = vi.spyOn(f.storage, 'putObject'); const update = vi.spyOn(f.tx.agentTask, 'updateMany');
+    const first = f.state.turns[0]!;
+    const received: NativeAgentSessionState = { ...f.state, turns: [{ state: 'received',
+      target: first.target, request: first.request, effectiveOptions: first.effectiveOptions,
+      received: { policy: 'image-review-tool-final-v1', provider: 'minimax', status: 200, body: '{invalid' } }] };
+    await expect(mode === 'paid' ? store.complete(f.state, received) : store.compareAndSet(null, received)).rejects.toThrow('changed');
+    expect(put).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled(); expect(f.task.result).toEqual(before);
+  });
   it('keeps started and completed receipts private and rejects concurrent CAS', async () => {
     const f = fixture(); const first = f.store(); const other = f.store();
     await first.compareAndSet(null, f.state);
