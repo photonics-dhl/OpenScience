@@ -20,6 +20,9 @@ const NATIVE_ROOT = '/opt/openscience-hermes';
 const NATIVE_TIMER = 'openscience-hermes-broker.timer';
 const executeFile = promisify(execFile);
 const VERIFIER_SOURCE_URL = import.meta.url;
+// Analysis is retained only for genuine successful closure collections. It is
+// not serialized into, substituted for, or supplied alongside their fingerprints.
+const rollbackProofContexts = new WeakMap();
 
 const APPLICATION_ROLLBACK_READERS = [
   ['apps/agent-worker/src/index.ts'],
@@ -488,7 +491,8 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
   const canonical = node => {
     const children = [];
     ts.forEachChild(node, child => { children.push(canonical(child)); });
-    return [node.kind, ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? (locationLiterals.get(node) ?? node.text) : null, children];
+    return [node.kind, ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) ? node.operator
+      : ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? (locationLiterals.get(node) ?? node.text) : null, children];
   };
   const addConfiguration = path => {
     const key = `configuration:${relative(root, path).replaceAll('\\', '/')}`;
@@ -981,7 +985,9 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
     };
     checkUse(parsed);
   }
-  return [...selected.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const entries = [...selected.entries()].sort(([left], [right]) => left.localeCompare(right));
+  rollbackProofContexts.set(entries, { ts, root, roots, program, checker, modules, canonical });
+  return entries;
 }
 
 function namedRuntimeFunction(ts, sourceFile, name) {
@@ -1465,6 +1471,1285 @@ export function verifyWorkerRecoveryWiring({ sourceRoot, compilerRoot = sourceRo
   return true;
 }
 
+/** This helper alone never permits rollback. The private finite pair proof
+ * may use its specified conditional witnesses only with complete context
+ * equality and the directional family proof.
+ */
+export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
+  const proven = [], references = [];
+  const storeGraph = { status: 'unproven', instances: [], sessions: [], hosts: [], shared: [], factories: [], identityObjects: [], pending: [] };
+  const privateStoreChain = { status: 'unproven', nodes: [], equalityPremise: { status: 'unresolved',
+    mechanism: 'existing-complete-module-closure-with-dependencies', modules: [] } };
+  const fail = (reason, node) => { throw { reason, node }; };
+  const need = (value, reason, node) => { if (!value) fail(reason, node); return value; };
+  const normalize = value => resolve(value).replaceAll('\\', '/').toLowerCase();
+  const root = normalize(sourceRoot) + '/';
+  const files = program.getSourceFiles().filter(file => !file.isDeclarationFile
+    && normalize(file.fileName).startsWith(root) && /\/(?:apps|packages)\/[^/]+\/src\//u.test(normalize(file.fileName)));
+  const location = node => node ? { file: relative(sourceRoot, node.getSourceFile().fileName).replaceAll('\\', '/'),
+    line: node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1 } : undefined;
+  const walk = (node, predicate) => {
+    const result = [];
+    const visit = current => {
+      if (ts.isTypeNode(current) || ts.isInterfaceDeclaration(current) || ts.isTypeAliasDeclaration(current)) return;
+      if (predicate(current)) result.push(current);
+      ts.forEachChild(current, visit);
+    };
+    visit(node); return result;
+  };
+  const one = (values, reason) => need(values.length === 1, reason, values[0]) && values[0];
+  const unwrap = value => {
+    while (value && (ts.isParenthesizedExpression(value) || ts.isAsExpression(value) || ts.isNonNullExpression(value)
+      || ts.isAwaitExpression(value))) value = value.expression;
+    return value;
+  };
+  try {
+    need(program.getSyntacticDiagnostics().length === 0, 'PROGRAM_SYNTAX_UNKNOWN');
+    const checker = program.getTypeChecker();
+    const symbolCache = new WeakMap();
+    const symbol = node => {
+      if (!node) return undefined;
+      if (symbolCache.has(node)) return symbolCache.get(node);
+      let value = ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+        ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+      if (value?.flags & ts.SymbolFlags.Alias) {
+        const target = checker.getAliasedSymbol(value);
+        if (target?.declarations?.length) value = target;
+      }
+      symbolCache.set(node, value);
+      return value;
+    };
+    const same = (left, right) => !!symbol(left) && symbol(left) === symbol(right);
+    const file = name => one(files.filter(value => normalize(value.fileName) === normalize(join(sourceRoot, name))), 'PROGRAM_SOURCE_MISSING');
+    const illustration = file('apps/agent-worker/src/native-agent/illustration-task.ts');
+    const host = file('apps/agent-worker/src/native-agent/host-task.ts');
+    const sessionFile = file('apps/agent-worker/src/native-agent/session.ts');
+    const storeFile = file('apps/agent-worker/src/native-agent/task-store.ts');
+    const handler = file('apps/agent-worker/src/presentation/handler.ts');
+    const fn = (scope, name) => one(walk(scope, value => ts.isFunctionDeclaration(value) && value.name?.text === name), `FUNCTION_${name}_UNKNOWN`);
+    const materializer = fn(illustration, 'createNativeIllustrationMaterializer');
+    const live = fn(illustration, 'runNativeIllustrationTask'), replay = fn(illustration, 'replayNativeVideoPlan');
+    const hostFactory = fn(host, 'runHostedNativeTask'), sessionFactory = fn(sessionFile, 'createNativeAgentSession');
+    const storeFactory = fn(storeFile, 'createNativeTaskStore');
+    const enclosing = node => {
+      for (let value = node.parent; value; value = value.parent) if (ts.isFunctionLike(value) && value.body) return value;
+      return undefined;
+    };
+    const variable = (scope, name) => one(walk(scope, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+      && node.name.text === name && enclosing(node) === scope), `BINDING_${name}_UNKNOWN`);
+    const objectProperty = (object, name) => {
+      object = unwrap(object);
+      need(object && ts.isObjectLiteralExpression(object), 'OBJECT_BINDING_UNKNOWN', object);
+      const property = one(object.properties.filter(value => (ts.isPropertyAssignment(value) || ts.isShorthandPropertyAssignment(value))
+        && value.name?.text === name), `PROPERTY_${name}_UNKNOWN`);
+      const index = object.properties.indexOf(property);
+      need(!object.properties.slice(index + 1).some(ts.isSpreadAssignment), 'LATE_SPREAD_OVERRIDES_BINDING', property);
+      return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+    };
+    const definition = expression => {
+      expression = unwrap(expression);
+      if (!expression || !ts.isIdentifier(expression)) return expression;
+      const declarations = symbol(expression)?.declarations;
+      const declaration = one((declarations ?? []).filter(ts.isVariableDeclaration), 'LOCAL_ORIGIN_UNKNOWN');
+      need(declaration.initializer && ts.isVariableDeclarationList(declaration.parent)
+        && declaration.parent.flags & ts.NodeFlags.Const, 'MUTABLE_ORIGIN_UNKNOWN', declaration);
+      return unwrap(declaration.initializer);
+    };
+    const callOf = (value, target) => {
+      value = unwrap(value);
+      return !!value && ts.isCallExpression(value) && same(value.expression, target.name);
+    };
+    const identifiers = new Map(), imports = [];
+    for (const source of files) for (const node of walk(source, ts.isIdentifier)) {
+      const values = identifiers.get(node.text) ?? []; values.push(node); identifiers.set(node.text, values);
+      if (ts.isImportSpecifier(node.parent) && node.parent.name === node) imports.push(node);
+    }
+    const uses = target => {
+      const names = new Set([target.name.text, ...imports.filter(node => same(node, target.name)).map(node => node.text)]);
+      const all = [...names].flatMap(name => identifiers.get(name) ?? []).filter(node => node !== target.name && same(node, target.name)
+        && !ts.isImportSpecifier(node.parent) && !ts.isExportSpecifier(node.parent));
+      return all.map(node => {
+        references.push({ target: target.name.text, ...location(node) });
+        need(ts.isCallExpression(node.parent) && node.parent.expression === node, 'FACTORY_ALIAS_OR_ESCAPE_UNKNOWN', node);
+        return node.parent;
+      });
+    };
+    // Expression skeletons below bind variables to checker symbols. They are
+    // finite data/control shapes, not source hashes or whole-function text.
+    const match = (actual, text, roles = {}) => {
+      const template = ts.createSourceFile('shape.ts', `const value = (${text});`, ts.ScriptTarget.ES2022, true);
+      const expected = template.statements[0].declarationList.declarations[0].initializer;
+      const compare = (a, b) => {
+        a = unwrap(a); b = unwrap(b);
+        if (!a || !b || a.kind !== b.kind) return false;
+        if (ts.isPropertyAccessExpression(a)) return a.name.text === b.name.text && compare(a.expression, b.expression)
+          && !!a.questionDotToken === !!b.questionDotToken;
+        if (ts.isIdentifier(b)) return Object.hasOwn(roles, b.text) ? same(a, roles[b.text]) : a.text === b.text;
+        if (ts.isLiteralExpression(b) || ts.isTemplateLiteralToken(b)) return a.text === b.text;
+        if (ts.isPrefixUnaryExpression(a) || ts.isPostfixUnaryExpression(a)) return a.operator === b.operator && compare(a.operand, b.operand);
+        const left = [], right = [];
+        ts.forEachChild(a, node => { if (!ts.isTypeNode(node)) left.push(node); });
+        ts.forEachChild(b, node => { if (!ts.isTypeNode(node)) right.push(node); });
+        return left.length === right.length && left.every((node, index) => compare(node, right[index]));
+      };
+      return compare(actual, expected);
+    };
+    const importOf = (source, module, name) => one(source.statements.filter(ts.isImportDeclaration)
+      .filter(node => node.moduleSpecifier.text === module && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings))
+      .flatMap(node => node.importClause.namedBindings.elements.filter(item => (item.propertyName ?? item.name).text === name).map(item => item.name)), 'IMPORT_BINDING_UNKNOWN');
+    const guard = (statement, condition, roles, stop) => {
+      if (!statement || !ts.isIfStatement(statement) || statement.elseStatement || !match(statement.expression, condition, roles)) return false;
+      const body = ts.isBlock(statement.thenStatement) ? statement.thenStatement.statements : [statement.thenStatement];
+      return body.length === 1 && ts.isExpressionStatement(body[0]) && callOf(body[0].expression, stop);
+    };
+    const hostStop = fn(host, 'blocked'), sessionStop = fn(sessionFile, 'blocked');
+    for (const stop of [hostStop, sessionStop]) need(stop.body?.statements.length === 1 && ts.isThrowStatement(stop.body.statements[0]), 'REJECTION_NOT_TERMINAL', stop);
+
+    const materializerUses = uses(materializer), liveUses = uses(live), replayUses = uses(replay);
+    need(materializerUses.length === 2 && materializerUses.every(call => [live, replay].includes(enclosing(call))), 'EXTRA_MATERIALIZER_CALLER', materializerUses[2]);
+    need(liveUses.length === 1 && liveUses[0].getSourceFile() === handler
+      && replayUses.length === 1 && replayUses[0].getSourceFile() === handler, 'EXTRA_LIVE_OR_REPLAY_CALLER');
+    const liveStore = variable(live, 'store'), liveSaved = variable(live, 'saved'), liveMaterializer = variable(live, 'materializer');
+    need(callOf(liveStore.initializer, storeFactory) && match(liveSaved.initializer, 'store.read()', { store: liveStore.name }), 'SAVED_STATE_ORIGIN_UNKNOWN');
+    need(callOf(liveMaterializer.initializer, materializer)
+      && same(objectProperty(unwrap(liveMaterializer.initializer).arguments[0], 'savedState'), liveSaved.name), 'CALLER_SELECTED_SAVED_STATE');
+    const paper = variable(live, 'paper'), paperCall = unwrap(objectProperty(paper.initializer, 'call'));
+    need(ts.isArrowFunction(paperCall) && paperCall.parameters.length === 4, 'PAPER_CALL_NOT_BOUND');
+    need(match(paperCall.body, "name.startsWith('paper_illustration_') ? materializer.call(name, args, sequence, callId) : source.call(name, args)",
+      { materializer: liveMaterializer.name, name: paperCall.parameters[0].name, args: paperCall.parameters[1].name,
+        sequence: paperCall.parameters[2].name, callId: paperCall.parameters[3].name, source: variable(live, 'source').name }), 'PAPER_CALL_NOT_MATERIALIZER');
+    const session = variable(live, 'session'), native = variable(live, 'native');
+    need(callOf(session.initializer, sessionFactory) && same(objectProperty(unwrap(session.initializer).arguments[0], 'store'), liveStore.name)
+      && callOf(native.initializer, hostFactory) && same(objectProperty(unwrap(native.initializer).arguments[0], 'session'), session.name)
+      && same(objectProperty(unwrap(native.initializer).arguments[0], 'store'), liveStore.name)
+      && same(objectProperty(unwrap(native.initializer).arguments[0], 'paper'), paper.name), 'HOST_STORE_SESSION_ORIGIN_UNKNOWN');
+    proven.push('materializer-host');
+
+    const history = fn(hostFactory, 'validateSourceHistory');
+    const hostEqual = importOf(host, 'node:util', 'isDeepStrictEqual');
+    const hostInput = hostFactory.parameters[0].name, historyInput = history.parameters[0].name;
+    const hostParser = importOf(host, '@openscience/ai-gateway', 'nativeAgentSdkRequest');
+    const decodedHistory = history.body.statements[0]?.declarationList?.declarations[0];
+    need(decodedHistory && ts.isObjectBindingPattern(decodedHistory.name)
+      && match(decodedHistory.initializer, 'nativeAgentSdkRequest(value, input.config.model)',
+        { nativeAgentSdkRequest: hostParser, value: historyInput, input: hostInput }), 'HOST_HISTORY_NOT_DECODED');
+    const historyMessages = one(decodedHistory.name.elements.filter(node => node.name.text === 'messages'), 'HOST_MESSAGES_BINDING_UNKNOWN').name;
+    const slots = variable(hostFactory, 'slots').name;
+    const loop = one(walk(history, ts.isForOfStatement), 'HOST_SLOT_LOOP_UNKNOWN');
+    need(ts.isVariableDeclarationList(loop.initializer) && loop.initializer.flags & ts.NodeFlags.Const
+      && loop.initializer.declarations.length === 1 && same(loop.expression, slots), 'HOST_SLOT_ITERABLE_UNKNOWN');
+    const slot = loop.initializer.declarations[0].name;
+    need(ts.isBlock(loop.statement) && loop.statement.statements.length === 3, 'HOST_SLOT_GUARDS_UNKNOWN');
+    const toolResult = loop.statement.statements[0].declarationList?.declarations[0];
+    need(toolResult && match(toolResult.initializer,
+      "[...messages].reverse().find(m => m.role === 'tool' && m.toolCallId === slot.id)",
+      { messages: historyMessages, slot }), 'HOST_TOOL_RESULT_ORIGIN_UNKNOWN');
+    const roles = { slot, result: toolResult?.name, isDeepStrictEqual: hostEqual };
+    need(guard(loop.statement.statements[1], '!slot.authorized || !result', roles, hostStop)
+      && guard(loop.statement.statements[2], "slot.name.startsWith('paper_') && (!slot.called || !isDeepStrictEqual(JSON.parse(result.content), slot.result))", roles, hostStop), 'HOST_TOOL_RESULT_UNBOUND');
+    const resultWrites = walk(hostFactory, node => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'result');
+    const resultWrite = one(resultWrites, 'HOST_RESULT_ASSIGNMENT_UNKNOWN');
+    const execute = enclosing(resultWrite);
+    need(ts.isArrowFunction(execute) && ts.isBlock(execute.body) && execute.body.statements.length === 3
+      && match(resultWrite.right, 'input.paper.call(slot.name, value.arguments, slot.sequence, slot.id)',
+        { input: hostInput, slot: resultWrite.left.expression }), 'MODEL_SELECTED_SLOT_RESULT');
+    const callSlot = resultWrite.left.expression;
+    const callSlotDecl = symbol(callSlot)?.declarations?.find(ts.isVariableDeclaration);
+    need(callSlotDecl && match(callSlotDecl.initializer,
+      "slots.find(s => s.authorized && !s.called && s.name.startsWith('paper_') && s.name === value.name && isDeepStrictEqual(s.args, value.arguments))",
+      { isDeepStrictEqual: hostEqual, slots }), 'HOST_SLOT_NOT_AUTHENTICATED');
+    const slotBlock = callSlotDecl.parent?.parent;
+    need(ts.isVariableStatement(slotBlock) && ts.isBlock(slotBlock.parent)
+      && slotBlock.parent.statements[0] === slotBlock
+      && guard(slotBlock.parent.statements[1], '!slot', { slot: callSlotDecl.name }, hostStop), 'HOST_SLOT_GUARD_BYPASS');
+    proven.push('host-slot-result');
+    const completeCalls = walk(hostFactory, node => ts.isCallExpression(node) && match(node.expression, 'input.session.complete', { input: hostInput }));
+    const completeCall = one(completeCalls, 'HOST_SESSION_CALL_UNKNOWN');
+    let completeStatement = completeCall.parent;
+    while (completeStatement && !ts.isVariableStatement(completeStatement)) completeStatement = completeStatement.parent;
+    need(completeStatement, 'HOST_SESSION_STATEMENT_UNKNOWN', completeCall);
+    const completeBlock = completeStatement.parent;
+    need(ts.isVariableStatement(completeStatement) && ts.isBlock(completeBlock) && completeBlock.statements.length === 4
+      && ts.isExpressionStatement(completeBlock.statements[0]) && ts.isAwaitExpression(completeBlock.statements[0].expression)
+      && callOf(completeBlock.statements[0].expression, history)
+      && completeBlock.statements[1] === completeStatement, 'HOST_HISTORY_CHECK_BYPASS');
+    const checkedHistory = unwrap(completeBlock.statements[0].expression);
+    need(checkedHistory.arguments.length === 1 && completeCall.arguments.length === 1
+      && same(checkedHistory.arguments[0], completeCall.arguments[0]), 'HOST_HISTORY_ARGUMENT_UNBOUND');
+    proven.push('host-before-session');
+
+    const prefix = fn(sessionFactory, 'checkHistory'), prefixStatements = prefix.body.statements;
+    const messages = prefix.parameters[0].name, state = prefix.parameters[1].name;
+    const sessionEqual = importOf(sessionFile, 'node:util', 'isDeepStrictEqual');
+    const cursorDeclaration = variable(sessionFactory, 'cursor'), cursor = cursorDeclaration.name;
+    need(match(cursorDeclaration.initializer, '0') && cursorDeclaration.parent.flags & ts.NodeFlags.Let, 'SESSION_CURSOR_ORIGIN_UNKNOWN');
+    const prefixRoles = { messages, state, cursor, isDeepStrictEqual: sessionEqual };
+    need(prefixStatements.length === 8 && ts.isIfStatement(prefixStatements[0])
+      && match(prefixStatements[0].expression, '!state', prefixRoles) && !prefixStatements[0].elseStatement
+      && ts.isBlock(prefixStatements[0].thenStatement) && prefixStatements[0].thenStatement.statements.length === 2
+      && guard(prefixStatements[0].thenStatement.statements[0], "messages.some(m => m.role === 'assistant' || m.role === 'tool')", prefixRoles, sessionStop)
+      && ts.isReturnStatement(prefixStatements[0].thenStatement.statements[1])
+      && !prefixStatements[0].thenStatement.statements[1].expression, 'FRESH_HISTORY_NOT_EMPTY');
+    need(guard(prefixStatements[1], '!isDeepStrictEqual(messages.slice(0, state.initialMessages.length), state.initialMessages)', prefixRoles, sessionStop), 'INITIAL_PREFIX_UNBOUND');
+    const preceding = variable(prefix, 'preceding');
+    prefixRoles.preceding = preceding.name;
+    need(match(preceding.initializer, 'cursor > 0 ? state.turns[cursor - 1]?.request.messages : undefined', prefixRoles)
+      && guard(prefixStatements[3], 'preceding?.length && !isDeepStrictEqual(messages.slice(0, preceding.length), preceding)', prefixRoles, sessionStop)
+      && guard(prefixStatements[4], 'cursor === state.turns.length && cursor > 0 && !preceding?.length', prefixRoles, sessionStop), 'PRIOR_PREFIX_UNBOUND');
+    const assistant = variable(prefix, 'assistantMessages');
+    need(match(assistant.initializer, "messages.filter(m => m.role === 'assistant')", prefixRoles)
+      && guard(prefixStatements[6], 'assistantMessages.length !== cursor', { ...prefixRoles, assistantMessages: assistant.name }, sessionStop), 'ASSISTANT_COUNT_UNBOUND');
+    const responseLoop = prefixStatements[7];
+    need(ts.isForStatement(responseLoop) && ts.isBlock(responseLoop.statement) && responseLoop.statement.statements.length === 4, 'ASSISTANT_HISTORY_LOOP_UNKNOWN');
+    const indexDeclaration = responseLoop.initializer?.declarations?.[0];
+    need(responseLoop.initializer && ts.isVariableDeclarationList(responseLoop.initializer) && responseLoop.initializer.flags & ts.NodeFlags.Let
+      && responseLoop.initializer.declarations.length === 1 && indexDeclaration && match(indexDeclaration.initializer, '0')
+      && match(responseLoop.condition, 'i < cursor', { i: indexDeclaration.name, cursor })
+      && match(responseLoop.incrementor, 'i++', { i: indexDeclaration.name }), 'ASSISTANT_HISTORY_LOOP_UNKNOWN');
+    const turn = responseLoop.statement.statements[0].declarationList?.declarations[0];
+    const message = responseLoop.statement.statements[1].declarationList?.declarations[0];
+    need(turn && match(turn.initializer, 'state.turns[i]', { state, i: indexDeclaration.name }), 'ASSISTANT_TURN_ORIGIN_UNKNOWN');
+    need(message && match(message.initializer, 'assistantMessages[i]', { assistantMessages: assistant.name, i: indexDeclaration.name }), 'ASSISTANT_MESSAGE_ORIGIN_UNKNOWN');
+    const semantic = one(walk(sessionFile, node => ts.isVariableDeclaration(node) && node.name.text === 'semanticCalls'), 'SEMANTIC_CALL_BINDING_UNKNOWN');
+    const responseRoles = { ...prefixRoles, turn: turn?.name, message: message?.name, semanticCalls: semantic.name };
+    need(guard(responseLoop.statement.statements[2], "!turn || turn.state !== 'completed' || !message", responseRoles, sessionStop)
+      && guard(responseLoop.statement.statements[3], 'message.content !== turn.response.text || !isDeepStrictEqual(semanticCalls(message.toolCalls), semanticCalls(turn.response.toolCalls)) || !isDeepStrictEqual(message.providerContent, turn.response.providerContent)', responseRoles, sessionStop), 'ASSISTANT_RESPONSE_UNBOUND');
+    const completeOnce = fn(sessionFactory, 'completeOnce');
+    const parser = fn(file('packages/ai-gateway/src/native-agent-bridge.ts'), 'nativeAgentSdkRequest');
+    const parsedRequest = completeOnce.body.statements[1]?.declarationList?.declarations[0];
+    need(parsedRequest && callOf(parsedRequest.initializer, parser) && ts.isObjectBindingPattern(parsedRequest.name), 'SESSION_REQUEST_NOT_DECODED');
+    const parsedMessages = one(parsedRequest.name.elements.filter(node => node.name.text === 'messages'), 'SESSION_MESSAGES_BINDING_UNKNOWN').name;
+    const parsedOptions = one(parsedRequest.name.elements.filter(node => node.name.text === 'options'), 'SESSION_OPTIONS_BINDING_UNKNOWN').name;
+    const readState = fn(sessionFactory, 'read'), binding = variable(sessionFactory, 'binding').name;
+    need(match(parsedRequest.initializer, 'nativeAgentSdkRequest(raw, binding.model)',
+      { nativeAgentSdkRequest: parser.name, raw: completeOnce.parameters[0].name, binding }), 'SESSION_REQUEST_NOT_DECODED');
+    const stateDeclaration = variable(completeOnce, 'state'), currentState = stateDeclaration.name;
+    need(callOf(stateDeclaration.initializer, readState) && completeOnce.body.statements[2]?.declarationList?.declarations[0] === stateDeclaration,
+      'SESSION_STATE_ORIGIN_UNKNOWN');
+    const historyCalls = walk(completeOnce, node => ts.isCallExpression(node) && same(node.expression, prefix.name));
+    need(historyCalls.length === 2 && completeOnce.body.statements[3]?.expression === historyCalls[0]
+      && historyCalls.every(call => same(call.arguments[0], parsedMessages) && same(call.arguments[1], currentState)), 'SESSION_PREFIX_CALL_BYPASS');
+    const submitHistory = historyCalls[1].parent?.parent;
+    need(ts.isBlock(submitHistory) && submitHistory.statements[2]?.expression === historyCalls[1]
+      && match(submitHistory.statements[1]?.expression, 'state = read()', { state: currentState, read: readState.name }), 'SESSION_STATE_ORIGIN_UNKNOWN');
+    proven.push('session-prefix');
+    const started = one(walk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'started'), 'STARTED_CHECKPOINT_UNKNOWN');
+    const completed = one(walk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'completed'), 'COMPLETED_CHECKPOINT_UNKNOWN');
+    // Inspect the effective last turn, never a matching descendant in a decoy.
+    // Unknown computed keys/spreads after a selected property may override it.
+    const cannotOverride = (expression, name) => {
+      expression = unwrap(expression);
+      if (ts.isConditionalExpression(expression)) return cannotOverride(expression.whenTrue, name) && cannotOverride(expression.whenFalse, name);
+      return ts.isObjectLiteralExpression(expression) && expression.properties.every(node => ts.isSpreadAssignment(node)
+        ? cannotOverride(node.expression, name) : (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node))
+          && !ts.isComputedPropertyName(node.name) && node.name.text !== name);
+    };
+    const checkpointProperty = (object, name) => {
+      object = unwrap(object);
+      need(object && ts.isObjectLiteralExpression(object), 'LATEST_PREFIX_NOT_RETAINED', object);
+      need(object.properties.every(node => ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node) || ts.isSpreadAssignment(node)),
+        'LATEST_PREFIX_NOT_RETAINED', object);
+      const properties = object.properties.filter(node => (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) && node.name?.text === name);
+      need(properties.length === 1, 'LATEST_PREFIX_NOT_RETAINED', object);
+      const property = properties[0];
+      need(!object.properties.slice(object.properties.indexOf(property) + 1).some(node => ts.isSpreadAssignment(node) && !cannotOverride(node.expression, name)
+        || node.name && ts.isComputedPropertyName(node.name)), 'LATEST_PREFIX_NOT_RETAINED', property);
+      return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+    };
+    const startedInitializer = unwrap(started.initializer);
+    need(ts.isBinaryExpression(startedInitializer) && startedInitializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken,
+      'LATEST_PREFIX_NOT_RETAINED', startedInitializer);
+    const retry = variable(completeOnce, 'retry'), attempt = variable(completeOnce, 'attempt');
+    need(!retry.initializer && retry.parent.flags & ts.NodeFlags.Let
+      && match(startedInitializer.left, 'retry?.started', { retry: retry.name })
+      && match(attempt.initializer, '{}') && attempt.parent.flags & ts.NodeFlags.Const, 'RETRY_STARTED_ORIGIN_UNKNOWN');
+    const assignmentRoot = expression => {
+      expression = unwrap(expression);
+      while (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) expression = unwrap(expression.expression);
+      return expression;
+    };
+    const assignments = target => walk(completeOnce, node => ts.isBinaryExpression(node)
+      && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      && same(assignmentRoot(node.left), target));
+    const retryWrites = assignments(retry.name), attemptWrites = assignments(attempt.name);
+    need(retryWrites.length === 1 && attemptWrites.length === 1, 'RETRY_STARTED_ORIGIN_UNKNOWN');
+    const retryWrite = retryWrites[0], rejectionWrite = attemptWrites[0];
+    need(retryWrite.operatorToken.kind === ts.SyntaxKind.EqualsToken && same(retryWrite.left, retry.name)
+      && match(checkpointProperty(retryWrite.right, 'started'), 'attempt.rejection.started', { attempt: attempt.name })
+      && rejectionWrite.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && match(rejectionWrite.left, 'attempt.rejection', { attempt: attempt.name }), 'RETRY_STARTED_ORIGIN_UNKNOWN');
+    let rejectionCatch = rejectionWrite.parent;
+    while (rejectionCatch && !ts.isCatchClause(rejectionCatch)) rejectionCatch = rejectionCatch.parent;
+    need(rejectionCatch?.variableDeclaration
+      && match(rejectionWrite.right, '{ started, error }', { started: started.name, error: rejectionCatch.variableDeclaration.name }), 'RETRY_STARTED_ORIGIN_UNKNOWN');
+    const publishCalls = walk(completeOnce, node => ts.isCallExpression(node)
+      && match(node.expression, 'input.store.publish', { input: sessionFactory.parameters[0].name }));
+    need(publishCalls.length === 1 && same(publishCalls[0].arguments[0], started.name)
+      && enclosing(rejectionWrite) === publishCalls[0].arguments[1], 'RETRY_STARTED_ORIGIN_UNKNOWN');
+    const latestRequest = object => {
+      const turns = unwrap(checkpointProperty(object, 'turns'));
+      need(ts.isArrayLiteralExpression(turns) && turns.elements.length === 2 && ts.isSpreadElement(turns.elements[0]), 'LATEST_PREFIX_NOT_RETAINED', turns);
+      return checkpointProperty(turns.elements[1], 'request');
+    };
+    for (const object of [startedInitializer.right, completed.initializer]) {
+      const request = latestRequest(object);
+      need(same(checkpointProperty(request, 'messages'), parsedMessages) && same(checkpointProperty(request, 'options'), parsedOptions), 'LATEST_PREFIX_NOT_RETAINED', request);
+    }
+    const finalCalls = walk(completeOnce, node => ts.isCallExpression(node) && match(node.expression, 'input.store.complete'));
+    need(finalCalls.length === 1 && same(finalCalls[0].arguments[0], started.name) && same(finalCalls[0].arguments[1], completed.name), 'PAID_CHECKPOINT_ORIGIN_UNKNOWN');
+    proven.push('session-checkpoint-prefix');
+
+    const verifiedBase = one(walk(handler, node => ts.isVariableDeclaration(node) && node.name.text === 'readVerifiedVideoPlan'), 'BASE_READER_MISSING');
+    const baseReader = unwrap(verifiedBase.initializer);
+    need(ts.isArrowFunction(baseReader) && replayUses[0].getStart() > baseReader.getStart() && replayUses[0].end < baseReader.end, 'BASE_REPLAY_ORIGIN_UNKNOWN');
+    const proof = one(walk(baseReader, node => ts.isVariableDeclaration(node) && node.name.text === 'proof'), 'BASE_PROOF_UNKNOWN');
+    const videoModule = file('packages/domain/src/assets/video.ts'), requireBase = fn(videoModule, 'requireNativeVideoStoryboard');
+    need(callOf(proof.initializer, requireBase)
+      && match(objectProperty(replayUses[0].arguments[0], 'task'), 'proof.task', { proof: proof.name }), 'BASE_TASK_NOT_VERIFIED');
+    const base = one(walk(enclosing(liveUses[0]), node => ts.isVariableDeclaration(node) && node.name.text === 'base'
+      && node.getStart() < liveUses[0].getStart() && enclosing(node) === enclosing(liveUses[0])), 'LIVE_BASE_UNKNOWN');
+    const conditional = unwrap(base.initializer);
+    need(ts.isConditionalExpression(conditional) && ts.isIdentifier(conditional.whenFalse) && conditional.whenFalse.text === 'undefined'
+      && ts.isCallExpression(unwrap(conditional.whenTrue)) && same(unwrap(conditional.whenTrue).expression, verifiedBase.name)
+      && same(objectProperty(liveUses[0].arguments[0], 'base'), base.name), 'LIVE_BASE_NOT_RECONSTRUCTED');
+    const replaySaved = variable(replay, 'saved'), replayStore = variable(replay, 'store');
+    need(callOf(replayStore.initializer, storeFactory) && match(replaySaved.initializer, 'store.read()', { store: replayStore.name }), 'REPLAY_CP_ORIGIN_UNKNOWN');
+    const replayFactory = materializerUses.find(call => enclosing(call) === replay);
+    need(same(objectProperty(replayFactory.arguments[0], 'savedState'), replaySaved.name), 'REPLAY_SELECTED_SAVED_STATE');
+    const rebuilt = variable(replay, 'rebuilt');
+    const finalCall = unwrap(rebuilt.initializer);
+    need(ts.isCallExpression(finalCall) && ts.isPropertyAccessExpression(finalCall.expression)
+      && finalCall.expression.name.text === 'finish' && finalCall.expression.expression === replayFactory
+      && match(finalCall.arguments[0], 'last.request.messages') && match(finalCall.arguments[1], 'last.response.text'), 'REPLAY_NOT_COMPLETED_CP_FINISH');
+    const replayEqual = importOf(illustration, 'node:util', 'isDeepStrictEqual');
+    const comparison = one(walk(replay, node => ts.isIfStatement(node) && match(node.expression,
+      "!isDeepStrictEqual(rebuilt.document, planned.document) || !isDeepStrictEqual(rebuilt.prompts, stored.illustrationPrompts) || !isDeepStrictEqual(rebuilt.designSkills, planned.designSkills) || rebuilt.planToolCallId !== native.planToolCallId || rebuilt.reviewToolCallId !== native.reviewToolCallId || rebuilt.review.decision !== 'accepted'",
+      { rebuilt: rebuilt.name, isDeepStrictEqual: replayEqual })), 'REPLAY_WHOLE_ARTIFACT_UNBOUND');
+    need(guard(comparison, comparison.expression.getText(), {}, fn(illustration, 'stopped')), 'REPLAY_COMPARISON_NOT_TERMINAL');
+    proven.push('verified-base');
+
+    // Conditional capability graph only. Receiver value identity, not the shared
+    // structural interface's method symbol, determines which store is used.
+    const journalFactory = fn(file('apps/agent-worker/src/native-agent/journal-task-store.ts'), 'createJournalNativeTaskStore');
+    const storeCalls = uses(storeFactory), journalCalls = uses(journalFactory);
+    const sessionCalls = uses(sessionFactory), hostCalls = uses(hostFactory);
+    const identityObjects = new Map(), identityCopies = new Set(), identityPasses = new Set();
+    const constResult = call => {
+      let expression = call;
+      while (expression.parent && (ts.isAwaitExpression(expression.parent) || ts.isParenthesizedExpression(expression.parent)
+        || ts.isAsExpression(expression.parent) || ts.isNonNullExpression(expression.parent))) expression = expression.parent;
+      const declaration = expression.parent;
+      need(ts.isVariableDeclaration(declaration) && declaration.initializer === expression && ts.isIdentifier(declaration.name)
+        && declaration.parent.flags & ts.NodeFlags.Const, 'STORE_FACTORY_RESULT_UNKNOWN', call);
+      return declaration;
+    };
+    // Only actual immutable local objects and literal conditional spreads are
+    // supported. Unknown late members cannot silently replace a capability.
+    const member = (expression, key, seen = new Set()) => {
+      expression = unwrap(expression);
+      need(expression && !seen.has(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+      seen = new Set(seen).add(expression);
+      if (ts.isIdentifier(expression)) {
+        const declarations = symbol(expression)?.declarations ?? [];
+        const declaration = declarations.length === 1 && declarations[0];
+        need(declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+          && declaration.parent.flags & ts.NodeFlags.Const, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+        const initial = unwrap(declaration.initializer);
+        need(ts.isObjectLiteralExpression(initial) || ts.isConditionalExpression(initial), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', expression);
+        identityObjects.set(symbol(declaration.name), declaration);
+        return member(declaration.initializer, key, seen);
+      }
+      if (ts.isConditionalExpression(expression)) {
+        const left = member(expression.whenTrue, key, seen), right = member(expression.whenFalse, key, seen);
+        need(!left && !right, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+        return undefined;
+      }
+      need(ts.isObjectLiteralExpression(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+      for (const property of [...expression.properties].reverse()) {
+        if (ts.isSpreadAssignment(property)) {
+          identityCopies.add(unwrap(property.expression));
+          const value = member(property.expression, key, seen);
+          if (value) return value;
+        } else {
+          need(property.name && !ts.isComputedPropertyName(property.name)
+            && (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', property);
+          if (property.name.text === key) return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+        }
+      }
+      return undefined;
+    };
+    const resolvedValue = expression => {
+      expression = unwrap(expression);
+      if (ts.isIdentifier(expression)) {
+        const declarations = symbol(expression)?.declarations;
+        if (declarations?.length === 1 && ts.isVariableDeclaration(declarations[0]) && declarations[0].initializer
+          && declarations[0].parent.flags & ts.NodeFlags.Const) {
+          const initial = unwrap(declarations[0].initializer);
+          if (ts.isObjectLiteralExpression(initial)) identityObjects.set(symbol(declarations[0].name), declarations[0]);
+          return initial;
+        }
+      } else if (ts.isPropertyAccessExpression(expression)) {
+        const base = resolvedValue(expression.expression);
+        if (ts.isObjectLiteralExpression(base)) return member(base, expression.name.text) ?? expression;
+      }
+      return expression;
+    };
+    const sameValue = (left, right, depth = 0) => {
+      left = unwrap(left); right = unwrap(right);
+      if (!left || !right || depth > 16) return false;
+      if (left === right || ts.isIdentifier(left) && ts.isIdentifier(right) && same(left, right)) return true;
+      if (ts.isPropertyAccessExpression(left) && ts.isPropertyAccessExpression(right) && left.name.text === right.name.text
+        && sameValue(left.expression, right.expression, depth + 1)) return true;
+      const a = resolvedValue(left), b = resolvedValue(right);
+      return (a !== left || b !== right) ? sameValue(a, b, depth + 1)
+        : ts.isLiteralExpression(left) && ts.isLiteralExpression(right) && left.kind === right.kind && left.text === right.text;
+    };
+    const executionReader = fn(file('packages/domain/src/agent/native-agent-execution.ts'), 'readNativeAgentExecution');
+    const instances = [], byStore = new Map(), bySession = new Map(), allowedValues = new Set();
+    for (const [factory, calls] of [[storeFactory, storeCalls], [journalFactory, journalCalls]]) for (const call of calls) {
+      const input = unwrap(call.arguments[0]);
+      need(input && ts.isObjectLiteralExpression(input), 'EXTRA_UNBOUND_FACTORY_CALLER', call);
+      const declaration = constResult(call), execution = member(input, 'execution');
+      const taskId = member(input, 'taskId'), attemptId = member(input, 'executionAttempt');
+      const markerCall = definition(execution);
+      need(taskId && ts.isPropertyAccessExpression(taskId) && taskId.name.text === 'id' && attemptId
+        && callOf(markerCall, executionReader) && markerCall.arguments.length === 1
+        && ts.isPropertyAccessExpression(markerCall.arguments[0]) && markerCall.arguments[0].name.text === 'result'
+        && sameValue(markerCall.arguments[0].expression, taskId.expression), 'STORE_INPUT_IDENTITY_UNKNOWN', call);
+      const graph = { id: instances.length, factory: factory.name.text, at: location(call), runner: location(enclosing(call)),
+        identity: { taskId: { text: taskId.getText(), ...location(taskId) }, executionAttempt: { text: attemptId.getText(), ...location(attemptId) },
+          execution: location(markerCall) }, localReads: [], sessions: [], hosts: [] };
+      const instance = { declaration, call, factory, taskId, attemptId, execution, graph };
+      instances.push(instance); byStore.set(symbol(declaration.name), instance); storeGraph.instances.push(graph);
+      if (!sameValue(attemptId, ts.factory.createPropertyAccessExpression(taskId.expression, 'executionAttempt')))
+        storeGraph.pending.push({ reason: 'TASK_ATTEMPT_EQUIVALENCE_UNPROVEN', at: location(attemptId), store: graph.id });
+    }
+    need(storeCalls.length === 5 && journalCalls.length === 1, 'STORE_FACTORY_INSTANCE_COUNT_UNKNOWN');
+    for (const call of sessionCalls) {
+      const input = call.arguments[0], store = member(input, 'store');
+      const instance = store && ts.isIdentifier(unwrap(store)) && byStore.get(symbol(unwrap(store)));
+      need(instance, 'STORE_SUBSTITUTE_INSTANCE_UNKNOWN', store ?? call);
+      const declaration = constResult(call), binding = member(input, 'binding');
+      identityPasses.add(unwrap(binding));
+      need(binding && sameValue(member(binding, 'taskId'), instance.taskId), 'STORE_SESSION_IDENTITY_UNKNOWN', call);
+      const source = {};
+      for (const key of ['sourceKind', 'artifactId', 'documentSha256', 'sourceMapHash', 'imageReview', 'journalText']) {
+        const value = member(binding, key); if (value) source[key] = { text: value.getText(), ...location(value) };
+      }
+      const row = { instance: instance.graph.id, at: location(call), binding: location(binding), source };
+      instance.graph.sessions.push(row.at); storeGraph.sessions.push(row); allowedValues.add(store);
+      bySession.set(symbol(declaration.name), { instance, declaration, binding, passed: new Set() });
+      for (const key of ['runtimeId', 'skillCatalogueId', 'model']) if (!sameValue(member(binding, key),
+        ts.factory.createPropertyAccessExpression(instance.execution, key))) {
+        storeGraph.pending.push({ reason: 'BINDING_EXECUTION_EQUIVALENCE_UNPROVEN', field: key, at: location(member(binding, key)), store: instance.graph.id });
+      }
+    }
+    for (const call of hostCalls) {
+      const input = call.arguments[0], store = member(input, 'store'), sessionValue = member(input, 'session');
+      const instance = store && ts.isIdentifier(unwrap(store)) && byStore.get(symbol(unwrap(store)));
+      const linked = sessionValue && ts.isIdentifier(unwrap(sessionValue)) && bySession.get(symbol(unwrap(sessionValue)));
+      need(instance && linked?.instance === instance, 'STORE_SUBSTITUTE_INSTANCE_UNKNOWN', store ?? call);
+      const config = member(input, 'config');
+      identityPasses.add(unwrap(config));
+      need(sameValue(member(input, 'executionAttempt'), instance.attemptId)
+        && sameValue(member(config, 'taskId'), instance.taskId), 'STORE_HOST_IDENTITY_UNKNOWN', call);
+      for (const key of ['runtimeId', 'skillCatalogueId', 'model']) need(sameValue(member(config, key), member(linked.binding, key)), 'STORE_HOST_IDENTITY_UNKNOWN', call);
+      const row = { instance: instance.graph.id, at: location(call), session: location(linked.declaration) };
+      instance.graph.hosts.push(row.at); storeGraph.hosts.push(row); allowedValues.add(store); linked.passed.add(sessionValue);
+    }
+    const valueReferences = name => (identifiers.get(name.text) ?? []).filter(node => node !== name && same(node, name));
+    // Const protects the local binding, not its object. These are finite actual
+    // receiver/value uses, deliberately refusing aliases and opaque mutators.
+    const identityUse = (use, allowCopy = false) => {
+      const transparent = value => {
+        while (value.parent && (ts.isParenthesizedExpression(value.parent) || ts.isAsExpression(value.parent)
+          || ts.isNonNullExpression(value.parent)) && value.parent.expression === value) value = value.parent;
+        return value;
+      };
+      let value = transparent(use), propertyRead = false;
+      while ((ts.isPropertyAccessExpression(value.parent) || ts.isElementAccessExpression(value.parent)) && value.parent.expression === value) {
+        propertyRead = true; value = transparent(value.parent);
+      }
+      const contains = (outer, inner) => outer.pos <= inner.pos && outer.end >= inner.end;
+      for (let node = value; node.parent; node = node.parent) {
+        const parent = node.parent;
+        const writes = ts.isBinaryExpression(parent) && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+          && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment && contains(parent.left, value)
+          || ts.isDeleteExpression(parent)
+          || (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
+          || (ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && contains(parent.initializer, value);
+        need(!writes, 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', parent);
+        if (ts.isStatement(parent) || ts.isFunctionLike(parent)) break;
+      }
+      // A property being read is not permission to invoke it as a mutating method.
+      need(!(ts.isCallExpression(value.parent) && value.parent.expression === value), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', value);
+      if (propertyRead) return;
+      if (identityPasses.has(use) || identityCopies.has(use) || allowCopy && ts.isSpreadAssignment(value.parent)) return;
+      const call = value.parent;
+      if (ts.isCallExpression(call) && call.arguments.includes(value)) {
+        const source = use.getSourceFile();
+        const imports = source.statements.filter(ts.isImportDeclaration).filter(node => node.moduleSpecifier.text === 'node:util'
+          && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings))
+          .flatMap(node => node.importClause.namedBindings.elements.filter(item => (item.propertyName ?? item.name).text === 'isDeepStrictEqual'));
+        if (imports.length === 1 && same(call.expression, imports[0].name)) return;
+      }
+      fail('STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', use);
+    };
+    const sessionInput = sessionFactory.parameters[0].name;
+    const clonedBinding = unwrap(variable(sessionFactory, 'binding').initializer);
+    const bindingInputs = walk(sessionFactory, node => ts.isPropertyAccessExpression(node) && node.name.text === 'binding' && same(node.expression, sessionInput));
+    need(ts.isCallExpression(clonedBinding) && match(clonedBinding, 'structuredClone(input.binding)', { input: sessionInput })
+      && !symbol(clonedBinding.expression)?.declarations?.some(node => files.includes(node.getSourceFile()))
+      && bindingInputs.length === 1 && clonedBinding.arguments[0] === bindingInputs[0], 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', clonedBinding);
+    for (const value of walk(hostFactory, node => ts.isPropertyAccessExpression(node) && node.name.text === 'config' && same(node.expression, hostInput)))
+      identityUse(value, true);
+    for (const declaration of identityObjects.values()) {
+      const uses = valueReferences(declaration.name);
+      for (const use of uses) identityUse(use);
+      storeGraph.identityObjects.push({ at: location(declaration), uses: uses.map(location), status: 'readonly-local-uses' });
+    }
+    for (const instance of instances) {
+      for (const use of valueReferences(instance.declaration.name)) {
+        if (allowedValues.has(use)) continue;
+        const access = use.parent;
+        need(ts.isPropertyAccessExpression(access) && access.expression === use && !access.questionDotToken, 'STORE_INSTANCE_ESCAPE_UNKNOWN', use);
+        const call = access.parent;
+        need(ts.isCallExpression(call) && call.expression === access && !call.questionDotToken, 'STORE_METHOD_ESCAPE_UNKNOWN', access);
+        need(access.name.text === 'read' && call.arguments.length === 0, 'STORE_UNEXPECTED_WRITER_UNKNOWN', call);
+        need(ts.isAwaitExpression(call.parent), 'STORE_METHOD_NOT_AWAITED_UNKNOWN', call);
+        need(enclosing(call) === enclosing(instance.call), 'STORE_UNKNOWN_CONSUMER', call);
+        instance.graph.localReads.push(location(call));
+      }
+      need(instance.graph.sessions.length > 0 && instance.graph.hosts.length === instance.graph.sessions.length
+        || same(instance.declaration.name, replayStore.name) && instance.graph.localReads.length === 1,
+      'STORE_UNKNOWN_CONSUMER', instance.call);
+    }
+    for (const linked of bySession.values()) {
+      need(linked.passed.size === 1, 'STORE_SESSION_ESCAPE_UNKNOWN', linked.declaration);
+      for (const use of valueReferences(linked.declaration.name)) need(linked.passed.has(use), 'STORE_SESSION_ESCAPE_UNKNOWN', use);
+    }
+    for (const [factory, consumer] of [[sessionFactory, 'session'], [hostFactory, 'host']]) {
+      const input = factory.parameters[0].name;
+      for (const use of valueReferences(input)) need(ts.isPropertyAccessExpression(use.parent) && use.parent.expression === use,
+        'STORE_CAPABILITY_INPUT_ESCAPE_UNKNOWN', use);
+      const values = walk(factory, node => ts.isPropertyAccessExpression(node) && node.name.text === 'store' && same(node.expression, input));
+      const methods = [];
+      for (const value of values) {
+        const access = value.parent, call = access?.parent;
+        need(access && ts.isPropertyAccessExpression(access) && access.expression === value && !access.questionDotToken
+          && call && ts.isCallExpression(call) && call.expression === access && !call.questionDotToken, 'STORE_METHOD_ESCAPE_UNKNOWN', value);
+        need(ts.isAwaitExpression(call.parent), 'STORE_METHOD_NOT_AWAITED_UNKNOWN', call);
+        const method = access.name.text;
+        if (consumer === 'host') need(method === 'read' && call.arguments.length === 0, 'STORE_UNEXPECTED_WRITER_UNKNOWN', call);
+        else if (method === 'read') need(call.arguments.length === 0 && enclosing(call) === readState, 'STORE_SHARED_SUPPLIER_UNKNOWN', call);
+        else if (method === 'compareAndSet') need(call.arguments.length === 2 && same(call.arguments[0], currentState)
+          && same(call.arguments[1], started.name), 'STORE_SHARED_SUPPLIER_UNKNOWN', call);
+        else if (method === 'publish') need(call === publishCalls[0], 'STORE_SHARED_SUPPLIER_UNKNOWN', call);
+        else if (method === 'complete') need(call === finalCalls[0], 'STORE_SHARED_SUPPLIER_UNKNOWN', call);
+        else fail('STORE_UNEXPECTED_WRITER_UNKNOWN', call);
+        methods.push(method); storeGraph.shared.push({ consumer, method, ...location(call) });
+      }
+      need(consumer === 'session' ? methods.length === 4 && new Set(methods).size === 4 : methods.length === 2,
+        'STORE_UNEXPECTED_WRITER_UNKNOWN', factory);
+    }
+    for (const factory of [storeFactory, journalFactory]) {
+      const returned = one(walk(factory, node => ts.isReturnStatement(node) && enclosing(node) === factory), 'STORE_RETURN_UNKNOWN');
+      const object = unwrap(returned.expression), input = factory.parameters[0].name;
+      need(ts.isObjectLiteralExpression(object) && object.properties.length === 4, 'STORE_RETURN_UNKNOWN', returned);
+      const methods = new Map(object.properties.map(property => [property.name?.text, property]));
+      need(methods.size === 4 && ['read', 'compareAndSet', 'complete', 'publish'].every(key => methods.has(key)), 'STORE_RETURN_UNKNOWN', returned);
+      const update = fn(factory, factory === storeFactory ? 'update' : 'save'), wrappers = [];
+      for (const [key, paid] of [['compareAndSet', false], ['complete', true]]) {
+        const arrow = unwrap(methods.get(key).initializer);
+        need(ts.isArrowFunction(arrow) && arrow.parameters.length === 2
+          && match(arrow.body, `update(previous, state, ${paid})`, { update: update.name, previous: arrow.parameters[0].name, state: arrow.parameters[1].name }),
+        'STORE_UPDATE_SUPPLIER_UNKNOWN', methods.get(key));
+        wrappers.push(unwrap(arrow.body));
+      }
+      const updateCalls = uses(update);
+      need(updateCalls.length === 2 && updateCalls.every(call => wrappers.includes(call)), 'STORE_UPDATE_SUPPLIER_UNKNOWN', update);
+      const marker = fn(factory, factory === storeFactory ? 'marker' : 'current'), task = variable(marker, 'task');
+      const taskLookup = unwrap(task.initializer);
+      need(ts.isAwaitExpression(task.initializer) && ts.isCallExpression(taskLookup) && match(taskLookup.expression, 'db.agentTask.findUnique', { db: marker.parameters[0].name })
+        && match(member(member(taskLookup.arguments[0], 'where'), 'id'), 'input.taskId', { input }), 'STORE_MARKER_IDENTITY_UNKNOWN', marker);
+      const execution = variable(marker, factory === storeFactory ? 'execution' : 'marker');
+      need(callOf(execution.initializer, executionReader) && match(unwrap(execution.initializer).arguments[0], 'task?.result', { task: task.name }),
+        'STORE_MARKER_IDENTITY_UNKNOWN', execution);
+      const readMethod = methods.get('read'), publishMethod = methods.get('publish');
+      need(ts.isMethodDeclaration(readMethod) && ts.isMethodDeclaration(publishMethod)
+        && publishMethod.parameters.length === 2, 'STORE_RETURN_SUPPLIER_UNKNOWN', returned);
+      const firstRead = readMethod.body?.statements[0]?.declarationList?.declarations[0];
+      const firstPublish = publishMethod.body?.statements[0]?.declarationList?.declarations[0];
+      const expected = fn(factory, factory === storeFactory ? 'expected' : 'receipt');
+      need(firstPublish && match(firstPublish.initializer, 'expected(started)',
+        { expected: expected.name, started: publishMethod.parameters[0].name }), 'STORE_RETURN_SUPPLIER_UNKNOWN', publishMethod);
+      if (factory === storeFactory) {
+        const checkpoint = unwrap(firstRead?.initializer);
+        let receiver = checkpoint && ts.isPropertyAccessExpression(checkpoint) ? checkpoint.expression : undefined;
+        while (receiver && ts.isParenthesizedExpression(receiver)) receiver = receiver.expression;
+        need(receiver && ts.isAwaitExpression(receiver)
+          && match(checkpoint, 'marker(input.prisma).checkpoint', { marker: marker.name, input }), 'STORE_RETURN_SUPPLIER_UNKNOWN', readMethod);
+      } else need(firstRead && ts.isAwaitExpression(firstRead.initializer) && callOf(firstRead.initializer, marker)
+        && match(unwrap(firstRead.initializer).arguments[0], 'input.prisma', { input }), 'STORE_RETURN_SUPPLIER_UNKNOWN', readMethod);
+      const row = { factory: factory.name.text, returned: location(returned), methods: [...methods].map(([method, node]) => ({ method, ...location(node) })),
+        update: location(update), marker: location(marker) };
+      if (factory === storeFactory) {
+        const persist = fn(factory, 'persist'), prepared = variable(update, 'prepared');
+        need(ts.isAwaitExpression(prepared.initializer) && callOf(prepared.initializer, persist) && same(unwrap(prepared.initializer).arguments[0], update.parameters[1].name)
+          && uses(persist).length === 1, 'STORE_PERSIST_SUPPLIER_UNKNOWN', prepared);
+        const compare = fn(file('packages/domain/src/agent/native-agent-execution.ts'), 'compareNativeAgentCheckpoint');
+        const calls = walk(update, node => ts.isCallExpression(node) && same(node.expression, compare.name));
+        need(calls.length === 1, 'STORE_CAS_SUPPLIER_UNKNOWN', update);
+        for (const key of ['taskId', 'executionAttempt', 'expectedExecution']) need(match(member(calls[0].arguments[1], key),
+          `input.${key === 'expectedExecution' ? 'execution' : key}`, { input }), 'STORE_CAS_SUPPLIER_UNKNOWN', calls[0]);
+        row.persist = location(persist); row.cas = location(calls[0]);
+
+        // Join the real private serializer/read membership to the external CAS.
+        // Internal byte/selected-read semantics remain a COMPLETE-module equality
+        // premise for the real future pair, never a supplied equality boolean.
+        const directVariable = (block, name) => one(block.statements.filter(ts.isVariableStatement)
+          .flatMap(statement => statement.declarationList.declarations).filter(node => ts.isIdentifier(node.name) && node.name.text === name), 'PRIVATE_LOCAL_ORIGIN_UNKNOWN');
+        const known = variable(factory, 'known'), hashFunction = one(walk(storeFile, node => ts.isVariableDeclaration(node)
+          && node.name.text === 'sha'), 'PRIVATE_HASH_ORIGIN_UNKNOWN');
+        const hashArrow = unwrap(hashFunction.initializer), createHash = importOf(storeFile, 'node:crypto', 'createHash');
+        need(known.parent.flags & ts.NodeFlags.Const && ts.isNewExpression(known.initializer) && known.initializer.expression.text === 'Map'
+          && (known.initializer.arguments?.length ?? 0) === 0
+          && !symbol(known.initializer.expression)?.declarations?.some(node => files.includes(node.getSourceFile()))
+          && hashFunction.parent.flags & ts.NodeFlags.Const && ts.isArrowFunction(hashArrow) && hashArrow.parameters.length === 1 && !hashArrow.modifiers?.length
+          && match(hashArrow.body, "createHash('sha256').update(bytes).digest('hex')", { createHash, bytes: hashArrow.parameters[0].name }), 'PRIVATE_HASH_ORIGIN_UNKNOWN', known);
+        const mapCalls = valueReferences(known.name).map(use => {
+          const access = use.parent, call = access?.parent;
+          need(ts.isPropertyAccessExpression(access) && access.expression === use && !access.questionDotToken
+            && ts.isCallExpression(call) && call.expression === access && !call.questionDotToken
+            && ['get', 'set'].includes(access.name.text), 'PRIVATE_KNOWN_USE_UNKNOWN', use);
+          return { method: access.name.text, call };
+        });
+        const gets = mapCalls.filter(item => item.method === 'get').map(item => item.call);
+        const sets = mapCalls.filter(item => item.method === 'set').map(item => item.call);
+        need(gets.length === 1 && sets.length === 2, 'PRIVATE_KNOWN_USE_UNKNOWN', known);
+        const stop = fn(storeFile, 'blocked'), expectedState = expected.parameters[0].name;
+        need(stop.body.statements.length === 1 && ts.isThrowStatement(stop.body.statements[0]), 'PRIVATE_EXPECTED_MEMBERSHIP_UNKNOWN', stop);
+        const expectedBody = expected.body.statements, expectedReference = directVariable(expected.body, 'reference');
+        need(expectedBody.length === 4 && ts.isIfStatement(expectedBody[0]) && !expectedBody[0].elseStatement
+          && match(expectedBody[0].expression, '!state', { state: expectedState })
+          && ts.isReturnStatement(expectedBody[0].thenStatement) && match(expectedBody[0].thenStatement.expression, 'undefined')
+          && unwrap(expectedReference.initializer) === gets[0]
+          && match(expectedReference.initializer, 'known.get(sha(Buffer.from(JSON.stringify(state))))',
+            { known: known.name, sha: hashFunction.name, state: expectedState })
+          && guard(expectedBody[2], '!reference', { reference: expectedReference.name }, stop)
+          && ts.isReturnStatement(expectedBody[3]) && same(expectedBody[3].expression, expectedReference.name), 'PRIVATE_EXPECTED_MEMBERSHIP_UNKNOWN', expected);
+        const bytes = directVariable(persist.body, 'bytes'), hash = directVariable(persist.body, 'hash');
+        const key = directVariable(persist.body, 'objectKey'), reference = directVariable(persist.body, 'reference');
+        const turn = directVariable(persist.body, 'turn'), binding = directVariable(persist.body, 'binding');
+        const persistState = persist.parameters[0].name;
+        need(match(bytes.initializer, 'Buffer.from(JSON.stringify(state))', { state: persistState })
+          && match(hash.initializer, 'sha(bytes)', { sha: hashFunction.name, bytes: bytes.name })
+          && match(key.initializer, '`derived/native-agent/${hash}.json`', { hash: hash.name })
+          && match(turn.initializer, 'state.turns.at(-1)', { state: persistState })
+          && match(binding.initializer, 'state.binding', { state: persistState }), 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', persist);
+        const referenceRoles = { input, objectKey: key.name, hash: hash.name, bytes: bytes.name, state: persistState, turn: turn.name };
+        for (const [name, shape] of [['taskId', 'input.taskId'], ['objectKey', 'objectKey'], ['serializedSha256', 'hash'], ['size', 'bytes.length'],
+          ['executionAttempt', 'input.executionAttempt'], ['turnCount', 'state.turns.length'], ['state', 'turn.state'], ['target', 'turn.target']])
+          need(match(member(reference.initializer, name), shape, referenceRoles), 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', reference);
+        const persistReturn = one(walk(persist, node => ts.isReturnStatement(node) && enclosing(node) === persist), 'PRIVATE_SERIALIZER_RETURN_UNKNOWN');
+        need(same(member(persistReturn.expression, 'reference'), reference.name) && same(member(persistReturn.expression, 'bytes'), bytes.name), 'PRIVATE_SERIALIZER_RETURN_UNKNOWN', persistReturn);
+
+        const updateBody = update.body.statements, attempt = updateBody[2];
+        const old = directVariable(update.body, 'old'), next = directVariable(update.body, 'next');
+        const updateSet = one(sets.filter(call => enclosing(call) === update), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN');
+        const readSet = one(sets.filter(call => enclosing(call) === readMethod), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN');
+        need(updateBody.length === 4 && ts.isTryStatement(attempt) && !attempt.finallyBlock && attempt.catchClause
+          && updateBody[3]?.expression === updateSet && !next.initializer && next.parent.flags & ts.NodeFlags.Let,
+        'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN', update);
+        need(match(old.initializer, 'expected(previous)', { expected: expected.name, previous: update.parameters[0].name }), 'PRIVATE_EXPECTED_ORIGIN_UNKNOWN', old);
+        const tryBody = attempt.tryBlock.statements, catchBody = attempt.catchClause.block.statements;
+        const preparedReference = directVariable(attempt.tryBlock, 'preparedReference'), head = directVariable(attempt.tryBlock, 'object');
+        need(tryBody.length === 7 && tryBody[0].declarationList?.declarations[0] === prepared
+          && match(tryBody[1]?.expression, 'next = prepared.reference', { next: next.name, prepared: prepared.name })
+          && ts.isAwaitExpression(head.initializer) && match(head.initializer, 'input.storage.headObject(next.objectKey)', { input, next: next.name })
+          && guard(tryBody[3], 'object && object.size !== prepared.bytes.length', { object: head.name, prepared: prepared.name }, stop)
+          && same(preparedReference.initializer, next.name), 'PRIVATE_PREPARED_REFERENCE_UNKNOWN', attempt);
+        const putIf = tryBody[4], put = putIf?.thenStatement?.expression;
+        need(ts.isIfStatement(putIf) && !putIf.elseStatement && match(putIf.expression, '!object', { object: head.name })
+          && put && ts.isAwaitExpression(put) && match(put,
+            "input.storage.putObject(next.objectKey, prepared.bytes, { contentType: 'application/json', sha256: next.serializedSha256 })",
+            { input, next: next.name, prepared: prepared.name }), 'PRIVATE_UPLOAD_ORIGIN_UNKNOWN', putIf);
+        const transaction = tryBody[6]?.expression;
+        need(transaction && ts.isAwaitExpression(transaction) && ts.isCallExpression(transaction.expression)
+          && match(transaction.expression.expression, 'input.prisma.$transaction', { input }), 'PRIVATE_UPDATE_TRANSACTION_UNKNOWN', attempt);
+        const txCall = transaction.expression, callback = txCall.arguments[0];
+        need(ts.isArrowFunction(callback) && callback.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+          && callback.parameters.length === 1 && ts.isBlock(callback.body)
+          && callback.body.statements.length === 3 && ts.isAwaitExpression(callback.body.statements[0]?.expression)
+          && match(callback.body.statements[0].expression, 'lockTrashReferences(tx)',
+            { lockTrashReferences: importOf(storeFile, '@openscience/domain', 'lockTrashReferences'), tx: callback.parameters[0].name })
+          && ts.isIfStatement(callback.body.statements[1]) && !callback.body.statements[1].elseStatement
+          && match(callback.body.statements[1].expression, '!paidCompletion', { paidCompletion: update.parameters[2].name })
+          && ts.isAwaitExpression(callback.body.statements[1].thenStatement?.expression)
+          && match(callback.body.statements[1].thenStatement.expression, 'input.authorize(tx)', { input, tx: callback.parameters[0].name })
+          && callback.body.statements[2]?.expression?.expression === calls[0]
+          && ts.isAwaitExpression(callback.body.statements[2].expression), 'PRIVATE_UPDATE_TRANSACTION_UNKNOWN', txCall);
+        const casObject = unwrap(calls[0].arguments[1]);
+        need(same(calls[0].arguments[0], callback.parameters[0].name) && ts.isObjectLiteralExpression(casObject)
+          && casObject.properties.length === 6 && casObject.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+            && !ts.isComputedPropertyName(property.name)), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
+        for (const [name, shape] of [['taskId', 'input.taskId'], ['executionAttempt', 'input.executionAttempt'], ['expected', 'old'],
+          ['next', 'preparedReference'], ['paidCompletion', 'paidCompletion'], ['expectedExecution', 'input.execution']])
+          need(match(member(casObject, name), shape, { input, old: old.name, preparedReference: preparedReference.name,
+            paidCompletion: update.parameters[2].name }), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
+        const failedTask = directVariable(attempt.catchClause.block, 'task'), catchError = attempt.catchClause.variableDeclaration?.name;
+        const cleanup = catchBody[1], cleanupCall = cleanup?.thenStatement?.expression;
+        need(catchBody.length === 3 && catchError && ts.isAwaitExpression(failedTask.initializer)
+          && match(failedTask.initializer, 'input.prisma.agentTask.findUnique({ where: { id: input.taskId } })', { input })
+          && ts.isIfStatement(cleanup) && !cleanup.elseStatement && match(cleanup.expression, 'next && (!task || task.deletedAt)', { next: next.name, task: failedTask.name })
+          && cleanupCall && ts.isAwaitExpression(cleanupCall) && match(cleanupCall,
+            'rememberDiscardedTaskResult(input.prisma, input.taskId, { nativeAgentExecution: { checkpoint: next } })',
+            { rememberDiscardedTaskResult: importOf(storeFile, '@openscience/domain', 'rememberDiscardedTaskResult'), input, next: next.name })
+          && ts.isThrowStatement(catchBody[2]) && same(catchBody[2].expression, catchError), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN', attempt.catchClause);
+        need(match(updateSet, 'known.set(next.serializedSha256, next)', { known: known.name, next: next.name }), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN', updateSet);
+
+        const cp = firstRead, readObject = directVariable(readMethod.body, 'object'), readBytes = directVariable(readMethod.body, 'bytes');
+        const readState = directVariable(readMethod.body, 'state'), readStatements = readMethod.body.statements;
+        need(ts.isAwaitExpression(readObject.initializer) && match(readObject.initializer, 'input.storage.getObject(cp.objectKey)', { input, cp: cp.name })
+          && match(readState.initializer, "JSON.parse(bytes.toString('utf8'))", { bytes: readBytes.name })
+          && match(readSet, 'known.set(cp.serializedSha256, cp)', { known: known.name, cp: cp.name })
+          && readStatements.at(-2)?.expression === readSet && ts.isReturnStatement(readStatements.at(-1))
+          && same(readStatements.at(-1).expression, readState.name), 'PRIVATE_READ_REFERENCE_UNKNOWN', readMethod);
+        need([expectedReference, bytes, hash, key, reference, turn, binding, old, prepared, preparedReference, cp, readObject, readBytes, readState]
+          .every(node => node.parent.flags & ts.NodeFlags.Const), 'PRIVATE_LOCAL_ORIGIN_UNKNOWN', update);
+        const referencesOnly = (declaration, allowed) => {
+          for (const use of valueReferences(declaration.name)) {
+            if (allowed.has(use)) continue;
+            need(ts.isPropertyAccessExpression(use.parent) && use.parent.expression === use, 'PRIVATE_REFERENCE_ESCAPE_UNKNOWN', use);
+            identityUse(use); // supported top-level receiver reads; nested target/source aliasing remains a premise
+          }
+        };
+        referencesOnly(reference, new Set([member(persistReturn.expression, 'reference')]));
+        referencesOnly(preparedReference, new Set([member(casObject, 'next')]));
+        referencesOnly(prepared, new Set());
+        referencesOnly(next, new Set([tryBody[1].expression.left, preparedReference.initializer, cleanup.expression.left,
+          member(member(unwrap(cleanupCall).arguments[2], 'nativeAgentExecution'), 'checkpoint'), updateSet.arguments[1]]));
+        need(ts.isIfStatement(readStatements[1]) && match(readStatements[1].expression, '!cp', { cp: cp.name }), 'PRIVATE_READ_REFERENCE_UNKNOWN', readMethod);
+        referencesOnly(cp, new Set([readStatements[1].expression.operand, readSet.arguments[1]]));
+        const expectedCalls = uses(expected);
+        need(expectedCalls.length === 2 && expectedCalls.includes(unwrap(old.initializer)) && expectedCalls.includes(unwrap(firstPublish.initializer)), 'PRIVATE_EXPECTED_ORIGIN_UNKNOWN', expected);
+        privateStoreChain.nodes = [['known', known], ['hash', hashFunction], ['expected', expected], ['persist', persist], ['reference', reference],
+          ['old', old], ['prepared', prepared], ['next', next], ['preparedReference', preparedReference], ['transaction', transaction], ['cas', calls[0]],
+          ['updateRegistration', updateSet], ['read', readMethod], ['parsedState', readState], ['readRegistration', readSet]].map(([role, node]) => ({ role, ...location(node) }));
+        privateStoreChain.knownUses = { get: gets.length, set: sets.length };
+        privateStoreChain.equalityPremise.modules = [storeFile, sessionFile, file('packages/storage/src/types.ts'),
+          file('packages/domain/src/agent/native-agent-execution.ts')].map(source => relative(sourceRoot, source.fileName).replaceAll('\\', '/'));
+        privateStoreChain.remaining = ['actual candidate/rollback complete-module equality with dependencies',
+          'borrowed state/reference target/source nonescape and concurrent mutation context', 'Domain external identity/source/paid/live/CAS semantics'];
+        privateStoreChain.status = 'conditional';
+      } else {
+        const writes = walk(update, node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+          && node.expression.name.text === 'updateMany' && ts.isPropertyAccessExpression(node.expression.expression)
+          && node.expression.expression.name.text === 'agentTask');
+        const paidWrites = writes.filter(call => {
+          const data = member(call.arguments[0], 'data'), result = unwrap(member(data, 'result'));
+          return ts.isObjectLiteralExpression(result) && result.properties.some(property => property.name?.text === 'journalNativeCheckpoint');
+        });
+        need(paidWrites.length === 1, 'STORE_JOURNAL_CAS_SUPPLIER_UNKNOWN', update);
+        need(match(member(member(paidWrites[0].arguments[0], 'where'), 'executionAttempt'), 'input.executionAttempt', { input }),
+          'STORE_JOURNAL_CAS_SUPPLIER_UNKNOWN', paidWrites[0]);
+        row.cas = location(paidWrites[0]);
+        storeGraph.pending.push({ reason: 'JOURNAL_OWN_RESULT_CAS_SEMANTICS_UNPROVEN', at: row.cas });
+      }
+      storeGraph.factories.push(row);
+    }
+    storeGraph.pending.push({ reason: 'DISPATCH_MARKER_TASK_KIND_PROFILE_SEPARATION_UNPROVEN',
+      at: location(fn(file('packages/domain/src/agent/native-agent-execution.ts'), 'compareNativeAgentCheckpoint')) });
+    storeGraph.status = 'conditional';
+    proven.push('store-capability-use');
+    if (privateStoreChain.status === 'conditional') proven.push('generic-private-store-chain');
+
+    const other = [];
+    for (const [target, calls] of [[storeFactory, storeCalls], [sessionFactory, sessionCalls], [hostFactory, hostCalls]]) for (const call of calls) {
+      const input = unwrap(call.arguments[0]);
+      need(input && ts.isObjectLiteralExpression(input), 'EXTRA_UNBOUND_FACTORY_CALLER', call);
+      if (target === storeFactory) for (const key of ['taskId', 'executionAttempt', 'execution', 'authorize']) objectProperty(input, key);
+      if (![live, replay].includes(enclosing(call))) other.push({ target: target.name.text, ...location(call) });
+    }
+    // These real paper/source/image/journal origins are inventoried, not blessed
+    // by function name. Their store-method/profile separation is still unproved.
+    return { status: 'unknown', reason: 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', releaseCompatible: false,
+      proven, references, storeGraph, privateStoreChain, unresolved: other,
+      pending: ['non-illustration factory/profile and store-method origin separation',
+        'all slot/value escapes and Gateway tool-history/SDK role codec',
+        'full private-byte/source and current-lease/late-paid CAS proof',
+        'recursive base cache/cycle/source identity and all return-path proof',
+        'directional A/B constructors, context projection and release-history premises'] };
+  } catch (error) {
+    return { status: 'unknown', reason: typeof error?.reason === 'string' ? error.reason : 'SOURCE_ANALYSIS_UNKNOWN',
+      releaseCompatible: false, proven, references, storeGraph, privateStoreChain, at: location(error?.node) };
+  }
+}
+
+// Internal constructor component of the pair proof. This does not grant a
+// compatibility result; the caller must still prove selectors, whole receipts,
+// all transfer edges, strict remainder/dependencies and the historical domain.
+function finiteVideoConstructorTerms(ts, context) {
+  const { program, checker, root } = context;
+  const fail = node => { throw { reason: 'VIDEO_CONSTRUCTOR_NOT_PURE', node }; };
+  const scan = (scope, predicate) => {
+    const values = [];
+    const visit = node => { if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (predicate(node)) values.push(node); ts.forEachChild(node, visit); };
+    visit(scope); return values;
+  };
+  const unique = (values, node) => { if (values.length !== 1) fail(node ?? values[0]); return values[0]; };
+  const sources = program.getSourceFiles().filter(source => !source.isDeclarationFile
+    && relative(root, source.fileName).replaceAll('\\', '/').match(/^(apps|packages)\/[^/]+\/src\//u));
+  const fn = (source, name) => unique(scan(source, node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = node => {
+    let value = checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) { const target = checker.getAliasedSymbol(value); if (target?.declarations?.length) value = target; }
+    return value;
+  };
+  const materializer = unique(sources.flatMap(source => scan(source,
+    node => ts.isFunctionDeclaration(node) && node.name?.text === 'createNativeIllustrationMaterializer')));
+  const spool = unique(sources.flatMap(source => scan(source, node => ts.isClassDeclaration(node) && node.name?.text === 'SynclipVideoSpool')));
+  const source = spool.getSourceFile(), legacy = fn(source, 'compileShotPrompt'), historical = fn(source, 'compileHistoricalNativeVideoShotPrompt');
+  const approved = scan(source, node => ts.isFunctionDeclaration(node) && node.name?.text === 'compileApprovedShotPrompt');
+  if (approved.length > 1) fail(source);
+  const direction = fn(source, 'directionText'), shot = fn(source, 'shotPrompt');
+  const modes = scan(legacy, node => ts.isVariableDeclaration(node) && node.name.text === 'mode');
+  const mode = unique(modes, legacy), modeCall = mode.initializer;
+  if (!modeCall || !ts.isCallExpression(modeCall) || !ts.isIdentifier(modeCall.expression)) fail(mode);
+  const classify = unique((symbol(modeCall.expression)?.declarations ?? []).filter(ts.isFunctionDeclaration), modeCall);
+  const classifiers = new Set([symbol(classify.name)]), helpers = new Map([direction, shot].map(value => [symbol(value.name), value]));
+  const unwrap = node => { while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const concatenate = values => {
+    const flat = values.flatMap(value => value[0] === 'concat' ? value.slice(1) : [value]);
+    const result = [];
+    for (const value of flat) {
+      if (value[0] === 'string' && result.at(-1)?.[0] === 'string') result[result.length - 1][1] += value[1];
+      else result.push([...value]);
+    }
+    return result.length === 1 ? result[0] : ['concat', ...result];
+  };
+  const evaluate = (functionNode, argumentsTerms, stack = new Set()) => {
+    if (stack.has(functionNode) || stack.size > 6 || functionNode.asteriskToken
+      || functionNode.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+      || !functionNode.body || functionNode.parameters.length !== argumentsTerms.length) fail(functionNode);
+    stack = new Set(stack).add(functionNode);
+    const locals = new Map(), guards = [];
+    functionNode.parameters.forEach((parameter, index) => { if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken) fail(parameter);
+      locals.set(symbol(parameter.name), argumentsTerms[index]); });
+    const expression = raw => {
+      const node = unwrap(raw); if (!node) fail(raw);
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return ['string', node.text];
+      if (ts.isNumericLiteral(node)) return ['number', node.text];
+      if ([ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(node.kind)) return ['constant', node.kind];
+      if (ts.isIdentifier(node)) { const value = locals.get(symbol(node)); if (!value) fail(node); return value; }
+      if (ts.isPropertyAccessExpression(node) && !['__proto__', 'prototype', 'constructor'].includes(node.name.text))
+        return ['property', expression(node.expression), node.name.text];
+      if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) return ['not', expression(node.operand)];
+      if (ts.isBinaryExpression(node)) {
+        if (node.operatorToken.kind === ts.SyntaxKind.PlusToken) return concatenate([expression(node.left), expression(node.right)]);
+        if (![ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.BarBarToken,
+          ts.SyntaxKind.AmpersandAmpersandToken].includes(node.operatorToken.kind)) fail(node);
+        return ['binary', node.operatorToken.kind, expression(node.left), expression(node.right)];
+      }
+      if (ts.isConditionalExpression(node)) {
+        const size = guards.length, condition = expression(node.condition), yes = expression(node.whenTrue), no = expression(node.whenFalse);
+        if (guards.length !== size) fail(node);
+        return ['conditional', condition, yes, no];
+      }
+      if (ts.isArrayLiteralExpression(node)) return ['array', ...node.elements.map(expression)];
+      if (ts.isCallExpression(node) && !node.questionDotToken && !node.typeArguments?.length) {
+        if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'join' && node.arguments.length === 1) {
+          const receiver = expression(node.expression.expression), separator = expression(node.arguments[0]);
+          if (separator[0] !== 'string') fail(node);
+          if (receiver[0] === 'array') return concatenate(receiver.slice(1).flatMap((value, index) => index ? [['string', separator[1]], value] : [value]));
+          // The original direction helper's parameter-derived string[] is an
+          // audited JSON contract, preserved in the pair's strict old context.
+          if (functionNode !== direction || receiver[0] !== 'property' || receiver[2] !== 'negativeConstraints') fail(node);
+          return ['join', receiver, separator];
+        }
+        if (!ts.isIdentifier(node.expression)) fail(node);
+        const target = symbol(node.expression), args = node.arguments.map(expression);
+        if (classifiers.has(target)) return ['retained-context-call', relative(root, classify.getSourceFile().fileName).replaceAll('\\', '/'), classify.name.text, args];
+        const helper = helpers.get(target); if (!helper) fail(node);
+        const result = evaluate(helper, args, stack); guards.push(...result.guards); return result.value;
+      }
+      fail(node);
+    };
+    let value;
+    for (const [index, statement] of functionNode.body.statements.entries()) {
+      if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (!ts.isIdentifier(declaration.name) || !declaration.initializer) fail(declaration);
+          locals.set(symbol(declaration.name), expression(declaration.initializer));
+        }
+      } else if (ts.isIfStatement(statement) && !statement.elseStatement) {
+        const body = ts.isBlock(statement.thenStatement) ? statement.thenStatement.statements : [statement.thenStatement];
+        const error = body[0]?.expression;
+        if (body.length !== 1 || !ts.isThrowStatement(body[0]) || !error || !ts.isNewExpression(error)
+          || !ts.isIdentifier(error.expression) || error.expression.text !== 'Error'
+          || symbol(error.expression)?.declarations?.some(node => sources.includes(node.getSourceFile()))
+          || error.arguments?.length !== 1 || !ts.isStringLiteral(error.arguments[0])) fail(statement);
+        guards.push([expression(statement.expression), error.arguments[0].text]);
+      } else if (ts.isReturnStatement(statement) && index === functionNode.body.statements.length - 1) value = expression(statement.expression);
+      else fail(statement);
+    }
+    if (!value) fail(functionNode);
+    return { value, guards };
+  };
+  const args = [0, 1, 2].map(index => ['parameter', index]);
+  return { materializer, spool, legacy, historical, approved: approved[0], direction, shot, classify,
+    terms: { legacy: evaluate(legacy, args), historical: evaluate(historical, args),
+      ...(approved.length ? { approved: evaluate(approved[0], args) } : {}) } };
+}
+
+// Source component only: consumed nodes are checked against a finite grammar,
+// then projected back to the retained original producer. The pair caller still
+// owns genuine collector identity, every other entry and history composition.
+function finiteVideoSourceModel(ts, context) {
+  const constructors = finiteVideoConstructorTerms(ts, context), { checker } = context;
+  const unknown = node => { throw { reason: 'VIDEO_TRANSFER_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) unknown(node); };
+  const nodes = (scope, predicate) => { const found = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) found.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return found; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => { let value = checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value); return value; };
+  const scope = node => { for (let parent = node.parent; parent; parent = parent.parent)
+    if (ts.isFunctionLike(parent) && parent.body) return parent; return undefined; };
+  const variable = (owner, name) => one(nodes(owner, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === name && scope(node) === owner), owner);
+  const fn = (owner, name) => one(nodes(owner, node => ts.isFunctionDeclaration(node) && node.name?.text === name), owner);
+  const isName = node => node && ts.isIdentifier(node);
+  const identifier = node => { need(isName(node), node); return node.text; };
+  const args = functionNode => functionNode.parameters.map(parameter => { need(!parameter.dotDotDotToken && isName(parameter.name), parameter); return parameter.name.text; });
+  const bindReferences = (region, declarations) => {
+    const names = new Map();
+    for (const declaration of declarations) {
+      const identifierNode = declaration?.name ?? declaration;
+      need(isName(identifierNode) && symbol(identifierNode), declaration);
+      const existing = names.get(identifierNode.text), target = symbol(identifierNode);
+      need(!existing || existing === target, identifierNode); names.set(identifierNode.text, target);
+    }
+    for (const reference of nodes(region, ts.isIdentifier)) {
+      const target = names.get(reference.text); if (!target) continue;
+      const parent = reference.parent;
+      if (ts.isPropertyAccessExpression(parent) && parent.name === reference
+        || ts.isPropertyAssignment(parent) && parent.name === reference
+        || ts.isMethodDeclaration(parent) && parent.name === reference) continue;
+      const actual = ts.isShorthandPropertyAssignment(parent) ? checker.getShorthandAssignmentValueSymbol(parent) : symbol(reference);
+      need(actual === target, reference);
+    }
+  };
+  const printer = ts.createPrinter({ removeComments: true });
+  const print = node => printer.printNode(ts.EmitHint.Unspecified, node, node.getSourceFile());
+  const canonical = node => {
+    const children = []; ts.forEachChild(node, child => { children.push(canonical(child)); });
+    return [node.kind, ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? node.text
+      : ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) ? node.operator
+        : ts.isVariableDeclarationList(node) ? node.flags & ts.NodeFlags.BlockScoped : null, children];
+  };
+  const runtime = code => {
+    const compiled = ts.transpileModule(code, { reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error));
+    const source = ts.createSourceFile('finite.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(source.parseDiagnostics.length === 0); return canonical(source);
+  };
+  const matches = (actual, expected) => need(JSON.stringify(runtime(actual.map(print).join('\n'))) === JSON.stringify(runtime(expected)), actual[0]);
+  const parse = code => {
+    const source = ts.createSourceFile('finite.ts', code, ts.ScriptTarget.ES2022, true);
+    need(source.parseDiagnostics.length === 0);
+    // Replacement nodes belong to this separate finite template, not the
+    // captured application's character offsets. Synthesize the complete tree
+    // so printing cannot read a number/string from the application's unrelated
+    // original source range. Original context nodes remain untouched.
+    const cloned = ts.transform(source, [transformation => {
+      const visit = node => {
+        const result = ts.factory.cloneNode(ts.visitEachChild(node, visit, transformation));
+        ts.setTextRange(result, { pos: -1, end: -1 }); ts.setOriginalNode(result, undefined); return result;
+      };
+      return node => ts.visitNode(node, visit);
+    }]);
+    try { return cloned.transformed[0].statements; } finally { cloned.dispose(); }
+  };
+  const replacements = new Map(), removed = new Set(), consumedApproved = new Set();
+  const { materializer, spool, legacy, historical, approved } = constructors;
+  if (approved) {
+    const terms = constructors.terms, L = terms.legacy.value, H = terms.historical.value, A = terms.approved.value;
+    const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+    // The admitted new family changes one final fixed drawing-policy string.
+    // All scientific/context field reads, audio choice and rejecting guards
+    // remain the genuine old constructor's terms. JSON-contract inputs carry
+    // no property accessors or operator hooks.
+    need(equal(terms.legacy.guards, terms.approved.guards) && L[0] === 'concat' && A[0] === 'concat' && H[0] === 'concat'
+      && L.length === A.length && L.at(-2)?.[0] === 'string' && A.at(-2)?.[0] === 'string'
+      && L.at(-1)?.[0] === 'conditional' && equal(L.at(-1), A.at(-1))
+      && equal(L.slice(0, -2), A.slice(0, -2)) && equal(L.slice(0, -2), H.slice(0, -1))
+      && H.at(-1)?.[0] === 'string', approved);
+    const audio = L.at(-1).slice(2);
+    need(audio.length === 2 && audio.every(value => value[0] === 'string')
+      && A.at(-2)[1] !== L.at(-2)[1]
+      && audio.every(value => A.at(-2)[1] + value[1] !== H.at(-1)[1]), approved);
+  }
+  const [input] = args(materializer), evaluate = fn(materializer, 'evaluate'), reconstruct = fn(materializer, 'reconstruct');
+  const evaluateArgs = args(evaluate), reconstructArgs = args(reconstruct);
+  need(evaluateArgs.length === (approved ? 6 : 5) && reconstructArgs.length === 5, evaluate);
+  const [name, value, sequence, callId, historicalExecution, flag] = evaluateArgs;
+  const [readName, readArgs, readSequence, readId, recorded] = reconstructArgs;
+  const native = variable(materializer, 'nativeVideo').name.text, originalProfile = variable(materializer, 'historicalVideo').name.text;
+  const revision = variable(materializer, 'revisionSceneIndex').name.text;
+  const prompts = variable(evaluate, 'prompts'), document = variable(evaluate, 'document').name.text, resources = variable(evaluate, 'resources').name.text;
+  const map = prompts.initializer;
+  need(map && ts.isCallExpression(map) && ts.isPropertyAccessExpression(map.expression) && map.expression.name.text === 'flatMap'
+    && map.arguments.length === 1 && ts.isArrowFunction(map.arguments[0]), prompts);
+  const callback = map.arguments[0], [scene, index] = args(callback);
+  need(callback.parameters.length === 2 && !callback.modifiers?.length, callback);
+  const videoContext = variable(materializer, 'videoContext').name.text;
+  const deepImport = one(nodes(materializer.getSourceFile(), node => ts.isImportSpecifier(node)
+    && (node.propertyName ?? node.name).text === 'isDeepStrictEqual'
+    && node.parent.parent.parent.moduleSpecifier?.text === 'node:util'), materializer);
+  const deep = deepImport.name.text;
+  const image = one(nodes(callback, node => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && symbol(node.expression)?.declarations?.some(declaration => ts.isFunctionDeclaration(declaration)
+      && declaration.name?.text === 'compileIllustrationImagePrompt')), callback).expression.text;
+  const legacyName = legacy.name.text, historicalName = historical.name.text;
+  const imported = new Map();
+  for (const target of [legacy, historical, approved].filter(Boolean)) {
+    const binding = one(nodes(materializer.getSourceFile(), node => ts.isImportSpecifier(node)
+      && symbol(node.name) === symbol(target.name)), materializer);
+    imported.set(target, binding.name.text);
+  }
+  const L = imported.get(legacy), H = imported.get(historical), A = imported.get(approved);
+  const inputDeclaration = materializer.parameters[0];
+  const callbackOuterBindings = [inputDeclaration, variable(materializer, 'nativeVideo'), variable(materializer, 'historicalVideo'),
+    variable(materializer, 'videoContext'), variable(materializer, 'revisionSceneIndex'), variable(evaluate, 'document'), variable(evaluate, 'resources'),
+    deepImport, ...[legacy, historical, approved].filter(Boolean).map(target => one(nodes(materializer.getSourceFile(),
+      node => ts.isImportSpecifier(node) && symbol(node.name) === symbol(target.name)), materializer)),
+    one(nodes(materializer.getSourceFile(), node => ts.isImportSpecifier(node) && node.name.text === image), materializer), ...callback.parameters];
+  const promptObject = compiler => `{ ${index === 'sceneIndex' ? 'sceneIndex' : `sceneIndex: ${index}`}, prompt: ${image}(${scene}.illustration!, ${resources}[${index}]!.instructions),
+    ...(${native} ? { videoPrompt: ${compiler}(${document}, ${scene}, ${input}.settings.locale) } : {}),
+    ...(${videoContext} ? { renderResources: ${resources}[${index}]!.usage } : {}) }`;
+  const oldCallback = `(${scene}, ${index}) => ${scene}.paperOriginal ? [] : [${promptObject(`(${originalProfile} ? ${H} : ${L})`)}]`;
+  let fresh = 'legacy', readers = new Set(['legacy', 'historical']), routes = [];
+  if (!approved) {
+    bindReferences(callback, callbackOuterBindings);
+    need(JSON.stringify(runtime(`const __callback = ${print(callback)};`)) === JSON.stringify(runtime(`const __callback = ${oldCallback};`)), callback);
+    routes.push({ kind: 'fresh', family: 'legacy', node: callback },
+      { kind: 'inherit-exact', families: ['legacy'], node: callback },
+      { kind: 'reconstruct-whole', families: ['legacy'], node: reconstruct });
+  } else {
+    need(ts.isBlock(callback.body), callback);
+    const compiler = variable(callback, 'compiler'), prompt = variable(callback, 'prompt'), alternate = variable(callback, 'alternate');
+    bindReferences(callback, [...callbackOuterBindings, evaluate.parameters[5], compiler, prompt, alternate]);
+    const choice = compiler.initializer;
+    need(choice && ts.isConditionalExpression(choice) && ts.isConditionalExpression(choice.whenFalse), compiler);
+    const inner = choice.whenFalse;
+    need(ts.isIdentifier(inner.condition) && symbol(inner.condition) === symbol(evaluate.parameters[5].name), inner);
+    const family = node => symbol(node) === symbol(legacy.name) ? 'legacy' : symbol(node) === symbol(approved.name) ? 'approved' : undefined;
+    const whenTrue = family(inner.whenTrue), whenFalse = family(inner.whenFalse);
+    need(whenTrue && whenFalse && whenTrue !== whenFalse && evaluate.parameters[5].initializer?.kind === ts.SyntaxKind.FalseKeyword, inner);
+    fresh = whenFalse;
+    const yes = whenTrue === 'legacy' ? L : A, no = whenFalse === 'legacy' ? L : A;
+    matches([...callback.body.statements], `
+      if (${scene}.paperOriginal) return [];
+      const ${compiler.name.text} = ${originalProfile} ? ${H} : ${flag} ? ${yes} : ${no};
+      const ${prompt.name.text} = ${promptObject(compiler.name.text)};
+      if (${revision} !== undefined && ${index} !== ${revision} && ${input}.nativeVideoAudio === true
+        && !${deep}(${prompt.name.text}, ${input}.base!.prompts[${index}])) {
+        const ${alternate.name.text} = { ...${prompt.name.text}, videoPrompt: (${flag} ? ${no} : ${yes})(${document}, ${scene}, ${input}.settings.locale) };
+        if (${deep}(${alternate.name.text}, ${input}.base!.prompts[${index}])) return [${alternate.name.text}];
+      }
+      return [${prompt.name.text}];`);
+    replacements.set(callback, parse(`const __callback = ${oldCallback};`)[0].declarationList.declarations[0].initializer);
+    replacements.set(evaluate, { operation: 'drop-finite-parameter', parameters: evaluate.parameters.slice(0, 5) });
+    const flagReferences = nodes(evaluate, node => ts.isIdentifier(node) && symbol(node) === symbol(evaluate.parameters[5].name));
+    need(flagReferences.length === 3 && flagReferences.includes(evaluate.parameters[5].name)
+      && flagReferences.every(node => node === evaluate.parameters[5].name || nodes(callback, value => value === node).length === 1), evaluate);
+    const restore = variable(reconstruct, 'restore').name.text;
+    const block = one([...reconstruct.body.statements].filter(statement => ts.isIfStatement(statement)
+      && nodes(statement, node => ts.isCallExpression(node) && symbol(node.expression) === symbol(evaluate.name) && node.arguments.length === 6).length === 1), reconstruct);
+    const rebuilt = one(nodes(block, node => ts.isVariableDeclaration(node) && ts.isCallExpression(node.initializer)), block).name.text;
+    bindReferences(block, [inputDeclaration, variable(materializer, 'nativeVideo'), deepImport, evaluate,
+      ...reconstruct.parameters, variable(reconstruct, 'restore'),
+      one(nodes(block, node => ts.isVariableDeclaration(node) && node.name.text === rebuilt), block)]);
+    matches([block], `if (${native} && ${input}.nativeVideoAudio === true && ${readName} === 'paper_illustration_art' && ${recorded}.status === 'art_ready') {
+      ${restore}();
+      const ${rebuilt} = ${evaluate.name.text}(${readName}, ${readArgs}, ${readSequence}, ${readId}, false, true);
+      if (${deep}(${rebuilt}, ${recorded})) return ${rebuilt};
+    }`);
+    removed.add(block); removed.add(approved);
+    readers.add('approved');
+    consumedApproved.add(approved.name);
+    for (const node of nodes(callback, node => ts.isIdentifier(node) && symbol(node) === symbol(approved.name))) consumedApproved.add(node);
+    routes.push({ kind: 'fresh', family: fresh, node: callback }, { kind: 'inherit-exact', families: [whenTrue, whenFalse], node: callback },
+      { kind: 'reconstruct-whole', families: [whenFalse, whenTrue], node: block });
+  }
+  const generate = one(spool.members.filter(member => ts.isMethodDeclaration(member) && member.name?.text === 'generate'), spool);
+  const [spoolInput] = args(generate), scenes = variable(generate, 'scenes'), sceneMap = scenes.initializer;
+  need(sceneMap && ts.isCallExpression(sceneMap) && sceneMap.arguments.length === 1 && ts.isArrowFunction(sceneMap.arguments[0]), scenes);
+  const sceneCallback = sceneMap.arguments[0], [spoolScene, spoolIndex] = args(sceneCallback);
+  need(ts.isBlock(sceneCallback.body) && sceneCallback.parameters.length === 2, sceneCallback);
+  const prompt = variable(sceneCallback, 'prompt').name.text, nativeSpool = variable(generate, 'nativeVideo').name.text,
+    locale = variable(generate, 'locale').name.text;
+  const first = [...sceneCallback.body.statements].slice(0, 2);
+  const failures = nodes(first[1], node => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && node.expression.text === 'fail');
+  need(failures.length > 0 && failures.every(call => symbol(call.expression) === symbol(failures[0].expression)), first[1]);
+  const failName = failures[0].expression.text;
+  const spoolBindings = [generate.parameters[0], ...sceneCallback.parameters, variable(sceneCallback, 'prompt'), variable(generate, 'nativeVideo'),
+    variable(generate, 'locale'), legacy, one(symbol(failures[0].expression)?.declarations ?? [], failures[0])];
+  const originalChoice = `const ${prompt} = ${legacyName}(${spoolInput}.storyboard, ${spoolScene}, ${locale});
+    if (${nativeSpool} && (${spoolInput}.videoPrompts![${spoolIndex}] !== ${prompt} || ![5, 10, 15].includes(${spoolScene}.durationSeconds!))) ${failName}('NATIVE_VIDEO_PLAN_CHANGED');`;
+  if (!approved) {
+    for (const statement of first) bindReferences(statement, spoolBindings); matches(first, originalChoice);
+    routes.push({ kind: 'spool-exact', families: ['legacy'], node: first[1] });
+  }
+  else {
+    const approvedPrompt = variable(sceneCallback, 'approved').name.text;
+    for (const statement of first) bindReferences(statement, [...spoolBindings, approved, variable(sceneCallback, 'approved')]);
+    matches(first, `let ${prompt} = ${legacyName}(${spoolInput}.storyboard, ${spoolScene}, ${locale});
+      if (${nativeSpool}) {
+        const ${approvedPrompt} = ${approved.name.text}(${spoolInput}.storyboard, ${spoolScene}, ${locale});
+        if (${spoolInput}.videoPrompts![${spoolIndex}] === ${approvedPrompt}) ${prompt} = ${approvedPrompt};
+        else if (${spoolInput}.videoPrompts![${spoolIndex}] !== ${prompt}) ${failName}('NATIVE_VIDEO_PLAN_CHANGED');
+        if (![5, 10, 15].includes(${spoolScene}.durationSeconds!)) ${failName}('NATIVE_VIDEO_PLAN_CHANGED');
+      }`);
+    const replacement = parse(originalChoice);
+    replacements.set(first[0], replacement[0]); replacements.set(first[1], replacement[1]);
+    for (const node of nodes(first[1], node => ts.isIdentifier(node) && symbol(node) === symbol(approved.name))) consumedApproved.add(node);
+    routes.push({ kind: 'spool-exact', families: ['legacy', 'approved'], node: first[1] });
+  }
+  if (approved) for (const source of context.program.getSourceFiles().filter(file => !file.isDeclarationFile)) {
+    for (const reference of nodes(source, node => ts.isIdentifier(node) && symbol(node) === symbol(approved.name))) {
+      if (ts.isImportSpecifier(reference.parent) && [reference.parent.name, reference.parent.propertyName].includes(reference) && source === materializer.getSourceFile()) {
+        removed.add(reference.parent); continue;
+      }
+      need(consumedApproved.has(reference), reference);
+    }
+  }
+  const transform = source => {
+    const result = ts.transform(source, [transformation => {
+      const visit = node => {
+        if (removed.has(node)) return undefined;
+        const replacement = replacements.get(node);
+        if (replacement?.operation === 'drop-finite-parameter') return ts.factory.updateFunctionDeclaration(node, node.modifiers, node.asteriskToken,
+          node.name, node.typeParameters, replacement.parameters, node.type, ts.visitNode(node.body, visit));
+        if (replacement) return replacement;
+        return ts.visitEachChild(node, visit, transformation);
+      };
+      return node => ts.visitNode(node, visit);
+    }]);
+    try { return printer.printFile(result.transformed[0]); } finally { result.dispose(); }
+  };
+  return { constructors, fresh, readers, routes, projected: new Map([materializer.getSourceFile(), spool.getSourceFile()]
+    .map(source => [relative(context.root, source.fileName).replaceAll('\\', '/'), { source, text: transform(source) }])) };
+}
+
+// Finite transfer closure over the exact constructors and whole-value gates
+// extracted above. No caller-supplied family/compatibility switch enters here.
+// The result remains conditional on the caller preserving every context entry.
+function finiteVideoFamilyClosure(candidate, rollback) {
+  const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  const fail = reason => ({ status: 'unknown', reason });
+  for (const family of ['legacy', 'historical']) if (!equal(candidate.constructors.terms[family], rollback.constructors.terms[family]))
+    return fail('OLD_CONSTRUCTOR_CHANGED');
+  for (const family of rollback.readers) {
+    if (!candidate.readers.has(family)) return fail('READER_CAPABILITY_REMOVED');
+    if (family === 'approved' && !equal(candidate.constructors.terms.approved, rollback.constructors.terms.approved))
+      return fail('RETAINED_CONSTRUCTOR_CHANGED');
+  }
+  // Old authenticated histories contain only the old producer/retainer
+  // families. A capable rollback keeps A in this domain even while fresh=L:
+  // a later failed writer can have left genuine A work in that same store.
+  const reachable = new Set([...rollback.readers, 'refused']), queue = [...reachable], transitions = [];
+  const fresh = candidate.routes.filter(route => route.kind === 'fresh');
+  if (fresh.length !== 1 || fresh[0].family !== candidate.fresh) return fail('FRESH_SOURCE_UNKNOWN');
+  const add = (from, to, route) => {
+    transitions.push({ from, to, kind: route.kind, node: route.node });
+    if (!reachable.has(to)) { reachable.add(to); queue.push(to); }
+  };
+  // A task's fresh tool result has an independently compiled family. Existing
+  // source/profile rejection preserves the U outcome under the exact context.
+  add('birth', candidate.fresh, fresh[0]);
+  while (queue.length) {
+    const family = queue.shift();
+    for (const route of candidate.routes.filter(value => value.kind !== 'fresh')) {
+      if (family === 'refused') { add(family, family, route); continue; }
+      if (route.kind === 'inherit-exact' || route.kind === 'reconstruct-whole') {
+        // These exact source branches return only an independently constructed
+        // WHOLE object equal to the authenticated input. They retain its
+        // family; trying the opposite compiler cannot mint a new input value.
+        if (route.families.includes(family) || family === 'historical') add(family, family, route);
+        add(family, 'refused', route);
+      } else if (route.kind === 'spool-exact') {
+        // The selected request string is the independently compiled equal
+        // value, never the incoming string. Historical-profile behavior and
+        // all failed/UNCERTAIN/paid/late request ownership remain strict context.
+        // Original-profile H can equal the old L external-narration value.
+        // Preserve both that original successful outcome and its refusals;
+        // there is no new historical-profile constructor selection here.
+        if (route.families.includes(family) || family === 'historical') add(family, family, route);
+        add(family, 'refused', route);
+      } else return fail('TRANSFER_SOURCE_UNKNOWN');
+    }
+  }
+  for (const family of reachable) if (family !== 'refused' && !rollback.readers.has(family)) return fail('ROLLBACK_FAMILY_NOT_CLOSED');
+  return { status: 'conditional', reachable: [...reachable], transitions };
+}
+
+function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
+  try {
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    // Only the two original successful collections may enter this unequal
+    // route. JSON clones/slices/source-only Programs cannot borrow authority.
+    if (roots !== APPLICATION_ROLLBACK_READERS || !left || !right || left.ts !== ts || right.ts !== ts
+      || left.roots !== roots || right.roots !== roots || left.root !== candidateRoot || right.root !== rollbackRoot
+      || left.program.getTypeChecker() !== left.checker || right.program.getTypeChecker() !== right.checker) return false;
+    const candidate = finiteVideoSourceModel(ts, left), rollback = finiteVideoSourceModel(ts, right);
+    const projectedKeys = [...candidate.projected.keys()].sort();
+    if (projectedKeys.length !== 2 || JSON.stringify(projectedKeys) !== JSON.stringify([...rollback.projected.keys()].sort())) return false;
+    const affected = new Set(projectedKeys.map(key => `module:${key}`)), a = new Map(current), b = new Map(previous);
+    for (const key of new Set([...a.keys(), ...b.keys()])) {
+      if (!a.has(key) || !b.has(key)) return false;
+      if (!affected.has(key) && JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))) return false;
+    }
+    for (const key of projectedKeys) {
+      const projected = [];
+      for (const [context, model] of [[left, candidate], [right, rollback]]) {
+        const { source, text } = model.projected.get(key), path = resolve(context.root, key);
+        if (context.modules.get(path) !== source || context.program.getSourceFile(path) !== source
+          || !a.has(`module:${key}`) || !b.has(`module:${key}`)) return false;
+        // Same captured TS source, same transpile options and original runtime
+        // canonical. These two application modules have no Prisma location
+        // literals; every generated/vendor entry remains untouched above.
+        const compiled = ts.transpileModule(text, { fileName: path, reportDiagnostics: true,
+          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+        if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) return false;
+        const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+        if (emitted.parseDiagnostics.length) return false;
+        projected.push(context.canonical(emitted));
+      }
+      if (JSON.stringify(projected[0]) !== JSON.stringify(projected[1])) return false;
+    }
+    // Reuse the independently reviewed actual bindings only under the complete
+    // unchanged runtime/dependency premise just established. No per-Domain or
+    // codec gate is introduced, and unrelated origins gain no new A constructor.
+    for (const context of [left, right]) {
+      const ingress = proveNativeVideoReceiptIngress(ts, context.program, context.root);
+      if (ingress.reason !== 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN'
+        || ingress.storeGraph.status !== 'conditional' || ingress.privateStoreChain.status !== 'conditional'
+        || !['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix',
+          'verified-base', 'store-capability-use', 'generic-private-store-chain'].every(edge => ingress.proven.includes(edge))) return false;
+    }
+    return finiteVideoFamilyClosure(candidate, rollback).status === 'conditional';
+  } catch { return false; }
+}
+
 function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot) {
   const left = new Map(current), right = new Map(previous);
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
@@ -1531,7 +2816,9 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
     stage = 'closure-rollback';
     const previous = rollbackReaderClosure(ts, resolve(rollbackRoot), roots, vendorPackages);
     stage = 'comparison';
-    if (JSON.stringify(current) !== JSON.stringify(previous)) {
+    if (JSON.stringify(current) !== JSON.stringify(previous)
+      && !(roots === APPLICATION_ROLLBACK_READERS
+        && finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
         catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }

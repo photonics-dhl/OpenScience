@@ -609,6 +609,25 @@ test('Prisma consumer requires plain runtime destructuring, not a rest object or
     assert.throws(() => check(code), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
 });
 
+for (const [name, candidateBody, rollbackBody] of [
+  ['prefix', 'return !value;', 'return +value;'],
+  ['postfix', 'value++; return value;', 'value--; return value;'],
+  ['same-operator', 'value++; return !value;', 'value++; return !value;'],
+]) test(`rollback actual exact canonical preserves ${name} operator`, async t => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const temporaryRoot = join(projectRoot, 'tmp'); await mkdir(temporaryRoot, { recursive: true });
+  const root = await mkdtemp(join(temporaryRoot, 'r04-operator-'));
+  assert.equal(dirname(root), temporaryRoot);
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidate = join(root, 'candidate'), previous = join(root, 'rollback');
+  await mkdir(candidate); await mkdir(previous);
+  await writeFile(join(candidate, 'reader.ts'), `export function readPersisted(value: number) { ${candidateBody} }`);
+  await writeFile(join(previous, 'reader.ts'), `export function readPersisted(value: number) { ${rollbackBody} }`);
+  const input = { candidateRoot: candidate, rollbackRoot: previous, compilerRoot: projectRoot, roots: [['reader.ts', 'readPersisted']] };
+  if (name === 'same-operator') await deployLock.verifyApplicationRollbackReaders(input);
+  else await assert.rejects(deployLock.verifyApplicationRollbackReaders(input), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
 test('ordinary rollback compares persisted readers and their runtime helpers without executing old source', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-readers-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -629,6 +648,451 @@ test('ordinary rollback compares persisted readers and their runtime helpers wit
   await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   await rm(join(previous, 'packages/domain/src/helper.ts'));
   await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+// These controls exercise source bindings in the actual production Program.
+// They do not replace genuine successful collectors or installed-root checks.
+async function videoIngressProgram(changes = new Map()) {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const tracked = execFileSync('git', ['ls-files', '-z', '--', 'apps', 'packages'], { cwd: projectRoot, encoding: 'utf8' })
+    .split('\0').filter(file => /\/src\/.*\.ts$/u.test(file) && !file.endsWith('.d.ts')).map(file => join(projectRoot, file));
+  const key = filename => resolve(filename).replaceAll('\\', '/').toLowerCase();
+  const changedFiles = [...changes].map(([file, change]) => {
+    const filename = join(projectRoot, file);
+    const original = existsSync(filename) ? readFileSync(filename, 'utf8') : '';
+    const updated = typeof change === 'function' ? change(original) : change;
+    assert.notEqual(updated, original, `mutation must change ${file}`);
+    return { filename, updated };
+  });
+  const overlays = new Map(changedFiles.map(item => [key(item.filename), item.updated]));
+  // Same source-only analysis boundary as rollbackReaderClosure: this is not a
+  // package typecheck, and never substitutes third-party declarations for code.
+  const options = { allowJs: true, noLib: true, types: [], noEmit: true,
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext };
+  const host = ts.createCompilerHost(options);
+  const originalRead = host.readFile.bind(host), originalExists = host.fileExists.bind(host);
+  host.readFile = filename => overlays.has(key(filename)) ? overlays.get(key(filename)) : originalRead(filename);
+  host.fileExists = filename => overlays.has(key(filename)) || originalExists(filename);
+  const source = host.getSourceFile.bind(host);
+  host.getSourceFile = (filename, languageVersion, ...args) => overlays.has(key(filename))
+    ? ts.createSourceFile(filename, overlays.get(key(filename)), languageVersion, true) : source(filename, languageVersion, ...args);
+  host.resolveModuleNames = (names, containingFile) => names.map(specifier => {
+    let base;
+    if (specifier.startsWith('.')) base = resolve(dirname(containingFile), specifier.replace(/\.js$/u, '')).replace(/([\\/])dist([\\/])/u, '$1src$2');
+    else if (/^@openscience\/[a-z-]+(?:\/.*)?$/u.test(specifier)) {
+      const [, name, ...subpath] = specifier.split('/');
+      const packageRoot = join(projectRoot, 'packages', name);
+      if (!subpath.length) base = join(packageRoot, 'src/index');
+      else {
+        const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+        const entry = manifest.exports?.[`./${subpath.join('/')}`]?.types;
+        if (typeof entry !== 'string' || !entry.startsWith('./dist/') || !entry.endsWith('.d.ts')) return undefined;
+        base = join(packageRoot, entry.replace('./dist/', 'src/').replace(/\.d\.ts$/u, ''));
+      }
+    } else return undefined;
+    const filename = [base, `${base}.ts`, `${base}.tsx`, `${base}.mjs`, `${base}.js`, join(base, 'index.ts'), join(base, 'index.js')]
+      .find(value => host.fileExists(value));
+    return filename ? { resolvedFileName: filename,
+      extension: filename.endsWith('.mjs') ? ts.Extension.Mjs : filename.endsWith('.js') ? ts.Extension.Js
+        : filename.endsWith('.tsx') ? ts.Extension.Tsx : ts.Extension.Ts } : undefined;
+  });
+  const program = ts.createProgram([...new Set([...tracked, ...changedFiles.map(item => item.filename)])], options, host);
+  assert.equal(program.getSyntacticDiagnostics().length, 0, 'actual Program must parse before a source-proof result');
+  for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
+    item.updated, 'the real Program must contain the exact mutation before testing its rejection');
+  return { ts, program, projectRoot };
+}
+
+function videoPairSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  assert.ok(component.startsWith('function finiteVideoConstructorTerms('));
+  return runInNewContext(`${component}; ({ constructors: finiteVideoConstructorTerms, model: finiteVideoSourceModel, closure: finiteVideoFamilyClosure,
+    pair: finiteVideoPairCompatibility, roots: APPLICATION_ROLLBACK_READERS })`, { relative, resolve, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+function videoPairContext({ ts, program, projectRoot }) { return { ts, program, checker: program.getTypeChecker(), root: projectRoot }; }
+
+function videoPairRuntime(ts, text) {
+  // Extract the one actual collector canonical, including its reviewed unary
+  // correction. This source-component comparison never fabricates a successful
+  // production collector or a complete installed root.
+  const canonicalText = deployLockSource.slice(deployLockSource.indexOf('  const canonical = node => {'),
+    deployLockSource.indexOf('\n  const addConfiguration =', deployLockSource.indexOf('  const canonical = node => {')));
+  const canonical = runInNewContext(`${canonicalText}; canonical`, { ts, locationLiterals: new Map() });
+  const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+  return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
+}
+
+test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
+  const components = videoPairSourceComponents(), actual = await videoIngressProgram(), left = videoPairContext(actual);
+  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
+  const original = await videoIngressProgram(new Map(files.map(file => [file,
+    execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const candidate = components.model(actual.ts, left), rollback = components.model(original.ts, videoPairContext(original));
+  for (const [key, { text }] of candidate.projected)
+    assert.deepEqual(videoPairRuntime(actual.ts, text), videoPairRuntime(original.ts, rollback.projected.get(key).text), key);
+  const closure = components.closure(candidate, rollback);
+  assert.equal(closure.status, 'conditional');
+  assert.deepEqual([...closure.reachable].sort(), ['historical', 'legacy', 'refused']);
+  assert.ok(closure.transitions.length > 0 && closure.transitions.every(row => row.node.getSourceFile().text));
+  // A copied JSON entry array and a source-only Program have no production
+  // WeakMap context. Neither can enter the unequal acceptance path.
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, actual.projectRoot, components.roots), false);
+  assert.equal(components.pair(actual.ts, JSON.parse(JSON.stringify([['module:example', 'same']])), [],
+    actual.projectRoot, actual.projectRoot, components.roots), false);
+});
+
+test('video pair source closure distinguishes a capable writer from dropping its readers', async () => {
+  const components = videoPairSourceComponents(), actual = await videoIngressProgram();
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const writer = await videoIngressProgram(new Map([[file, source => source
+    .replace('approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt', 'approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt')
+    .replace('(approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt)', '(approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt)')]]));
+  const candidate = components.model(writer.ts, videoPairContext(writer)), rollback = components.model(actual.ts, videoPairContext(actual));
+  assert.equal(candidate.fresh, 'approved');
+  assert.equal(components.closure(candidate, rollback).status, 'conditional');
+  for (const [key, { text }] of candidate.projected)
+    assert.deepEqual(videoPairRuntime(writer.ts, text), videoPairRuntime(actual.ts, rollback.projected.get(key).text), key);
+  const files = [file, 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
+  const old = await videoIngressProgram(new Map(files.map(path => [path,
+    execFileSync('git', ['show', `ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const original = components.model(old.ts, videoPairContext(old));
+  assert.equal(components.closure(candidate, original).reason, 'ROLLBACK_FAMILY_NOT_CLOSED');
+  assert.equal(components.closure(original, rollback).reason, 'READER_CAPABILITY_REMOVED');
+});
+
+test('video pair source projection consumes genuine imported aliases but not arbitrary A uses', async () => {
+  const components = videoPairSourceComponents(), file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const actual = await videoIngressProgram(), original = components.model(actual.ts, videoPairContext(actual));
+  const aliased = await videoIngressProgram(new Map([[file, source => source.replaceAll('compileApprovedShotPrompt', 'approvedCompiler')
+    .replace('compileShotPrompt, approvedCompiler, compileHistorical', 'compileShotPrompt, compileApprovedShotPrompt as approvedCompiler, compileHistorical')]]));
+  const model = components.model(aliased.ts, videoPairContext(aliased));
+  assert.equal(model.fresh, 'legacy');
+  for (const [key, { text }] of model.projected)
+    assert.deepEqual(videoPairRuntime(aliased.ts, text), videoPairRuntime(actual.ts, original.projected.get(key).text), key);
+  const escaped = await videoIngressProgram(new Map([[file, source => source.replace('  const nativeVideo = input.nativeVideo === true;',
+    '  const escapedCompiler = compileApprovedShotPrompt;\n  const nativeVideo = input.nativeVideo === true;')]]));
+  assert.throws(() => components.model(escaped.ts, videoPairContext(escaped)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN');
+});
+
+test('video pair source refuses the real earlier A writer whose legacy constructor was refactored', async () => {
+  const components = videoPairSourceComponents(), actual = await videoIngressProgram();
+  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
+  const earlier = await videoIngressProgram(new Map(files.map(file => [file,
+    execFileSync('git', ['show', `36e8ce5228bc8d3109de171cc86f17eab3fe7f64:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  assert.throws(() => components.model(earlier.ts, videoPairContext(earlier)), error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE');
+});
+
+test('video pair source grammar refuses saved-field adoption, foreign base indices and unbound spool values', async () => {
+  const components = videoPairSourceComponents();
+  for (const [file, before, after] of [
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', 'if (isDeepStrictEqual(approved, recorded)) return approved;', 'if (isDeepStrictEqual(approved, recorded)) return recorded;'],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', 'isDeepStrictEqual(alternate, input.base!.prompts[sceneIndex])', 'isDeepStrictEqual(alternate, input.base!.prompts[0])'],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', 'restore();\n      const approved = evaluate', 'const approved = evaluate'],
+    ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'prompt = approved;', 'prompt = input.videoPrompts![index]!;'],
+    ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'compileApprovedShotPrompt(input.storyboard, scene, locale)', 'compileApprovedShotPrompt(input.storyboard, scene, input.locale!)'],
+  ]) {
+    const actual = await videoIngressProgram(new Map([[file, source => source.replaceAll('\r\n', '\n').replace(before, after)]]));
+    assert.throws(() => components.model(actual.ts, videoPairContext(actual)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN', before);
+  }
+});
+
+test('video pair projection retains changed non-video and request-identity context', async () => {
+  const components = videoPairSourceComponents(), actual = await videoIngressProgram(), baseline = components.model(actual.ts, videoPairContext(actual));
+  for (const [file, before, after] of [
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', "if (!record(args)) throw new Error('object_required');", "if (!record(args)) throw new Error('different_context');"],
+    ['apps/agent-worker/src/presentation/synclip-video-spool.ts', 'existing.inputHash !== inputHash', 'existing.inputHash === inputHash'],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, source => source.replace(before, after)]]));
+    const model = components.model(changed.ts, videoPairContext(changed));
+    assert.notDeepEqual(videoPairRuntime(changed.ts, model.projected.get(file).text), videoPairRuntime(actual.ts, baseline.projected.get(file).text));
+  }
+});
+
+test('video pair source family bound rejects a pure constructor that changes scientific or audio context', async () => {
+  const components = videoPairSourceComponents(), file = 'apps/agent-worker/src/presentation/synclip-video-spool.ts';
+  for (const [before, after] of [
+    ['storyboard.videoProduction!.visualContinuity', 'scene.visualAction'],
+    ["if (!mode) throw new Error('VIDEO_PLAN_UNSUPPORTED');", "if (!mode) throw new Error('different_guard');"],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, source => {
+      const start = source.indexOf('export function compileApprovedShotPrompt('), end = source.indexOf('\nexport class SynclipVideoSpool', start);
+      assert.ok(start >= 0 && end > start);
+      return source.slice(0, start) + source.slice(start, end).replace(before, after) + source.slice(end);
+    }]]));
+    assert.throws(() => components.model(changed.ts, videoPairContext(changed)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN', before);
+  }
+});
+
+test('video pair constructor component extracts actual legacy families without granting compatibility', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  assert.ok(component.startsWith('function finiteVideoConstructorTerms('));
+  const analyze = runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative });
+  const files = ['apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/synclip-video-spool.ts'];
+  const legacyRef = 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6';
+  const actual = await videoIngressProgram();
+  const original = await videoIngressProgram(new Map(files.map(file => [file,
+    execFileSync('git', ['show', `${legacyRef}:${file}`], { cwd: actual.projectRoot, encoding: 'utf8' })])));
+  const inspect = ({ ts, program, projectRoot }) => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot });
+  const candidate = inspect(actual), previous = inspect(original);
+  const json = value => JSON.parse(JSON.stringify(value));
+  assert.deepEqual(json(candidate.terms.legacy), json(previous.terms.legacy));
+  assert.deepEqual(json(candidate.terms.historical), json(previous.terms.historical));
+  assert.notDeepEqual(json(candidate.terms.approved), json(candidate.terms.legacy));
+  assert.equal(previous.approved, undefined);
+  assert.equal(candidate.classify.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/packages/domain/src/assets/storyboard.ts'), true);
+  // This component returns actual nodes and symbolic constructor values only;
+  // source-only Programs never acquire successful production-collector context.
+  assert.equal(Object.hasOwn(candidate, 'releaseCompatible'), false);
+});
+
+test('video pair constructor component refuses effects and unsupported bindings in actual source', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const analyze = runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative });
+  const file = 'apps/agent-worker/src/presentation/synclip-video-spool.ts';
+  const mutateApproved = mutate => source => {
+    const start = source.indexOf('export function compileApprovedShotPrompt('), end = source.indexOf('\nexport class SynclipVideoSpool', start);
+    assert.ok(start >= 0 && end > start);
+    return source.slice(0, start) + mutate(source.slice(start, end)) + source.slice(end);
+  };
+  for (const [name, mutate] of [
+    ['effectful call', source => source.replace('  const mode =', '  Date.now();\n  const mode =')],
+    ['async constructor', source => source.replace('export function ', 'export async function ')],
+    ['default parameter', source => source.replace('locale: string)', "locale: string = 'en')")],
+    ['assignment', source => source.replace('  const mode =', '  storyboard.videoProduction = undefined;\n  const mode =')],
+    ['unbound helper', source => source.replace("return ['Scientific explainer shot.", "return [String('Scientific explainer shot.') , 'Scientific explainer shot.")],
+  ]) {
+    const { ts, program, projectRoot } = await videoIngressProgram(new Map([[file, mutateApproved(mutate)]]));
+    assert.throws(() => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot }),
+      error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE', name);
+  }
+});
+
+test('video constructor ingress prototype reports genuine bindings and unresolved other consumers without permitting rollback', async () => {
+  assert.equal(typeof deployLock.proveNativeVideoReceiptIngress, 'function');
+  const { ts, program, projectRoot } = await videoIngressProgram();
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
+  for (const edge of ['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix', 'verified-base'])
+    assert.ok(result.proven.includes(edge), `${edge} must be an actual proved edge, not a supplied trust bit`);
+  assert.ok(result.references.some(item => item.file.endsWith('/paper-task.ts')));
+  assert.ok(result.references.some(item => item.file.endsWith('/source-review-task.ts')));
+  assert.ok(result.references.some(item => item.file.endsWith('/journal-task.ts')));
+  assert.equal(result.releaseCompatible, false);
+});
+
+const videoIngressHighMutations = [
+  ['host-unawaited-history', 'host-task.ts', value => value.replace('await validateSourceHistory(value);', 'validateSourceHistory(value);'),
+    'HOST_HISTORY_CHECK_BYPASS', 'host-before-session'],
+  ['checkpoint-alternate-state', 'session.ts', value => value.replace('retry?.started ??', 'state ??'),
+    'RETRY_STARTED_ORIGIN_UNKNOWN', 'session-checkpoint-prefix'],
+  ['checkpoint-retry-computed-started-override', 'session.ts', value => value.replace(
+    'retry = { started: attempt.rejection.started, receipt: { httpStatus: 529, maxOutputTokens: boundedOptions.maxTokens } };',
+    "retry = { started: attempt.rejection.started, receipt: { httpStatus: 529, maxOutputTokens: boundedOptions.maxTokens }, ['sta' + 'rted']: state };"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['checkpoint-retry-wrong-supplier', 'session.ts', value => value.replace('retry = { started: attempt.rejection.started,', 'retry = { started: state,'),
+    'RETRY_STARTED_ORIGIN_UNKNOWN', 'session-checkpoint-prefix'],
+  ['checkpoint-rejection-wrong-started', 'session.ts', value => value.replace('attempt.rejection = { started, error };', 'attempt.rejection = { started: state, error };'),
+    'RETRY_STARTED_ORIGIN_UNKNOWN', 'session-checkpoint-prefix'],
+  ['checkpoint-retry-late-member-write', 'session.ts', value => value.replace('retry = { started: attempt.rejection.started, receipt: { httpStatus: 529, maxOutputTokens: boundedOptions.maxTokens } };',
+    'retry = { started: attempt.rejection.started, receipt: { httpStatus: 529, maxOutputTokens: boundedOptions.maxTokens } }; retry.started = state;'),
+    'RETRY_STARTED_ORIGIN_UNKNOWN', 'session-checkpoint-prefix'],
+  ['host-self-comparison', 'host-task.ts', value => value.replace(
+    "const result = [...messages].reverse().find(m => m.role === 'tool' && m.toolCallId === slot.id);",
+    'const result = { content: JSON.stringify(slot.result) };'), 'HOST_TOOL_RESULT_ORIGIN_UNKNOWN', 'host-slot-result'],
+  ['host-empty-slots', 'host-task.ts', value => value.replace('for (const slot of slots)', 'for (const slot of [])'),
+    'HOST_SLOT_ITERABLE_UNKNOWN', 'host-slot-result'],
+  ['session-skipped-loop', 'session.ts', value => value.replace('i < cursor; i++', 'i < 0; i++'),
+    'ASSISTANT_HISTORY_LOOP_UNKNOWN', 'session-prefix'],
+  ['checkpoint-decoy', 'session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages: [], options }, proofDecoy: { request: { messages, options } }, effectiveOptions: boundedOptions }"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['host-different-history-argument', 'host-task.ts', value => value.replace('await validateSourceHistory(value);', 'await validateSourceHistory({});'),
+    'HOST_HISTORY_ARGUMENT_UNBOUND', 'host-before-session'],
+  ['session-substituted-turn', 'session.ts', value => value.replace('const turn = state.turns[i];', 'const turn = state.turns[0];'),
+    'ASSISTANT_TURN_ORIGIN_UNKNOWN', 'session-prefix'],
+  ['session-substituted-message', 'session.ts', value => value.replace('const message = assistantMessages[i];', 'const message = assistantMessages[0];'),
+    'ASSISTANT_MESSAGE_ORIGIN_UNKNOWN', 'session-prefix'],
+  ['session-substituted-preceding', 'session.ts', value => value.replace(
+    'cursor > 0 ? state.turns[cursor - 1]?.request.messages : undefined', 'undefined'),
+    'PRIOR_PREFIX_UNBOUND', 'session-prefix'],
+  ['checkpoint-late-request-override', 'session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, request: { messages: [], options } }"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['checkpoint-completed-decoy', 'session.ts', value => value.replace(
+    "{ state: 'completed', target, request: { messages, options }, effectiveOptions: boundedOptions,",
+    "{ state: 'completed', target, request: { messages: [], options }, proofDecoy: { request: { messages, options } }, effectiveOptions: boundedOptions,"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['checkpoint-late-spread-override', 'session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, ...{ request: { messages: [], options } } }"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['checkpoint-late-computed-override', 'session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, ['request']: { messages: [], options } }"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  ['session-skipped-initial-index', 'session.ts', value => value.replace('for (let i = 0; i < cursor; i++)', 'for (let i = cursor; i < cursor; i++)'),
+    'ASSISTANT_HISTORY_LOOP_UNKNOWN', 'session-prefix'],
+  ['session-wrong-increment', 'session.ts', value => value.replace('for (let i = 0; i < cursor; i++)', 'for (let i = 0; i < cursor; i--)'),
+    'ASSISTANT_HISTORY_LOOP_UNKNOWN', 'session-prefix'],
+  ['session-substituted-initial-state', 'session.ts', value => value.replace('let state = await read();', 'let state = null;'),
+    'SESSION_STATE_ORIGIN_UNKNOWN', 'session-prefix'],
+  ['session-substituted-publication-state', 'session.ts', value => value.replace('await authorize(); state = await read(); checkHistory(messages, state);',
+    'await authorize(); state = null; checkHistory(messages, state);'), 'SESSION_STATE_ORIGIN_UNKNOWN', 'session-prefix'],
+  ['checkpoint-late-method-override', 'session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, request() { return {}; } }"),
+    'LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+];
+
+for (const [name, file, mutate, reason, edge] of videoIngressHighMutations) test(`video constructor ingress High regression ${name}`, async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram(new Map([[`apps/agent-worker/src/native-agent/${file}`, mutate]]));
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.reason, reason, 'the exact binding must reject, not an unrelated analysis exception');
+  assert.ok(!result.proven.includes(edge), `${edge} must not be proved for the counterexample`);
+  assert.equal(result.releaseCompatible, false);
+});
+
+const videoStoreCapabilityMutations = [
+  ['binding-task-id-write', value => value.replace('const session = createNativeAgentSession(',
+    "binding.taskId = '00000000-0000-4000-8000-000000000001'; const session = createNativeAgentSession("), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN'],
+  ['binding-object-assign', value => value.replace('const session = createNativeAgentSession(',
+    "Object.assign(binding, { taskId: '00000000-0000-4000-8000-000000000001' }); const session = createNativeAgentSession("), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN'],
+  ['extra-writer', value => value.replace('const saved = await store.read();',
+    'const saved = await store.read(); await store.complete(saved, saved!);'), 'STORE_UNEXPECTED_WRITER_UNKNOWN'],
+  ['substitute-instance', value => value.replace('const saved = await store.read();',
+    'const saved = await store.read(); const substitute: typeof store = { ...store };')
+    .replace('binding, store, authorize });', 'binding, store: substitute, authorize });'), 'STORE_SUBSTITUTE_INSTANCE_UNKNOWN'],
+  ['method-escape', value => value.replace('const saved = await store.read();',
+    'const saved = await store.read(); const escapedWrite = store.complete;'), 'STORE_METHOD_ESCAPE_UNKNOWN'],
+];
+
+for (const [name, mutate, reason] of videoStoreCapabilityMutations) test(`video store capability rejects ${name}`, async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/paper-task.ts', mutate]]));
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.reason, reason, 'reject the actual receiver/use edge, not an unrelated exception');
+  assert.ok(!result.proven.includes('store-capability-use'));
+  assert.equal(result.storeGraph.status, 'unproven');
+  assert.equal(result.releaseCompatible, false);
+});
+
+for (const alias of [false, true]) test(`video store capability maps actual instances${alias ? ' with genuine import alias' : ''}`, async () => {
+  const changes = alias ? new Map([['apps/agent-worker/src/native-agent/paper-task.ts', value => value.replace(
+    "import { createNativeTaskStore } from './task-store';", "import { createNativeTaskStore as genuineStoreFactory } from './task-store';")
+    .replace('const store = createNativeTaskStore(', 'const store = genuineStoreFactory(')]]) : new Map();
+  const { ts, program, projectRoot } = await videoIngressProgram(changes);
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
+  for (const edge of ['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix', 'verified-base', 'store-capability-use'])
+    assert.ok(result.proven.includes(edge), edge);
+  assert.equal(result.storeGraph.instances.filter(instance => instance.factory === 'createNativeTaskStore').length, 5);
+  assert.equal(result.storeGraph.status, 'conditional');
+  assert.equal(result.storeGraph.instances.filter(instance => instance.factory === 'createJournalNativeTaskStore').length, 1);
+  assert.equal(result.storeGraph.sessions.length, 6);
+  assert.equal(result.storeGraph.hosts.length, 6);
+  assert.equal(result.storeGraph.shared.filter(use => use.consumer === 'session').length, 4);
+  assert.equal(result.storeGraph.shared.filter(use => use.consumer === 'host').length, 2);
+  assert.ok(result.storeGraph.pending.length > 0, 'the graph does not prove cross-profile or full private checkpoint isolation');
+  assert.equal(result.unresolved.length, 13);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.releaseCompatible, false);
+});
+
+const privateStoreChainMutations = [
+  ['foreign-expected', value => value.replace('expected: old, next: preparedReference, paidCompletion,',
+    'expected: input.execution.checkpoint, next: preparedReference, paidCompletion,'), 'PRIVATE_CAS_REFERENCE_UNKNOWN'],
+  ['premature-known-registration', value => value.replace('    known.set(next.serializedSha256, next);', '')
+    .replace('const prepared = await persist(state); next = prepared.reference;',
+      'const prepared = await persist(state); next = prepared.reference; known.set(next.serializedSha256, next);'), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN'],
+];
+
+for (const [name, mutate, reason] of privateStoreChainMutations) test(`generic private store chain rejects ${name}`, async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/task-store.ts', mutate]]));
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.reason, reason, 'the new reference/origin/order boundary must reject the actual injected source');
+  assert.ok(!result.proven.includes('generic-private-store-chain'));
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.releaseCompatible, false);
+});
+
+test('generic private store chain binds actual private references with unresolved complete-module premise', async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram();
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
+  assert.ok(result.proven.includes('generic-private-store-chain'));
+  assert.equal(result.privateStoreChain.status, 'conditional');
+  assert.equal(result.privateStoreChain.knownUses.get, 1);
+  assert.equal(result.privateStoreChain.knownUses.set, 2);
+  assert.equal(result.privateStoreChain.equalityPremise.status, 'unresolved');
+  assert.ok(result.privateStoreChain.equalityPremise.modules.includes('apps/agent-worker/src/native-agent/task-store.ts'));
+  assert.equal(result.unresolved.length, 13);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.releaseCompatible, false);
+});
+
+const videoIngressMutations = [
+  ['model-selected-slot-result', 'apps/agent-worker/src/native-agent/host-task.ts', value => value.replace(
+    'slot.result = await input.paper.call(slot.name, value.arguments, slot.sequence, slot.id);', 'slot.result = value.result;')],
+  ['history-check-bypass', 'apps/agent-worker/src/native-agent/host-task.ts', value => value.replace('await validateSourceHistory(value);', 'void value;')],
+  ['tool-result-equality-bypass', 'apps/agent-worker/src/native-agent/host-task.ts', value => value.replace(
+    '!isDeepStrictEqual(JSON.parse(result.content), slot.result)', 'false')],
+  ['session-fresh-history-bypass', 'apps/agent-worker/src/native-agent/session.ts', value => value.replace(
+    "messages.some(m => m.role === 'assistant' || m.role === 'tool')", 'false')],
+  ['session-prefix-bypass', 'apps/agent-worker/src/native-agent/session.ts', value => value.replace(
+    '!isDeepStrictEqual(messages.slice(0, preceding.length), preceding)', 'false')],
+  ['assistant-response-bypass', 'apps/agent-worker/src/native-agent/session.ts', value => value.replace(
+    'message.content !== turn.response.text', 'false')],
+  ['latest-checkpoint-prefix-erased', 'apps/agent-worker/src/native-agent/session.ts', value => value.replace(
+    "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+    "{ state: 'started', target, request: { messages: [], options }, effectiveOptions: boundedOptions }")],
+  ['unchecked-base-object', 'apps/agent-worker/src/presentation/handler.ts', value => value.replace(
+    'await readVerifiedVideoPlan(payload.storyboard.baseAssetId)', '({ prompts: [] } as never)')],
+  ['caller-supplied-saved-state', 'apps/agent-worker/src/native-agent/illustration-task.ts', value => value.replace(
+    '{ ...input, savedState: saved, nativeVideo,', '{ ...input, savedState: input.savedState, nativeVideo,')],
+  ['additional-materializer-caller', 'apps/agent-worker/src/native-agent/illustration-task.ts', value => value +
+    '\nexport function uncheckedVideoIngress(input: any) { return createNativeIllustrationMaterializer(input); }\n'],
+  ['escaped-materializer-alias', 'apps/agent-worker/src/native-agent/illustration-task.ts', value => value +
+    '\nconst escapedVideoMaterializer = createNativeIllustrationMaterializer;\n'],
+  ['slot-object-mutation', 'apps/agent-worker/src/native-agent/host-task.ts', value => value.replace(
+    'slot.called = true;', 'slot.called = true; Object.assign(slot, { result: value.result });')],
+  ['additional-store-caller', 'apps/agent-worker/src/native-agent/task-store.ts', value => value +
+    '\nexport function uncheckedStoreIngress(input: any) { return createNativeTaskStore(input); }\n'],
+];
+
+const videoIngressRejections = {
+  'model-selected-slot-result': ['MODEL_SELECTED_SLOT_RESULT', 'host-slot-result'],
+  'history-check-bypass': ['HOST_HISTORY_CHECK_BYPASS', 'host-before-session'],
+  'tool-result-equality-bypass': ['HOST_TOOL_RESULT_UNBOUND', 'host-slot-result'],
+  'session-fresh-history-bypass': ['FRESH_HISTORY_NOT_EMPTY', 'session-prefix'],
+  'session-prefix-bypass': ['PRIOR_PREFIX_UNBOUND', 'session-prefix'],
+  'assistant-response-bypass': ['ASSISTANT_RESPONSE_UNBOUND', 'session-prefix'],
+  'latest-checkpoint-prefix-erased': ['LATEST_PREFIX_NOT_RETAINED', 'session-checkpoint-prefix'],
+  'unchecked-base-object': ['LIVE_BASE_NOT_RECONSTRUCTED', 'verified-base'],
+  'caller-supplied-saved-state': ['CALLER_SELECTED_SAVED_STATE', 'materializer-host'],
+  'additional-materializer-caller': ['EXTRA_MATERIALIZER_CALLER', 'materializer-host'],
+  'escaped-materializer-alias': ['FACTORY_ALIAS_OR_ESCAPE_UNKNOWN', 'materializer-host'],
+  'slot-object-mutation': ['MODEL_SELECTED_SLOT_RESULT', 'host-slot-result'],
+  'additional-store-caller': ['EXTRA_UNBOUND_FACTORY_CALLER'],
+};
+
+for (const [name, file, mutate] of videoIngressMutations) test(`video constructor ingress rejects ${name} from actual source`, async () => {
+  assert.equal(typeof deployLock.proveNativeVideoReceiptIngress, 'function');
+  const { ts, program, projectRoot } = await videoIngressProgram(new Map([[file, mutate]]));
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  const [reason, edge] = videoIngressRejections[name];
+  assert.equal(result.reason, reason, 'mutated claimed edge must fail at the intended binding');
+  if (edge) assert.ok(!result.proven.includes(edge), `${edge} must not be proved for the counterexample`);
+  assert.equal(result.releaseCompatible, false);
 });
 
 async function gatewaySupplierFixtureSource() {
@@ -936,11 +1400,15 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   }
   const collectorSource = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(collectorSource);
+  const closureContexts = new WeakMap();
   const collect = runInNewContext(`${collectorSource}; rollbackReaderClosure`, { resolve, relative, dirname, join, existsSync, readFileSync,
-    builtinModules, APPLICATION_ROLLBACK_READERS: [], verifyPrismaVendorRuntime: deployLock.verifyPrismaVendorRuntime,
+    builtinModules, rollbackProofContexts: closureContexts, APPLICATION_ROLLBACK_READERS: [], verifyPrismaVendorRuntime: deployLock.verifyPrismaVendorRuntime,
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } });
   const ts = trusted('typescript'), roots = [['packages/prisma-fixture/generated/client/index.js']], vendorPackages = { upstreamPackageRoot, enginePackageRoot };
-  const current = JSON.stringify(collect(ts, candidate, roots, vendorPackages));
+  const currentEntries = collect(ts, candidate, roots, vendorPackages);
+  const current = JSON.stringify(currentEntries);
+  assert.equal(closureContexts.get(currentEntries).program.getTypeChecker(), closureContexts.get(currentEntries).checker);
+  assert.equal(closureContexts.get(currentEntries).root, candidate);
   assert.equal(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
   const core = join(candidate, 'node_modules/.prisma/client');
   await mkdir(join(core, 'runtime'), { recursive: true });

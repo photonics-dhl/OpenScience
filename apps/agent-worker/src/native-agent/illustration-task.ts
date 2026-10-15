@@ -334,7 +334,7 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
     return { status: 'science_ready', scienceToolCallId: callId, intent,
       ...(deferDesignGuidance ? { designGuidance: guidance.instructions } : {}) };
   };
-  function evaluate(name: string, args: unknown, sequence: number, callId: string, historicalExecution = false, savedVideoPrompts = false): Record<string, unknown> {
+  function evaluate(name: string, args: unknown, sequence: number, callId: string, historicalExecution = false, approvedVideoPrompts = false): Record<string, unknown> {
     try {
       if (!record(args)) throw new Error('object_required');
       if (name === 'paper_illustration_context') {
@@ -374,13 +374,13 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
         const prompts = document.scenes.flatMap((scene, sceneIndex) => {
           if (scene.paperOriginal) return [];
           const compiler = historicalVideo ? compileHistoricalNativeVideoShotPrompt
-            : savedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt;
+            : approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt;
           const prompt = { sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions),
             ...(nativeVideo ? { videoPrompt: compiler(document, scene, input.settings.locale) } : {}),
             ...(videoContext ? { renderResources: resources[sceneIndex]!.usage } : {}) };
           if (revisionSceneIndex !== undefined && sceneIndex !== revisionSceneIndex && input.nativeVideoAudio === true
             && !isDeepStrictEqual(prompt, input.base!.prompts[sceneIndex])) {
-            const alternate = { ...prompt, videoPrompt: (savedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt)(document, scene, input.settings.locale) };
+            const alternate = { ...prompt, videoPrompt: (approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt)(document, scene, input.settings.locale) };
             if (isDeepStrictEqual(alternate, input.base!.prompts[sceneIndex])) return [alternate];
           }
           return [prompt];
@@ -437,12 +437,12 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
     const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };
     const rebuilt = evaluate(name, args, sequence, callId);
     if (!recorded || isDeepStrictEqual(rebuilt, recorded)) return rebuilt;
-    // Known optional-video receipt compatibility: recompile every field, without
-    // changing render resources or copying any saved prompt into the result.
+    // Read an exact approved optional-video receipt without activating that
+    // constructor for fresh art or copying saved fields into a rebuilt result.
     if (nativeVideo && input.nativeVideoAudio === true && name === 'paper_illustration_art' && recorded.status === 'art_ready') {
       restore();
-      const previous = evaluate(name, args, sequence, callId, false, true);
-      if (isDeepStrictEqual(previous, recorded)) return previous;
+      const approved = evaluate(name, args, sequence, callId, false, true);
+      if (isDeepStrictEqual(approved, recorded)) return approved;
     }
     // Known resource compatibility only, never trust or splice a saved prompt.
     // Science and art are revalidated, then the entire receipt must still match.

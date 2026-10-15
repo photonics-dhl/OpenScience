@@ -728,7 +728,15 @@ jobs:
             --output "$GITHUB_WORKSPACE/tmp/native-restore-source-identity/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
-      - run: node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+      - name: Test release tooling with the retained video source fixtures
+        run: |
+          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64; do
+            if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$fixture_ref"
+            fi
+            test "$(git rev-parse "$fixture_ref^{commit}")" = "$fixture_ref"
+          done
+          node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
       - name: Lint first-image continuation sources and tests
         run: npx pnpm@9.15.0 exec eslint apps/agent-worker/src/presentation/handler.ts apps/agent-worker/src/scientific-writing-source.ts apps/agent-worker/src/workspace-guide.ts apps/agent-worker/test/workspace-guide.test.ts apps/api/src/routes/agent.ts apps/api/src/routes/research-runs.ts apps/api/test/agent-payload.test.ts apps/api/test/first-image-continuation.test.ts apps/web/components/hermes/HermesAssistantDrawer.tsx apps/web/components/hermes/HermesFirstImageResult.tsx apps/web/lib/api.ts apps/web/lib/hermes/presentation-intent.ts apps/web/test/e2e/hermes-first-image.spec.ts apps/web/test/hermes-guide-recovery.test.ts apps/web/test/hermes-presentation-intent.test.ts packages/domain/src/agent/first-image-continuation.ts packages/domain/src/agent/native-agent-execution.ts packages/domain/src/agent/workspace-guide-contract.ts packages/domain/src/assets/illustration-source.ts packages/domain/src/assets/presentation-asset.ts packages/domain/test/agent/first-image-continuation-fixture.ts packages/domain/test/agent/first-image-continuation.test.ts packages/domain/test/workspace-guide-contract.test.ts
       - name: Check completed paid image recovery and changed sources
