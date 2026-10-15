@@ -800,26 +800,42 @@ test.describe('short desktop Hermes conversation', () => {
       const bounds = node.getBoundingClientRect();
       const range = document.caretRangeFromPoint(bounds.left + 24, bounds.top + 8)!;
       if (range.startContainer.nodeType !== Node.TEXT_NODE || !node.contains(range.startContainer)) throw new Error('A visible research text anchor is required');
-      return { text: range.startContainer.textContent!, character: range.startOffset, offset: range.getBoundingClientRect().top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight };
+      const rect = range.getBoundingClientRect();
+      return { text: range.startContainer.textContent!, character: range.startOffset, offset: rect.top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+        at: performance.now(), paneTop: bounds.top, range: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height } };
     });
-    await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
-    await page.setViewportSize({ width: 1536, height: 681 });
-    await assertConversation(page, 'dialog');
-    await expect(input).toBeFocused();
-    await expect(input).toHaveValue('Refine this paragraph next.');
-    expect(await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; })).toEqual(selection);
-    const textOffset = () => pane.evaluate((node, saved) => {
+    const sampleReading = () => pane.evaluate((node, saved) => {
       const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
       let text: Node | null;
       while ((text = walker.nextNode())) {
         if (text.textContent !== saved.text) continue;
         const range = document.createRange(); range.setStart(text, saved.character); range.collapse(true);
-        return range.getBoundingClientRect().top - node.getBoundingClientRect().top;
+        const rect = range.getBoundingClientRect(), bounds = node.getBoundingClientRect();
+        return { at: performance.now(), character: saved.character, offset: rect.top - bounds.top, scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+          paneTop: bounds.top, range: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height } };
       }
       throw new Error('The same research text must remain in the conversation');
     }, reading);
-    // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
-    await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
+    const diagnostic = { before: reading, beforeResize: null as Awaited<ReturnType<typeof sampleReading>> | null, modalReads: [] as Array<Awaited<ReturnType<typeof sampleReading>>>, selection,
+      timingLimit: 'The post-screenshot sample adds one read before resize; a pass alone does not resolve the original wheel ordering.' };
+    const textOffset = async () => {
+      const sample = await sampleReading();
+      diagnostic.modalReads.push(sample);
+      return sample.offset;
+    };
+    try {
+      await page.screenshot({ path: test.info().outputPath('conversation-before-resize.png'), fullPage: false });
+      diagnostic.beforeResize = await sampleReading();
+      await page.setViewportSize({ width: 1536, height: 681 });
+      await assertConversation(page, 'dialog');
+      await expect(input).toBeFocused();
+      await expect(input).toHaveValue('Refine this paragraph next.');
+      expect(await input.evaluate((node) => { const field = node as HTMLTextAreaElement; return [field.selectionStart, field.selectionEnd, field.selectionDirection]; })).toEqual(selection);
+      // Fractional DOM rectangles and browser-rounded scrollTop may differ by one CSS pixel.
+      await expect.poll(async () => Math.abs(await textOffset() - reading.offset)).toBeLessThanOrEqual(1);
+    } finally {
+      await test.info().attach('conversation-reading-diagnostic', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+    }
     const after = await pane.evaluate((node) => ({ scrollTop: node.scrollTop, clientHeight: node.clientHeight, scrollHeight: node.scrollHeight }));
     const observations = { before: { ...reading, text: reading.text.slice(reading.character, reading.character + 64) }, after: { ...after, offset: await textOffset() }, selection };
     await test.info().attach('resized-conversation-reading', { body: JSON.stringify(observations, null, 2), contentType: 'application/json' });
