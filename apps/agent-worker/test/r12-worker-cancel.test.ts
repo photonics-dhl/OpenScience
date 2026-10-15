@@ -31,11 +31,17 @@ function live(id = ID) {
     error: null as string | null, payload: { concept: 'original source' }, result: null, retryCount: 0, progress: 10,
     createdAt: new Date(0), updatedAt: new Date(0), sessionId: 'session-1',
     session: { id: 'session-1', userId: 'user-1', status: 'active', deletedAt: null as Date | null,
-      researchObjectId: null as string | null, researchObject: null as { id: string; deletedAt: Date | null } | null } };
+      researchObjectId: null as string | null, researchObject: null as { id: string; workspaceId: string; deletedAt: Date | null } | null } };
 }
 /** Controlled transaction/lock model, not a PostgreSQL test. Real Gateway and Domain CAS helpers run above it. */
 function fixture() {
   const states = new Map([[ID, live()], [OTHER, live(OTHER)]]);
+  const workspaces = new Map([['workspace-1', { id: 'workspace-1', status: 'active' }]]);
+  const memberships = new Map([['workspace-1:user-1', { workspaceId: 'workspace-1', userId: 'user-1', role: 'author' }]]);
+  const workspace = { findUnique: async ({ where }: { where: { id: string } }) => structuredClone(workspaces.get(where.id) ?? null) };
+  const membership = { findUnique: async ({ where }: { where: { workspaceId_userId: { workspaceId: string; userId: string } } }) => {
+    const key = where.workspaceId_userId; return structuredClone(memberships.get(`${key.workspaceId}:${key.userId}`) ?? null);
+  } };
   const global = new Mutex(); const rows = new Map([[ID, new Mutex()], [OTHER, new Mutex()]]);
   const events: string[] = []; const observers = new Map<string, Array<() => void>>();
   const emit = (name: string) => { events.push(name); for (const fn of observers.get(name) ?? []) fn(); observers.delete(name); };
@@ -77,6 +83,7 @@ function fixture() {
     };
   }
   const prisma = {
+    workspace, membership,
     agentTask: taskModel(),
     ingestionTask: { updateMany: async () => ({ count: 0 }) },
     usageLedger: { findUnique: async () => null },
@@ -106,7 +113,7 @@ function fixture() {
     },
   };
   function client(tx: Tx) {
-    return { agentTask: taskModel(tx),
+    return { agentTask: taskModel(tx), workspace, membership,
       $executeRaw: async (strings: TemplateStringsArray) => {
         expect(strings.join('')).toContain('pg_advisory_xact_lock'); emit('global:request');
         tx.releases.push(await global.acquire()); tx.global = true; emit('global:locked'); return 1;
@@ -134,7 +141,7 @@ function fixture() {
     return stopAgentTaskInTransaction(tx as never, { taskId: ID, expectedExecutionAttempt: 1 });
   }, { isolationLevel: 'ReadCommitted' });
   const finish = () => response.resolve({ text: '{"ok":true}', model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } });
-  return { prisma, states, global, rows, controls, events, next, calls, response, gateway, claim, scoped, execute, stop, finish,
+  return { prisma, states, workspaces, memberships, global, rows, controls, events, next, calls, response, gateway, claim, scoped, execute, stop, finish,
     lockedAtProvider: () => Boolean(transactions.getStore()?.rows.has(ID)) };
 }
 const outcome = <T>(promise: Promise<T>) => promise.then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
@@ -165,7 +172,7 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     f.finish(); // A counterfactual unwanted call must settle, not merely time out.
     f.controls.afterPrepare = async () => {
       if (change === 'actor') task.session.userId = 'other-actor';
-      if (change === 'researchObject') { task.session.researchObjectId = 'other-ro'; task.session.researchObject = { id: 'other-ro', deletedAt: null }; }
+      if (change === 'researchObject') { task.session.researchObjectId = 'other-ro'; task.session.researchObject = { id: 'other-ro', workspaceId: 'workspace-1', deletedAt: null }; }
       if (change === 'session') { task.sessionId = 'other-session'; task.session.id = 'other-session'; }
     };
     await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
@@ -252,14 +259,46 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
   it.each(['review.analyze', 'visualization.plan', 'workspace.guide', 'presentation.figure-audit'] as const)(
     'admits the original live %s claim with its authoritative source scope', async kind => {
       const f = fixture(); const task = f.states.get(ID)!; task.kind = kind;
-      if (kind === 'review.analyze' || kind === 'presentation.figure-audit') {
-        task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', deletedAt: null };
-        Object.assign(task.payload, { researchObjectId: 'ro-1' }); Object.assign(f.claim.payload, { researchObjectId: 'ro-1' });
-      }
+      task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', workspaceId: 'workspace-1', deletedAt: null };
+      Object.assign(task.payload, { researchObjectId: 'ro-1' }); Object.assign(f.claim.payload, { researchObjectId: 'ro-1' });
       f.finish(); const scoped = createTaskScopedGateway(f.gateway, f.prisma as never, f.claim, kind);
       await expect(f.execute(scoped)).resolves.toEqual({ ok: true }); expect(f.calls).toEqual(['fixture']);
     },
   );
+
+  it.each(['before prepare', 'after prepare'])('blocks revoked RO membership %s without losing prepared custody', async timing => {
+    const f = fixture(); const task = f.states.get(ID)!;
+    task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', workspaceId: 'workspace-1', deletedAt: null };
+    const reservation = { id: 'original-ledger', userId: 'user-1', resource: 'ai_credit', kind: 'consume',
+      idempotencyKey: `agent-task-reserve:${ID}`, delta: -1n };
+    Object.assign(f.prisma.usageLedger, { findUnique: async () => reservation });
+    const revoke = () => { f.memberships.delete('workspace-1:user-1'); };
+    if (timing === 'before prepare') revoke();
+    else f.controls.afterPrepare = async () => { revoke(); };
+    f.finish();
+    await expect(f.execute()).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' });
+    expect(f.calls).toEqual([]);
+    expect(task).toMatchObject({ status: 'running', executionAttempt: 1 });
+    expect(reservation.delta).toBe(-1n);
+    if (timing === 'before prepare') expect(task.result).toBeNull();
+    else {
+      const receipt = (task.result as unknown as { ordinaryStructuredReceipt: { sourceJson: string; attempts: unknown[] } }).ordinaryStructuredReceipt;
+      expect(JSON.parse(receipt.sourceJson)).toEqual({ payload: f.claim.payload, messages: [], reservation: { ...reservation, delta: '-1' } });
+      expect(receipt.attempts).toHaveLength(1);
+      expect(receipt.attempts[0]).toMatchObject({ state: 'unknown', failureJson: JSON.stringify({ code: 'publication_unconfirmed' }) });
+    }
+  });
+
+  it('keeps a submitted RO response privately after membership is revoked', async () => {
+    const f = fixture(); const task = f.states.get(ID)!;
+    task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', workspaceId: 'workspace-1', deletedAt: null };
+    const started = f.next('submit'); const request = outcome(f.execute());
+    await started; f.memberships.delete('workspace-1:user-1'); f.finish(); await request;
+    expect(f.calls).toEqual(['fixture']);
+    expect(task.result).toMatchObject({ ordinaryStructuredReceipt: { attempts: [{ state: 'completed',
+      responseJson: JSON.stringify({ text: '{"ok":true}', model: 'fixture', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } }),
+    }] } });
+  });
 
   it('observes stop committed while admission waits on the global lock, before any real provider submit', async () => {
     const f = fixture(); const allowStop = deferred<void>(); const stopLocked = f.next('stop:locked');
@@ -337,7 +376,7 @@ describe('ordinary structured claimed submission admission (simulated locks)', (
     if (change === 'payload') task.payload = { concept: 'replacement source' };
     if (change === 'deleted') task.deletedAt = new Date();
     if (change === 'session') task.session.deletedAt = new Date();
-    if (change === 'ro') { task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', deletedAt: new Date() }; }
+    if (change === 'ro') { task.session.researchObjectId = 'ro-1'; task.session.researchObject = { id: 'ro-1', workspaceId: 'workspace-1', deletedAt: new Date() }; }
     if (change === 'stale') task.executionAttempt = 2;
     f.finish(); await expect(f.execute(scoped)).rejects.toMatchObject({ code: 'OCR_EXTERNAL_PROCESSING_DENIED' }); expect(f.calls).toEqual([]);
   });

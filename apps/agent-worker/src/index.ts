@@ -30,6 +30,7 @@ import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, reconcileHermesResearchRuns, recoverUndispatchedAgentTasks,
   prepareOrdinaryStructuredReceipt, settleOrdinaryStructuredReceipt, readOrdinaryStructuredReceipt,
   hasOrdinaryStructuredReceipt, isOrdinaryStructuredKind,
+  requireActiveMembership,
   ORDINARY_STRUCTURED_HOLD,
   OrdinaryStructuredReceiptConflict, type OrdinaryStructuredReceipt,
   recoverCompletedHermesSceneImageResults, type HermesResearchRunDeps,
@@ -151,6 +152,9 @@ export function createTaskScopedGateway(
         ? kind === 'review.analyze' || kind === 'presentation.figure-audit' || session.researchObject !== null
         : !session.researchObject || session.researchObject.id !== session.researchObjectId || session.researchObject.deletedAt !== null)
       || (typeof claim.payload.researchObjectId === 'string' && claim.payload.researchObjectId !== session.researchObjectId)) throw denied();
+    if (session.researchObjectId !== null) {
+      await requireActiveMembership(tx, session.researchObject!.workspaceId, session.userId);
+    }
     requireClaim(); return live;
   };
   const save = async (prepared: OrdinaryStructuredReceipt, completion: { responseJson: string } | { failureJson: string }) => {

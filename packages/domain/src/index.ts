@@ -476,7 +476,7 @@ export { readNativeImageReviewCheckpoint, nativeImageReviewMatches, nativeImageR
   type NativeImageReviewCheckpoint, type NativeImageReviewStarted, type NativeImageReviewCompleted,
   type NativeImageReviewTarget } from './assets/native-image-review';
 export { registerPaperFigure, type RegisterPaperFigureInput, type RegisterPaperFigureResult } from './assets/paper-figure';
-export { requireMembership } from './workspace/helpers';
+export { requireMembership, requireActiveMembership } from './workspace/helpers';
 export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, projectIllustrationEvidence, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
