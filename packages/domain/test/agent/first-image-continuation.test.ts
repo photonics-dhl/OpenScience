@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { seedUser } from '../helpers/fakes';
 import { createHermesFirstImageContinuation, findFirstImageContinuation, FIRST_IMAGE_CONTINUATION, readFirstImageContinuationAuthority } from '../../src/agent/first-image-continuation';
 import { reconcileHermesResearchRuns, recoverCompletedHermesSceneImageResults, requireHermesPresentationTaskAuthority } from '../../src/agent/research-run';
@@ -6,6 +7,40 @@ import { claimAgentTask, prepareAgentTaskForCrashRecovery } from '../../src/agen
 import { readVisualNarrativeSource } from '../../src/assets/illustration-source';
 
 import { completeImage, fixture, id, plannedFixture, renderingFixture } from './first-image-continuation-fixture';
+
+describe('first-image fixture JSON compare-and-set semantics', () => {
+  it.each([null, undefined])('matches a null or missing result with AnyNull: %s', async value => {
+    const f = fixture(); const task = f.db.agentTasks.find(t => t.id === id(15))!;
+    task.result = value;
+    expect(await f.prisma.agentTask.updateMany({ where: { id: task.id, result: { equals: Prisma.AnyNull } },
+      data: { progress: 11 } })).toEqual({ count: 1 });
+    expect(task.progress).toBe(11);
+  });
+  it('refuses AnyNull for a nonnull result without writing it', async () => {
+    const f = fixture(); const task = f.db.agentTasks.find(t => t.id === id(15))!;
+    task.result = { summary: 'retained evidence' }; task.progress = 10;
+    expect(await f.prisma.agentTask.updateMany({ where: { id: task.id, result: { equals: Prisma.AnyNull } },
+      data: { progress: 11 } })).toEqual({ count: 0 });
+    expect(task).toMatchObject({ progress: 10, result: { summary: 'retained evidence' } });
+  });
+  it('retains deep object result equality and the original payload condition', async () => {
+    const f = fixture(); const task = f.db.agentTasks.find(t => t.id === id(15))!;
+    task.result = { nested: { summary: 'retained evidence' } };
+    const payload = structuredClone(task.payload), result = structuredClone(task.result);
+    expect(await f.prisma.agentTask.updateMany({ where: { id: task.id, result: { equals: result }, payload: { equals: payload } },
+      data: { progress: 11 } })).toEqual({ count: 1 });
+    expect(await f.prisma.agentTask.updateMany({ where: { id: task.id, result: { equals: { nested: { summary: 'different' } } } },
+      data: { progress: 12 } })).toEqual({ count: 0 });
+    expect(await f.prisma.agentTask.updateMany({ where: { id: task.id, result: { equals: result }, payload: { equals: { ...payload, goal: 'changed' } } },
+      data: { progress: 13 } })).toEqual({ count: 0 });
+    expect(task).toMatchObject({ progress: 11, result, payload });
+  });
+  it('does not treat an absent task as a matching null row', async () => {
+    const f = fixture();
+    expect(await f.prisma.agentTask.updateMany({ where: { id: id(99), result: { equals: Prisma.AnyNull } },
+      data: { progress: 11 } })).toEqual({ count: 0 });
+  });
+});
 
 describe('current Hermes first-image continuation', () => {
   it('advances a real Native terminal plan into one image and completes with an unadopted private draft', async () => {
