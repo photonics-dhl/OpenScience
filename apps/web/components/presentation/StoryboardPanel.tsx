@@ -50,6 +50,7 @@ export function buildStoryboardRequest(input: {
       ? { narrative: true as const, narrativeSceneLimit: 1 } : {}),
     ...(input.baseAssetId ? {
       baseAssetId: input.baseAssetId,
+      ...(input.output === 'video' && input.storyboard?.narrative === true ? { narrative: true as const } : {}),
       ...(input.artOnly ? { revisionMode: 'art' as const, artSceneIndex: 0,
         ...(input.storyboard?.narrative ? { narrative: true as const } : {}) } : {}),
     } : {}),

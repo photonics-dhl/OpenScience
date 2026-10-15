@@ -115,6 +115,18 @@ it('carries the existing narrative scope into an art-only revision payload', () 
   expect(legacy).not.toHaveProperty('narrative');
 });
 
+
+it('preserves a narrative VIDEO parent for ordinary private revision without promoting other scopes', () => {
+  const input = { locale: 'zh' as const, style: 'auto', output: 'video' as const,
+    instruction: ' Restore the sourced 35-second plan ', baseAssetId: '591e9fd8-14ed-4ef4-885f-0f6ade1d386d',
+    artOnly: false, storyboard: { narrative: true as const } };
+  expect(buildStoryboardRequest(input)).toEqual({ locale: 'zh', style: 'auto', output: 'video',
+    instruction: 'Restore the sourced 35-second plan', baseAssetId: input.baseAssetId, narrative: true });
+  expect(buildStoryboardRequest({ ...input, storyboard: undefined })).not.toHaveProperty('narrative');
+  expect(buildStoryboardRequest({ ...input, baseAssetId: undefined })).not.toHaveProperty('narrative');
+  expect(buildStoryboardRequest({ ...input, output: 'image' })).not.toHaveProperty('narrative');
+});
+
 it('sends a hard one-scene paper scope for the focused new research image', () => {
   expect(buildStoryboardRequest({ locale: 'zh', style: 'auto', output: 'image', instruction: ' Explain the core mechanism ',
     artOnly: false, singlePaperImage: true })).toEqual({ locale: 'zh', style: 'auto', output: 'image',
