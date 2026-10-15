@@ -2,7 +2,7 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施/失败/发布留在 Git。
 
-- 2026-10-15：视频四文件公式编译候选两原CI完整通过，Linux实际94/94零skip，独立High/类型通过；跨版本pair及部署尚未放行，新私有稿科学质量仍NO-GO。R12有序成员撤权P1已具真实RED→最小三文件High→原PG八例GREEN与完整六job证据，该源码/CI子组关闭；后继并发排序仅只读scope交High，未设新政策或擅开实现。图片15路径与最终类型增量已审，program仍exit2/46旧tests/fakes；真实SDK桥235模块加载与716控制通过，Python三处运行隔离反馈修复后待同High与Linux实际验收。root继续收取并行交付和原范围下一步，心跳保持ACTIVE。
+- 2026-10-15：视频四文件公式编译候选两原CI完整通过，Linux实际94/94零skip，独立High/类型通过；跨版本pair及部署尚未放行，新私有稿科学质量仍NO-GO。R12有序成员撤权P1已具真实RED→最小三文件High→原PG八例GREEN与完整六job证据，该源码/CI子组关闭；后继并发排序只读scope经High确认需用户选择生效边界，答复前冻结。图片15生产路径与最终类型增量已审，program仍exit2/46旧tests/fakes；真实ea81 SDK0.10的blocked/accepted与Linux Host六例已通过，同High Source及限定offline GO，首次静态资源缺漏失败保留。25路径冻结交付已由root精确提交并推送，原Media CI与当前生产真实pair验收进行中；ca0a旧reader不接受新记录，实际跨版本兼容仍未通过，科学质量仍NO-GO。root继续收取并行交付和原范围下一步，心跳保持ACTIVE。
 - UI最终组合及唯一E2E差异均独立High GO，精确Media六jobs成功；新双库备份后原发布流程exit0，public精确版本与实际Web Node24已核。root已走通首页→Guide→P04→原稿四分区/Hermes/原图/PDF，路径后有界日志原transform错误0；UI owner发布后证据复核GO、无新增阻断。跳过的Parser/ScanSci/embedding/auth功能probe及未测角色/移动端不宣称完成。
 - 原92df截断与旧71e/591e成功事实保留，不按旧容量标签重跑。新稿实际few-nm/受限>1000x/35秒字段及原场景2科学公式通过；旁白适配、single-emitter全字段限定、编译公式冲突、构图对象歧义未过，未生成商业图片/视频/音频或公开。新调用许可与离线源码修复分开，不直写DB冒充Hermes。
 - R12 ordinary late-paid及真实PG六例是已验收原子组，真实Redis/RO矩阵、PGserver/host断电、永久丢响应、OCR/混合媒体/物理停止及整体仍OPEN。后继有序成员撤权最小权限接线已获实际原八例GREEN/完整六job及独立High；paid late保存保持，无架构部署许可；R04跨版本兼容义务保持。
