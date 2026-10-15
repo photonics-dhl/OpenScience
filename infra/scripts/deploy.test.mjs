@@ -239,6 +239,373 @@ test('bounded Worker recovery wiring proof rejects unsafe condition or duplicate
   await writeFile(runPath, runOriginal);
 });
 
+test('Prisma location mapping keeps the original 22 metadata and unrelated-source negative cases strict', async () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer));
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const helper = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const canonical = deployLockSource.match(/  const canonical = node => \{[\s\S]*?\n  \};/u)?.[0];
+  assert.ok(helper && canonical);
+  // Exercise the actual helper and closure canonicalizer without substituting
+  // this AST unit control for complete vendor/default-root pair acceptance.
+  const normalize = runInNewContext(`${helper}; const locationLiterals = new Map(); ${canonical}
+    (file, root) => { locationLiterals.clear(); for (const [node, identity] of prismaSearchLocationLiterals(ts, file, root))
+      locationLiterals.set(node, identity); return JSON.stringify(canonical(file)); }`, {
+    ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const candidate = join(projectRoot, 'tmp/prisma-candidate'), previous = join(projectRoot, 'tmp/prisma-previous');
+  const fixture = (directory, change = () => {}) => {
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    change(config);
+    return genuine.slice(0, declaration.initializer.getStart(parsed)) + JSON.stringify(config)
+      + genuine.slice(declaration.initializer.end);
+  };
+  const compare = (code, root) => normalize(ts.createSourceFile('index.js', code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS), root);
+  const valid = fixture(previous), expected = compare(fixture(candidate), candidate);
+  assert.equal(compare(valid, previous), expected);
+  for (const change of [
+    config => { config.generator.output.value = join(candidate, 'packages/search/generated/client'); },
+    config => { config.generator.output.value = join(previous, 'other'); },
+    config => { config.generator.sourceFilePath = join(previous, 'infra/schema.prisma'); },
+    config => { config.generator.sourceFilePath = join(previous, '..', 'outside/schema.prisma'); },
+    config => { config.generator.output.fromEnvVar = 'PRIVATE_ENV'; },
+    config => { config.generator.output.extra = true; },
+    config => { config.generator.provider.value = 'other'; },
+    config => { config.generator.extra = true; },
+    config => { config.generator.config.engineType = 'binary'; },
+    config => { config.clientVersion = 'unknown'; },
+  ]) assert.throws(() => compare(fixture(previous, change), previous), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const change of [
+    config => { config.relativePath = '../different'; },
+    config => { config.inlineSchema += '\n// changed'; },
+    config => { config.inlineDatasources.search.url.fromEnvVar = 'OTHER_DATABASE_URL'; },
+    config => { config.generator.binaryTargets[0].value = 'other'; },
+  ]) assert.notEqual(compare(fixture(previous, change), previous), expected);
+  for (const changed of [
+    valid.replace('const config =', 'let config ='),
+    valid.replace('"sourceFilePath":', '"sourceFilePath":"duplicate","sourceFilePath":'),
+    valid.replace('"generator":', '"generator":{},"generator":'),
+    valid.replace('"output":', '"output":{},"output":'),
+  ]) assert.throws(() => compare(changed, previous), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const extra of ['\nexports.unrelated = () => "changed-runtime-literal";', '\nconfig.dirname = "/external";'])
+    assert.notEqual(compare(valid + extra, previous), expected);
+  assert.notEqual(compare(fixture(candidate) + `\nexports.otherLocation = ${JSON.stringify(candidate + '/unrelated')};`, candidate),
+    compare(valid + `\nexports.otherLocation = ${JSON.stringify(previous + '/unrelated')};`, previous));
+  // A different module cannot inherit the generated-config relocation allowance.
+  await mkdir(join(projectRoot, 'tmp/ui-r04-prisma-location'), { recursive: true });
+  const root = await mkdtemp(join(projectRoot, 'tmp/ui-r04-prisma-location/other-module-'));
+  const directories = [join(root, 'candidate'), join(root, 'previous')];
+  for (const directory of directories) {
+    const file = join(directory, 'packages/search/generated/client/other.js');
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, `export const unrelated = ${JSON.stringify(directory)};`);
+  }
+  await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: directories[0], rollbackRoot: directories[1],
+    compilerRoot: projectRoot, roots: [['packages/search/generated/client/other.js']] }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('Prisma location allowance proves the actual generated config consumer and rejects observers or escapes', () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(proofSource);
+  const prove = runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
+    rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const check = code => {
+    const filename = join(projectRoot, 'tmp/prisma-consumer-memory.js').replaceAll('\\', '/');
+    const options = { allowJs: true, noLib: true, noEmit: true };
+    const host = ts.createCompilerHost(options), original = host.getSourceFile.bind(host);
+    host.getSourceFile = (file, languageVersion, ...args) => file === filename
+      ? ts.createSourceFile(file, code, languageVersion, true, ts.ScriptKind.JS) : original(file, languageVersion, ...args);
+    const program = ts.createProgram([filename], options, host);
+    prove(ts, program.getSourceFile(filename), program.getTypeChecker());
+  };
+  check(genuine);
+  check(genuine.replaceAll('query_engine-windows.dll.node', 'libquery_engine-debian-openssl-3.0.x.so.node'));
+  const observer = 'exports.readPersisted = () => config.generator.output.value === "/fixed-candidate";';
+  for (const code of [
+    genuine + observer,
+    genuine + '\nexports.config = config;',
+    genuine + '\nconst alias = config; exports.readPersisted = () => alias;',
+    genuine + '\nexports.readPersisted = () => config["generator"].sourceFilePath;',
+    genuine + '\nfunction shadow(config) { return config.generator.output.value; }',
+    genuine + '\nfunction shadowFactory() { function getPrismaClient(x) { return x; } return getPrismaClient(config); }',
+    genuine + '\nconst other = PrismaClient;',
+    genuine + '\nexports.readPersisted = () => exports.PrismaClient;',
+    genuine + '\nexports.readPersisted = () => config.dirname;',
+    genuine.replace("} = require('./runtime/library.js')", '} = require("./fake-runtime.js")'),
+    genuine.replace('const PrismaClient = getPrismaClient(config)', 'const PrismaClient = (() => config)()'),
+    genuine + '\nconst { generator } = config;',
+    genuine + '\nexports.readPersisted = () => Reflect.get(config, "generator");',
+    genuine + '\nconfig.generator.output.value = "/changed";',
+    genuine + '\nconfig.generator.sourceFilePath = "/changed";',
+    genuine + '\nObject.assign(config, { generator: {} });',
+    genuine + '\nexports.readPersisted = () => eval("config.generator.output.value");',
+    genuine + '\nexports.readPersisted = () => exports["Prisma" + "Client"];',
+    genuine + '\nconst aliasExports = exports;',
+    genuine + '\nconst aliasFactory = getPrismaClient;',
+    genuine + '\nfunction scope(require) { return require("./runtime/library.js"); }',
+    genuine + '\nfunction scope(exports) { return exports; }',
+    genuine.replace('config.dirname = __dirname', 'exports.readPersisted = () => config.dirname'),
+    genuine.replace('config.engineWasm = undefined', 'config.engineWasm = config.generator'),
+    genuine.replace('config.runtimeDataModel = JSON.parse(', 'config.runtimeDataModel = observe('),
+    genuine.replace('const { warnEnvConflicts }', 'const { warnEnvConflicts: fake }'),
+    genuine.replace('defineDmmfProperty(exports.Prisma, config.runtimeDataModel)', 'defineDmmfProperty(exports.Prisma, config)'),
+    genuine.replace('exports.PrismaClient = PrismaClient', 'exports.PrismaClient = getPrismaClient(config)'),
+    genuine.replace('const PrismaClient = getPrismaClient(config)', 'const PrismaClient = getPrismaClient({ ...config })'),
+    genuine + '\nconst ExtraClient = getPrismaClient(config);',
+    genuine.replace('const PrismaClient = getPrismaClient(config)', 'function decoy() { return getPrismaClient(config); }'),
+    genuine.replace("} = require('./runtime/library.js')", '} = require("./index.js")'),
+    genuine + '\nconst moduleAlias = module;',
+    genuine + '\nconst repeat = require("./index.js");',
+    genuine + '\nconfig["generator"].output.value = "/changed";',
+    genuine + '\nconst builtinAlias = path;',
+    genuine + '\npath.join = () => "/changed";',
+    genuine + '\nfs.existsSync = () => true;',
+    genuine + '\nObject.assign = (...args) => args;',
+    genuine + '\nJSON.parse = x => x;',
+    genuine + '\nconst Object = { assign() {} };',
+    genuine.replace('config.engineWasm = undefined', 'if (false) { config.engineWasm = undefined; }'),
+    genuine.replace('const PrismaClient = getPrismaClient(config)', 'const PrismaClient = fake(config)'),
+    genuine.replace('const alternativePaths =', 'let alternativePaths ='),
+    genuine.replace('if (!fs.existsSync(', 'if (+fs.existsSync('),
+    genuine.replace('  getPrismaClient,\n', '').replace('  getRuntime\n', '  getRuntime,\n  ...getPrismaClient\n'),
+    genuine.replace('  getPrismaClient,', '  getPrismaClient = () => {},'),
+    genuine.replace('  getPrismaClient,', '  getPrismaClient: getPrismaClient,'),
+  ]) assert.throws(() => check(code), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('Prisma observer refusal occurs at consumer proof in the exported verifier, before vendor comparison', async () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  await mkdir(join(projectRoot, 'tmp/ui-r04-prisma-location'), { recursive: true });
+  const root = await mkdtemp(join(projectRoot, 'tmp/ui-r04-prisma-location/observer-refusal-'));
+  const candidate = join(root, 'candidate'), previous = join(root, 'previous');
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const observed = [];
+  for (const directory of [candidate, previous]) {
+    const file = join(directory, 'packages/search/generated/client/index.js');
+    await mkdir(dirname(file), { recursive: true });
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    const source = `const config=${JSON.stringify(config)}; exports.readPersisted=()=>config.generator.output.value===${JSON.stringify(join(candidate, 'packages/search/generated/client'))};`;
+    await writeFile(file, source);
+    const context = { exports: {} };
+    runInNewContext(source, context);
+    observed.push(context.exports.readPersisted());
+  }
+  assert.deepEqual(observed, [true, false]);
+  const events = [], originalError = console.error;
+  try {
+    console.error = value => events.push(value);
+    await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
+      compilerRoot: projectRoot, roots: [['packages/search/generated/client/index.js']], diagnostics: true }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    const report = JSON.parse(events.find(value => value.startsWith('ROLLBACK_COMPATIBILITY_DIAGNOSTIC ')).slice('ROLLBACK_COMPATIBILITY_DIAGNOSTIC '.length));
+    assert.equal(report.stage, 'closure-candidate');
+    assert.equal(events.some(value => value.startsWith('ROLLBACK_COMPARISON_DIAGNOSTIC ')), false);
+  } finally { console.error = originalError; }
+});
+
+test('Prisma initial config rejects the identical prototype/this observer before location mapping', () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const metadataSource = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const canonicalSource = deployLockSource.match(/  const canonical = node => \{[\s\S]*?\n  \};/u)?.[0];
+  assert.ok(proofSource && metadataSource && canonicalSource);
+  const functions = runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
+    ({ prove: provePrismaSearchConsumer, metadata: prismaSearchLocationLiterals,
+      normalized(file, literals) { locationLiterals.clear(); for (const [node, identity] of literals) locationLiterals.set(node, identity);
+        return JSON.stringify(canonical(file)); } })`, {
+    ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const candidate = join(projectRoot, 'tmp/ui-r04-prisma-location/prototype-candidate');
+  const previous = join(projectRoot, 'tmp/ui-r04-prisma-location/prototype-previous');
+  const fixed = JSON.stringify(join(candidate, 'packages/search/generated/client'));
+  const fixture = (directory, extra) => {
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    const initializer = JSON.stringify(config).slice(0, -1) + ',' + extra + '}';
+    return { initializer, source: genuine.slice(0, declaration.initializer.getStart(parsed)) + initializer + genuine.slice(declaration.initializer.end) };
+  };
+  const check = ({ source }, directory) => {
+    const filename = join(projectRoot, 'tmp/prisma-prototype-memory.js').replaceAll('\\', '/');
+    const options = { allowJs: true, noLib: true, noEmit: true };
+    const host = ts.createCompilerHost(options), read = host.getSourceFile.bind(host);
+    host.getSourceFile = (file, languageVersion, ...args) => file === filename
+      ? ts.createSourceFile(file, source, languageVersion, true, ts.ScriptKind.JS) : read(file, languageVersion, ...args);
+    const program = ts.createProgram([filename], options, host), file = program.getSourceFile(filename);
+    functions.prove(ts, file, program.getTypeChecker());
+    const literals = functions.metadata(ts, file, directory);
+    return { mapped: literals.size, canonical: functions.normalized(file, literals) };
+  };
+  const extra = `"__proto__": { get isBundled() { return this.generator.output.value === ${fixed}; } }`;
+  const metadataOnly = ({ source }, directory) => functions.metadata(ts,
+    ts.createSourceFile('index.js', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS), directory);
+  assert.equal(metadataOnly(fixture(candidate, '"nested": { "text": "__proto__", "constructor": { "prototype": 3 }, "values": [1, -2, 0, 1.5, true, false, null] }'), candidate).size, 2);
+  const pair = [fixture(candidate, extra), fixture(previous, extra)];
+  const observed = pair.map(({ initializer }) => runInNewContext(`(${initializer}).isBundled`));
+  assert.deepEqual(observed, [true, false]);
+  const accepted = pair.map((value, index) => { try { return check(value, [candidate, previous][index]); } catch { return null; } });
+  console.log(JSON.stringify({ prototypeRegression: true, helperAccepted: accepted.map(Boolean), mappedLiteralCounts: accepted.map(value => value?.mapped ?? 0),
+    canonicalEqual: accepted.every(Boolean) && accepted[0].canonical === accepted[1].canonical, observed }));
+  for (let index = 0; index < pair.length; index += 1) {
+    assert.throws(() => metadataOnly(pair[index], [candidate, previous][index]), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.throws(() => check(pair[index], [candidate, previous][index]), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+  for (const addition of [
+    '"__proto__": {}',
+    '"nested": { "__proto__": {} }',
+    '"nested": [{ "__proto__": {} }]',
+    '"nested": { get value() { return this; } }',
+    '"nested": { set value(x) {} }',
+    '"nested": { method() { return this; } }',
+    '"nested": { "value": function () { return this; } }',
+    '"nested": { "value": () => 1 }',
+    '"nested": { "value": (() => 1)() }',
+    '"nested": { ["value"]: 1 }',
+    '"nested": { ...{} }',
+    '"nested": { config }',
+    '"nested": { "value": this }',
+    '"nested": { "value": undefined }',
+    '"nested": { "value": new Date() }',
+    '"nested": { "value": /x/ }',
+    '"nested": { "value": `template` }',
+    '"nested": { "value": 1 + 1 }',
+    '"nested": [, 1]',
+    '"nested": [...[]]',
+    '"nested": { "value": 1, "value": 2 }',
+    '"nested": { "__\\u0070roto__": {} }',
+    '"nested": { __proto__: {} }',
+  ]) {
+    assert.throws(() => metadataOnly(fixture(candidate, addition), candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+    assert.throws(() => check(fixture(candidate, addition), candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+});
+
+test('Prisma consumer rejects alias-based ambient prototype observers and unknown execution', () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const metadataSource = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const canonicalSource = deployLockSource.match(/  const canonical = node => \{[\s\S]*?\n  \};/u)?.[0];
+  assert.ok(proofSource && metadataSource && canonicalSource);
+  const functions = runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
+    ({ prove: provePrismaSearchConsumer, metadata: prismaSearchLocationLiterals,
+      normalized(file, literals) { locationLiterals.clear(); for (const [node, identity] of literals) locationLiterals.set(node, identity);
+        return JSON.stringify(canonical(file)); } })`, {
+    ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const candidate = join(projectRoot, 'tmp/ui-r04-prisma-location/ambient-candidate');
+  const previous = join(projectRoot, 'tmp/ui-r04-prisma-location/ambient-previous');
+  const fixed = JSON.stringify(join(candidate, 'packages/search/generated/client'));
+  const extra = `const O = ({}).constructor; O.defineProperty(O.prototype, 'isBundled', { get() { return this.generator.output.value === ${fixed}; } });`;
+  const pair = [candidate, previous].map(directory => {
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    const initializer = JSON.stringify(config);
+    return { directory, initializer, source: genuine.slice(0, declaration.initializer.getStart(parsed)) + initializer
+      + genuine.slice(declaration.initializer.end) + '\n' + extra };
+  });
+  const check = source => {
+    const filename = join(projectRoot, 'tmp/prisma-ambient-memory.js').replaceAll('\\', '/');
+    const options = { allowJs: true, noLib: true, noEmit: true };
+    const host = ts.createCompilerHost(options), read = host.getSourceFile.bind(host);
+    host.getSourceFile = (file, languageVersion, ...args) => file === filename
+      ? ts.createSourceFile(file, source, languageVersion, true, ts.ScriptKind.JS) : read(file, languageVersion, ...args);
+    const program = ts.createProgram([filename], options, host), file = program.getSourceFile(filename);
+    functions.prove(ts, file, program.getTypeChecker());
+    return file;
+  };
+  const observed = pair.map(({ initializer }) => runInNewContext(`const config=${initializer}; ${extra} config.isBundled;`));
+  assert.deepEqual(observed, [true, false]);
+  const accepted = pair.map(({ source, directory }) => {
+    try { const file = check(source), literals = functions.metadata(ts, file, directory);
+      return { mapped: literals.size, canonical: functions.normalized(file, literals) }; } catch { return null; }
+  });
+  console.log(JSON.stringify({ ambientPrototypeRegression: true, helperAccepted: accepted.map(Boolean), mappedLiteralCounts: accepted.map(value => value?.mapped ?? 0),
+    canonicalEqual: accepted.every(Boolean) && accepted[0].canonical === accepted[1].canonical, observed }));
+  for (const { source } of pair) assert.throws(() => check(source), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const source of [
+    genuine + '\nconst O = Reflect.getPrototypeOf({}).constructor;',
+    genuine + '\nconst { constructor: C } = {};',
+    genuine + '\nconst O = ({}).constructor; const D = O.defineProperty; D(O.prototype, "isBundled", { value: true });',
+    genuine + '\nconst O = ({}).constructor; const { defineProperty: D } = O;',
+    genuine + '\n(() => {})();',
+    genuine + '\nnew Proxy({}, {});',
+    genuine + '\nconst extra = String.raw`unknown`;',
+    genuine + '\nexports.Prisma.Extra = { get hidden() { return 1; } };',
+    genuine + '\nexports.Prisma.Extra = { method() { return 1; } };',
+    genuine + '\nexports.Prisma.Extra = { value: () => 1 };',
+    genuine + '\nexports.Prisma.Extra = (() => ({}))();',
+    genuine.replace("ReadUncommitted: 'ReadUncommitted'", 'get ReadUncommitted() { return "ReadUncommitted"; }'),
+    genuine.replace("ReadUncommitted: 'ReadUncommitted'", "__proto__: {}"),
+    genuine.replace('const Prisma = {}', 'const Prisma = {}, Other = (() => ({}))()'),
+    genuine + '\nPrisma.__proto__ = {};',
+    genuine + '\nPrisma.constructor = {};',
+    genuine + '\nPrisma.prototype = {};',
+    genuine + '\nPrisma.PrismaClient = null;',
+    genuine + '\nPrisma["extra"] = {};',
+    genuine + '\nfunction extra() {}',
+  ]) assert.throws(() => check(source), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
+test('Prisma consumer requires plain runtime destructuring, not a rest object or default binding', () => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(proofSource);
+  const prove = runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
+    rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const check = code => {
+    const filename = join(projectRoot, 'tmp/prisma-binding-memory.js').replaceAll('\\', '/');
+    const options = { allowJs: true, noLib: true, noEmit: true };
+    const host = ts.createCompilerHost(options), read = host.getSourceFile.bind(host);
+    host.getSourceFile = (file, languageVersion, ...args) => file === filename
+      ? ts.createSourceFile(file, code, languageVersion, true, ts.ScriptKind.JS) : read(file, languageVersion, ...args);
+    const program = ts.createProgram([filename], options, host);
+    assert.equal(program.getSyntacticDiagnostics().length, 0);
+    prove(ts, program.getSourceFile(filename), program.getTypeChecker());
+  };
+  check(genuine);
+  const rest = genuine.replace(/  getPrismaClient,\r?\n/u, '').replace(/  getRuntime\r?\n/u, '  getRuntime,\n  ...getPrismaClient\n');
+  assert.notEqual(rest, genuine);
+  let accepted = true; try { check(rest); } catch { accepted = false; }
+  console.log(JSON.stringify({ runtimeRestRegression: true, restAccepted: accepted }));
+  assert.throws(() => check(rest), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  for (const code of [genuine.replace('  getPrismaClient,', '  getPrismaClient = () => {},'),
+    genuine.replace('  getPrismaClient,', '  getPrismaClient: getPrismaClient,')])
+    assert.throws(() => check(code), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+});
+
 test('ordinary rollback compares persisted readers and their runtime helpers without executing old source', async t => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-readers-'));
   t.after(() => rm(root, { recursive: true, force: true }));

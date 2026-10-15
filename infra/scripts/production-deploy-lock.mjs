@@ -130,6 +130,272 @@ export function verifyPrismaCoreClientRuntime({ sourceRoot, upstreamPackageRoot,
     upstreamPackageRoot, enginePackageRoot, allowPnpmCore: true });
 }
 
+function provePrismaSearchConsumer(ts, sourceFile, checker) {
+  const declarations = sourceFile.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []);
+  const topConst = declaration => declaration && ts.isVariableDeclarationList(declaration.parent)
+    && Boolean(declaration.parent.flags & ts.NodeFlags.Const) && declaration.parent.parent.parent === sourceFile;
+  const named = name => {
+    const matches = declarations.filter(node => ts.isIdentifier(node.name) && node.name.text === name);
+    if (matches.length !== 1 || !topConst(matches[0])) rollbackCompatibilityUnknown();
+    return matches[0];
+  };
+  const config = named('config'), client = named('PrismaClient');
+  const configSymbol = checker.getSymbolAtLocation(config.name), clientSymbol = checker.getSymbolAtLocation(client.name);
+  if (!configSymbol || !clientSymbol) rollbackCompatibilityUnknown();
+  const imported = (identifier, specifier, destructured) => {
+    const symbol = checker.getSymbolAtLocation(identifier);
+    const binding = symbol?.declarations?.length === 1 ? symbol.declarations[0] : undefined;
+    const declaration = destructured && binding && ts.isBindingElement(binding) && ts.isObjectBindingPattern(binding.parent)
+      && !binding.propertyName && !binding.initializer && !binding.dotDotDotToken && ts.isIdentifier(binding.name) ? binding.parent.parent : binding;
+    const loader = declaration?.initializer;
+    if (!topConst(declaration) || !loader || !ts.isCallExpression(loader) || !ts.isIdentifier(loader.expression)
+      || loader.expression.text !== 'require' || loader.arguments.length !== 1
+      || !ts.isStringLiteral(loader.arguments[0]) || loader.arguments[0].text !== specifier
+      || (checker.getSymbolAtLocation(loader.expression)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile)) rollbackCompatibilityUnknown();
+    return { symbol, binding, loader };
+  };
+  const call = client.initializer;
+  if (!call || !ts.isCallExpression(call) || !ts.isIdentifier(call.expression) || call.expression.text !== 'getPrismaClient'
+    || call.arguments.length !== 1 || !ts.isIdentifier(call.arguments[0])
+    || checker.getSymbolAtLocation(call.arguments[0]) !== configSymbol) rollbackCompatibilityUnknown();
+  const factory = imported(call.expression, './runtime/library.js', true);
+  // Check complete contexts of the finite config uses emitted by Prisma 5.22.
+  // A property-name/count allowlist would admit observers using those members.
+  const contexts = [
+    'config.dirname = __dirname;',
+    `if (!fs.existsSync(path.join(__dirname, 'schema.prisma'))) {
+      const alternativePaths = ['generated/client', 'client'];
+      const alternativePath = alternativePaths.find((altPath) => {
+        return fs.existsSync(path.join(process.cwd(), altPath, 'schema.prisma'));
+      }) ?? alternativePaths[0];
+      config.dirname = path.join(process.cwd(), alternativePath);
+      config.isBundled = true;
+    }`,
+    'config.runtimeDataModel = JSON.parse("__PRISMA_STATIC_MODEL__");',
+    'defineDmmfProperty(exports.Prisma, config.runtimeDataModel);',
+    'config.engineWasm = undefined;',
+    `warnEnvConflicts({
+      rootEnvPath: config.relativeEnvPaths.rootEnvPath && path.resolve(config.dirname, config.relativeEnvPaths.rootEnvPath),
+      schemaEnvPath: config.relativeEnvPaths.schemaEnvPath && path.resolve(config.dirname, config.relativeEnvPaths.schemaEnvPath)
+    });`,
+    'const PrismaClient = getPrismaClient(config);',
+    'exports.PrismaClient = PrismaClient;',
+    'Object.defineProperty(exports, "__esModule", { value: true });',
+    'Object.assign(exports, Prisma);',
+    'const Prisma = {};',
+    'exports.Prisma = Prisma;',
+    'exports.$Enums = {};',
+  ];
+  const children = node => { const result = []; ts.forEachChild(node, child => { result.push(child); }); return result; };
+  const sameContext = (actual, expected) => {
+    if (!actual || actual.kind !== expected.kind) return false;
+    if (ts.isVariableDeclarationList(expected) && (actual.flags & ts.NodeFlags.BlockScoped) !== (expected.flags & ts.NodeFlags.BlockScoped)) return false;
+    if (ts.isPrefixUnaryExpression(expected) && actual.operator !== expected.operator) return false;
+    if (ts.isStringLiteral(expected) && expected.text === '__PRISMA_STATIC_MODEL__') {
+      try { return actual.text.length > 0 && typeof JSON.parse(actual.text) === 'object' && JSON.parse(actual.text) !== null; }
+      catch { return false; }
+    }
+    if ((ts.isIdentifier(expected) || ts.isLiteralExpression(expected)) && actual.text !== expected.text) return false;
+    const left = children(actual), right = children(expected);
+    return left.length === right.length && left.every((node, index) => sameContext(node, right[index]));
+  };
+  const allowed = new Set([config.name]);
+  const trusted = new Map([['getPrismaClient', factory]]);
+  const globalNames = new Set(['require', '__dirname', 'process', 'JSON', 'Object', 'undefined']);
+  for (const text of contexts) {
+    const expected = ts.createSourceFile('prisma-context.js', text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS).statements[0];
+    const matches = sourceFile.statements.filter(statement => sameContext(statement, expected));
+    if (matches.length !== 1) rollbackCompatibilityUnknown();
+    const collect = node => {
+      allowed.add(node);
+      if (ts.isIdentifier(node) && ['defineDmmfProperty', 'warnEnvConflicts', 'path', 'fs'].includes(node.text)) {
+        const context = imported(node, ['path', 'fs'].includes(node.text) ? node.text : './runtime/library.js', !['path', 'fs'].includes(node.text));
+        if (trusted.has(node.text) && trusted.get(node.text).symbol !== context.symbol) rollbackCompatibilityUnknown();
+        trusted.set(node.text, context);
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(matches[0]);
+  }
+  // Prisma's unused bundler annotations vary by generation platform. Keep
+  // their literal filenames strict in canonical comparison; allow only the
+  // side-effect-free builtin call context, without leaking a builtin alias.
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) continue;
+    const annotation = statement.expression, receiver = annotation.expression, [directory, filename] = annotation.arguments;
+    if (!ts.isPropertyAccessExpression(receiver) || !ts.isIdentifier(receiver.expression) || receiver.expression.text !== 'path'
+      || receiver.name.text !== 'join' || annotation.arguments.length !== 2 || !ts.isStringLiteral(filename)) continue;
+    const cwd = directory && ts.isCallExpression(directory) && directory.arguments.length === 0
+      && ts.isPropertyAccessExpression(directory.expression) && ts.isIdentifier(directory.expression.expression)
+      && directory.expression.expression.text === 'process' && directory.expression.name.text === 'cwd';
+    if (!(ts.isIdentifier(directory ?? {}) && directory.text === '__dirname') && !cwd) continue;
+    const collect = node => { allowed.add(node); ts.forEachChild(node, collect); };
+    collect(statement);
+  }
+  // Initializer references alone cannot detect ambient prototype mutation.
+  // Admit only the generated module's known imports, contexts and inert
+  // namespace assembly; no unrelated execution inherits this allowance.
+  const prisma = named('Prisma'), prismaSymbol = checker.getSymbolAtLocation(prisma.name);
+  const runtimeBindings = new Set(), importDeclarations = new Set();
+  for (const dependency of trusted.values()) {
+    const declaration = ts.isBindingElement(dependency.binding) ? dependency.binding.parent.parent : dependency.binding;
+    importDeclarations.add(declaration);
+    if (ts.isObjectBindingPattern(declaration.name)) {
+      for (const element of declaration.name.elements) {
+        if (!ts.isIdentifier(element.name) || element.propertyName || element.initializer || element.dotDotDotToken) rollbackCompatibilityUnknown();
+        runtimeBindings.add(checker.getSymbolAtLocation(element.name));
+      }
+    }
+  }
+  const restrictedFactories = new Set(['getPrismaClient', 'defineDmmfProperty', 'warnEnvConflicts', 'makeStrictEnum']);
+  const runtimePaths = new Set(['Public.validator', 'Extensions.getExtensionContext', 'Extensions.defineExtension',
+    'objectEnumValues.instances.DbNull', 'objectEnumValues.instances.JsonNull', 'objectEnumValues.instances.AnyNull',
+    'objectEnumValues.classes.DbNull', 'objectEnumValues.classes.JsonNull', 'objectEnumValues.classes.AnyNull']);
+  const namespaceValue = (node, references = true) => {
+    if (!node) rollbackCompatibilityUnknown();
+    if (ts.isStringLiteral(node) || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(node.kind)) return;
+    if (ts.isNumericLiteral(node) && Number.isFinite(Number(node.text))) return;
+    if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken
+      && ts.isNumericLiteral(node.operand) && Number.isFinite(Number(node.operand.text))) return;
+    if (ts.isArrayLiteralExpression(node)) { for (const element of node.elements) namespaceValue(element, references); return; }
+    if (ts.isObjectLiteralExpression(node)) {
+      const keys = new Set();
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property) || !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+          || property.name.text === '__proto__' || keys.has(property.name.text)) rollbackCompatibilityUnknown();
+        keys.add(property.name.text);
+        namespaceValue(property.initializer, references);
+      }
+      return;
+    }
+    if (references && ts.isIdentifier(node) && runtimeBindings.has(checker.getSymbolAtLocation(node)) && !restrictedFactories.has(node.text)) return;
+    if (references && ts.isPropertyAccessExpression(node)) {
+      const names = []; let base = node;
+      while (ts.isPropertyAccessExpression(base)) { names.unshift(base.name.text); base = base.expression; }
+      if (ts.isIdentifier(base) && ((runtimeBindings.has(checker.getSymbolAtLocation(base)) && runtimePaths.has([base.text, ...names].join('.')))
+        || checker.getSymbolAtLocation(base) === prismaSymbol && names.length === 1 && ['DbNull', 'JsonNull', 'AnyNull'].includes(names[0]))) return;
+    }
+    rollbackCompatibilityUnknown();
+  };
+  const enumCalls = new Set();
+  for (const statement of sourceFile.statements) {
+    if (allowed.has(statement)) continue;
+    if (ts.isVariableStatement(statement) && statement.declarationList.declarations.length === 1) {
+      const declaration = statement.declarationList.declarations[0];
+      if (declaration === config || importDeclarations.has(declaration)) continue;
+    }
+    if (!ts.isExpressionStatement(statement) || !ts.isBinaryExpression(statement.expression)
+      || statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken) rollbackCompatibilityUnknown();
+    const { left, right } = statement.expression;
+    if (!ts.isPropertyAccessExpression(left) || ['__proto__', 'constructor', 'prototype', 'PrismaClient'].includes(left.name.text)) rollbackCompatibilityUnknown();
+    const namespace = ts.isIdentifier(left.expression) && checker.getSymbolAtLocation(left.expression) === prismaSymbol
+      || ts.isPropertyAccessExpression(left.expression) && left.expression.name.text === 'Prisma'
+        && ts.isIdentifier(left.expression.expression) && left.expression.expression.text === 'exports';
+    if (!namespace) rollbackCompatibilityUnknown();
+    if (ts.isCallExpression(right) && ts.isIdentifier(right.expression) && right.expression.text === 'makeStrictEnum'
+      && left.name.text === 'TransactionIsolationLevel' && right.arguments.length === 1) {
+      const dependency = imported(right.expression, './runtime/library.js', true);
+      if (!runtimeBindings.has(dependency.symbol) || enumCalls.size) rollbackCompatibilityUnknown();
+      trusted.set('makeStrictEnum', dependency);
+      namespaceValue(right.arguments[0], false);
+      allowed.add(right.expression);
+      enumCalls.add(right);
+    } else namespaceValue(right);
+  }
+  if (enumCalls.size !== 1) rollbackCompatibilityUnknown();
+  const isPropertyName = node => ts.isPropertyAssignment(node.parent) && node.parent.name === node
+    || ts.isPropertyAccessExpression(node.parent) && node.parent.name === node;
+  const visit = node => {
+    if (!allowed.has(node) && (ts.isCallExpression(node) && !enumCalls.has(node) && ![...trusted.values()].some(item => item.loader === node)
+      || ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node) || ts.isFunctionLike(node)
+      || ts.isElementAccessExpression(node) || ts.isPropertyAccessExpression(node) && ['__proto__', 'constructor', 'prototype'].includes(node.name.text))) rollbackCompatibilityUnknown();
+    if (ts.isIdentifier(node) && !isPropertyName(node)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (node.text === 'config' && (symbol !== configSymbol || !allowed.has(node))) rollbackCompatibilityUnknown();
+      if (symbol === configSymbol && !allowed.has(node)) rollbackCompatibilityUnknown();
+      if ((node.text === 'PrismaClient' || symbol === clientSymbol) && !allowed.has(node)) rollbackCompatibilityUnknown();
+      if (trusted.has(node.text)) {
+        const dependency = trusted.get(node.text);
+        if (symbol !== dependency.symbol) rollbackCompatibilityUnknown();
+        if (node !== dependency.binding.name && !allowed.has(node)) rollbackCompatibilityUnknown();
+      }
+      if (globalNames.has(node.text) && (symbol?.declarations ?? []).some(item => !item.getSourceFile().isDeclarationFile)) rollbackCompatibilityUnknown();
+      // TypeScript models CJS exports with synthetic assignment declarations.
+      // Reject real lexical bindings rather than those namespace assignments.
+      if (node.text === 'exports' && (symbol?.declarations ?? []).some(item => ts.isVariableDeclaration(item)
+        || ts.isParameter(item) || ts.isBindingElement(item) || ts.isFunctionDeclaration(item)
+        || ts.isClassDeclaration(item) || ts.isImportSpecifier(item))) rollbackCompatibilityUnknown();
+      if (node.text === 'exports' && !allowed.has(node) && !(ts.isPropertyAccessExpression(node.parent)
+        && node.parent.expression === node && ['Prisma', '$Enums'].includes(node.parent.name.text))) rollbackCompatibilityUnknown();
+      if (node.text === 'require' && ![...trusted.values()].some(item => item.loader.expression === node)) rollbackCompatibilityUnknown();
+      if (['Object', 'JSON', 'process', '__dirname'].includes(node.text) && !allowed.has(node)) rollbackCompatibilityUnknown();
+      if (['eval', 'Function', 'module', 'globalThis', 'global'].includes(node.text)) rollbackCompatibilityUnknown();
+    }
+    if ((ts.isPropertyAccessExpression(node) && node.name.text === 'PrismaClient'
+      || ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression ?? {}) && node.argumentExpression.text === 'PrismaClient')
+      && ts.isIdentifier(node.expression) && node.expression.text === 'exports' && !allowed.has(node)) rollbackCompatibilityUnknown();
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+}
+
+function prismaSearchLocationLiterals(ts, sourceFile, sourceRoot) {
+  const properties = object => {
+    if (!object || !ts.isObjectLiteralExpression(object)) rollbackCompatibilityUnknown();
+    const result = new Map();
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property) || !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+        || property.name.text === '__proto__' || result.has(property.name.text)) rollbackCompatibilityUnknown();
+      result.set(property.name.text, property.initializer);
+    }
+    return result;
+  };
+  // A getter inherited through __proto__ can read the mapped fields via this,
+  // without referring to the config binding. Require the complete initializer
+  // to be inert JSON data, including nested values, before granting relocation.
+  const staticData = node => {
+    if (!node) rollbackCompatibilityUnknown();
+    if (ts.isStringLiteral(node) || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(node.kind)) return;
+    if (ts.isNumericLiteral(node) && Number.isFinite(Number(node.text))) return;
+    if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken
+      && ts.isNumericLiteral(node.operand) && Number.isFinite(Number(node.operand.text))) return;
+    if (ts.isArrayLiteralExpression(node)) {
+      for (const element of node.elements) staticData(element);
+      return;
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const value of properties(node).values()) staticData(value);
+      return;
+    }
+    rollbackCompatibilityUnknown();
+  };
+  const string = node => ts.isStringLiteral(node ?? {}) ? node.text : rollbackCompatibilityUnknown();
+  const configs = sourceFile.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? statement.declarationList.declarations.filter(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'config')
+      .map(declaration => ({ declaration, statement })) : []);
+  if (configs.length !== 1 || !(configs[0].statement.declarationList.flags & ts.NodeFlags.Const)) rollbackCompatibilityUnknown();
+  staticData(configs[0].declaration.initializer);
+  const config = properties(configs[0].declaration.initializer);
+  if (string(config.get('clientVersion')) !== '5.22.0') rollbackCompatibilityUnknown();
+  const generator = properties(config.get('generator'));
+  const expected = ['name', 'provider', 'output', 'config', 'binaryTargets', 'previewFeatures', 'sourceFilePath', 'isCustomOutput'];
+  if (generator.size !== expected.length || expected.some(key => !generator.has(key))
+    || string(generator.get('name')) !== 'client' || generator.get('isCustomOutput')?.kind !== ts.SyntaxKind.TrueKeyword) rollbackCompatibilityUnknown();
+  const provider = properties(generator.get('provider'));
+  const output = properties(generator.get('output'));
+  const engine = properties(generator.get('config'));
+  if (provider.size !== 2 || string(provider.get('value')) !== 'prisma-client-js'
+    || provider.get('fromEnvVar')?.kind !== ts.SyntaxKind.NullKeyword || output.size !== 2
+    || output.get('fromEnvVar')?.kind !== ts.SyntaxKind.NullKeyword || engine.size !== 1
+    || string(engine.get('engineType')) !== 'library') rollbackCompatibilityUnknown();
+  const outputLiteral = output.get('value'), schemaLiteral = generator.get('sourceFilePath');
+  if (string(outputLiteral) !== join(resolve(sourceRoot), 'packages/search/generated/client')
+    || string(schemaLiteral) !== join(resolve(sourceRoot), 'infra/search/schema.prisma')) rollbackCompatibilityUnknown();
+  return new Map([[outputLiteral, 'packages/search/generated/client'], [schemaLiteral, 'infra/search/schema.prisma']]);
+}
+
+
 function rollbackReaderClosure(ts, root, roots, vendorPackages) {
   // Custom fixtures retain the strict supplier proof. The complete release
   // uses the bounded Worker recovery AST proof above for the only callback
@@ -218,10 +484,11 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
   if (program.getSyntacticDiagnostics().length) rollbackCompatibilityUnknown();
   const checker = program.getTypeChecker(), selected = new Map(), modules = new Map(), verifiedVendorModules = new Set();
   const callbackCalls = [], calledBodies = new Map(), externalLoaderValues = new Set(), literalLoaderCalls = new Set();
+  const locationLiterals = new Map();
   const canonical = node => {
     const children = [];
     ts.forEachChild(node, child => { children.push(canonical(child)); });
-    return [node.kind, ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? node.text : null, children];
+    return [node.kind, ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? (locationLiterals.get(node) ?? node.text) : null, children];
   };
   const addConfiguration = path => {
     const key = `configuration:${relative(root, path).replaceAll('\\', '/')}`;
@@ -263,6 +530,12 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
     if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) rollbackCompatibilityUnknown();
     const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
     if (emitted.parseDiagnostics.length) rollbackCompatibilityUnknown();
+    if (relative(root, path).replaceAll('\\', '/') === 'packages/search/generated/client/index.js') {
+      prismaSearchLocationLiterals(ts, parsed, root);
+      provePrismaSearchConsumer(ts, parsed, checker);
+      visitModule(sourcePath('packages/search/generated/client/runtime/library.js'));
+      for (const [node, identity] of prismaSearchLocationLiterals(ts, emitted, root)) locationLiterals.set(node, identity);
+    }
     selected.set(`module:${relative(root, path).replaceAll('\\', '/')}`, canonical(emitted));
     if (/^(?:packages\/[a-z-]+\/generated\/client|node_modules\/\.prisma\/client)\/runtime\/library\.js$/u.test(relative(root, path).replaceAll('\\', '/'))) {
       if (!vendorPackages) rollbackCompatibilityUnknown();
