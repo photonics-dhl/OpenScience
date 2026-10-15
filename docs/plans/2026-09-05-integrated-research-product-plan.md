@@ -258,17 +258,35 @@ v2效果迭代：用户认可v1并要求过渡自然、动效突出；`render-v2
 
 ## Task 5: 语音和讨论回路
 
-- [ ] 对候选 ASR/TTS 核实中文科研术语识别、费用、延迟和隐私边界；MediaRecorder 仅承担录音。
+- [x] 2026-10-15 用户指定 Synclip ASR（whisper-1）与 TTS，共用既有 Synclip API key；已在提供的真实文档页核对 POST `/v1/asr`、POST `/v1/audio` 与 GET `/v1/tasks/:id`。ASR 每开始一分钟 1 供应商积分；标准 TTS 每开始 1,000 字符 1 积分。此项只确认接口与计价，不证明账户调用、中文术语质量、延迟或音质。
 - [ ] 实现显式录音、文本校正与同一修改预览路径，麦克风拒绝时保留完整文字操作。
 - [ ] 利用现有协作/版本模块接通公开 RO 的针对性讨论与作者修订，逐一验证目标版本。
 - [ ] 分别交用户验收语音修改和阅读讨论体验，不用后台成功率替代交互验收。
+
+### Hermes 语音对话实施范围（2026-10-15）
+
+- 来源为本轮用户选择“说话提问并听取回答”及所给 [ASR](https://synclip.ai/dev/docs/asr)、[TTS](https://synclip.ai/dev/docs/audio)；停止其他供应商搜索。引用聊天不授权卸载 Qwen、克隆声音或分离音频。
+- Gateway 复用 `SynclipAudioClient` 的固定 origin、凭证、受限 HTTP、音色与私有下载；新增转写提交/文字结果校验。浏览器只产生 PCM16 / mono / 16kHz WAV，单次最多60秒；服务端从实际字节复验。无需新编码二进制或客户端 key。
+- Domain 在 `agent/voice-contract.ts`、`agent/voice.ts` 复用 AgentTask、原账本、队列 outbox 与 StorageAdapter。私有录音/结果使用既有 `derived/` 清理范围。同幂等键配不同录音会错误覆盖原输入，因此复用现有存储 checksum 做内容身份核对，不新增 hash 算法、冻结基线或全局门禁。
+- 专用 `/agent/voice` 提交、查询、原 key 恢复、只恢复查询与私有 MP3 路由绑定当前 owner / guide session / RO / 有效成员。新 kinds 不开放一般 payload 提交。每个新 ASR/TTS 任务沿现有1 AI点记账；供应商积分与平台点数分别说明。
+- Worker 在外发前保存 submitting 收据并重查授权；未知创建不重发。已有供应商 ID 只继续 GET，已完成结果只恢复保存/交付；撤权或停止后的迟到 paid 结果仍私有保留，不能采用或公开。
+- 回复只读同 owner 已成功 guide 的 `summary`；按实际标准音色目录选择。首版整段文字不超过1,000 UTF-8字节；超出明确提示请求简短回复，不能静默截断或重新概括。普通文字回复始终保留。
+- Web 所有录音/播放均需主动操作，关闭、换账号/RO、页面隐藏时释放麦克风与音频；识别文字须可校正且不能覆盖识别期间的新编辑，不自动发送。沿用原 Hermes 表单、差异预览和发布确认。
+- 分工：语音工作树内 Domain、Web 与主线程 API/Worker/Gateway 各自限定路径；独立 High 覆核新增权限、付费恢复与媒体边界。总控 CURRENT/progress/index/registry 保持原 owner，集成时交精确差异与证据。
+- 最小验证：Gateway ASR + 受影响 TTS；Domain 幂等/权限/恢复；API 文件及越权合同；Worker 真实生产者离线纵向链；Web 录音 WAV、拒绝/撤权/迟到结果与实际入口浏览器 fixture。真实供应商、真实麦克风、质量与生产观察须另记事实，不能由 mock 推导。
+
+语音候选实现检查点：录音/停止→显式识别→可编辑文字→原 Hermes 输入及发送链、同一已保存回答的点播/停止均已接线；能力未配置时原文字操作可用。Gateway220项、Domain语音/原Agent214项、API6项、Worker6项本地通过；Web43项单元/相邻检查复用有效结果，新增两处恢复缺陷均先复现失败、修复后4项相关浏览器用例通过。所有媒体/供应商响应仍为合成夹具。独立 High 对供应商边界、撤权/并发/迟到回执及两项前端修复复核无未决实质问题。
+
+发布请求沿现有 R12 模式在短授权事务内启动一次 HTTP，提交释放全局/行锁后再等响应；不能在等待供应商时占住现有 Trash 全局锁。真实 PostgreSQL 触发器验收已接入既有 media workflow 的隔离 PostgreSQL 服务，包含同会话写入不被慢 HTTP 阻塞、task/session/RO 删除后原付费回执只更新 result，以及撤权先后胜负；本机无数据库，执行结果仍待该 CI，模拟锁测试不替代它。
+
+base Compose 仅增 API/Worker 的私有只读目录和默认空文件路径；未读本机/生产 key、未发真实供应商请求、未部署。激活/同 key 副本权限与轮换、兼容回退读者及最小真实入口验收见[部署手册语音段](../runbooks/deployment.md#hermes-语音候选启用默认关闭尚未部署验收)。总控 CURRENT/progress/index/能力台账仍由原 owner 在集成后同步，不能把候选或 CI 成功写成用户已验收。
 
 ## Validation of this planning checkpoint
 
 - 文档同步：`npx pnpm@9.15.0 audit:docs-sync`。
 - 文档格式：`npx pnpm@9.15.0 docs:lint`。
 - 变更卫生：`git diff --check`。
-- 本检查点不声称代码实现、运行时测试、用户效果验收或新部署已完成。
+- 以上三项为早期规划检查要求；语音候选实施证据见上段，用户效果验收和新部署仍未完成。
 
 ## 首批本地验收记录
 

@@ -25,6 +25,7 @@ import { registerPublicationRoutes } from './routes/publications';
 import { registerAuthorRoutes } from './routes/authors';
 import { registerNotificationRoutes } from './routes/notifications';
 import { registerAgentRoutes } from './routes/agent';
+import { registerHermesVoiceRoutes } from './routes/voice';
 import { registerLiteratureRoutes } from './routes/literature';
 import { registerAppealRoutes } from './routes/appeals';
 import { registerResearchRoutes } from './routes/research';
@@ -48,6 +49,7 @@ import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
 export interface BuildAppOptions extends AuthRouteDeps {
+  voiceRuntime?: import('@openscience/ai-gateway').SynclipVoiceRuntime;
   nativeAgentRuntime?: import('@openscience/domain').AgentDeps['nativeAgentRuntime'];
   journalsEnabled?: boolean;
   journalMetadataFetcher?: typeof fetch;
@@ -139,6 +141,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAuthorRoutes(instance, opts), {});
   await app.register(async (instance) => registerNotificationRoutes(instance, opts), {});
   await app.register(async (instance) => registerAgentRoutes(instance, opts), {});
+  await app.register(async (instance) => registerHermesVoiceRoutes(instance, opts), {});
   await app.register(async (instance) => registerLiteratureRoutes(instance, opts), {});
   await app.register(async (instance) => registerAppealRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRoutes(instance, opts), {});

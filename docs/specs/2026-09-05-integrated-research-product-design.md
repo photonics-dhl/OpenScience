@@ -275,8 +275,8 @@ Hermes 接收当前 Workspace、RO、版本及显式选中对象。跨路由继�
 | 图解 | cathrynlavery/diagram-design | 已查官方仓库，HTML/SVG 与现有路径匹配；先参考布局和图形语法，尚未安装或选择具体模板 |
 | 视频 | gnipbao/story-to-handdrawn-video | 参考分镜、插图与转场流程；其无声画面定位不等于完整科研视频产品 |
 | 视频渲染 | Remotion | 官方文档已初查；仅候选，需核实商业许可、CPU 渲染成本和部署边界再决定 |
-| 语音输入 | MediaRecorder + 待选 ASR 服务 | 浏览器录音接口不是语音识别器；需比较中文科研术语、延迟与价格 |
-| 语音输出与生成媒体 | MiniMax 与适用替代 provider | 经现有 AI Gateway；当前受阻能力不得标记可用或绕过管理员限定 |
+| 语音输入 | 浏览器显式录音 + Synclip ASR（whisper-1） | 2026-10-15 用户指定供应商及既有 Synclip key；录音转为有界 WAV，经 Gateway 创建异步转写任务，再由用户校正并发送 |
+| Hermes 语音回复 | Synclip TTS / 既有音色目录 | 用户主动点播同会话已完成回复；复用 Gateway、任务/额度与私有存储，真实音质与部署分别验收；克隆、分离与旧 Qwen 退役不在本次范围 |
 | 配色 | Huemint、Happy Hues、Realtime Colors 等参考 | 辅助比较实际页面，保留既有品牌；不把换色当作流程修复 |
 
 参考资料：
