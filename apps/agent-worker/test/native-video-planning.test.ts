@@ -3,7 +3,7 @@ import type { ChatMessage } from '@openscience/ai-gateway';
 import type { NativeAgentSessionState } from '../src/native-agent/session';
 import { createNativeIllustrationMaterializer, nativeIllustrationToolProfile } from '../src/native-agent/illustration-task';
 import { materializeIllustrationScience } from '../src/presentation/illustration-planner';
-import { compileShotPrompt } from '../src/presentation/synclip-video-spool';
+import { compileShotPrompt, compileApprovedShotPrompt } from '../src/presentation/synclip-video-spool';
 
 // Exact saved tool input from reviewed a0f2, captured before changing the fresh producer.
 // It must remain independent of the R1 fresh factory. This is input, not an expected implementation string.
@@ -740,6 +740,113 @@ const externalPrompt = [
 ].join('\n');
 
 describe('native Hermes complete video planning', () => {
+  function recordedOptionalPlan(policy: string) {
+    // The retained original producer and old compiler construct this old receipt;
+    // the corrected producer is deliberately not its source of expected prompts.
+    const original = createNativeIllustrationMaterializer({ claims, settings, paperOriginals: new Map(),
+      ...nativeIllustrationToolProfile(null, 'video') });
+    const candidate = structuredClone(science);
+    candidate.videoProduction.audioPolicy = policy;
+    candidate.scenes.forEach(scene => { scene.videoDirection.audioMode = policy === 'native-first' ? 'native' : 'external-narration'; });
+    const messages: ChatMessage[] = [];
+    for (const [id, name, args] of [['science-video', 'paper_illustration_science', candidate],
+      ['old-art', 'paper_illustration_art', art], ['old-review', 'paper_illustration_review', {
+        planToolCallId: 'old-art', decision: 'accepted', summary: 'The original source-bound plan.', corrections: [], issues: [],
+      }]] as const) {
+      const result = original.call(name, args, messages.length, id);
+      expect(result.status).not.toBe('invalid_illustration');
+      if (name === 'paper_illustration_art') {
+        const planned = result as unknown as { document: import('@openscience/domain').StoryboardDocument;
+          prompts: Array<{ sceneIndex: number; videoPrompt: string }> };
+        for (const prompt of planned.prompts) prompt.videoPrompt = compileShotPrompt(planned.document,
+          planned.document.scenes[prompt.sceneIndex]!, settings.locale);
+      }
+      messages.push({ role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+        { role: 'tool', toolCallId: id, content: JSON.stringify(result) });
+    }
+    const planned = JSON.parse(messages.find(message => message.role === 'tool' && message.toolCallId === 'old-art')!.content);
+    const saved = { turns: [{ request: { options: { tools: OPTIONAL_SAVED_TOOL_INPUT.map(definition => ({ type: 'function', function: definition })) }, messages } }] } as unknown as NativeAgentSessionState;
+    return { messages, saved, planned, final: '{"reviewToolCallId":"old-review"}' };
+  }
+
+  it.each(['external-narration', 'native-first'])('replays an old optional %s receipt with its original complete prompts', policy => {
+    const old = recordedOptionalPlan(policy), before = structuredClone(old.saved);
+    const restored = createNativeIllustrationMaterializer({ claims, settings, paperOriginals: new Map(), savedState: old.saved,
+      ...nativeIllustrationToolProfile(old.saved, 'video', 'video-optional-audio-v1') });
+    expect(restored.finish(old.messages, old.final).prompts).toEqual(old.planned.prompts);
+    expect(old.saved).toEqual(before);
+  });
+
+  it.each(['video', 'frame', 'resources'])('refuses a changed old optional art receipt %s instead of adopting saved content', field => {
+    const old = recordedOptionalPlan('external-narration');
+    const receipt = old.messages.find(message => message.role === 'tool' && message.toolCallId === 'old-art')!;
+    const changed = JSON.parse(receipt.content);
+    if (field === 'video') changed.prompts[0].videoPrompt += ' Invent an extra label.';
+    else if (field === 'frame') changed.prompts[0].prompt += ' Invent an extra subject.';
+    else changed.prompts[0].renderResources = [];
+    receipt.content = JSON.stringify(changed);
+    expect(() => createNativeIllustrationMaterializer({ claims, settings, paperOriginals: new Map(), savedState: old.saved,
+      ...nativeIllustrationToolProfile(old.saved, 'video', 'video-optional-audio-v1') }).finish(old.messages, old.final)).toThrow(/blocked/u);
+  });
+
+  it.each(['external-narration', 'native-first'])('keeps old unselected prompts in a new %s local revision and replays the mixed result', policy => {
+    const old = recordedOptionalPlan(policy);
+    const base = { settings, view: { document: old.planned.document, locale: settings.locale, style: settings.style, output: 'video', narrative: true },
+      prompts: old.planned.prompts, designSkills: [] } as import('../src/native-agent/illustration-task').VerifiedNativeVideoBase;
+    const before = structuredClone(base);
+    const revision = { ...settings, baseAssetId: '10000000-0000-4000-8000-000000000003', revisionSceneIndex: 1 };
+    const profile = nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1');
+    const child = createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile });
+    const candidate = JSON.parse(old.messages.find(message => message.role === 'assistant' && message.toolCalls?.[0]?.id === 'science-video')!.toolCalls![0]!.function.arguments);
+    candidate.scenes[1].narration = 'A supported connection.';
+    const messages: ChatMessage[] = [];
+    for (const [id, name, args] of [['science-video', 'paper_illustration_science', candidate],
+      ['child-art', 'paper_illustration_art', { scienceToolCallId: 'science-video', scenes: [art.scenes[1]] }],
+      ['child-review', 'paper_illustration_review', { planToolCallId: 'child-art', decision: 'accepted', summary: 'Only the selected scene changed.', corrections: [], issues: [] }]] as const) {
+      const result = child.call(name, args, messages.length, id);
+      expect(result.status).not.toBe('invalid_illustration');
+      messages.push({ role: 'assistant', content: '', toolCalls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+        { role: 'tool', toolCallId: id, content: JSON.stringify(result) });
+    }
+    const final = '{"reviewToolCallId":"child-review"}', mixed = child.finish(messages, final);
+    for (const index of [0, 2]) expect(mixed.prompts[index]).toEqual(base.prompts[index]);
+    expect(mixed.prompts[1]!.videoPrompt).not.toContain('Do not render subtitles, formulas,');
+    expect(createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile })
+      .finish(messages, final)).toEqual(mixed);
+    const oldSelected = structuredClone(messages);
+    const oldArt = oldSelected.find(message => message.role === 'tool' && message.toolCallId === 'child-art')!;
+    const oldPlan = JSON.parse(oldArt.content);
+    for (const prompt of oldPlan.prompts) prompt.videoPrompt = compileShotPrompt(oldPlan.document,
+      oldPlan.document.scenes[prompt.sceneIndex], revision.locale);
+    oldArt.content = JSON.stringify(oldPlan);
+    expect(createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile })
+      .finish(oldSelected, final).prompts).toEqual(oldPlan.prompts);
+    expect(base).toEqual(before);
+  });
+
+  it.each(['external-narration', 'native-first'])('keeps the approved phase-matching formula drawable in a new %s plan', policy => {
+    const formulaClaims = structuredClone(claims);
+    formulaClaims[0]!.sourcePassages[0]!.text += ' The electron and mode obey the phase-matching condition v·k = ω(k).';
+    const candidate = structuredClone(science);
+    candidate.videoProduction.audioPolicy = policy;
+    candidate.scenes.forEach(scene => { scene.videoDirection.audioMode = policy === 'native-first' ? 'native' : 'external-narration'; });
+    Object.assign(candidate.scenes[1]!, {
+      message: 'The electron and mode obey the phase-matching condition v·k = ω(k).',
+      subjects: [{ description: 'Electron and mode obeying the phase-matching condition v·k = ω(k).', basis: { sourceId: 's0' } }],
+      encoding: 'Display the approved phase-matching formula label.', labels: ['v·k = ω(k)'],
+      constraints: ['Only the approved formula v·k = ω(k); no other equations.'],
+    });
+    const materializer = createNativeIllustrationMaterializer({ claims: formulaClaims, settings, paperOriginals: new Map(),
+      ...nativeIllustrationToolProfile(null, 'video', 'video-optional-audio-v1') });
+    expect(materializer.call('paper_illustration_science', candidate, 0, 'science-video')).toMatchObject({ status: 'science_ready' });
+    const planned = materializer.call('paper_illustration_art', art, 1, 'art-formula') as {
+      status: string; prompts: Array<{ videoPrompt: string }>;
+    };
+    expect(planned.status).toBe('art_ready');
+    expect(planned.prompts[1]!.videoPrompt).toContain('v·k = ω(k)');
+    expect(planned.prompts[1]!.videoPrompt).not.toContain('Do not render subtitles, formulas,');
+  });
+
   it('keeps unmarked R1 pending video on the historical external contract while reading exact optional saved tools', () => {
     const fresh = nativeIllustrationToolProfile(null, 'video');
     expect(fresh).toMatchObject({ nativeVideo: true, videoContext: true, nativeVideoAudio: false });
@@ -793,9 +900,9 @@ describe('native Hermes complete video planning', () => {
       document: import('@openscience/domain').StoryboardDocument; prompts: Array<{ videoPrompt: string }>;
     };
     expect(planned.document.videoProduction!.audioPolicy).toBe(policy);
-    expect(planned.prompts[0]!.videoPrompt).toBe(compileShotPrompt(planned.document, planned.document.scenes[0]!, settings.locale));
-    if (policy === 'external-narration') expect(planned.prompts[0]!.videoPrompt).toBe(externalPrompt);
-    else expect(planned.prompts[0]!.videoPrompt).not.toBe(externalPrompt);
+    expect(planned.prompts[0]!.videoPrompt).toBe(compileApprovedShotPrompt(planned.document, planned.document.scenes[0]!, settings.locale));
+    expect(planned.prompts[0]!.videoPrompt).not.toBe(externalPrompt);
+    expect(planned.prompts[0]!.videoPrompt).not.toContain('Do not render subtitles, formulas,');
   });
 
   it.each(['unknown', null, false, {}])('refuses an invalid optional planning marker %s', marker => {
@@ -822,7 +929,7 @@ describe('native Hermes complete video planning', () => {
     expect(result.document.videoProduction?.audioPolicy).toBe('native-first');
     for (const [index, scene] of result.document.scenes.entries()) {
       expect(scene.videoDirection?.audioMode).toBe('native');
-      expect(result.prompts[index]!.videoPrompt).toBe(compileShotPrompt(result.document, scene, settings.locale));
+      expect(result.prompts[index]!.videoPrompt).toBe(compileApprovedShotPrompt(result.document, scene, settings.locale));
       expect(result.prompts[index]!.videoPrompt).not.toContain('Spoken narration is external');
     }
     const saved = { turns: [{ request: { options: { tools: profile.sourceTools.map(definition => ({ type: 'function', function: definition })) }, messages } }] } as unknown as NativeAgentSessionState;
@@ -927,7 +1034,7 @@ describe('native Hermes complete video planning', () => {
     expect(document.videoProduction).toEqual(base.view.document.videoProduction); expect(document.narrative).toEqual(base.view.document.narrative);
     for (const index of [0, 2]) { expect(document.scenes[index]).toEqual(base.view.document.scenes[index]); expect(prompts[index]).toEqual(base.prompts[index]); }
     expect(document.scenes[1]!.narration).toBe('A supported connection.');
-    expect(prompts[1]!.videoPrompt).toBe(compileShotPrompt(document, document.scenes[1]!, revision.locale));
+    expect(prompts[1]!.videoPrompt).toBe(compileApprovedShotPrompt(document, document.scenes[1]!, revision.locale));
     const mixed = structuredClone(originalScience); mixed.scenes[1]!.videoDirection.audioMode = policy === 'native-first' ? 'external-narration' : 'native';
     expect(createNativeIllustrationMaterializer({ claims, settings: revision, base, paperOriginals: new Map(), ...profile })
       .call('paper_illustration_science', mixed, 0, 'bad-local-audio')).toMatchObject({ status: 'invalid_illustration' });

@@ -57,25 +57,34 @@ function timingDiagnostic(value: unknown, inputHash: string, audio: ReturnType<t
 }
 function directionText(direction: VideoSceneDirection | undefined): string { if (!direction) throw new Error('VIDEO_DIRECTION_REQUIRED'); const exclusions = direction.negativeConstraints.length ? ' Do not: ' + direction.negativeConstraints.join('; ') + '.' : ''; return 'Shot type: ' + direction.shotType + '. Purpose: ' + direction.purpose + '. Locked subject: ' + direction.subjectLock + '. Generated elements: ' + direction.generatedElements + '. Motion: ' + direction.motion + '. Camera: ' + direction.camera + '.' + exclusions; }
 export function compileShotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string): string {
+  return shotPrompt(storyboard, scene, locale, shotSound(storyboard));
+}
+/** New Native art respects the exact source-approved text, including formulas. */
+export function compileApprovedShotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string): string {
+  return shotPrompt(storyboard, scene, locale, shotSound(storyboard), true);
+}
+function shotSound(storyboard: StoryboardDocument): string {
   if (!storyboard.videoProduction || storyboard.videoProduction.modelPolicy !== 'commercial-primary') throw new Error('COMMERCIAL_VIDEO_PLAN_REQUIRED');
   const mode = classifyNativeVideoAudio(storyboard);
   if (!mode) throw new Error('VIDEO_PLAN_UNSUPPORTED');
-  const sound = mode === 'external-narration'
+  return mode === 'external-narration'
     ? 'Spoken narration is external; use only subtle non-verbal ambience if supplied.'
     : 'Use provider-native audio grounded only in the approved narration above; do not invent dialogue, claims, numbers, or speakers. Exact words, voice, timing, and audio quality remain unverified.';
-  return shotPrompt(storyboard, scene, locale, sound);
 }
 /** Deterministic original-profile receipt reconstruction only. The real spool never uses this compiler. */
 export function compileHistoricalNativeVideoShotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string): string {
   if (!storyboard.videoProduction || storyboard.videoProduction.modelPolicy !== 'commercial-primary') throw new Error('COMMERCIAL_VIDEO_PLAN_REQUIRED');
   return shotPrompt(storyboard, scene, locale, 'Spoken narration is external; use only subtle non-verbal ambience if supplied.');
 }
-function shotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string, sound: string): string {
+function shotPrompt(storyboard: StoryboardDocument, scene: StoryboardDocument['scenes'][number], locale: string, sound: string, approvedText = false): string {
+  const textPolicy = approvedText
+    ? 'Do not render subtitles, logos, watermarks, or unapproved labels or formulas. Preserve only the labels and formulas explicitly approved above.'
+    : 'Do not render subtitles, formulas, logos, watermarks, or invented labels.';
   return ['Scientific explainer shot. Preserve approved subject identity, geometry, direction, and causal relationship exactly.',
     'Locale: ' + locale + '. Global continuity bible: ' + storyboard.videoProduction!.visualContinuity,
     'Scene: ' + scene.title + '. Reader-facing narration context: ' + scene.narration,
     'Approved visual action: ' + scene.visualAction, directionText(scene.videoDirection),
-    'Use smooth physically plausible motion, restrained cinematic lighting, and clean scientific composition. Do not render subtitles, formulas, logos, watermarks, or invented labels. Do not change scientific meaning. ' + sound].join('\n');
+    'Use smooth physically plausible motion, restrained cinematic lighting, and clean scientific composition. ' + textPolicy + ' Do not change scientific meaning. ' + sound].join('\n');
 }
 export class SynclipVideoSpool {
   readonly provider = 'synclip' as const;
@@ -206,8 +215,13 @@ export class SynclipVideoSpool {
     if (nativeVideo && !mode) fail('VIDEO_PLAN_UNSUPPORTED');
     const audio = mode === 'external-narration' ? narrationConfig(ready.narration) : undefined;
     const scenes = input.storyboard.scenes.map((scene, index) => {
-      const prompt = compileShotPrompt(input.storyboard, scene, locale);
-      if (nativeVideo && (input.videoPrompts![index] !== prompt || ![5, 10, 15].includes(scene.durationSeconds!))) fail('NATIVE_VIDEO_PLAN_CHANGED');
+      let prompt = compileShotPrompt(input.storyboard, scene, locale);
+      if (nativeVideo) {
+        const approved = compileApprovedShotPrompt(input.storyboard, scene, locale);
+        if (input.videoPrompts![index] === approved) prompt = approved;
+        else if (input.videoPrompts![index] !== prompt) fail('NATIVE_VIDEO_PLAN_CHANGED');
+        if (![5, 10, 15].includes(scene.durationSeconds!)) fail('NATIVE_VIDEO_PLAN_CHANGED');
+      }
       return { index, title: scene.title, narration: scene.narration, sourceClaimIds: scene.sourceClaimIds,
         durationSeconds: nativeVideo ? scene.durationSeconds! : durationForScene(scene.durationSeconds ?? 5), prompt,
         image: { name: 'scene-' + index + '.png', size: input.sceneImages[index]!.length,

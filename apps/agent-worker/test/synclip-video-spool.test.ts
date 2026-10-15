@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, rename } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt, compileHistoricalNativeVideoShotPrompt, resolveSynclipVideoModel } from '../src/presentation/synclip-video-spool';
+import { SynclipVideoSpool, SynclipVideoTimingError, compileShotPrompt, compileApprovedShotPrompt, compileHistoricalNativeVideoShotPrompt, resolveSynclipVideoModel } from '../src/presentation/synclip-video-spool';
 
 const TASK = '10000000-0000-4000-8000-000000000001';
 const CLAIM = '20000000-0000-4000-8000-000000000001';
@@ -19,7 +19,7 @@ type Submitted = { id: string; inputHash: string; executionAttempt: number; audi
   files: Record<string, unknown>;
   scenes: Array<{ narration: string; durationSeconds: number }> };
 async function nativeFixture(reply: (request: Submitted) => Record<string, unknown> = () => ({})) {
-  const fixtures = resolve('../../tmp'); await mkdir(fixtures, { recursive: true });
+  const fixtures = resolve(__dirname, '../../../tmp'); await mkdir(fixtures, { recursive: true });
   const root = await mkdtemp(join(fixtures, 'synclip-video-native-')); ownedFixtures.push(root);
   const inboxDir = join(root, 'inbox'), resultsDir = join(root, 'results'); await mkdir(inboxDir); await mkdir(resultsDir);
   const now = Date.now(), audio = { provider: 'synclip' as const, voice: 'test-catalog-voice', speed: 1 };
@@ -46,6 +46,68 @@ async function nativeFixture(reply: (request: Submitted) => Record<string, unkno
 }
 
 describe('Native provider output without optional TTS', () => {
+  it.each(['external-narration', 'native-first'])('publishes exact per-scene mixed old and corrected %s prompts', async policy => {
+    const f = await nativeFixture(() => policy === 'native-first' ? { narration: undefined } : {});
+    if (policy === 'native-first') {
+      Object.assign(f.input.storyboard.videoProduction, { audioPolicy: policy });
+      for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    }
+    f.input.storyboard.scenes[1]!.visualAction = 'Show the source-approved single formula v·k = ω(k).';
+    f.input.videoPrompts = f.input.storyboard.scenes.map((scene, index) => (index === 1 ? compileApprovedShotPrompt : compileShotPrompt)(f.input.storyboard, scene, 'zh'));
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now, sleep: async () => {
+      await f.complete();
+      if (policy === 'native-first') await writeFile(join(f.resultsDir, TASK, 'metrics.json'), JSON.stringify({
+        provider: 'synclip', model: 'ltx23', audioMode: 'provider-output-unverified', audioStreamCount: 1, durationSeconds: 30,
+      }));
+    } });
+    await spool.generate(f.input);
+    const request = JSON.parse(await readFile(join(f.inboxDir, TASK, 'request.json'), 'utf8'));
+    expect(request.scenes.map((scene: { prompt: string }) => scene.prompt)).toEqual(f.input.videoPrompts);
+    expect(request.scenes[1].prompt).toContain('v·k = ω(k)');
+    expect(request.scenes[1].prompt).not.toContain('Do not render subtitles, formulas,');
+    expect(request.inputHash).toBe(createHash('sha256').update(JSON.stringify(policy === 'native-first'
+      ? { files: request.files, scenes: request.scenes } : { files: request.files, audio: request.audio, scenes: request.scenes })).digest('hex'));
+  });
+
+  async function verifyPaidRequestIdentity(policy: string, archiveInbox: boolean) {
+    const f = await nativeFixture(() => policy === 'native-first' ? { narration: undefined } : {});
+    if (policy === 'native-first') {
+      Object.assign(f.input.storyboard.videoProduction, { audioPolicy: policy });
+      for (const scene of f.input.storyboard.scenes) Object.assign(scene.videoDirection, { audioMode: 'native' });
+    }
+    f.input.videoPrompts = f.input.storyboard.scenes.map(scene => compileShotPrompt(f.input.storyboard, scene, 'zh'));
+    let completions = 0;
+    const spool = new SynclipVideoSpool({ inboxDir: f.inboxDir, resultsDir: f.resultsDir, now: () => f.now, sleep: async () => {
+      completions += 1;
+      await f.complete();
+      if (policy === 'native-first') await writeFile(join(f.resultsDir, TASK, 'metrics.json'), JSON.stringify({
+        provider: 'synclip', model: 'ltx23', audioMode: 'provider-output-unverified', audioStreamCount: 1, durationSeconds: 30,
+      }));
+    } });
+    const original = await spool.generate(f.input);
+    const requestPath = join(f.inboxDir, TASK, 'request.json');
+    const requestBytes = await readFile(requestPath);
+    const originalResultBytes = await readFile(join(f.resultsDir, TASK, 'result.json'));
+    const archived = join(f.inboxDir, 'processed-' + TASK);
+    if (archiveInbox) await rename(join(f.inboxDir, TASK), archived);
+    const recovered = await spool.generate(f.input);
+    expect(recovered.inputHash).toBe(original.inputHash);
+    expect(recovered.contentHash).toBe(original.contentHash);
+    expect(await readFile(requestPath)).toEqual(requestBytes);
+    if (archiveInbox) expect(await readFile(join(archived, 'request.json'))).toEqual(requestBytes);
+    expect(await readFile(join(f.resultsDir, TASK, 'result.json'))).toEqual(originalResultBytes);
+    expect(completions).toBe(1);
+  }
+
+  it.each(['external-narration', 'native-first'])('reconstructs the same paid %s request identity after inbox archiving and adopts its known result', async policy => {
+    await verifyPaidRequestIdentity(policy, true);
+  });
+  // Production is Linux. Windows returns EPERM for this nonempty-directory
+  // rename; do not normalize that error or claim the Linux path ran locally.
+  it.skipIf(process.platform === 'win32').each(['external-narration', 'native-first'])('preserves an existing nonempty Linux inbox and its paid %s result', async policy => {
+    await verifyPaidRequestIdentity(policy, false);
+  });
+
   it('rejects a result that claims a different video model', async () => {
     const f = await nativeFixture(() => ({ narration: undefined, model: 'ltx23fast' }));
     Object.assign(f.input.storyboard.videoProduction, { audioPolicy: 'native-first' });
