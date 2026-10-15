@@ -8,9 +8,36 @@ import { readVisualNarrativeSource } from '../../src/assets/illustration-source'
 import { completeImage, fixture, id, plannedFixture, renderingFixture } from './first-image-continuation-fixture';
 
 describe('current Hermes first-image continuation', () => {
+  it.each(['absent', 'absent-malformed', 'own-undefined', 'own-null', 'own-unknown', 'envelope-only',
+    'exact-malformed-envelope', 'exact-mismatch-envelope'] as const)('recovery policy routing preserves old refusal: %s', async change => {
+    const f = await renderingFixture();
+    await completeImage(f, change.startsWith('exact-') || change === 'envelope-only');
+    Object.assign(f.db.presentationAssets.find(asset => asset.id === f.image.id)!.provenance,
+      { subtype: 'storyboard_scene_image', sceneImage: f.image.payload.sceneImage });
+    Object.assign(f.image, { status: 'failed', error: 'database write conflict' });
+    Object.assign(f.db.hermesResearchSteps.find(step => step.stage === 'scene_image')!, { status: 'failed', presentationAssetId: f.image.id });
+    f.db.hermesResearchRuns[0].status = 'failed';
+    const saved = f.image.result;
+    if (change === 'absent-malformed') saved.nativeAgentExecution.unrecognized = 'old-refused-shape';
+    if (change === 'own-undefined') saved.nativeAgentExecution.imageResultPolicy = undefined;
+    if (change === 'own-null') saved.nativeAgentExecution.imageResultPolicy = null;
+    if (change === 'own-unknown') saved.nativeAgentExecution.imageResultPolicy = 'unknown';
+    if (change === 'envelope-only') delete saved.nativeAgentExecution;
+    if (change === 'exact-malformed-envelope') saved.nativeImageReview.unrecognized = true;
+    if (change === 'exact-mismatch-envelope') delete saved.nativeImageReview.imageResultPolicy;
+    const before = structuredClone({ ledger: f.db.usageLedger, result: saved, tasks: f.db.agentTasks.map(task => task.id) });
+    const inspectImageRecoveryState = vi.fn(async () => 'completed' as const);
+    const result = await recoverCompletedHermesSceneImageResults({ ...f.deps, inspectImageRecoveryState });
+    expect(result.resumed).toBe(0);
+    expect(result.errors).toBe(change.startsWith('exact-') ? 1 : 0);
+    expect(inspectImageRecoveryState).not.toHaveBeenCalled();
+    expect(f.db.usageLedger).toEqual(before.ledger);
+    expect(f.db.agentTasks.map(task => task.id)).toEqual(before.tasks);
+    expect(f.db.agentTasks.find(task => task.id === f.image.id)!.result).toEqual(before.result);
+  });
   it.each(['saved-final', 'final-before-adoption', 'lost-final-cas'] as const)('recovers the original tagged receipt without a new reservation: %s', async state => {
     const f = await renderingFixture();
-    expect(f.image.result.nativeAgentExecution.imageResultPolicy).toBe('image-review-tool-final-v1');
+    expect(f.image.result.nativeAgentExecution).not.toHaveProperty('imageResultPolicy');
     expect(f.parent.result.nativeAgentExecution).not.toHaveProperty('imageResultPolicy');
     await completeImage(f, true);
     Object.assign(f.image, { status: 'failed', error: state === 'saved-final' ? '[blocked] Native Agent original deadline expired' : 'database write conflict' });

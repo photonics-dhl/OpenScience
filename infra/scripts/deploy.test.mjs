@@ -77,6 +77,40 @@ test('rollback verifier diagnostics are opt-in, bounded and preserve rejection',
   assert.equal(JSON.parse(events[2].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')).code, 'ENOENT');
 });
 
+test('rollback verifier dispatches guarded image proofs only after original default collections differ', async () => {
+  // This is dispatch coverage, not a positive compatibility proof. The real
+  // image helpers separately refuse copied arrays and source-only Programs.
+  const verifierSource=deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(verifierSource);
+  const roots=[],events=[],current=[['module:one','new']],previous=[['module:one','old']];
+  let accept='',equal=false;
+  const verify=runInNewContext(`${verifierSource.replace('export ','')}; verifyApplicationRollbackReaders`,{
+    APPLICATION_ROLLBACK_READERS:roots,APPLICATION_ROLLBACK_ROOTS:{},resolve,join,dirname,
+    createRequire(){return ()=>({});},
+    rollbackReaderClosure(_ts,root,selected){events.push(['collect',root,selected]);return root===resolve('/candidate')?current:equal?current:previous;},
+    finiteVideoPairCompatibility(...args){events.push(['video',...args]);return accept==='video';},
+    finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
+    finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
+    rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
+  });
+  for(const allowed of ['video','capable','first']){
+    accept=allowed;events.length=0;
+    await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
+    assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
+    const attempted=events.slice(2);
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first'].slice(0,['video','capable','first'].indexOf(allowed)+1));
+    for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
+  }
+  accept='';events.length=0;
+  await assert.rejects(verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots}),/ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  accept='first';events.length=0;
+  await assert.rejects(verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots:[]}),/ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  assert.equal(events.length,2,'custom roots never enter an image compatibility route');
+  equal=true;events.length=0;
+  await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
+  assert.equal(events.length,2,'exact equality retains the original fast path');
+});
+
 test('comparison diagnostics locate real two-root differences without printing values or permitting rollback', async () => {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   await mkdir(join(projectRoot, 'tmp'), { recursive: true });
@@ -724,6 +758,432 @@ function videoPairRuntime(ts, text) {
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
+
+test('image producer partition uses the real initializer and preserves all consumer runtime', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  assert.ok(component.startsWith('function finiteImageProducerTerms('));
+  const terms = runInNewContext(`${component}; finiteImageProducerTerms`, { resolve, relative });
+  const actual = await videoIngressProgram();
+  const original = terms(actual.ts, videoPairContext(actual));
+  assert.equal(original.kind, 'absent');
+  const path = 'packages/domain/src/agent/agent.ts';
+  const writer = await videoIngressProgram(new Map([[path, text => text.replace(
+    "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review')",
+    "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', 'image-review-tool-final-v1')")]]));
+  const tagged = terms(writer.ts, videoPairContext(writer));
+  assert.equal(tagged.kind, 'tagged');
+  assert.deepEqual(videoPairRuntime(actual.ts, original.text), videoPairRuntime(writer.ts, tagged.text));
+  for (const argument of ['undefined', 'input.payload.policy']) {
+    const unknown = await videoIngressProgram(new Map([[path, text => text.replace(
+      "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review')",
+      `nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', ${argument})`)]]));
+    assert.throws(() => terms(unknown.ts, videoPairContext(unknown)), error => error.reason === 'IMAGE_PRODUCER_BINDING_UNKNOWN');
+  }
+});
+
+test('image constructor partition refuses untagged raw-turn emission at the actual Session writer', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const partition = runInNewContext(`${component}; finiteImageProtocolPartition`, { resolve, relative });
+  const actual = await videoIngressProgram();
+  const model = partition(actual.ts, videoPairContext(actual));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.producer.kind, 'absent');
+  assert.equal(model.writers.length, 5);
+  assert.equal(model.outstanding.length, 4);
+  const path = 'apps/agent-worker/src/native-agent/session.ts';
+  for (const change of [
+    text => text.replace(/ && binding\.imageReview\.imageResultPolicy === 'image-review-tool-final-v1'(\r?\n\s*&& messages\.some)/u, '$1'),
+    text => text.replace("{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }",
+      "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, imageResultPolicy: 'image-review-tool-final-v1' }"),
+  ]) {
+    const unsafe = await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(() => partition(unsafe.ts, videoPairContext(unsafe)), error => error.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN');
+  }
+});
+
+test('image cyclic imports inspect the actual owned freezer and eager initializer effects', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const initialization = runInNewContext(`${component}; finiteImageInitializationTerms`, { resolve, relative });
+  const actual = await videoIngressProgram();
+  const model = initialization(actual.ts, videoPairContext(actual));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.sources.length, 3);
+  assert.ok(model.freezer);
+  for (const change of [
+    text => text.replace("Object.values(value).forEach(freeze);", "Object.values(value).forEach(freeze); globalThis.imageProtocolChanged = true;"),
+    text => text.replace("const resultTool: ChatToolDefinition = freeze({", "const resultTool: ChatToolDefinition = (globalThis.imageProtocolChanged = true, freeze)({"),
+  ]) {
+    const unsafe = await videoIngressProgram(new Map([['packages/ai-gateway/src/native-image-review.ts',change]]));
+    assert.throws(() => initialization(unsafe.ts, videoPairContext(unsafe)), error => error.reason === 'IMAGE_INITIALIZATION_UNKNOWN');
+  }
+  // Pure operands alone do not make arithmetic nonthrowing. These are actual
+  // eager initializer nodes in the SCC, including the independently observed
+  // BigInt zero-division counterexample; no application module is executed.
+  const path='packages/ai-gateway/src/native-image-review.ts';
+  const original=actual.program.getSourceFile(resolve(actual.projectRoot,path)).text;
+  for (const expression of ['1n / 0n',
+    "({ valueOf: () => { throw new Error('coercion'); } }) + 1"]){
+    const mutated=`${original}\nconst imageInitializationCrash = ${expression};\n`;
+    const unsafe=await videoIngressProgram(new Map([[path,mutated]]));
+    assert.equal(unsafe.program.getSourceFile(resolve(unsafe.projectRoot,path)).text,mutated);
+    assert.throws(()=>initialization(unsafe.ts,videoPairContext(unsafe)),
+      error=>error.reason==='IMAGE_INITIALIZATION_UNKNOWN',`must not erase potentially throwing initializer ${expression}`);
+  }
+  const numeric=await videoIngressProgram(new Map([['packages/ai-gateway/src/native-image-review.ts',text=>
+    `${text}\nconst imageInitializationNumeric = -(2 * 1024) + 4 / 0 + 2 ** 3;\n`]]));
+  assert.equal(initialization(numeric.ts,videoPairContext(numeric)).status,'conditional',
+    'number-literal arithmetic remains nonthrowing even when its result is nonfinite');
+});
+
+test('image store binds its three modes to the original captured image attempt', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const analyze = runInNewContext(`${component}; finiteImageStoreFlowTerms`,{ resolve,relative });
+  const actual = await videoIngressProgram(), model = analyze(actual.ts,videoPairContext(actual));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(Array.from(model.modes,([name,value]) => [name,value.mode]),[
+    ['compareAndSet','start'],['complete','paid'],['finalize','final'],
+  ]);
+  for (const [file,change] of [
+    ['apps/agent-worker/src/presentation/handler.ts',text => text.replace(
+      'task: { id: task.id, executionAttempt: task.executionAttempt, result: currentTask.result },','task,')],
+    ['apps/agent-worker/src/native-agent/task-store.ts',text => text.replace(
+      "complete: (previous, state) => update(previous, state, 'paid')","complete: (previous, state) => update(previous, state, 'start')")],
+  ]) {
+    const unsafe = await videoIngressProgram(new Map([[file,change]]));
+    assert.throws(() => analyze(unsafe.ts,videoPairContext(unsafe)),error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN');
+  }
+});
+
+test('image initializer projection preserves the retained real legacy function on every supported caller', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project = runInNewContext(`${component}; finiteImageInitializerProjection`,{ resolve,relative });
+  const path = 'packages/domain/src/agent/native-agent-execution.ts';
+  // This unchanged file is already in the workflow's retained source fixture;
+  // the accepting deployment pair still uses its actual installed rollback.
+  const legacyText = execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{ encoding:'utf8' });
+  const actual = await videoIngressProgram(), legacy = await videoIngressProgram(new Map([[path,legacyText]]));
+  const model = project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,model.rollback.getText()));
+});
+
+test('image Session projection retains the complete original untagged runtime and read order', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project = runInNewContext(`${component}; finiteImageSessionProjection`,{ resolve,relative });
+  const path = 'apps/agent-worker/src/native-agent/session.ts';
+  const text = execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{ encoding:'utf8' });
+  const actual = await videoIngressProgram(), legacy = await videoIngressProgram(new Map([[path,text]]));
+  const model = project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+});
+
+test('image decoder projection preserves the actual old private checkpoint decoder', async () => {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project = runInNewContext(`${component}; finiteImageDecoderProjection`,{ resolve,relative });
+  const path = 'packages/domain/src/assets/native-image-review.ts';
+  const text = execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{ encoding:'utf8' });
+  const actual = await videoIngressProgram(), legacy = await videoIngressProgram(new Map([[path,text]]));
+  const model = project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+  for (const change of [
+    value => value.replace("Boolean(value && typeof value === 'object' && !Array.isArray(value))",
+      "Boolean(value && typeof value === 'object' && !Array.isArray(value) && globalThis.imageDecoderSideEffect())"),
+    value => value.replace("const hash = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value)",
+      "const hash = (value: unknown) => typeof value === 'string'"),
+    value => value.replace("export function readNativeImageAgentExecution(result: unknown): NativeAgentExecution | undefined {",
+      "export function readNativeImageAgentExecution(result: unknown): NativeAgentExecution | undefined { void (result as any).nativeAgentExecution.imageResultPolicy;"),
+    value => value.replace("!hash(cp.responseHash) || typeof cp.hasToolCalls", "typeof cp.hasToolCalls"),
+  ]) {
+    const unsafe = await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(() => {
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
+    },'a changed decoder/predicate or an unsafe pre-record read must not erase into the original runtime');
+  }
+});
+
+test('image store projection retains actual private bytes, known references and paid/live CAS', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageStoreProjection`,{resolve,relative});
+  const path='apps/agent-worker/src/native-agent/task-store.ts';
+  const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+  for(const change of [
+    value=>value.replace('expected: old,','expected: preparedReference,'),
+    value=>value.replace('expectedExecution: input.execution','expectedExecution: undefined'),
+    value=>value.replace('JSON.stringify(state)','JSON.stringify({ ...state, added: true })'),
+    value=>value.replace('if (changed.count !== 1) blocked();','if (changed.count < 0) blocked();'),
+    value=>value.replace("if (binding.sourceKind === 'journal-text') blocked();",
+      "if (turn.imageResultPolicy) throw new Error('unsafe pre-turn read'); if (binding.sourceKind === 'journal-text') blocked();"),
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
+    },'changed old/new reference, full execution fence, bytes or CAS count must not project to the retained store');
+  }
+});
+
+test('image Domain projection preserves the entire original execution and compare-and-set module', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageExecutionProjection`,{resolve,relative});
+  const path='packages/domain/src/agent/native-agent-execution.ts';
+  const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+  for(const change of [
+    value=>value.replace('old.executionAttempt !== input.executionAttempt','old.executionAttempt === input.executionAttempt'),
+    value=>value.replace('result: { equals: task.result as Prisma.InputJsonValue }','result: { equals: result as Prisma.InputJsonValue }'),
+    value=>value.replace('if (changed.count !== 1) blocked();','if (changed.count > 1) blocked();'),
+    value=>value.replace('const marker = readNativeAgentExecution(task.result);',
+      "const marker = readNativeAgentExecution(task.result); if (marker.imageResultPolicy) blocked();"),
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
+    },'original attempt, fetched-result equality and exactly-one CAS must remain in the actual Domain function');
+  }
+});
+
+test('image illustration projection preserves the original complete image-role entry', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageIllustrationProjection`,{resolve,relative});
+  const path='apps/agent-worker/src/native-agent/illustration-task.ts';
+  const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
+  const entry=(ts,text)=>{
+    const source=ts.createSourceFile(path,text,ts.ScriptTarget.ES2022,true);
+    const entries=source.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='runNativeImageReviewTask');
+    assert.equal(entries.length,1);return entries[0].getText(source);
+  };
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  // Only this image function is equal in the retained ca0a source fixture;
+  // the full installed pair must separately preserve e75's video A reader.
+  assert.deepEqual(videoPairRuntime(actual.ts,entry(actual.ts,model.text)),videoPairRuntime(legacy.ts,entry(legacy.ts,text)));
+  for(const change of [
+    value=>value.replace('await input.authorize(tx);','void input.authorize;'),
+    value=>value.replace("checkpoint?.mode !== 'agent-native' || !isDeepStrictEqual(agentNativeImageReviewEnvelope(checkpoint), envelope)","checkpoint?.mode !== 'agent-native'"),
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      assert.deepEqual(videoPairRuntime(unsafe.ts,entry(unsafe.ts,projected.text)),videoPairRuntime(legacy.ts,entry(legacy.ts,text)));
+    },'common source authority and whole exact current envelope must remain before every new branch');
+  }
+});
+
+test('image Host projection keeps the original SDK response and finish guards', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageHostProjection`,{resolve,relative});
+  const path='apps/agent-worker/src/native-agent/host-task.ts';
+  const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+  for(const [file,change] of [
+    [path,value=>value.replace('last.response.text.trim() !== value.finalResponse','last.response.text.trim() === value.finalResponse')],
+    ['packages/ai-gateway/src/native-agent-bridge.ts',value=>value.replace("message: { role: 'assistant', content: completion.text,",
+      "message: { role: 'assistant', content: completion.text, get tool_calls() { throw new Error('not an owned data property'); },")],
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[file,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
+    },'Host final equality and plain owned message shape cannot be waived');
+  }
+});
+
+test('image SDK option domain follows actual request and all Session binding constructors', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const analyze=runInNewContext(`${component}; finiteImageSdkOptionTerms`,{resolve,relative});
+  const actual=await videoIngressProgram(),model=analyze(actual.ts,videoPairContext(actual));
+  assert.equal(model.status,'conditional');assert.ok(model.sites.length>0);
+  assert.deepEqual([...model.assignments].sort(),['maxTokens','temperature','topP']);
+  assert.ok(!model.keys.some(key=>['toolChoice','tool_choice','imageResultPolicy','policy'].includes(key)));
+  for(const [path,change] of [
+    ['packages/ai-gateway/src/native-agent-bridge.ts',value=>value.replace('const snapshot = snapshotChatMessages(messages);',
+      "options.policy = 'image-review-tool-final-v1'; const snapshot = snapshotChatMessages(messages);")],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts',value=>value.replace("generation: { thinking: 'adaptive' as const, temperature: 0.1 }",
+      "generation: { thinking: 'adaptive' as const, temperature: 0.1, policy: undefined }")],
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>analyze(unsafe.ts,videoPairContext(unsafe)),error=>error.reason==='IMAGE_SDK_OPTION_DOMAIN_UNKNOWN');
+  }
+});
+
+test('image recovery projection retains both original task and run recovery modules', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageRecoveryProjections`,{resolve,relative});
+  const files=['packages/domain/src/agent/agent.ts','packages/domain/src/agent/research-run.ts'];
+  const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
+  assert.equal(model.status,'conditional');
+  for(const [key,value]of model.projected)assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
+  for(const [path,change]of[
+    [files[1],value=>value.replace('const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution);',
+      'const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution); await tx.extraOperation();')],
+    [files[0],value=>value.replace('task.retryCount === 0','task.retryCount >= 0')],
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      for(const [key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
+    },'new pre-refusal effects or expanded old retry authority cannot be erased');
+  }
+});
+
+test('image allowed-tool domain derives all fresh names and explicit saved-name recurrences', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const analyze=runInNewContext(`${component}; finiteImageAllowedToolTerms`,{resolve,relative});
+  const actual=await videoIngressProgram(),model=analyze(actual.ts,videoPairContext(actual));
+  assert.equal(model.status,'conditional');assert.equal(model.results.length,model.options.sites.length);
+  assert.ok(model.history.length>0);
+  assert.ok(model.results.every(row=>!row.result.values.has('image_review_result')));
+  const unsafe=await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/illustration-task.ts',value=>value.replace(
+    "allowedTools: ['skills_list', 'skill_view', 'paper_image_view']","allowedTools: ['skills_list', 'skill_view', 'paper_image_view', 'image_review_result']")]]));
+  assert.throws(()=>analyze(unsafe.ts,videoPairContext(unsafe)),error=>error.reason==='IMAGE_ALLOWED_TOOL_DOMAIN_UNKNOWN');
+  const mutated=await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/paper-task.ts',value=>value.replace(
+    "tool.function.name.startsWith('paper_')).map(tool => {","tool.function.name.startsWith('paper_')).map(tool => { tool.function.name = 'image_review_result';")]]));
+  assert.throws(()=>analyze(mutated.ts,videoPairContext(mutated)),error=>error.reason==='IMAGE_ALLOWED_TOOL_DOMAIN_UNKNOWN');
+});
+
+test('image transport projection retains the original native and provider request methods', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageTransportProjections`,{resolve,relative});
+  const files=['packages/ai-gateway/src/gateway.ts','packages/ai-gateway/src/provider.ts'];
+  const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  const method=(ts,text,owner,name)=>{
+    const source=ts.createSourceFile('source.ts',text,ts.ScriptTarget.ES2022,true);
+    const declaration=source.statements.find(node=>ts.isClassDeclaration(node)&&node.name?.text===owner);
+    const methods=declaration.members.filter(node=>ts.isMethodDeclaration(node)&&node.name.text===name);
+    assert.equal(methods.length,1);return `class Comparison { ${methods[0].getText(source)} }`;
+  };
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
+  for(const [key,owner,name]of[[files[0],'AiGateway','nativeAgentComplete'],[files[1],'AnthropicCompatProvider','requestBody']]){
+    assert.deepEqual(videoPairRuntime(actual.ts,method(actual.ts,model.projected.get(key).text,owner,name)),
+      videoPairRuntime(legacy.ts,method(legacy.ts,originals.get(key),owner,name)),key);
+  }
+  const unsafe=await videoIngressProgram(new Map([[files[0],value=>value.replace('maxTokens: 32768, timeoutMs: 300_000 }, {',
+    'maxTokens: 32768, timeoutMs: 300_000, tools: input.unknownTools }, {')]]));
+  assert.throws(()=>project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy)),error=>error.reason==='IMAGE_TRANSPORT_RESIDUAL_UNKNOWN');
+  for(const observation of ['void this.requestBody.length;','const observed = this.requestBody; void observed;']){
+    const observed=await videoIngressProgram(new Map([[files[1],value=>value.replace(
+      'preflightNativeImages(opts: CompleteOptions): void { this.requestBody(opts); }',
+      `preflightNativeImages(opts: CompleteOptions): void { ${observation} this.requestBody(opts); }`)]]));
+    assert.throws(()=>project(observed.ts,videoPairContext(observed),videoPairContext(legacy)),
+      error=>error.reason==='IMAGE_TRANSPORT_RESIDUAL_UNKNOWN','method arity or escaped function identity cannot be specialized away');
+  }
+});
+
+test('image consumer projection retains original decision parsing and journal turn checks', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageConsumerProjections`,{resolve,relative});
+  const files=['apps/agent-worker/src/presentation/generated-image-review.ts','apps/agent-worker/src/native-agent/journal-task-store.ts'];
+  const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
+  for(const[key,value]of model.projected)assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
+  for(const[path,change]of[
+    [files[0],value=>value.replace('else decision = parseDecision(parseStructuredJson(result.text));','else decision = JSON.parse(result.text);')],
+    [files[1],value=>value.replace("paidCompletion ? turn.state !== 'completed' : turn.state !== 'started'","paidCompletion ? turn.state === 'completed' : turn.state !== 'started'")],
+  ]){
+    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    assert.throws(()=>{
+      const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
+      for(const[key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
+    },'legacy JSON validation and paid/live journal completion checks must be retained');
+  }
+});
+
+test('image legacy source model composes the real projections and refuses a live prepared-method escape', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const project=runInNewContext(`${component}; finiteImageLegacySourceModel`,{resolve,relative});
+  const files=[
+    'apps/agent-worker/src/native-agent/session.ts','apps/agent-worker/src/native-agent/task-store.ts',
+    'apps/agent-worker/src/native-agent/host-task.ts','apps/agent-worker/src/native-agent/illustration-task.ts',
+    'apps/agent-worker/src/native-agent/journal-task-store.ts','apps/agent-worker/src/presentation/generated-image-review.ts',
+    'packages/domain/src/agent/agent.ts','packages/domain/src/agent/native-agent-execution.ts',
+    'packages/domain/src/agent/research-run.ts','packages/domain/src/assets/native-image-review.ts',
+    'packages/ai-gateway/src/gateway.ts','packages/ai-gateway/src/provider.ts','packages/ai-gateway/src/native-agent-bridge.ts',
+    'packages/ai-gateway/src/native-image-review.ts','packages/ai-gateway/src/index.ts',
+  ];
+  const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
+  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
+  assert.ok(model.closure.declarations.size>0);
+  for(const[key,value]of model.projected){
+    if(key==='apps/agent-worker/src/native-agent/illustration-task.ts'){
+      // The saved fixture predates e75 video A; only its image-role function
+      // is the old image oracle. Actual installed e75 must compare the WHOLE
+      // module and all default entries before any admission can be granted.
+      const entry=(ts,text)=>{const source=ts.createSourceFile(key,text,ts.ScriptTarget.ES2022,true);
+        return source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='runNativeImageReviewTask').getText(source);};
+      assert.deepEqual(videoPairRuntime(actual.ts,entry(actual.ts,value.text)),videoPairRuntime(legacy.ts,entry(legacy.ts,originals.get(key))),key);
+    }else assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
+  }
+  const unsafe=await videoIngressProgram(new Map([['packages/ai-gateway/src/gateway.ts',value=>value.replace(
+    '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]));
+  assert.throws(()=>project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy)),error=>error.reason==='IMAGE_DECLARATION_CONTEXT_UNKNOWN');
+});
+
+test('image capable source pair retains raw/final readers despite an absent fresh producer', async () => {
+  const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const roots=[],weak=new WeakMap();
+  const methods=runInNewContext(`${component}; ({model:finiteImageCapableSourceModel,capable:finiteImageCapablePairCompatibility,first:finiteImageFirstPairCompatibility})`,
+    {resolve,relative,rollbackProofContexts:weak,APPLICATION_ROLLBACK_READERS:roots,builtinModules});
+  const file='packages/domain/src/agent/agent.ts',decoder='packages/domain/src/assets/native-image-review.ts';
+  const current=await videoIngressProgram();
+  const writer=await videoIngressProgram(new Map([[file,value=>value.replace(
+    "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review')",
+    "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', 'image-review-tool-final-v1')")]]));
+  // These are two real source runtime records, not successful collector arrays.
+  // Their conditional model must never acquire default deployment authority.
+  const entries=value=>[file,decoder].map(path=>[`module:${path}`,videoPairRuntime(value.ts,value.program.getSourceFile(resolve(value.projectRoot,path)).text)]);
+  const left=entries(writer),right=entries(current);
+  const model=methods.model(writer.ts,videoPairContext(writer),videoPairContext(current),left,right);
+  assert.equal(model.status,'conditional');assert.equal(model.candidate.producer.kind,'tagged');assert.equal(model.rollback.producer.kind,'absent');
+  assert.deepEqual(videoPairRuntime(writer.ts,model.candidate.producer.text),videoPairRuntime(current.ts,model.rollback.producer.text));
+  for(const change of[
+    value=>value.replace("const rawOnly = record(cp) && cp.received === 'raw-only';","const rawOnly = false;"),
+    value=>value.replace("if (Object.hasOwn(cp, 'validatedFinal')) {","if (false) {"),
+  ]){
+    const weakened=await videoIngressProgram(new Map([[decoder,change]]));
+    assert.throws(()=>methods.model(weakened.ts,videoPairContext(weakened),videoPairContext(current),entries(weakened),right),
+      error=>error.reason==='IMAGE_READER_CAPABILITY_OR_CONTEXT_CHANGED');
+  }
+  for(const proof of[methods.capable,methods.first])for(const arrays of[[left,right],[structuredClone(left),structuredClone(right)]])
+    assert.equal(proof(writer.ts,...arrays,writer.projectRoot,current.projectRoot,roots),false,'source-only/copied arrays have no successful collector provenance');
+});
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
   const components = videoPairSourceComponents(), actual = await videoIngressProgram(), left = videoPairContext(actual);

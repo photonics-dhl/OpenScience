@@ -3,9 +3,9 @@ import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { claimAgentTask, createAgentSession, getAgentTask, markTaskProgress, retryAgentTask, submitAgentTask } from '../../../../packages/domain/src/agent/agent';
-import { requireSceneImageParent, prepareAgentNativeImageReview, readNativeAgentExecution, presentationClaimContent } from '@openscience/domain';
+import { requireSceneImageParent, prepareAgentNativeImageReview, readNativeAgentExecution, presentationClaimContent, initialNativeAgentExecution } from '@openscience/domain';
 import { AiGateway, AnthropicCompatProvider, NATIVE_IMAGE_REQUEST_MAX_BYTES, type ScienceReviewInput } from '@openscience/ai-gateway';
-import { createNativeAgentSession, type NativeAgentSessionState, type NativeAgentSessionStore } from '../../src/native-agent/session';
+import { createNativeAgentSession, type NativeAgentSessionStore } from '../../src/native-agent/session';
 import { createNativeTaskStore } from '../../src/native-agent/task-store';
 import * as nativeHost from '../../src/native-agent/host-task';
 import { NATIVE_IMAGE_REVIEW_TOOLS, validateNativeImageReviewHistory } from '../../src/native-agent/illustration-task';
@@ -52,8 +52,8 @@ async function fixture(native = false, toolFinal = false) {
   const submitted = await submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload,
     idempotencyKey: 'native-review', dispatch: false });
   const owner = db.agentTasks.find(task => task.id === submitted.id)!; Object.assign(owner, { status: 'running', executionAttempt: 1 });
-  // These existing controls represent already-created legacy tasks, not new-policy producer defaults.
-  if (native && !toolFinal) delete owner.result.nativeAgentExecution.imageResultPolicy;
+  // Tagged fixtures use the trusted future writer; I1 fresh tasks remain untagged.
+  if (native && toolFinal) owner.result = { ...owner.result, ...initialNativeAgentExecution(runtime, 'image-review', 'image-review-tool-final-v1') };
   const approvedParent = (await requireSceneImageParent(prisma, payload as never))!;
   const asset = { id: owner.id, researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', objectKey: 'saved.png', contentHash: sha(bytes),
     provenance: { source: 'approved_storyboard_scene', subtype: 'storyboard_scene_image', taskId: owner.id, contentType: 'image/png',
@@ -103,7 +103,7 @@ async function paidAgentFinal(options: { toolFinal?: boolean; crashBeforeFinal?:
     source: { kind: 'illustration-image', researchObjectId: id(3), versionId: id(4), candidateHash: identity.contentHash,
       sourceEvidenceIdentity: identity.sourceEvidenceIdentity },
     attachments: [generatedImageReviewAttachment(bytes, identity.contentHash, 'image/png')] };
-  let state: NativeAgentSessionState | null = null; let calls = 0;
+  let calls = 0;
   const answer = options.legacyText ?? JSON.stringify({ decision: options.decision ?? 'accepted', summary: 'The actual field arrow points along x.', repairInstruction: null });
   const provider = new AnthropicCompatProvider(envelope.provider, { apiKey: 'fixture', baseUrl: 'https://offline.invalid', model: envelope.model },
     async () => { calls++;
@@ -119,17 +119,24 @@ async function paidAgentFinal(options: { toolFinal?: boolean; crashBeforeFinal?:
         { type: 'tool_use', id: 'view-1', name: 'paper_image_view', input: {} }] : options.toolFinal
         ? [{ type: 'tool_use', id: 'result-1', name: 'image_review_result', input: JSON.parse(answer) }] : [{ type: 'text', text: answer }],
       stop_reason: calls === 1 || options.toolFinal ? 'tool_use' : 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } })); });
-  const memoryStore = { read: async () => state, compareAndSet: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); },
-    complete: async (_old: unknown, next: NativeAgentSessionState) => { state = structuredClone(next); }, publish: async <T>(_old: unknown, submit: () => Promise<T>) => submit() };
   const objects = new Map<string, Buffer>();
-  if (options.toolFinal) Object.assign(f.deps.storage, {
+  const checkpoints: Array<Record<string, unknown>> = [];
+  const updateMany = f.prisma.agentTask.updateMany.bind(f.prisma.agentTask);
+  vi.spyOn(f.prisma.agentTask, 'updateMany').mockImplementation(async args => {
+    const changed = await updateMany(args);
+    const result = (args.data as { result?: Record<string, unknown> }).result;
+    if (changed.count === 1 && result?.nativeAgentExecution && 'checkpoint' in (result.nativeAgentExecution as object))
+      checkpoints.push(structuredClone(result));
+    return changed;
+  });
+  Object.assign(f.deps.storage, {
     getObject: async (key: string) => { const body = objects.get(key) ?? bytes; return { size: body.length, body: Readable.from([body]) }; },
     headObject: async (key: string) => objects.has(key) ? { size: objects.get(key)!.length } : null,
     putObject: async (key: string, body: Uint8Array) => { objects.set(key, Buffer.from(body)); },
   });
   const authorize = (tx: Parameters<typeof requireIllustrationReviewSubmission>[0]) => requireIllustrationReviewSubmission(tx, request);
-  const store: NativeAgentSessionStore = options.toolFinal ? createNativeTaskStore({ ...f.deps, taskId: f.owner.id, executionAttempt: 1,
-    execution: readNativeAgentExecution(f.owner.result)!, storage: f.deps.storage as never, authorize, authorizeFinal: authorize }) : memoryStore;
+  const store: NativeAgentSessionStore = createNativeTaskStore({ ...f.deps, taskId: f.owner.id, executionAttempt: 1,
+    execution: readNativeAgentExecution(f.owner.result)!, storage: f.deps.storage as never, authorize, authorizeFinal: authorize });
   if (options.crashBeforeFinal) {
     const finalize = store.finalize;
     if (!finalize) throw new Error('Fixture requires the real pure-final store');
@@ -167,15 +174,11 @@ async function paidAgentFinal(options: { toolFinal?: boolean; crashBeforeFinal?:
   else await finish;
   const history = await store.read(); const last = history!.turns.at(-1)!;
   if (last.state !== 'completed' && !(options.expectInvalid && last.state === 'received')) throw new Error('fixture must contain a final paid turn');
-  if (options.toolFinal) return { ...f, envelope, calls: () => calls, objects };
-  if (last.state !== 'completed') throw new Error('legacy fixture requires a decoded final');
-  const serialized = Buffer.from(JSON.stringify(history)); const hash = sha(serialized); const objectKey = `derived/native-agent/${hash}.json`;
-  f.owner.result.nativeAgentExecution.checkpoint = { taskId: f.owner.id, sourceKind: 'illustration-image', imageIdentity: identity,
-    objectKey, serializedSha256: hash, size: serialized.length, executionAttempt: 1, turnCount: history!.turns.length,
-    state: 'completed', target: last.target, responseHash: sha(last.response.text), finishReason: last.response.finishReason, hasToolCalls: false };
-  f.deps.storage.getObject = async (key?: string) => { const body = key === objectKey ? serialized : bytes; return { body: Readable.from([body]), size: body.length }; };
-  return { ...f, envelope, calls: () => calls, objects };
+  return { ...f, envelope, calls: () => calls, objects, store, history, request, checkpoints };
 }
+
+// The offline reverse-version driver consumes these actual producer/store bytes.
+export const nativeImageReviewFixture = { fixture, paidAgentFinal, legacyInvalidFinal: LEGACY_INVALID_FINAL };
 
 describe('real Worker native image review persistence and replay', () => {
   it('keeps the exact historical716 invalid final untagged, invalid and ineligible without another paid call', async () => {

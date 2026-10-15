@@ -102,6 +102,13 @@ async function fixture(options: { initialOnly?: boolean; deferInitial?: boolean;
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('actual image Agent final checkpoint consumer', () => {
+  it.each([false, true])('only the persisted tool-final policy reads terminal state before SDK decoding: %s', async toolFinal => {
+    const f = await fixture({ toolFinal, deferInitial: true });
+    const read = vi.spyOn(f.store, 'read');
+    await expect(f.session.complete({})).rejects.toThrow();
+    expect(read).toHaveBeenCalledTimes(toolFinal ? 1 : 0);
+    expect(f.fetcher).not.toHaveBeenCalled();
+  });
   it('saves the raw tool-use receipt and projects a separate JSON final without executing the result tool', async () => {
     const f = await fixture({ toolFinal: true, initialOnly: true });
     const state = f.state;

@@ -71,10 +71,12 @@ export async function runNativeImageReviewTask(input: {
     const current = await tx.agentTask.findUniqueOrThrow({ where: { id: input.task.id } });
     const checkpoint = readNativeImageReviewCheckpoint(current.result);
     if (checkpoint?.mode !== 'agent-native' || !isDeepStrictEqual(agentNativeImageReviewEnvelope(checkpoint), envelope)) stopped();
-    if ((modelCall || envelope.imageResultPolicy === 'image-review-tool-final-v1')
-      && await requireAgentNativeImageReviewReservation(tx, current.id) !== envelope.reservationLedgerId) stopped();
-    if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
-      || Date.now() >= envelope.deadlineAt)) stopped();
+    if (envelope.imageResultPolicy === 'image-review-tool-final-v1') {
+      if (await requireAgentNativeImageReviewReservation(tx, current.id) !== envelope.reservationLedgerId) stopped();
+      if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
+        || Date.now() >= envelope.deadlineAt)) stopped();
+    } else if (modelCall && (current.executionAttempt !== envelope.executionAttempt || Date.now() < envelope.preparedAt
+      || Date.now() >= envelope.deadlineAt || await requireAgentNativeImageReviewReservation(tx, current.id) !== envelope.reservationLedgerId)) stopped();
   };
   const readAuthority = () => input.deps.prisma.$transaction(tx => authorize(tx), { isolationLevel: 'Serializable' });
   await readAuthority();

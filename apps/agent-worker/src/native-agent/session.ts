@@ -152,10 +152,12 @@ export function createNativeAgentSession(input: { gateway: AiGateway; binding: N
   }
   async function completeOnce(raw: unknown) {
       await authorize();
-      const terminal = await read();
-      if (terminal?.validatedFinal || terminal?.turns.some(turn => turn.imageResultPolicy === 'image-review-tool-final-v1'
-        && (turn.state === 'completed' || turn.state === 'received')))
-        blocked('terminal image reply cannot continue');
+      if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1') {
+        const terminal = await read();
+        if (terminal?.validatedFinal || terminal?.turns.some(turn => turn.imageResultPolicy === 'image-review-tool-final-v1'
+          && (turn.state === 'completed' || turn.state === 'received')))
+          blocked('terminal image reply cannot continue');
+      }
       const { messages, options } = nativeAgentSdkRequest(raw, binding.model);
       let state = await read();
       checkHistory(messages, state);

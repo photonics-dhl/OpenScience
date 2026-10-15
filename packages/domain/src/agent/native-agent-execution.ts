@@ -316,13 +316,16 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
 /** Adopt only the last actual native response, never a guessed or historical self-check receipt. */
 export function nativeAgentTerminalResult(task: AgentTask, status: string, incoming: unknown): unknown {
   const marker = readNativeAgentExecution(task.result);
+  if (record(task.result) && record(task.result.nativeImageReview) && Object.hasOwn(task.result.nativeImageReview, 'imageResultPolicy')
+    && (task.result.nativeImageReview.imageResultPolicy !== 'image-review-tool-final-v1'
+      || marker?.profile !== 'image-review' || marker.imageResultPolicy !== 'image-review-tool-final-v1')) blocked();
   if (!marker) { if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution')) blocked(); return incoming; }
   if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution') && !isDeepStrictEqual(incoming.nativeAgentExecution, marker)) blocked();
   const privatePlan: Record<string, unknown> = {};
   if (marker.profile === 'image-review') {
     const checkpoint = readNativeImageReviewCheckpoint(task.result);
     if (status === 'succeeded' && (checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed')) blocked();
-    if (status === 'succeeded') {
+    if (status === 'succeeded' && marker.imageResultPolicy === 'image-review-tool-final-v1') {
       const cp = marker.checkpoint;
       const responseHash = marker.imageResultPolicy ? cp?.validatedFinal?.responseHash : cp?.responseHash;
       if (!cp || cp.state !== 'completed' || !responseHash || checkpoint?.state !== 'completed'

@@ -661,7 +661,7 @@ async function persistAgentTaskCoreInTransaction(
         : inheritedContract !== undefined
           ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', inheritedContract)
           : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
-      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', 'image-review-tool-final-v1') : undefined;
+      : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
     throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');

@@ -2264,6 +2264,8 @@ async function inspectGenerationRecovery(
         if (native) {
           // Only the original two-task continuation may resume this already durable tagged final.
           // CP-R may resume only pure validation; the Worker must verify saved bytes before any Host path.
+          const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution);
+          if (!Object.hasOwn(rawMarker, 'imageResultPolicy') || rawMarker.imageResultPolicy !== 'image-review-tool-final-v1') return null;
           const execution = readNativeImageAgentExecution(task.result), cp = execution?.checkpoint;
           const envelope = readNativeImageReviewCheckpoint(task.result);
           if (!firstImage || run.maxAgentTasks !== 2 || task.status !== 'failed' || ![1, 2].includes(task.executionAttempt)

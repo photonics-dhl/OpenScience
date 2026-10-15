@@ -42,6 +42,38 @@ describe('image review tool-final contract and pure checkpoint finalization', ()
       validatedFinal: { policy, rawCheckpoint: cp.serializedSha256, turnOrdinal: 1, resultToolCallId: 'result-1', responseHash: 'f'.repeat(64) } };
     return { ...f, cp, next };
   }
+  it('terminal policy partition keeps the old no-marker/no-policy early return opaque', () => {
+    const task = { result: { nativeImageReview: { historical: 'opaque' } } };
+    const incoming = { assetId: 'preserved-old-image' };
+    expect(nativeAgentTerminalResult(task as never, 'succeeded', incoming)).toBe(incoming);
+  });
+  it.each([undefined, null, 'unknown', policy])('terminal policy partition refuses orphan own envelope policy %s', value => {
+    const task = { result: { nativeImageReview: { imageResultPolicy: value } } };
+    expect(() => nativeAgentTerminalResult(task as never, 'succeeded', {})).toThrow();
+  });
+  it.each([undefined, null, 'unknown'])('terminal policy partition keeps invalid own marker policy %s closed', value => {
+    const initialized = initialNativeAgentExecution(runtime, 'image-review')!;
+    const task = { result: { ...initialized, nativeAgentExecution: { ...initialized.nativeAgentExecution, imageResultPolicy: value },
+      nativeImageReview: { mode: 'model-native', state: 'not_started' } } };
+    expect(() => nativeAgentTerminalResult(task as never, 'failed', {})).toThrow();
+  });
+  it('terminal policy partition refuses an envelope tag attached to a different decoded role', () => {
+    const task = { result: { ...initialNativeAgentExecution(runtime), nativeImageReview: { imageResultPolicy: policy } } };
+    expect(() => nativeAgentTerminalResult(task as never, 'failed', {})).toThrow();
+  });
+  it.each(['valid', 'missing-cp', 'cp-policy', 'review-hash', 'raw-link'] as const)('terminal policy partition retains tagged final proof: %s', change => {
+    const f = imageFixture();
+    const saved = f.task.result as unknown as { nativeAgentExecution: Record<string, unknown>; nativeImageReview: Record<string, unknown> };
+    saved.nativeAgentExecution.checkpoint = structuredClone(f.next);
+    Object.assign(saved.nativeImageReview, { state: 'completed', review: { stage: 'generated-image', ...f.cp.imageIdentity,
+      ...f.cp.target, decision: 'accepted', summary: 'Matches the source.', repairInstruction: null,
+      responseHash: change === 'review-hash' ? 'a'.repeat(64) : f.next.validatedFinal.responseHash } });
+    if (change === 'missing-cp') delete saved.nativeAgentExecution.checkpoint;
+    if (change === 'cp-policy') Reflect.deleteProperty(saved.nativeAgentExecution.checkpoint as object, 'imageResultPolicy');
+    if (change === 'raw-link') (saved.nativeAgentExecution.checkpoint as typeof f.next).validatedFinal.rawCheckpoint = f.next.serializedSha256;
+    if (change === 'valid') expect(nativeAgentTerminalResult(f.task as never, 'succeeded', { assetId: 'task' })).toHaveProperty('assetId', 'task');
+    else expect(() => nativeAgentTerminalResult(f.task as never, 'succeeded', { assetId: 'task' })).toThrow();
+  });
   it('requires explicit trusted image-only opt-in without upgrading legacy runtime objects', () => {
     expect(initialize(runtime, 'image-review', policy)?.nativeAgentExecution).toHaveProperty('imageResultPolicy', policy);
     expect(initialNativeAgentExecution({ ...runtime, imageResultPolicy: policy } as typeof runtime, 'image-review')?.nativeAgentExecution)
