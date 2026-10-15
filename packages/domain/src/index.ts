@@ -296,6 +296,7 @@ export {
   type IngestionClaimSelection,
 } from './ingestion/claim-evidence-bridge';
 export {
+  isExplicitFirstImageRequest,
   parseWorkspaceGuidePayload,
   type WorkspaceGuidePayload,
   type WorkspaceWritingCitation,
@@ -479,6 +480,10 @@ export { requireMembership } from './workspace/helpers';
 export { ILLUSTRATION_BRIEF_MAX_CHARACTERS, parseIllustrationBrief, describeIllustrationBrief, requireIllustrationSourceSupport, projectIllustrationEvidence, type IllustrationBrief } from './assets/illustration-brief';
 
 export { getResearchRecord, getResearchRecordSource, ResearchRecordSourceError } from './commit/research-record';
+export { prepareOrdinaryStructuredReceipt, settleOrdinaryStructuredReceipt, readOrdinaryStructuredReceipt,
+  hasOrdinaryStructuredReceipt, isOrdinaryStructuredKind,
+  ORDINARY_STRUCTURED_HOLD,
+  OrdinaryStructuredReceiptConflict, type OrdinaryStructuredReceipt, type OrdinaryStructuredIdentity } from './agent/ordinary-structured-receipt';
 export { initialNativeAgentExecution, nativeAgentMaxTurns, nativeAgentRuntimeFromEnv, readNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult, requireNativeAgentExecutionAuthority, supportsNativeIllustration,
   type NativeAgentRuntimeConfig, type NativeAgentCheckpointReference, type NativeAgentImageCheckpointReference, type NativeAgentExecution } from './agent/native-agent-execution';
 

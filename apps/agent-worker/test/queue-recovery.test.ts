@@ -241,6 +241,69 @@ describe('completed paid scene image maintenance scheduling', () => {
     return { task, db, lists, deps: { ...enabled(), prisma, redis, mailer: createFakeMailer() } as unknown as WorkerDeps };
   }
 
+  it.each(['prepared', 'completed', 'unknown'])('ordinary paid %s evidence is held instead of requeued at startup', async state => {
+    const f = await queueFixture('workspace.guide');
+    const cp = await f.deps.prisma.$transaction(tx => domain.prepareOrdinaryStructuredReceipt(tx, {
+      identity: { taskId: f.task.id, kind: 'workspace.guide', sessionId: f.task.sessionId,
+        userId: uuid(99), researchObjectId: null, executionAttempt: 1 }, sourceJson: '{"source":"original"}', ordinal: 0,
+      target: { provider: 'fixture', model: 'fixture', promptHash: 'a'.repeat(64) },
+    }));
+    if (state !== 'prepared') await f.deps.prisma.$transaction(tx => domain.settleOrdinaryStructuredReceipt(tx, cp,
+      state === 'completed' ? { responseJson: '{"text":"paid"}' } : { failureJson: '{"code":"provider_timeout"}' }));
+    const evidence = structuredClone(f.task.result);
+    expect(await recoverProcessingQueue(f.deps)).toBe(0);
+    expect(f.lists.get('agent:queue')).toEqual([]);
+    expect(f.task).toMatchObject({ status: 'failed', executionAttempt: 1, result: evidence });
+    expect(f.task.error).toContain('[blocked]');
+  });
+
+  it('ordinary paid completion survives final-progress P2034 without a new queue entry or attempt', async () => {
+    const f = await queueFixture('workspace.guide');
+    f.task.status = 'pending';
+    f.lists.set('agent:queue', [f.task.id]); f.lists.set('agent:queue:processing', []);
+    let calls = 0;
+    const handler: TaskHandler = async (_deps, task) => {
+      calls++;
+      const cp = await f.deps.prisma.$transaction(tx => domain.prepareOrdinaryStructuredReceipt(tx, {
+        identity: { taskId: task.id, kind: 'workspace.guide', sessionId: f.task.sessionId,
+          userId: uuid(99), researchObjectId: null, executionAttempt: task.executionAttempt }, sourceJson: '{"source":"original"}', ordinal: 0,
+        target: { provider: 'fixture', model: 'fixture', promptHash: 'a'.repeat(64) },
+      }));
+      await f.deps.prisma.$transaction(tx => domain.settleOrdinaryStructuredReceipt(tx, cp, { responseJson: '{"text":"paid"}' }));
+      throwIfProgress = true; return { summary: 'original' };
+    };
+    let throwIfProgress = false;
+    const update = f.deps.prisma.agentTask.updateMany.bind(f.deps.prisma.agentTask);
+    const write = vi.spyOn(f.deps.prisma.agentTask, 'updateMany').mockImplementation((args) => {
+      if (throwIfProgress && args.data.status === 'succeeded') throw Object.assign(new Error('fixture final progress conflict'), { code: 'P2034' });
+      return update(args);
+    });
+    try {
+      const poll = await createPollOnce({ 'workspace.guide': handler }, { runMaintenance: false });
+      expect(await poll(f.deps)).toBe(true);
+      expect(await poll(f.deps)).toBe(false);
+      const current = f.db.agentTasks.find(row => row.id === f.task.id)!;
+      expect(calls).toBe(1); expect(current).toMatchObject({ status: 'failed', executionAttempt: 2 });
+      expect(domain.readOrdinaryStructuredReceipt(current.result)?.attempts[0]?.responseJson).toBe('{"text":"paid"}');
+      expect(f.lists.get('agent:queue')).toEqual([]);
+    } finally { write.mockRestore(); }
+  });
+
+  it('ordinary paid recovery never discards its processing reference when the blocking CAS cannot commit', async () => {
+    const f = await queueFixture('workspace.guide');
+    f.task.result = { ordinaryStructuredReceipt: { state: 'malformed but may-paid' } };
+    const update = f.deps.prisma.agentTask.updateMany.bind(f.deps.prisma.agentTask);
+    const write = vi.spyOn(f.deps.prisma.agentTask, 'updateMany').mockImplementation(args =>
+      args.data.error === '[blocked] Previous structured request may have been paid; automatic replay is disabled'
+        ? Promise.resolve({ count: 0 }) as never : update(args));
+    try {
+      await expect(recoverProcessingQueue(f.deps)).rejects.toBeInstanceOf(domain.OrdinaryStructuredReceiptConflict);
+      expect(f.lists.get('agent:queue')).toEqual([]);
+      expect(f.lists.get('agent:queue:processing')).toEqual([f.task.id]);
+      expect(f.task).toMatchObject({ status: 'running', executionAttempt: 1 });
+    } finally { write.mockRestore(); }
+  });
+
   it('default polling runs recovery before the outbox after startup claim attempt 2 fails without the late result', async () => {
     let current = 0, completed = false;
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => current);
