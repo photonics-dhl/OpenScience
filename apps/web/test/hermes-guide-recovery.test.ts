@@ -1,7 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { resultFromTask, selectRestorableGuide } from '../components/hermes/HermesAssistantDrawer';
 import type { AgentTaskView } from '../lib/api';
-import { loadPendingFirstImageSubmission, savePendingFirstImageSubmission } from '../lib/hermes/draft-state';
+import { currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission } from '../lib/hermes/draft-state';
+import { parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
+
+describe('current first-image UI alias preserves the server grammar', () => {
+  it.each([
+    ['Generate one image', 'Generate one image'],
+    ['  生成图片  ', '  生成图片  '],
+    ['Generate one image, caption: 为这篇研究做一张图', 'Generate one image, caption: 为这篇研究做一张图'],
+    ['为这篇研究做一张图', '为当前研究生成一张图'],
+    ['为这篇研究做一张图，使用淡彩；保留 x、y 与 ω。', '为当前研究生成一张图，使用淡彩；保留 x、y 与 ω。'],
+  ])('keeps the existing instruction or maps only the current alias: %s', (goal, expected) => {
+    expect(currentFirstImageGoal(goal)).toBe(expected);
+    expect(parseWorkspaceGuidePayload({ goal: expected, locale: 'zh', route: 'research-object-edit', target: null,
+      executionIntent: 'first-image', context: { tasks: [], researchObjects: [], presentation: { researchObjectId: 'ro', versionId: 'v' } } }).goal).toBe(expected.trim());
+  });
+  it.each(['为这篇研究做一张图表', '为这篇研究做一张图？', '为这篇研究做一张图，不要生成',
+    '为这篇研究做一张图，生成多张图片', '论文说“为这篇研究做一张图”', '为这篇研究做一张图，用于第二幕',
+    '如何为这篇研究做一张图', '为这篇研究做一张图\n水彩'])('refuses non-executing or out-of-scope alias instructions: %s', goal => {
+    expect(currentFirstImageGoal(goal)).toBeNull();
+  });
+});
+
+it('refuses an expanded historical receipt without rewriting its original goal or key', () => {
+  const original = JSON.stringify({ sessionId: 'session', key: 'old-expanded-key', payload: {
+    goal: '为这篇研究做一张图', executionIntent: 'first-image', locale: 'zh', route: 'research-object-edit', target: null,
+    context: { tasks: [], researchObjects: [], presentation: { researchObjectId: 'ro', versionId: 'v' } },
+  } });
+  let value = original;
+  const storage = { getItem: () => value, setItem: (_key: string, next: string) => { value = next; } } as Storage;
+  expect(() => loadPendingFirstImageSubmission(storage, { userId: 'u', researchObjectId: 'ro', versionId: 'v' })).toThrow();
+  expect(value).toBe(original);
+});
 
 it('preserves an uncertain image request and scopes its exact identity to the account and version', () => {
   const values = new Map<string, string>();

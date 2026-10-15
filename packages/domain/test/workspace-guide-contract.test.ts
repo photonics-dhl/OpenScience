@@ -42,7 +42,7 @@ describe('workspace guide route and semantic target contract', () => {
     expect(parseWorkspaceGuidePayload({ ...firstImage, goal: '请帮我生图' })).toHaveProperty('executionIntent', 'first-image');
     expect(() => parseWorkspaceGuidePayload({ ...firstImage, goal: 'Generate an image, ' + 'x'.repeat(1000) })).toThrow();
   });
-  it.each(['请直接生成一张图片', '直接生成图片', '为这篇研究做一张图', 'Generate an image explaining the scene transitions in this paper.'])(
+  it.each(['请直接生成一张图片', '直接生成图片', 'Generate an image explaining the scene transitions in this paper.'])(
     'recognizes an explicit new first-image request: %s', goal => {
       expect(parseWorkspaceGuidePayload({ ...firstImage, goal })).toHaveProperty('executionIntent', 'first-image');
     });

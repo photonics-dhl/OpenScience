@@ -31,7 +31,7 @@ import { HermesPresentationReview } from './HermesPresentationReview';
 import { HermesFirstImageResult } from './HermesFirstImageResult';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal,
-  loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
+  currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublicationPanel } from '@/components/research/ResearchPublicationPanel';
@@ -728,9 +728,12 @@ function HermesAssistantDrawerContent({
 
   const submitGoal = async (explicitGoal?: string) => {
     const savesWritingDraft = Boolean(writingSaveGoal.current);
-    const normalized = writingSaveGoal.current || explicitGoal || goal.trim();
+    const requestedGoal = writingSaveGoal.current || explicitGoal || goal.trim();
+    const normalized = route === 'research-object-edit' && routeResearchObjectId && !taskKey.current && !pendingPayload.current
+      ? currentFirstImageGoal(requestedGoal) ?? requestedGoal : requestedGoal;
     writingSaveGoal.current = '';
     if (!normalized || busy || actionBusy || submittingRef.current) return;
+    if (normalized !== requestedGoal) { goalTouched.current = true; setGoal(normalized); }
     if (pendingPayload.current && normalized !== pendingPayload.current.goal) { setError(tc('retrySame')); return; }
     const command = normalized.replace(/[。！!.]+$/u, '').trim();
     if (onSourceCommand && (!offeredAction.current || offeredAction.current.canDismiss)) {

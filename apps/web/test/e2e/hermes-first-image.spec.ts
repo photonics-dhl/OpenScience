@@ -142,10 +142,11 @@ test('a lost POST response survives reload and explicit recovery keeps the origi
   const state = await setup(page, false); state.loseResponseOnce = true;
   await openResearchConversation(page, version);
   const input = page.getByLabel('Send an instruction to Hermes', { exact: true });
-  await input.fill('Generate one image explaining this paper.');
+  await input.fill('为这篇研究做一张图，使用淡彩；保留 x、y 与 ω。');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => state.submissions.length).toBe(1);
   const originalBody = state.submissions[0], originalKey = state.submissionKeys[0];
+  expect(originalBody).toMatchObject({ payload: { goal: '为当前研究生成一张图，使用淡彩；保留 x、y 与 ω。', executionIntent: 'first-image' } });
   await page.reload();
   await page.locator('[data-hermes-avatar-anchor="true"]').getByRole('button', { name: 'Open conversation', exact: true }).click();
   await expect(page.getByText('The previous submission is unconfirmed. Continue to recover the same request without starting another image task.')).toBeVisible();

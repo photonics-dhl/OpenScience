@@ -1,7 +1,14 @@
 import type { HermesNarrativeGeneration, StoryboardRequest, WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
-import { parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
+import { isExplicitFirstImageRequest, parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
 
 const STORAGE_PREFIX = 'openscience:hermes-draft:';
+
+/** Current UI alias only. Never apply this to a saved or pending request body. */
+export function currentFirstImageGoal(goal: string): string | null {
+  if (isExplicitFirstImageRequest(goal)) return goal;
+  const alias = goal.replace(/^为这篇研究做一张图(?=[，,：:\s。！!]|$)/u, '为当前研究生成一张图');
+  return alias !== goal && isExplicitFirstImageRequest(alias) ? alias : null;
+}
 
 export type FirstImageSubmissionScope = Pick<HermesDraftScope, 'userId' | 'researchObjectId' | 'versionId'>;
 export interface PendingFirstImageSubmission {
