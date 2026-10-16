@@ -7,9 +7,9 @@ const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', 
 const confirmation = { commitId: 'confirmed-commit', versionId: 'confirmed-version', versionNo: 2, version: 7, evidenceStatus: 'needs_review', missingFields: ['results'] };
 const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.title, logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, artifactId: 'artifact-journey', agentTaskId: 'agent-journey' };
 
-test('stored formatted research stays read-only across tabs, Hermes and browser-draft recovery', async ({ page }) => {
+test('unsupported formatted research stays read-only across tabs, Hermes and browser-draft recovery', async ({ page }) => {
   await fixtures(page, []);
-  const stored = { ...core, schemaVersion: '0.2.0', insight: '**Stored finding**', fieldFormats: { insight: 'markdown' } };
+  const stored = { ...core, schemaVersion: '0.2.0', insight: '**Stored finding**', fieldFormats: { insight: 'invalid' } };
   const retained = JSON.stringify({ core: { ...core, insight: 'Older browser draft' }, savedAt: Date.now() });
   await page.addInitScript(value => localStorage.setItem('editor:draft:journey-ro', value), retained);
   await page.route('**/api/research-objects/journey-ro', route => readJson(route, { researchObject: { ...ro, sdf: { core: stored, nodes: [] } } }));
@@ -36,7 +36,7 @@ test('stored formatted research stays read-only across tabs, Hermes and browser-
   });
   await page.goto('/research-objects/journey-ro/edit');
   await expect(page.locator('[data-sdf-snapshot-read-only="true"]')).toBeVisible();
-  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  await expect(page.getByText('**Stored finding**', { exact: true })).toBeVisible();
   const tabs = page.getByRole('navigation', { name: 'Research sections' }).getByRole('button');
   for (let index = 0; index < 4; index++) {
     await tabs.nth(index).click();
@@ -49,10 +49,10 @@ test('stored formatted research stays read-only across tabs, Hermes and browser-
   await assistant.getByRole('button', { name: 'Send', exact: true }).click();
   await assistant.locator('summary').filter({ hasText: 'View changes' }).click();
   await assistant.getByRole('button', { name: 'Use this field', exact: true }).click();
-  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  await expect(page.getByText('**Stored finding**', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('editor:draft:journey-ro'))).toBe(retained);
   await page.reload();
-  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  await expect(page.getByText('**Stored finding**', { exact: true })).toBeVisible();
   await page.waitForTimeout(1100); // Exercise the existing one-second autosave debounce.
   expect(writes).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem('editor:draft:journey-ro'))).toBe(retained);
@@ -264,7 +264,7 @@ test('the confirmed paper is included in the next commit through the editor', as
     expect(route.request().method()).toBe('PUT');
     expect(route.request().postDataJSON()).toEqual({ version: 1, core: editedCore });
     saves += 1;
-    return route.fulfill({ json: { sdf: { core: editedCore } } });
+    return route.fulfill({ json: { sdf: { core: editedCore, version: 2 } } });
   });
   const guideSubmissions = await mockVersionGuide(page);
   let submitted: unknown;
@@ -812,4 +812,149 @@ test('failed confirmed snapshot shows a retryable load error without empty saved
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(page.locator('textarea[readonly]').first()).toHaveValue('Actual saved contents');
   await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+});
+
+test.describe('formatted research authoring', () => {
+  test.use({ hasTouch: true });
+  test('formats a selected passage, keeps untouched prose literal and restores the actual saved format', async ({ page }) => {
+    await fixtures(page, []);
+    let savedCore = { ...core, insight: String.raw`literal **x** [y] [S12] and \(x+y\) final`, fieldFormats: { old: 'opaque' } } as Record<string, unknown>;
+    let revision = 1;
+    const writes: Record<string, unknown>[] = [];
+    await page.route('**/api/research-objects/journey-ro', route => readJson(route, { researchObject: { ...ro, version: revision, sdf: { core: savedCore, nodes: [] } } }));
+    await page.route('**/api/csrf-token', route => readJson(route, { csrfToken: 'test-csrf' }));
+    await page.route('**/api/sdf/journey-ro', route => {
+      expect(route.request().method()).toBe('PUT');
+      const body = route.request().postDataJSON();
+      expect(body.version).toBe(revision);
+      revision += savedCore.schemaVersion === '0.1.0' ? 2 : 1;
+      savedCore = body.core;
+      writes.push(body);
+      return route.fulfill({ json: { sdf: { core: savedCore, version: revision } } });
+    });
+    await page.goto('/research-objects/journey-ro/edit');
+    await page.getByRole('button', { name: 'Core contribution · Edit', exact: true }).click();
+    let input = page.getByRole('textbox', { name: 'Core contribution', exact: true });
+    await input.press('End');
+    await input.press('Control+Shift+ArrowLeft');
+    await page.getByRole('button', { name: 'Bold', exact: true }).click();
+    await expect(input).toBeFocused();
+    await page.getByRole('heading', { name: 'Core contribution', exact: true }).click();
+    await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('final');
+    await expect(page.getByText('literal **x** [y] and', { exact: false })).toBeVisible();
+    await expect.poll(() => writes.length).toBe(1);
+    expect(savedCore.fieldFormats).toEqual({ insight: 'markdown' });
+    expect(savedCore.method).toBe(core.method);
+    expect(savedCore.insight).toContain('[S12]');
+    await expect(page.locator('[data-hermes-anchor="sdf-insight"]')).not.toContainText('S12');
+    await page.reload();
+    await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('final');
+    const beforeItalic = savedCore.insight as string;
+    await page.getByRole('button', { name: 'Core contribution · Edit', exact: true }).tap();
+    input = page.getByRole('textbox', { name: 'Core contribution', exact: true });
+    await input.press('End');
+    await input.press('ArrowLeft'); await input.press('ArrowLeft');
+    await input.press('Control+Shift+ArrowLeft');
+    await input.press('Control+i');
+    await expect(input).toBeFocused();
+    await page.getByRole('button', { name: 'Undo format', exact: true }).tap();
+    await expect(input).toHaveValue(beforeItalic);
+    await page.getByRole('button', { name: 'Link', exact: true }).tap();
+    const linkInput = page.getByLabel('Link address');
+    await linkInput.fill('javascript:alert(1)');
+    await linkInput.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: 'Use an https' })).toBeVisible();
+    await linkInput.fill('https://example.org/source');
+    await linkInput.press('Enter');
+    await expect(input).toBeFocused();
+    await page.getByRole('heading', { name: 'Core contribution', exact: true }).click();
+    await expect(page.getByRole('link', { name: 'final', exact: true })).toHaveAttribute('href', 'https://example.org/source');
+    await expect.poll(() => String(savedCore.insight)).toContain('https://example.org/source');
+    expect(revision).toBeGreaterThanOrEqual(4);
+    await page.getByRole('navigation', { name: 'Research sections' }).getByRole('button', { name: 'Research content', exact: true }).click();
+    await page.getByRole('button', { name: 'Research method · Edit', exact: true }).click();
+    const method = page.getByRole('textbox', { name: 'Research method', exact: true });
+    await method.press('Control+a');
+    await page.getByRole('button', { name: 'List', exact: true }).click();
+    await page.getByRole('heading', { name: 'Research method', exact: true }).click();
+    await expect(page.locator('[data-hermes-anchor="sdf-method"] li')).toHaveText('Measurement');
+    await expect.poll(() => savedCore.fieldFormats).toEqual({ insight: 'markdown', method: 'markdown' });
+  });
+});
+
+test('consecutive formats and undo keep the same selected word across hidden source markers', async ({ page }) => {
+  await fixtures(page, []);
+  const original = { ...core, insight: 'Evidence [S12] final' };
+  let saved: Record<string, unknown> = structuredClone(original);
+  let revision = 1;
+  await page.route('**/api/research-objects/journey-ro', route => readJson(route, { researchObject: { ...ro, version: revision, sdf: { core: saved, nodes: [] } } }));
+  await page.route('**/api/csrf-token', route => readJson(route, { csrfToken: 'test-csrf' }));
+  await page.route('**/api/sdf/journey-ro', route => {
+    const body = route.request().postDataJSON();
+    expect(body.version).toBe(revision);
+    revision += saved.schemaVersion === '0.1.0' && body.core.schemaVersion === '0.2.0' ? 2 : 1;
+    saved = body.core;
+    return route.fulfill({ json: { sdf: { core: saved, version: revision } } });
+  });
+  await page.goto('/research-objects/journey-ro/edit');
+  await page.getByRole('button', { name: 'Core contribution · Edit', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Core contribution', exact: true });
+  const selectedWord = () => input.evaluate((element: HTMLTextAreaElement) => element.value.slice(element.selectionStart, element.selectionEnd));
+  await input.press('End');
+  await input.press('Control+Shift+ArrowLeft');
+  for (const name of ['Bold', 'Italic']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect(input).toBeFocused();
+    await expect.poll(selectedWord).toBe('final');
+  }
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  await page.getByLabel('Link address').fill('https://example.org/source');
+  await page.getByLabel('Link address').press('Enter');
+  await expect(input).toBeFocused();
+  await expect.poll(selectedWord).toBe('final');
+  for (let step = 0; step < 3; step++) {
+    await page.getByRole('button', { name: 'Undo format', exact: true }).click();
+    await expect(input).toBeFocused();
+    await expect.poll(selectedWord).toBe('final');
+  }
+  await expect(input).toHaveValue('Evidence  final');
+  await expect.poll(() => saved).toEqual(original);
+  await page.getByRole('button', { name: 'Bold', exact: true }).click();
+  await expect.poll(selectedWord).toBe('final');
+  await page.getByRole('heading', { name: 'Core contribution', exact: true }).click();
+  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('final');
+  await expect.poll(() => String(saved.insight)).toContain('[S12]');
+  await expect(page.locator('[data-hermes-anchor="sdf-insight"]')).not.toContainText('S12');
+});
+
+test('first format autosaves, then undo persists the complete opaque legacy draft without a reload in between',async({page})=>{
+  await fixtures(page,[]);
+  const original={...core,insight:'Evidence [S12] final',fieldFormats:{arbitrary:{keep:true}}};
+  let saved:Record<string,unknown>=structuredClone(original);let revision=1;let puts=0;
+  await page.route('**/api/research-objects/journey-ro',route=>readJson(route,{researchObject:{...ro,version:revision,sdf:{core:saved,nodes:[]}}}));
+  await page.route('**/api/csrf-token',route=>readJson(route,{csrfToken:'test-csrf'}));
+  await page.route('**/api/sdf/journey-ro',route=>{
+    const body=route.request().postDataJSON();expect(body.version).toBe(revision);
+    revision+=saved.schemaVersion==='0.1.0'&&body.core.schemaVersion==='0.2.0'?2:1;
+    saved=body.core;puts++;return route.fulfill({json:{sdf:{core:saved,version:revision}}});
+  });
+  await page.goto('/research-objects/journey-ro/edit');
+  await page.getByRole('button',{name:'Core contribution · Edit',exact:true}).click();
+  const input=page.getByRole('textbox',{name:'Core contribution',exact:true});
+  await input.press('End');await input.press('Control+Shift+ArrowLeft');
+  await page.getByRole('button',{name:'Bold',exact:true}).click();
+  await expect.poll(()=>puts).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('editor:draft:journey-ro'))).toBeNull();
+  expect(saved.schemaVersion).toBe('0.2.0');expect(saved.insight).toContain('[S12]');
+  await expect(input).toBeFocused();
+  await page.getByRole('button',{name:'Undo format',exact:true}).click();
+  await expect(input).toHaveValue('Evidence  final');
+  await expect.poll(()=>puts).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('editor:draft:journey-ro'))).toBeNull();
+  expect(saved).toEqual(original);expect(revision).toBe(4);
+  await page.reload();
+  await expect(page.locator('[data-hermes-anchor="sdf-insight"]')).toContainText('Evidence final');
+  await expect(page.locator('[data-hermes-anchor="sdf-insight"]')).not.toContainText('S12');
+  await expect(page.locator('[data-hermes-anchor="sdf-insight"] strong')).toHaveCount(0);
+  expect(saved).toEqual(original);
 });

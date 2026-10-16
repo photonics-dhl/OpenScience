@@ -1,4 +1,5 @@
 import type { SdfCore } from './api';
+import { withSdfField } from './editor-state';
 import { getSuggestionEvidenceLocation, getSuggestionEvidenceSegments, type SuggestionEvidenceLocation, type SuggestionEvidenceSegment } from './suggestion-evidence';
 
 /** AI 建议（§5.4 MUST：以 diff 展示，确认后才写入 SDF）。 */
@@ -58,9 +59,9 @@ export function suggestionReducer(suggestions: AiSuggestion[], action: Suggestio
 
 /** 把已应用的建议合入 core（仅 pending 且用户显式 apply 的）。 */
 export function applySuggestionsToCore(core: SdfCore, suggestions: AiSuggestion[]): SdfCore {
-  const next = { ...core };
+  let next = { ...core };
   for (const s of suggestions) {
-    if (s.status === 'applied') next[s.field] = s.suggestion;
+    if (s.status === 'applied' && next[s.field] !== s.suggestion) next = withSdfField(next, s.field, s.suggestion, 'plain');
   }
   return next;
 }
@@ -119,4 +120,3 @@ export function coreToSuggestions(
   }
   return list;
 }
-

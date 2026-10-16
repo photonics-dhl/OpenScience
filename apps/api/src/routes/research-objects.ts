@@ -38,9 +38,23 @@ const updateBody = z.object({
   version: z.number().int().positive(),
   title: z.string().min(1).max(200).optional(),
 }).strict();
+const formattedCore = z.object({
+  schemaVersion: z.literal('0.2.0'),
+  problem: z.string(), insight: z.string(), method: z.string(), results: z.string(), limitations: z.string(), reproducibility: z.string(),
+  fieldFormats: z.object({
+    problem: z.enum(['plain', 'markdown']).optional(), insight: z.enum(['plain', 'markdown']).optional(),
+    method: z.enum(['plain', 'markdown']).optional(), results: z.enum(['plain', 'markdown']).optional(),
+    limitations: z.enum(['plain', 'markdown']).optional(), reproducibility: z.enum(['plain', 'markdown']).optional(),
+  }).strict().optional(),
+}).passthrough();
+// Legacy extension values stay opaque; this branch matches the existing full draft validator.
+const legacyCore = z.object({
+  schemaVersion: z.literal('0.1.0'),
+  problem: z.string(), insight: z.string(), method: z.string(), results: z.string(), limitations: z.string(), reproducibility: z.string(),
+}).passthrough();
 const sdfBody = z.object({
   version: z.number().int().positive(),
-  core: z.record(z.string(), z.string()),
+  core: z.union([z.record(z.string(), z.string()), legacyCore, formattedCore]),
 });
 const publicIdempotencyKey = z.string().min(1).max(200).refine(
   (key) => !key.startsWith('system:'),

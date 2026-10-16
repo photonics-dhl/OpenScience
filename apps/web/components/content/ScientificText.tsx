@@ -103,6 +103,67 @@ export function escapeScientificMathForMarkdown(value: string) {
   }).join('');
 }
 
+/** Map raw boundaries using exactly the textarea's outside-math marker hiding rule. */
+export function scientificDisplaySelection(value: string, start: number, end: number): { start: number; end: number } {
+  const displayOffsets = [0];
+  let displayOffset = 0;
+  for (const part of splitMath(value)) {
+    const source = part.type === 'math' ? part.source : part.value;
+    for (let index = 0; index < source.length;) {
+      const marker = part.type === 'text' ? source.slice(index).match(/^\[S\d{1,4}\]/u)?.[0] : undefined;
+      if (marker) {
+        for (let token = 0; token < marker.length; token++) displayOffsets.push(displayOffset);
+        index += marker.length;
+      } else { index++; displayOffset++; displayOffsets.push(displayOffset); }
+    }
+  }
+  const at = (offset: number) => displayOffsets[Math.max(0, Math.min(value.length, offset))];
+  return { start: at(start), end: at(end) };
+}
+
+/** Convert a plain field once, keeping untouched prose literal and math source intact. */
+export function prepareScientificMarkdownSelection(value: string, start: number, end: number, markdown = false, displayOffsets = false): { value: string; start: number; end: number } | null {
+  if (displayOffsets) {
+    const rawOffsets = [0];
+    let rawOffset = 0;
+    for (const part of splitMath(value)) {
+      const source = part.type === 'math' ? part.source : part.value;
+      for (let index = 0; index < source.length;) {
+        const marker = part.type === 'text' ? source.slice(index).match(/^\[S\d{1,4}\]/u)?.[0] : undefined;
+        if (marker) {
+          index += marker.length; rawOffset += marker.length;
+          rawOffsets[rawOffsets.length - 1] = rawOffset;
+        } else { index++; rawOffset++; rawOffsets.push(rawOffset); }
+      }
+    }
+    start = rawOffsets[start]; end = rawOffsets[end];
+  }
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > value.length || start >= end) return null;
+  let offset = 0;
+  let output = '';
+  const offsets: number[] = [];
+  for (const part of splitMath(value, 60_000)) {
+    const source = part.type === 'math' ? part.source : part.value;
+    if (part.type === 'math' && start < offset + source.length && end > offset) return null;
+    for (let index = 0; index < source.length; index++) {
+      const marker = part.type === 'text' ? source.slice(index).match(/^\[S\d{1,4}\]/u)?.[0] : undefined;
+      if (marker) {
+        for (let token = 0; token < marker.length; token++) offsets[offset + index + token] = output.length + token;
+        output += marker; index += marker.length - 1; continue;
+      }
+      offsets[offset + index] = output.length;
+      const character = source[index];
+      output += markdown || part.type === 'math' ? character
+        : character === '\n' ? '  \n'
+        : character === ' ' || character === '\t' ? `&#${character.charCodeAt(0)};`
+        : /[\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e]/u.test(character) ? `&#${character.charCodeAt(0)};` : character;
+    }
+    offset += source.length;
+  }
+  offsets[value.length] = output.length;
+  return { value: output, start: offsets[start], end: offsets[end] };
+}
+
 function renderExpression(value: string, displayMode: boolean) {
   try {
     return katex.renderToString(value, {

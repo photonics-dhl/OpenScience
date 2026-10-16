@@ -98,3 +98,50 @@ describe('sdf 读写（P1B-1 合同 + 乐观锁）', () => {
     ).rejects.toThrow(/版本冲突/);
   });
 });
+
+describe('formatted author save', () => {
+  it('checkpoints an unrecorded opaque legacy object before replacing it and returns the actual revision', async () => {
+    const {deps,db,user}=makeDeps();
+    const ro=await createResearchObject(deps,{workspaceId:'ws-1',userId:user.id,title:'Legacy',sdf:{core:fullCore()}});
+    const before={...fullCore(),fieldFormats:{arbitrary:{keep:true}}};
+    db.sdfDocuments[0].coreJson=before;
+    const formatted={...fullCore(),schemaVersion:'0.2.0',insight:'**Finding**',fieldFormats:{insight:'markdown'}};
+    const saved=await updateSdfDocument(deps,{userId:user.id,roId:ro.id,version:1,core:formatted});
+    expect(saved).toMatchObject({version:3,core:formatted});
+    expect(db.versionManifests).toHaveLength(2);
+    expect(db.versionManifests[0].coreJson).toEqual(before);
+    expect(db.versionManifests[1].coreJson).toEqual(formatted);
+  });
+});
+
+describe('format upgrade history', () => {
+  it('keeps a partial legacy preimage byte-for-byte as a recoverable private manifest', async()=>{
+    const {deps,db,user}=makeDeps();
+    const ro=await createResearchObject(deps,{workspaceId:'ws-1',userId:user.id,title:'Partial'});
+    const before={problem:'Only field',fieldFormats:{unknown:['opaque']},extra:'kept'};
+    db.sdfDocuments[0].coreJson=before;
+    const formatted={...fullCore(),schemaVersion:'0.2.0',fieldFormats:{insight:'markdown'}};
+    const saved=await updateSdfDocument(deps,{userId:user.id,roId:ro.id,version:1,core:formatted});
+    expect(saved.version).toBe(3);
+    expect(db.versionManifests[0].coreJson).toEqual(before);
+    expect(db.versions[0].status).toBe('draft');
+  });
+  it('does not create an extra checkpoint when a complete identical legacy preimage is already recorded',async()=>{
+    const {deps,db,user}=makeDeps();
+    const ro=await createResearchObject(deps,{workspaceId:'ws-1',userId:user.id,title:'Recorded',sdf:{core:fullCore()}});
+    await updateSdfDocument(deps,{userId:user.id,roId:ro.id,version:1,core:fullCore()});
+    const original=structuredClone(db.versionManifests[0]);
+    const formatted={...fullCore(),schemaVersion:'0.2.0',fieldFormats:{insight:'markdown'}};
+    const saved=await updateSdfDocument(deps,{userId:user.id,roId:ro.id,version:2,core:formatted});
+    expect(saved.version).toBe(3);
+    expect(db.versionManifests).toHaveLength(2);
+    expect(db.versionManifests[0]).toEqual(original);
+  });
+  it.each([{schemaVersion:'0.3.0'},{schemaVersion:'0.2.0',fieldFormats:{insight:'html'}}])('rejects invalid or unknown author format without advancing history: %j',async invalid=>{
+    const {deps,db,user}=makeDeps();
+    const ro=await createResearchObject(deps,{workspaceId:'ws-1',userId:user.id,title:'Invalid'});
+    const before=structuredClone(db);
+    await expect(updateSdfDocument(deps,{userId:user.id,roId:ro.id,version:1,core:{...fullCore(),...invalid}})).rejects.toMatchObject({code:'VALIDATION_ERROR'});
+    expect(db).toEqual(before);
+  });
+});

@@ -245,20 +245,25 @@ describe('stored readable snapshots remain distinct from fresh commits', () => {
     return { ...f, saved, artifact, claim, evidence, media };
   }
 
-  it('fresh commits still reject explicit readable identity, even with an active transaction', async () => {
+  it.each([false, true])('author commits accept typed formatting with or without an existing transaction: %s', async useTransaction => {
     const f = await makeRo();
-    const input = { researchObjectId: f.ro.id, userId: f.user.id, message: 'Untrusted fresh core', version: 1, sdfCore: readable };
-    await expect(createCommit(f.deps, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-    await expect(f.prisma.$transaction(tx => createCommit(f.deps, input, {}, tx))).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-    expect(f.db.commits).toHaveLength(0);
-    expect(f.db.researchObjects[0].version).toBe(1);
+    const before = structuredClone(f.db.sdfDocuments[0].coreJson);
+    const input = { researchObjectId: f.ro.id, userId: f.user.id, message: 'Format draft', version: 1, sdfCore: readable, idempotencyKey:'formatted-once' };
+    const saved = useTransaction ? await f.prisma.$transaction(tx => createCommit(f.deps,input,{},tx)) : await createCommit(f.deps,input);
+    expect(saved.snapshot.core).toEqual(readable);
+    expect(saved.versionNo).toBe(2);
+    expect(f.db.versionManifests[0].coreJson).toEqual(before);
+    expect(f.db.researchObjects[0].version).toBe(3);
+    const replay=await createCommit(f.deps,input);
+    expect(replay.versionId).toBe(saved.versionId);
+    expect(f.db.commits).toHaveLength(2);
   });
 
-  it('does not convert an implicit live readable core into a fresh commit', async () => {
-    const f = await makeRo();
-    f.db.sdfDocuments[0].coreJson = structuredClone(readable);
-    await expect(createCommit(f.deps, { researchObjectId: f.ro.id, userId: f.user.id, message: 'Save current draft', version: 1 })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-    expect(f.db.commits).toHaveLength(0);
+  it('can save a valid formatted live core without changing its format', async () => {
+    const f=await makeRo();
+    f.db.sdfDocuments[0].coreJson=structuredClone(readable);
+    const saved=await createCommit(f.deps,{researchObjectId:f.ro.id,userId:f.user.id,message:'Save current draft',version:1});
+    expect(saved.snapshot.core).toEqual(readable);
     expect(f.db.sdfDocuments[0].coreJson).toEqual(readable);
   });
 
@@ -328,4 +333,18 @@ describe('stored readable snapshots remain distinct from fresh commits', () => {
     await expect(restoreVersionDraft(f.deps, { researchObjectId: f.ro.id, versionId: f.saved.versionId, userId: f.user.id, version: 2 })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(f.db).toEqual(before);
   });
+});
+
+it('can restore the exact partial legacy draft checkpoint created by first formatting', async()=>{
+  const f=await makeRo();
+  Object.assign(f.prisma.artifact,{count:async()=>0});
+  Object.assign(f.prisma.researchObject,{findUniqueOrThrow:async(args:Parameters<typeof f.prisma.researchObject.findUnique>[0])=>{const row=await f.prisma.researchObject.findUnique(args);if(!row)throw new Error('Missing RO');return row;}});
+  const before={problem:'Only original field',fieldFormats:{old:{opaque:true}}};
+  f.db.sdfDocuments[0].coreJson=structuredClone(before);
+  const core={...CORE1,schemaVersion:'0.2.0',fieldFormats:{insight:'markdown'}};
+  await createCommit(f.deps,{researchObjectId:f.ro.id,userId:f.user.id,version:1,message:'First format',sdfCore:core});
+  const source=f.db.versions[0];
+  const restored=await restoreVersionDraft(f.deps,{researchObjectId:f.ro.id,versionId:source.id,userId:f.user.id,version:3});
+  expect(restored.researchObject.sdf.core).toEqual(before);
+  expect(f.db.versionManifests[0].coreJson).toEqual(before);
 });

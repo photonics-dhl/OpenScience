@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
 import { freezeResearchRecord } from './research-record-snapshot';
 import { carryVersionMedia } from './carry-media';
@@ -99,6 +100,20 @@ export async function createCommit(
   transaction?: Prisma.TransactionClient,
   systemExecution?: { executor: 'hermes'; runId: string },
 ): Promise<CreateCommitResult> {
+  if (!transaction && (input.idempotencyKey?.startsWith('ingestion-confirm:') || input.idempotencyKey?.startsWith('hermes-ingestion:'))) {
+    throw new CommitError('VALIDATION_ERROR', 'Reserved ingestion idempotency key');
+  }
+  if (input.sdfCore?.schemaVersion === '0.2.0' && !systemExecution) {
+    const write = async (tx: Prisma.TransactionClient) => {
+      await lockTrashReferences(tx);
+      await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;
+      return createCommitInternal(deps, input, ctx, tx, undefined, undefined, !transaction);
+    };
+    return transaction ? write(transaction) : deps.prisma.$transaction(write, { isolationLevel: 'Serializable', timeout: 30_000 }).catch((error: unknown) => {
+      if ((error as { code?: string }).code === 'P2034') throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
+      throw error;
+    });
+  }
   return createCommitInternal(deps, input, ctx, transaction, systemExecution);
 }
 
@@ -145,6 +160,13 @@ export async function createStoredSnapshotCommit(
   }, ctx, transaction, undefined, core);
 }
 
+/** Only actual stored legacy sources may retain their original partial shape. */
+function isStoredLegacyCore(core: Record<string, unknown>): boolean {
+  if (!core || typeof core !== 'object' || Array.isArray(core)) return false;
+  return (core.schemaVersion === undefined || core.schemaVersion === '0.1.0')
+    && SDF_NODE_TYPES.every(field => core[field] === undefined || typeof core[field] === 'string');
+}
+
 /** The source-bound path shares all commit persistence and concurrency checks. */
 async function createCommitInternal(
   deps: WorkspaceDeps,
@@ -153,6 +175,7 @@ async function createCommitInternal(
   transaction?: Prisma.TransactionClient,
   systemExecution?: { executor: 'hermes'; runId: string },
   storedCore?: Record<string, unknown>,
+  composeHistory = false,
 ): Promise<CreateCommitResult> {
   // Internal composition: all reads and writes use the caller's transaction.
   if (transaction) deps = { ...deps, prisma: transaction as WorkspaceDeps['prisma'] };
@@ -244,8 +267,23 @@ async function createCommitInternal(
   const liveCore = (ro.sdfDocument?.coreJson as Record<string, unknown> | undefined) ?? predecessorCore;
   const changesets: Array<{ kind: string; payload: Prisma.InputJsonValue }> = [];
   const finalCore = input.sdfCore ?? (branch.isDefault ? liveCore : predecessorCore);
-  const check = storedCore === undefined ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(storedCore);
-  if (!check.ok) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
+  const check = systemExecution ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(finalCore);
+  // The private stored path is bound to the actual locked source, never an HTTP flag.
+  const storedPartial = storedCore === finalCore && isStoredLegacyCore(storedCore);
+  if (!check.ok && !storedPartial) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
+  if (storedCore === undefined && branch.isDefault && finalCore.schemaVersion === '0.2.0' && liveCore.schemaVersion !== '0.2.0') {
+    if (!isStoredLegacyCore(liveCore)) throw new CommitError('VALIDATION_ERROR', '当前草稿格式不支持升级');
+    if (!isDeepStrictEqual(prevManifest?.coreJson, liveCore)) {
+      if (!transaction) throw new CommitError('VALIDATION_ERROR', '格式升级需要事务');
+      await createCommitInternal(deps, {
+        researchObjectId: ro.id, userId: input.userId, version: input.version, branchId: input.branchId,
+        sdfCore: liveCore, message: 'Save original draft before formatting',
+      }, ctx, transaction, undefined, liveCore, true);
+      const current = await transaction.researchObject.findUnique({ where: { id: ro.id } });
+      if (!current) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+      return createCommitInternal(deps, { ...input, version: current.version }, ctx, transaction, systemExecution, undefined, composeHistory);
+    }
+  }
   const patch = diffSdfCore(predecessorCore, finalCore);
   if (patch.length) {
     changesets.push({ kind: 'sdf_core', payload: patch as unknown as Prisma.InputJsonValue });
@@ -335,7 +373,7 @@ async function createCommitInternal(
         });
       }
     }
-    if (!transaction) {
+    if (!transaction || composeHistory) {
       if (predecessorVersion) {
         await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: predecessorVersion.id, versionId: version.id });
         await carryVersionMedia(tx, { researchObjectId: ro.id, previousVersionId: predecessorVersion.id, versionId: version.id });

@@ -1,5 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
-import { validateSdfDraftCore } from '@openscience/sdf-schema';
+import { validateReadableSdfDraftCore } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import { requireActiveMembership } from '../workspace/helpers';
 import { requirePrivateRoAccess } from '../visibility/access';
@@ -13,7 +13,8 @@ import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES } from './types';
 
 export interface SdfDocumentView {
-  core: Record<string, string>;
+  version?: number;
+  core: Record<string, unknown>;
   nodes: Array<{ nodeType: string; content: string }>;
 }
 
@@ -22,7 +23,7 @@ export interface UpdateSdfInput {
   roId: string;
   /** 乐观锁版本（对齐 RO.version）。 */
   version: number;
-  core: Record<string, string>;
+  core: Record<string, unknown>;
 }
 
 /** 查 SDFDocument（可见性判定 §4.2：成员/invite_only grant 可读 + core + nodes）。 */
@@ -39,7 +40,8 @@ export async function getSdfDocument(
   if (!ro.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
 
   return {
-    core: ro.sdfDocument.coreJson as Record<string, string>,
+    version: ro.version,
+    core: ro.sdfDocument.coreJson as Record<string, unknown>,
     nodes: ro.sdfDocument.nodes.map((n) => ({ nodeType: n.nodeType, content: n.content })),
   };
 }
@@ -52,7 +54,7 @@ export async function updateSdfDocument(
   deps: WorkspaceDeps,
   input: UpdateSdfInput,
   ctx: AuditContext = {},
-): Promise<SdfDocumentView> {
+): Promise<SdfDocumentView & { version: number }> {
   const ro = await deps.prisma.researchObject.findUnique({
     where: { id: input.roId },
     include: { sdfDocument: { include: { nodes: true } } },
@@ -63,11 +65,11 @@ export async function updateSdfDocument(
   if (!ro.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
 
   // Every save is a private draft, including edits after a public release.
-  const check = validateSdfDraftCore(input.core);
+  const check = validateReadableSdfDraftCore(input.core);
   if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
 
   // Saving creates a private history snapshot; createCommit advances the revision once.
-  await deps.prisma.$transaction(async (tx) => {
+  const updated = await deps.prisma.$transaction(async (tx) => {
     await lockTrashReferences(tx);
     await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${ro.id}::uuid FOR UPDATE`;
     const previous = await tx.version.findFirst({ where: { researchObjectId: ro.id, commit: { branch: { isDefault: true } } }, orderBy: { versionNo: 'desc' } });
@@ -89,9 +91,13 @@ export async function updateSdfDocument(
       },
       ctx,
     );
+    const current = await tx.researchObject.findUnique({ where: { id: ro.id }, include: { sdfDocument: { include: { nodes: true } } } });
+    if (!current?.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
+    return { version: current.version, core: current.sdfDocument.coreJson as Record<string, unknown>,
+      nodes: current.sdfDocument.nodes.map(node => ({ nodeType: node.nodeType, content: node.content })) };
   }, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
     if ((error as { code?: string }).code === 'P2034') throw new ResearchObjectError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
     throw error;
   });
-  return getSdfDocument(deps, { userId: input.userId, roId: input.roId });
+  return updated;
 }

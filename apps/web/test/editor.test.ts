@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { editorReducer, emptyCore, saveDraft, loadDraft, clearDraft, draftKey, canEditSdfCore, canRestoreBrowserDraft } from '../lib/editor-state';
+import { editorReducer, emptyCore, saveDraft, loadDraft, clearDraft, draftKey, withSdfField, sameSdfRepresentation, canEditSdfCore, canRestoreBrowserDraft } from '../lib/editor-state';
 import { suggestionReducer, applySuggestionsToCore, demoSuggestions } from '../lib/suggestions';
 
 /** §5.1 六字段（对齐 SDF_CORE_FIELDS，合同测试本地常量避免跨包依赖）。 */
@@ -28,9 +28,7 @@ const core = () => ({
 
 describe('editorReducer', () => {
   it('keeps unsupported snapshots intact and refuses edits, including invalid new snapshots', () => {
-    for (const snapshot of [
-      { ...core(), schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'markdown' } },
-      { schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'invalid' } },
+    for (const snapshot of [       { schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'invalid' } },
       { ...core(), schemaVersion: '9.0.0' },
     ]) {
       const state = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: snapshot as ReturnType<typeof emptyCore>, version: 2, dirty: true });
@@ -89,15 +87,15 @@ describe('草稿持久化（§18.3）', () => {
   it('never replaces a retained browser draft with an unsupported snapshot', () => {
     saveDraft('ro-1', core());
     const before = localStorage.getItem(draftKey('ro-1'));
-    saveDraft('ro-1', { ...core(), schemaVersion: '0.2.0' });
+    saveDraft('ro-1', { ...core(), schemaVersion: '9.0.0' });
     expect(localStorage.getItem(draftKey('ro-1'))).toBe(before);
   });
 
   it('restores only a supported browser draft onto a supported server core', () => {
     const draft = { core: core(), savedAt: Date.now() };
     expect(canRestoreBrowserDraft(core(), draft)).toBe(true);
-    expect(canRestoreBrowserDraft({ ...core(), schemaVersion: '0.2.0' }, draft)).toBe(false);
-    expect(canRestoreBrowserDraft(core(), { ...draft, core: { ...core(), schemaVersion: '0.2.0' } })).toBe(false);
+    expect(canRestoreBrowserDraft({ ...core(), schemaVersion: '9.0.0' }, draft)).toBe(false);
+    expect(canRestoreBrowserDraft(core(), { ...draft, core: { ...core(), schemaVersion: '9.0.0' } })).toBe(false);
     expect(canRestoreBrowserDraft(core(), { ...draft, savedAt: Number.NaN })).toBe(false);
     expect(canRestoreBrowserDraft(core(), { ...draft, savedAt: Date.now() - 25 * 3600 * 1000 })).toBe(false);
   });
@@ -180,4 +178,38 @@ describe('合同测试：编辑器 core vs SDF_CORE_FIELDS（§21.1）', () => {
       expect(c[field]).toBe('');
     }
   });
+});
+
+describe('formatted author drafts', () => {
+  it('allows valid typed drafts to edit, persist and restore without dropping format', () => {
+    const formatted = { ...core(), schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'markdown' } };
+    expect(canEditSdfCore(formatted)).toBe(true);
+    const state = editorReducer({core: formatted,version: 2,dirty: false,lastSavedAt:null}, {type:'edit_field',field:'method',value:'New method'});
+    expect(state.core).toEqual({...formatted,method:'New method'});
+    saveDraft('formatted', state.core);
+    expect(loadDraft('formatted')?.core).toEqual(state.core);
+    expect(canRestoreBrowserDraft(formatted,loadDraft('formatted'))).toBe(true);
+  });
+  it('does not mark a format-only later edit clean when an earlier save returns', () => {
+    const before = {...core(),schemaVersion:'0.2.0',fieldFormats:{insight:'plain'}};
+    const after = {...before,fieldFormats:{insight:'markdown'}};
+    const state = editorReducer({core:after,version:2,dirty:true,lastSavedAt:null},{type:'saved',version:4,core:before});
+    expect(state.version).toBe(4);
+    expect(state.dirty).toBe(true);
+    expect(state.core).toEqual(after);
+  });
+  it('plain suggestion adoption clears only the changed field format', () => {
+    const formatted = {...core(),schemaVersion:'0.2.0',fieldFormats:{insight:'markdown',method:'markdown'}};
+    expect(applySuggestionsToCore(formatted,[{id:'plain',field:'insight',suggestion:'Plain finding',before:'I',status:'applied',source:'manual'}])).toEqual({...formatted,insight:'Plain finding',fieldFormats:{method:'markdown'}});
+  });
+});
+
+it('first explicit format ignores legacy opaque map and preserves every other field and ordinary extension',()=>{
+  const legacy={...core(),extra:{keep:true},fieldFormats:{method:'markdown',arbitrary:{keep:true}}};
+  const before=structuredClone(legacy);
+  const formatted=withSdfField(legacy,'insight','**I**','markdown');
+  expect(formatted).toEqual({...legacy,schemaVersion:'0.2.0',insight:'**I**',fieldFormats:{insight:'markdown'}});
+  expect(legacy).toEqual(before);
+  expect(sameSdfRepresentation({...formatted,fieldFormats:{}},{...formatted,fieldFormats:{insight:'plain'}})).toBe(true);
+  expect(sameSdfRepresentation(formatted,{...formatted,fieldFormats:{}})).toBe(false);
 });

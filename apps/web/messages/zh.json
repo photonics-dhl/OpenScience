@@ -657,6 +657,20 @@
     }
   },
   "editor": {
+    "formattedAnalysisNotice": "当前草稿含文字格式。请逐项采用分析建议，避免覆盖现有排版。",
+    "format": {
+      "changed": "内容已改变，请使用当前草稿继续编辑。",
+      "toolbar": "文字格式",
+      "bold": "加粗",
+      "italic": "斜体",
+      "list": "列表",
+      "link": "链接",
+      "undo": "撤销格式",
+      "url": "链接地址",
+      "insert": "插入链接",
+      "selectProse": "请选择公式以外的文字。",
+      "invalidUrl": "请输入网页、邮件或页内锚点地址。"
+    },
     "snapshotReadOnly": "此版本暂为只读，尚未开放文字格式编辑。",
     "reading": {
       "title": "研究内容",

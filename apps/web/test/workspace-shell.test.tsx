@@ -25,6 +25,9 @@ vi.mock('next-intl', () => ({
 
 import EditorLayout from '../components/editor/EditorLayout';
 import CoreEditor from '../components/editor/CoreEditor';
+import { readLocalEditorRepresentation, type LocalEditorRepresentation } from '../components/hermes/HermesAssistantDrawer';
+import type { WorkspaceGuidePayload } from '../lib/api';
+import { prepareScientificMarkdownSelection, scientificDisplaySelection, withoutInternalSourceMarkers } from '../components/content/ScientificText';
 import { SdfFieldContent } from '../components/content/SdfFieldContent';
 import ArtifactUploader from '../components/editor/ArtifactUploader';
 import { ArtifactRow } from '../components/research/ArtifactRow';
@@ -200,7 +203,7 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(markup).not.toContain('<textarea');
   });
 
-  it('reads explicit formatted snapshots without exposing a fresh edit surface', () => {
+  it('reads explicit formatted snapshots with author edit controls', () => {
     const core = { schemaVersion: '0.2.0', problem: 'Question', insight: '**Finding** and *qualification*\n\n- First\n- Second\n\n[Source](https://example.org) $E=mc^2$ [S12]', method: '**Literal method**', results: '', limitations: '', reproducibility: '', fieldFormats: { insight: 'markdown' as const } };
     const markup = renderToStaticMarkup(createElement(CoreEditor, { core, activeField: 'insight', onEdit: vi.fn(), onSelectField: vi.fn(), readFirst: true }));
     const semantic = markup.replace(/<\/?span\b[^>]*>/g, '');
@@ -212,7 +215,7 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(markup).not.toContain('[S12]');
     expect(markup).toContain('**Literal method**');
     expect(markup).not.toContain('<textarea');
-    expect(markup).not.toContain('<button');
+    expect(markup).toContain('<button');
   });
 
   it('leaves legacy same-map markup literal and neutralizes invalid or unsafe new content', () => {
@@ -240,4 +243,83 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(viewer).toContain('/api/artifacts/artifact/download');
     expect(viewer.match(/min-h-11/g)).toHaveLength(2);
   });
+});
+
+describe('first formatting keeps untouched scientific prose literal',()=>{
+  it('preserves literal markup, HTML and formula when only the last word is made bold',()=>{
+    const text=String.raw`literal **x** [y] <b>hello</b> \(x+y\) final`;
+    const selected=prepareScientificMarkdownSelection(text,text.indexOf('final'),text.length)!;
+    const changed=selected.value.slice(0,selected.start)+'**'+selected.value.slice(selected.start,selected.end)+'**';
+    const core={schemaVersion:'0.2.0',problem:'',insight:changed,method:'',results:'',limitations:'',reproducibility:'',fieldFormats:{insight:'markdown'}};
+    const html=renderToStaticMarkup(createElement(SdfFieldContent,{core,field:'insight'}));
+    expect(html).toContain('literal **x** [y] &lt;b&gt;hello&lt;/b&gt;');
+    expect(html).toMatch(/<strong>(?:<span[^>]*>)?final/);
+    expect(html).toContain('katex');
+    expect(html).not.toContain('<strong>x</strong>');
+  });
+  it('refuses a selection inside a formula',()=>{
+    const text=String.raw`word \(x+y\) tail`;
+    expect(prepareScientificMarkdownSelection(text,text.indexOf('x'),text.indexOf('y')+1)).toBeNull();
+  });
+});
+
+it('maps a visible formatting selection onto raw source without deleting hidden source tokens',()=>{
+  const raw=String.raw`Evidence [S12] \(x+y\) final`;
+  const display=raw.replace('[S12]','');
+  const selected=prepareScientificMarkdownSelection(raw,display.indexOf('final'),display.length,false,true)!;
+  const value=selected.value.slice(0,selected.start)+'**'+selected.value.slice(selected.start,selected.end)+'**'+selected.value.slice(selected.end);
+  expect(value).toContain('[S12]');
+  const core={schemaVersion:'0.2.0',problem:'',insight:value,method:'',results:'',limitations:'',reproducibility:'',fieldFormats:{insight:'markdown'}};
+  const html=renderToStaticMarkup(createElement(SdfFieldContent,{core,field:'insight'}));
+  expect(html).toMatch(/<strong>(?:<span[^>]*>)?final/);
+  expect(html).not.toContain('S12');
+  expect(html).toContain('katex');
+});
+
+it('keeps format custody in the same local submit and refuses another owner, recovered receipt or task on the same cell',()=>{
+  const payload:WorkspaceGuidePayload={goal:'Review this research',locale:'en',route:'research-object-edit',target:null,context:{tasks:[],researchObjects:[]}};
+  const core={schemaVersion:'0.2.0',problem:'P',insight:'I',method:'M',results:'R',limitations:'L',reproducibility:'RP',fieldFormats:{insight:'markdown'}};
+  const cell:{current:LocalEditorRepresentation|undefined}={current:{owner:'actorA:ro',payload,core}};
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{payload})).toBe(core);
+  // Same cell, no remount: another session or parsed durable body has no capture.
+  expect(readLocalEditorRepresentation(cell.current,'actorB:ro',{payload})).toBeUndefined();
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{payload:structuredClone(payload)})).toBeUndefined();
+  cell.current={...cell.current!,taskId:'local-task'};
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{taskId:'local-task'})).toBe(core);
+  expect(readLocalEditorRepresentation(cell.current,'actorB:ro',{taskId:'local-task'})).toBeUndefined();
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{taskId:'restored-task'})).toBeUndefined();
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{payload})).toBeUndefined();
+  cell.current=undefined;
+  expect(readLocalEditorRepresentation(cell.current,'actorA:ro',{taskId:'local-task'})).toBeUndefined();
+});
+
+it('keeps the selected word when raw formatting boundaries cross an unseen source marker',()=>{
+  const raw='Evidence&#32;[S12]&#32;**final**';
+  expect(raw.length).toBe(32);expect(withoutInternalSourceMarkers(raw).length).toBe(27);
+  expect(scientificDisplaySelection(raw,25,30)).toEqual({start:20,end:25});
+  const range=scientificDisplaySelection(raw,25,30);
+  expect(withoutInternalSourceMarkers(raw).slice(range.start,range.end)).toBe('final');
+  const next=prepareScientificMarkdownSelection(raw,range.start,range.end,true,true)!;
+  expect(next.value.slice(next.start,next.end)).toBe('final');
+  const previous='Evidence [S12] final';
+  expect(scientificDisplaySelection(previous,15,20)).toEqual({start:10,end:15});
+});
+
+it('maps consecutive italic and link label ranges while preserving math and source IDs',()=>{
+  let raw='Evidence&#32;[S12]&#32;**final**';
+  let display=scientificDisplaySelection(raw,25,30);
+  const italic=prepareScientificMarkdownSelection(raw,display.start,display.end,true,true)!;
+  raw=raw.slice(0,italic.start)+'*'+raw.slice(italic.start,italic.end)+'*'+raw.slice(italic.end);
+  display=scientificDisplaySelection(raw,italic.start+1,italic.end+1);
+  expect(withoutInternalSourceMarkers(raw).slice(display.start,display.end)).toBe('final');
+  const link=prepareScientificMarkdownSelection(raw,display.start,display.end,true,true)!;
+  const label=raw.slice(link.start,link.end);
+  raw=raw.slice(0,link.start)+'['+label+'](<https://example.org>)'+raw.slice(link.end);
+  display=scientificDisplaySelection(raw,link.start+1,link.start+1+label.length);
+  expect(withoutInternalSourceMarkers(raw).slice(display.start,display.end)).toBe('final');
+  expect(raw).toContain('[S12]');
+  const math=String.raw`Evidence \(x+[S12]\) [S3] final`;
+  const selection=scientificDisplaySelection(math,math.indexOf('final'),math.length);
+  expect(withoutInternalSourceMarkers(math).slice(selection.start,selection.end)).toBe('final');
+  expect(withoutInternalSourceMarkers(math)).toContain('[S12]');
 });

@@ -33,6 +33,8 @@ import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal,
   currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
+import { sameSdfRepresentation } from '@/lib/editor-state';
+import type { SdfCoreSnapshot } from '@/lib/api';
 import { SDF_FIELDS } from '@/lib/suggestions';
 import { ResearchPublicationPanel } from '@/components/research/ResearchPublicationPanel';
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
@@ -85,10 +87,23 @@ export async function createDrawerLiteratureIntent({
   };
 }
 
+export interface LocalEditorRepresentation {
+  owner: string; payload: WorkspaceGuidePayload; core: SdfCoreSnapshot; taskId?: string;
+}
+
+/** Local custody only: a recovered receipt never reconstructs a submit-time format. */
+export function readLocalEditorRepresentation(binding: LocalEditorRepresentation | undefined, owner: string,
+  expected: { payload: WorkspaceGuidePayload } | { taskId: string }): SdfCoreSnapshot | undefined {
+  if (!binding || binding.owner !== owner) return undefined;
+  if ('taskId' in expected) return binding.taskId === expected.taskId ? binding.core : undefined;
+  return binding.taskId === undefined && binding.payload === expected.payload ? binding.core : undefined;
+}
+
 export interface HermesAssistantDrawerProps {
   /** A live user-click action. Mounting, prefilling and restoration never invoke it. */
   onImageSubmitReady?(submit: (() => void) | null): void;
-  onPrepareVersion?(expected: WorkspaceGuidePayload['context']['editorDraft']): Promise<{ versionId: string; assertCurrent(): void }>;
+  editorRepresentation?: SdfCoreSnapshot;
+  onPrepareVersion?(expected: WorkspaceGuidePayload['context']['editorDraft'], representation?: SdfCoreSnapshot): Promise<{ versionId: string; assertCurrent(): void }>;
   open: boolean;
   onOpenChange(open: boolean): void;
   locale: 'zh' | 'en';
@@ -98,7 +113,7 @@ export interface HermesAssistantDrawerProps {
   route?: WorkspaceGuidePayload['route'];
   routeResearchObjectId?: string;
   target?: WorkspaceGuidePayload['target'];
-  onDraftEdit?(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace?: boolean): { applied: number; conflicts: number };
+  onDraftEdit?(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace?: boolean, representation?: SdfCoreSnapshot): { applied: number; conflicts: number };
   onUndoDraftEdit?(): void;
   /** Optional caller-provided text to prefill and route through the same Hermes conversation. */
   initialGoal?: string;
@@ -259,7 +274,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, sourceReview, onSourceCommand, onImageSubmitReady,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, editorRepresentation, sourceReview, onSourceCommand, onImageSubmitReady,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -283,10 +298,18 @@ function HermesAssistantDrawerContent({
   const assertPrepared = useRef<(() => void) | null>(null);
   const currentDraft = useRef(dashboardContext.editorDraft); currentDraft.current = dashboardContext.editorDraft;
   const submittedDraft = useRef<WorkspaceGuidePayload['context']['editorDraft']>();
+  const submittedRepresentation = useRef<LocalEditorRepresentation>();
+  const pendingRepresentation = useRef<LocalEditorRepresentation>();
+  const offeredRepresentation = useRef<SdfCoreSnapshot>();
+  const clearLocalRepresentations = () => {
+    pendingRepresentation.current = undefined; submittedRepresentation.current = undefined; offeredRepresentation.current = undefined;
+  };
+  const currentRepresentation = useRef(editorRepresentation); currentRepresentation.current = editorRepresentation;
   const submittedPresentationVersion = useRef('');
   const actionScopeIsCurrent = () => {
     try { assertPrepared.current?.(); } catch { return false; }
     const base = offeredDraft.current; const current = currentDraft.current;
+    if (offeredRepresentation.current && (!currentRepresentation.current || !sameSdfRepresentation(offeredRepresentation.current, currentRepresentation.current))) return false;
     return !base || Boolean(current && base.researchObjectId === current.researchObjectId && base.scope === current.scope && SDF_FIELDS.every((field) => base.core[field] === current.core[field]));
   };
   const viewerId = useHermesViewerId();
@@ -535,7 +558,7 @@ function HermesAssistantDrawerContent({
     if (!task || !result?.draftEdit || !onDraftEdit || restoredTask || dismissedInitialTask.current === task.id
       || (task.id === initialTaskId && !initialTaskAutoApply) || appliedTasks.current.has(task.id)) return;
     appliedTasks.current.add(task.id);
-    setEditOutcome(onDraftEdit(result.draftEdit));
+    setEditOutcome(onDraftEdit(result.draftEdit, false, readLocalEditorRepresentation(submittedRepresentation.current, currentOwner, { taskId: task.id })));
     if (task.id === initialTaskId && initialTaskAutoApply) onInitialTaskConsumed?.();
   }, [initialTaskAutoApply, initialTaskId, onDraftEdit, onInitialTaskConsumed, result, restoredTask, task]);
   useEffect(() => {
@@ -560,10 +583,11 @@ function HermesAssistantDrawerContent({
     : undefined;
 
   useEffect(() => {
+    clearLocalRepresentations();
     appliedTasks.current.clear(); setEditOutcome(null);
     preparedTasks.current.clear(); setTurns([]); setSentGoal(''); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false); setWritingDraft(null); setWritingDirty(false);
-    setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
+    setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; offeredRepresentation.current = undefined; assertPrepared.current = null;
     sessionId.current = null; sessionKey.current = null; sessionCreation.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; writingSaveGoal.current = ''; latestWritingTask.current = null; displayOnlyWritingTasks.current.clear(); setActionBusy(false);
     deletedSessions.current.clear(); deletedTasks.current.clear(); suppressAutoRestore.current = false;
   }, [currentOwner]);
@@ -579,12 +603,13 @@ function HermesAssistantDrawerContent({
         if (writingDraft?.taskId === id) { setWritingDraft(null); setWritingDirty(false); latestWritingTask.current = null; }
       }
       if (!removesCurrent) return;
+      clearLocalRepresentations();
       suppressAutoRestore.current = true;
       setTask(null); setRestoredTask(true); setError(''); setSentGoal('');
       if (detail.kind === 'session') { setTurns([]); sessionId.current = null; sessionKey.current = null; sessionCreation.current = null; taskKey.current = null; }
       // A removed conversation retains its adopted writing output. Only deleting that task clears it.
       setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
-      offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
+      offeredAction.current = null; offeredDraft.current = undefined; offeredRepresentation.current = undefined; assertPrepared.current = null;
       pendingPayload.current = null; submittingRef.current = false; setSubmitting(false); setActionBusy(false); setPreparing(false);
       setLocalMessage(tc('contentRemoved'));
     };
@@ -599,6 +624,7 @@ function HermesAssistantDrawerContent({
     const pendingVersion = pendingPayload.current?.executionIntent === 'first-image'
       ? pendingPayload.current.context.presentation?.versionId : undefined;
     if (submittingRef.current || !pendingVersion || pendingVersion === firstImageViewVersion) return;
+    clearLocalRepresentations();
     // Keep the original receipt under its original version; never reuse it in this one.
     pendingPayload.current = null; taskKey.current = null; sessionId.current = null; sessionKey.current = null;
     setSentGoal(''); setTask(null); setError('');
@@ -631,7 +657,7 @@ function HermesAssistantDrawerContent({
     setPreparing(true);
     void (async () => {
       try {
-        const prepared = onPrepareVersion ? await onPrepareVersion(base) : null;
+        const prepared = onPrepareVersion ? await onPrepareVersion(base, readLocalEditorRepresentation(submittedRepresentation.current, owner, { taskId: task.id })) : null;
         const version = prepared?.versionId || scopedPresentationDraft?.versionId || requestedVersion || resolvedGuideVersion;
         if (ownerRef.current !== owner) return;
         if (!version) throw new Error(tc('prepareVersionFailed'));
@@ -640,6 +666,7 @@ function HermesAssistantDrawerContent({
         prepared?.assertCurrent();
         assertPrepared.current = prepared?.assertCurrent ?? null;
         offeredDraft.current = base;
+        offeredRepresentation.current = readLocalEditorRepresentation(submittedRepresentation.current, owner, { taskId: task.id });
         if (scopedPresentationDraft) {
           setPresentationSuggestion({ ...scopedPresentationDraft, versionId: version });
           setPresentationIntent({ action: scopedPresentationDraft.action, instruction: scopedPresentationDraft.instruction });
@@ -692,6 +719,10 @@ function HermesAssistantDrawerContent({
           ? loadPendingFirstImageSubmission(draftStorage, { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: firstImageViewVersion }) : null;
       } catch { setError(tc('firstImage.storageError')); return; }
       if (savedImage && !savedImage.taskId && !initialTaskId) {
+        // A same-instance unknown POST keeps its original in-memory payload and format.
+        if (pendingPayload.current && savedImage.key === taskKey.current && savedImage.sessionId === sessionId.current
+          && readLocalEditorRepresentation(pendingRepresentation.current, currentOwner, { payload: pendingPayload.current })) return;
+        clearLocalRepresentations();
         sessionId.current = savedImage.sessionId; taskKey.current = savedImage.key; pendingPayload.current = savedImage.payload;
         setGoal(savedImage.payload.goal); setSentGoal(savedImage.payload.goal); setError(tc('firstImage.uncertain'));
         return;
@@ -717,6 +748,7 @@ function HermesAssistantDrawerContent({
           }
           const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, exactTaskId);
           if (restored) {
+            clearLocalRepresentations();
             if (savedImage) setSentGoal(savedImage.payload.goal);
             if (restoredWriting && restored.id !== restoredWriting.id) displayOnlyWritingTasks.current.add(restored.id);
             sessionId.current = restored.sessionId;
@@ -821,9 +853,11 @@ function HermesAssistantDrawerContent({
             || (run && (run.actorId !== viewerId || run.researchObjectId !== routeResearchObjectId || run.versionId !== entryVersion)))
             throw new Error(tc('firstImage.scopeChanged'));
           if (run?.status !== 'succeeded') {
+            clearLocalRepresentations();
             sessionId.current = saved.sessionId; setSentGoal(saved.payload.goal); setTask(original); return;
           }
         } else if (saved) {
+          clearLocalRepresentations();
           sessionId.current = saved.sessionId; taskKey.current = saved.key; pendingPayload.current = saved.payload;
           setGoal(saved.payload.goal); setSentGoal(saved.payload.goal); throw new Error(tc('firstImage.uncertain'));
         }
@@ -847,13 +881,14 @@ function HermesAssistantDrawerContent({
       if (!pendingPayload.current && route === 'research-object-edit' && routeResearchObjectId
         && isExplicitFirstImageRequest(normalized)) {
         if (normalized.length > 1000) throw new Error(tc('firstImage.tooLong'));
-        const prepared = onPrepareVersion ? await onPrepareVersion(dashboardContext.editorDraft) : null;
+        const prepared = onPrepareVersion ? await onPrepareVersion(dashboardContext.editorDraft, editorRepresentation) : null;
         if (ownerRef.current !== owner) return;
         prepared?.assertCurrent();
         firstImageVersion = prepared?.versionId || dashboardContext.presentation?.versionId || requestedVersion || undefined;
         if (!firstImageVersion) throw new Error(tc('prepareVersionFailed'));
         setFirstImageVersionBinding({ scope: versionScope, versionId: firstImageVersion });
       }
+      const freshPayload = !pendingPayload.current;
       pendingPayload.current ??= {
         goal: normalized, locale, route, target,
         ...(firstImageVersion ? { executionIntent: 'first-image' as const } : {}),
@@ -874,7 +909,10 @@ function HermesAssistantDrawerContent({
           } } : {}),
         },
       };
+      if (freshPayload) pendingRepresentation.current = editorRepresentation
+        ? { owner, payload: pendingPayload.current, core: structuredClone(editorRepresentation) } : undefined;
       submittedDraft.current = pendingPayload.current.context.editorDraft;
+      submittedRepresentation.current = undefined;
       submittedPresentationVersion.current = pendingPayload.current.context.presentation?.versionId ?? '';
       const submission = {
         sessionId: guideSessionId,
@@ -895,6 +933,9 @@ function HermesAssistantDrawerContent({
         { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload, taskId: response.task.id }))
         throw new Error(tc('firstImage.storageError'));
       if (!imageVersionIsCurrent()) return;
+      const localCore = readLocalEditorRepresentation(pendingRepresentation.current, owner, { payload: submission.payload });
+      submittedRepresentation.current = localCore && pendingRepresentation.current
+        ? { ...pendingRepresentation.current, taskId: response.task.id } : undefined;
       setTask(response.task);
       setRestoredTask(false);
       if (!savesWritingDraft) {
@@ -903,10 +944,11 @@ function HermesAssistantDrawerContent({
       }
       taskKey.current = null;
       pendingPayload.current = null;
+      pendingRepresentation.current = undefined;
     } catch (cause) {
       if (ownerRef.current !== owner) return;
       if (cause instanceof ApiClientError && cause.status >= 400 && cause.status < 500 && ![408, 429].includes(cause.status)) {
-        taskKey.current = null; pendingPayload.current = null;
+        taskKey.current = null; pendingPayload.current = null; clearLocalRepresentations();
         if ([401, 403, 404].includes(cause.status)) { sessionId.current = null; sessionKey.current = null; }
       }
       setError(cause instanceof Error ? cause.message : t('guide.error'));
@@ -972,7 +1014,7 @@ function HermesAssistantDrawerContent({
               <details><summary>{tw('viewChanges')}</summary>
                 {Object.entries(result.draftEdit.changes).map(([field, value]) => <div className="hermes-conversation-field" key={field}>
                   <h4>{fieldLabel(field)}</h4><ScientificText as="p">{value}</ScientificText>
-                  {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts) || (!editOutcome && task && appliedTasks.current.has(task.id))) && <button type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true))}>{tw('useField')}</button>}
+                  {onDraftEdit && (restoredTask || Boolean(editOutcome?.conflicts) || (!editOutcome && task && appliedTasks.current.has(task.id))) && <button type="button" onClick={() => setEditOutcome(onDraftEdit({ ...result.draftEdit!, changes: { [field]: value } }, true, readLocalEditorRepresentation(submittedRepresentation.current, currentOwner, { taskId: task?.id ?? '' })))}>{tw('useField')}</button>}
                 </div>)}
               </details>
             </div>}

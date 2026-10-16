@@ -967,7 +967,7 @@ export async function getResearchObject(id: string, options: ReadOptions = {}): 
 }
 
 /** 更新 SDF（乐观锁 version，§16）。 */
-export async function updateSdf(roId: string, version: number, core: SdfCore): Promise<{ sdf: { core: SdfCore } }> {
+export async function updateSdf(roId: string, version: number, core: SdfCore): Promise<{ sdf: { core: SdfCoreSnapshot; version: number } }> {
   return request(`/api/sdf/${roId}`, { method: 'PUT', body: JSON.stringify({ version, core }) });
 }
 

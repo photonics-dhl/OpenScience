@@ -657,6 +657,20 @@
     }
   },
   "editor": {
+    "formattedAnalysisNotice": "This draft has text formatting. Adopt analysis suggestions individually to keep the current formatting.",
+    "format": {
+      "changed": "The draft changed. Continue editing the current content.",
+      "toolbar": "Text formatting",
+      "bold": "Bold",
+      "italic": "Italic",
+      "list": "List",
+      "link": "Link",
+      "undo": "Undo format",
+      "url": "Link address",
+      "insert": "Insert link",
+      "selectProse": "Select some text outside a formula.",
+      "invalidUrl": "Use an https, http, mailto or page anchor address."
+    },
     "snapshotReadOnly": "This version is read-only. Text-format editing is not available yet.",
     "reading": {
       "title": "Research content",

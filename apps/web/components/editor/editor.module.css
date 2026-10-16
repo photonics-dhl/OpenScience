@@ -304,3 +304,16 @@
   .mathSurface,
   .outline li > button { transition: none; }
 }
+
+.proseEditor { min-width: 0; border: 1px solid var(--border-subtle, #dbe6e9); border-radius: 5px; background: var(--surface, #fff); }
+.formatToolbar { display: flex; align-items: center; gap: .25rem; padding: .4rem .65rem; border-bottom: 1px solid var(--border-subtle, #dbe6e9); }
+.formatToolbar button { min-width: 2rem; min-height: 2rem; padding: .25rem .5rem; border: 0; background: transparent; color: inherit; border-radius: 3px; cursor: pointer; }
+.formatToolbar button:hover:not(:disabled) { background: #edf6f6; }
+.formatToolbar button:focus-visible { outline: 2px solid #08798b; outline-offset: 2px; }
+.formatToolbar button:disabled { opacity: .4; cursor: default; }
+.linkEditor { display: flex; align-items: end; flex-wrap: wrap; gap: .5rem; padding: .65rem; }
+.linkEditor label { display: grid; gap: .3rem; flex: 1; }
+.linkEditor input { min-width: 0; width: 100%; padding: .5rem; border: 1px solid #c5d9df; border-radius: 3px; font: inherit; }
+.proseEditor > p { font-size: .875rem; color: #6a5260; padding: 0 .8rem; }
+
+@media (max-width: 640px) { .formatToolbar button { min-height: 2.75rem; min-width: 2.75rem; } }

@@ -1,4 +1,5 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest, type FastifyReply, type FastifyInstance } from 'fastify';
+import { registerResearchObjectRoutes } from '../src/routes/research-objects';
 import { getBlobStorageKey } from '@openscience/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -239,4 +240,48 @@ describe('frozen research record real HTTP routes', () => {
     await validator.close();
     expect(validation.statusCode, validation.body).toBe(200);
   });
+});
+
+describe('formatted author HTTP writes', () => {
+  it('PUT keeps typed format and returns the actual advanced RO revision, while old history stays frozen', async()=>{
+    const f=await fixture();
+    const before=structuredClone(f.db.versionManifests[0]);
+    const version=f.db.researchObjects[0].version;
+    const core={...f.core,schemaVersion:'0.2.0',insight:'**Finding**',fieldFormats:{insight:'markdown'}};
+    const saved=await f.app.inject({method:'PUT',url:`/sdf/${RO}`,cookies:f.cookies,payload:{version,core}});
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().sdf).toMatchObject({version:version+1,core});
+    expect(f.db.versionManifests[0]).toEqual(before);
+    const direct=await f.app.inject({method:'POST',url:`/research-objects/${RO}/commits`,cookies:f.cookies,headers:{'idempotency-key':'format-http'},payload:{version:saved.json().sdf.version,message:'Keep format',sdfCore:core,artifacts:[{artifactId:ARTIFACT,logicalPath:'source.txt'}]}});
+    expect(direct.statusCode).toBe(201);
+    expect(f.db.sdfDocuments[0].coreJson).toEqual(core);
+  });
+  it.each([{schemaVersion:'0.3.0'},{schemaVersion:'0.2.0',fieldFormats:{insight:'html'}}])('rejects invalid format and future versions without writes: %j',async invalid=>{
+    const f=await fixture();const before=structuredClone(f.db);
+    const response=await f.app.inject({method:'PUT',url:`/sdf/${RO}`,cookies:f.cookies,payload:{version:f.db.researchObjects[0].version,core:{...f.core,...invalid}}});
+    expect(response.statusCode).toBe(400);expect(f.db).toEqual(before);
+  });
+});
+
+it('registered SDF PUT persists exact legacy opaque undo after the first formatted save',async()=>{
+  const {prisma,db}=createFakePrisma();const user=seedUser(db);const redis=createFakeRedis();
+  const original={schemaVersion:'0.1.0',problem:'P',insight:'Evidence [S12] final',method:'M',results:'R',limitations:'L',reproducibility:'RP',fieldFormats:{arbitrary:{keep:true}}};
+  db.workspaces.push({id:'workspace',type:'team',status:'active',ownerId:user.id,name:'Lab'});
+  db.memberships.push({id:'member',workspaceId:'workspace',userId:user.id,role:'author'});
+  db.researchObjects.push({id:RO,workspaceId:'workspace',title:'Undo',version:1,status:'draft',visibility:'private'});
+  db.sdfDocuments.push({id:'sdf',researchObjectId:RO,coreJson:structuredClone(original)});
+  for(const nodeType of ['problem','insight','method','results','limitations','reproducibility'])db.sdfNodes.push({id:nodeType,sdfDocumentId:'sdf',nodeType,content:''});
+  let handler: ((req:FastifyRequest,reply:FastifyReply)=>Promise<unknown>)|undefined;
+  const routeSurface={get:()=>{},post:()=>{},patch:()=>{},put:(url:string,callback:typeof handler)=>{if(url==='/sdf/:roId')handler=callback;}};
+  registerResearchObjectRoutes(routeSurface as unknown as FastifyInstance,{prisma,redis,mailer:createFakeMailer()});
+  const cookies={openscience_session:await createSession(redis,{userId:user.id,status:'email_verified'})};
+  const invoke=(core:unknown,version:number)=>handler!({id:'undo-route',params:{roId:RO},cookies,body:{core,version},ip:'127.0.0.1'} as unknown as FastifyRequest,{send:(value:unknown)=>value} as unknown as FastifyReply);
+  const formatted={...original,schemaVersion:'0.2.0',insight:'**final**',fieldFormats:{insight:'markdown'}};
+  expect(await invoke(formatted,1)).toMatchObject({sdf:{core:formatted,version:3}});
+  expect(await invoke(original,3)).toMatchObject({sdf:{core:original,version:4}});
+  expect(db.sdfDocuments[0].coreJson).toEqual(original);
+  expect(db.versionManifests[0].coreJson).toEqual(original);
+  await expect(invoke({...formatted,fieldFormats:{insight:'html'}},4)).rejects.toThrow();
+  await expect(invoke({...original,schemaVersion:'0.3.0'},4)).rejects.toThrow();
+  expect(db.researchObjects[0].version).toBe(4);
 });

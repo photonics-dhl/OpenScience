@@ -1,4 +1,5 @@
 'use client';
+import type { SdfFieldFormat } from '@openscience/sdf-schema';
 import { ResearchTypeLabel } from '@/components/research/ResearchTypeLabel';
 import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 
@@ -53,6 +54,10 @@ import { startIngestionReviewPolling } from '../../../../lib/ingestion-review-po
 import {
   clearDraft,
   canEditSdfCore,
+  sameSdfRepresentation,
+  sdfRepresentationSignature,
+  sdfFieldFormat,
+  withSdfField,
   canRestoreBrowserDraft,
   editorReducer,
   emptyCore,
@@ -210,7 +215,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const activeWrite = useRef<Promise<unknown> | null>(null);
   const prepareVersionIntent = useRef<PrepareVersionIntent | null>(null);
   const confirmedSnapshot = useRef<SdfCore | null>(null);
-  const lastHermesEdit = useRef<WorkspaceGuideResult['draftEdit']>(undefined);
+  const lastHermesEdit = useRef<{ before: SdfCoreSnapshot; after: SdfCoreSnapshot; fields: SdfField[]; scope: string; version: number }>();
   const [suggestions, dispatchSuggestions] = useReducer(suggestionReducer, []);
   const [artifacts, setArtifacts] = useState<ArtifactReference[]>([]);
   const currentArtifacts = useRef(artifacts); currentArtifacts.current = artifacts;
@@ -260,7 +265,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       if (!active || record.objectId !== roId || record.versionId !== versionId) return;
       confirmedSnapshot.current = record.sdf;
       setReadingRecord(record);
-      setNeedsConfirmation(SDF_FIELDS.some((field) => currentCore.current[field] !== record.sdf[field]));
+      setNeedsConfirmation(!sameSdfRepresentation(currentCore.current, record.sdf));
       setCheckedSnapshotVersion(versionId);
     }).catch(() => { if (active) setNeedsConfirmation(true); });
     return () => { active = false; };
@@ -334,7 +339,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         const draft = loadDraft(roId);
         if (canRestoreBrowserDraft(core, draft)) {
           setDraftPrompt(true);
-          dispatch({ type: 'init', core: draft.core, version: ro.researchObject.version, dirty: SDF_FIELDS.some((field) => draft.core[field] !== core[field]) });
+          dispatch({ type: 'init', core: draft.core, version: ro.researchObject.version, dirty: !sameSdfRepresentation(draft.core, core) });
         } else {
           setDraftPrompt(false);
           dispatch({ type: 'init', core, version: ro.researchObject.version });
@@ -471,13 +476,14 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       type: 'init',
       core: editorCore,
       version,
-      dirty: SDF_FIELDS.some((field) => editorCore[field] !== authoritativeCore[field]),
+      dirty: !sameSdfRepresentation(editorCore, authoritativeCore),
     });
   }
 
   async function confirmIngestionProposal() {
     if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     if (!ingestionProposal || confirmingIngestion) return;
+    if (currentCore.current.schemaVersion === '0.2.0') { setIngestionMessage(t('formattedAnalysisNotice')); return; }
     const frozen = confirmationIntent ?? ingestionProposal;
     setConfirmationIntent(frozen);
     setConfirmingIngestion(true);
@@ -677,7 +683,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     }
     if (!editorLoaded || ingestionWriteBlocked.current || !currentCoreIsWritable()) return;
     const frozenCore = { ...currentCore.current };
-    if (SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field])) return;
+    if (sameSdfRepresentation(frozenCore, serverCore.current)) return;
     const baseVersion = serverVersion.current;
     let run: Promise<void> | undefined = undefined;
     run = (async (): Promise<void> => {
@@ -685,13 +691,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setServerSaveState('saving');
       setErrorMsg(null);
       try {
-        await updateSdf(roId, baseVersion, frozenCore);
+        const saved = await updateSdf(roId, baseVersion, frozenCore);
         serverCore.current = frozenCore;
-        serverVersion.current = baseVersion + 1;
-        const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
-        dispatch({ type: 'saved', version: baseVersion + 1, core: frozenCore });
+        serverVersion.current = saved.sdf.version;
+        const unchanged = sameSdfRepresentation(currentCore.current, frozenCore);
+        dispatch({ type: 'saved', version: saved.sdf.version, core: frozenCore });
         setNeedsConfirmation(!confirmedSnapshot.current
-          || SDF_FIELDS.some((field) => currentCore.current[field] !== confirmedSnapshot.current![field]));
+          || !sameSdfRepresentation(currentCore.current, confirmedSnapshot.current!));
         if (unchanged) clearDraft(roId);
         setServerSaveState(unchanged ? 'saved' : 'dirty');
       } catch (cause) {
@@ -833,11 +839,18 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }, [hermesRouteState, hermesStage]);
   useEffect(() => () => hermesStage?.setRouteState('idle'), [hermesStage]);
 
-  function editField(field: FieldKey, value: string) {
+  function editField(field: FieldKey, value: string, format?: SdfFieldFormat) {
     if (historyRestoring.current || !currentCoreIsWritable()) return;
-    currentCore.current = { ...currentCore.current, [field]: value };
+    currentCore.current = withSdfField(currentCore.current, field, value, format);
     saveDraft(roId, currentCore.current);
-    dispatch({ type: 'edit_field', field, value });
+    dispatch({ type: 'edit_field', field, value, format });
+  }
+
+  function restoreFormatting(core: SdfCoreSnapshot) {
+    if (historyRestoring.current || !currentCoreIsWritable()) return;
+    currentCore.current = core;
+    saveDraft(roId, core);
+    dispatch({ type: 'init', core, version: serverVersion.current, dirty: !sameSdfRepresentation(core, serverCore.current) });
   }
 
   const draftCore = ingestionProposal?.core ?? state.core;
@@ -847,30 +860,34 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     researchObjectId: roId, scope: draftScope, version: state.version,
     core: Object.fromEntries(SDF_FIELDS.map(field => [field, typeof draftCore[field] === 'string' ? draftCore[field] : ''])) as Omit<SdfCore, 'schemaVersion'>,
   };
-  function applyHermesEdit(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace = false) {
+  function applyHermesEdit(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace = false, representation?: SdfCoreSnapshot) {
     const changed = SDF_FIELDS.filter((field) => typeof edit.changes[field] === 'string');
     if (!currentCoreIsWritable()) return { applied: 0, conflicts: changed.length };
     if (!editorLoaded || historyOpenRef.current || historyRestoring.current || confirmingIngestion || confirmationIntent || writingDraft.current || edit.base.researchObjectId !== roId || edit.base.scope !== draftScope || edit.base.version !== state.version) return { applied: 0, conflicts: changed.length };
     const applied: typeof edit.changes = {};
-    const base = { ...editorDraft, core: { ...editorDraft.core } };
+    const before = structuredClone(draftCore);
     let conflicts = 0;
     for (const field of changed) {
-      if (!replace && draftCore[field] !== edit.base.core[field]) { conflicts++; continue; }
+      if (!replace && (draftCore[field] !== edit.base.core[field] || (representation ? sdfFieldFormat(draftCore, field) !== sdfFieldFormat(representation, field) || draftCore.schemaVersion !== representation.schemaVersion : draftCore.schemaVersion === '0.2.0'))) { conflicts++; continue; }
       const value = edit.changes[field]!;
       if (value === draftCore[field]) continue;
       applied[field] = value;
-      if (ingestionProposal) editIngestionProposal(field, value); else editField(field, value);
+      if (ingestionProposal) editIngestionProposal(field, value); else editField(field, value, 'plain');
     }
-    if (Object.keys(applied).length) lastHermesEdit.current = { base, changes: applied };
+    if (Object.keys(applied).length) lastHermesEdit.current = { before, after: structuredClone(ingestionProposal ? { ...draftCore, ...applied } : currentCore.current), fields: Object.keys(applied) as SdfField[], scope: draftScope, version: state.version };
     return { applied: Object.keys(applied).length, conflicts };
   }
   function undoHermesEdit() {
     if (!currentCoreIsWritable()) return;
     const last = lastHermesEdit.current;
-    if (!last || last.base.scope !== draftScope || last.base.version !== state.version) return;
-    for (const field of SDF_FIELDS) if (last.changes[field] !== undefined && draftCore[field] === last.changes[field]) {
-      if (ingestionProposal) editIngestionProposal(field, last.base.core[field]); else editField(field, last.base.core[field]);
+    if (!last || last.scope !== draftScope) return;
+    let restored = currentCore.current;
+    for (const field of last.fields) if (draftCore.schemaVersion === last.after.schemaVersion && draftCore[field] === last.after[field]
+      && sdfFieldFormat(draftCore, field) === sdfFieldFormat(last.after, field)) {
+      if (ingestionProposal) editIngestionProposal(field, last.before[field]);
+      else restored = withSdfField(restored, field, last.before[field], sdfFieldFormat(last.before, field));
     }
+    if (!ingestionProposal) restoreFormatting(restored);
     lastHermesEdit.current = undefined;
   }
 
@@ -893,10 +910,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const applied = suggestionReducer(revised, { type: 'apply', id });
     dispatchSuggestions({ type: 'revise', id, suggestion: value });
     dispatchSuggestions({ type: 'apply', id });
-    const next = applySuggestionsToCore(state.core, applied);
-    for (const [k, v] of Object.entries(next) as [FieldKey, string][]) {
-      if (v !== state.core[k]) dispatch({ type: 'edit_field', field: k, value: v });
-    }
+    const next = applySuggestionsToCore(state.core, applied.filter(item => item.id === id));
+    currentCore.current = next;
+    dispatch({ type: 'init', core: next, version: state.version, dirty: !sameSdfRepresentation(next, serverCore.current) });
     saveDraft(roId, next);
     advanceReview(id);
   }
@@ -991,20 +1007,22 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setActiveExtraction(run);
   }
 
-  const prepareVersion = useCallback(async (expected: EditorDraft): Promise<PreparedVersion> => {
+  const prepareVersion = useCallback(async (expected: EditorDraft, representation?: SdfCoreSnapshot): Promise<PreparedVersion> => {
     if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     if (historyOpenRef.current || historyRestoring.current) throw new Error(th('busyDraft'));
     if (!expected) throw new Error(tw('versionMismatch'));
+    const expectedCore = representation ?? { ...currentCore.current, ...expected.core };
+    if ((!representation && currentCore.current.schemaVersion === '0.2.0') || !SDF_FIELDS.every(field => expectedCore[field] === expected.core[field])) throw new Error(tw('versionMismatch'));
     if (expected.researchObjectId !== roId || expected.scope !== 'sdf') throw new Error(tw('versionMismatch'));
     const inFlightPrepare = prepareVersionIntent.current;
     if (inFlightPrepare?.promise) {
       const currentSignature = JSON.stringify([
         expected.researchObjectId,
         serverVersion.current,
-        SDF_FIELDS.map((field) => expected.core[field]),
+        sdfRepresentationSignature(expectedCore),
         currentArtifacts.current.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
       ]);
-      const sameCore = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+      const sameCore = sameSdfRepresentation(expectedCore, currentCore.current);
       if (!sameCore || currentSignature !== inFlightPrepare.signature) throw new Error(tw('versionMismatch'));
       return inFlightPrepare.promise;
     }
@@ -1015,16 +1033,16 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         const currentSignature = JSON.stringify([
           expected.researchObjectId,
           serverVersion.current,
-          SDF_FIELDS.map((field) => expected.core[field]),
+          sdfRepresentationSignature(expectedCore),
           currentArtifacts.current.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
         ]);
-        const sameCore = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+        const sameCore = sameSdfRepresentation(expectedCore, currentCore.current);
         if (!sameCore || currentSignature !== concurrentPrepare.signature) throw new Error(tw('versionMismatch'));
         return concurrentPrepare.promise;
       }
       await pending;
     }
-    const coreMatches = SDF_FIELDS.every((field) => expected.core[field] === currentCore.current[field]);
+    const coreMatches = sameSdfRepresentation(expectedCore, currentCore.current);
     if (!editorLoaded || !coreMatches) throw new Error(tw('versionMismatch'));
     if (ingestionWriteBlocked.current) {
       throw new Error(t('ingestionProposalBody'));
@@ -1036,20 +1054,20 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const assertCurrent = () => {
       const coreIsCurrent = currentCoreIsWritable() && expected.researchObjectId === roId
         && expected.scope === 'sdf'
-        && SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
+        && sameSdfRepresentation(currentCore.current, frozenCore);
       const currentArtifactList = currentArtifacts.current;
       const artifactsAreCurrent = currentArtifactList.length === frozenArtifacts.length
         && frozenArtifacts.every((artifact, index) => artifact.artifactId === currentArtifactList[index]?.artifactId
           && artifact.logicalPath === currentArtifactList[index]?.logicalPath);
       if (!coreIsCurrent || !artifactsAreCurrent) throw new Error(tw('versionMismatch'));
     };
-    const coreSavedToServer = SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field]);
+    const coreSavedToServer = sameSdfRepresentation(frozenCore, serverCore.current);
     const savedArtifactList = currentCommittedArtifacts.current;
     const artifactsSavedToServer = savedArtifactList.length === frozenArtifacts.length
       && frozenArtifacts.every((artifact, index) => artifact.artifactId === savedArtifactList[index]?.artifactId
         && artifact.logicalPath === savedArtifactList[index]?.logicalPath);
     if (versions[0] && versions[0].publicationNo == null && snapshotReady && coreSavedToServer && artifactsSavedToServer && !needsConfirmation
-      && confirmedSnapshot.current && SDF_FIELDS.every((field) => confirmedSnapshot.current![field] === expected.core[field])) {
+      && confirmedSnapshot.current && sameSdfRepresentation(confirmedSnapshot.current!, frozenCore)) {
       assertCurrent();
       return { versionId: versions[0].versionId, assertCurrent };
     }
@@ -1057,7 +1075,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const signature = JSON.stringify([
       expected.researchObjectId,
       baseVersion,
-      SDF_FIELDS.map((field) => expected.core[field]),
+      sdfRepresentationSignature(expectedCore),
       frozenArtifacts.map((artifact) => [artifact.artifactId, artifact.logicalPath]),
     ]);
     const previous = prepareVersionIntent.current;
@@ -1077,8 +1095,8 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           sdfCore: frozenCore,
           artifacts: frozenArtifacts,
         }, intent.idempotencyKey);
-        const nextObjectVersion = baseVersion + 1;
-        const unchanged = SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
+        const nextObjectVersion = result.commit.versionNo + 1;
+        const unchanged = sameSdfRepresentation(currentCore.current, frozenCore);
         setCommittedArtifacts(frozenArtifacts);
         serverCore.current = frozenCore;
         serverVersion.current = nextObjectVersion;
@@ -1132,7 +1150,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     setServerSaveState('saved');
     dispatch({ type: 'init', core: serverCore.current, version: serverVersion.current });
     currentCore.current = serverCore.current;
-    setNeedsConfirmation(!confirmedSnapshot.current || SDF_FIELDS.some((field) => serverCore.current[field] !== confirmedSnapshot.current![field]));
+    setNeedsConfirmation(!confirmedSnapshot.current || !sameSdfRepresentation(serverCore.current, confirmedSnapshot.current!));
     setDraftPrompt(false);
   }
 
@@ -1298,7 +1316,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           <div className={styles.document}>
             {contentReadOnly ? <p className={styles.notice} role="status" data-sdf-snapshot-read-only="true">{t('snapshotReadOnly')}</p> : null}
             {(activeView === 'contribution' || draftPrompt || historyMessage || errorMsg) ? <section className={styles.leadSection} aria-label={tw('contribution')}>
-              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} readFirst /> : null}
+              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} onRestoreCore={restoreFormatting} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} readFirst /> : null}
               {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
@@ -1335,7 +1353,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <section className={`${styles.contentSection} ${activeView !== 'content' && activeView !== 'materials' ? styles.viewPanelHidden : ''}`} id="workbench-content" data-workbench-section="content" aria-hidden={activeView === 'content' || activeView === 'materials' ? undefined : true}>
 
             {activeView === 'content' && ingestionReviewActive && <button type="button" className={styles.secondaryButton} onClick={() => { setHermesOpen(true); if (sourceReviewRef.current) sourceReviewRef.current.open = true; }}>{th('reviewInHermes')}</button>}
-            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} readFirst chapterNavigation /> : null}
+            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} onRestoreCore={restoreFormatting} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} readFirst chapterNavigation /> : null}
 
             {activeView === 'content' && readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
 
@@ -1432,6 +1450,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               taskRestoreReady={editorLoaded && hermesHandoffResolved}
               dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded && !contentReadOnly ? { editorDraft } : {}), ...(selectedIngestionTaskId && !contentReadOnly ? { writingSource: { ingestionTaskId: selectedIngestionTaskId } } : {}) }}
               onDraftEdit={applyHermesEdit}
+              editorRepresentation={draftCore}
               onPrepareVersion={prepareVersion}
               onUndoDraftEdit={undoHermesEdit}
               locale={locale}
