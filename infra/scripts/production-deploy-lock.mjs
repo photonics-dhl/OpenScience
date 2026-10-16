@@ -5955,6 +5955,549 @@ function finiteVoiceFormatReaderSourceModel(ts, left, right, current, previous) 
     rollbackModules: new Map([[gatewayPath, oldGateway], [voicePath, oldVoice]]) };
 }
 
+function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) {
+  const fail = (reason, node) => { throw { reason: `VOICE_WAV_${reason}`, node }; };
+  const need = (value, reason, node) => { if (!value) fail(reason, node); };
+  const nodes = (scope, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return result; };
+  const one = (values, reason) => { need(values.length === 1, reason); return values[0]; };
+  const tokens = text => { const scan = ts.createScanner(ts.ScriptTarget.ES2022, true, ts.LanguageVariant.Standard, text.replace(/\r\n?/gu, '\n')), out = [];
+    for (let token = scan.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scan.scan()) out.push([token, scan.getTokenText()]);
+    return JSON.stringify(out);
+  };
+  const same = (node, text) => node && tokens(node.getText(node.getSourceFile())) === tokens(text);
+  const symbol = (context, node) => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const file = (context, path) => { const value = context.program.getSourceFile(resolve(context.root, path)); need(value, 'SOURCE_MISSING'); return value; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), 'FUNCTION_UNKNOWN');
+  const inside = (node, scope) => node.getSourceFile() === scope.getSourceFile() && node.pos >= scope.pos && node.end <= scope.end;
+  const edit = (source, changes) => {
+    const list = [...changes].sort((a, b) => b.node.getStart() - a.node.getStart()); let end = source.end, text = source.getText();
+    for (const change of list) {
+      need(change.node.getSourceFile() === source.getSourceFile() && change.node.getStart() >= source.getStart()
+        && change.node.end <= end, 'PROJECTION_OVERLAP', change.node);
+      text = text.slice(0, change.node.getStart() - source.getStart()) + change.text + text.slice(change.node.end - source.getStart());
+      end = change.node.getStart();
+    }
+    return text;
+  };
+  const gatewayPath = 'packages/ai-gateway/src/synclip-audio-api.ts', voicePath = 'packages/domain/src/agent/voice.ts';
+  const workerPath = 'apps/agent-worker/src/voice.ts', a = new Map(current), b = new Map(previous);
+  const canonicalSource = (context, text) => {
+    const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    const ast = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!ast.parseDiagnostics.length && typeof (context.canonical ?? left.canonical) === 'function', 'SOURCE_ENTRY_UNBOUND');
+    return (context.canonical ?? left.canonical)(ast);
+  };
+  for (const key of new Set([...a.keys(), ...b.keys()])) need(a.has(key) && b.has(key)
+    && (key === 'module:' + workerPath || JSON.stringify(a.get(key)) === JSON.stringify(b.get(key))), 'RESIDUAL_ENTRY_CHANGED');
+  for (const context of [left, right]) for (const path of [gatewayPath, voicePath, workerPath]) {
+    const terms = context === left ? a : b;
+    need(terms.has('module:' + path) && JSON.stringify(canonicalSource(context, file(context, path).text))
+      === JSON.stringify(terms.get('module:' + path)), 'SOURCE_ENTRY_UNBOUND');
+  }
+  const projections = new Map(), outputReferences = new Map();
+  const runtimeFiles = context => context.modules ? [...context.modules.values()].filter(source => !source.isDeclarationFile)
+    : context.program.getSourceFiles().filter(source => {
+      const path = relative(context.root, source.fileName).replaceAll('\\', '/');
+      return !source.isDeclarationFile && path && !path.startsWith('../') && !path.startsWith('node_modules/') && !path.includes('/node_modules/');
+    });
+  const hasExport = (context, module, targets) => {
+    const moduleSymbol = context.checker.getSymbolAtLocation(module);
+    return moduleSymbol && context.checker.getExportsOfModule(moduleSymbol).some(value => {
+      const resolved = value.flags & ts.SymbolFlags.Alias ? context.checker.getAliasedSymbol(value) : value;
+      return targets.has(resolved);
+    });
+  };
+  for (const context of [left, right]) {
+    const contract = file(context, 'packages/domain/src/agent/voice-contract.ts');
+    need(same(fn(contract, 'isHermesVoiceWriterEnabled').body, '{ return true; }'), 'PHASE_UNKNOWN');
+    const worker = file(context, 'apps/agent-worker/src/voice.ts'), index = file(context, 'apps/agent-worker/src/index.ts');
+    const factory = fn(worker, 'createHermesVoiceHandlers'), factorySymbol = symbol(context, factory.name);
+    need(factory.parameters.length === 2 && same(factory.parameters[1].initializer, '{}')
+      && ts.isIdentifier(factory.parameters[1].name), 'FACTORY_DEFAULT_CHANGED');
+    const optionsSymbol = symbol(context, factory.parameters[1].name);
+    for (const use of nodes(factory.body, ts.isIdentifier)) if (symbol(context, use) === optionsSymbol) {
+      const access = use.parent;
+      need(ts.isPropertyAccessExpression(access) && access.expression === use
+        && ['wait', 'maxPolls', 'pollIntervalMs', 'downloadAudio'].includes(access.name.text), 'FACTORY_OPTIONS_ESCAPE', use);
+      const parent = access.parent;
+      need(!(ts.isBinaryExpression(parent) && parent.left === access
+        && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+        && !ts.isDeleteExpression(parent) && !ts.isPostfixUnaryExpression(parent)
+        && !(ts.isPrefixUnaryExpression(parent) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)), 'FACTORY_OPTIONS_WRITE', access);
+    }
+    const save = fn(file(context, voicePath), 'saveHermesVoiceCheckpoint'), saveSymbol = symbol(context, save.name);
+    const writing = context === left;
+    const downloadName = writing ? 'downloadHermesVoiceAudio' : 'downloadSynclipAudio';
+    const downloadSymbol = symbol(context, fn(file(context, gatewayPath), downloadName).name);
+    let factoryCalls = 0, saveCalls = 0;
+    for (const source of runtimeFiles(context)) for (const use of nodes(source, ts.isIdentifier)) {
+      const selected = symbol(context, use);
+      if (selected !== factorySymbol && selected !== saveSymbol) continue;
+      if (use === factory.name || use === save.name || ts.isImportSpecifier(use.parent) || ts.isExportSpecifier(use.parent)) continue;
+      const call = use.parent; need(ts.isCallExpression(call) && call.expression === use, 'PRODUCER_OR_SAVE_ESCAPE', use);
+      if (selected === factorySymbol) {
+        need(source === index && same(call, 'createHermesVoiceHandlers(options.voiceRuntime)'), 'DOWNLOAD_INJECTION', call); factoryCalls++;
+      } else {
+        need(source === worker || source === save.getSourceFile(), 'SAVE_CALLER_CHANGED', call);
+        if (source === worker) {
+          need(inside(call, factory) && call.arguments.length === 3 && same(call.arguments[1], 'originalIdentity'), 'SAVE_IDENTITY_CHANGED', call);
+          const update = call.arguments[2]; need(ts.isObjectLiteralExpression(update), 'SAVE_INPUT_CHANGED', update);
+          const phase = one(update.properties.filter(value => ts.isPropertyAssignment(value) && value.name.getText() === 'phase'), 'SAVE_PHASE_CHANGED');
+          need(ts.isStringLiteral(phase.initializer) && ['failed', 'completed'].includes(phase.initializer.text), 'SAVE_PHASE_CHANGED', update);
+        } else {
+          need(same(call, "saveHermesVoiceCheckpoint(deps, prepared.identity, { phase: 'submitted', ...received })"), 'SAVE_INPUT_CHANGED', call);
+        }
+        saveCalls++;
+      }
+    }
+    need(factoryCalls === 1 && saveCalls === 4, 'PRODUCER_OR_SAVE_INVENTORY_CHANGED');
+    const download = one(nodes(factory, ts.isCallExpression).filter(call => same(call,
+      `(options.downloadAudio ?? ${downloadName})(output)`)), 'RECOVERY_DOWNLOAD_CHANGED');
+    const fallback = download.expression.expression;
+    outputReferences.set(context, fallback.right);
+    need(ts.isBinaryExpression(fallback) && symbol(context, fallback.right) === downloadSymbol, 'DOWNLOAD_BINDING_CHANGED', download);
+    const local = name => {
+      const declaration = one(nodes(factory, ts.isVariableDeclaration).filter(node => ts.isIdentifier(node.name) && node.name.text === name), 'MP3_BINDING_CHANGED');
+      need(ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const
+        && declaration.parent.declarations.length === 1, 'MP3_BINDING_CHANGED', declaration);
+      need(symbol(context, declaration.name), 'MP3_BINDING_CHANGED', declaration);
+      return declaration;
+    };
+    const audioBytes = local('audio'), digest = local('sha256'), key = local('objectKey'), stored = local('storedAudio');
+    need(audioBytes.initializer === download.parent && ts.isAwaitExpression(download.parent)
+      && same(digest.initializer, 'sha256HexBuffer(audio.bytes)')
+      && symbol(context, digest.initializer.expression) === symbol(context, fn(file(context, 'packages/storage/src/checksum.ts'), 'sha256HexBuffer').name)
+      && same(key.initializer, writing ? '`derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.${audio.format}`' : '`derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.mp3`')
+      && same(stored.initializer, writing ? '{ objectKey, sha256, bytes: audio.bytes.length, contentType: audio.contentType }' : "{ objectKey, sha256, bytes: audio.bytes.length, contentType: 'audio/mpeg' as const }"), 'MP3_RECEIPT_CHANGED');
+    const sizeGuard = one(nodes(factory, ts.isIfStatement).filter(node => same(node,
+      "if (audio.bytes.length > 20 * 1024 * 1024) throw new Error('[blocked] VOICE_AUDIO_TOO_LARGE');")), 'MP3_SIZE_GUARD_CHANGED');
+    const put = one(nodes(factory, ts.isCallExpression).filter(node => ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'putObject'), 'MP3_STORAGE_CHANGED');
+    need(same(put, writing ? 'deps.storage.putObject(objectKey, audio.bytes, { contentType: audio.contentType, sha256 })' : "deps.storage.putObject(objectKey, audio.bytes, { contentType: 'audio/mpeg', sha256 })")
+      && ts.isAwaitExpression(put.parent) && ts.isExpressionStatement(put.parent.parent), 'MP3_STORAGE_CHANGED', put);
+    const audioSave = one(nodes(factory, ts.isCallExpression).filter(call => symbol(context, call.expression) === saveSymbol
+      && same(call.arguments[2], "{ phase: 'completed', ...(output.coins_used === undefined ? {} : { credits: output.coins_used }), audio: storedAudio }")), 'MP3_SAVE_CHANGED');
+    const discarded = one(nodes(factory, ts.isCallExpression).filter(call => same(call,
+      'rememberDiscardedTaskResult(deps.prisma, originalIdentity.taskId, { hermesVoice: { audio: storedAudio } })')), 'MP3_DISCARD_CHANGED');
+    // The saved object is an immutable local construction, not merely near an MP3 put.
+    // Bind every value use, including shorthand properties, to its actual declaration.
+    const localSymbol = node => ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+      ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : symbol(context, node);
+    const allowed = new Map([
+      [symbol(context, audioBytes.name), [audioBytes.name, sizeGuard.expression.left.expression.expression,
+        digest.initializer.arguments[0].expression, put.arguments[1].expression,
+        stored.initializer.properties[2].initializer.expression.expression,
+        ...(writing ? [key.initializer.templateSpans[3].expression.expression, put.arguments[2].properties[0].initializer.expression,
+          stored.initializer.properties[3].initializer.expression] : [])]],
+      [symbol(context, digest.name), [digest.name, key.initializer.templateSpans[2].expression,
+        put.arguments[2].properties[1].name, stored.initializer.properties[1].name]],
+      [symbol(context, key.name), [key.name, put.arguments[0], stored.initializer.properties[0].name]],
+      [symbol(context, stored.name), [stored.name, audioSave.arguments[2].properties[2].initializer,
+        discarded.arguments[2].properties[0].initializer.properties[0].initializer]],
+    ]);
+    // Check both directions: a same-spelled nested parameter must not replace
+    // one of these expected value nodes while the outer const stays unused.
+    for (const [binding, references] of allowed) for (const reference of references)
+      need(ts.isIdentifier(reference) && localSymbol(reference) === binding, 'LOCAL_BINDING_CHANGED', reference);
+    for (const use of nodes(factory, ts.isIdentifier)) {
+      const references = allowed.get(localSymbol(use));
+      if (references) need(references.includes(use), 'MP3_LOCAL_ESCAPE_OR_WRITE', use);
+    }
+    const block = audioBytes.parent.parent.parent;
+    need(ts.isBlock(block) && [digest, key, stored].every(node => node.parent.parent.parent === block)
+      && put.parent.parent.parent === block && sizeGuard.parent === block
+      && audioBytes.end < sizeGuard.pos && sizeGuard.end < digest.pos && digest.end < key.pos
+      && key.end < put.pos && put.end < stored.pos && stored.end < audioSave.pos, 'MP3_STORAGE_ORDER_CHANGED');
+    // No second storage access, alias, computed write, or unclassified dependency escape.
+    const depsDeclaration = local('deps'), depsSymbol = symbol(context, depsDeclaration.name);
+    need(same(depsDeclaration.initializer, '{ ...workerDeps, storage: workerDeps.storage, voicePresets: [] }'), 'MP3_DEPENDENCY_CHANGED');
+    need(symbol(context, put.expression.expression.expression) === depsSymbol
+      && symbol(context, audioSave.arguments[0]) === depsSymbol
+      && symbol(context, discarded.arguments[0].expression) === depsSymbol, 'MP3_DEPENDENCY_BINDING_CHANGED');
+    const handler = local('handle').initializer;
+    need(ts.isArrowFunction(handler) && handler.parameters.length === 2 && ts.isIdentifier(handler.parameters[0].name), 'MP3_HANDLER_CHANGED');
+    const workerDepsSymbol = symbol(context, handler.parameters[0].name);
+    const storageGuard = one(nodes(handler.body, ts.isIfStatement).filter(node => same(node,
+      "if (!workerDeps.storage) throw new Error('[blocked] VOICE_STORAGE_UNAVAILABLE');")), 'MP3_STORAGE_GUARD_CHANGED');
+    for (const use of nodes(handler.body, ts.isIdentifier)) if (symbol(context, use) === workerDepsSymbol)
+      need(inside(use, storageGuard) || inside(use, depsDeclaration.initializer), 'MP3_STORAGE_ESCAPE', use);
+    const depsCalls = new Set(['loadHermesVoiceExecution', 'finalizeHermesVoiceTask', 'recording', 'withHermesVoiceSubmission', 'saveHermesVoiceCheckpoint']);
+    for (const use of nodes(factory, ts.isIdentifier)) if (symbol(context, use) === depsSymbol && use !== depsDeclaration.name) {
+      const parent = use.parent;
+      if (ts.isCallExpression(parent) && parent.arguments[0] === use && ts.isIdentifier(parent.expression)) {
+        need(depsCalls.has(parent.expression.text)
+          && (parent.expression.text === 'recording' ? symbol(context, parent.expression) === symbol(context, fn(worker, 'recording').name)
+            : symbol(context, parent.expression)?.declarations?.some(node => relative(context.root, node.getSourceFile().fileName).replaceAll('\\', '/').startsWith('packages/domain/src/'))),
+        'MP3_DEPENDENCY_ESCAPE', use);
+      } else need(ts.isPropertyAccessExpression(parent) && parent.expression === use
+        && (parent.name.text === 'storage' && parent === put.expression.expression
+          || parent.name.text === 'prisma' && parent === discarded.arguments[0]
+          || parent.name.text === 'voicePresets'), 'MP3_DEPENDENCY_ESCAPE', use);
+    }
+
+    const identity = local('originalIdentity'), identitySymbol = symbol(context, identity.name);
+    need(same(identity.initializer, 'checkpoint.identity'), 'ORIGINAL_IDENTITY_CHANGED');
+    const identityUses = [identity.name, key.initializer.templateSpans[0].expression.expression,
+      key.initializer.templateSpans[1].expression.expression, discarded.arguments[1].expression,
+      ...nodes(factory, ts.isCallExpression).filter(call => symbol(context, call.expression) === saveSymbol).map(call => call.arguments[1])];
+    for (const use of identityUses) need(ts.isIdentifier(use) && symbol(context, use) === identitySymbol, 'ORIGINAL_IDENTITY_CHANGED', use);
+    for (const use of nodes(factory, ts.isIdentifier)) if (symbol(context, use) === identitySymbol)
+      need(identityUses.includes(use), 'ORIGINAL_IDENTITY_ESCAPE', use);
+    const audioTry = audioSave.parent.parent.parent.parent;
+    need(ts.isTryStatement(audioTry) && ts.isAwaitExpression(audioSave.parent)
+      && ts.isExpressionStatement(audioSave.parent.parent)
+      && audioTry.tryBlock.statements.length === 1
+      && audioTry.tryBlock.statements[0] === audioSave.parent.parent
+      && same(audioTry.catchClause.block,
+        '{ await rememberDiscardedTaskResult(deps.prisma, originalIdentity.taskId, { hermesVoice: { audio: storedAudio } }); throw error; }'), 'LATE_DISCARD_ORDER_CHANGED');
+    need(symbol(context, discarded.expression) === symbol(context, fn(file(context, 'packages/domain/src/trash/trash.ts'), 'rememberDiscardedTaskResult').name), 'LATE_DISCARD_BINDING_CHANGED');
+    const preamble = [
+      "if (!workerDeps.storage) throw new Error('[blocked] VOICE_STORAGE_UNAVAILABLE');",
+      'const deps: HermesVoiceDeps = { ...workerDeps, storage: workerDeps.storage, voicePresets: [] };',
+      'const execution = await loadHermesVoiceExecution(deps, { taskId: task.id, executionAttempt: task.executionAttempt });',
+      'let checkpoint = execution.checkpoint;',
+      "if (checkpoint?.phase === 'completed') return (await finalizeHermesVoiceTask(deps, execution)).result ?? {};",
+      "if (checkpoint?.phase === 'submitting') throw new Error('[blocked] VOICE_SUBMISSION_UNCERTAIN');",
+      "if (checkpoint?.phase === 'failed') throw new Error('[blocked] VOICE_PROVIDER_FAILED');",
+      'if (!checkpoint && !isHermesVoiceWriterEnabled()) throw new Error(HERMES_VOICE_READER_ONLY);',
+    ];
+    need(preamble.every((text, index) => same(handler.body.statements[index], text)), 'RETAINED_RECEIPT_PATH_CHANGED');
+    const calls = nodes(factory, ts.isCallExpression).filter(call => ts.isPropertyAccessExpression(call.expression)
+      && ['create', 'createTranscription'].includes(call.expression.name.text));
+    for (const call of calls) {
+      let fresh = call.parent; while (fresh && !(ts.isIfStatement(fresh) && same(fresh.expression, '!checkpoint'))) fresh = fresh.parent;
+      need(fresh && fresh.end < identity.pos, 'RECOVERY_CAN_REPOST');
+    }
+    if (writing) {
+      const importNode = one(nodes(worker, ts.isImportSpecifier).filter(node => symbol(context, node.name) === downloadSymbol), 'DOWNLOAD_IMPORT_CHANGED');
+      need(!importNode.propertyName && importNode.name.text === 'downloadHermesVoiceAudio', 'DOWNLOAD_IMPORT_CHANGED');
+      projections.set(workerPath, { source: worker, text: edit(worker, [
+        { node: importNode.name, text: 'downloadSynclipAudio' }, { node: fallback.right, text: 'downloadSynclipAudio' },
+        { node: key.initializer, text: '`derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.mp3`' },
+        { node: put.arguments[2].properties[0].initializer, text: "'audio/mpeg'" },
+        { node: stored.initializer.properties[3].initializer, text: "'audio/mpeg' as const" },
+      ]) });
+    }
+  }
+  // Equal exported types or equal two-root bodies do not prove a validated writer.
+  // These finite algorithms bind full collected bytes, the MIME discriminator and
+  // the actual bounded TLS transport before either format can become a receipt.
+  const gateway = file(left, gatewayPath), voice = file(right, voicePath);
+  const kernel = fn(gateway, 'downloadAudio'), output = fn(gateway, 'downloadHermesVoiceAudio'), legacy = fn(gateway, 'downloadSynclipAudio');
+  const wav = fn(gateway, 'validateHermesVoiceAudioBytes'), mp3 = fn(gateway, 'validateSynclipAudioBytes');
+  need(same(legacy.body, `{
+  return downloadAudio(task, options, { maxBytes: SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES,
+    accept: 'audio/mpeg,application/octet-stream', types: ['audio/mpeg', 'application/octet-stream'],
+    decode: bytes => validateSynclipAudioBytes(bytes) });
+}`), 'LEGACY_WRAPPER_CHANGED');
+  need(same(fn(gateway, 'downloadHermesVoiceAudio').body, `{
+  return downloadAudio(task, options, { maxBytes: hermesVoiceAudioMaxBytes,
+    accept: 'audio/mpeg,audio/wav,application/octet-stream', types: ['audio/mpeg', 'audio/wav', 'application/octet-stream'],
+    decode: (bytes, mime) => {
+      const audio = validateHermesVoiceAudioBytes(bytes);
+      const contentType = mime.split(';')[0]!.trim().toLowerCase();
+      if (contentType !== 'application/octet-stream' && contentType !== audio.contentType) throw invalid();
+      return audio;
+    } });
+}`), 'VALIDATED_DOWNLOADHERMESVOICEAUDIO_CHANGED');
+  need(same(fn(gateway, 'validateHermesVoiceAudioBytes').body, `{
+  if (!Buffer.isBuffer(bytes)) throw invalid();
+  if (bytes.length > hermesVoiceAudioMaxBytes) throw new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE');
+  if (bytes.toString('latin1', 0, 4) !== 'RIFF') return validateSynclipAudioBytes(bytes);
+  if (bytes.length < 46 || bytes.readUInt32LE(4) !== bytes.length - 8 || bytes.toString('latin1', 8, 12) !== 'WAVE') throw invalid();
+  let offset = 12, chunks = 0, format = false, data = false;
+  while (offset < bytes.length) {
+    // Bound zero-length metadata chunks as well as the total untrusted byte count.
+    if (++chunks > 128 || offset + 8 > bytes.length) throw invalid();
+    const id = bytes.toString('latin1', offset, offset + 4), size = bytes.readUInt32LE(offset + 4);
+    const start = offset + 8, end = start + size, next = end + (size & 1);
+    if (end > bytes.length || next > bytes.length) throw invalid();
+    if (id === 'fmt ') {
+      if (format || data) throw invalid();
+      if (size !== 16 || bytes.readUInt16LE(start) !== 1 || bytes.readUInt16LE(start + 2) !== 1
+        || bytes.readUInt32LE(start + 4) !== 24_000 || bytes.readUInt32LE(start + 8) !== 48_000
+        || bytes.readUInt16LE(start + 12) !== 2 || bytes.readUInt16LE(start + 14) !== 16) {
+        throw new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED');
+      }
+      format = true;
+    } else if (id === 'data') {
+      if (!format || data || size === 0 || size % 2 !== 0) throw invalid();
+      data = true;
+    }
+    offset = next;
+  }
+  if (!format || !data) throw invalid();
+  return { bytes, format: 'wav', contentType: 'audio/wav' };
+}`), 'VALIDATED_VALIDATEHERMESVOICEAUDIOBYTES_CHANGED');
+  need(same(fn(gateway, 'validateSynclipAudioBytes').body, `{
+  if (!Buffer.isBuffer(bytes)) throw invalid();
+  if (bytes.length > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES) throw new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE');
+  const unsupported = () => new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED');
+  let offset = 0;
+  if (bytes.subarray(0, 3).equals(Buffer.from('ID3'))) {
+    if (bytes.length < 10 || ![2, 3, 4].includes(bytes[3]!) || bytes[4] === 255
+      || (bytes[5]! & (bytes[3] === 2 ? 63 : bytes[3] === 3 ? 31 : 15))
+      || bytes.subarray(6, 10).some(value => value >= 128)) throw invalid();
+    const tagSize = bytes[6]! * 2 ** 21 + bytes[7]! * 2 ** 14 + bytes[8]! * 128 + bytes[9]!;
+    offset = 10 + tagSize;
+    // Footer-bearing metadata is outside the presently verified MP3 subset.
+    if (bytes[3] === 4 && (bytes[5]! & 16)) throw unsupported();
+    if (offset >= bytes.length) throw invalid();
+  } else if (bytes.length < 4 || bytes[0] !== 255 || (bytes[1]! & 224) !== 224) throw unsupported();
+  let frames = 0;
+  let sampleRate: number | undefined;
+  while (offset < bytes.length) {
+    if (bytes.length - offset === 128 && bytes.subarray(offset, offset + 3).equals(Buffer.from('TAG'))) break;
+    if (bytes.length - offset < 4 || bytes[offset] !== 255 || (bytes[offset + 1]! & 224) !== 224) throw invalid();
+    const version = (bytes[offset + 1]! >> 3) & 3;
+    const layer = (bytes[offset + 1]! >> 1) & 3;
+    const bitrateIndex = bytes[offset + 2]! >> 4;
+    const rateIndex = (bytes[offset + 2]! >> 2) & 3;
+    if (version === 1 || layer !== 1 || bitrateIndex === 0 || bitrateIndex === 15 || rateIndex === 3
+      || (bytes[offset + 3]! & 3) === 2) throw invalid();
+    const bitrate = (version === 3 ? mpeg1Bitrates : mpeg2Bitrates)[bitrateIndex]!;
+    const rate = [44100, 48000, 32000][rateIndex]! / (version === 3 ? 1 : version === 2 ? 2 : 4);
+    if (sampleRate !== undefined && sampleRate !== rate) throw invalid();
+    sampleRate = rate;
+    const frameLength = Math.floor((version === 3 ? 144000 : 72000) * bitrate / rate) + ((bytes[offset + 2]! >> 1) & 1);
+    if (offset + frameLength > bytes.length) throw invalid();
+    offset += frameLength;
+    frames++;
+  }
+  if (frames < 2) throw invalid();
+  return { bytes, format: 'mp3', contentType: 'audio/mpeg' };
+}`), 'VALIDATED_VALIDATESYNCLIPAUDIOBYTES_CHANGED');
+  need(same(fn(gateway, 'downloadAudio').body, `{
+  validateDownloadOptions(options);
+  const value = validateSynclipAudioTask(task, record(task) ? String(task.task_id) : '');
+  const now = (options.now ?? Date.now)();
+  if (!Number.isFinite(now)) throw new SynclipAudioError('SYNCLIP_AUDIO_CONFIG_INVALID', 'invalid');
+  if (value.status !== 'completed' || Date.parse(value.url_expires_at) <= now) throw invalid();
+  const url = new URL(value.output.url);
+  const resolve = options.resolve ?? (hostname => lookup(hostname, { family: 4, all: true }));
+  const request = options.request ?? get;
+  const controller = new AbortController();
+  let active: ClientRequest | undefined;
+  let incoming: IncomingMessage | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const operation = async () => {
+    const addresses = await resolve(url.hostname);
+    if (controller.signal.aborted) throw new SynclipAudioError('SYNCLIP_AUDIO_TIMEOUT');
+    if (!Array.isArray(addresses) || !addresses.length || addresses.length > 64
+      || addresses.some(item => !record(item) || item.family !== 4 || typeof item.address !== 'string'
+        || isIP(item.address) !== 4 || blocked.check(item.address, 'ipv4'))) throw invalid();
+    const address = addresses[0]!.address;
+    return new Promise<T>((accept, reject) => {
+      let settled = false;
+      const chunks: Buffer[] = [];
+      let partial: Buffer | undefined;
+      let partialSize = 0;
+      const fail = (error: SynclipAudioError) => {
+        if (settled) return;
+        settled = true;
+        chunks.length = 0;
+        partial = undefined;
+        reject(error);
+        incoming?.destroy();
+        active?.destroy();
+      };
+      const outgoing = request(url, { method: 'GET', family: 4, autoSelectFamily: false, agent: false,
+        servername: url.hostname, rejectUnauthorized: true, signal: controller.signal,
+        lookup: (_hostname, options, callback) => {
+          if (options.all) callback(null, [{ address, family: 4 }]);
+          else callback(null, address, 4);
+        },
+        headers: { Accept: format.accept, 'Accept-Encoding': 'identity' } }, response => {
+        incoming = response;
+        response.on('error', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
+        response.on('aborted', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
+        response.on('close', () => { if (!settled) fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')); });
+        if (controller.signal.aborted || settled) { response.destroy(); return; }
+        // https.get does not follow Location; every redirect is rejected here.
+        if (response.statusCode !== 200) { fail(new SynclipAudioError('SYNCLIP_AUDIO_HTTP_FAILED', 'uncertain', response.statusCode)); return; }
+        const encoding = response.headers['content-encoding'];
+        const contentType = response.headers['content-type'];
+        if ((encoding !== undefined && encoding !== 'identity') || typeof contentType !== 'string'
+          || !format.types.includes(contentType.split(';')[0]!.trim().toLowerCase())) {
+          fail(new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED')); return;
+        }
+        const length = response.headers['content-length'];
+        if (length !== undefined && (typeof length !== 'string' || !/^\\d+$/u.test(length) || Number(length) > format.maxBytes)) {
+          fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return;
+        }
+        let size = 0;
+        response.on('data', (chunk: Buffer) => {
+          if (settled) return;
+          if (!Buffer.isBuffer(chunk)) { fail(invalid()); return; }
+          size += chunk.length;
+          if (size > format.maxBytes) { fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return; }
+          // Coalesce tiny network chunks so the byte cap also bounds retained Buffer objects.
+          for (let offset = 0; offset < chunk.length;) {
+            if (!partial || partialSize === partial.length) {
+              partial = Buffer.allocUnsafe(64 * 1024);
+              partialSize = 0;
+              chunks.push(partial);
+            }
+            const copied = chunk.copy(partial, partialSize, offset, offset + Math.min(chunk.length - offset, partial.length - partialSize));
+            partialSize += copied;
+            offset += copied;
+          }
+        });
+        response.on('end', () => {
+          if (settled) return;
+          if (length !== undefined && size !== Number(length)) { fail(invalid()); return; }
+          try {
+            if (partial) chunks[chunks.length - 1] = partial.subarray(0, partialSize);
+            const result = format.decode(Buffer.concat(chunks, size), contentType);
+            chunks.length = 0;
+            partial = undefined;
+            settled = true;
+            accept(result);
+          } catch (error) { fail(error instanceof SynclipAudioError ? error : invalid()); }
+        });
+      });
+      active = outgoing;
+      outgoing.on('error', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
+      if (settled || controller.signal.aborted) outgoing.destroy();
+    });
+  };
+  try {
+    return await Promise.race([operation(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new SynclipAudioError('SYNCLIP_AUDIO_TIMEOUT'));
+        controller.abort(); incoming?.destroy(); active?.destroy();
+      }, options.timeoutMs ?? 90_000);
+    })]);
+  } catch (error) {
+    controller.abort(); incoming?.destroy(); active?.destroy();
+    if (error instanceof SynclipAudioError) throw error;
+    throw new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED');
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}`), 'VALIDATED_DOWNLOADAUDIO_CHANGED');
+  const cap = one(nodes(gateway, ts.isVariableDeclaration).filter(node => node.name.getText() === 'hermesVoiceAudioMaxBytes'), 'CAP_CHANGED');
+  need(cap.parent.flags & ts.NodeFlags.Const && same(cap.initializer, '16 * 1024 * 1024'), 'CAP_CHANGED');
+  for (const [functionNode, names, async] of [[output, ['task', 'options'], true], [legacy, ['task', 'options'], true], [wav, ['bytes'], false], [mp3, ['bytes'], false], [kernel, ['task', 'options', 'format'], true]]) {
+    need(!functionNode.asteriskToken && !!functionNode.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword) === async
+      && functionNode.parameters.length === names.length && functionNode.parameters.every((node, index) => ts.isIdentifier(node.name) && node.name.text === names[index]
+        && !node.dotDotDotToken && ((functionNode === output || functionNode === legacy) && index === 1
+          ? same(node.initializer, '{}') : !node.initializer)), 'DECODER_SIGNATURE_CHANGED');
+  }
+  const wrapperCall = output.body.statements[0].expression, config = wrapperCall.arguments[2], decoder = config.properties[3].initializer;
+  need(symbol(left, wrapperCall.expression) === symbol(left, kernel.name)
+    && wrapperCall.arguments.slice(0, 2).every((node, index) => symbol(left, node) === symbol(left, output.parameters[index].name))
+    && symbol(left, config.properties[0].initializer) === symbol(left, cap.name), 'OUTPUT_KERNEL_BINDING_CHANGED');
+  const validated = decoder.body.statements[0].declarationList.declarations[0];
+  need(symbol(left, validated.initializer.expression) === symbol(left, wav.name)
+    && symbol(left, validated.initializer.arguments[0]) === symbol(left, decoder.parameters[0].name), 'VALIDATOR_BINDING_CHANGED');
+  const validationResult = symbol(left, validated.name);
+  const validatedUses = [validated.name, decoder.body.statements[2].expression.right.right.expression,
+    decoder.body.statements[3].expression];
+  for (const use of validatedUses) need(ts.isIdentifier(use) && symbol(left, use) === validationResult, 'VALIDATOR_RESULT_BINDING_CHANGED', use);
+  for (const use of nodes(decoder.body, ts.isIdentifier)) if (symbol(left, use) === validationResult)
+    need(validatedUses.includes(use), 'VALIDATOR_RESULT_ESCAPE', use);
+  const formatBinding = symbol(left, kernel.parameters[2].name);
+  const decodeCall = one(nodes(kernel, ts.isCallExpression).filter(node => same(node, 'format.decode(Buffer.concat(chunks, size), contentType)')), 'FULL_BYTES_DECODE_CHANGED');
+  need(symbol(left, decodeCall.expression.expression) === formatBinding, 'FULL_BYTES_DECODE_BINDING_CHANGED');
+  const completeBytes = one(nodes(kernel, ts.isVariableDeclaration).filter(node => node.name.getText() === 'chunks'), 'FULL_BYTES_BINDING_CHANGED');
+  const byteSize = one(nodes(kernel, ts.isVariableDeclaration).filter(node => node.name.getText() === 'size'), 'FULL_BYTES_BINDING_CHANGED');
+  need(symbol(left, decodeCall.arguments[0].arguments[0]) === symbol(left, completeBytes.name)
+    && symbol(left, decodeCall.arguments[0].arguments[1]) === symbol(left, byteSize.name), 'FULL_BYTES_BINDING_CHANGED');
+  for (const scope of [output, wav, mp3, kernel]) for (const use of nodes(scope, ts.isIdentifier))
+    if (['Array', 'Buffer', 'Number', 'String', 'Date', 'Math', 'URL', 'AbortController', 'Promise', 'setTimeout', 'clearTimeout'].includes(use.text))
+      need(!(symbol(left, use)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'TRANSPORT_INTRINSIC_SHADOWED', use);
+  for (const call of nodes(wav, ts.isCallExpression).filter(node => ts.isIdentifier(node.expression) && node.expression.text === 'validateSynclipAudioBytes'))
+    need(symbol(left, call.expression) === symbol(left, mp3.name) && symbol(left, call.arguments[0]) === symbol(left, wav.parameters[0].name), 'MP3_VALIDATOR_BINDING_CHANGED');
+  const audio = fn(voice, 'validAudio'), receipt = fn(voice, 'readHermesVoiceCheckpoint');
+  for (const [reader, name] of [[audio, 'audio'], [receipt, 'result']]) need(!reader.asteriskToken
+    && !reader.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+    && reader.parameters.length === 1 && ts.isIdentifier(reader.parameters[0].name) && reader.parameters[0].name.text === name
+    && !reader.parameters[0].initializer && !reader.parameters[0].dotDotDotToken, 'WAV_READER_SIGNATURE_CHANGED');
+  for (const use of nodes(audio.body, ts.isIdentifier).filter(node => node.text === 'audio'))
+    need(symbol(right, use) === symbol(right, audio.parameters[0].name), 'WAV_READER_BINDING_CHANGED', use);
+  need(same(audio.body, `{
+  return record(audio) && keysAllowed(audio, ['objectKey', 'sha256', 'bytes', 'contentType'])
+    && nonempty(audio.objectKey) && /^derived\\/hermes-voice\\/[^\\s?#\\\\]+\\.(?:mp3|wav)$/u.test(audio.objectKey)
+    && !audio.objectKey.split('/').includes('..') && hash(audio.sha256)
+    && Number.isSafeInteger(audio.bytes) && Number(audio.bytes) > 0 && Number(audio.bytes) <= 20 * 1024 * 1024
+    && ((audio.contentType === 'audio/mpeg' && audio.objectKey.endsWith('.mp3'))
+      || (audio.contentType === 'audio/wav' && audio.objectKey.endsWith('.wav') && Number(audio.bytes) <= 16 * 1024 * 1024));
+}`), 'WAV_READER_CHANGED');
+  const completed = one(nodes(receipt, ts.isIfStatement).filter(node => same(node, `if (cp.phase === 'completed' && (payload.operation === 'transcription'
+    ? typeof cp.transcript !== 'string' || cp.transcript.length > 20_000 || cp.audio !== undefined
+    : !validAudio(cp.audio) || cp.transcript !== undefined
+      || cp.audio.objectKey !== \`derived/hermes-voice/\${encodeURIComponent(String(cp.identity.userId))}/\${cp.identity.taskId}/\${cp.audio.sha256}.\${cp.audio.contentType === 'audio/wav' ? 'wav' : 'mp3'}\`)) blocked('私有语音完成回执无效');`)), 'COMPLETED_GUARD_CHANGED');
+  const check = one(nodes(completed, ts.isCallExpression).filter(node => same(node, 'validAudio(cp.audio)')), 'WAV_READER_BINDING_CHANGED');
+  need(symbol(right, check.expression) === symbol(right, audio.name), 'WAV_READER_BINDING_CHANGED');
+  need(receipt.body.statements.length === 7 && receipt.body.statements[5] === completed
+    && same(receipt.body.statements[1], 'const cp = (result as Record<string, unknown>)[HERMES_VOICE_RECEIPT_KEY];')
+    && same(receipt.body.statements[3], 'const payload = readPayload(cp.request, cp.identity.kind);')
+    && same(receipt.body.statements[6], 'return cp as unknown as HermesVoiceCheckpoint;'), 'COMPLETED_GUARD_POSITION_CHANGED');
+  const cp = receipt.body.statements[1].declarationList.declarations[0], payload = receipt.body.statements[3].declarationList.declarations[0];
+  for (const use of nodes(completed, ts.isIdentifier)) if (['cp', 'payload'].includes(use.text))
+    need(symbol(right, use) === symbol(right, (use.text === 'cp' ? cp : payload).name), 'COMPLETED_GUARD_BINDING_CHANGED', use);
+  // Bind the checked mutable transport/validator capabilities to their actual
+  // consumers too: matching declaration bodies cannot prevent later rebinding.
+  for (const context of [left, right]) {
+    const source = file(context, gatewayPath), transport = fn(source, 'downloadAudio'), validator = fn(source, 'validateSynclipAudioBytes');
+    const transportSymbol = symbol(context, transport.name), validatorSymbol = symbol(context, validator.name);
+    const targets = new Set(['downloadHermesVoiceAudio', 'validateHermesVoiceAudioBytes'].map(name => symbol(context, fn(source, name).name)));
+    targets.add(transportSymbol); targets.add(validatorSymbol);
+    const scopes = [fn(source, 'downloadHermesVoiceAudio'), fn(source, 'validateHermesVoiceAudioBytes')];
+    const transportUses = new Set([transport.name]), validatorUses = new Set([validator.name]);
+    const oldWrapper = fn(source, 'downloadSynclipAudio');
+    for (const wrapper of [scopes[0], oldWrapper]) {
+      const call = one(nodes(wrapper, ts.isCallExpression).filter(node => symbol(context, node.expression) === transportSymbol), 'KERNEL_CONSUMER_CHANGED');
+      need(wrapper.body.statements.length === 1 && call === wrapper.body.statements[0].expression && call.arguments.length === 3
+        && call.arguments.slice(0, 2).every((node, index) => symbol(context, node) === symbol(context, wrapper.parameters[index].name)), 'KERNEL_CONSUMER_CHANGED');
+      transportUses.add(call.expression);
+    }
+    const legacyDecoder = oldWrapper.body.statements[0].expression.arguments[2].properties[3].initializer;
+    const presentation = fn(file(context, 'apps/agent-worker/src/presentation/handler.ts'), 'readAudioAuditionOutput');
+    const presentationBytes = one(nodes(presentation, ts.isVariableDeclaration).filter(node => ts.isIdentifier(node.name) && node.name.text === 'bytes'), 'MP3_CONSUMER_CHANGED');
+    for (const [scope, bytes] of [[scopes[1], scopes[1].parameters[0]], [legacyDecoder, legacyDecoder.parameters[0]], [presentation, presentationBytes]]) {
+      const call = one(nodes(scope, ts.isCallExpression).filter(node => symbol(context, node.expression) === validatorSymbol), 'MP3_CONSUMER_CHANGED');
+      need(same(call, 'validateSynclipAudioBytes(bytes)') && symbol(context, call.arguments[0]) === symbol(context, bytes.name)
+        && (scope !== presentation || call.parent === presentation.body.statements.at(-2)), 'MP3_CONSUMER_CHANGED');
+      validatorUses.add(call.expression);
+    }
+    const capabilitySpecifiers = new Set(), loaderFactories = new Set(), loaders = new Set();
+    for (const file of runtimeFiles(context)) for (const node of nodes(file, () => true)) {
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && hasExport(context, node.moduleSpecifier, targets)) capabilitySpecifiers.add(node.moduleSpecifier.text);
+      if (ts.isImportDeclaration(node) && ['node:module', 'module'].includes(node.moduleSpecifier.text) && node.importClause?.namedBindings) {
+        need(ts.isNamedImports(node.importClause.namedBindings), 'LOADER_NAMESPACE_UNKNOWN');
+        for (const imported of node.importClause.namedBindings.elements) if ((imported.propertyName ?? imported.name).text === 'createRequire') loaderFactories.add(context.checker.getSymbolAtLocation(imported.name));
+      }
+    }
+    for (const file of runtimeFiles(context)) for (const declaration of nodes(file, ts.isVariableDeclaration)) if (declaration.initializer && ts.isCallExpression(declaration.initializer)
+      && loaderFactories.has(context.checker.getSymbolAtLocation(declaration.initializer.expression))) { need(ts.isIdentifier(declaration.name), 'LOADER_ESCAPE'); loaders.add(context.checker.getSymbolAtLocation(declaration.name)); }
+    for (const file of runtimeFiles(context)) for (const node of nodes(file, () => true)) {
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamespaceImport(node.importClause.namedBindings)) need(!hasExport(context, node.moduleSpecifier, targets), 'NAMESPACE_ESCAPE');
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression) && node.expression.text === 'require'
+        || loaders.has(context.checker.getSymbolAtLocation(node.expression)))) {
+        need(node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]), 'DYNAMIC_MODULE_UNKNOWN');
+        need(!capabilitySpecifiers.has(node.arguments[0].text) && !hasExport(context, node.arguments[0], targets), 'DYNAMIC_ESCAPE');
+      }
+      if (!ts.isIdentifier(node)) continue;
+      if (loaderFactories.has(context.checker.getSymbolAtLocation(node)) && !ts.isImportSpecifier(node.parent)) need(ts.isCallExpression(node.parent) && node.parent.expression === node
+        && ts.isVariableDeclaration(node.parent.parent) && node.parent.parent.initializer === node.parent && ts.isIdentifier(node.parent.parent.name), 'LOADER_FACTORY_ESCAPE');
+      if (loaders.has(context.checker.getSymbolAtLocation(node)) && !ts.isVariableDeclaration(node.parent)) need(ts.isCallExpression(node.parent) && node.parent.expression === node, 'LOADER_ESCAPE');
+      const capability = symbol(context, node);
+      if (capability === transportSymbol) need(transportUses.has(node), 'KERNEL_CAPABILITY_ESCAPE', node);
+      else if (capability === validatorSymbol) need(validatorUses.has(node) || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent), 'MP3_CAPABILITY_ESCAPE', node);
+      else if (targets.has(capability)) need(scopes.some(scope => inside(node, scope)) || node === outputReferences.get(context)
+        || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent), 'OUTPUT_CAPABILITY_ESCAPE', node);
+    }
+  }
+  const model = projections.get(workerPath);
+  need(model && JSON.stringify(canonicalSource(left, model.text)) === JSON.stringify(b.get('module:' + workerPath)), 'PROJECTED_RUNTIME_CHANGED');
+  return { phase: 'format-writer', domain: 'wav-and-retained-mp3', projected: projections,
+    rollbackModules: new Map([[workerPath, file(right, workerPath)]]) };
+}
+
 function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
   try {
     const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
@@ -5970,7 +6513,9 @@ function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, roll
         && node.body?.statements.length === 1 && ts.isReturnStatement(node.body.statements[0])
         && node.body.statements[0].expression?.kind === ts.SyntaxKind.TrueKeyword);
       if (selectorIsTrue(oldContract) && selectorIsTrue(left.program.getSourceFile(resolve(left.root, selectorPath)))) {
-        const model = finiteVoiceFormatReaderSourceModel(ts, left, right, current, previous);
+        let model;
+        try { model = finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous); }
+        catch { model = finiteVoiceFormatReaderSourceModel(ts, left, right, current, previous); }
         return [...model.projected].every(([path, value]) => left.modules.get(resolve(left.root, path)) === value.source
           && right.modules.get(resolve(right.root, path)) === model.rollbackModules.get(path));
       }
