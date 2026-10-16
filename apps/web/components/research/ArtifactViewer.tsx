@@ -37,7 +37,8 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [preview, setPreview] = useState<{ kind: PreviewKind; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ kind: PreviewKind; url: string; artifactId: string; logicalPath: string } | null>(null);
+  const currentPreview = preview?.artifactId === artifactId && preview.logicalPath === logicalPath ? preview : null;
 
   const revokePreview = useCallback(() => {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
@@ -89,7 +90,7 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
       if (requestId !== requestVersion.current) return;
       const url = URL.createObjectURL(new Blob([blob], { type: contentType }));
       objectUrl.current = url;
-      setPreview({ kind: previewType.kind, url });
+      setPreview({ kind: previewType.kind, url, artifactId, logicalPath });
     } catch {
       if (requestId === requestVersion.current) setError(true);
     } finally {
@@ -111,11 +112,16 @@ export function ArtifactViewer({ artifactId, logicalPath }: { artifactId: string
             </div>
             <DialogClose asChild><button className="min-h-11 shrink-0 rounded-control border border-os-rule-paper px-3 text-sm text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button">{t('close')}</button></DialogClose>
           </div>
+          {currentPreview?.kind === 'pdf' ? <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <p className="m-0 w-full text-sm leading-6 text-os-muted-paper">{t('pdfPreviewNotice')}</p>
+            <a className="inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" href={currentPreview.url} rel="noopener noreferrer" target="_blank">{t('openOriginal')}</a>
+            <a className="inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download={logicalPath} href={currentPreview.url}>{t('downloadOriginal')}</a>
+          </div> : null}
           <div className="mt-5 min-h-48 border border-os-rule-paper bg-os-paper-strong">
             {loading ? <p className="p-5 text-sm text-os-muted-paper" role="status">{t('loading')}</p> : null}
             {error ? <div className="p-5"><p className="m-0 text-sm leading-6 text-state-danger" role="alert">{t('unavailable')}</p><button className="mt-3 min-h-11 rounded-control border border-os-rule-paper px-4 text-sm text-os-vermilion-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" type="button" onClick={() => void openPreview()}>{commonT('retry')}</button></div> : null}
-            {preview?.kind === 'image' ? <img alt={logicalPath} className="mx-auto max-h-[65dvh] w-auto max-w-full object-contain" src={preview.url} /> : null}
-            {preview?.kind === 'pdf' ? <object aria-label={t('documentTitle', { name: logicalPath })} className="h-[65dvh] w-full bg-white" data={preview.url} type="application/pdf"><p className="p-5 text-sm text-os-ink">{t('unavailable')}</p></object> : null}
+            {currentPreview?.kind === 'image' ? <img alt={logicalPath} className="mx-auto max-h-[65dvh] w-auto max-w-full object-contain" src={currentPreview.url} /> : null}
+            {currentPreview?.kind === 'pdf' ? <object aria-label={t('documentTitle', { name: logicalPath })} className="h-[65dvh] w-full bg-white" data={currentPreview.url} type="application/pdf"><p className="p-5 text-sm text-os-ink">{t('unavailable')}</p></object> : null}
           </div>
           {error ? <a className="mt-4 inline-flex min-h-11 items-center text-os-vermilion-ink underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" download href={`/api/artifacts/${encodeURIComponent(artifactId)}/download`}>{t('download')}</a> : null}
         </DialogContent>

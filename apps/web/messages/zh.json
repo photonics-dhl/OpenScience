@@ -1289,6 +1289,9 @@
   "attachmentViewer": {
     "preview": "预览",
     "download": "下载",
+    "openOriginal": "打开原文",
+    "downloadOriginal": "下载原文",
+    "pdfPreviewNotice": "PDF 预览需浏览器支持；若未显示内容，可打开或下载原文。",
     "close": "关闭",
     "loading": "正在加载预览…",
     "unavailable": "无法预览此附件。请下载原始文件后查看。",
