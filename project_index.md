@@ -838,4 +838,4 @@ UI内容发布原件与唯一线上观察定位canonical `tmp/coordination/ui-co
 
 语音WAV R源码/唯一P2及完整8路径身份沿voice树 `tmp/voice-integration/wav-reader-r-{receipt.md,patch,postimages/}`、`wav-reader-r-p2.*`、`root-wav-r-collection.json`，原CI dispatch及唯一后继日志沿`root-wav-r-629460cd-ci-dispatch.json`与`ci-wav-r-629460cd-*`。UI现场变化只用原live-1c88目录观测和后继anomaly原件，不能由Content preservation推Core未变。
 
-UI异常原始前后图/DOM沿shared树 `tmp/ui-content-reading/live-1c88ff81-20261016/`；root一次只读数据库与六字段对照沿canonical `tmp/coordination/ui-content-1c88ff81-anomaly-{read.sql,read.sh,db.json,db-comparison.json}`。它们证明私有保存和差额，不证明输入事件来源。维护High728方案及后继候选副本沿既有协议目录 `PLAN.md` H与 `candidate-handoff/`，现役旧堆可执行性仍只见CURRENT。
+UI异常原始前后图/DOM沿shared树 `tmp/ui-content-reading/live-1c88ff81-20261016/`；root一次只读数据库与六字段对照沿canonical `tmp/coordination/ui-content-1c88ff81-anomaly-{read.sql,read.sh,db.json,db-comparison.json}`。同一独立源分析及条件恢复方案沿原 `tmp/coordination/ui-approved-group1-high.md` 的“1c88线上私有insight异常”节；证据证明私有保存和差额，不证明输入事件来源。语音两infra格式证明首实际Program合同沿voice树 `tmp/voice-integration/wav-reader-r-proof-red.log`，设计沿原 `wav-reader-r-receipt.md` Post-CI节，非实际pair通过。维护High728方案及后继候选副本沿既有协议目录 `PLAN.md` H与 `candidate-handoff/`，现役旧堆可执行性仍只见CURRENT。
