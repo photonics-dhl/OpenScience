@@ -13,15 +13,10 @@ base_id='sha256:52388ae1c2d4ea0e2fd9d347c97c97bd90612eedfdb5d1434610e62eba04433a
 test_file="$packet_dir/../server-resource-maintenance-20261015-worker-lifecycle.test.cjs"
 image="openscience-development/langfuse-worker:otel-shutdown-$source_sha"
 docker_cmd=(env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  DOCKER_BUILDKIT=1 docker --host unix:///var/run/docker.sock)
+  DOCKER_BUILDKIT=0 docker --host unix:///var/run/docker.sock)
 [[ -f "$test_file" && -f "$packet_dir/instrumentation.js" && -f "$packet_dir/shutdown.js" ]]
 [[ "$("${docker_cmd[@]}" context inspect default --format '{{.Endpoints.docker.Host}}')" == 'unix:///var/run/docker.sock' ]]
-# Inspect only; never bootstrap/create a builder or accept a separate cache.
-builder_info="$("${docker_cmd[@]}" buildx inspect default)"
-[[ "$(awk '/^Driver:[[:space:]]/ {print $2}' <<<"$builder_info")" == docker ]]
-[[ "$(awk '/^[[:space:]]*Endpoint:[[:space:]]/ {n++} END {print n+0}' <<<"$builder_info")" == 1 ]]
-builder_endpoint="$(awk '/^[[:space:]]*Endpoint:[[:space:]]/ {print $2}' <<<"$builder_info")"
-[[ "$builder_endpoint" == default || "$builder_endpoint" == unix:///var/run/docker.sock ]]
+# Explicit existing same-daemon legacy builder; no plugin bootstrap or fallback.
 [[ "$("${docker_cmd[@]}" image inspect --format '{{.Id}}' "$base")" == "$base_id" ]]
 # Do not replace an existing local artifact under the same source name.
 if "${docker_cmd[@]}" image inspect "$image" >/dev/null 2>&1; then
@@ -29,7 +24,7 @@ if "${docker_cmd[@]}" image inspect "$image" >/dev/null 2>&1; then
   exit 1
 fi
 chmod 0644 "$packet_dir/instrumentation.js" "$packet_dir/shutdown.js" "$test_file"
-"${docker_cmd[@]}" buildx build --builder default --pull=false --network none --tag "$image" "$packet_dir"
+"${docker_cmd[@]}" build --pull=false --network none --tag "$image" "$packet_dir"
 candidate_id="$("${docker_cmd[@]}" image inspect --format '{{.Id}}' "$image")"
 printf 'BASE_IMAGE_ID=%s\nCANDIDATE_IMAGE_ID=%s\nSOURCE_COMMIT=%s\n' "$base_id" "$candidate_id" "$source_sha"
 common=(--rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges

@@ -187,7 +187,7 @@ The existing stage and evidence are recorded only in CURRENT.
 adjacent `server-resource-maintenance-20261015-worker-lifecycle.test.cjs` to a
 private staging directory. Invoke `bash worker-sdk-image/verify-isolated.sh <full-source-sha>`
 with the actual pushed commit. The script accepts only the existing local Docker
-engine/default builder and cached pinned base. It builds two COPY changes, then
+engine, explicitly selected legacy builder (DOCKER_BUILDKIT=0), and cached pinned base. It builds two COPY changes, then
 uses isolated network-none, read-only containers with no application environment,
 production volumes, daemon socket or real app entry. No install/pull fallback or
 service switch is authorized by this command. The flags do not promise absolute
