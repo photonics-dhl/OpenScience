@@ -854,3 +854,5 @@ PDF原生观察限制与语音R操作包导航（2026-10-16）：shared树`tmp/u
 
 
 图片完整Source收取与新精确CI导航（2026-10-16）：原High `tmp/coordination/native-image-review-json-scope-high.md:1170`、root `selected-r-high-final-root-check.json`、reference树 `tmp/first-image/selected-r-high-final-*` 保存整单位零项GO与4cc收取；root后继四交叠沿同树 `selected-r-root-composition-{provenance,resolution}.json`/merge.log。语音ba276唯一新run沿canonical `tmp/coordination/voice-wav-r-ba276d8e-{ci-request,ci-run}.json`，旧82f4失败原件不重取。UI独立readable R写集来自原High621–646和shared树 `tmp/ui-content-reading/r-reader-source-map-20261016.md`，实施与验证状态只见CURRENT；这些路径不授额外Provider/浏览器/运维。
+
+组合后唯一有限修复沿原High1187–1210及reference树 `tmp/first-image/selected-r-root-actual-voice-pair-readonly.{md,cjs,json,log}`；原399/399真实source UNKNOWN与root隐私43/语义类型0分别留 `selected-r-root-composition-{privacy,types}.log`，不互相替代。
