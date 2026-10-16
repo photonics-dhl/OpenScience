@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Script } from 'node:vm';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -7680,7 +7681,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
       return object({ title: str, narrative: object({ mainMessage: str, audience: str }), scenes: { type: 'array', minItems: 1, maxItems: 6, items: scienceSceneSchema(domain, originalRefRequired) } });
     };`, ts.ScriptTarget.ES2022, true).statements[0].declarationList.declarations[0].initializer;
   const pureInitializers = [], declarations = [], modules = [], checking = new Set();
-  const cache = new Map();
+  const cache = new Map(), coldCache = new Map();
   const retainedInitializer = (owner, initializer) => {
     if (!ts.isVariableDeclaration(initializer) || !ts.isIdentifier(initializer.name) || !initializer.initializer) return false;
     const other = owner === context ? rollbackContext : context;
@@ -7689,10 +7690,10 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
       .find(value => ts.isIdentifier(value.name) && value.name.text === initializer.name.text);
     return previous?.initializer && JSON.stringify(owner.canonical(initializer.initializer)) === JSON.stringify(other.canonical(previous.initializer));
   };
-  const pure = (raw, initializer, owner = context, locals = new Map()) => {
+  const pure = (raw, initializer, owner = context, locals = new Map(), retainedLoading = true) => {
     const node = unwrap(raw); need(node && !checking.has(node), node);
     checking.add(node);
-    const within = (value, seed = initializer) => pure(value, seed, owner, locals);
+    const within = (value, seed = initializer) => pure(value, seed, owner, locals, retainedLoading);
     const dataObject = value => ['object', 'tool'].includes(value);
     const dataArray = value => ['array', 'tools'].includes(value);
     const variable = identifier => {
@@ -7729,7 +7730,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
       // TS5.5 accepts invalid regex spellings without syntactic diagnostics.
       // Only an exactly retained old initializer has the old loading premise;
       // a new literal is UNKNOWN, never executed or interpreted here.
-      if (ts.isRegularExpressionLiteral(node)) { need(retainedInitializer(owner, initializer), node); return 'primitive'; }
+      if (ts.isRegularExpressionLiteral(node)) { need(retainedLoading && retainedInitializer(owner, initializer), node); return 'primitive'; }
       if (ts.isLiteralExpression(node) || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(node.kind)) return 'primitive';
       if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return 'function';
       if (ts.isArrayLiteralExpression(node)) {
@@ -7759,8 +7760,9 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
         const bound = symbol(node, owner);
         if (locals.has(bound)) return locals.get(bound);
         const declaration = variable(node);
-        if (!cache.has(declaration)) cache.set(declaration, pure(declaration.initializer, declaration, owner));
-        return cache.get(declaration);
+        const memo = retainedLoading ? cache : coldCache;
+        if (!memo.has(declaration)) memo.set(declaration, pure(declaration.initializer, declaration, owner, new Map(), retainedLoading));
+        return memo.get(declaration);
       }
       if (ts.isPropertyAccessExpression(node)) {
         if (locals.get(symbol(node.expression, owner)) === 'tool') {
@@ -7795,7 +7797,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
           (owner === context ? rollbackContext : context).root, relative(owner.root, initializer.getSourceFile().fileName)));
         const declaration = other?.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
           .find(value => value.name.text === initializer.name?.text);
-        need(ts.isVariableDeclaration(initializer) && declaration?.initializer
+        need(retainedLoading && ts.isVariableDeclaration(initializer) && declaration?.initializer
           && JSON.stringify(owner.canonical(initializer.initializer)) === JSON.stringify(owner.canonical(declaration.initializer))
           && node.arguments.every(value => within(value) === 'string'), node); return 'regexp';
       }
@@ -7827,7 +7829,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
             && !callback.parameters[0].initializer && !callback.parameters[0].dotDotDotToken && !ts.isBlock(callback.body)
             && !callback.modifiers?.length, callback);
           const bindings = new Map(locals).set(symbol(callback.parameters[0].name, owner), 'tool');
-          need(pure(callback.body, initializer, owner, bindings) === 'tool', callback); return 'tools';
+          need(pure(callback.body, initializer, owner, bindings, retainedLoading) === 'tool', callback); return 'tools';
         }
         fail(node);
       }
@@ -7850,7 +7852,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
         for (const name of ['str', 'list']) {
           const value = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
             .find(value => value.name.text === name);
-          if (!(value && value.end < bound.pos && dataObject(pure(value.initializer, value, owner))))
+          if (!(value && value.end < bound.pos && dataObject(pure(value.initializer, value, owner, new Map(), retainedLoading))))
             throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `schema-${name}`, initializationSite };
         }
         if (equal(scienceGrammar)) {
@@ -7943,7 +7945,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
         if (!target || target.isDeclarationFile || !/^(?:apps|packages|infra)\//u.test(path)) return { external: node.moduleSpecifier.text };
         return { owned: path };
       });
-      result.set(path, { source: parsed, requests });
+      result.set(path, { source: parsed, requests, runtime });
     }
     return result;
   };
@@ -7972,7 +7974,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   };
   for (const path of currentGraph.keys()) if (!indices.has(path)) visit(path);
   const changedCycles = components.filter(component => newEdges.some(edge => component.includes(edge.from) && component.includes(edge.to)));
-  const moved = new Set(changedCycles.flat()), ordering = [];
+  const moved = new Set(changedCycles.flat()), newlyReachable = new Set(), ordering = [];
   const entryPaths = context.roots?.map(([path]) => path) ?? ['apps/agent-worker/src/index.ts'];
   const builtins = new Set(builtinModules.map(value => value.replace(/^node:/u, '')));
   const order = (graph, entry) => {
@@ -7996,8 +7998,9 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
     // the additional eager-order obligation checked here.
     need(JSON.stringify(before.external) === JSON.stringify(after.external), currentGraph.get(entry)?.source);
     const a = before.modules, b = after.modules;
-    need(a.length <= 1024 && b.length <= 1024 && a.length === b.length
+    need(a.length <= 1024 && b.length <= 1024
       && a.every(path => b.includes(path)), currentGraph.get(entry)?.source);
+    for (const path of b) if (!a.includes(path)) newlyReachable.add(path);
     const lengths = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
     for (let i = a.length - 1; i >= 0; i -= 1) for (let j = b.length - 1; j >= 0; j -= 1)
       lengths[i][j] = a[i] === b[j] ? 1 + lengths[i + 1][j + 1] : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
@@ -8013,13 +8016,28 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   const cycleInitializers = [];
   for (const path of moved) for (const owner of [context, rollbackContext]) {
     initializationSite = 'moved-source';
-    const parsed = (owner === context ? currentGraph : oldGraph).get(path)?.source; need(parsed, context.program.getSourceFile(resolve(context.root, path)));
+    const module = (owner === context ? currentGraph : oldGraph).get(path), parsed = module?.source;
+    need(parsed, context.program.getSourceFile(resolve(context.root, path)));
+    if (newlyReachable.has(path)) {
+      // Loading a newly reachable module parses literals in deferred bodies
+      // too. TS syntactic diagnostics do not validate every regexp pattern.
+      // Compile only the real emitted literal token, including its flags;
+      // never execute it or the module, and never expose the parser error.
+      const syntax = node => {
+        if (ts.isRegularExpressionLiteral(node)) {
+          try { new Script(`(${node.getText(module.runtime)})`); } catch { fail(parsed); }
+        }
+        ts.forEachChild(node, syntax);
+      };
+      syntax(module.runtime);
+    }
     for (const statement of parsed.statements) {
       if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isInterfaceDeclaration(statement)
         || ts.isTypeAliasDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
       if (ts.isVariableStatement(statement)) {
         initializationSite = 'moved-initializer';
-        for (const declaration of statement.declarationList.declarations) if (declaration.initializer) pure(declaration.initializer, declaration, owner);
+        for (const declaration of statement.declarationList.declarations) if (declaration.initializer)
+          pure(declaration.initializer, declaration, owner, new Map(), !newlyReachable.has(path));
       } else if (ts.isClassDeclaration(statement)) {
         initializationSite = 'moved-class';
         need(!(statement.modifiers ?? []).some(modifier => modifier.kind === ts.SyntaxKind.Decorator), statement);

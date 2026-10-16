@@ -12,7 +12,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { runInNewContext } from 'node:vm';
+import { runInNewContext, Script } from 'node:vm';
 import * as deployLock from './production-deploy-lock.mjs';
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
@@ -245,6 +245,133 @@ test('private eager diagnostics identify the original initialization phase and s
     const output = JSON.parse(events[0].slice(events[0].indexOf(' ') + 1));
     assert.equal(output.module, undefined, 'budget exhaustion must omit attribution, never guess it');
     assert.equal(JSON.stringify(output).includes('ballast'), false);
+  });
+});
+
+test('selected entry may reach an old captured pure module without borrowing an old entry loading premise', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const diagnostic = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  const functions = runInNewContext(`${collector}; ${initialization}; ${diagnostic};
+    ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [], Script,
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types, console: { error: value => events.push(value) },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(join(parent, 'entry-reachability-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous');
+  const roots = [['apps/reader.ts'], ['apps/extra.ts'], ['apps/old-a.ts'], ['apps/old-b.ts']];
+  const pair = async (moduleText, a = "import './extra.js';", b = '') => {
+    for (const [root, entry] of [[candidate, a], [previous, b]]) {
+      await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+      await writeFile(join(root, 'apps/reader.ts'), entry);
+      await writeFile(join(root, 'apps/extra.ts'), typeof moduleText === 'string' ? moduleText : moduleText[root === candidate ? 0 : 1]);
+      for (const file of ['old-a', 'old-b']) await writeFile(join(root, `apps/${file}.ts`), 'export const old = globalThis.NEVER_EXECUTE();');
+    }
+    const current = functions.collect(ts, candidate, roots), old = functions.collect(ts, previous, roots);
+    return { current, old, left: contexts.get(current), right: contexts.get(old) };
+  };
+  const check = value => functions.initialize(ts, value.left, value.right, { current: value.current, previous: value.old });
+  await t.test('natural collector original independent entry gains only an existing pure module', async () => {
+    const value = await pair('const object = () => ({}); export function helper() { return object(); }');
+    const key = 'module:apps/extra.ts';
+    assert.equal(JSON.stringify(new Map(value.current).get(key)), JSON.stringify(new Map(value.old).get(key)));
+    const result = check(value);
+    assert.equal(result.status, 'conditional');
+    assert.ok(result.moved.has('apps/extra.ts'));
+    for (const [context, root] of [[value.left, candidate], [value.right, previous]])
+      assert.ok(result.cycleInitializers.some(item => item.source === context.modules.get(resolve(root, 'apps/extra.ts'))));
+  });
+  await t.test('valid deferred literals include the actual review literal and never execute their body', async () => {
+    const actual = ts.createSourceFile('generated-image-review.ts',
+      readFileSync(new URL('../../apps/agent-worker/src/presentation/generated-image-review.ts', import.meta.url), 'utf8'), ts.ScriptTarget.ES2022, true);
+    let token;
+    const visit = node => {
+      if (ts.isRegularExpressionLiteral(node) && node.text === '/^[a-f0-9]{64}$/u') token = node.getText(actual);
+      ts.forEachChild(node, visit);
+    }; visit(actual); assert.ok(token, 'the actual paired review source must supply this token');
+    for (const text of [`export function helper() { globalThis.NEVER_EXECUTE(); return ${token}; }`,
+      'export const unused = () => /[a-z]+/iu;',
+      'export class Value { unused() { return /[a-z]+/iu; } }',
+      "export function unused() { return new RegExp('[', 'u'); }",
+      'export const text = "/a/z is text, not a literal";']) {
+      const value = await pair(text);
+      assert.equal(check(value).status, 'conditional');
+    }
+  });
+  for (const [name, text] of [
+    ['unknown eager call', 'export const value = globalThis.NEVER_EXECUTE();'],
+    ['getter', 'export const value = { get hidden() { return globalThis.NEVER_EXECUTE(); } };'],
+    ['class static block', 'export class Value { static { globalThis.NEVER_EXECUTE(); } }'],
+    ['retained invalid RegExp constructor', "export const value = new RegExp('[', 'u');"],
+    ['retained constructor nested inside data', "export const value = { pattern: new RegExp('[', 'u') };"],
+    ['retained regex nested inside data', 'export const value = [/a/u];'],
+    ['retained invalid regex literal', 'export const value = /[z-a]/u;'],
+    ['invalid regex in an uncalled function', 'export function unused() { return /[z-a]/u; }'],
+    ['invalid regex in an uncalled arrow', 'export const unused = () => /[z-a]/u;'],
+    ['invalid regex in an uncalled class method', 'export class Value { unused() { return /[z-a]/u; } }'],
+    ['duplicate flags in a deferred literal', 'export function unused() { return /a/gg; }'],
+    ['unknown flag in a deferred literal', 'export function unused() { return /a/z; }'],
+  ]) await t.test(`newly reachable ${name} still refuses even if both module fingerprints match`, async () => {
+    const value = await pair(text), key = 'module:apps/extra.ts';
+    assert.equal(JSON.stringify(new Map(value.current).get(key)), JSON.stringify(new Map(value.old).get(key)));
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  });
+  await t.test('old entry cannot lose a module even when it is pure', async () => {
+    const value = await pair('export const value = 1;', '', "import './extra.js';");
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
+  });
+  await t.test('new pure reachability cannot hide reordered old unknown effects', async () => {
+    const value = await pair('export const value = 1;', "import './old-b.js'; import './extra.js'; import './old-a.js';",
+      "import './old-a.js'; import './old-b.js';");
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'moved-initializer');
+  });
+  await t.test('the rollback emitted source is independently syntax checked', async () => {
+    const value = await pair(['export function helper() { return /ok/u; }', 'export function helper() { return /[z-a]/u; }']);
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.node === value.right.modules.get(resolve(previous, 'apps/extra.ts')));
+  });
+  await t.test('parser failure reports only the original captured module and fixed reason', async () => {
+    const value = await pair('export function unused() { return /[z-a]SECRET/u; }');
+    let failure;
+    assert.throws(() => check(value), error => {
+      failure = error; return error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+        && error.node === value.left.modules.get(resolve(candidate, 'apps/extra.ts'));
+    });
+    events.length = 0;
+    functions.emit(ts, value.current, value.old, candidate, previous, roots, 'selected-guide', 'model', failure);
+    assert.equal(events.length, 1);
+    assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ') + 1)).module, 'module:apps/extra.ts');
+    assert.doesNotMatch(events[0], /SECRET|\[z-a\]|SyntaxError|regular expression|candidate|previous/u);
+  });
+  await t.test('already reachable moved initializers retain the original loading premise', async () => {
+    const value = await pair('export const retained = /a/u;', "import './old-a.js'; import './extra.js';",
+      "import './extra.js'; import './old-a.js';");
+    const result = check(value);
+    assert.equal(result.status, 'conditional'); assert.ok(result.moved.has('apps/extra.ts'));
+  });
+  await t.test('new reachability never waives external loading order', async () => {
+    // Synthetic metadata only, no installed/copied/executed external runtime.
+    // The original collector reads these exact manifests itself.
+    for (const root of [candidate, previous]) for (const name of ['fixture-alpha', 'fixture-beta']) {
+      const directory = join(root, 'apps/node_modules', name); await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'package.json'), JSON.stringify({ name, version: '0.0.0' }));
+    }
+    const extraExternal = await pair("import 'fixture-alpha'; export const value = 1;");
+    assert.throws(() => check(extraExternal), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
+    const reordered = await pair('export const value = 1;',
+      "import 'fixture-beta'; import './extra.js'; import 'fixture-alpha';",
+      "import 'fixture-alpha'; import 'fixture-beta';");
+    assert.throws(() => check(reordered), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
   });
 });
 
@@ -1386,7 +1513,7 @@ function selectedGuideSourceComponents() {
     pair: finiteSelectedGuidePairCompatibility,
     httpLibrary: finiteSelectedGuideApiLibraryTerms,
     initialization: finiteSelectedGuideInitializationTerms })`, { relative, resolve, isAbsolute, builtinModules,
-      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap() });
+      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap(), Script });
 }
 
 function selectedGuideSourceContext(actual) {
