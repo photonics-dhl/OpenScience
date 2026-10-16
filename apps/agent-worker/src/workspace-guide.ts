@@ -1,9 +1,14 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import type { StorageAdapter } from '@openscience/storage';
+import type { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
+import { getBlobStorageKey } from '@openscience/storage';
 import {
   buildInterestContext,
   createHermesFirstImageContinuation,
-  parseWorkspaceGuidePayload,
+  readWorkspaceGuidePayloadWithSelectedImage,
+  requireNativeAgentExecutionAuthority, readNativeAgentExecution,
+  projectIllustrationEvidence, readWorkspaceSelectedImageDraft, workspaceSelectedImageDraftSource,
   presentationStoryboardView,
   validateInterestContext,
   type AgentDeps,
@@ -12,7 +17,14 @@ import {
   type WorkspaceWritingCitation,
   type WorkspaceWritingDraft,
   type WorkspaceWritingKind,
+  type WorkspaceSelectedImageDraft,
 } from '@openscience/domain';
+import type { createPresentationGenerationHandler } from './presentation/handler';
+import { canonicalPresentationClaims, type PresentationClaim } from './presentation/chart-generator';
+import { readPresentationInput, generatedImageReviewAttachment } from './presentation/generated-image-review';
+import { ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES } from '@openscience/ai-gateway';
+import { runNativeSelectedImageGuideTask } from './native-agent/illustration-task';
+import { resolveVisualNarrativeSource } from './scientific-writing-source';
 import { createWritingSourcePacket, materializeWritingCitations, normalizeWritingCitationMarkers, remapWritingDraftCitations, writingCitationIds } from './citation-management';
 import { SCIENTIFIC_SYNTHESIS_OPTIONS } from './scientific-generation-options';
 import { resolveScientificWritingSource, WritingSourceChoiceError } from './scientific-writing-source';
@@ -22,6 +34,9 @@ import { SCIENTIFIC_WRITING_SKILL } from './skills/scientific-writing';
 type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
 
 export interface WorkspaceGuideResult extends Record<string, unknown> {
+  selectedImageReference?: WorkspaceSelectedImageDraft['source'];
+  /** Server-authored private proposal after the actual selected PNG and sources were read. */
+  selectedImageDraft?: WorkspaceSelectedImageDraft;
   /** Written by the Domain continuation, not accepted from model JSON. */
   firstImageRun?: { runId: string; versionId: string };
   summary: string;
@@ -451,8 +466,9 @@ export async function workspaceGuideHandler(
   gateway: AiGateway,
   deps: Pick<AgentDeps, 'prisma'> & Partial<HermesResearchRunDeps>,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt?: number },
+  nativeAgent?: NonNullable<NonNullable<Parameters<typeof createPresentationGenerationHandler>[0]>['nativeAgent']>,
 ): Promise<WorkspaceGuideResult> {
-  const payload = parseWorkspaceGuidePayload(task.payload);
+  const payload = readWorkspaceGuidePayloadWithSelectedImage(task.payload);
   const interestContext = task.interestContext === undefined || task.interestContext === null
     ? buildInterestContext({ currentGoal: payload.goal })
     : validateInterestContext(task.interestContext);
@@ -474,6 +490,82 @@ export async function workspaceGuideHandler(
   });
   if (!ownerTask || ownerTask.kind !== 'workspace.guide') throw new Error('workspace.guide 服务端任务上下文无效');
   const userId = ownerTask.session.userId;
+  if (payload.context.presentation?.selectedImageAssetId) {
+    if (!nativeAgent || !deps.storage || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt! < 1)
+      throw new Error('[blocked] Native selected-image host is unavailable');
+    const storage = deps.storage;
+    const authority = await deps.prisma.$transaction(tx => requireNativeAgentExecutionAuthority(tx,
+      { taskId: task.id, executionAttempt: task.executionAttempt! }), { isolationLevel: 'Serializable' });
+    if (!('selectedImageSource' in authority) || !authority.selectedImageSource || !isDeepStrictEqual(ownerTask.payload, task.payload))
+      throw new Error('[blocked] Selected-image task binding changed');
+    const selected = authority.selectedImageSource;
+    const authorize = async (tx: Prisma.TransactionClient) => {
+      const current = await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt! });
+      if (!('selectedImageSource' in current) || !current.selectedImageSource
+        || !isDeepStrictEqual(current.selectedImageSource.binding, selected.binding) || !isDeepStrictEqual(current.task.payload, ownerTask.payload))
+        throw new Error('[blocked] Selected-image source changed');
+      const bytes = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
+      generatedImageReviewAttachment(bytes, selected.binding.contentHash, selected.binding.mimeType);
+    };
+    const pixels = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES);
+    const attachment = generatedImageReviewAttachment(pixels, selected.binding.contentHash, selected.binding.mimeType);
+    const scope = { userId, workspaceId: authority.researchObject.workspaceId, researchObjectId: selected.binding.researchObjectId,
+      versionId: selected.binding.versionId, sourceClaimIds: selected.binding.sourceClaimIds };
+    const narrative = await resolveVisualNarrativeSource({ prisma: deps.prisma, storage }, scope, selected.evidence);
+    if (narrative.identity !== selected.binding.narrativeSourceIdentity) throw new Error('[blocked] Selected-image paper changed');
+    const evidence = await projectIllustrationEvidence(storage, selected.evidence);
+    const priorTasks = await deps.prisma.agentTask.findMany({ where: { sessionId: ownerTask.sessionId, kind: 'workspace.guide',
+      status: 'succeeded', deletedAt: null, createdAt: { lt: ownerTask.createdAt },
+      result: { path: ['selectedImageContext', 'assetId'], equals: selected.binding.assetId } }, orderBy: { createdAt: 'desc' }, take: 4 });
+    const previousExchanges = priorTasks.flatMap(prior => {
+      const saved = record(prior.result), context = record(saved.selectedImageContext), reply = record(saved.selectedImageReply), request = record(prior.payload);
+      return context.assetId === selected.binding.assetId && context.researchObjectId === scope.researchObjectId && context.versionId === scope.versionId
+        && typeof request.goal === 'string' && request.goal.length <= 2000 && typeof reply.summary === 'string' && reply.summary.length <= 1200
+        ? [{ request: request.goal, reply: reply.summary }] : [];
+    }).reverse();
+    const claims = canonicalPresentationClaims(selected.claims.filter(claim => selected.binding.sceneSourceClaimIds.includes(claim.id)).map(claim => ({ ...claim,
+      sourcePassages: evidence.filter(row => row.claimId === claim.id).map(row => ({ evidenceId: row.id, text: row.exactQuote!, relation: row.relation })) })) as PresentationClaim[]);
+    let paperBytes: Buffer | undefined;
+    const actual = await runNativeSelectedImageGuideTask({ gateway: nativeAgent.gateway, deps: { ...deps, storage } as AgentDeps & { storage: StorageAdapter },
+      task: { id: task.id, executionAttempt: task.executionAttempt!, result: ownerTask.result },
+      sourceMap: narrative.sourceMap, sourceMapRef: narrative.reference, sourceEvidenceIdentity: selected.binding.sourceEvidenceIdentity,
+      claims, paperOriginals: new Map(), settings: { locale: payload.locale, style: selected.settings.style, output: 'image', narrative: true, narrativeSceneLimit: 1,
+        instruction: 'Revise only the selected image. Read the complete userRequest and original scientific brief in context.selectedImage.' },
+      narrativeSource: narrative.context, previousExchanges, selectedImage: { binding: selected.binding, illustration: selected.illustration, userRequest: payload.goal },
+      selectedImageAttachment: attachment, inboxRoot: nativeAgent.inboxRoot, authorize,
+      semanticSearch: nativeAgent.semanticSearchFor ? await nativeAgent.semanticSearchFor({ researchObjectId: scope.researchObjectId,
+        artifactId: narrative.reference.artifactId, sourceVersionId: scope.versionId, contentHash: narrative.reference.contentHash }) : undefined,
+      renderPages: async pages => {
+        paperBytes ??= await readPresentationInput(storage, getBlobStorageKey(narrative.reference.contentHash), narrative.reference.contentHash, 100 * 1024 * 1024);
+        return nativeAgent.renderPages({ artifactId: narrative.reference.artifactId, contentHash: narrative.reference.contentHash, content: paperBytes, mediaType: 'application/pdf' }, pages);
+      } });
+    const question = actual.kind === 'reply';
+    const accepted = !question && actual.review.decision === 'accepted';
+    const selectedImageDraft = accepted ? readWorkspaceSelectedImageDraft({ status: 'private-proposal',
+      source: workspaceSelectedImageDraftSource(selected.binding), document: actual.document }) : undefined;
+    const summary = question ? actual.reply.text : accepted
+      ? payload.locale === 'zh' ? '已查看原图并保存私有修改提案；尚未生成新图，原图保持保留。' : 'The original image was read and a private revision proposal saved. No new image has been generated; the original is retained.'
+      : actual.review.summary.slice(0, 1200);
+    const paid = question ? actual : actual.review;
+    const selectedImageReply = { kind: question ? actual.reply.kind : accepted ? 'proposal' : 'blocked', sourceBinding: selected.binding,
+      target: { provider: paid.provider, model: paid.model, promptHash: paid.promptHash }, responseHash: paid.responseHash, summary,
+      ...(question ? { replyToolCallId: actual.reply.toolCallId } : { reviewToolCallId: actual.nativeAgent.reviewToolCallId }) };
+    await deps.prisma.$transaction(async tx => {
+      await authorize(tx);
+      const current = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+      const cp = readNativeAgentExecution(current.result)?.checkpoint;
+      if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+        || cp.responseHash !== paid.responseHash || !isDeepStrictEqual(cp.target, selectedImageReply.target)) throw new Error('[blocked] Selected-image paid completion changed');
+      const stored = current.result as Record<string, unknown>;
+      const update = await tx.agentTask.updateMany({ where: { id: task.id, status: 'running', deletedAt: null, executionAttempt: task.executionAttempt!, result: { equals: current.result! } },
+        data: { result: { ...stored, selectedImageReply, ...(selectedImageDraft ? { selectedImageDraft } : {}),
+          ...(!question ? { storyboardReview: actual.review, nativeIllustration: actual.nativeAgent } : {}) } as unknown as Prisma.InputJsonObject } });
+      if (update.count !== 1) throw new Error('[blocked] Selected-image result changed');
+    }, { isolationLevel: 'Serializable' });
+    return { summary, nextSteps: [], needsMoreInformation: question ? actual.reply.kind === 'question' : !accepted,
+      selectedImageReference: workspaceSelectedImageDraftSource(selected.binding), ...(selectedImageDraft ? { selectedImageDraft } : {}),
+      sourceMapRef: narrative.reference, selectedImageReply, ...(!question ? { storyboardReview: actual.review } : {}) };
+  }
   const requestedWriting = writingIntent(payload.goal, Boolean(payload.context.writingDraft));
   if (requestedWriting) {
     if (!deps.storage) throw new Error('[blocked] Scientific writing storage is unavailable');

@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
 import type { AgentTask, Prisma } from '@prisma/client';
 import { parseDocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { AgentError } from './errors';
@@ -11,7 +12,9 @@ import { requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecut
 import { journalSourceProcessingAllowed } from '../journal/enhancements';
 import { journalDigest } from '../journal/content';
 import { readNativeImageAgentExecution, readNativeImageReviewCheckpoint } from '../assets/native-image-review';
-import { readStoredGeneratedImageReview, requireSceneImageParent, type ImageReviewIdentity } from '../assets/scene-image';
+import { readStoredGeneratedImageReview, requireSceneImageParent, requireSelectedImageSource, type ImageReviewIdentity, type SelectedImageBinding } from '../assets/scene-image';
+import { readWorkspaceGuidePayloadWithSelectedImage, readWorkspaceSelectedImageDraft, workspaceSelectedImageDraftSource } from './workspace-guide-contract';
+import { parseStoryboardDocument } from '../assets/storyboard';
 
 export interface NativeAgentRuntimeConfig { runtimeId: string; skillCatalogueId: string; model: string }
 /** Read only these non-secret server fields. Missing installation must not silently select another engine. */
@@ -60,6 +63,12 @@ const exact = (x: Record<string, unknown>, keys: string[]) => Object.keys(x).sor
 const nativePlanningContract = (x: unknown) => x === 'video-optional-audio-v1' || x === 'image-source-explicit-trig-v1';
 function blocked(): never { throw new AgentError('ILLEGAL_TRANSITION', '[blocked] Native Agent execution binding changed'); }
 
+function selectedGuide(task: { kind: string; payload: unknown } | null) {
+  if (task?.kind !== 'workspace.guide') return undefined;
+  const payload = readWorkspaceGuidePayloadWithSelectedImage(task.payload);
+  return payload.context.presentation?.selectedImageAssetId ? payload : undefined;
+}
+
 /** Reuse live task/source/membership authority for every native call and for final scientific adoption. */
 export async function requireNativeAgentExecutionAuthority(tx: Prisma.TransactionClient, input: { taskId: string; executionAttempt: number }) {
   await lockTrashReferences(tx);
@@ -100,6 +109,24 @@ export async function requireNativeAgentExecutionAuthority(tx: Prisma.Transactio
       || !isDeepStrictEqual(image.sourceClaims.map(link => link.claimId).sort(), planned.sourceClaimIds)
       || !readStoredGeneratedImageReview(provenance.imageReview, identity, task.result)) blocked();
     return { task, marker, artifact: null, researchObject: ro, workspace, sourceReview: undefined, sourceCorrection: undefined };
+  }
+  if (marker?.profile === 'paper-illustration' && task?.kind === 'workspace.guide') {
+    const guide = selectedGuide(task), presentation = guide?.context.presentation;
+    if (!guide || !presentation?.selectedImageAssetId || !presentation.versionId || task.deletedAt || task.status !== 'running'
+      || task.executionAttempt !== input.executionAttempt || task.session.deletedAt || task.session.status !== 'active'
+      || task.session.kind !== 'workspace.guide' || task.session.researchObjectId !== presentation.researchObjectId || !record(task.result)) blocked();
+    const selectedImageSource = await requireSelectedImageSource(tx, { userId: task.session.userId,
+      researchObjectId: presentation.researchObjectId, versionId: presentation.versionId, assetId: presentation.selectedImageAssetId });
+    if (!isDeepStrictEqual(task.result.selectedImageContext, selectedImageSource.binding)
+      || !isDeepStrictEqual(task.result.sourceMapRef, selectedImageSource.source.reference)) blocked();
+    const cp = marker.checkpoint, ref = selectedImageSource.source.reference;
+    if (cp && (cp.sourceKind || cp.artifactId !== ref.artifactId || cp.documentSha256 !== ref.contentHash || cp.sourceMapHash !== ref.serializedSha256)) blocked();
+    const ro = await tx.researchObject.findUnique({ where: { id: presentation.researchObjectId } });
+    if (!ro || ro.deletedAt) blocked();
+    const { workspace } = await requireActiveMembership(tx, ro.workspaceId, task.session.userId);
+    const artifact = await tx.artifact.findUnique({ where: { id: ref.artifactId } });
+    if (!artifact || artifact.deletedAt || artifact.bytesPurgedAt || artifact.workspaceId !== ro.workspaceId || artifact.blobSha256 !== ref.contentHash) blocked();
+    return { task, marker, artifact, researchObject: ro, workspace, sourceReview: undefined, sourceCorrection: undefined, selectedImageSource };
   }
   const sourceCorrection = await resolveNativeSourceCorrectionExecution(tx, { ownerTaskId: input.taskId, executionAttempt: input.executionAttempt });
   const payload = task?.payload;
@@ -222,8 +249,17 @@ export async function compareNativeAgentCheckpoint(tx: Pick<Prisma.TransactionCl
 }): Promise<void> {
   const task = await tx.agentTask.findUnique({ where: { id: input.taskId } });
   const marker = readNativeAgentExecution(task?.result);
-  if (!task || task.deletedAt || !marker || task.kind !== (['paper-illustration', 'image-review'].includes(marker.profile) ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
+  const selected = marker?.profile === 'paper-illustration' && task?.kind === 'workspace.guide' ? selectedGuide(task) : undefined;
+  if (!task || task.deletedAt || !marker || task.kind !== (selected ? 'workspace.guide' : ['paper-illustration', 'image-review'].includes(marker.profile) ? 'presentation.generate' : 'sdf.extract') || input.next.taskId !== task.id
     || !isDeepStrictEqual(marker.checkpoint, input.expected)) blocked();
+  if (selected) {
+    if (!record(task.result) || !record(task.result.selectedImageContext)
+      || task.result.selectedImageContext.assetId !== selected.context.presentation?.selectedImageAssetId) blocked();
+    const reference = parseDocumentSourceMapReference(task.result.sourceMapRef);
+    if (!isDeepStrictEqual(task.result.selectedImageContext.sourceMapRef, reference) || input.next.sourceKind
+      || input.next.artifactId !== reference.artifactId || input.next.documentSha256 !== reference.contentHash
+      || input.next.sourceMapHash !== reference.serializedSha256) blocked();
+  }
   if (input.expectedExecution !== undefined) {
     // A store can bind the entire original marker across awaits; CP progression has its separate exact comparison above.
     const identity = { ...marker }, expectedIdentity = { ...input.expectedExecution };
@@ -290,6 +326,17 @@ export async function requireNativeIllustrationTerminalSource(tx: Prisma.Transac
   nativeBaseProofReader?: Parameters<typeof requireStoryboardBase>[2]): Promise<void> {
   if (readNativeAgentExecution(task.result)?.profile !== 'paper-illustration') return;
   const result = record(task.result) ? task.result : {};
+  const guide = selectedGuide(task);
+  if (guide) {
+    const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
+    const presentation = guide.context.presentation!;
+    if (!session || session.deletedAt || session.status !== 'active' || session.kind !== 'workspace.guide'
+      || session.researchObjectId !== presentation.researchObjectId) blocked();
+    const current = await requireSelectedImageSource(tx, { userId: session.userId, researchObjectId: presentation.researchObjectId,
+      versionId: presentation.versionId!, assetId: presentation.selectedImageAssetId! });
+    if (!isDeepStrictEqual(result.selectedImageContext, current.binding) || !isDeepStrictEqual(result.sourceMapRef, current.source.reference)) blocked();
+    return;
+  }
   const context = record(result.nativeIllustrationContext) ? result.nativeIllustrationContext : undefined;
   const payload = parsePresentationGenerationPayload(task.payload);
   const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
@@ -322,6 +369,45 @@ export function nativeAgentTerminalResult(task: AgentTask, status: string, incom
   if (!marker) { if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution')) blocked(); return incoming; }
   if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution') && !isDeepStrictEqual(incoming.nativeAgentExecution, marker)) blocked();
   const privatePlan: Record<string, unknown> = {};
+  if (marker.profile === 'paper-illustration' && selectedGuide(task)) {
+    const stored = record(task.result) ? task.result : {};
+    for (const key of ['selectedImageContext', 'selectedImageReply', 'selectedImageDraft', 'sourceMapRef', 'storyboardReview', 'nativeIllustration']) {
+      if (record(incoming) && Object.hasOwn(incoming, key) && !isDeepStrictEqual(incoming[key], stored[key])) blocked();
+      if (Object.hasOwn(stored, key)) privatePlan[key] = stored[key];
+    }
+    if (status === 'succeeded') {
+      const cp = marker.checkpoint, reply = stored.selectedImageReply, binding = stored.selectedImageContext;
+      if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls || !record(incoming)
+        || !record(reply) || !record(binding) || !isDeepStrictEqual(reply.sourceBinding, binding)
+        || !isDeepStrictEqual(reply.target, cp.target) || reply.responseHash !== cp.responseHash
+        || !isDeepStrictEqual(incoming.selectedImageReply, reply) || incoming.summary !== reply.summary
+        || !Array.isArray(incoming.nextSteps) || incoming.nextSteps.length
+        || Object.keys(incoming).some(key => !['summary', 'nextSteps', 'needsMoreInformation', 'selectedImageReference', 'selectedImageDraft', 'sourceMapRef', 'selectedImageReply', 'storyboardReview'].includes(key))) blocked();
+      if (!Array.isArray(binding.sceneSourceClaimIds)
+        || !isDeepStrictEqual(incoming.selectedImageReference, workspaceSelectedImageDraftSource(binding as unknown as SelectedImageBinding))) blocked();
+      const source = parseDocumentSourceMapReference(stored.sourceMapRef);
+      if (cp.sourceKind || source.artifactId !== cp.artifactId || source.contentHash !== cp.documentSha256 || source.serializedSha256 !== cp.sourceMapHash) blocked();
+      if (reply.kind === 'proposal') {
+        const draft = readWorkspaceSelectedImageDraft(stored.selectedImageDraft);
+        const document = parseStoryboardDocument(draft.document, draft.source.sourceClaimIds, 'image');
+        if (!Array.isArray(binding.sceneSourceClaimIds) || !isDeepStrictEqual(draft.source, workspaceSelectedImageDraftSource(binding as unknown as SelectedImageBinding))
+          || !isDeepStrictEqual(incoming.selectedImageDraft, draft) || incoming.needsMoreInformation !== false
+          || !record(stored.storyboardReview) || stored.storyboardReview.candidateHash !== createHash('sha256').update(JSON.stringify(document)).digest('hex')) blocked();
+      } else if (reply.kind === 'question' || reply.kind === 'explanation' || reply.kind === 'blocked') {
+        if (stored.selectedImageDraft !== undefined || incoming.selectedImageDraft !== undefined || incoming.needsMoreInformation !== (reply.kind !== 'explanation')) blocked();
+        if (reply.kind !== 'blocked' && (!text(reply.replyToolCallId) || typeof reply.summary !== 'string' || reply.summary.length > (reply.kind === 'question' ? 400 : 1200))) blocked();
+      } else blocked();
+      if (reply.kind !== 'question' && reply.kind !== 'explanation') {
+        const review = stored.storyboardReview;
+        if (!record(review) || review.stage !== 'final-brief' || review.requestId !== task.id
+          || !['provider', 'model', 'promptHash'].every(key => review[key] === cp.target[key as keyof typeof cp.target])
+          || review.responseHash !== cp.responseHash || !isDeepStrictEqual(review, incoming.storyboardReview)
+          || (reply.kind === 'proposal' ? review.decision !== 'accepted' : !['revised', 'blocked'].includes(String(review.decision)))) blocked();
+      }
+    }
+    return { ...(record(incoming) ? incoming : {}), ...privatePlan, nativeAgentExecution: marker,
+      ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };
+  }
   if (marker.profile === 'image-review') {
     const checkpoint = readNativeImageReviewCheckpoint(task.result);
     if (status === 'succeeded' && (checkpoint?.mode !== 'agent-native' || checkpoint.state !== 'completed')) blocked();

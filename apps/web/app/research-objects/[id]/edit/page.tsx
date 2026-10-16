@@ -5,7 +5,7 @@ import { hasEmptyIngestionCore } from '@/lib/ingestion-display';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ResearchPresentation } from '@/components/presentation/ResearchPresentation';
-import type { WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
+import type { WorkspaceGuidePayload, WorkspaceGuideResult, HermesImageContext } from '@/lib/api';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import EditorLayout from '../../../../components/editor/EditorLayout';
@@ -19,7 +19,7 @@ import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
-import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
+import { HermesAssistantDrawer, applyFirstImageReady } from '../../../../components/hermes/HermesAssistantDrawer';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import { HermesExtractionEvidence } from '../../../../components/hermes/HermesExtractionEvidence';
@@ -138,6 +138,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const [hermesInitialGoal, setHermesInitialGoal] = useState('');
   const imageSubmit = useRef<(() => void) | null>(null);
   const [imageShortcutReady, setImageShortcutReady] = useState(false);
+  const [hermesImageContext, setHermesImageContext] = useState<HermesImageContext>();
   const registerImageSubmit = useCallback((submit: (() => void) | null) => {
     imageSubmit.current = submit;
     setImageShortcutReady(Boolean(submit));
@@ -1320,6 +1321,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               <header className={styles.productSectionHeader}><h2>{tw('media')}</h2></header>
               {versions.length > 0 && !snapshotReady ? <p className={styles.lockedMessage} role="status">{tw('loadingVersion')}</p> : null}
               {versions[0] && snapshotReady ? <ResearchPresentation key={`${versions[0].versionId}:${contentRefresh}`} params={{ id: roId }} embedded selectedVersionId={versions[0].versionId}
+                imageContext={hermesImageContext?.researchObjectId === roId && hermesImageContext.versionId === versions[0].versionId ? hermesImageContext : undefined}
+                onImageContextChange={next => {
+                  if (next.researchObjectId !== roId || next.versionId !== versions[0]?.versionId) return;
+                  setHermesImageContext(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+                }}
                 imageShortcutReady={imageShortcutReady} onAskHermes={(kind) => {
                   if (kind === 'image') {
                     setHermesInitialGoal(''); setHermesOpen(true); imageSubmit.current?.();
@@ -1407,6 +1413,13 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
           <>
             <EditHistory researchObjectId={roId} versions={versions} open={historyOpen} loading={historyLoading} loadError={historyError} onOpenChange={setHistoryOpen} dirty={state.dirty || JSON.stringify(artifacts) !== JSON.stringify(committedArtifacts)} draftToken={JSON.stringify([state.core, artifacts, state.version])} restoreBlocked={confirmingIngestion || Boolean(confirmationIntent) || reanalyzingConfirmedIngestion || refreshingLegacyIngestion || extracting || serverSaveState === 'saving'} onRestore={restoreHistory} />
             <HermesAssistantDrawer
+              onImageReady={ready => {
+                if (ready.researchObjectId !== roId || ready.versionId !== versions[0]?.versionId) return;
+                setHermesImageContext(previous => applyFirstImageReady(previous, ready,
+                  { actorId: ready.actorId, researchObjectId: roId, versionId: versions[0]!.versionId }));
+              }}
+              imageContext={hermesImageContext?.researchObjectId === roId && hermesImageContext.versionId === versions[0]?.versionId ? hermesImageContext : undefined}
+              mediaVisible={activeView === 'media'}
               docked
               pageOwnedAnchor
               sourceReview={sourceReviewPanel}

@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Script } from 'node:vm';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -986,7 +987,8 @@ function rollbackReaderClosure(ts, root, roots, vendorPackages) {
     checkUse(parsed);
   }
   const entries = [...selected.entries()].sort(([left], [right]) => left.localeCompare(right));
-  rollbackProofContexts.set(entries, { ts, root, roots, program, checker, modules, canonical });
+  rollbackProofContexts.set(entries, { ts, root, roots, program, checker, modules, canonical,
+    sourceHost: host, resolveSource });
   return entries;
 }
 
@@ -3250,7 +3252,7 @@ function finiteVideoFamilyClosure(candidate, rollback) {
 
 function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode, ingressSide) {
   try {
-    let code = 'COMPATIBILITY_UNKNOWN', module, side;
+    let code = 'COMPATIBILITY_UNKNOWN', module, initializationSite, side;
     const stages = ['video', 'selected-guide'];
     const sites = ['context', 'model', 'library', 'projected-keys', 'remaining-entry', 'captured-source',
       'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin',
@@ -3330,29 +3332,41 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
       const thrown = data(error, 'reason');
       if (branch === 'video' && site === 'ingress-reason' && ingressCodes.has(thrown)) code = thrown;
       if ((branch === 'selected-guide' ? selected : new Set(['VIDEO_CONSTRUCTOR_NOT_PURE', 'VIDEO_TRANSFER_UNKNOWN'])).has(thrown)) code = thrown;
+      if (code === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN') {
+        const value = data(error, 'initializationSite');
+        if (['capture-context', 'module-identity', 'retained-function', 'declaration-binding', 'retained-declaration',
+          'added-declaration', 'retained-statement', 'graph-source', 'graph-transpile', 'graph-import', 'graph-existing',
+          'graph-edge', 'graph-order', 'moved-source', 'moved-initializer', 'moved-class', 'moved-statement'].includes(value)) initializationSite = value;
+      }
       if (branch === 'video' && site === 'family' && ['OLD_CONSTRUCTOR_CHANGED', 'READER_CAPABILITY_REMOVED',
         'RETAINED_CONSTRUCTOR_CHANGED', 'FRESH_SOURCE_UNKNOWN', 'TRANSFER_SOURCE_UNKNOWN', 'ROLLBACK_FAMILY_NOT_CLOSED'].includes(familyCode)) code = familyCode;
       const node = data(error, 'node');
-      let budget = 100000;
+      const pending = [];
       for (const [index, owner] of [left, right].entries()) {
         for (const [path, source] of owner.modules) {
           const key = `module:${relative(owner.root, path).replaceAll('\\', '/')}`;
-          let found = moduleKey === key;
-          if (!found && node && !nodeUtilTypes.isProxy(node)) {
-            const pending = [source];
-            while (pending.length && budget-- > 0) {
-              const actual = pending.pop();
-              if (actual === node) { found = true; break; }
-              ts.forEachChild(actual, child => { pending.push(child); });
-            }
-          }
-          if (found && entries[index].has(key) && key.length <= 240 && !key.includes('..')
-            && /^module:(?:apps|packages|infra)\/[A-Za-z0-9@_./:+-]+$/u.test(key)) { module = key; break; }
+          if (!entries[index].has(key) || key.length > 240 || key.includes('..')
+            || !/^module:(?:apps|packages|infra)\/[A-Za-z0-9@_./:+-]+$/u.test(key)) continue;
+          if (moduleKey === key) { module = key; break; }
+          pending.push({ actual: source, key });
         }
         if (module) break;
       }
+      // Search the captured forest breadth first with the original node budget.
+      // One deep function must not hide later modules' shallow failing nodes.
+      // Only actual captured nodes are traversed; error node methods/parents are
+      // never read. Missing identity remains unreported, never assumed valid.
+      if (!module && node && !nodeUtilTypes.isProxy(node)) {
+        let cursor = 0, budget = 100000;
+        while (cursor < pending.length && budget-- > 0) {
+          const { actual, key } = pending[cursor++];
+          if (actual === node) { module = key; break; }
+          ts.forEachChild(actual, child => { pending.push({ actual: child, key }); });
+        }
+      }
     }
-    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site, ...(module ? { module } : {}), ...(side ? { side } : {}) })}`);
+    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site,
+      ...(initializationSite ? { initializationSite } : {}), ...(module ? { module } : {}), ...(side ? { side } : {}) })}`);
   } catch { /* Diagnostics never replace the original refusal. */ }
 }
 
@@ -5668,6 +5682,7 @@ function finiteImageFirstPairCompatibility(ts,current,previous,candidateRoot,rol
   }catch{return false;}
 }
 
+
 // This transition is intentionally directional. Reader -> old proves closure
 // over states produced by the old application. Once a writer has run, its only
 // adjacent rollback is the retained reader; the old-domain proof cannot erase
@@ -6709,6 +6724,2364 @@ function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, roll
   } catch { return false; }
 }
 
+
+// A source lemma only. It does not carry collector authority and is not an
+// application compatibility permit. In particular, own null/malformed selected
+// data cannot borrow the legacy ABSENT branch.
+function finiteSelectedGuideSupplementaryTerms(ts, context, { ui = true } = {}) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  need(context.ts === ts && context.program.getTypeChecker() === context.checker
+    && context.sourceHost && typeof context.resolveSource === 'function', undefined);
+  const { root, sourceHost } = context;
+  const owns = file => { const path = relative(root, resolve(file)).replaceAll('\\', '/');
+    return !path.startsWith('../') && !path.includes('/node_modules/') && !path.startsWith('node_modules/'); };
+  const apiPath = resolve(root, 'apps/api/src/routes/agent.ts');
+  const apiEntryPath = resolve(root, 'apps/api/src/index.ts');
+  const parserEntryPath = resolve(root, 'apps/agent-worker/src/parser-acceptance-runner.ts');
+  const drawerPath = resolve(root, 'apps/web/components/hermes/HermesAssistantDrawer.tsx');
+  const extras = [apiPath, apiEntryPath, parserEntryPath, ...(ui ? [drawerPath] : [])];
+  for (const file of extras) need(owns(file) && sourceHost.fileExists(file), undefined);
+  let webConfiguration;
+  if (ui) {
+    const text = sourceHost.readFile(resolve(root, 'apps/web/tsconfig.json')); need(typeof text === 'string', undefined);
+    try { webConfiguration = JSON.parse(text); } catch { fail(undefined); }
+    need(webConfiguration.compilerOptions?.baseUrl === '.'
+      && JSON.stringify(webConfiguration.compilerOptions?.paths?.['@/*']) === '["./*"]', undefined);
+  }
+  const originals = new Map(context.program.getSourceFiles().map(source => [resolve(source.fileName), source]));
+  const added = new Map();
+  const host = { ...sourceHost };
+  host.getSourceFile = (file, languageVersion, ...args) => {
+    const path = resolve(file), original = originals.get(path);
+    if (original) return original;
+    if (added.has(path)) return added.get(path);
+    need(owns(path), undefined);
+    const source = sourceHost.getSourceFile(file, languageVersion, ...args);
+    if (source) { need(added.size < 1024, source); added.set(path, source); }
+    return source;
+  };
+  host.resolveModuleNames = (names, containingFile) => names.map(specifier => {
+    const web = relative(resolve(root, 'apps/web'), containingFile).replaceAll('\\', '/');
+    if (ui && owns(containingFile) && web !== '..' && !web.startsWith('../') && !web.includes(':')
+      && (specifier.startsWith('@/') || specifier.startsWith('.'))) {
+      const base = specifier.startsWith('@/') ? resolve(root, 'apps/web', specifier.slice(2))
+        : resolve(containingFile, '..', specifier.replace(/\.js$/u, ''));
+      need(owns(base), undefined);
+      const path = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, resolve(base, 'index.ts'), resolve(base, 'index.tsx')]
+        .find(file => sourceHost.fileExists(file));
+      need(path, undefined);
+      return { resolvedFileName: path, extension: path.endsWith('.tsx') ? ts.Extension.Tsx : path.endsWith('.js') ? ts.Extension.Js : ts.Extension.Ts };
+    }
+    return context.resolveSource(specifier, containingFile);
+  });
+  // Preserve every captured source node by identity. Supplemental writer analysis
+  // neither replaces the successful reader collection nor adds an acceptance token.
+  const program = ts.createProgram([...new Set([...originals.keys(), ...extras])],
+    { ...context.program.getCompilerOptions(), types: [] }, host);
+  need(!program.getSyntacticDiagnostics().length, undefined);
+  for (const [path, source] of originals) need(program.getSourceFile(path) === source, source);
+  const api = program.getSourceFile(apiPath), drawer = ui ? program.getSourceFile(drawerPath) : undefined;
+  need(api && (!ui || drawer), api);
+  return { ...context, status: 'conditional', program, checker: program.getTypeChecker(), originalContext: context,
+    api, drawer, webConfiguration, supplementalSources: added,
+    apiEntry: program.getSourceFile(apiEntryPath), parserEntry: program.getSourceFile(parserEntryPath),
+    outstanding: ['successful DEFAULT WeakMap provenance required at the main caller',
+      'actual writer and UI emission binding', 'external/package/vendor/config comparison remains original'] };
+}
+
+function finiteSelectedGuideDecoderTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const source = (ctx, name) => {
+    const value = ctx.program.getSourceFile(resolve(ctx.root, name));
+    need(value && !value.isDeclarationFile && ctx.program.getTypeChecker() === ctx.checker, value);
+    return value;
+  };
+  const symbol = node => {
+    let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value);
+    return value;
+  };
+  const fn = (parsed, name) => {
+    const values = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    need(values.length === 1 && values[0].body, parsed); return values[0];
+  };
+  const runtime = (ctx, declaration) => {
+    need(typeof ctx.canonical === 'function', declaration);
+    const output = ts.transpileModule(declaration.getText(), { fileName: declaration.getSourceFile().fileName,
+      reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!output.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error), declaration);
+    const emitted = ts.createSourceFile('runtime.js', output.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!emitted.parseDiagnostics.length, declaration); return ctx.canonical(emitted);
+  };
+  const path = 'packages/domain/src/agent/workspace-guide-contract.ts';
+  const current = source(context, path), previous = source(rollbackContext, path);
+  const legacyParser = fn(current, 'parseWorkspaceGuidePayload'), oldParser = fn(previous, 'parseWorkspaceGuidePayload');
+  need(JSON.stringify(runtime(context, legacyParser)) === JSON.stringify(runtime(rollbackContext, oldParser)), legacyParser);
+  const reader = fn(current, 'readWorkspaceGuidePayloadWithSelectedImage');
+  need(reader.parameters.length === 1 && ts.isIdentifier(reader.parameters[0].name)
+    && reader.parameters[0].name.text === 'value' && !reader.parameters[0].initializer, reader);
+  // This is the finite prefix grammar, not a guessed source replacement. It
+  // returns the ORIGINAL bound strict parser's result on each absence/invalid
+  // container path before any selected-specific validation or construction.
+  const grammar = ts.createSourceFile('selected-absence.ts', `function absence(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return parseWorkspaceGuidePayload(value);
+    const payload = value as Record<string, unknown>;
+    const context = payload.context;
+    if (!context || typeof context !== 'object' || Array.isArray(context)) return parseWorkspaceGuidePayload(value);
+    const presentation = (context as Record<string, unknown>).presentation;
+    if (!presentation || typeof presentation !== 'object' || Array.isArray(presentation)
+      || !Object.hasOwn(presentation, 'selectedImageAssetId')) return parseWorkspaceGuidePayload(value);
+  }`, ts.ScriptTarget.ES2022, true);
+  const expected = grammar.statements[0].body.statements;
+  need(reader.body.statements.length > expected.length, reader);
+  const target = symbol(legacyParser.name);
+  for (let index = 0; index < expected.length; index += 1) {
+    const actual = reader.body.statements[index];
+    need(JSON.stringify(context.canonical(actual)) === JSON.stringify(context.canonical(expected[index])), actual);
+    const visit = node => {
+      if (ts.isIdentifier(node) && node.text === 'parseWorkspaceGuidePayload') need(symbol(node) === target, node);
+      if (ts.isIdentifier(node) && ['Array', 'Object'].includes(node.text)) {
+        need(!(symbol(node)?.declarations ?? []).some(value => !value.getSourceFile().isDeclarationFile), node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(actual);
+  }
+  return { status: 'conditional', capable: true, source: current, legacyParser, oldParser, reader,
+    outstanding: ['actual fresh writer/caller closure', 'authenticated historical transition closure',
+      'complete residual/import/init equality', 'original successful default collector provenance'] };
+}
+
+function finiteSelectedGuideFreshTerms(ts, context, decoder, rollbackContext) {
+  const { program, checker, root } = context;
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const nodes = (scope, predicate) => {
+    const values = []; const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+    }; visit(scope); return values;
+  };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => {
+    let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+      ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value);
+    return value;
+  };
+  const source = path => {
+    const value = program.getSourceFile(resolve(root, path)); need(value && !value.isDeclarationFile, value); return value;
+  };
+  const unwrap = raw => {
+    let node = raw;
+    while (node && (ts.isAsExpression(node) || ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)
+      || ts.isSatisfiesExpression(node))) node = node.expression;
+    return node;
+  };
+  const name = node => ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text
+    : ts.isComputedPropertyName(node) && ts.isStringLiteral(node.expression) ? node.expression.text : undefined;
+  const declaration = (parsed, target) => one(nodes(parsed, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === target), parsed);
+  const fn = (parsed, target) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === target), parsed);
+  const chain = (raw, member) => {
+    const node = unwrap(raw);
+    return ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === member && !node.questionDotToken ? node : undefined;
+  };
+  const route = source('apps/api/src/routes/agent.ts'), domain = source('packages/domain/src/agent/agent.ts');
+  const guide = declaration(route, 'workspaceGuideTaskBody'), generic = declaration(route, 'genericTaskBody');
+  const schema = declaration(route, 'agentTaskBodySchema'), publicKinds = declaration(domain, 'PUBLIC_AGENT_TASK_KINDS');
+  need(rollbackContext?.program.getTypeChecker() === rollbackContext?.checker, route);
+  const previousRoute = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'apps/api/src/routes/agent.ts'));
+  need(previousRoute && typeof context.canonical === 'function', route);
+  // Identical schema syntax is insufficient if its actual factory can be
+  // replaced, mutated or passed to an opaque callback before parsing.
+  const zodBinding = (parsed, owner) => {
+    const imported = one(nodes(parsed, node => ts.isImportSpecifier(node) && node.name.text === 'z'), parsed);
+    const statement = imported.parent.parent.parent;
+    need(ts.isImportDeclaration(statement) && statement.moduleSpecifier.text === 'zod'
+      && !imported.isTypeOnly && !statement.importClause.isTypeOnly
+      && (!imported.propertyName || imported.propertyName.text === 'z'), imported);
+    const bound = owner.checker.getSymbolAtLocation(imported.name); need(bound, imported);
+    for (const node of nodes(parsed, ts.isIdentifier)) {
+      if (node === imported.name || owner.checker.getSymbolAtLocation(node) !== bound) continue;
+      const member = node.parent;
+      need(ts.isPropertyAccessExpression(member) && member.expression === node && !member.questionDotToken, node);
+      if (member.name.text === 'NEVER') {
+        need(ts.isReturnStatement(member.parent) && member.parent.expression === member, member);
+      } else if (member.name.text === 'ZodIssueCode') {
+        const code = member.parent;
+        need(ts.isPropertyAccessExpression(code) && code.expression === member && code.name.text === 'custom'
+          && ts.isPropertyAssignment(code.parent) && code.parent.initializer === code && code.parent.name.text === 'code', member);
+      } else {
+        need(['enum', 'literal', 'object', 'record', 'string', 'union', 'unknown'].includes(member.name.text)
+          && ts.isCallExpression(member.parent) && member.parent.expression === member && !member.parent.questionDotToken, member);
+      }
+    }
+    return imported;
+  };
+  zodBinding(route, context); zodBinding(previousRoute, rollbackContext);
+  for (const value of [generic, schema]) {
+    const previous = declaration(previousRoute, value.name.text);
+    need(JSON.stringify(context.canonical(value.initializer)) === JSON.stringify(context.canonical(previous.initializer)), value);
+  }
+  const kinds = unwrap(publicKinds.initializer);
+  need(ts.isArrayLiteralExpression(kinds) && kinds.elements.length && kinds.elements.every(ts.isStringLiteral), kinds);
+  need(!kinds.elements.some(node => node.text === 'workspace.guide'), kinds);
+  const objectCall = raw => {
+    let current = unwrap(raw);
+    while (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)
+      && ['strict', 'superRefine'].includes(current.expression.name.text)) current = unwrap(current.expression.expression);
+    need(chain(current, 'object') && current.arguments.length === 1 && ts.isObjectLiteralExpression(current.arguments[0]), current);
+    return current.arguments[0];
+  };
+  const property = (object, key) => one(object.properties.filter(node => ts.isPropertyAssignment(node) && name(node.name) === key), object).initializer;
+  const guideObject = objectCall(guide.initializer), genericObject = objectCall(generic.initializer);
+  const kind = chain(property(guideObject, 'kind'), 'literal');
+  need(kind?.arguments.length === 1 && ts.isStringLiteral(kind.arguments[0]) && kind.arguments[0].text === 'workspace.guide', guide);
+  const transform = chain(property(guideObject, 'payload'), 'transform');
+  need(transform?.arguments.length === 1 && (ts.isArrowFunction(transform.arguments[0]) || ts.isFunctionExpression(transform.arguments[0])), guide);
+  const callback = transform.arguments[0], rawPayload = callback.parameters[0];
+  need(rawPayload && ts.isIdentifier(rawPayload.name) && !rawPayload.initializer, callback);
+  const strictCalls = nodes(callback, node => ts.isCallExpression(node) && [symbol(decoder.legacyParser.name), symbol(decoder.reader.name)].includes(symbol(node.expression)));
+  const strictCall = one(strictCalls, callback);
+  const fresh = symbol(strictCall.expression) === symbol(decoder.reader.name) ? 'selected' : 'legacy';
+  need(strictCall.arguments.length === 1 && ts.isIdentifier(strictCall.arguments[0])
+    && symbol(strictCall.arguments[0]) === symbol(rawPayload.name) && ts.isReturnStatement(strictCall.parent), strictCall);
+  const validReturns = nodes(callback, ts.isReturnStatement);
+  need(validReturns.every(node => node.expression === strictCall
+    || ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'NEVER'), callback);
+  const priorGuide = declaration(previousRoute, guide.name.text);
+  const projection = ts.transform(guide.initializer, [transformation => {
+    const visit = node => node === strictCall.expression && fresh === 'selected'
+      ? ts.factory.createIdentifier(decoder.oldParser.name.text) : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  try { need(JSON.stringify(context.canonical(projection.transformed[0])) === JSON.stringify(rollbackContext.canonical(priorGuide.initializer)), guide); }
+  finally { projection.dispose(); }
+  const enumCall = chain(property(genericObject, 'kind'), 'enum');
+  need(enumCall?.arguments.length === 1 && symbol(enumCall.arguments[0]) === symbol(publicKinds.name), generic);
+  const union = chain(schema.initializer, 'union');
+  need(union?.arguments.length === 1 && ts.isArrayLiteralExpression(union.arguments[0])
+    && union.arguments[0].elements.length === 2 && symbol(union.arguments[0].elements[0]) === symbol(guide.name)
+    && symbol(union.arguments[0].elements[1]) === symbol(generic.name), schema);
+  const post = one(nodes(route, node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === 'post' && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === '/agent/tasks'), route);
+  need(post.arguments.length === 2 && ts.isArrowFunction(post.arguments[1]) && ts.isBlock(post.arguments[1].body), post);
+  const handler = post.arguments[1], body = declaration(handler, 'body');
+  const parse = chain(body.initializer, 'parse');
+  need(parse && symbol(parse.expression.expression) === symbol(schema.name) && parse.arguments.length === 1
+    && ts.isPropertyAccessExpression(parse.arguments[0]) && parse.arguments[0].name.text === 'body'
+    && symbol(parse.arguments[0].expression) === symbol(handler.parameters[0].name), body);
+  const submit = fn(domain, 'submitAgentTask'), persist = fn(domain, 'persistAgentTaskInTransaction');
+  const core = fn(domain, 'persistAgentTaskCoreInTransaction');
+  const sources = program.getSourceFiles().filter(parsed => !parsed.isDeclarationFile
+    && /^(?:apps|packages)\//u.test(relative(root, parsed.fileName).replaceAll('\\', '/')));
+  const references = target => {
+    const calls = [];
+    for (const parsed of sources) for (const node of nodes(parsed, ts.isIdentifier)) {
+      if (symbol(node) !== symbol(target.name)) continue;
+      const parent = node.parent;
+      if (node === target.name || ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) continue;
+      need(ts.isCallExpression(parent) && parent.expression === node && !parent.questionDotToken
+        && !parent.arguments.some(ts.isSpreadElement), node); calls.push(parent);
+    }
+    return calls;
+  };
+  const apiSubmit = one(references(submit).filter(call => call.getSourceFile() === route
+    && call.pos >= handler.pos && call.end <= handler.end), handler);
+  need(apiSubmit.arguments.length === 3 && ts.isObjectLiteralExpression(apiSubmit.arguments[1]), apiSubmit);
+  const aliases = new Map([[symbol(body.name), []]]);
+  const bodyPath = raw => {
+    let node = unwrap(raw); const parts = [];
+    while (ts.isPropertyAccessExpression(node) && !node.questionDotToken) { parts.unshift(node.name.text); node = unwrap(node.expression); }
+    const prefix = ts.isIdentifier(node) ? aliases.get(symbol(node)) : undefined;
+    return prefix ? [...prefix, ...parts] : undefined;
+  };
+  for (let pass = 0; pass < 64; pass += 1) {
+    let added = 0;
+    for (const value of nodes(handler, ts.isVariableDeclaration)) {
+      if (!ts.isIdentifier(value.name) || !value.initializer || aliases.has(symbol(value.name))) continue;
+      const path = bodyPath(value.initializer);
+      if (path) { need(Boolean(value.parent.flags & ts.NodeFlags.Const), value); aliases.set(symbol(value.name), path); added += 1; }
+    }
+    if (!added) break;
+    need(pass !== 63, handler);
+  }
+  for (const identifier of nodes(handler, ts.isIdentifier)) {
+    if (!aliases.has(symbol(identifier))) continue;
+    if (ts.isVariableDeclaration(identifier.parent) && identifier.parent.name === identifier) continue;
+    let expression = identifier;
+    while (expression.parent && (ts.isPropertyAccessExpression(expression.parent) && expression.parent.expression === expression
+      || (ts.isNonNullExpression(expression.parent) || ts.isAsExpression(expression.parent) || ts.isParenthesizedExpression(expression.parent))
+        && expression.parent.expression === expression)) expression = expression.parent;
+    const parent = expression.parent, path = bodyPath(expression);
+    if (ts.isBinaryExpression(parent) && parent.left === expression
+      && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      || ts.isDeleteExpression(parent) || (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)) fail(expression);
+    if (ts.isVariableDeclaration(parent) && parent.initializer === expression) continue;
+    if (ts.isPropertyAssignment(parent) && parent.initializer === expression && path?.length === 1 && path[0] === 'payload') {
+      need(parent.parent === apiSubmit.arguments[1] && name(parent.name) === 'payload', expression); continue;
+    }
+    if (ts.isCallExpression(parent) && parent.arguments.includes(expression)) {
+      need(path?.length && ['kind', 'sessionId', 'activeClaimId', 'currentGoal', 'researchObjectId', 'versionId', 'selectedImageAssetId']
+        .includes(path.at(-1)), expression);
+    }
+    if (ts.isReturnStatement(parent) || ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)
+      || ts.isElementAccessExpression(parent) && parent.expression === expression) fail(expression);
+  }
+  const active = new Set(), origins = [], nonGuide = [], forwarders = new Set();
+  const retainedForwarder = target => {
+    if (forwarders.has(target)) return;
+    need(ts.isFunctionDeclaration(target) && target.name && target.body && ts.isSourceFile(target.parent), target);
+    const path = relative(root, target.getSourceFile().fileName).replaceAll('\\', '/');
+    const previousSource = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+    need(previousSource, target);
+    const previous = fn(previousSource, target.name.text);
+    // A field map from a parameter/rest alias is not a current value proof if
+    // the actual forwarder changed before the call. Keep its complete old body.
+    // This is conditional on the old writer/alias and shared-runtime premises;
+    // it never treats a name or a retained body alone as an absence witness.
+    need(JSON.stringify(context.canonical(target.body)) === JSON.stringify(rollbackContext.canonical(previous.body)), target);
+    forwarders.add(target);
+  };
+  const variableOwner = declaration => {
+    let owner = declaration.parent;
+    while (owner && !(ts.isFunctionDeclaration(owner) && ts.isSourceFile(owner.parent)) && !ts.isSourceFile(owner)) owner = owner.parent;
+    need(owner, declaration); retainedForwarder(owner);
+  };
+  const objects = (raw, seen = new Set()) => {
+    const node = unwrap(raw); need(node && !seen.has(node) && seen.size < 128, node);
+    const next = new Set(seen).add(node);
+    if (ts.isConditionalExpression(node)) return [...objects(node.whenTrue, next), ...objects(node.whenFalse, next)];
+    if (ts.isObjectLiteralExpression(node)) {
+      let alternatives = [new Map()];
+      for (const entry of node.properties) {
+        if (ts.isSpreadAssignment(entry)) {
+          const spread = objects(entry.expression, next);
+          alternatives = alternatives.flatMap(value => spread.map(other => new Map([...value, ...other])));
+          need(alternatives.length <= 1024, entry);
+        } else {
+          need((ts.isPropertyAssignment(entry) || ts.isShorthandPropertyAssignment(entry)) && name(entry.name), entry);
+          for (const value of alternatives) value.set(name(entry.name), ts.isPropertyAssignment(entry) ? entry.initializer : entry.name);
+        }
+      }
+      return alternatives;
+    }
+    if (ts.isIdentifier(node)) {
+      const bound = symbol(node)?.valueDeclaration;
+      if (bound === body) return [new Map([['kind', { guideBody: true }], ['payload', { guidePayload: true }]])];
+      if (bound && ts.isVariableDeclaration(bound) && bound.initializer) {
+        variableOwner(bound); return objects(bound.initializer, next);
+      }
+      if (bound && ts.isBindingElement(bound) && bound.dotDotDotToken && ts.isObjectBindingPattern(bound.parent)
+        && ts.isVariableDeclaration(bound.parent.parent) && bound.parent.parent.initializer) {
+        const excluded = bound.parent.elements.filter(element => !element.dotDotDotToken).map(element => name(element.propertyName ?? element.name));
+        need(!excluded.includes('kind') && !excluded.includes('payload'), bound);
+        variableOwner(bound);
+        return objects(bound.parent.parent.initializer, next);
+      }
+      if (bound && ts.isParameter(bound) && ts.isFunctionDeclaration(bound.parent)) {
+        const target = bound.parent, index = target.parameters.indexOf(bound);
+        retainedForwarder(target);
+        need(index !== -1 && !active.has(target), target); active.add(target);
+        try {
+          const calls = references(target); need(calls.length, target);
+          return calls.flatMap(call => { need(call.arguments[index], call); return objects(call.arguments[index], next); });
+        } finally { active.delete(target); }
+      }
+    }
+    fail(node);
+  };
+  for (const call of references(core)) {
+    need(call.arguments.length >= 3 && call.arguments.length <= 5, call);
+    for (const object of objects(call.arguments[2])) {
+      const value = unwrap(object.get('kind'));
+      if (value && ts.isStringLiteral(value) && value.text !== 'workspace.guide') { nonGuide.push({ call, kind: value.text }); continue; }
+      const path = value && bodyPath(value);
+      need(path?.length === 1 && path[0] === 'kind', call);
+      const payload = bodyPath(object.get('payload'));
+      need(payload?.length === 1 && payload[0] === 'payload', call);
+      origins.push({ call, handler, body, strictCall });
+    }
+  }
+  need(origins.length > 0 && references(submit).length && references(persist).length, core);
+  return { status: 'conditional', fresh, guide, generic, schema, body, handler, strictCall,
+    origins, nonGuide, forwarders, core, submit, persist, source: route,
+    outstanding: ['complete actual writer inventory and other constructor alias/mutation closure', 'installed Zod implementation identity in actual collection',
+      'supplemental source identity under original collector', 'all historical transitions and residual runtime'] };
+}
+
+function finiteSelectedGuideRelocationTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_BYTE_READER_CHANGED', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const source = (ctx, path) => {
+    const parsed = ctx.program.getSourceFile(resolve(ctx.root, path));
+    need(parsed && !parsed.isDeclarationFile && ctx.program.getTypeChecker() === ctx.checker, parsed); return parsed;
+  };
+  const fn = parsed => {
+    const found = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readPresentationInput');
+    need(found.length === 1 && found[0].body && found[0].parameters.length === 4, parsed); return found[0];
+  };
+  const current = source(context, 'apps/agent-worker/src/presentation/generated-image-review.ts');
+  const previous = source(rollbackContext, 'apps/agent-worker/src/presentation/handler.ts');
+  const reader = fn(current), oldReader = fn(previous);
+  const runtime = (ctx, declaration) => {
+    need(typeof ctx.canonical === 'function', declaration);
+    const normalized = ts.factory.updateFunctionDeclaration(declaration,
+      declaration.modifiers?.filter(modifier => modifier.kind !== ts.SyntaxKind.ExportKeyword), declaration.asteriskToken,
+      declaration.name, declaration.typeParameters, declaration.parameters, declaration.type, declaration.body);
+    const printed = ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified, normalized, declaration.getSourceFile());
+    const compiled = ts.transpileModule(printed, { reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error), declaration);
+    const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!emitted.parseDiagnostics.length, declaration); return ctx.canonical(emitted);
+  };
+  need(JSON.stringify(runtime(context, reader)) === JSON.stringify(runtime(rollbackContext, oldReader)), reader);
+  const uses = (ctx, declaration) => {
+    const symbol = node => {
+      let value = ctx.checker.getSymbolAtLocation(node);
+      if (value?.flags & ts.SymbolFlags.Alias) value = ctx.checker.getAliasedSymbol(value);
+      return value;
+    };
+    const target = symbol(declaration.name), calls = [];
+    for (const parsed of ctx.program.getSourceFiles()) {
+      if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(ctx.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+      const visit = node => {
+        if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+        if (ts.isIdentifier(node) && symbol(node) === target) {
+          const parent = node.parent;
+          if (node !== declaration.name && !ts.isImportSpecifier(parent) && !ts.isExportSpecifier(parent)) {
+            need(ts.isCallExpression(parent) && parent.expression === node && !parent.questionDotToken
+              && parent.arguments.length >= 3 && parent.arguments.length <= 4 && !parent.arguments.some(ts.isSpreadElement), node);
+            calls.push(parent);
+          }
+        }
+        ts.forEachChild(node, visit);
+      }; visit(parsed);
+    }
+    return calls;
+  };
+  const calls = uses(context, reader), oldCalls = uses(rollbackContext, oldReader);
+  const handler = source(context, 'apps/agent-worker/src/presentation/handler.ts');
+  const retained = calls.filter(call => call.getSourceFile() === handler);
+  need(retained.length === oldCalls.length && retained.length > 0, handler);
+  for (let index = 0; index < retained.length; index += 1)
+    need(JSON.stringify(context.canonical(retained[index])) === JSON.stringify(rollbackContext.canonical(oldCalls[index])), retained[index]);
+  return { status: 'conditional', reader, oldReader, source: current, oldSource: previous, handler, calls, retained,
+    additionalCalls: calls.filter(call => call.getSourceFile() !== handler),
+    outstanding: ['new callers confined to selected domain', 'module initialization and complete residual/import equality',
+      'original successful default collector provenance'] };
+}
+
+function finiteSelectedGuideRelocationResidualTerms(ts, context, rollbackContext, relocation, workspace) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  need(relocation?.status === 'conditional' && workspace?.status === 'conditional', undefined);
+  const { source, handler, reader, oldReader } = relocation;
+  need(context.program.getSourceFile(source.fileName) === source && context.program.getSourceFile(handler.fileName) === handler, source);
+  for (const call of relocation.additionalCalls) need(call.getSourceFile() === workspace.source
+    && call.pos >= workspace.selected.pos && call.end <= workspace.selected.end, call);
+  const generatedPath = relative(context.root, source.fileName).replaceAll('\\', '/');
+  const handlerPath = relative(context.root, handler.fileName).replaceAll('\\', '/');
+  const oldGenerated = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, generatedPath));
+  const oldHandler = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, handlerPath));
+  need(oldGenerated && oldHandler === oldReader.getSourceFile(), oldReader);
+  const globals = (parsed, name) => context.checker.getSymbolsInScope(parsed, ts.SymbolFlags.Value).find(value => value.name === name);
+  for (const name of ['Buffer', 'Error']) for (const parsed of [source, handler])
+    need(!globals(parsed, name)?.declarations?.some(declaration => !declaration.getSourceFile().isDeclarationFile), parsed);
+  const hashImport = parsed => parsed.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === 'node:crypto'
+    && node.importClause && !node.importClause.isTypeOnly && node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings))
+    .flatMap(node => node.importClause.namedBindings.elements.filter(entry => entry.name.text === 'createHash' && !entry.isTypeOnly
+      && (!entry.propertyName || entry.propertyName.text === 'createHash')));
+  need(hashImport(source).length === 1 && hashImport(handler).length === 1, reader);
+  const index = oldHandler.statements.indexOf(oldReader), anchor = oldHandler.statements[index + 1];
+  need(index >= 0 && ts.isFunctionDeclaration(anchor) && anchor.name, oldReader);
+  const currentAnchors = handler.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === anchor.name.text);
+  need(currentAnchors.length === 1, handler);
+  const moved = ts.factory.updateFunctionDeclaration(reader, reader.modifiers?.filter(modifier => modifier.kind !== ts.SyntaxKind.ExportKeyword),
+    reader.asteriskToken, reader.name, reader.typeParameters, reader.parameters, reader.type, reader.body);
+  const imports = handler.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === './generated-image-review'
+    && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings));
+  need(imports.length === 1, handler);
+  const imported = imports[0], entries = imported.importClause.namedBindings.elements.filter(entry => (entry.propertyName ?? entry.name).text === reader.name.text);
+  need(entries.length === 1 && entries[0].name.text === reader.name.text && !entries[0].isTypeOnly, imported);
+  const replacement = ts.factory.updateImportDeclaration(imported, imported.modifiers, ts.factory.updateImportClause(imported.importClause,
+    imported.importClause.isTypeOnly, imported.importClause.name, ts.factory.updateNamedImports(imported.importClause.namedBindings,
+      imported.importClause.namedBindings.elements.filter(entry => entry !== entries[0]))), imported.moduleSpecifier, imported.attributes);
+  const generated = ts.factory.updateSourceFile(source, source.statements.filter(node => node !== reader));
+  const printer = ts.createPrinter(), text = printer.printFile(generated);
+  // Print the moved body against its original source before inserting text;
+  // cross-file AST positions must never choose literals from the destination.
+  const edits = [
+    { start: imported.getStart(handler), end: imported.end, value: printer.printNode(ts.EmitHint.Unspecified, replacement, handler) },
+    { start: currentAnchors[0].getStart(handler), end: currentAnchors[0].getStart(handler), value: printer.printNode(ts.EmitHint.Unspecified, moved, source) + '\n' },
+  ].sort((left, right) => right.start - left.start);
+  need(edits[0].start >= edits[1].end, handler);
+  let handlerText = handler.text;
+  for (const edit of edits) handlerText = handlerText.slice(0, edit.start) + edit.value + handlerText.slice(edit.end);
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  if (runtime(text, context) !== runtime(oldGenerated.text, rollbackContext)) throw { reason: 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN', node: source, stage: 'generated-runtime' };
+  if (runtime(handlerText, context) !== runtime(oldHandler.text, rollbackContext)) throw { reason: 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN', node: handler, stage: 'handler-runtime' };
+  return { status: 'conditional', source, handler, text, handlerText, moved, relocation, workspace,
+    outstanding: ['whole module initialization/declaration namespace closure', 'original successful collector context and remaining entries'] };
+}
+
+function finiteSelectedGuideWorkspaceTerms(ts, context, rollbackContext, decoder) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const file = 'apps/agent-worker/src/workspace-guide.ts';
+  const source = context.program.getSourceFile(resolve(context.root, file));
+  const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, file));
+  need(source && previous && decoder?.status === 'conditional' && decoder.capable, source);
+  const nodes = (root, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)
+      || ts.isImportDeclaration(node) && node.importClause?.isTypeOnly || ts.isImportSpecifier(node) && node.isTypeOnly) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return values; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = (node, owner = context) => {
+    let value = ts.isShorthandPropertyAssignment(node.parent) ? owner.checker.getShorthandAssignmentValueSymbol(node.parent)
+      : ts.isExportSpecifier(node.parent) ? owner.checker.getExportSpecifierLocalTargetSymbol(node.parent) : owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value;
+  };
+  const handler = one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'workspaceGuideHandler'), source);
+  const oldHandler = one(previous.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === handler.name.text), previous);
+  need(handler.parameters.length === 4 && oldHandler.parameters.length === 3 && handler.parameters.every(node => ts.isIdentifier(node.name)
+    && !node.initializer && !node.dotDotDotToken), handler);
+  const payload = one(nodes(handler, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'payload'), handler);
+  need(payload.parent.flags & ts.NodeFlags.Const && ts.isCallExpression(payload.initializer)
+    && payload.initializer.arguments.length === 1 && symbol(payload.initializer.expression)?.valueDeclaration === decoder.reader, payload);
+  const argument = payload.initializer.arguments[0];
+  need(ts.isPropertyAccessExpression(argument) && argument.name.text === 'payload' && symbol(argument.expression) === symbol(handler.parameters[2].name), argument);
+  const selected = one(handler.body.statements.filter(node => {
+    if (!ts.isIfStatement(node)) return false;
+    const condition = node.expression, presentation = condition.expression, contextField = presentation?.expression;
+    return ts.isPropertyAccessExpression(condition) && condition.name.text === 'selectedImageAssetId' && condition.questionDotToken
+      && ts.isPropertyAccessExpression(presentation) && presentation.name.text === 'presentation'
+      && ts.isPropertyAccessExpression(contextField) && contextField.name.text === 'context'
+      && symbol(contextField.expression) === symbol(payload.name);
+  }), handler);
+  const insideSelected = node => node.pos >= selected.pos && node.end <= selected.end && node.getSourceFile() === source;
+  const native = symbol(handler.parameters[3].name);
+  for (const ref of nodes(source, ts.isIdentifier)) if (symbol(ref) === native && ref !== handler.parameters[3].name) need(insideSelected(ref), ref);
+  const handlerCalls = [];
+  for (const parsed of context.program.getSourceFiles()) if (!parsed.isDeclarationFile && /^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/')))
+    for (const ref of nodes(parsed, ts.isIdentifier)) if (symbol(ref) === symbol(handler.name) && ref !== handler.name) {
+      if (ts.isImportSpecifier(ref.parent)) continue;
+      need(ts.isCallExpression(ref.parent) && ref.parent.expression === ref && ref.parent.arguments.length === 4
+        && !ref.parent.arguments.some(ts.isSpreadElement), ref); handlerCalls.push(ref.parent);
+    }
+  need(handlerCalls.length, handler);
+  const oldImports = new Map();
+  for (const statement of previous.statements) if (ts.isImportDeclaration(statement) && statement.importClause
+    && !statement.importClause.isTypeOnly && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+    const values = oldImports.get(statement.moduleSpecifier.text) ?? new Set();
+    for (const entry of statement.importClause.namedBindings.elements) if (!entry.isTypeOnly) values.add((entry.propertyName ?? entry.name).text);
+    oldImports.set(statement.moduleSpecifier.text, values);
+  }
+  const removed = new Set(), readerImports = [], builtinOmissions = [];
+  for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause
+    && !statement.importClause.isTypeOnly && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+    for (const entry of statement.importClause.namedBindings.elements) if (!entry.isTypeOnly) {
+      const target = symbol(entry.name), local = context.checker.getSymbolAtLocation(entry.name), imported = (entry.propertyName ?? entry.name).text;
+      if (target?.valueDeclaration === decoder.reader) { readerImports.push(entry); continue; }
+      if (oldImports.get(statement.moduleSpecifier.text)?.has(imported)) continue;
+      need(target, entry);
+      for (const ref of nodes(source, ts.isIdentifier)) if ((ts.isExportSpecifier(ref.parent)
+        ? context.checker.getExportSpecifierLocalTargetSymbol(ref.parent) : context.checker.getSymbolAtLocation(ref)) === local
+        && ref !== entry.name && ref !== entry.propertyName) need(insideSelected(ref), ref);
+      if (imported === 'isDeepStrictEqual') {
+        need(statement.moduleSpecifier.text === 'node:util', entry);
+        builtinOmissions.push({ specifier: 'node:util', binding: entry });
+      } else need(target.declarations?.some(node => !node.getSourceFile().isDeclarationFile
+        && /^(?:apps|packages)\//u.test(relative(context.root, node.getSourceFile().fileName).replaceAll('\\', '/'))), entry);
+      removed.add(entry);
+    }
+  }
+  const readerImport = one(readerImports, payload);
+  need(oldImports.get(readerImport.parent.parent.parent.moduleSpecifier.text)?.has(decoder.legacyParser.name.text), readerImport);
+  for (const ref of nodes(source, ts.isIdentifier)) if (symbol(ref)?.valueDeclaration === decoder.reader && ref !== readerImport.name)
+    need(ref === payload.initializer.expression, ref);
+  const transformed = ts.transform(source, [factory => {
+    const visit = node => {
+      if (node === selected) return undefined;
+      if (node === payload.initializer.expression) return ts.factory.createIdentifier(decoder.legacyParser.name.text);
+      if (node === handler) return ts.factory.updateFunctionDeclaration(node, node.modifiers, node.asteriskToken, node.name,
+        node.typeParameters, node.parameters.slice(0, 3), node.type, ts.visitNode(node.body, visit));
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+        const entries = node.importClause.namedBindings.elements.flatMap(entry => entry === readerImport
+          ? [ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier(decoder.legacyParser.name.text))] : removed.has(entry) ? [] : [entry]);
+        if (!entries.length && !node.importClause.name) return undefined;
+        return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause,
+          node.importClause.isTypeOnly, node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, entries)), node.moduleSpecifier, node.attributes);
+      }
+      return ts.visitEachChild(node, visit, factory);
+    }; return root => ts.visitNode(root, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  const runtime = (value, owner) => {
+    const compiled = ts.transpileModule(value, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    return JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  };
+  need(runtime(text, context) === runtime(previous.text, rollbackContext), source);
+  return { status: 'conditional', source, previous, handler, selected, payload, text, handlerCalls, removed, builtinOmissions,
+    outstanding: ['actual legacy/familyA absence at this handler', 'fourth argument and config supplier lemma',
+      'all removed owned imports/eager effects and full declaration context', 'actual successful DEFAULT collection and builtin presence in old entries'] };
+}
+
+function finiteSelectedGuideNativeTerms(ts, context, rollbackContext, decoder) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const path = 'packages/domain/src/agent/native-agent-execution.ts';
+  const source = context.program.getSourceFile(resolve(context.root, path)), previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+  need(source && previous && decoder?.capable && decoder.status === 'conditional', source);
+  const nodes = (root, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)
+      || ts.isImportDeclaration(node) && node.importClause?.isTypeOnly || ts.isImportSpecifier(node) && node.isTypeOnly) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return values; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const fn = name => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const selector = fn('selectedGuide');
+  const grammar = ts.createSourceFile('selector.ts', `function selectedGuide(task: { kind: string; payload: unknown } | null) {
+    if (task?.kind !== 'workspace.guide') return undefined;
+    const payload = readWorkspaceGuidePayloadWithSelectedImage(task.payload);
+    return payload.context.presentation?.selectedImageAssetId ? payload : undefined;
+  }`, ts.ScriptTarget.ES2022, true).statements[0];
+  need(JSON.stringify(context.canonical(selector)) === JSON.stringify(context.canonical(grammar)), selector);
+  const read = one(nodes(selector, ts.isCallExpression), selector);
+  need(symbol(read.expression)?.valueDeclaration === decoder.reader, read);
+  const owners = new Set(['requireNativeAgentExecutionAuthority', 'compareNativeAgentCheckpoint', 'requireNativeIllustrationTerminalSource', 'nativeAgentTerminalResult'].map(fn));
+  const taskSymbols = new Map(), markerSymbols = new Map();
+  for (const owner of owners) {
+    const task = one([...owner.parameters.filter(node => ts.isIdentifier(node.name) && node.name.text === 'task'),
+      ...nodes(owner.body, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'task')], owner);
+    taskSymbols.set(owner, symbol(task.name));
+    const markers = nodes(owner.body, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'marker');
+    if (markers.length) markerSymbols.set(owner, symbol(one(markers, owner).name));
+  }
+  const ownerOf = node => { let parent = node.parent; while (parent && !owners.has(parent)) parent = parent.parent; return parent; };
+  const member = (node, name, base) => ts.isPropertyAccessExpression(node) && node.name.text === name && symbol(node.expression) === base;
+  const equals = (node, name, base, value) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && member(node.left, name, base) && ts.isStringLiteral(node.right) && node.right.text === value;
+  const selectedPair = node => {
+    const owner = ownerOf(node);
+    return owner && ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+      && equals(node.left, 'profile', markerSymbols.get(owner), 'paper-illustration')
+      && equals(node.right, 'kind', taskSymbols.get(owner), 'workspace.guide');
+  };
+  const selectedCall = node => ts.isCallExpression(node) && symbol(node.expression) === symbol(selector.name)
+    && node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) && symbol(node.arguments[0]) === taskSymbols.get(ownerOf(node));
+  const absent = new Map(), removed = new Set([selector]), selectedRegions = [];
+  for (const owner of owners) for (const statement of owner.body.statements) if (ts.isVariableStatement(statement)) {
+    for (const declaration of statement.declarationList.declarations) {
+      const init = declaration.initializer;
+      if (init && (selectedCall(init) || ts.isConditionalExpression(init) && selectedPair(init.condition))) {
+        need(statement.declarationList.declarations.length === 1 && statement.declarationList.flags & ts.NodeFlags.Const, statement);
+        if (ts.isConditionalExpression(init)) need(selectedCall(init.whenTrue) && ts.isIdentifier(init.whenFalse) && init.whenFalse.text === 'undefined'
+          && !symbol(init.whenFalse)?.declarations?.some(node => !node.getSourceFile().isDeclarationFile), init);
+        absent.set(symbol(declaration.name), declaration); removed.add(statement);
+      }
+    }
+  }
+  const falseValue = node => {
+    if (selectedPair(node) || selectedCall(node) || ts.isIdentifier(node) && absent.has(symbol(node))) return true;
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && falseValue(node.right)) {
+      const owner = ownerOf(node);
+      need(owner && equals(node.left, 'profile', markerSymbols.get(owner), 'paper-illustration'), node.left); return true;
+    }
+    return false;
+  };
+  for (const owner of owners) for (const statement of owner.body.statements) if (ts.isIfStatement(statement) && falseValue(statement.expression)) {
+    need(!statement.elseStatement, statement); selectedRegions.push(statement); removed.add(statement);
+  }
+  need(selectedRegions.length === 4 && absent.size === 2, source);
+  const insideRemoved = node => [...removed].some(parent => node.pos >= parent.pos && node.end <= parent.end && node.getSourceFile() === source);
+  for (const ref of nodes(source, ts.isIdentifier)) if (symbol(ref) === symbol(selector.name) && ref !== selector.name)
+    need(insideRemoved(ref) || selectedCall(ref.parent) && owners.has(ownerOf(ref)), ref);
+  const oldImports = new Map();
+  for (const statement of previous.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly
+    && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings))
+    oldImports.set(statement.moduleSpecifier.text, new Set(statement.importClause.namedBindings.elements.filter(node => !node.isTypeOnly).map(node => (node.propertyName ?? node.name).text)));
+  const removedImports = new Set(), builtinOmissions = [];
+  for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly
+    && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) for (const entry of statement.importClause.namedBindings.elements) if (!entry.isTypeOnly) {
+    const imported = (entry.propertyName ?? entry.name).text;
+    if (oldImports.get(statement.moduleSpecifier.text)?.has(imported)) continue;
+    const local = context.checker.getSymbolAtLocation(entry.name); need(local, entry);
+    for (const ref of nodes(source, ts.isIdentifier)) if (context.checker.getSymbolAtLocation(ref) === local && ref !== entry.name && ref !== entry.propertyName) need(insideRemoved(ref), ref);
+    if (imported === 'createHash') { need(statement.moduleSpecifier.text === 'node:crypto', entry); builtinOmissions.push({ specifier: 'node:crypto', binding: entry }); }
+    else need(symbol(entry.name)?.declarations?.some(node => !node.getSourceFile().isDeclarationFile
+      && /^(?:apps|packages)\//u.test(relative(context.root, node.getSourceFile().fileName).replaceAll('\\', '/'))), entry);
+    removedImports.add(entry);
+  }
+  const transformed = ts.transform(source, [factory => { const visit = node => {
+    if (removed.has(node)) return undefined;
+    if (ts.isConditionalExpression(node) && falseValue(node.condition)) return ts.visitNode(node.whenFalse, visit);
+    if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+      const entries = node.importClause.namedBindings.elements.filter(entry => !removedImports.has(entry));
+      if (!entries.length && !node.importClause.name) return undefined;
+      return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause, node.importClause.isTypeOnly,
+        node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, entries)), node.moduleSpecifier, node.attributes);
+    }
+    return ts.visitEachChild(node, visit, factory);
+  }; return root => ts.visitNode(root, visit); }]);
+  let text;
+  try { text = ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  const runtime = (text, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(text,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  need(runtime(text, context) === runtime(previous.text, rollbackContext), source);
+  return { status: 'conditional', source, previous, text, selector, owners, absent, selectedRegions, removed, removedImports, builtinOmissions,
+    outstanding: ['legacy kind/profile/payload and retained-history familyA premise', 'positive selected reader/final/retry familyB contract',
+      'global import/declaration/namespace closure', 'actual successful DEFAULT contexts and all remaining entries'] };
+}
+
+function finiteSelectedGuideHandlerTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const nodes = (scope, predicate) => {
+    const found = []; const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (predicate(node)) found.push(node); ts.forEachChild(node, visit);
+    }; visit(scope); return found;
+  };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const source = (ctx, file) => {
+    const parsed = ctx.program.getSourceFile(resolve(ctx.root, file));
+    need(parsed && !parsed.isDeclarationFile && ctx.program.getTypeChecker() === ctx.checker, parsed); return parsed;
+  };
+  const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), parsed);
+  const symbol = node => {
+    let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+      ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value;
+  };
+  const unwrap = raw => {
+    let node = raw; while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node))) node = node.expression;
+    return node;
+  };
+  const property = (object, name) => one(object.properties.filter(node => ts.isPropertyAssignment(node)
+    && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && node.name.text === name), object);
+  const equal = (left, right) => JSON.stringify(context.canonical(left)) === JSON.stringify(rollbackContext.canonical(right));
+  const current = source(context, 'apps/agent-worker/src/index.ts'), previous = source(rollbackContext, 'apps/agent-worker/src/index.ts');
+  const factory = fn(current, 'createHandlers'), oldFactory = fn(previous, 'createHandlers');
+  need(factory.parameters.length === 2 && oldFactory.parameters.length === 2 && factory.body?.statements.length === 3
+    && oldFactory.body?.statements.length === 2, factory);
+  need(equal(factory.body.statements[0], oldFactory.body.statements[0]), factory);
+  const declarationStatement = factory.body.statements[1];
+  need(ts.isVariableStatement(declarationStatement) && Boolean(declarationStatement.declarationList.flags & ts.NodeFlags.Const)
+    && declarationStatement.declarationList.declarations.length === 1, declarationStatement);
+  const native = declarationStatement.declarationList.declarations[0], conditional = unwrap(native.initializer);
+  need(ts.isIdentifier(native.name) && ts.isConditionalExpression(conditional) && ts.isObjectLiteralExpression(conditional.whenTrue)
+    && ts.isIdentifier(conditional.whenFalse) && conditional.whenFalse.text === 'undefined', native);
+  const table = factory.body.statements[2], oldTable = oldFactory.body.statements[1];
+  need(ts.isReturnStatement(table) && ts.isObjectLiteralExpression(table.expression)
+    && ts.isReturnStatement(oldTable) && ts.isObjectLiteralExpression(oldTable.expression), table);
+  const presentation = property(table.expression, 'presentation.generate'), oldPresentation = property(oldTable.expression, 'presentation.generate');
+  need(ts.isCallExpression(presentation.initializer) && ts.isCallExpression(oldPresentation.initializer)
+    && presentation.initializer.arguments.length === 1 && oldPresentation.initializer.arguments.length === 1
+    && ts.isObjectLiteralExpression(presentation.initializer.arguments[0]) && ts.isObjectLiteralExpression(oldPresentation.initializer.arguments[0]), presentation);
+  const oldSpread = one(oldPresentation.initializer.arguments[0].properties.filter(ts.isSpreadAssignment), oldPresentation);
+  const oldConditional = unwrap(oldSpread.expression);
+  need(ts.isConditionalExpression(oldConditional) && ts.isObjectLiteralExpression(oldConditional.whenTrue)
+    && ts.isObjectLiteralExpression(oldConditional.whenFalse) && !oldConditional.whenFalse.properties.length, oldSpread);
+  const oldNative = property(oldConditional.whenTrue, 'nativeAgent');
+  need(oldConditional.whenTrue.properties.length === 1 && equal(conditional.condition, oldConditional.condition)
+    && equal(conditional.whenTrue, oldNative.initializer), native);
+  const spread = one(presentation.initializer.arguments[0].properties.filter(ts.isSpreadAssignment), presentation);
+  const newConditional = unwrap(spread.expression);
+  need(ts.isConditionalExpression(newConditional) && ts.isIdentifier(newConditional.condition)
+    && symbol(newConditional.condition) === symbol(native.name) && ts.isObjectLiteralExpression(newConditional.whenTrue)
+    && newConditional.whenTrue.properties.length === 1 && ts.isShorthandPropertyAssignment(newConditional.whenTrue.properties[0])
+    && newConditional.whenTrue.properties[0].name.text === 'nativeAgent'
+    && symbol(newConditional.whenTrue.properties[0].name) === symbol(native.name)
+    && ts.isObjectLiteralExpression(newConditional.whenFalse) && !newConditional.whenFalse.properties.length, spread);
+  const guide = property(table.expression, 'workspace.guide');
+  need(ts.isArrowFunction(guide.initializer) && ts.isCallExpression(guide.initializer.body)
+    && guide.initializer.body.arguments.length === 4 && symbol(guide.initializer.body.arguments[3]) === symbol(native.name), guide);
+  const guideCall = guide.initializer.body;
+  const nativeUses = nodes(factory, node => ts.isIdentifier(node) && symbol(node) === symbol(native.name));
+  need(nativeUses.length === 4 && nativeUses.every(node => node === native.name || node === newConditional.condition
+    || node === newConditional.whenTrue.properties[0].name || node === guideCall.arguments[3]), native);
+  // Before the old Native initializer the table allocates closure values only.
+  // The combined voice reader adds one concrete factory before that initializer.
+  // Its call can commute only after binding its complete allocation-only body,
+  // omitted fresh options and actual data-only createHandlers suppliers below.
+  const before = oldTable.expression.properties.slice(0, oldTable.expression.properties.indexOf(oldPresentation));
+  let voicePredecessor;
+  const bound = (owner, node) => {
+    let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+      ? owner.checker.getShorthandAssignmentValueSymbol(node.parent) : owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value;
+  };
+  for (const [index, node] of before.entries()) {
+    if (ts.isPropertyAssignment(node) && (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name))
+      && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) continue;
+    const currentSpread = table.expression.properties[index];
+    need(index === 0 && !voicePredecessor && ts.isSpreadAssignment(node) && ts.isSpreadAssignment(currentSpread), node);
+    const currentVoice = source(context, 'apps/agent-worker/src/voice.ts');
+    const oldVoice = source(rollbackContext, 'apps/agent-worker/src/voice.ts');
+    const voiceFactory = fn(currentVoice, 'createHermesVoiceHandlers'), oldVoiceFactory = fn(oldVoice, 'createHermesVoiceHandlers');
+    need(equal(voiceFactory, oldVoiceFactory), voiceFactory);
+    const callShape = (owner, spreadNode, handlerFactory, target) => {
+      const call = unwrap(spreadNode.expression);
+      need(ts.isCallExpression(call) && ts.isIdentifier(call.expression) && !call.questionDotToken
+        && bound(owner, call.expression)?.valueDeclaration === target && call.arguments.length === 1, spreadNode);
+      const argument = call.arguments[0];
+      need(ts.isPropertyAccessExpression(argument) && !argument.questionDotToken && argument.name.text === 'voiceRuntime'
+        && ts.isIdentifier(argument.expression) && bound(owner, argument.expression) === bound(owner, handlerFactory.parameters[1].name), call);
+      const calls = [];
+      for (const parsed of owner.program.getSourceFiles()) {
+        if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(owner.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+        for (const reference of nodes(parsed, ts.isIdentifier)) {
+          if (bound(owner, reference)?.valueDeclaration !== target || reference === target.name
+            || ts.isImportSpecifier(reference.parent) || ts.isExportSpecifier(reference.parent)) continue;
+          need(reference === call.expression, reference); calls.push(reference.parent);
+        }
+      }
+      need(calls.length === 1 && calls[0] === call, call);
+      return call;
+    };
+    const voiceCall = callShape(context, currentSpread, factory, voiceFactory);
+    const oldVoiceCall = callShape(rollbackContext, node, oldFactory, oldVoiceFactory);
+    need(equal(voiceCall, oldVoiceCall), voiceCall);
+    need(!voiceFactory.asteriskToken && !voiceFactory.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword)
+      && voiceFactory.parameters.length === 2 && voiceFactory.parameters.every(value => ts.isIdentifier(value.name) && !value.dotDotDotToken)
+      && !voiceFactory.parameters[0].initializer && voiceFactory.parameters[1].name.text === 'options'
+      && voiceFactory.parameters[1].initializer && ts.isObjectLiteralExpression(voiceFactory.parameters[1].initializer)
+      && voiceFactory.parameters[1].initializer.properties.length === 0 && voiceFactory.body?.statements.length === 3, voiceFactory);
+    const [waitStatement, handleStatement, returned] = voiceFactory.body.statements;
+    const constDeclaration = statement => {
+      need(ts.isVariableStatement(statement) && Boolean(statement.declarationList.flags & ts.NodeFlags.Const)
+        && statement.declarationList.declarations.length === 1 && ts.isIdentifier(statement.declarationList.declarations[0].name), statement);
+      return statement.declarationList.declarations[0];
+    };
+    const wait = constDeclaration(waitStatement), handle = constDeclaration(handleStatement);
+    const waitGrammar = ts.createSourceFile('voice-allocation.ts',
+      'const wait = options.wait ?? (async milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));',
+      ts.ScriptTarget.ES2022, true).statements[0];
+    need(JSON.stringify(context.canonical(waitStatement)) === JSON.stringify(context.canonical(waitGrammar)), waitStatement);
+    const waitInput = unwrap(wait.initializer).left;
+    need(bound(context, waitInput.expression) === bound(context, voiceFactory.parameters[1].name), wait);
+    need(handle.initializer && ts.isArrowFunction(handle.initializer) && ts.isBlock(handle.initializer.body)
+      && handle.initializer.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword), handle);
+    need(ts.isReturnStatement(returned) && ts.isObjectLiteralExpression(returned.expression)
+      && returned.expression.properties.length === 2, returned);
+    for (const [position, key] of ['voice.transcribe', 'voice.reply'].entries()) {
+      const entry = returned.expression.properties[position];
+      need(ts.isPropertyAssignment(entry) && ts.isStringLiteral(entry.name) && entry.name.text === key
+        && ts.isIdentifier(entry.initializer) && bound(context, entry.initializer) === bound(context, handle.name), returned);
+    }
+    voicePredecessor = { factory: voiceFactory, previous: oldVoiceFactory, call: voiceCall, oldCall: oldVoiceCall, wait, handle, returned };
+  }
+  const handlerSource = source(context, 'apps/agent-worker/src/presentation/handler.ts');
+  const handlerFactory = fn(handlerSource, 'createPresentationGenerationHandler');
+  need(symbol(presentation.initializer.expression) === symbol(handlerFactory.name)
+    && handlerFactory.body.statements.length === 1 && ts.isReturnStatement(handlerFactory.body.statements[0])
+    && ts.isArrowFunction(handlerFactory.body.statements[0].expression), handlerFactory);
+  const suppliers = [];
+  for (const parsed of context.program.getSourceFiles()) {
+    if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+    for (const node of nodes(parsed, ts.isIdentifier)) {
+      if (symbol(node) !== symbol(factory.name) || node === factory.name || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent)) continue;
+      const call = node.parent;
+      need(ts.isCallExpression(call) && call.expression === node && !call.questionDotToken && call.arguments.length >= 1
+        && call.arguments.length <= 2 && !call.arguments.some(ts.isSpreadElement), node);
+      if (call.arguments.length === 2) {
+        // Whatever effects its VALUES have already happened at the call site.
+        // A fresh object literal's own properties are data properties. Accessors,
+        // prototype setters and escaped/opaque option objects are not admitted.
+        const options = unwrap(call.arguments[1]);
+        need(ts.isObjectLiteralExpression(options) && options.properties.every(value => ts.isSpreadAssignment(value)
+          || (ts.isPropertyAssignment(value) || ts.isShorthandPropertyAssignment(value))
+            && (ts.isIdentifier(value.name) || ts.isStringLiteral(value.name)) && value.name.text !== '__proto__'), options);
+        if (voicePredecessor) {
+          // In this moved interval options.voiceRuntime must be a data read.
+          // A spread of an opaque object could introduce an accessor/prototype
+          // premise not established by the old shallow supplier check.
+          const dataObject = (raw, depth = 0) => {
+            const value = unwrap(raw);
+            if (!value || depth > 32) return false;
+            if (ts.isConditionalExpression(value)) return dataObject(value.whenTrue, depth + 1) && dataObject(value.whenFalse, depth + 1);
+            return ts.isObjectLiteralExpression(value) && value.properties.every(entry => ts.isSpreadAssignment(entry)
+              ? dataObject(entry.expression, depth + 1)
+              : (ts.isPropertyAssignment(entry) || ts.isShorthandPropertyAssignment(entry))
+                && (ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) && entry.name.text !== '__proto__');
+          };
+          need(dataObject(options), options);
+        }
+      }
+      suppliers.push(call);
+    }
+  }
+  need(suppliers.length > 0, factory);
+  const reconstructed = ts.factory.createSpreadAssignment(ts.factory.createParenthesizedExpression(ts.factory.createConditionalExpression(
+    conditional.condition, undefined, ts.factory.createObjectLiteralExpression([ts.factory.createPropertyAssignment('nativeAgent', conditional.whenTrue)]),
+    undefined, ts.factory.createObjectLiteralExpression([]))));
+  const transformed = ts.transform(current, [transformation => {
+    const visit = node => node === declarationStatement ? undefined : node === spread ? reconstructed
+      : node === guideCall ? ts.factory.updateCallExpression(node, node.expression, node.typeArguments, node.arguments.slice(0, 3))
+        : ts.visitEachChild(node, visit, transformation);
+    return value => ts.visitNode(value, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter({ removeComments: true }).printFile(transformed.transformed[0]); }
+  finally { transformed.dispose(); }
+  return { status: 'conditional', source: current, rollback: previous, factory, oldFactory, native, suppliers, voicePredecessor, text,
+    outstanding: ['complete caller inventory under successful collector supplementary source closure',
+      'legacy guide branch absence before fourth argument is removed', 'complete remaining module runtime equality'] };
+}
+
+function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  const nodes = (scope, predicate, skipNested = false) => {
+    const result = []; const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (skipNested && node !== scope && ts.isFunctionLike(node)) return;
+      if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+    }; visit(scope); return result;
+  };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const source = (ctx, file) => { const value = ctx.program.getSourceFile(resolve(ctx.root, file)); need(value && !value.isDeclarationFile, value); return value; };
+  const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), parsed);
+  const variable = (scope, name) => one(nodes(scope, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name), scope);
+  const symbol = node => { let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+    ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const unwrap = raw => { let node = raw; while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const key = node => ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : undefined;
+  const member = (raw, base, name) => { const node = unwrap(raw); return node && ts.isPropertyAccessExpression(node)
+    && node.name.text === name && ts.isIdentifier(unwrap(node.expression)) && symbol(unwrap(node.expression)) === base; };
+  const equal = (left, right) => JSON.stringify(context.canonical(left)) === JSON.stringify(rollbackContext.canonical(right));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const current = source(context, file), previous = source(rollbackContext, file);
+  const wrapper = fn(current, 'runNativeIllustrationTask'), core = fn(current, 'runNativeIllustrationTaskCore');
+  const selected = fn(current, 'runNativeSelectedImageGuideTask'), replay = fn(current, 'replayNativeVideoPlan');
+  const materializer = fn(current, 'createNativeIllustrationMaterializer'), profile = fn(current, 'nativeIllustrationToolProfile');
+  const oldRun = fn(previous, 'runNativeIllustrationTask'), oldProfile = fn(previous, 'nativeIllustrationToolProfile');
+  need(equal(profile, oldProfile), profile);
+  const profileReturns = nodes(profile.body, ts.isReturnStatement, true);
+  need(profileReturns.length && profileReturns.every(node => ts.isObjectLiteralExpression(node.expression)
+    && node.expression.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+      && key(property.name) && key(property.name) !== 'selectedImage')), profile);
+  const references = target => {
+    const calls = [];
+    for (const parsed of context.program.getSourceFiles()) {
+      if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+      for (const node of nodes(parsed, ts.isIdentifier)) {
+        if (symbol(node) !== symbol(target.name) || node === target.name || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent)) continue;
+        need(ts.isCallExpression(node.parent) && node.parent.expression === node && !node.parent.questionDotToken
+          && node.parent.arguments.length === 1 && !node.parent.arguments.some(ts.isSpreadElement), node); calls.push(node.parent);
+      }
+    }
+    return calls;
+  };
+  const ordinaryCalls = references(wrapper), replayCalls = references(replay), coreCalls = references(core);
+  const wrapperGrammar = ts.createSourceFile('ordinary-native-wrapper.ts', `async function ordinary(input: unknown) {
+    if (input.selectedImage) stopped();
+    const result = await runNativeIllustrationTaskCore(input);
+    if ('reply' in result) stopped();
+    return result;
+  }`, ts.ScriptTarget.ES2022, true);
+  need(wrapper.parameters.length === 1 && ts.isIdentifier(wrapper.parameters[0].name) && wrapper.parameters[0].name.text === 'input'
+    && equal(wrapper.body, wrapperGrammar.statements[0].body), wrapper);
+  const handler = source(context, 'apps/agent-worker/src/presentation/handler.ts');
+  for (const calls of [ordinaryCalls, replayCalls]) {
+    need(calls.length === 1 && calls[0].getSourceFile() === handler, calls[0]);
+    const input = unwrap(calls[0].arguments[0]);
+    need(ts.isObjectLiteralExpression(input) && input.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+      && key(property.name) && !['selectedImage', '__proto__'].includes(key(property.name))), input);
+  }
+  need(coreCalls.length === 2 && coreCalls.every(call => (call.pos > wrapper.pos && call.end < wrapper.end)
+    || (call.pos > selected.pos && call.end < selected.end)), core);
+  const wrapperCall = one(coreCalls.filter(call => call.pos > wrapper.pos && call.end < wrapper.end), wrapper);
+  need(ts.isIdentifier(wrapperCall.arguments[0]) && symbol(wrapperCall.arguments[0]) === symbol(wrapper.parameters[0].name), wrapperCall);
+  const constructors = references(materializer);
+  need(constructors.length === 2, materializer);
+  const coreInput = symbol(core.parameters[0].name), replayInput = symbol(replay.parameters[0].name);
+  for (const call of constructors) {
+    const owner = call.pos > core.pos && call.end < core.end ? core : call.pos > replay.pos && call.end < replay.end ? replay : undefined;
+    const object = unwrap(call.arguments[0]); need(owner && ts.isObjectLiteralExpression(object), call);
+    for (const property of object.properties) {
+      if (ts.isSpreadAssignment(property)) need(ts.isIdentifier(unwrap(property.expression))
+        && (symbol(unwrap(property.expression)) === symbol(owner.parameters[0].name)
+          || owner === replay && symbol(unwrap(property.expression)) === symbol(variable(replay, 'profile').name)), property);
+      else need((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+        && key(property.name) && !['selectedImage', '__proto__'].includes(key(property.name)), property);
+    }
+  }
+  const allowedSpreads = new Set(constructors.flatMap(call => unwrap(call.arguments[0]).properties.filter(ts.isSpreadAssignment).map(node => unwrap(node.expression))));
+  for (const owner of [core, replay, materializer]) {
+    const target = symbol(owner.parameters[0].name);
+    for (const node of nodes(owner, ts.isIdentifier)) {
+      if (symbol(node) !== target || node === owner.parameters[0].name) continue;
+      need(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node || allowedSpreads.has(node), node);
+      if (ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node) {
+        const parent = node.parent.parent;
+        need(!(ts.isBinaryExpression(parent) && parent.left === node.parent && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+          && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) && !ts.isDeleteExpression(parent)
+          && !((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)), node);
+      }
+    }
+  }
+  const finish = one(nodes(materializer, node => ts.isFunctionDeclaration(node) && node.name?.text === 'finish'), materializer);
+  const finishReturns = nodes(finish.body, ts.isReturnStatement, true);
+  need(finishReturns.length === 1 && ts.isObjectLiteralExpression(finishReturns[0].expression)
+    && finishReturns[0].expression.properties.every(property => ts.isPropertyAssignment(property)
+      && key(property.name) && key(property.name) !== 'reply'), finish);
+  const materializerVariable = variable(core, 'materializer');
+  need(ts.isCallExpression(materializerVariable.initializer) && symbol(materializerVariable.initializer.expression) === symbol(materializer.name), materializerVariable);
+  const result = variable(core, 'result');
+  need(ts.isCallExpression(result.initializer) && member(result.initializer.expression, symbol(materializerVariable.name), 'finish'), result);
+  const profileBinding = one(nodes(core, node => ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)
+    && ts.isIdentifier(node.initializer) && symbol(node.initializer) === symbol(variable(core, 'profile').name)), core);
+  const sourceTools = variable(core, 'sourceTools'), originalBinding = one(nodes(oldRun, node => ts.isVariableDeclaration(node)
+    && ts.isObjectBindingPattern(node.name) && ts.isIdentifier(node.initializer) && node.initializer.text === 'profile'), oldRun);
+  need(ts.isConditionalExpression(sourceTools.initializer) && member(sourceTools.initializer.whenFalse, symbol(variable(core, 'profile').name), 'sourceTools'), sourceTools);
+  const fieldNames = binding => binding.name.elements.map(element => { need(!element.dotDotDotToken && !element.initializer && !element.propertyName && ts.isIdentifier(element.name), element); return element.name.text; });
+  const originalFields = fieldNames(originalBinding), fields = fieldNames(profileBinding);
+  need(originalFields.filter(name => name !== 'sourceTools').join(',') === fields.join(','), profileBinding);
+  const inputs = new Set([coreInput, replayInput, symbol(materializer.parameters[0].name), symbol(wrapper.parameters[0].name)]);
+  const falseValue = raw => {
+    const node = unwrap(raw);
+    if (node && ts.isPropertyAccessExpression(node) && node.name.text === 'selectedImage'
+      && ts.isIdentifier(unwrap(node.expression)) && inputs.has(symbol(unwrap(node.expression)))) return true;
+    return node && ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && falseValue(node.left);
+  };
+  need(falseValue(sourceTools.initializer.condition), sourceTools);
+  const paper = variable(core, 'paper');
+  need(ts.isObjectLiteralExpression(paper.initializer), paper);
+  const images = one(paper.initializer.properties.filter(node => ts.isPropertyAssignment(node) && key(node.name) === 'images'), paper);
+  need(ts.isArrowFunction(images.initializer) && images.initializer.parameters.length === 2 && ts.isBlock(images.initializer.body), images);
+  const sourceVariable = variable(core, 'source');
+  need(ts.isCallExpression(sourceVariable.initializer), sourceVariable);
+  const paperFactory = symbol(sourceVariable.initializer.expression)?.valueDeclaration;
+  need(paperFactory && ts.isFunctionDeclaration(paperFactory)
+    && paperFactory.getSourceFile() === source(context, 'apps/agent-worker/src/native-agent/paper-tools.ts'), sourceVariable);
+  const paperReturn = one(nodes(paperFactory.body, ts.isReturnStatement, true), paperFactory);
+  need(ts.isObjectLiteralExpression(paperReturn.expression), paperReturn);
+  const method = one(paperReturn.expression.properties.filter(node => ts.isMethodDeclaration(node) && key(node.name) === 'images'), paperReturn);
+  for (const property of paperReturn.expression.properties) {
+    need((ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property)) && property.body
+      && !nodes(property.body, node => node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword
+        || ts.isIdentifier(node) && node.text === 'arguments').length, property);
+  }
+  const hostCall = one(nodes(core, node => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && node.expression.text === 'runHostedNativeTask'), core);
+  const host = symbol(hostCall.expression)?.valueDeclaration;
+  need(host && ts.isFunctionDeclaration(host) && host.getSourceFile() === source(context, 'apps/agent-worker/src/native-agent/host-task.ts'), hostCall);
+  const hostInput = symbol(host.parameters[0].name);
+  for (const access of nodes(host, node => ts.isPropertyAccessExpression(node) && member(node, hostInput, 'paper'))) {
+    const property = access.parent;
+    need(ts.isPropertyAccessExpression(property) && property.expression === access
+      && ['observedPassageIds', 'call', 'images', 'withAuthorizedToolCall'].includes(property.name.text), access);
+    if (property.name.text === 'images') need(ts.isCallExpression(property.parent) && property.parent.expression === property
+      && property.parent.arguments.length === 2 && !property.parent.arguments.some(ts.isSpreadElement), property);
+  }
+  const delegated = one(images.initializer.body.statements.filter(ts.isReturnStatement), images);
+  need(ts.isCallExpression(delegated.expression) && member(delegated.expression.expression, symbol(sourceVariable.name), 'images')
+    && delegated.expression.arguments.length === 2 && delegated.expression.arguments.every((arg, index) =>
+      ts.isIdentifier(arg) && symbol(arg) === symbol(images.initializer.parameters[index].name)), delegated);
+  const removed = new Set([wrapper, selected, sourceTools.parent.parent, images]);
+  const emptySpread = node => {
+    if (!ts.isSpreadAssignment(node) && !ts.isSpreadElement(node)) return false;
+    const condition = unwrap(node.expression);
+    return ts.isConditionalExpression(condition) && falseValue(condition.condition)
+      && (ts.isObjectLiteralExpression(condition.whenFalse) && !condition.whenFalse.properties.length
+        || ts.isArrayLiteralExpression(condition.whenFalse) && !condition.whenFalse.elements.length);
+  };
+  const transformed = ts.transform(current, [transformation => {
+    const visit = node => {
+      if (removed.has(node)) return undefined;
+      if (ts.isIfStatement(node) && falseValue(node.expression)) { removed.add(node); return undefined; }
+      if (emptySpread(node)) { removed.add(node); return undefined; }
+      if (ts.isConditionalExpression(node) && falseValue(node.condition)) return ts.visitNode(node.whenFalse, visit);
+      if (node === profileBinding.name) return ts.factory.createObjectBindingPattern(originalFields.map(name => ts.factory.createBindingElement(undefined, undefined, name)));
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        const right = unwrap(node.right);
+        if (ts.isConditionalExpression(right) && falseValue(right.condition) && ts.isStringLiteral(right.whenFalse) && !right.whenFalse.text) {
+          need(ts.isCallExpression(node.left) && ts.isPropertyAccessExpression(node.left.expression)
+            && node.left.expression.name.text === 'join', node); return ts.visitNode(node.left, visit);
+        }
+      }
+      if (ts.isArrowFunction(node) && ts.isBlock(node.body)) {
+        const body = ts.visitNode(node.body, visit);
+        return ts.factory.updateArrowFunction(node, node.modifiers, node.typeParameters, node.parameters, node.type, node.equalsGreaterThanToken,
+          node.body.statements.length > 1 && body.statements.length === 1 && ts.isReturnStatement(body.statements[0]) ? body.statements[0].expression : body);
+      }
+      if (node === core) return ts.factory.updateFunctionDeclaration(node, wrapper.modifiers, node.asteriskToken, wrapper.name,
+        node.typeParameters, node.parameters, node.type, ts.visitNode(node.body, visit));
+      if (ts.isVariableStatement(node) && node.declarationList.declarations.every(declaration => ts.isIdentifier(declaration.name)
+        && ['imageReceipt', 'selectedImageCaption'].includes(declaration.name.text))) {
+        need(node.declarationList.declarations.every(declaration => ts.isConditionalExpression(declaration.initializer)
+          && falseValue(declaration.initializer.condition) && ts.isIdentifier(declaration.initializer.whenFalse)
+          && declaration.initializer.whenFalse.text === 'undefined'), node); removed.add(node); return undefined;
+      }
+      return ts.visitEachChild(node, visit, transformation);
+    };
+    return value => ts.visitNode(value, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter({ removeComments: true }).printFile(transformed.transformed[0]); }
+  finally { transformed.dispose(); }
+  const parsed = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+  const projectedRun = fn(parsed, 'runNativeIllustrationTask');
+  const emittedFunction = declaration => {
+    const output = ts.transpileModule(declaration.getText(), { compilerOptions: {
+      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    return context.canonical(ts.createSourceFile('runtime.js', output.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS));
+  };
+  need(JSON.stringify(emittedFunction(projectedRun)) === JSON.stringify(emittedFunction(oldRun)), projectedRun);
+  return { status: 'conditional', source: current, rollback: previous, wrapper, selected, core, replay, profile, materializer, removed,
+    ordinaryCalls, replayCalls, constructors, text,
+    outstanding: ['selected caller dominance and complete retained wrapper-result family',
+      'selected schema initializer and complete declaration/import residual closure', 'original successful collector supplementary caller inventory'] };
+}
+
+function finiteSelectedGuideIllustrationResidualTerms(ts, context, rollbackContext, illustration, initialization) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_ILLUSTRATION_RESIDUAL_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  need(illustration?.status === 'conditional' && initialization?.status === 'conditional', undefined);
+  const { source, rollback } = illustration;
+  need(context.program.getSourceFile(source.fileName) === source && rollbackContext.program.getSourceFile(rollback.fileName) === rollback, source);
+  const declarations = source.statements.filter(ts.isVariableStatement).flatMap(node => node.declarationList.declarations)
+    .filter(node => ts.isIdentifier(node.name) && node.name.text === 'SELECTED_IMAGE_TOOLS');
+  need(declarations.length === 1 && initialization.pureInitializers.includes(declarations[0])
+    && !declarations[0].parent.parent.modifiers?.some(node => node.kind === ts.SyntaxKind.ExportKeyword), source);
+  const tool = declarations[0], target = context.checker.getSymbolAtLocation(tool.name);
+  const inside = node => [...illustration.removed].some(parent => node.getSourceFile() === source && node.pos >= parent.pos && node.end <= parent.end);
+  const identifiers = [], visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (ts.isIdentifier(node)) identifiers.push(node); ts.forEachChild(node, visit);
+  }; visit(source);
+  for (const ref of identifiers) if (context.checker.getSymbolAtLocation(ref) === target && ref !== tool.name) need(inside(ref), ref);
+  const added = source.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === '../presentation/generated-image-review'
+    && node.importClause && !node.importClause.isTypeOnly && node.importClause.namedBindings && ts.isNamedImports(node.importClause.namedBindings));
+  need(added.length === 1 && added[0].importClause.namedBindings.elements.length === 1, source);
+  const binding = added[0].importClause.namedBindings.elements[0];
+  need(!binding.isTypeOnly && binding.name.text === 'generatedImageReviewAttachment' && !binding.propertyName, binding);
+  const imported = context.checker.getSymbolAtLocation(binding.name); need(imported, binding);
+  for (const ref of identifiers) if (context.checker.getSymbolAtLocation(ref) === imported && ref !== binding.name) need(inside(ref), ref);
+  const projected = ts.createSourceFile(source.fileName, illustration.text, ts.ScriptTarget.ES2022, true);
+  const selectedTools = projected.statements.filter(ts.isVariableStatement).filter(node => node.declarationList.declarations.some(value => value.name.text === tool.name.text));
+  need(selectedTools.length === 1 && JSON.stringify(context.canonical(selectedTools[0])) === JSON.stringify(context.canonical(tool.parent.parent)), source);
+  const removedImport = projected.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === added[0].moduleSpecifier.text
+    && !node.importClause?.isTypeOnly && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)
+    && node.importClause.namedBindings.elements.some(entry => entry.name.text === binding.name.text));
+  need(removedImport.length === 1 && JSON.stringify(context.canonical(removedImport[0])) === JSON.stringify(context.canonical(added[0])), source);
+  const text = ts.createPrinter().printFile(ts.factory.updateSourceFile(projected,
+    projected.statements.filter(node => node !== selectedTools[0] && node !== removedImport[0])));
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  need(runtime(text, context) === runtime(rollback.text, rollbackContext), source);
+  return { status: 'conditional', source, rollback, text, illustration, initialization, tool,
+    outstanding: ['complete selected-vs-ordinary root/history and wrapper outcome families', 'module import/eager order and namespace observers',
+      'actual DEFAULT collection and complete remaining entries'] };
+}
+
+function finiteSelectedGuideDormantModuleTerms(ts, context, rollbackContext, decoder) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN', node }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  need(decoder?.status === 'conditional' && decoder.capable, undefined);
+  const module = path => { const source = context.program.getSourceFile(resolve(context.root, path));
+    const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path)); need(source && previous, source); return { source, previous }; };
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const nodes = (root, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return values; };
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  const contract = module('packages/domain/src/agent/workspace-guide-contract.ts'), scene = module('packages/domain/src/assets/scene-image.ts');
+  need(contract.source === decoder.source, decoder.reader);
+  const removed = new Set();
+  for (const [entry, names] of [[contract, ['workspaceSelectedImageDraftSource', 'readWorkspaceSelectedImageDraft', 'readWorkspaceSelectedImageReference', decoder.reader.name.text]],
+    [scene, ['requireSelectedImageSource']]]) for (const name of names) {
+    const functions = entry.source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    need(functions.length === 1 && functions[0].body && !functions[0].asteriskToken
+      && !(functions[0].modifiers ?? []).some(node => node.kind === ts.SyntaxKind.Decorator)
+      && !entry.previous.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === name), entry.source);
+    removed.add(functions[0]);
+  }
+  const projections = new Map(), removedImports = new Set();
+  for (const entry of [contract, scene]) {
+    const oldImports = new Map();
+    for (const statement of entry.previous.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly
+      && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings))
+      oldImports.set(statement.moduleSpecifier.text, new Set(statement.importClause.namedBindings.elements.filter(node => !node.isTypeOnly).map(node => (node.propertyName ?? node.name).text)));
+    for (const statement of entry.source.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly
+      && statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) for (const imported of statement.importClause.namedBindings.elements) if (!imported.isTypeOnly
+      && !oldImports.get(statement.moduleSpecifier.text)?.has((imported.propertyName ?? imported.name).text)) {
+      const local = context.checker.getSymbolAtLocation(imported.name); need(local, imported);
+      for (const ref of nodes(entry.source, ts.isIdentifier)) if (context.checker.getSymbolAtLocation(ref) === local && ref !== imported.name && ref !== imported.propertyName)
+        need([...removed].some(fn => fn.getSourceFile() === entry.source && ref.pos >= fn.pos && ref.end <= fn.end), ref);
+      need(symbol(imported.name)?.declarations?.some(node => !node.getSourceFile().isDeclarationFile
+        && /^(?:apps|packages)\//u.test(relative(context.root, node.getSourceFile().fileName).replaceAll('\\', '/'))), imported);
+      removedImports.add(imported);
+    }
+    const statements = entry.source.statements.flatMap(statement => {
+      if (removed.has(statement)) return [];
+      if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+        const elements = statement.importClause.namedBindings.elements.filter(node => !removedImports.has(node));
+        if (!elements.length && !statement.importClause.name) return [];
+        return [ts.factory.updateImportDeclaration(statement, statement.modifiers, ts.factory.updateImportClause(statement.importClause,
+          statement.importClause.isTypeOnly, statement.importClause.name, ts.factory.updateNamedImports(statement.importClause.namedBindings, elements)), statement.moduleSpecifier, statement.attributes)];
+      }
+      return [statement];
+    });
+    const text = ts.createPrinter().printFile(ts.factory.updateSourceFile(entry.source, statements));
+    need(runtime(text, context) === runtime(entry.previous.text, rollbackContext), entry.source);
+    projections.set(relative(context.root, entry.source.fileName).replaceAll('\\', '/'), { ...entry, text });
+  }
+  const index = module('packages/domain/src/index.ts'), removedExports = [];
+  const statements = index.source.statements.flatMap(statement => {
+    if (!ts.isExportDeclaration(statement) || !statement.exportClause || !ts.isNamedExports(statement.exportClause)) return [statement];
+    const elements = statement.exportClause.elements.filter(node => {
+      const target = symbol(node.propertyName ?? node.name)?.valueDeclaration;
+      if (!removed.has(target)) return true;
+      removedExports.push(node); return false;
+    });
+    return elements.length ? [ts.factory.updateExportDeclaration(statement, statement.modifiers, statement.isTypeOnly,
+      ts.factory.updateNamedExports(statement.exportClause, elements), statement.moduleSpecifier, statement.attributes)] : [];
+  });
+  need(removedExports.length === removed.size, index.source);
+  const text = ts.createPrinter().printFile(ts.factory.updateSourceFile(index.source, statements));
+  need(runtime(text, context) === runtime(index.previous.text, rollbackContext), index.source);
+  projections.set('packages/domain/src/index.ts', { ...index, text });
+  return { status: 'conditional', projections, removed, removedImports, removedExports,
+    outstanding: ['complete legacy call-domain and declaration/namespace reference closure', 'selected source/DTO positive contracts for familyB',
+      'import initialization/order and actual successful DEFAULT contexts'] };
+}
+
+function finiteSelectedGuidePublicReaderTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const path = 'packages/domain/src/agent/agent.ts';
+  const source = context.program.getSourceFile(resolve(context.root, path));
+  const oldSource = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+  need(source && oldSource, source);
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), parsed);
+  const current = fn(source, 'projectAgentTaskResult'), previous = fn(oldSource, 'projectAgentTaskResult');
+  const taskView = fn(source, 'taskToView'), previousTaskView = fn(oldSource, 'taskToView');
+  const nodes = (root, predicate, nested = true) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (!nested && node !== root && ts.isFunctionLike(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const shape = (actual, text) => {
+    const grammar = ts.createSourceFile('task-bound-public-reader.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!grammar.parseDiagnostics.length && grammar.statements.length === 1, actual);
+    need(JSON.stringify(context.canonical(actual)) === JSON.stringify(context.canonical(grammar.statements[0])), actual);
+  };
+  need(current.parameters.length === 3 && current.parameters[2].questionToken && !current.parameters[2].initializer
+    && current.parameters.every(parameter => ts.isIdentifier(parameter.name))
+    && current.parameters.map(parameter => parameter.name.text).join(',') === 'rawResult,kind,task', current);
+  const statements = [...current.body.statements];
+  const start = statements.findIndex(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(value => value.name.text === 'ordinary'));
+  need(start >= 0, current);
+  const region = statements.slice(start, start + 7);
+  need(region.length === 7, current);
+  shape(region[0], 'let ordinary = false;');
+  need(ts.isVariableStatement(region[1]) && region[1].declarationList.declarations.length === 1
+    && region[1].declarationList.declarations[0].name.text === 'selectedReference' && !region[1].declarationList.declarations[0].initializer, region[1]);
+  need(ts.isVariableStatement(region[2]) && region[2].declarationList.declarations.length === 1
+    && region[2].declarationList.declarations[0].name.text === 'selectedDraft' && !region[2].declarationList.declarations[0].initializer, region[2]);
+  const attempt = region[3]; need(ts.isTryStatement(attempt) && attempt.catchClause && !attempt.finallyBlock, attempt);
+  const body = attempt.tryBlock.statements;
+  need(body.length === 6, attempt);
+  shape(body[0], `if (!task || task.kind !== kind || task.result !== rawResult || !task.id || !task.sessionId
+    || !isJsonRecord(task.payload) || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt < 0) throw new Error('Missing task provenance');`);
+  shape(body[1], 'const context = task.payload.context;');
+  shape(body[2], 'const presentation = isJsonRecord(context) ? context.presentation : undefined;');
+  shape(body[3], "const selectedRequest = isJsonRecord(presentation) && Object.hasOwn(presentation, 'selectedImageAssetId');");
+  shape(body[4], 'const marker = readNativeAgentExecution(rawResult);');
+  const choice = body[5]; need(ts.isIfStatement(choice) && ts.isIdentifier(choice.expression) && choice.expression.text === 'selectedRequest'
+    && ts.isBlock(choice.thenStatement) && choice.elseStatement && ts.isBlock(choice.elseStatement), choice);
+  shape(choice.thenStatement.statements[0], "if (kind !== 'workspace.guide' || marker?.profile !== 'paper-illustration') throw new Error('Invalid selected task');");
+  shape(choice.elseStatement, `{
+    if (kind === 'workspace.guide') readWorkspaceGuidePayloadWithSelectedImage(task.payload);
+    if (marker) {
+      const expectedKind = ['paper-understanding', 'paper-author', 'paper-source-review'].includes(marker.profile) ? 'sdf.extract'
+        : ['paper-illustration', 'image-review'].includes(marker.profile) ? 'presentation.generate' : 'journal.generate';
+      if (kind !== expectedKind || marker.checkpoint && marker.checkpoint.taskId !== task.id) throw new Error('Contradictory native association');
+    }
+    ordinary = true;
+  }`);
+  shape(attempt.catchClause.block, '{ selectedReference = undefined; selectedDraft = undefined; }');
+  shape(region[4], `if (!ordinary) {
+    delete publicResult.selectedImageContext; delete publicResult.selectedImageReply;
+    delete publicResult.selectedImageReference; delete publicResult.selectedImageDraft;
+  }`);
+  shape(region[5], 'if (selectedReference) publicResult.selectedImageReference = selectedReference;');
+  shape(region[6], 'if (selectedDraft) publicResult.selectedImageDraft = selectedDraft;');
+  // Only the authenticated ordinary branch may preserve opaque private-key
+  // extensions. Selected/unknown records cannot turn decoder failure into it.
+  const ordinary = symbol(region[0].declarationList.declarations[0].name);
+  const refs = nodes(current.body, node => ts.isIdentifier(node) && symbol(node) === ordinary);
+  need(refs.length === 3 && !nodes(choice.thenStatement, ts.isReturnStatement, false).length, choice);
+  need(!nodes(choice.thenStatement, node => ts.isIdentifier(node) && node.text === 'publicResult').length, choice);
+  // The ordinary path cannot manufacture either validated selected refill.
+  // No root-field names are excluded: arbitrary ordinary opaque values reach
+  // the exact old public tail, while selected/unknown take the four deletes.
+  const fills = region.slice(1, 3).map(statement => statement.declarationList.declarations[0]);
+  for (const fill of fills) for (const node of nodes(current.body, value => ts.isBinaryExpression(value)
+    && symbol(value.left) === symbol(fill.name) && value.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+    && value.operatorToken.kind <= ts.SyntaxKind.LastAssignment))
+    need(node.operatorToken.kind === ts.SyntaxKind.EqualsToken && (node.pos > choice.thenStatement.pos && node.end < choice.thenStatement.end
+      || node.pos > attempt.catchClause.pos && node.end < attempt.catchClause.end), node);
+  const newParameters = current.parameters.slice(0, 2);
+  const projected = ts.factory.updateFunctionDeclaration(current, current.modifiers, current.asteriskToken, current.name,
+    current.typeParameters, newParameters, current.type, ts.factory.updateBlock(current.body, statements.filter(node => !region.includes(node))));
+  const calls = nodes(taskView, node => ts.isCallExpression(node) && symbol(node.expression)?.valueDeclaration === current);
+  const call = one(calls, taskView);
+  shape(ts.factory.createExpressionStatement(call), 'projectAgentTaskResult(task.result, task.kind, task);');
+  const task = symbol(taskView.parameters[0].name);
+  need(nodes(call, node => ts.isIdentifier(node) && node.text === 'task').every(node => symbol(node) === task), call);
+  const transformed = ts.transform(taskView, [transformation => {
+    const visit = node => node === call ? ts.factory.updateCallExpression(node, node.expression, node.typeArguments, node.arguments.slice(0, 2))
+      : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  const printer = ts.createPrinter();
+  const text = printer.printNode(ts.EmitHint.Unspecified, projected, source);
+  let taskViewText;
+  try { taskViewText = printer.printNode(ts.EmitHint.Unspecified, transformed.transformed[0], source); } finally { transformed.dispose(); }
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText,
+  ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  need(runtime(text, context) === runtime(previous.getText(), rollbackContext), current);
+  need(runtime(taskViewText, context) === runtime(previousTaskView.getText(), rollbackContext), taskView);
+  return { status: 'conditional', source, current, previous, text, taskView, previousTaskView, taskViewText, region, call,
+    ordinaryRelation: { ordinary, choice, fills, quarantine: region[4], refill: region.slice(5) },
+    relation: ['ordinary opaque values preserved', 'unknown/selected private fields quarantined', 'same persisted row required'],
+    outstanding: ['actual legacy retained/fresh/history domain for familyA', 'selected-positive binder/terminal projection and familyB',
+      'bound intrinsic/codec references, whole agent module and actual DEFAULT composition'] };
+}
+
+function finiteSelectedGuideAgentResidualTerms(ts, context, rollbackContext, decoder, publicReader) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const source = publicReader?.source;
+  need(source && decoder?.capable && publicReader.status === 'conditional', source);
+  const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/agent.ts'));
+  need(previous, source);
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const fn = name => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const sameShape = (node, expected) => {
+    const grammar = ts.createSourceFile('agent-selected-region.ts', expected, ts.ScriptTarget.ES2022, true);
+    need(!grammar.parseDiagnostics.length && grammar.statements.length === 1, node);
+    need(JSON.stringify(context.canonical(node)) === JSON.stringify(context.canonical(grammar.statements[0])), node);
+  };
+  const core = fn('persistAgentTaskCoreInTransaction'), eligibility = fn('evaluateAgentTaskRetryEligibility');
+  const retryable = fn('canRetryAgentTask'), retry = fn('retryAgentTask'), recover = fn('canRecoverSelectedGuideFinal');
+  const selected = one(nodes(core, node => ts.isVariableDeclaration(node) && node.name.text === 'selectedImageSource'), core);
+  need(!selected.initializer && selected.parent.declarations.length === 1, selected);
+  const selectedSymbol = symbol(selected.name), removed = new Set([selected.parent.parent, recover]);
+  const guard = one(core.body.statements.filter(node => ts.isIfStatement(node) && node.expression.getText().includes('Object.hasOwn')), core);
+  sameShape(ts.factory.createExpressionStatement(guard.expression), `input.kind === 'workspace.guide' && isJsonRecord(input.payload.context)
+    && isJsonRecord(input.payload.context.presentation) && Object.hasOwn(input.payload.context.presentation, 'selectedImageAssetId');`);
+  const input = one(core.parameters.filter(parameter => parameter.name.text === 'input'), core);
+  need(nodes(guard.expression, node => ts.isIdentifier(node) && node.text === 'input').every(node => symbol(node) === symbol(input.name)), guard);
+  removed.add(guard);
+  const writes = nodes(core, node => ts.isBinaryExpression(node) && symbol(node.left) === selectedSymbol
+    && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment);
+  need(writes.length === 1 && writes[0].operatorToken.kind === ts.SyntaxKind.EqualsToken
+    && writes[0].pos > guard.pos && writes[0].end < guard.end, selected);
+  const falseGuard = one(core.body.statements.filter(node => ts.isIfStatement(node)
+    && ts.isBinaryExpression(node.expression) && symbol(node.expression.left) === selectedSymbol), core);
+  sameShape(falseGuard, "if (selectedImageSource && !nativeAgentResult) throw new AgentError('ILLEGAL_TRANSITION', 'Native image understanding is unavailable');");
+  removed.add(falseGuard);
+  const guideRetry = one(eligibility.body.statements.filter(node => ts.isIfStatement(node)
+    && node.expression.getText() === "task.kind === 'workspace.guide'"), eligibility);
+  sameShape(guideRetry, "if (task.kind === 'workspace.guide') return { authorityValid: true, canRetry: canRecoverSelectedGuideFinal(task) };");
+  const recoverCall = one(nodes(guideRetry, ts.isCallExpression), guideRetry);
+  need(symbol(recoverCall.expression)?.valueDeclaration === recover, recoverCall); removed.add(guideRetry);
+  const guideCheck = one(retryable.body.statements.filter(node => ts.isIfStatement(node)
+    && node.expression.getText() === "task.kind === 'workspace.guide'"), retryable);
+  // Optional tx has no evaluation effect. Its sole value use must remain in
+  // the selected-only source read; ordinary retry behavior is then unchanged.
+  need(retryable.parameters.length === 4 && retryable.parameters[3].questionToken && !retryable.parameters[3].initializer, retryable);
+  const tx = retryable.parameters[3];
+  const txUses = nodes(retryable.body, node => ts.isIdentifier(node) && symbol(node) === symbol(tx.name));
+  need(txUses.length === 1 && txUses[0].pos > guideCheck.pos && txUses[0].end < guideCheck.end, tx);
+  sameShape(ts.factory.createExpressionStatement(txUses[0].parent), 'tx ?? deps.prisma;');
+  removed.add(guideCheck);
+  const retryCheck = one(nodes(retry, node => ts.isIfStatement(node)
+    && node.expression.getText() === "task.kind === 'workspace.guide' && eligibility.canRetry"), retry);
+  sameShape(retryCheck, "if (task.kind === 'workspace.guide' && eligibility.canRetry) eligibility.canRetry = await canRetryAgentTask(deps, task, input.userId, tx);");
+  need(symbol(one(nodes(retryCheck, ts.isCallExpression), retryCheck).expression)?.valueDeclaration === retryable, retryCheck);
+  removed.add(retryCheck);
+  const inRemoved = node => [...removed].some(parent => node.pos >= parent.pos && node.end <= parent.end);
+  const choices = new Set(nodes(core, node => ts.isConditionalExpression(node) && symbol(node.condition) === selectedSymbol));
+  need(choices.size === 2, core);
+  for (const ref of nodes(source, node => ts.isIdentifier(node) && symbol(node) === selectedSymbol)) {
+    need(ref === selected.name || inRemoved(ref) || choices.has(ref.parent)
+      || ts.isPropertyAccessExpression(ref.parent) && [...choices].some(choice => ref.pos >= choice.whenTrue.pos && ref.end <= choice.whenTrue.end), ref);
+  }
+  const nativeChoice = [...choices].find(node => ts.isCallExpression(node.whenTrue));
+  need(nativeChoice && nativeChoice.whenTrue.arguments.length === 2
+    && nativeChoice.whenTrue.arguments[1].text === 'paper-illustration', core);
+  const spreadChoice = [...choices].find(node => ts.isObjectLiteralExpression(node.whenFalse));
+  let spreadOwner = spreadChoice;
+  while (spreadOwner?.parent && ts.isParenthesizedExpression(spreadOwner.parent)) spreadOwner = spreadOwner.parent;
+  need(spreadChoice && !spreadChoice.whenFalse.properties.length && ts.isSpreadAssignment(spreadOwner.parent), core);
+  const spreadStatement = spreadOwner.parent;
+  for (const reference of nodes(source, node => ts.isIdentifier(node) && symbol(node) === symbol(retryable.name)))
+    need(reference === retryable.name || ts.isCallExpression(reference.parent) && reference.parent.expression === reference
+      && (inRemoved(reference) || reference.parent.arguments.length === 3), reference);
+  const removedImports = new Set();
+  for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings
+    && ts.isNamedImports(statement.importClause.namedBindings)) for (const entry of statement.importClause.namedBindings.elements) {
+    if (entry.isTypeOnly || !['requireSelectedImageSource', 'workspaceSelectedImageDraftSource', 'readWorkspaceSelectedImageReference', 'readWorkspaceSelectedImageDraft'].includes((entry.propertyName ?? entry.name).text)) continue;
+    const local = context.checker.getSymbolAtLocation(entry.name);
+    for (const reference of nodes(source, ts.isIdentifier)) if (context.checker.getSymbolAtLocation(reference) === local && reference !== entry.name)
+      need(inRemoved(reference) || reference.pos >= publicReader.current.pos && reference.end <= publicReader.current.end, reference);
+    removedImports.add(entry);
+  }
+  need(removedImports.size === 4, source);
+  const printer = ts.createPrinter(), replacement = new Map([[publicReader.current, publicReader.text], [publicReader.taskView, publicReader.taskViewText]]);
+  const transformed = ts.transform(source, [transformation => {
+    const visit = node => {
+      if (removed.has(node)) return undefined;
+      if (replacement.has(node)) {
+        // Text from another SourceFile is spliced below, never printed using
+        // the original source's offsets.
+        return node;
+      }
+      if (node === tx) return undefined;
+      if (node === spreadStatement) return undefined;
+      if (choices.has(node)) return ts.visitNode(node.whenFalse, visit);
+      if (ts.isIdentifier(node) && symbol(node)?.valueDeclaration === decoder.reader) return ts.factory.createIdentifier(decoder.legacyParser.name.text);
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+        const entries = node.importClause.namedBindings.elements.filter(entry => !removedImports.has(entry)).map(entry =>
+          symbol(entry.name)?.valueDeclaration === decoder.reader
+            ? ts.factory.updateImportSpecifier(entry, entry.isTypeOnly, undefined, ts.factory.createIdentifier(decoder.legacyParser.name.text)) : entry);
+        if (!entries.length && !node.importClause.name) return undefined;
+        return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause, node.importClause.isTypeOnly,
+          node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, entries)), node.moduleSpecifier, node.attributes);
+      }
+      return ts.visitEachChild(node, visit, transformation);
+    }; return node => ts.visitNode(node, visit);
+  }]);
+  let text;
+  try { text = printer.printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  const parsed = ts.createSourceFile(source.fileName, text, ts.ScriptTarget.ES2022, true), edits = [];
+  for (const [original, value] of replacement) {
+    const node = one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === original.name.text), parsed);
+    edits.push({ start: node.getStart(parsed), end: node.end, value });
+  }
+  for (const edit of edits.sort((left, right) => right.start - left.start)) text = text.slice(0, edit.start) + edit.value + text.slice(edit.end);
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText,
+  ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  need(runtime(text, context) === runtime(previous.text, rollbackContext), source);
+  return { status: 'conditional', source, previous, text, removed, choices, removedImports, publicReader, core, eligibility, retryable, retry, recover,
+    outstanding: ['retained familyA legacy payload and old guide retry/refusal relation', 'selected final/binder/tx familyB contract',
+      'all removed bindings and intrinsic/declaration/init context', 'actual successful DEFAULT collection and strict remaining entries'] };
+}
+
+function finiteSelectedGuideIngestionReaderTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_INGESTION_READER_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const path = 'packages/domain/src/ingestion/ingestion-service.ts';
+  const source = context.program.getSourceFile(resolve(context.root, path));
+  const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+  need(source && previous, source);
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const reader = one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'getIngestionTask'), source);
+  const row = one(nodes(reader, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'task'), reader);
+  const projector = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/agent/agent.ts'));
+  const declaration = one(projector?.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'projectAgentTaskResult') ?? [], source);
+  const calls = nodes(source, node => ts.isCallExpression(node) && symbol(node.expression)?.valueDeclaration === declaration);
+  const call = one(calls, source);
+  need(call.pos >= reader.pos && call.end <= reader.end, call);
+  const grammar = ts.createSourceFile('same-persisted-ingestion-row.ts',
+    "projectAgentTaskResult(task.agentTask?.result, task.agentTask?.kind ?? '', task.agentTask ?? undefined);", ts.ScriptTarget.ES2022, true)
+    .statements[0].expression;
+  need(JSON.stringify(context.canonical(call)) === JSON.stringify(context.canonical(grammar)), call);
+  const references = nodes(call, node => ts.isIdentifier(node) && node.text === 'task');
+  need(references.length === 3 && references.every(node => symbol(node) === symbol(row.name)), call);
+  // Dropping only the extra provenance argument is justified by the separately
+  // required task-bound projection relation. Every query, permission check,
+  // include, original argument and other module statement must remain exact.
+  const transformed = ts.transform(source, [transformation => {
+    const visit = node => node === call
+      ? ts.factory.updateCallExpression(node, node.expression, node.typeArguments, node.arguments.slice(0, 2))
+      : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  const runtime = (value, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(value,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText,
+  ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  need(runtime(text, context) === runtime(previous.text, rollbackContext), source);
+  return { status: 'conditional', source, previous, text, row, call, projector: declaration,
+    outstanding: ['complete ordinary/unknown/selected public projection relation for this exact persisted row',
+      'all retained families and actual successful DEFAULT collector composition'] };
+}
+
+function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected) {
+  let initializationSite = 'capture-context';
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node, initializationSite }; };
+  const need = (condition, node) => { if (!condition) fail(node); };
+  let currentEntries, previousEntries;
+  if (collected !== undefined) {
+    need(Array.isArray(collected.current) && Array.isArray(collected.previous)
+      && rollbackProofContexts.get(collected.current) === context && rollbackProofContexts.get(collected.previous) === rollbackContext
+      && context.ts === ts && rollbackContext.ts === ts && context.roots === rollbackContext.roots, undefined);
+    currentEntries = new Map(collected.current); previousEntries = new Map(collected.previous);
+    need(currentEntries.size === collected.current.length && previousEntries.size === collected.previous.length, undefined);
+  }
+  const symbol = (node, owner = context) => { let value = owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value; };
+  const intrinsic = (node, name, owner) => {
+    const value = owner.checker.getSymbolAtLocation(node);
+    return ts.isIdentifier(node) && node.text === name && !(value?.flags & ts.SymbolFlags.Alias)
+      && !(value?.declarations ?? []).some(declaration => !declaration.getSourceFile().isDeclarationFile);
+  };
+  const unwrap = raw => { let node = raw; while (node && (ts.isAsExpression(node) || ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const key = node => ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : undefined;
+  const factoryGrammar = ts.createSourceFile('owned-json-schema-factory.ts', `const factory =
+    (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: 'object', additionalProperties: false, properties, required });`, ts.ScriptTarget.ES2022, true)
+    .statements[0].declarationList.declarations[0].initializer;
+  const sceneGrammar = ts.createSourceFile('owned-science-scene.ts',
+    `const scene = (domain: Record<string, unknown>, originalRefRequired = true) => {
+      const scene = object({ title: str, narration: str, message: str, domain, encoding: str, labels: list, constraints: list,
+        subjects: { type: 'array', minItems: 1, maxItems: 4, items: object({ description: str, basis: object({ sourceId: str }) }) },
+        paperOriginalAssetId: { type: ['string', 'null'] } });
+      if (!originalRefRequired) scene.required = scene.required.filter(key => key !== 'paperOriginalAssetId');
+      return scene;
+    };`, ts.ScriptTarget.ES2022, true).statements[0].declarationList.declarations[0].initializer;
+  const scienceGrammar = ts.createSourceFile('owned-science-schema.ts',
+    `const schema = (domain: Record<string, unknown>, originalRefRequired = true) => {
+      return object({ title: str, narrative: object({ mainMessage: str, audience: str }), scenes: { type: 'array', minItems: 1, maxItems: 6, items: scienceSceneSchema(domain, originalRefRequired) } });
+    };`, ts.ScriptTarget.ES2022, true).statements[0].declarationList.declarations[0].initializer;
+  const pureInitializers = [], declarations = [], modules = [], checking = new Set();
+  const cache = new Map(), coldCache = new Map();
+  const retainedInitializer = (owner, initializer) => {
+    if (!ts.isVariableDeclaration(initializer) || !ts.isIdentifier(initializer.name) || !initializer.initializer) return false;
+    const other = owner === context ? rollbackContext : context;
+    const source = other.program.getSourceFile(resolve(other.root, relative(owner.root, initializer.getSourceFile().fileName)));
+    const previous = source?.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+      .find(value => ts.isIdentifier(value.name) && value.name.text === initializer.name.text);
+    return previous?.initializer && JSON.stringify(owner.canonical(initializer.initializer)) === JSON.stringify(other.canonical(previous.initializer));
+  };
+  const pure = (raw, initializer, owner = context, locals = new Map(), retainedLoading = true) => {
+    const node = unwrap(raw); need(node && !checking.has(node), node);
+    checking.add(node);
+    const within = (value, seed = initializer) => pure(value, seed, owner, locals, retainedLoading);
+    const dataObject = value => ['object', 'tool'].includes(value);
+    const dataArray = value => ['array', 'tools'].includes(value);
+    const variable = identifier => {
+      const bound = symbol(identifier, owner)?.valueDeclaration;
+      need(bound && ts.isVariableDeclaration(bound) && bound.initializer && bound.getSourceFile() === initializer.getSourceFile()
+        && bound.end < initializer.pos && Boolean(bound.parent.flags & ts.NodeFlags.Const), identifier);
+      return bound;
+    };
+    const ownProperty = (raw, field, seen = new Set()) => {
+      const value = unwrap(raw); need(value && !seen.has(value), raw); const next = new Set(seen).add(value);
+      if (ts.isIdentifier(value)) return ownProperty(variable(value).initializer, field, next);
+      if (ts.isPropertyAccessExpression(value)) return ownProperty(ownProperty(value.expression, value.name.text, next), field, next);
+      if (ts.isCallExpression(value) && ts.isIdentifier(value.expression)) {
+        const factory = unwrap(variable(value.expression).initializer);
+        if (['properties', 'required'].includes(field) && [sceneGrammar, scienceGrammar, factoryGrammar].some(grammar =>
+          JSON.stringify(owner.canonical(factory)) === JSON.stringify(owner.canonical(grammar)))) {
+          need(within(value) === 'object', value);
+          return { verifiedSchemaField: value, type: field === 'properties' ? 'object' : 'array' };
+        }
+        if (JSON.stringify(owner.canonical(factory)) !== JSON.stringify(owner.canonical(factoryGrammar)))
+          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `own-field:${field}`, initializationSite };
+        if (field === 'properties') return value.arguments[0];
+        fail(value);
+      }
+      need(ts.isObjectLiteralExpression(value), value);
+      for (const item of [...value.properties].reverse()) {
+        if (ts.isSpreadAssignment(item)) return ownProperty(item.expression, field, next);
+        if (key(item.name) === field) { need(ts.isPropertyAssignment(item), item); return item.initializer; }
+      }
+      fail(value);
+    };
+    try {
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return 'string';
+      // TS5.5 accepts invalid regex spellings without syntactic diagnostics.
+      // Only an exactly retained old initializer has the old loading premise;
+      // a new literal is UNKNOWN, never executed or interpreted here.
+      if (ts.isRegularExpressionLiteral(node)) { need(retainedLoading && retainedInitializer(owner, initializer), node); return 'primitive'; }
+      if (ts.isLiteralExpression(node) || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(node.kind)) return 'primitive';
+      if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return 'function';
+      if (ts.isArrayLiteralExpression(node)) {
+        const values = node.elements.map(element => {
+          if (ts.isSpreadElement(element)) { need(dataArray(within(element.expression)), element); return 'spread'; }
+          return within(element);
+        });
+        return values.length && values.every(value => value === 'tool') ? 'tools' : 'array';
+      }
+      if (ts.isObjectLiteralExpression(node)) {
+        const fields = new Map(); let tool = false, unknownSpread = false;
+        for (const property of node.properties) {
+          if (ts.isSpreadAssignment(property)) {
+            const value = within(property.expression); need(dataObject(value), property);
+            if (value === 'tool') { tool = true; fields.set('name', 'string'); fields.set('description', 'string'); fields.set('parameters', 'object'); }
+            else unknownSpread = true;
+          } else {
+            need(ts.isPropertyAssignment(property) && key(property.name) && key(property.name) !== '__proto__', property);
+            fields.set(key(property.name), within(property.initializer));
+          }
+        }
+        if (!unknownSpread && (tool || fields.size === 3) && [...fields.keys()].every(name => ['name', 'description', 'parameters'].includes(name))
+          && fields.get('name') === 'string' && fields.get('description') === 'string' && dataObject(fields.get('parameters'))) return 'tool';
+        return 'object';
+      }
+      if (ts.isIdentifier(node)) {
+        const bound = symbol(node, owner);
+        if (locals.has(bound)) return locals.get(bound);
+        const declaration = variable(node);
+        const memo = retainedLoading ? cache : coldCache;
+        if (!memo.has(declaration)) memo.set(declaration, pure(declaration.initializer, declaration, owner, new Map(), retainedLoading));
+        return memo.get(declaration);
+      }
+      if (ts.isPropertyAccessExpression(node)) {
+        if (locals.get(symbol(node.expression, owner)) === 'tool') {
+          need(['name', 'description', 'parameters'].includes(node.name.text), node);
+          return node.name.text === 'parameters' ? 'object' : 'string';
+        }
+        const field = ownProperty(node.expression, node.name.text);
+        return field.verifiedSchemaField ? field.type : within(field);
+      }
+      if (ts.isTemplateExpression(node)) {
+        for (const span of node.templateSpans) need(within(span.expression) === 'string', span);
+        return 'string';
+      }
+      if (ts.isConditionalExpression(node)) {
+        const condition = unwrap(node.condition);
+        need(ts.isBinaryExpression(condition) && condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+          && ts.isPropertyAccessExpression(condition.left) && condition.left.name.text === 'name'
+          && locals.get(symbol(condition.left.expression, owner)) === 'tool' && ts.isStringLiteral(condition.right), condition);
+        const left = within(node.whenTrue), right = within(node.whenFalse); need(left === right, node); return left;
+      }
+      if (ts.isNewExpression(node) && node.arguments?.length === 1 && intrinsic(node.expression, 'Set', owner)
+        && dataArray(within(node.arguments[0]))) return 'set';
+      if (ts.isNewExpression(node) && intrinsic(node.expression, 'Map', owner) && node.arguments?.length === 1) {
+        const entries = node.arguments[0];
+        need(ts.isArrayLiteralExpression(entries) && entries.elements.every(value => ts.isArrayLiteralExpression(value) && value.elements.length === 2), entries);
+        within(entries); return 'map';
+      }
+      if (ts.isNewExpression(node) && intrinsic(node.expression, 'RegExp', owner) && node.arguments?.length === 2) {
+        // Retain only the actual already-existing constant constructors. The
+        // grammar does not bless a new, possibly invalid/throwing RegExp.
+        const other = (owner === context ? rollbackContext : context).program.getSourceFile(resolve(
+          (owner === context ? rollbackContext : context).root, relative(owner.root, initializer.getSourceFile().fileName)));
+        const declaration = other?.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+          .find(value => value.name.text === initializer.name?.text);
+        need(retainedLoading && ts.isVariableDeclaration(initializer) && declaration?.initializer
+          && JSON.stringify(owner.canonical(initializer.initializer)) === JSON.stringify(owner.canonical(declaration.initializer))
+          && node.arguments.every(value => within(value) === 'string'), node); return 'regexp';
+      }
+      if (ts.isCallExpression(node) && intrinsic(node.expression, 'Symbol', owner) && !node.questionDotToken
+        && node.arguments.length <= 1 && node.arguments.every(ts.isStringLiteral)) return 'symbol';
+      const numeric = value => ts.isNumericLiteral(value) || ts.isPrefixUnaryExpression(value)
+        && [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(value.operator) && numeric(unwrap(value.operand))
+        || ts.isBinaryExpression(value) && [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken,
+          ts.SyntaxKind.SlashToken, ts.SyntaxKind.AsteriskAsteriskToken].includes(value.operatorToken.kind)
+          && numeric(unwrap(value.left)) && numeric(unwrap(value.right));
+      if ((ts.isBinaryExpression(node) || ts.isPrefixUnaryExpression(node)) && numeric(node)) return 'primitive';
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        need(within(node.left) === 'string' && within(node.right) === 'string', node); return 'string';
+      }
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && !node.questionDotToken) {
+        const method = node.expression;
+        if (method.name.text === 'join') {
+          const values = unwrap(method.expression);
+          need(ts.isArrayLiteralExpression(values) && values.elements.every(value => within(value) === 'string')
+            && node.arguments.length === 1 && within(node.arguments[0]) === 'string', node); return 'string';
+        }
+        if (method.name.text === 'replace') {
+          need(within(method.expression) === 'string' && node.arguments.length === 2 && node.arguments.every(value => within(value) === 'string'), node); return 'string';
+        }
+        if (method.name.text === 'map') {
+          need(within(method.expression) === 'tools' && node.arguments.length === 1, node);
+          const callback = node.arguments[0];
+          need(ts.isArrowFunction(callback) && callback.parameters.length === 1 && ts.isIdentifier(callback.parameters[0].name)
+            && !callback.parameters[0].initializer && !callback.parameters[0].dotDotDotToken && !ts.isBlock(callback.body)
+            && !callback.modifiers?.length, callback);
+          const bindings = new Map(locals).set(symbol(callback.parameters[0].name, owner), 'tool');
+          need(pure(callback.body, initializer, owner, bindings, retainedLoading) === 'tool', callback); return 'tools';
+        }
+        fail(node);
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && !node.questionDotToken
+        && !node.typeArguments?.length && node.arguments.length >= 1 && node.arguments.length <= 2) {
+        const bound = variable(node.expression), factory = unwrap(bound.initializer);
+        const equal = grammar => JSON.stringify(owner.canonical(factory)) === JSON.stringify(owner.canonical(grammar));
+        if (equal(factoryGrammar)) {
+          need(intrinsic(factory.parameters[1].initializer.expression.expression, 'Object', owner), factory);
+          need(dataObject(within(node.arguments[0])) && (node.arguments.length === 1 || dataArray(within(node.arguments[1]))), node); return 'object';
+        }
+        if (!equal(sceneGrammar) && !equal(scienceGrammar)) throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-grammar', initializationSite };
+        need(dataObject(within(node.arguments[0])) && (node.arguments.length === 1
+          || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(node.arguments[1].kind)), node);
+        const object = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
+          .find(value => value.name.text === 'object');
+        if (!(object && object.end < bound.pos && JSON.stringify(owner.canonical(unwrap(object.initializer))) === JSON.stringify(owner.canonical(factoryGrammar))))
+          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-object-factory', initializationSite };
+        need(intrinsic(unwrap(object.initializer).parameters[1].initializer.expression.expression, 'Object', owner), object);
+        for (const name of ['str', 'list']) {
+          const value = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
+            .find(value => value.name.text === name);
+          if (!(value && value.end < bound.pos && dataObject(pure(value.initializer, value, owner, new Map(), retainedLoading))))
+            throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `schema-${name}`, initializationSite };
+        }
+        if (equal(scienceGrammar)) {
+          const scene = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
+            .find(value => value.name.text === 'scienceSceneSchema');
+          need(scene && scene.end < bound.pos && JSON.stringify(owner.canonical(unwrap(scene.initializer))) === JSON.stringify(owner.canonical(sceneGrammar)), factory);
+        }
+        return 'object';
+      }
+      fail(node);
+    } finally { checking.delete(node); }
+  };
+  const captured = context.modules ?? new Map(context.program.getSourceFiles().filter(parsed => !parsed.isDeclarationFile
+    && /^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/'))).map(parsed => [parsed.fileName, parsed]));
+  for (const current of captured.values()) {
+    initializationSite = 'module-identity';
+    const path = relative(context.root, current.fileName).replaceAll('\\', '/');
+    const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+    need(previous && context.program.getSourceFile(current.fileName) === current, current);
+    if (currentEntries) {
+      const key = `module:${path}`;
+      need(context.modules.get(resolve(current.fileName)) === current
+        && rollbackContext.modules.get(resolve(rollbackContext.root, path)) === previous
+        && currentEntries.has(key) && previousEntries.has(key), current);
+      // Consume the original complete emitted fingerprint, including its proved
+      // relocation/consumer mapping. Raw generated metadata must not undo that
+      // equality. Import ordering and every remaining entry are still checked.
+      if (JSON.stringify(currentEntries.get(key)) === JSON.stringify(previousEntries.get(key))) continue;
+    }
+    if (current.text === previous.text || JSON.stringify(context.canonical(current)) === JSON.stringify(rollbackContext.canonical(previous))) continue;
+    const previousVariables = new Map(previous.statements.filter(ts.isVariableStatement).flatMap(statement =>
+      statement.declarationList.declarations.map(declaration => [key(declaration.name), declaration])));
+    modules.push({ source: current, rollback: previous });
+    for (const statement of current.statements) {
+      if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isInterfaceDeclaration(statement)
+        || ts.isTypeAliasDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
+      if (ts.isFunctionDeclaration(statement)) {
+        initializationSite = 'retained-function';
+        need(statement.name && !(statement.modifiers ?? []).some(modifier => ![ts.SyntaxKind.AsyncKeyword, ts.SyntaxKind.ExportKeyword].includes(modifier.kind)), statement);
+        if (!previous.statements.some(old => ts.isFunctionDeclaration(old) && old.name?.text === statement.name.text)) declarations.push(statement);
+        continue;
+      }
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          initializationSite = 'declaration-binding';
+          need(ts.isIdentifier(declaration.name), declaration);
+          const previousDeclaration = previousVariables.get(declaration.name.text);
+          if (previousDeclaration) {
+            initializationSite = 'retained-declaration';
+            need(JSON.stringify(context.canonical(declaration)) === JSON.stringify(rollbackContext.canonical(previousDeclaration)), declaration);
+          } else {
+            initializationSite = 'added-declaration';
+            need(Boolean(statement.declarationList.flags & ts.NodeFlags.Const) && declaration.initializer, declaration);
+            pure(declaration.initializer, statement); pureInitializers.push(declaration); declarations.push(declaration);
+          }
+        }
+        continue;
+      }
+      // No changed class/static/decorator/ambient call/throw/await can hide
+      // behind a dormant selected function. Existing other statements must be
+      // byte-structurally retained; import graph ordering is a separate lemma.
+      initializationSite = 'retained-statement';
+      need(previous.statements.some(old => JSON.stringify(context.canonical(statement))
+        === JSON.stringify(rollbackContext.canonical(old))), statement);
+    }
+  }
+  const graph = owner => {
+    const result = new Map();
+    const sources = owner.modules ?? new Map(owner.program.getSourceFiles().filter(parsed => !parsed.isDeclarationFile
+      && /^(?:apps|packages)\//u.test(relative(owner.root, parsed.fileName).replaceAll('\\', '/'))).map(parsed => [parsed.fileName, parsed]));
+    for (const parsed of sources.values()) {
+      initializationSite = 'graph-source';
+      const path = relative(owner.root, parsed.fileName).replaceAll('\\', '/');
+      if (!/^(?:apps|packages|infra)\//u.test(path)) continue;
+      need(owner.program.getSourceFile(parsed.fileName) === parsed, parsed);
+      const compiled = ts.transpileModule(parsed.text, { fileName: parsed.fileName, reportDiagnostics: true,
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+      initializationSite = 'graph-transpile';
+      need(!compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error), parsed);
+      const runtime = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+      need(!runtime.parseDiagnostics.length, parsed);
+      const requests = runtime.statements.filter(node => (ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+        && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)).map(node => {
+        const literal = parsed.statements.find(statement => (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement))
+          && statement.moduleSpecifier?.text === node.moduleSpecifier.text)?.moduleSpecifier;
+        initializationSite = 'graph-import';
+        need(literal, parsed);
+        const target = owner.checker.getSymbolAtLocation(literal)?.declarations?.find(ts.isSourceFile);
+        const path = target && relative(owner.root, target.fileName).replaceAll('\\', '/');
+        if (!target || target.isDeclarationFile || !/^(?:apps|packages|infra)\//u.test(path)) return { external: node.moduleSpecifier.text };
+        return { owned: path };
+      });
+      result.set(path, { source: parsed, requests, runtime });
+    }
+    return result;
+  };
+  const currentGraph = graph(context), oldGraph = graph(rollbackContext);
+  const newEdges = [];
+  for (const [path, value] of currentGraph) {
+    initializationSite = 'graph-existing';
+    const previous = oldGraph.get(path); need(previous, value.source);
+    for (const request of value.requests) if (request.owned && !previous.requests.some(old => old.owned === request.owned))
+      newEdges.push({ from: path, to: request.owned });
+  }
+  const components = [], indices = new Map(), low = new Map(), stack = [], active = new Set(); let index = 0;
+  const visit = path => {
+    indices.set(path, index); low.set(path, index++); stack.push(path); active.add(path);
+    for (const { owned } of currentGraph.get(path)?.requests ?? []) if (owned) {
+      initializationSite = 'graph-edge';
+      need(currentGraph.has(owned), currentGraph.get(path).source);
+      if (!indices.has(owned)) { visit(owned); low.set(path, Math.min(low.get(path), low.get(owned))); }
+      else if (active.has(owned)) low.set(path, Math.min(low.get(path), indices.get(owned)));
+    }
+    if (indices.get(path) === low.get(path)) {
+      const component = []; let member;
+      do { member = stack.pop(); active.delete(member); component.push(member); } while (member !== path);
+      components.push(component);
+    }
+  };
+  for (const path of currentGraph.keys()) if (!indices.has(path)) visit(path);
+  const changedCycles = components.filter(component => newEdges.some(edge => component.includes(edge.from) && component.includes(edge.to)));
+  const moved = new Set(changedCycles.flat()), newlyReachable = new Set(), ordering = [];
+  const entryPaths = context.roots?.map(([path]) => path) ?? ['apps/agent-worker/src/index.ts'];
+  const builtins = new Set(builtinModules.map(value => value.replace(/^node:/u, '')));
+  const order = (graph, entry) => {
+    const seen = new Set(), modules = [], external = [];
+    const visit = path => {
+      if (seen.has(path)) return; seen.add(path);
+      initializationSite = 'graph-order';
+      const current = graph.get(path); need(current, graph.get(entry)?.source);
+      for (const request of current.requests) {
+        if (request.owned) visit(request.owned);
+        else if (!builtins.has(request.external.replace(/^node:/u, ''))) external.push([path, request.external]);
+      }
+      modules.push(path);
+    }; visit(entry); return { modules, external };
+  };
+  for (const entry of entryPaths) {
+    const before = order(oldGraph, entry), after = order(currentGraph, entry);
+    initializationSite = 'graph-order';
+    // Resolve/cache/package identity is still consumed from the successful
+    // collector's strict remaining entries; source occurrence order is only
+    // the additional eager-order obligation checked here.
+    need(JSON.stringify(before.external) === JSON.stringify(after.external), currentGraph.get(entry)?.source);
+    const a = before.modules, b = after.modules;
+    need(a.length <= 1024 && b.length <= 1024
+      && a.every(path => b.includes(path)), currentGraph.get(entry)?.source);
+    for (const path of b) if (!a.includes(path)) newlyReachable.add(path);
+    const lengths = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
+    for (let i = a.length - 1; i >= 0; i -= 1) for (let j = b.length - 1; j >= 0; j -= 1)
+      lengths[i][j] = a[i] === b[j] ? 1 + lengths[i + 1][j + 1] : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+    let i = 0, j = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i += 1; j += 1; }
+      else if (lengths[i + 1][j] >= lengths[i][j + 1]) moved.add(a[i++]);
+      else moved.add(b[j++]);
+    }
+    for (const path of [...a.slice(i), ...b.slice(j)]) moved.add(path);
+    ordering.push({ entry, before, after });
+  }
+  const cycleInitializers = [];
+  for (const path of moved) for (const owner of [context, rollbackContext]) {
+    initializationSite = 'moved-source';
+    const module = (owner === context ? currentGraph : oldGraph).get(path), parsed = module?.source;
+    need(parsed, context.program.getSourceFile(resolve(context.root, path)));
+    if (newlyReachable.has(path)) {
+      // Loading a newly reachable module parses literals in deferred bodies
+      // too. TS syntactic diagnostics do not validate every regexp pattern.
+      // Compile only the real emitted literal token, including its flags;
+      // never execute it or the module, and never expose the parser error.
+      const syntax = node => {
+        if (ts.isRegularExpressionLiteral(node)) {
+          try { new Script(`(${node.getText(module.runtime)})`); } catch { fail(parsed); }
+        }
+        ts.forEachChild(node, syntax);
+      };
+      syntax(module.runtime);
+    }
+    for (const statement of parsed.statements) {
+      if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isInterfaceDeclaration(statement)
+        || ts.isTypeAliasDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
+      if (ts.isVariableStatement(statement)) {
+        initializationSite = 'moved-initializer';
+        for (const declaration of statement.declarationList.declarations) if (declaration.initializer)
+          pure(declaration.initializer, declaration, owner, new Map(), !newlyReachable.has(path));
+      } else if (ts.isClassDeclaration(statement)) {
+        initializationSite = 'moved-class';
+        need(!(statement.modifiers ?? []).some(modifier => modifier.kind === ts.SyntaxKind.Decorator), statement);
+        for (const clause of statement.heritageClauses ?? []) if (clause.token === ts.SyntaxKind.ExtendsKeyword)
+          for (const type of clause.types) need(intrinsic(type.expression, 'Error', owner), type);
+        for (const member of statement.members) need(!ts.isClassStaticBlockDeclaration(member)
+          && !(member.modifiers ?? []).some(modifier => [ts.SyntaxKind.StaticKeyword, ts.SyntaxKind.Decorator].includes(modifier.kind))
+          && (!member.name || ts.isIdentifier(member.name) || ts.isStringLiteral(member.name) || ts.isPrivateIdentifier(member.name)), member);
+      } else { initializationSite = 'moved-statement'; fail(statement); }
+      cycleInitializers.push({ source: parsed, node: statement });
+    }
+  }
+  return { status: 'conditional', modules, declarations, pureInitializers, currentGraph, oldGraph, newEdges, changedCycles, cycleInitializers, moved, ordering,
+    outstanding: ['installed external resolution/cache identity and namespace observers', 'complete declaration/reference/escape closure',
+      'captured module identity and residual runtime equality under original collector'] };
+}
+
+function finiteSelectedGuideDeclarationTerms(ts, context, rollbackContext, models) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const symbol = node => {
+    let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+      ? context.checker.getShorthandAssignmentValueSymbol(node.parent)
+      : ts.isExportSpecifier(node.parent) ? context.checker.getExportSpecifierLocalTargetSymbol(node.parent)
+        : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value;
+  };
+  const within = (node, parent) => node.getSourceFile() === parent.getSourceFile() && node.pos >= parent.pos && node.end <= parent.end;
+  const regions = new Set([...models.dormant.removed, ...models.agent.removed, ...models.native.removed,
+    ...models.illustration.removed, ...models.publicReader.region, models.workspace.selected]);
+  const regionRanges = new Map();
+  const inRegion = node => {
+    const source = node.getSourceFile();
+    return (regionRanges.get(source) ?? []).some(parent => node.pos >= parent.pos && node.end <= parent.end);
+  };
+  const declarations = new Map();
+  for (const node of models.initialization.declarations) {
+    need(node.name && ts.isIdentifier(node.name), node);
+    const value = symbol(node.name); need(value && !declarations.has(value), node); declarations.set(value, node);
+  }
+  const decoder = models.decoder, relocation = models.relocation, illustration = models.illustration;
+  need(declarations.get(symbol(decoder.reader.name)) === decoder.reader
+    && declarations.get(symbol(relocation.reader.name)) === relocation.reader
+    && declarations.get(symbol(illustration.core.name)) === illustration.core, decoder.reader);
+  const fresh = models.fresh;
+  const routeGuards = [];
+  const scan = (root, predicate) => { const found = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) found.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return found; };
+  for (const node of scan(fresh.handler, ts.isIfStatement)) {
+    const expected = ts.createSourceFile('selected-api-guard.ts',
+      "body.kind === 'workspace.guide' && body.payload.context.presentation?.selectedImageAssetId;", ts.ScriptTarget.ES2022, true)
+      .statements[0].expression;
+    if (JSON.stringify(context.canonical(node.expression)) !== JSON.stringify(context.canonical(expected))) continue;
+    need(scan(node.expression, value => ts.isIdentifier(value) && value.text === 'body').every(value => symbol(value) === symbol(fresh.body.name)), node);
+    routeGuards.push(node);
+  }
+  need(routeGuards.length === 1, fresh.handler);
+  regions.add(routeGuards[0]);
+  for (const region of regions) {
+    const source = region.getSourceFile(), values = regionRanges.get(source) ?? [];
+    values.push(region); regionRanges.set(source, values);
+  }
+  const ordinaryDecoder = node => {
+    const call = node.parent;
+    if (!ts.isCallExpression(call) || call.expression !== node || call.arguments.length !== 1 || call.questionDotToken) return false;
+    if (node === models.workspace.payload.initializer.expression || call === fresh.strictCall) return true;
+    // The one remaining replay call is transformed at its actual bound symbol
+    // by the whole-agent residual. It receives the immutable existing payload.
+    const replay = models.agent.source.statements.find(value => ts.isFunctionDeclaration(value) && value.name?.text === 'assertTaskReplay');
+    if (!replay || !within(call, replay)) return false;
+    const actual = call.arguments[0];
+    return ts.isPropertyAccessExpression(actual) && actual.name.text === 'payload' && ts.isIdentifier(actual.expression)
+      && actual.expression.text === 'existing' && symbol(actual.expression)?.valueDeclaration === replay.parameters[0];
+  };
+  const references = [];
+  const exportsNewDeclaration = literal => {
+    const value = context.checker.getSymbolAtLocation(literal);
+    return value && context.checker.getExportsOfModule(value).some(exported => {
+      const target = exported.flags & ts.SymbolFlags.Alias ? context.checker.getAliasedSymbol(exported) : exported;
+      return declarations.has(target);
+    });
+  };
+  const sources = context.program.getSourceFiles().filter(source => !source.isDeclarationFile
+    && /^(?:apps|packages|infra)\//u.test(relative(context.root, source.fileName).replaceAll('\\', '/')));
+  for (const source of sources) {
+    const namespaces = new Set();
+    for (const statement of source.statements) if (ts.isImportDeclaration(statement) && !statement.importClause?.isTypeOnly
+      && statement.importClause?.namedBindings && ts.isNamespaceImport(statement.importClause.namedBindings)
+      && exportsNewDeclaration(statement.moduleSpecifier)) namespaces.add(symbol(statement.importClause.namedBindings.name));
+    const visit = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)
+        || ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return;
+      if (ts.isIdentifier(node)) {
+        const bound = symbol(node), target = declarations.get(bound);
+        if (target && node !== target.name) {
+          const call = node.parent;
+          const movedCall = target === relocation.reader && relocation.calls.includes(call);
+          const coreCall = target === illustration.core && [illustration.wrapper, illustration.selected].some(parent => within(node, parent));
+          need(inRegion(node) || movedCall || coreCall || target === decoder.reader && ordinaryDecoder(node), node);
+          // A name merely appearing in an allowed call region cannot escape
+          // as a callback, object field, assignment or function identity.
+          if (!ts.isVariableDeclaration(target)) need(ts.isCallExpression(call) && call.expression === node
+            && !call.questionDotToken && !call.arguments.some(ts.isSpreadElement), node);
+          references.push({ node, target });
+        }
+        if (namespaces.has(bound)) need(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node, node);
+        if (inRegion(node) && ['Object', 'Array', 'Number', 'JSON', 'Math', 'Error', 'Boolean', 'undefined'].includes(node.text))
+          need(!(bound?.declarations ?? []).some(value => !value.getSourceFile().isDeclarationFile), node);
+      }
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) {
+        need(node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]), node);
+        const resolved = context.resolveSource(node.arguments[0].text, source.fileName);
+        const target = resolved && context.program.getSourceFile(resolved.resolvedFileName);
+        const module = target && context.checker.getSymbolAtLocation(target);
+        if (module) need(!context.checker.getExportsOfModule(module).some(exported => {
+          const value = exported.flags & ts.SymbolFlags.Alias ? context.checker.getAliasedSymbol(exported) : exported;
+          return declarations.has(value);
+        }), node);
+      }
+      ts.forEachChild(node, visit);
+    }; visit(source);
+  }
+  return { status: 'conditional', declarations, regions, references, routeGuards };
+}
+
+function finiteSelectedGuideLegacyRetryTerms(ts, context, agent, decoder, native) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_LEGACY_GUIDE_RETRY_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const recover = agent.recover;
+  const grammar = ts.createSourceFile('selected-retry-absence.ts', `function recovery(task: unknown) {
+    try {
+      if (task.kind !== 'workspace.guide' || task.session.kind !== 'workspace.guide' || task.status !== 'failed' || task.retryCount !== 0) return false;
+      const guide = readWorkspaceGuidePayloadWithSelectedImage(task.payload), scope = guide.context.presentation;
+      const marker = readNativeAgentExecution(task.result), cp = marker?.checkpoint;
+      if (!scope?.selectedImageAssetId || !scope.versionId || scope.researchObjectId !== task.session.researchObjectId
+        || marker?.profile !== 'paper-illustration' || !cp || cp.state !== 'completed' || cp.sourceKind
+        || cp.taskId !== task.id || cp.executionAttempt > task.executionAttempt || cp.finishReason !== 'stop' || cp.hasToolCalls !== false
+        || !isJsonRecord(task.result) || !isJsonRecord(task.result.sourceMapRef) || !isJsonRecord(task.result.selectedImageContext)) return false;
+    } catch { return false; }
+  }`, ts.ScriptTarget.ES2022, true).statements[0].body.statements[0];
+  need(recover.body.statements.length === 1 && ts.isTryStatement(recover.body.statements[0]), recover);
+  const attempt = recover.body.statements[0];
+  need(!attempt.finallyBlock && attempt.catchClause && !attempt.catchClause.variableDeclaration
+    && JSON.stringify(context.canonical(attempt.catchClause)) === JSON.stringify(context.canonical(grammar.catchClause)), attempt);
+  const actual = attempt.tryBlock.statements, expected = grammar.tryBlock.statements;
+  need(actual.length >= expected.length, attempt);
+  for (let index = 0; index < expected.length; index += 1)
+    need(JSON.stringify(context.canonical(actual[index])) === JSON.stringify(context.canonical(expected[index])), actual[index]);
+  let markerReader;
+  const visit = node => {
+    if (ts.isIdentifier(node) && ['readWorkspaceGuidePayloadWithSelectedImage', 'readNativeAgentExecution'].includes(node.text)) {
+      let bound = context.checker.getSymbolAtLocation(node);
+      if (bound?.flags & ts.SymbolFlags.Alias) bound = context.checker.getAliasedSymbol(bound);
+      if (node.text === decoder.reader.name.text) need(bound?.valueDeclaration === decoder.reader, node);
+      else { markerReader = bound?.valueDeclaration; need(markerReader?.getSourceFile() === native.source
+        && ts.isFunctionDeclaration(markerReader) && markerReader.name?.text === 'readNativeAgentExecution', node); }
+    }
+    ts.forEachChild(node, visit);
+  };
+  actual.slice(0, expected.length).forEach(visit);
+  need(markerReader, recover);
+  return { status: 'conditional', recover, prefix: actual.slice(0, expected.length), markerReader };
+}
+
+function finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected) {
+  const fail = (reason, node) => { throw { reason, node }; };
+  const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
+  const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
+  const decoder = finiteSelectedGuideDecoderTerms(ts, left, right);
+  // Capability is checked before fresh emission. A capable rollback owns its
+  // selected retained families even if its HTTP producer is currently legacy.
+  // Identical capable backends use the original exact-equality path; this
+  // finite first-install branch never removes that capability on a downgrade.
+  const oldContract = right.program.getSourceFile(resolve(right.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
+  if (oldContract.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === decoder.reader.name.text))
+    fail('SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL', oldContract);
+  const fresh = finiteSelectedGuideFreshTerms(ts, left, decoder, right);
+  if (fresh.fresh !== 'legacy') fail('SELECTED_GUIDE_FAMILY_NOT_CLOSED', fresh.strictCall);
+  const initialization = finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected);
+  const relocation = finiteSelectedGuideRelocationTerms(ts, left, right);
+  const workspace = finiteSelectedGuideWorkspaceTerms(ts, left, right, decoder);
+  const relocationResidual = finiteSelectedGuideRelocationResidualTerms(ts, left, right, relocation, workspace);
+  const native = finiteSelectedGuideNativeTerms(ts, left, right, decoder);
+  const handlers = finiteSelectedGuideHandlerTerms(ts, left, right);
+  const illustration = finiteSelectedGuideIllustrationTerms(ts, left, right);
+  const illustrationResidual = finiteSelectedGuideIllustrationResidualTerms(ts, left, right, illustration, initialization);
+  const dormant = finiteSelectedGuideDormantModuleTerms(ts, left, right, decoder);
+  const publicReader = finiteSelectedGuidePublicReaderTerms(ts, left, right);
+  const agent = finiteSelectedGuideAgentResidualTerms(ts, left, right, decoder, publicReader);
+  const ingestion = finiteSelectedGuideIngestionReaderTerms(ts, left, right);
+  const legacyRetry = finiteSelectedGuideLegacyRetryTerms(ts, left, agent, decoder, native);
+  const models = { decoder, fresh, initialization, relocation, workspace, relocationResidual, native, handlers,
+    illustration, illustrationResidual, dormant, publicReader, agent, ingestion, legacyRetry };
+  const closure = finiteSelectedGuideDeclarationTerms(ts, left, right, models);
+  const projected = new Map();
+  const add = value => {
+    const key = relative(left.root, value.source.fileName).replaceAll('\\', '/');
+    if (projected.has(key)) fail('SELECTED_GUIDE_OVERLAPPING_PROJECTION', value.source);
+    const previous = right.program.getSourceFile(resolve(right.root, key));
+    if (!previous || typeof value.text !== 'string') fail('SELECTED_GUIDE_RESIDUAL_MISSING', value.source);
+    projected.set(key, { ...value, previous });
+  };
+  for (const value of [workspace, native, handlers, illustrationResidual, agent, ingestion]) add(value);
+  // The relocation lemma returns the two independently derived module texts.
+  add({ source: relocationResidual.source, text: relocationResidual.text });
+  add({ source: relocationResidual.handler, text: relocationResidual.handlerText });
+  for (const value of dormant.projections.values()) add(value);
+  const api = fresh.source, apiGuard = closure.routeGuards[0];
+  const transformedApi = ts.transform(api, [transformation => {
+    const visit = node => {
+      if (node === apiGuard) return undefined;
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+        const elements = node.importClause.namedBindings.elements.filter(entry => (entry.propertyName ?? entry.name).text !== 'requireSelectedImageSource');
+        return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause,
+          node.importClause.isTypeOnly, node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, elements)), node.moduleSpecifier, node.attributes);
+      }
+      return ts.visitEachChild(node, visit, transformation);
+    }; return node => ts.visitNode(node, visit);
+  }]);
+  let apiText;
+  try { apiText = ts.createPrinter().printFile(transformedApi.transformed[0]); } finally { transformedApi.dispose(); }
+  const runtime = (text, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(text,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText,
+  ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  const auxiliary = [];
+  // Supplementary API/caller code cannot smuggle a changed schema factory,
+  // global/library mutation or different dispatcher behind unchanged backend
+  // fingerprints. These read-only inputs grant no collector authority.
+  for (const source of left.program.getSourceFiles()) {
+    const key = relative(left.root, source.fileName).replaceAll('\\', '/');
+    if (source.isDeclarationFile || !/^(?:apps|packages)\//u.test(key) || projected.has(key)) continue;
+    if (context.modules?.has(resolve(source.fileName))) continue; // main strictly compares this original entry
+    const previous = right.program.getSourceFile(resolve(right.root, key));
+    const text = source === api ? apiText : source.text;
+    if (!previous || text.replaceAll('\r\n', '\n') !== previous.text.replaceAll('\r\n', '\n')
+      && runtime(text, left) !== runtime(previous.text, right))
+      fail('SELECTED_GUIDE_AUXILIARY_RUNTIME_CHANGED', source);
+    auxiliary.push({ source, previous });
+  }
+  return { status: 'conditional', ...models, closure, projected, auxiliary,
+    outstanding: ['actual ordinary result/historical root partition is not implied by this residual',
+      'original successful DEFAULT private context identity and canonical snapshot',
+      'strict remaining module/package/configuration/vendor entries and justified builtin import differences',
+      'existing trusted transaction ordered-pair and root-controlled admitted origin premise'] };
+}
+
+function finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, residual) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const nodes = (root, predicate) => { const found = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) found.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return found; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = (owner, node) => { let value = owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value; };
+  const unwrap = raw => { let node = raw; while (node && (ts.isAsExpression(node) || ts.isParenthesizedExpression(node))) node = node.expression; return node; };
+  const oldAgent = residual.agent.previous, oldNative = residual.native.previous;
+  const get = fn(oldAgent, 'getAgentTask'), view = fn(oldAgent, 'taskToView');
+  const row = one(nodes(get, node => ts.isVariableDeclaration(node) && node.name.text === 'task'), get);
+  const query = row.initializer && unwrap(ts.isAwaitExpression(row.initializer) ? row.initializer.expression : row.initializer);
+  need(ts.isCallExpression(query) && ts.isPropertyAccessExpression(query.expression) && query.expression.name.text === 'findUnique'
+    && ts.isPropertyAccessExpression(query.expression.expression) && query.expression.expression.name.text === 'agentTask', row);
+  const projected = one(nodes(view, node => ts.isCallExpression(node)
+    && symbol(rollbackContext, node.expression)?.valueDeclaration === residual.publicReader.previous), view);
+  need(ts.isPropertyAccessExpression(projected.arguments[0]) && projected.arguments[0].name.text === 'result'
+    && symbol(rollbackContext, projected.arguments[0].expression) === symbol(rollbackContext, view.parameters[0].name), projected);
+  need(residual.publicReader.ordinaryRelation && residual.publicReader.region.length === 7, projected);
+  // The actual classifier proof makes the ordinary projection equal to the
+  // old tail for ANY opaque Json root, not a set of current fresh keys. Its
+  // ordinary branch cannot assign a selected refill; all four deletes are
+  // conditional on !ordinary. Historical keys therefore need no absence seed.
+  const runtime = (node, owner) => JSON.stringify(owner.canonical(ts.createSourceFile('runtime.js', ts.transpileModule(node.getText(),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText,
+  ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)));
+  const transfers = [];
+  const bindTransfers = (model, names) => {
+    const oldSource = model.previous ?? model.rollback;
+    const normalized = ts.createSourceFile(model.source.fileName, model.text, ts.ScriptTarget.ES2022, true);
+    for (const name of names) {
+      const old = fn(oldSource, name), current = fn(model.source, name), ordinary = fn(normalized, name);
+      need(runtime(ordinary, context) === runtime(old, rollbackContext), current);
+      transfers.push({ old, current, ordinary, model });
+    }
+  };
+  bindTransfers(residual.agent, ['getAgentTask', 'listAgentTasks', 'markTaskProgress', 'markTaskProgressOnce', 'retryAgentTask']);
+  bindTransfers(residual.native, ['compareNativeAgentCheckpoint', 'nativeAgentTerminalResult']);
+  bindTransfers(residual.ingestion, ['getIngestionTask']);
+  const storePath = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const store = context.program.getSourceFile(resolve(context.root, storePath));
+  const oldStore = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, storePath));
+  need(store && oldStore, store);
+  bindTransfers({ source: store, previous: oldStore, text: store.text }, ['createNativeTaskStore']);
+  // Bind the ordinary no-marker terminal gate as well as the result code:
+  // a remote ordinary result cannot mint a server Native association. Marked
+  // inputs must retain the identical marker, including task/CP association.
+  const terminal = fn(oldNative, 'nativeAgentTerminalResult');
+  const terminalGrammar = ts.createSourceFile('ordinary-terminal-retainer.ts', `function retain(task: unknown, status: string, incoming: unknown) {
+    if (!marker) { if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution')) blocked(); return incoming; }
+    if (record(incoming) && Object.hasOwn(incoming, 'nativeAgentExecution') && !isDeepStrictEqual(incoming.nativeAgentExecution, marker)) blocked();
+  }`, ts.ScriptTarget.ES2022, true).statements[0].body.statements;
+  const gate = terminal.body.statements.findIndex(node => ts.isIfStatement(node) && ts.isPrefixUnaryExpression(node.expression)
+    && node.expression.operator === ts.SyntaxKind.ExclamationToken && node.expression.operand.getText() === 'marker');
+  need(gate >= 0, terminal);
+  terminalGrammar.forEach((node, index) => need(JSON.stringify(rollbackContext.canonical(terminal.body.statements[gate + index]))
+    === JSON.stringify(rollbackContext.canonical(node)), terminal.body.statements[gate + index]));
+  const marker = one(nodes(terminal, node => ts.isVariableDeclaration(node) && node.name.text === 'marker'), terminal);
+  const reader = fn(oldNative, 'readNativeAgentExecution');
+  need(ts.isCallExpression(marker.initializer) && symbol(rollbackContext, marker.initializer.expression)?.valueDeclaration === reader, marker);
+  // This is pointwise composition through actual old/new functions on the
+  // original authenticated immutable association, including arbitrary retained
+  // root extensions. It is not a family-label/self-loop or fresh-fieldset claim.
+  // Unknown/contradictory/selected rows still take the separately bound strict
+  // quarantine. Erasure of EVERY immutable association is not distinguishable
+  // from a legitimate ordinary row and is outside this original trusted seed.
+  return { status: 'conditional', domain: 'authenticated-ordinary-opaque-json-root', node: projected.arguments[0],
+    seed: { query, row, get, view, projected, ingestion: residual.ingestion.row },
+    projection: residual.publicReader.ordinaryRelation, transfers, marker, terminalGate: terminal.body.statements.slice(gate, gate + 2) };
+}
+
+function finiteSelectedGuideSourceModel(ts, context, rollbackContext, collected) {
+  const residual = finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected);
+  const origin = finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, residual);
+  if (origin.status !== 'conditional') throw { reason: 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', node: origin.node };
+  return { ...residual, origin };
+}
+
+function finiteSelectedGuideApiLibraryTerms(context, rollbackContext) {
+  const fail = () => { throw { reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN' }; };
+  const need = value => { if (!value) fail(); };
+  const manifest = (owner, path) => {
+    const text = owner.sourceHost.readFile(path); need(typeof text === 'string');
+    try { return JSON.parse(text); } catch { fail(); }
+  };
+  const identify = owner => {
+    const importer = manifest(owner, resolve(owner.root, 'apps/api/package.json'));
+    const expected = importer.dependencies?.zod;
+    // This is the same trusted installed-package name/version boundary as
+    // addExternal, plus the actual frozen importer. No source-only fake library
+    // or a newly ranged dependency may stand in for the installed HTTP factory.
+    need(typeof expected === 'string' && /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u.test(expected));
+    need(typeof owner.sourceHost.realpath === 'function');
+    let directory = resolve(owner.root, 'apps/api/src/routes'), library, libraryPath;
+    while (true) {
+      const path = resolve(directory, 'node_modules/zod/package.json');
+      if (owner.sourceHost.fileExists(path)) { library = manifest(owner, path); libraryPath = path; break; }
+      if (directory === owner.root) break;
+      const parent = resolve(directory, '..');
+      need(parent !== directory && !relative(owner.root, parent).replaceAll('\\', '/').startsWith('../'));
+      directory = parent;
+    }
+    need(library?.name === 'zod' && library.version === expected);
+    const physicalPath = resolve(owner.sourceHost.realpath(libraryPath));
+    const localPath = relative(owner.root, physicalPath).replaceAll('\\', '/');
+    // Different temporary release roots are alpha-renamed only inside each
+    // original root. A shared external package cache must be the SAME physical
+    // package; an unrelated donor directory cannot borrow a matching version.
+    const cacheIdentity = localPath !== '..' && !localPath.startsWith('../') && !isAbsolute(localPath)
+      ? ['release', localPath] : ['shared', physicalPath];
+    return { name: library.name, version: library.version, type: library.type ?? 'commonjs',
+      main: library.main ?? null, exports: library.exports ?? null, dependency: expected, cacheIdentity };
+  };
+  const lock = owner => {
+    const value = owner.sourceHost.readFile(resolve(owner.root, 'pnpm-lock.yaml'));
+    need(typeof value === 'string' && value.length > 0); return value;
+  };
+  need(lock(context) === lock(rollbackContext));
+  const current = identify(context), previous = identify(rollbackContext);
+  need(JSON.stringify(current) === JSON.stringify(previous));
+  return { status: 'conditional', current, previous };
+}
+
+function finiteSelectedGuidePairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots, diagnostics = false) {
+  let site = 'context', moduleKey;
+  const reject = error => {
+    if (diagnostics === true) emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots,
+      'selected-guide', site, error, moduleKey);
+    return false;
+  };
+  try {
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    if (roots !== APPLICATION_ROLLBACK_READERS || !left || !right || left.ts !== ts || right.ts !== ts
+      || left.roots !== roots || right.roots !== roots || left.root !== candidateRoot || right.root !== rollbackRoot
+      || left.program.getTypeChecker() !== left.checker || right.program.getTypeChecker() !== right.checker
+      || typeof left.canonical !== 'function' || typeof right.canonical !== 'function'
+      || typeof left.resolveSource !== 'function' || typeof right.resolveSource !== 'function' || !left.sourceHost || !right.sourceHost) return reject();
+    const a = new Map(current), b = new Map(previous);
+    if (a.size !== current.length || b.size !== previous.length) return reject();
+    // The private synchronous collector/caller lifetime has no yield or
+    // externally supplied context. Check its actual captured nodes and retained
+    // module keys; source-only Programs and cloned arrays cannot reach here.
+    for (const owner of [left, right]) for (const [path, source] of owner.modules) {
+      site = 'captured-source'; moduleKey = `module:${relative(owner.root, path).replaceAll('\\', '/')}`;
+      if (owner.program.getSourceFile(path) !== source || source.isDeclarationFile
+        || !(owner === left ? a : b).has(`module:${relative(owner.root, path).replaceAll('\\', '/')}`)) return reject();
+    }
+    site = 'library'; moduleKey = undefined;
+    finiteSelectedGuideApiLibraryTerms(left, right);
+    site = 'model';
+    const model = finiteSelectedGuideSourceModel(ts, left, right, { current, previous }), runtime = new Map();
+    const affected = new Set([...model.projected.keys()].map(key => `module:${key}`));
+    for (const [key, value] of model.projected) {
+      const candidatePath = resolve(candidateRoot, key), previousPath = resolve(rollbackRoot, key);
+      moduleKey = `module:${key}`;
+      site = 'captured-source';
+      if (!a.has(moduleKey) || !b.has(moduleKey) || left.modules.get(candidatePath) !== value.source
+        || right.modules.get(previousPath) !== value.previous) return reject();
+      site = 'projected-runtime';
+      const emitted = finiteImageProjectedRuntime(ts, left, key, value); runtime.set(key, emitted);
+      site = 'projected-equality';
+      if (JSON.stringify(emitted.canonical) !== JSON.stringify(b.get(moduleKey))) return reject();
+    }
+    for (const key of new Set([...a.keys(), ...b.keys()])) {
+      site = 'remaining-entry'; moduleKey = key;
+      if (affected.has(key)) continue;
+      if (a.has(key) && b.has(key)) { if (JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))) return reject(); continue; }
+      // Exactly the established builtin rule, derived from a real removed
+      // binding/use region. No package/config/vendor/module omission is allowed.
+      site = 'builtin'; moduleKey = undefined;
+      const match = /^(.*):external:(node:[A-Za-z0-9_/-]+)$/u.exec(key);
+      if (!a.has(key) || b.has(key) || a.get(key) !== 'node-builtin' || !match || !model.projected.has(match[1])
+        || !builtinModules.includes(match[2].slice(5)) && !builtinModules.includes(match[2])) return reject();
+      const value = model.projected.get(match[1]), compiled = ts.transpileModule(value.source.text,
+        { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+      const original = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+      if (!original.statements.some(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === match[2])
+        || runtime.get(match[1]).imports.includes(match[2])
+        || ![...b].some(([name, value]) => name.endsWith(`:external:${match[2]}`) && value === 'node-builtin')) return reject();
+    }
+    // Existing production callers still bind this directional source theorem
+    // to the exact locked journal pair and root-controlled original history.
+    // No queue emptiness, SHA allowlist, caller boolean or new ledger is used.
+    return true;
+  } catch (error) { return reject(error); }
+}
+
 // Directional reader introduction. Fresh admission can contract, but the old
 // object domain is never inferred from a database scan or from a version tag.
 // Stored readable objects may only be copied from the locked same-RO source;
@@ -7059,7 +9432,7 @@ function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollback
     const b = hasRight ? JSON.stringify(right.get(key)) : undefined;
     if (hasLeft === hasRight && a === b) continue;
     differences += 1;
-    if (entries.length === 4) continue;
+    if (entries.length === 16) continue;
     const entry = { key: safeKey(key), candidatePresent: hasLeft, rollbackPresent: hasRight };
     if (typeof a === 'string' && typeof b === 'string') {
       let offset = 0;
@@ -7109,7 +9482,8 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
           || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
-          || finiteSdfReadablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
+          || finiteSdfReadablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteSelectedGuidePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots, diagnostics === true)))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
         catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }

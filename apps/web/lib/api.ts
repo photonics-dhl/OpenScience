@@ -1,6 +1,7 @@
 /** OpenScience web API client：对接 apps/api（同源反代或 dev 直连）。 */
 import type { IngestionClaimSelection as DomainIngestionClaimSelection, IngestionClaimEvidenceSuggestion as DomainClaimSuggestion } from '@openscience/domain';
-import type { UsageSnapshot } from '@openscience/domain';
+import type { UsageSnapshot, WorkspaceSelectedImageDraft } from '@openscience/domain';
+export type { WorkspaceSelectedImageDraft } from '@openscience/domain';
 import { RequestCache, type ReadOptions } from './request-cache';
 export type { UsageSnapshot, UsageSnapshotItem } from '@openscience/domain';
 export type { ReadOptions } from './request-cache';
@@ -1469,6 +1470,16 @@ export interface AgentTaskView {
   updatedAt: string;
 }
 
+/** Display snapshot only; server asset/source authority is independently resolved. */
+export interface HermesImageReady {
+  actorId: string; researchObjectId: string; versionId: string; guideTaskId: string; assetId: string; label: string;
+}
+export interface HermesImageContext {
+  actorId: string; researchObjectId: string; versionId: string; selectedImageAssetId: string | null;
+  images: Array<{ assetId: string; label: string }>;
+  readyImage?: { guideTaskId: string; assetId: string; label: string };
+  pendingImageAssetId?: string;
+}
 export interface WorkspaceGuidePayload {
   executionIntent?: 'first-image';
   goal: string;
@@ -1478,7 +1489,7 @@ export interface WorkspaceGuidePayload {
   context: {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
-    presentation?: { researchObjectId: string; versionId?: string };
+    presentation?: { researchObjectId: string; versionId?: string; selectedImageAssetId?: string };
     editorDraft?: { researchObjectId: string; scope: string; version: number; core: Omit<SdfCore, 'schemaVersion'> };
     writingDraft?: { baseDraftTaskId: string; title: string; body: string };
     writingSource?: { ingestionTaskId: string };
@@ -1487,6 +1498,8 @@ export interface WorkspaceGuidePayload {
 }
 
 export interface WorkspaceGuideResult {
+  selectedImageReference?: WorkspaceSelectedImageDraft['source'];
+  selectedImageDraft?: WorkspaceSelectedImageDraft;
   /** Server-created continuation; never a model-produced identifier. */
   firstImageRun?: { runId: string; versionId: string };
   summary: string;

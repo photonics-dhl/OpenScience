@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, requirePresentationWriteScope, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
+import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, requireSelectedImageSource, requirePresentationWriteScope, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -139,6 +139,15 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
       const scope = body.payload.context.presentation!;
       if (session.researchObjectId !== scope.researchObjectId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话与图片研究对象不一致');
       await requirePresentationWriteScope(deps.prisma, { userId: user.userId, researchObjectId: scope.researchObjectId, versionId: scope.versionId! });
+    }
+    if (body.kind === 'workspace.guide' && body.payload.context.presentation?.selectedImageAssetId) {
+      const scope = body.payload.context.presentation;
+      if (session.researchObjectId !== scope.researchObjectId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Selected image does not belong to this session');
+      // Fresh input is checked before charge. An existing key still goes through Domain's
+      // exact session/kind/full-body replay check, retaining already-paid receipts after source removal.
+      const existing = typeof idempotencyKey === 'string' ? await deps.prisma.agentTask.findUnique({ where: { idempotencyKey } }) : null;
+      if (!existing) await requireSelectedImageSource(deps.prisma, { userId: user.userId, researchObjectId: scope.researchObjectId,
+        versionId: scope.versionId!, assetId: scope.selectedImageAssetId! });
     }
     if (body.activeClaimId) {
       const claim = await deps.prisma.claimNode.findUnique({ where: { id: body.activeClaimId } });

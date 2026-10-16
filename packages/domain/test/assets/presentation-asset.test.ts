@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { AuditLog, Prisma } from '@prisma/client';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
-import { claimAgentTask } from '../../src/agent/agent';
-import { initialNativeAgentExecution } from '../../src/agent/native-agent-execution';
+import { claimAgentTask, createAgentSession, submitAgentTask } from '../../src/agent/agent';
+import { buildInterestContext } from '../../src/research-intelligence/interest-context';
+import { initialNativeAgentExecution, requireNativeAgentExecutionAuthority } from '../../src/agent/native-agent-execution';
 import { parseStoryboardDocument } from '../../src/assets/storyboard';
 import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarrativeSource } from '../../src/assets/illustration-source';
 import { requireNativeVideoStoryboard } from '../../src/assets/video';
+import { requireSelectedImageSource, requireSceneImageParent } from '../../src/assets/scene-image';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
 import {
   parsePresentationGenerationPayload,
@@ -435,6 +437,81 @@ function sceneFixture(output: 'image' | 'video' = 'video', platformRole: 'user' 
   const input = { userId: USER, researchObjectId: RO, versionId: VERSION, kind: 'image' as const, sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: ASSET, sceneIndex: 1 }, idempotencyKey: 'scene' };
   return { ...ctx, input };
 }
+
+async function selectedImageFixture() {
+  const f = await nativeLocalFixture('marked-native');
+  f.parent.status = 'approved';
+  const imageDocument = structuredClone(f.parent.provenance.storyboardDocument);
+  Reflect.deleteProperty(imageDocument, 'videoProduction');
+  for (const scene of imageDocument.scenes) {
+    Reflect.deleteProperty(scene, 'videoDirection'); Reflect.deleteProperty(scene, 'durationSeconds');
+  }
+  f.parent.provenance = { subtype: 'sourced_storyboard', source: 'verified_claims',
+    sourceEvidenceIdentity: f.parent.provenance.sourceEvidenceIdentity, storyboardDocument: imageDocument,
+    storyboardSettings: { locale: 'en', style: 'scientific', instruction: 'Explain the source', output: 'image', narrative: true } } as typeof f.parent.provenance;
+  const sceneImage = { storyboardAssetId: ASSET, sceneIndex: 1 };
+  const parent = await requireSceneImageParent(f.prisma, { researchObjectId: RO, versionId: VERSION, sourceClaimIds: [CLAIM], sceneImage });
+  const image = { id: 'a1000000-0000-4000-8000-000000000001', researchObjectId: RO, versionId: VERSION,
+    kind: 'image', status: 'draft', deletedAt: null, contentHash: 'e'.repeat(64), objectKey: 'private/exact.png',
+    provenance: { subtype: 'storyboard_scene_image', sceneImage, parentIdentity: parent!.identity, contentType: 'image/png' } };
+  f.db.presentationAssets.push(image);
+  f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: CLAIM });
+  return { ...f, image, selected: { userId: USER, researchObjectId: RO, versionId: VERSION, assetId: image.id } };
+}
+
+describe('selected image source binding', () => {
+  it('persists a real selected Native task once and replays its exact paid body with null legacy context', async () => {
+    const f = await selectedImageFixture();
+    const session = await createAgentSession(f as never, { userId: USER, researchObjectId: RO, kind: 'workspace.guide' });
+    const payload = { goal: 'Clarify the left arrow', locale: 'en', route: 'research-object-edit', target: null,
+      context: { tasks: [], researchObjects: [], presentation: { researchObjectId: RO, versionId: VERSION, selectedImageAssetId: f.image.id } } };
+    const input = { sessionId: session.id, userId: USER, kind: 'workspace.guide', payload,
+      interestContext: buildInterestContext({ currentGoal: payload.goal, activeResearchObjectId: RO }), idempotencyKey: 'selected-once', dispatch: false };
+    const task = await submitAgentTask(f as never, input);
+    const stored = f.db.agentTasks.find(row => row.id === task.id)!;
+    expect(stored.result).toMatchObject({ nativeAgentExecution: { profile: 'paper-illustration' },
+      selectedImageContext: { assetId: f.image.id, sceneIndex: 1 }, sourceMapRef: { parserStatus: 'succeeded' } });
+    stored.interestContext = null;
+    f.image.deletedAt = new Date() as never;
+    await expect(submitAgentTask(f as never, input)).resolves.toMatchObject({ id: task.id });
+    expect(stored.payload).toEqual(payload);
+    expect(f.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+    await expect(submitAgentTask(f as never, { ...input, payload: { ...payload, goal: 'Change another image' } })).rejects.toThrow();
+  });
+  it('resolves the actual selected scene and original source without selecting a recent plan', async () => {
+    const f = await selectedImageFixture();
+    const found = await requireSelectedImageSource(f.prisma, f.selected);
+    expect(found.binding).toMatchObject({ assetId: f.image.id, objectKey: f.image.objectKey, contentHash: f.image.contentHash,
+      storyboardAssetId: ASSET, sceneIndex: 1, sourceClaimIds: [CLAIM] });
+    expect(found.illustration).toEqual(f.parent.provenance.storyboardDocument.scenes[1].illustration);
+    expect(found.source.reference.artifactId).toBe('70000000-0000-4000-8000-000000000001');
+  });
+  it('rechecks the exact selected source at the actual Native boundary and refuses changed bytes', async () => {
+    const f = await selectedImageFixture();
+    const session = await createAgentSession(f as never, { userId: USER, researchObjectId: RO, kind: 'workspace.guide' });
+    const payload = { goal: 'Clarify the left arrow', locale: 'en', route: 'research-object-edit', target: null,
+      context: { tasks: [], researchObjects: [], presentation: { researchObjectId: RO, versionId: VERSION, selectedImageAssetId: f.image.id } } };
+    const task = await submitAgentTask(f as never, { sessionId: session.id, userId: USER, kind: 'workspace.guide', payload,
+      idempotencyKey: 'selected-boundary', dispatch: false });
+    const claimed = await claimAgentTask(f as never, task.id);
+    const input = { taskId: task.id, executionAttempt: claimed!.executionAttempt };
+    await expect(requireNativeAgentExecutionAuthority(f.prisma, input)).resolves.toMatchObject({
+      selectedImageSource: { binding: { assetId: f.image.id, sceneIndex: 1 } } });
+    f.image.contentHash = 'f'.repeat(64);
+    await expect(requireNativeAgentExecutionAuthority(f.prisma, input)).rejects.toThrow();
+    expect(f.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(1);
+  });
+  it.each(['deleted', 'version', 'parent', 'evidence', 'viewer', 'missing-brief'])('rejects changed %s rather than switching image', async change => {
+    const f = await selectedImageFixture();
+    if (change === 'deleted') f.image.deletedAt = new Date() as never;
+    if (change === 'version') f.image.versionId = ASSET;
+    if (change === 'parent') f.image.provenance.parentIdentity = 'stale';
+    if (change === 'evidence') f.db.evidenceRecords[0].exactQuote = 'Changed';
+    if (change === 'viewer') f.db.memberships[0].role = 'viewer';
+    if (change === 'missing-brief') delete (f.parent.provenance.storyboardDocument.scenes[1] as { illustration?: unknown }).illustration;
+    await expect(requireSelectedImageSource(f.prisma, f.selected)).rejects.toThrow();
+  });
+});
 
 async function nativeLocalFixture(mode: 'historical-external' | 'marked-external' | 'marked-native') {
   const f = fixture(), now = new Date('2026-10-11T00:00:00Z');

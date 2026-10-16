@@ -5,14 +5,14 @@ import {
   chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { builtinModules } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { runInNewContext } from 'node:vm';
+import { runInNewContext, Script } from 'node:vm';
 import * as deployLock from './production-deploy-lock.mjs';
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
@@ -168,6 +168,9 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   };
   const known = 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', key = 'module:apps/reader.ts';
   assert.equal(run({ reason: known, node: source.statements[0] }).module, key);
+  assert.equal(run({ reason: known, initializationSite: 'SECRET' }).initializationSite, undefined);
+  assert.equal(run({ reason: known, initializationSite: 'moved-initializer' }).initializationSite, 'moved-initializer');
+  assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN', initializationSite: 'moved-initializer' }).initializationSite, undefined);
   assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN' }).code, 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
   let invoked = 0;
   const bad = { get reason() { invoked++; return 'SECRET'; }, get node() { invoked++; return source; },
@@ -176,6 +179,7 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   assert.equal(run({ reason: known, node: { parent: source, getSourceFile() { invoked++; return source; } } }).module, undefined);
   const proxy = new Proxy({}, { getOwnPropertyDescriptor() { invoked++; throw Error('SECRET-proxy'); }, get() { invoked++; throw Error('SECRET-proxy'); } });
   assert.equal(run(proxy).code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(run({ reason: known, get initializationSite() { invoked++; return 'moved-initializer'; } }).initializationSite, undefined);
   assert.equal(invoked, 0);
   const unknown = run({ reason: 'SECRET', message: 'SECRET', stack: 'SECRET', path: 'SECRET', stage: 'SECRET' });
   assert.equal(JSON.stringify(unknown).includes('SECRET'), false);
@@ -199,9 +203,12 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   const segments = [
     [video.slice(video.indexOf('    for (const key of new Set'), video.indexOf('    for (const key of projectedKeys)')), 'remaining-entry'],
     [video.match(/      site = 'projected-equality';\r?\n      if [^\n]+/u)[0], 'projected-equality'],
+    [video.slice(video.indexOf("      let ingressReason;"), video.indexOf("    site = 'family'")), 'ingress-reason'],
     [video.slice(video.indexOf("    site = 'family'"), video.indexOf('  } catch')), 'family'],
   ];
   for (let [body, expected] of segments) {
+    // The ingress snippet includes its original enclosing loop's closing brace.
+    if (expected === 'ingress-reason') body = body.slice(0, body.lastIndexOf('    }'));
     events.length = 0;
     const reject = (error, reason) => { functions.emit(ts,current,old,candidate,previous,roots,'video',expected,error,key,reason); return false; };
     const family = deployLockSource.match(/function finiteVideoFamilyClosure\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
@@ -216,6 +223,231 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   const order = ['finiteVideoPairCompatibility','finiteImageCapablePairCompatibility','finiteImageFirstPairCompatibility','finiteVoicePairCompatibility'];
   assert.ok(order.every((name,index)=> index===0 || verifier.indexOf(order[index-1])<verifier.indexOf(name)));
   if (verifier.includes('finiteSelectedGuidePairCompatibility')) assert.ok(verifier.indexOf(order.at(-1))<verifier.indexOf('finiteSelectedGuidePairCompatibility'));
+});
+
+test('private eager diagnostics identify the original initialization phase and shallow captured nodes without executing inputs', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  const functions = runInNewContext(`${collector}; ${helper}; ${initialization};
+    ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+    console: { error: value => events.push(value) },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(join(parent, 'eager-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous'), roots = [['apps/reader.ts']];
+  const collectPair = async (a, b, extra = {}, selectedRoots = roots) => {
+    for (const [root, text] of [[candidate, a], [previous, b]]) {
+      await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+      await writeFile(join(root, 'apps/reader.ts'), text);
+      for (const [file, body] of Object.entries(extra)) await writeFile(join(root, file), body);
+    }
+    const current = functions.collect(ts, candidate, selectedRoots), old = functions.collect(ts, previous, selectedRoots);
+    return { current, old, left: contexts.get(current), right: contexts.get(old), roots: selectedRoots };
+  };
+  const refuse = (pair, phase, expectedModule) => {
+    let failure;
+    assert.throws(() => functions.initialize(ts, pair.left, pair.right, { current: pair.current, previous: pair.old }), error => {
+      failure = error; return error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN';
+    });
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, pair.roots, 'selected-guide', 'model', failure);
+    assert.equal(events.length, 1);
+    const output = JSON.parse(events[0].slice(events[0].indexOf(' ') + 1));
+    if (expectedModule) assert.equal(output.module, expectedModule);
+    assert.equal(output.initializationSite, phase);
+    return { failure, output };
+  };
+  // Original collector is the only context writer; custom roots do not prove
+  // installed DEFAULT compatibility. Candidate initializer bodies never run.
+  await t.test('retained and added pure declarations keep their original acceptance', async () => {
+    const pair = await collectPair('export const retained = 1; export const added = [2, 3];', 'export const retained = 1;');
+    events.length = 0;
+    assert.equal(functions.initialize(ts, pair.left, pair.right, { current: pair.current, previous: pair.old }).status, 'conditional');
+    assert.equal(events.length, 0);
+  });
+  await t.test('retained declaration refusal', async () => {
+    const pair = await collectPair('export const value = 2;', 'export const value = 1;');
+    assert.equal(refuse(pair, 'retained-declaration').output.module, 'module:apps/reader.ts');
+  });
+  await t.test('added initializer refusal', async () => {
+    const pair = await collectPair('export const value = globalThis.SECRET_probe();', '');
+    assert.equal(refuse(pair, 'added-declaration').output.module, 'module:apps/reader.ts');
+  });
+  await t.test('equal modules still refuse changed eager order with unknown effects', async () => {
+    const imports = ["import './a.js';", "import './b.js';"];
+    const pair = await collectPair(imports.join('\n'), [...imports].reverse().join('\n'), {
+      'apps/a.ts': 'export const a = globalThis.SECRET_probe();',
+      'apps/b.ts': 'export const b = globalThis.SECRET_probe();',
+    });
+    for (const key of ['module:apps/a.ts', 'module:apps/b.ts'])
+      assert.equal(JSON.stringify(new Map(pair.current).get(key)), JSON.stringify(new Map(pair.old).get(key)));
+    const moved = refuse(pair, 'moved-initializer');
+    assert.match(moved.output.module, /^module:apps\/[ab]\.ts$/u);
+    assert.equal(JSON.stringify(moved.output).includes('SECRET'), false);
+  });
+  await t.test('shallow captured node is not starved by a large later function', async () => {
+    // The old depth-first walk exhausts its unchanged 100000-node budget in
+    // this later function before reaching the earlier failing declaration.
+    const ballast = `export function ballast() { return [${'0,'.repeat(100010)}0]; }`;
+    const pair = await collectPair(`export const value = 2;\n${ballast}`, `export const value = 1;\n${ballast}`);
+    const node = pair.left.modules.get(resolve(candidate, 'apps/reader.ts')).statements[0].declarationList.declarations[0];
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, roots, 'selected-guide', 'model', {
+      reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node,
+    });
+    assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ') + 1)).module, 'module:apps/reader.ts');
+  });
+  await t.test('large first module cannot hide a second module while deep targets still obey the original budget', async () => {
+    const ballast = `export function ballast() { return [${'0,'.repeat(100010)}0]; }`;
+    const pair = await collectPair('export const value = 2;', 'export const value = 1;',
+      { 'apps/ballast.ts': ballast }, [['apps/ballast.ts'], ['apps/reader.ts']]);
+    assert.equal([...pair.left.modules.keys()][0], resolve(candidate, 'apps/ballast.ts'));
+    refuse(pair, 'retained-declaration', 'module:apps/reader.ts');
+    const parsed = pair.left.modules.get(resolve(candidate, 'apps/ballast.ts'));
+    const node = parsed.statements[0].body.statements[0].expression.elements.at(-1);
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, pair.roots, 'selected-guide', 'model', {
+      reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node,
+    });
+    const output = JSON.parse(events[0].slice(events[0].indexOf(' ') + 1));
+    assert.equal(output.module, undefined, 'budget exhaustion must omit attribution, never guess it');
+    assert.equal(JSON.stringify(output).includes('ballast'), false);
+  });
+});
+
+test('selected entry may reach an old captured pure module without borrowing an old entry loading premise', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const diagnostic = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  const functions = runInNewContext(`${collector}; ${initialization}; ${diagnostic};
+    ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [], Script,
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types, console: { error: value => events.push(value) },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(join(parent, 'entry-reachability-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous');
+  const roots = [['apps/reader.ts'], ['apps/extra.ts'], ['apps/old-a.ts'], ['apps/old-b.ts']];
+  const pair = async (moduleText, a = "import './extra.js';", b = '') => {
+    for (const [root, entry] of [[candidate, a], [previous, b]]) {
+      await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+      await writeFile(join(root, 'apps/reader.ts'), entry);
+      await writeFile(join(root, 'apps/extra.ts'), typeof moduleText === 'string' ? moduleText : moduleText[root === candidate ? 0 : 1]);
+      for (const file of ['old-a', 'old-b']) await writeFile(join(root, `apps/${file}.ts`), 'export const old = globalThis.NEVER_EXECUTE();');
+    }
+    const current = functions.collect(ts, candidate, roots), old = functions.collect(ts, previous, roots);
+    return { current, old, left: contexts.get(current), right: contexts.get(old) };
+  };
+  const check = value => functions.initialize(ts, value.left, value.right, { current: value.current, previous: value.old });
+  await t.test('natural collector original independent entry gains only an existing pure module', async () => {
+    const value = await pair('const object = () => ({}); export function helper() { return object(); }');
+    const key = 'module:apps/extra.ts';
+    assert.equal(JSON.stringify(new Map(value.current).get(key)), JSON.stringify(new Map(value.old).get(key)));
+    const result = check(value);
+    assert.equal(result.status, 'conditional');
+    assert.ok(result.moved.has('apps/extra.ts'));
+    for (const [context, root] of [[value.left, candidate], [value.right, previous]])
+      assert.ok(result.cycleInitializers.some(item => item.source === context.modules.get(resolve(root, 'apps/extra.ts'))));
+  });
+  await t.test('valid deferred literals include the actual review literal and never execute their body', async () => {
+    const actual = ts.createSourceFile('generated-image-review.ts',
+      readFileSync(new URL('../../apps/agent-worker/src/presentation/generated-image-review.ts', import.meta.url), 'utf8'), ts.ScriptTarget.ES2022, true);
+    let token;
+    const visit = node => {
+      if (ts.isRegularExpressionLiteral(node) && node.text === '/^[a-f0-9]{64}$/u') token = node.getText(actual);
+      ts.forEachChild(node, visit);
+    }; visit(actual); assert.ok(token, 'the actual paired review source must supply this token');
+    for (const text of [`export function helper() { globalThis.NEVER_EXECUTE(); return ${token}; }`,
+      'export const unused = () => /[a-z]+/iu;',
+      'export class Value { unused() { return /[a-z]+/iu; } }',
+      "export function unused() { return new RegExp('[', 'u'); }",
+      'export const text = "/a/z is text, not a literal";']) {
+      const value = await pair(text);
+      assert.equal(check(value).status, 'conditional');
+    }
+  });
+  for (const [name, text] of [
+    ['unknown eager call', 'export const value = globalThis.NEVER_EXECUTE();'],
+    ['getter', 'export const value = { get hidden() { return globalThis.NEVER_EXECUTE(); } };'],
+    ['class static block', 'export class Value { static { globalThis.NEVER_EXECUTE(); } }'],
+    ['retained invalid RegExp constructor', "export const value = new RegExp('[', 'u');"],
+    ['retained constructor nested inside data', "export const value = { pattern: new RegExp('[', 'u') };"],
+    ['retained regex nested inside data', 'export const value = [/a/u];'],
+    ['retained invalid regex literal', 'export const value = /[z-a]/u;'],
+    ['invalid regex in an uncalled function', 'export function unused() { return /[z-a]/u; }'],
+    ['invalid regex in an uncalled arrow', 'export const unused = () => /[z-a]/u;'],
+    ['invalid regex in an uncalled class method', 'export class Value { unused() { return /[z-a]/u; } }'],
+    ['duplicate flags in a deferred literal', 'export function unused() { return /a/gg; }'],
+    ['unknown flag in a deferred literal', 'export function unused() { return /a/z; }'],
+  ]) await t.test(`newly reachable ${name} still refuses even if both module fingerprints match`, async () => {
+    const value = await pair(text), key = 'module:apps/extra.ts';
+    assert.equal(JSON.stringify(new Map(value.current).get(key)), JSON.stringify(new Map(value.old).get(key)));
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  });
+  await t.test('old entry cannot lose a module even when it is pure', async () => {
+    const value = await pair('export const value = 1;', '', "import './extra.js';");
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
+  });
+  await t.test('new pure reachability cannot hide reordered old unknown effects', async () => {
+    const value = await pair('export const value = 1;', "import './old-b.js'; import './extra.js'; import './old-a.js';",
+      "import './old-a.js'; import './old-b.js';");
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'moved-initializer');
+  });
+  await t.test('the rollback emitted source is independently syntax checked', async () => {
+    const value = await pair(['export function helper() { return /ok/u; }', 'export function helper() { return /[z-a]/u; }']);
+    assert.throws(() => check(value), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.node === value.right.modules.get(resolve(previous, 'apps/extra.ts')));
+  });
+  await t.test('parser failure reports only the original captured module and fixed reason', async () => {
+    const value = await pair('export function unused() { return /[z-a]SECRET/u; }');
+    let failure;
+    assert.throws(() => check(value), error => {
+      failure = error; return error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+        && error.node === value.left.modules.get(resolve(candidate, 'apps/extra.ts'));
+    });
+    events.length = 0;
+    functions.emit(ts, value.current, value.old, candidate, previous, roots, 'selected-guide', 'model', failure);
+    assert.equal(events.length, 1);
+    assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ') + 1)).module, 'module:apps/extra.ts');
+    assert.doesNotMatch(events[0], /SECRET|\[z-a\]|SyntaxError|regular expression|candidate|previous/u);
+  });
+  await t.test('already reachable moved initializers retain the original loading premise', async () => {
+    const value = await pair('export const retained = /a/u;', "import './old-a.js'; import './extra.js';",
+      "import './extra.js'; import './old-a.js';");
+    const result = check(value);
+    assert.equal(result.status, 'conditional'); assert.ok(result.moved.has('apps/extra.ts'));
+  });
+  await t.test('new reachability never waives external loading order', async () => {
+    // Synthetic metadata only, no installed/copied/executed external runtime.
+    // The original collector reads these exact manifests itself.
+    for (const root of [candidate, previous]) for (const name of ['fixture-alpha', 'fixture-beta']) {
+      const directory = join(root, 'apps/node_modules', name); await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'package.json'), JSON.stringify({ name, version: '0.0.0' }));
+    }
+    const extraExternal = await pair("import 'fixture-alpha'; export const value = 1;");
+    assert.throws(() => check(extraExternal), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
+    const reordered = await pair('export const value = 1;',
+      "import 'fixture-beta'; import './extra.js'; import 'fixture-alpha';",
+      "import 'fixture-alpha'; import 'fixture-beta';");
+    assert.throws(() => check(reordered), error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'
+      && error.initializationSite === 'graph-order');
+  });
 });
 
 test('rollback verifier diagnostics are opt-in, bounded and preserve rejection', async () => {
@@ -276,14 +508,15 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
     finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
     finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
+    finiteSelectedGuidePairCompatibility(...args){events.push(['selected',...args]);return accept==='selected';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','voice','sdf']){
+  for(const allowed of ['video','capable','first','voice','sdf','selected']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf'].slice(0,['video','capable','first','voice','sdf'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf','selected'].slice(0,['video','capable','first','voice','sdf','selected'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -334,15 +567,19 @@ test('comparison diagnostics bound missing keys and multiple differences without
   const helperSource = deployLockSource.match(/function rollbackComparisonDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(helperSource);
   const describe = runInNewContext(`${helperSource}; rollbackComparisonDiagnostic`, { resolve });
-  const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 5 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
+  const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 16 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
   const report = describe(current, [], '/candidate', '/rollback');
-  assert.equal(report.differences, 6);
-  assert.equal(report.entries.length, 4);
+  assert.equal(report.differences, 17);
+  assert.equal(report.entries.length, 16);
   assert.equal(report.truncated, true);
   assert.equal(report.entries[0].key, '[redacted-key]');
   assert.equal(report.entries[0].candidatePresent, true);
   assert.equal(report.entries[0].rollbackPresent, false);
   assert.doesNotMatch(JSON.stringify(report), /PRIVATE_KEY|PRIVATE_VALUE|candidateLength|jsonOffset/);
+  const complete = describe(current.slice(1, 13), [], '/candidate', '/rollback');
+  assert.equal(complete.differences, 12);
+  assert.equal(complete.entries.length, 12);
+  assert.equal(complete.truncated, false);
 });
 
 test('bounded Worker recovery wiring proof accepts the current construction path', () => {
@@ -876,7 +1113,8 @@ function historicalVideoSource(projectRoot, sourceRef) {
   if (historicalVideoSources.has(sourceRef)) return historicalVideoSources.get(sourceRef);
   const files = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', sourceRef, '--', 'apps', 'packages'],
     { cwd: projectRoot, encoding: 'utf8' }).split('\0').filter(file =>
-    /\/src\/.*\.(?:[cm]?[jt]sx?)$/u.test(file) || /\/package\.json$/u.test(file));
+    /\/src\/.*\.(?:[cm]?[jt]sx?)$/u.test(file) || /\/package\.json$/u.test(file)
+      || /^apps\/web\//u.test(file) && /\.(?:[cm]?[jt]sx?|json|css)$/u.test(file));
   const blobs = execFileSync('git', ['cat-file', '--batch'], { cwd: projectRoot,
     input: files.map(file => `${sourceRef}:${file}\n`).join(''), maxBuffer: 64 * 1024 * 1024 });
   const sources = new Map();
@@ -970,10 +1208,11 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   if (historical) for (const file of program.getSourceFiles().filter(file => ownsSource(file.fileName)))
     assert.equal(file.text, overlays.get(key(file.fileName)) ?? historical.sources.get(key(file.fileName))
       ?? (!trackedSourceOnly ? ambient.get(key(file.fileName)) : undefined),
-      'historical Program must contain only selected baseline bytes, exact mutations and explicitly visible ambient inputs');
+      'historical Program must contain only selected baseline bytes plus exact mutations or declared ambient inputs');
   for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
     item.updated, 'the real Program must contain the exact mutation before testing its rejection');
-  return { ts, program, projectRoot };
+  return { ts, program, projectRoot, sourceHost: host,
+    resolveSource: (specifier, containingFile) => host.resolveModuleNames([specifier], containingFile)[0] };
 }
 
 // Legacy video controls opt into the released V1 oracle. The two historical
@@ -1090,10 +1329,22 @@ async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
   return videoIngressProgram(changes, { ...options, ...releasedVoiceWriterSource });
 }
 
+// The pure selector theorem compares complete adjacent MP3 source families.
+// CURRENT-format/selected-image additions belong to separate live regressions.
+function retainedPureVoiceWriterProgram(changes = new Map(), options = {}) {
+  return videoIngressProgram(changes, { ...options, sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+}
+
+// These component regressions retain the complete approved format-reader source
+// family; CURRENT and the independent combined/voice direction remain separate.
+function retainedVoiceFormatProgram(changes = new Map(), options = {}) {
+  return videoIngressProgram(changes, { sourceRef: 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff', ...options });
+}
+
 test('voice format reader source reconstructs the actual previous MP3 runtime without granting collector authority', async () => {
   const methods = voicePairSourceComponents();
-  const current = await videoIngressProgram(new Map(), releasedVoiceFormatReaderSource);
-  const previous = await videoIngressProgram(new Map(), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  const current = await retainedVoiceFormatProgram(new Map(), { trackedSourceOnly: true });
+  const previous = await retainedVoiceFormatProgram(new Map(), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
   let model;
   const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
   try { model = methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)); }
@@ -1117,7 +1368,7 @@ test('voice format reader source rejects changed producers, late receipts, secur
   const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
   const gateway = 'packages/ai-gateway/src/synclip-audio-api.ts', voice = 'packages/domain/src/agent/voice.ts';
   const worker = 'apps/agent-worker/src/voice.ts', index = 'apps/agent-worker/src/index.ts';
-  const previous = await videoIngressProgram(new Map(), rollback);
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
   const cases = [
     ['fresh download injection', worker, text => text.replace("    if (!checkpoint) {", "    if (!checkpoint) { options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });"), true],
     ['saved-ID download injection', worker, text => text.replace('    if (!checkpoint.providerId)', "    if (checkpoint) options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });\n    if (!checkpoint.providerId)"), true],
@@ -1134,13 +1385,13 @@ test('voice format reader source rejects changed producers, late receipts, secur
     ['dynamic capability escape', gateway, text => `${text}\nexport async function escapedOutput() { return import('@openscience/ai-gateway'); }\n`],
   ];
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const candidate = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
-    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const candidate = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(candidate), canonical: node => videoPairRuntime(candidate.ts, node.getText()) };
     assert.throws(() => methods.formatReader(candidate.ts, context, videoPairContext(old), voiceSourceEntries(candidate), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
   });
-  const actual = await videoIngressProgram(new Map(), releasedVoiceFormatReaderSource);
+  const actual = await retainedVoiceFormatProgram(new Map(), { trackedSourceOnly: true });
   const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
   assert.throws(() => methods.formatReader(actual.ts, context, videoPairContext(previous),
     [...voiceSourceEntries(actual), ['module:packages/new/src/unclassified.ts', []]], voiceSourceEntries(previous)),
@@ -1159,8 +1410,8 @@ test('voice format reader rejects both actual High P1 counterexamples', async t 
       .replace('const result = ', "String.prototype.split = function () { throw new Error('second normalization'); }; const result = ")],
   ];
   for (const [name, path, mutate] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
-    const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback);
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
@@ -1176,10 +1427,10 @@ test('voice format reader guards signatures and new output recovery references',
     ['namespace output capability', 'apps/agent-worker/src/voice.ts', text => `import * as outputGateway from '@openscience/ai-gateway';\n${text}\nconst exposedOutput = () => outputGateway;\n`, true],
     ['existing runtime loader capability', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("loadRuntimeModule('yauzl')", "loadRuntimeModule('@openscience/ai-gateway')"), true],
   ];
-  const previous = await videoIngressProgram(new Map(), rollback);
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
-    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
@@ -1195,8 +1446,8 @@ test('voice format reader binds immutable saved audio and the unique storage wri
     ['unclassified computed storage write', text => text.replace('          try {', "          await workerDeps.storage!['putObject']('unclassified.wav', Buffer.alloc(2), { contentType: 'audio/wav' });\n          try {")],
   ];
   for (const [name, mutate] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
-    const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback);
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
@@ -1208,8 +1459,8 @@ test('voice format reader rejects shadowed save and late-discard receipt symbols
   const shadow = text => text.replace('          try {', '          await (async (storedAudio) => {\n          try {')
     .replace(/            throw error;\r?\n          \}/u,
       "$&\n          })({ objectKey: `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${'b'.repeat(64)}.wav`, sha256: 'b'.repeat(64), bytes: 48, contentType: 'audio/wav' as const });");
-  const current = await videoIngressProgram(new Map([[path, shadow]]), releasedVoiceFormatReaderSource);
-  const previous = await videoIngressProgram(new Map([[path, shadow]]), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  const current = await retainedVoiceFormatProgram(new Map([[path, shadow]]), { trackedSourceOnly: true });
+  const previous = await retainedVoiceFormatProgram(new Map([[path, shadow]]), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
   const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
   assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)),
     error => error.reason === 'VOICE_MP3_LOCAL_BINDING_CHANGED');
@@ -1217,15 +1468,15 @@ test('voice format reader rejects shadowed save and late-discard receipt symbols
 
 test('voice format reader closes module factory escapes without erasing decoder evaluation', async t => {
   const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
-  const previous = await videoIngressProgram(new Map(), rollback);
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
   const cases = [
     ['module factory alias', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace('const loadRuntimeModule = createRequire(__filename);', 'const factoryAlias = createRequire; const loadRuntimeModule = factoryAlias(__filename);'), true],
     ['module namespace factory', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("import { createRequire } from 'node:module';", "import * as nativeModule from 'node:module';").replace('createRequire(__filename)', 'nativeModule.createRequire(__filename)'), true],
     ['decoder extra evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('format.decode(Buffer.concat(chunks, size), contentType)', 'format.decode(Buffer.concat(chunks, size), (Date.now(), contentType))')],
   ];
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
-    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
@@ -1319,7 +1570,7 @@ function voiceSourceEntries(value) {
 test('voice writer source transition permits only the pure selector while retaining reader and every remaining entry', async () => {
   const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const key = 'packages/domain/src/agent/voice-contract.ts';
-  const writer = await retainedVoiceWriterProgram(new Map(), { trackedSourceOnly: true });
+  const writer = await retainedPureVoiceWriterProgram(new Map(), { trackedSourceOnly: true });
   const entries = voiceSourceEntries;
   const a = entries(writer), b = entries(reader);
   const model = methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), a, b);
@@ -1342,7 +1593,7 @@ test('voice writer source transition permits only the pure selector while retain
   const privateGate = value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;',
     'if (isHermesVoiceTaskKind(kind)) return isHermesVoiceWriterEnabled() ? rawResult as Record<string, unknown> : null;');
   const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), releasedVoiceReaderSource);
-  const unsafeWriter = await retainedVoiceWriterProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), { trackedSourceOnly: true });
+  const unsafeWriter = await retainedPureVoiceWriterProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), { trackedSourceOnly: true });
   assert.throws(() => methods.writer(unsafeWriter.ts, videoPairContext(unsafeWriter), videoPairContext(unsafeReader), entries(unsafeWriter), entries(unsafeReader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the same new private phase-dependent behavior in both roots must reject');
 });
@@ -1356,9 +1607,9 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
   const changes = new Map([[client, value => `import '../generated/voice-source-boundary.js';\n${value}`]]);
   const ambientSources = new Map([[extra, text]]);
   const reader = await videoIngressProgram(changes, { ...releasedVoiceReaderSource, ambientSources, trackedSourceOnly: true });
-  const raw = await retainedVoiceWriterProgram(changes, { ambientSources });
+  const raw = await retainedPureVoiceWriterProgram(changes, { ambientSources });
   const get = value => value.program.getSourceFile(resolve(value.projectRoot, extra));
-  assert.equal(get(raw)?.text, text, 'the default filesystem view must resolve the ambient module');
+  assert.equal(get(raw)?.text, text, 'the explicitly declared ambient input must resolve in this complete historical writer');
   const file = raw.program.getSourceFile(resolve(raw.projectRoot, client));
   const imported = file.statements.find(node => raw.ts.isImportDeclaration(node)
     && node.moduleSpecifier.text === '../generated/voice-source-boundary.js');
@@ -1366,11 +1617,11 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
     ?.some(node => node.getSourceFile() === get(raw)), 'the real import must bind the extra JS before comparison');
   assert.throws(() => methods.writer(raw.ts, videoPairContext(raw), videoPairContext(reader), voiceSourceEntries(raw), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
-  const scoped = await retainedVoiceWriterProgram(changes, { ambientSources, trackedSourceOnly: true });
+  const scoped = await retainedPureVoiceWriterProgram(changes, { ambientSources, trackedSourceOnly: true });
   assert.equal(Boolean(get(scoped)), false, 'the source inventory must exclude ambient JS during resolution, not after comparison');
   assert.equal(get(reader), undefined);
   assert.equal(methods.writer(scoped.ts, videoPairContext(scoped), videoPairContext(reader), voiceSourceEntries(scoped), voiceSourceEntries(reader)).phase, 'writer');
-  const explicit = await retainedVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
+  const explicit = await retainedPureVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
   assert.equal(get(explicit)?.text, text, 'an explicit source mutation must remain visible even outside the tracked inventory');
   const explicitClient = explicit.program.getSourceFile(resolve(explicit.projectRoot, client));
   const explicitImport = explicitClient.statements.find(node => explicit.ts.isImportDeclaration(node)
@@ -1379,8 +1630,21 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
     ?.some(node => node.getSourceFile() === get(explicit)), 'the explicit new JS must bind the real import even in a scoped historical Program');
   assert.throws(() => methods.writer(explicit.ts, videoPairContext(explicit), videoPairContext(reader), voiceSourceEntries(explicit), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
-  await assert.rejects(retainedVoiceWriterProgram(new Map([[extra, value => value + text]])),
-    /mutation must target historical source/u, 'function mutations cannot invent missing historical bytes');
+  await assert.rejects(() => retainedPureVoiceWriterProgram(new Map([[extra, value => `${value}\nexport const another = 1;`]])),
+    /mutation must target historical source/u);
+  await assert.rejects(() => retainedPureVoiceWriterProgram(new Map(), { ambientSources: new Map([[client, text]]) }),
+    /ambient input cannot replace tracked source/u);
+  const history = historicalVideoSource(scoped.projectRoot, '1c88ff813db128fd1933096a2f102c1c1c667b25');
+  assert.equal(file.text, changes.get(client)(history.sources.get(resolve(scoped.projectRoot, client).replaceAll('\\', '/').toLowerCase())));
+  const filesystemOnly = execFileSync('git', ['ls-files', '-z', '--', 'packages'], { cwd: scoped.projectRoot, encoding: 'utf8' }).split('\0')
+    .find(path => /^packages\/[^/]+\/test\/.*\.ts$/u.test(path) && existsSync(resolve(scoped.projectRoot, path))
+      && !history.sources.has(resolve(scoped.projectRoot, path).replaceAll('\\', '/').toLowerCase()));
+  assert.ok(filesystemOnly, 'use a real file outside the declared historical source inventory, without inventing a missing CURRENT source');
+  assert.equal(scoped.sourceHost.fileExists(resolve(scoped.projectRoot, filesystemOnly)), false, 'historical host cannot fall through to a real undeclared file');
+  assert.equal(scoped.sourceHost.readFile(resolve(scoped.projectRoot, filesystemOnly)), undefined);
+  const agent = resolve(scoped.projectRoot, 'packages/domain/src/agent/agent.ts');
+  assert.equal(scoped.sourceHost.readFile(agent), history.sources.get(agent.replaceAll('\\', '/').toLowerCase()));
+  assert.notEqual(scoped.sourceHost.readFile(agent), readFileSync(agent, 'utf8'), 'changed CURRENT source bytes cannot replace the retained historical module');
 });
 
 test('voice writer tracked runtime mutations retain exact current bytes and strict residual rejection', async () => {
@@ -1392,6 +1656,724 @@ test('voice writer tracked runtime mutations retain exact current bytes and stri
     'tracked-source inventory must preserve the exact current mutation, not read a HEAD blob');
   assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), voiceSourceEntries(writer), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+});
+
+function selectedGuideSourceComponents() {
+  const start = deployLockSource.indexOf('function finiteSelectedGuideSupplementaryTerms(');
+  assert.ok(start !== -1, 'the selected decoder proof must be implemented');
+  const component = deployLockSource.slice(start, deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
+  return runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
+    relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
+    workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
+    illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
+    dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
+    agent: finiteSelectedGuideAgentResidualTerms,
+    sourceModel: finiteSelectedGuideSourceModel,
+    sourceResidual: finiteSelectedGuideSourceResidual,
+    resultOrigin: finiteSelectedGuideResultOriginTerms,
+    pair: finiteSelectedGuidePairCompatibility,
+    httpLibrary: finiteSelectedGuideApiLibraryTerms,
+    initialization: finiteSelectedGuideInitializationTerms })`, { relative, resolve, isAbsolute, builtinModules,
+      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap(), Script });
+}
+
+function selectedGuideSourceContext(actual) {
+  const canonicalText = deployLockSource.slice(deployLockSource.indexOf('  const canonical = node => {'),
+    deployLockSource.indexOf('\n  const addConfiguration =', deployLockSource.indexOf('  const canonical = node => {')));
+  const canonical = runInNewContext(`${canonicalText}; canonical`, { ts: actual.ts, locationLiterals: new Map() });
+  return { ...videoPairContext(actual), canonical, sourceHost: actual.sourceHost, resolveSource: actual.resolveSource };
+}
+
+// Original selected-component positives and mutations use the same complete
+// image4cc inventory and source host; they are not the live combined candidate.
+function retainedSelectedGuideProgram(changes = new Map()) {
+  return videoIngressProgram(changes, { sourceRef: '4cc78008f86da811aeb695b5d3639a5b52891d57' });
+}
+
+// Complete selected+voice transition, independent of later SDF additions.
+function retainedSelectedVoiceProgram(changes = new Map()) {
+  return videoIngressProgram(changes, { sourceRef: '2ad0aa1b103797dd9f86a005ff3c33050b33ff54', trackedSourceOnly: true });
+}
+
+test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const narrow = actual.ts.createProgram([resolve(actual.projectRoot, 'apps/agent-worker/src/index.ts')],
+    actual.program.getCompilerOptions(), actual.sourceHost);
+  const captured = selectedGuideSourceContext({ ...actual, program: narrow });
+  assert.equal(narrow.getSourceFile(resolve(actual.projectRoot, 'apps/api/src/routes/agent.ts')), undefined);
+  assert.equal(narrow.getSourceFile(resolve(actual.projectRoot, 'apps/web/components/hermes/HermesAssistantDrawer.tsx')), undefined);
+  let extra;
+  try { extra = components.supplemental(actual.ts, captured); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getSourceFile().fileName ?? ''}:${error.node?.getText().slice(0, 80) ?? ''}`); }
+  assert.equal(extra.status, 'conditional');
+  assert.equal(extra.originalContext, captured);
+  assert.ok(extra.api.fileName.endsWith('apps/api/src/routes/agent.ts'));
+  assert.ok(extra.drawer.fileName.endsWith('apps/web/components/hermes/HermesAssistantDrawer.tsx'));
+  for (const source of narrow.getSourceFiles()) assert.equal(extra.program.getSourceFile(source.fileName), source);
+  assert.equal(extra.api.text, actual.sourceHost.readFile(extra.api.fileName));
+  assert.equal(extra.drawer.text, actual.sourceHost.readFile(extra.drawer.fileName));
+  assert.ok(extra.apiEntry.fileName.endsWith('apps/api/src/index.ts'));
+  assert.ok(extra.parserEntry.fileName.endsWith('apps/agent-worker/src/parser-acceptance-runner.ts'));
+  assert.ok(extra.outstanding.length > 0, 'supplemental input alone is never a production permit');
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), decoder = components.decoder(actual.ts, extra, baseline);
+  assert.equal(components.fresh(actual.ts, extra, decoder, baseline).fresh, 'legacy');
+  assert.equal(components.handlers(actual.ts, extra, baseline).status, 'conditional');
+  for (const changed of [
+    { ...captured, checker: {} }, { ...captured, sourceHost: undefined },
+    { ...captured, sourceHost: { ...captured.sourceHost, fileExists: file => !file.endsWith('HermesAssistantDrawer.tsx') && captured.sourceHost.fileExists(file) } },
+  ]) assert.throws(() => components.supplemental(actual.ts, changed), error => error.reason === 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN');
+});
+
+test('selected guide decoder proves own-member absence without accepting null or a changed legacy parser', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const model = components.decoder(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.capable, true);
+  assert.equal(model.legacyParser.name.text, 'parseWorkspaceGuidePayload');
+  assert.equal(model.reader.name.text, 'readWorkspaceGuidePayloadWithSelectedImage');
+  const path = 'packages/domain/src/agent/workspace-guide-contract.ts';
+  for (const change of [
+    text => text.replace("!Object.hasOwn(presentation, 'selectedImageAssetId')", "!presentation.selectedImageAssetId"),
+    text => text.replace('return parseWorkspaceGuidePayload(value);', 'return parseWorkspaceGuidePayload({});'),
+    text => text.replace("['researchObjectId', 'versionId'])", "['researchObjectId', 'versionId', 'selectedImageAssetId'])"),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[path, change]]));
+    assert.throws(() => components.decoder(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+  }
+});
+
+test('selected guide fresh source follows actual HTTP and transitive task persistence callers', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, selectedGuideSourceContext(previous));
+  let model;
+  try { model = components.fresh(actual.ts, context, decoder, selectedGuideSourceContext(previous)); }
+  catch (error) { assert.fail(`${error.reason}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 120)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh, 'legacy');
+  assert.ok(model.origins.length > 0);
+  assert.ok(model.nonGuide.some(value => value.kind === 'presentation.generate'));
+  const path = 'apps/api/src/routes/agent.ts';
+  const writer = await retainedSelectedGuideProgram(new Map([[path, text => text
+    .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
+    .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
+  const changedContext = selectedGuideSourceContext(writer);
+  const changedDecoder = components.decoder(writer.ts, changedContext, selectedGuideSourceContext(previous));
+  assert.equal(components.fresh(writer.ts, changedContext, changedDecoder, selectedGuideSourceContext(previous)).fresh, 'selected',
+    'The genuine writer overlay changes the birth family, never the legacy-absence premise');
+  for (const addition of [
+    "body.payload.context.presentation!.selectedImageAssetId = '00000000-0000-4000-8000-000000000001';",
+    "const afterValidation = body.payload.context.presentation!; Object.assign(afterValidation, { selectedImageAssetId: '00000000-0000-4000-8000-000000000001' });",
+    'const afterValidation = body.payload; unknownWriter(afterValidation);',
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[path, text => text.replace('const body = agentTaskBodySchema.parse(req.body);',
+      `const body = agentTaskBodySchema.parse(req.body); ${addition}`)]]));
+    const scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, selectedGuideSourceContext(previous));
+    assert.throws(() => components.fresh(changed.ts, scope, read, selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide schema proof rejects a replaced or escaped actual Zod binding', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const file = 'apps/api/src/routes/agent.ts';
+  for (const change of [
+    text => text.replace("import { z } from 'zod';", "import { z } from './unowned-schema';"),
+    text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; Object.assign(z, { object: unownedObject });"),
+    text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; const escapedSchema = z; unowned(escapedSchema);"),
+  ]) {
+    const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
+    assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide fresh proof refuses changed actual persistence forwarders and rest-alias mutation', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);',
+      "input.kind = 'workspace.guide'; return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);"),
+    text => text.replace('return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);',
+      "Object.assign(input, { kind: 'workspace.guide' }); return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);"),
+    text => text.replace('const { dispatch, beforePersist, ...persistenceInput } = input;',
+      "const { dispatch, beforePersist, ...persistenceInput } = input; persistenceInput.kind = 'workspace.guide';"),
+  ]) {
+    const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
+    assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide relocated byte reader retains actual bounds hash finally and all ordinary call arguments', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.relocation(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.retained.length > 0);
+  assert.ok(model.additionalCalls.every(call => call.getSourceFile().fileName.endsWith('workspace-guide.ts')));
+  const path = 'apps/agent-worker/src/presentation/generated-image-review.ts';
+  for (const change of [
+    text => text.replace('maxBytes = 10 * 1024 * 1024', 'maxBytes = 100 * 1024 * 1024'),
+    text => text.replace(".digest('hex') !== expectedHash", ".digest('hex') === expectedHash"),
+    text => text.replace('object.body.destroy();', 'void object.body;'),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[path, change]]));
+    assert.throws(() => components.relocation(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
+  }
+  const escaped = await retainedSelectedGuideProgram(new Map([['apps/agent-worker/src/presentation/handler.ts',
+    text => `${text}\nconst escapedByteReader = readPresentationInput;\n`]]));
+  assert.throws(() => components.relocation(escaped.ts, selectedGuideSourceContext(escaped), baseline),
+    error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
+});
+
+test('selected guide workspace branch reduces to the complete old module without ordinary or builtin escape changes', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
+  const decoder = components.decoder(actual.ts, context, baseline);
+  let model;
+  try { model = components.workspace(actual.ts, context, baseline, decoder); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.handlerCalls.length > 0);
+  assert.equal(model.builtinOmissions.length, 1);
+  assert.equal(model.builtinOmissions[0].specifier, 'node:util');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'apps/agent-worker/src/workspace-guide.ts';
+  for (const change of [
+    text => text.replace('if (payload.context.presentation?.selectedImageAssetId) {', 'if (payload.context.presentation?.versionId) {'),
+    text => text.replace('const INTENTS = new Set', 'const escaped = isDeepStrictEqual; unowned(escaped); const INTENTS = new Set'),
+    text => text.replace('workspace.guide 服务端任务上下文无效', 'changed ordinary task guard'),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, baseline);
+    assert.throws(() => components.workspace(changed.ts, scope, baseline, read),
+      error => error.reason === 'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide Native ordinary projection preserves complete actual CAS terminal authority and parser runtime', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
+  const decoder = components.decoder(actual.ts, context, baseline);
+  let model;
+  try { model = components.native(actual.ts, context, baseline, decoder); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.selectedRegions.length, 4); assert.equal(model.absent.size, 2);
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/agent/native-agent-execution.ts';
+  for (const change of [
+    text => text.replace('return payload.context.presentation?.selectedImageAssetId ? payload : undefined;', 'return payload.context.presentation ? payload : undefined;'),
+    text => text.replace('kind: task.kind, status: task.status,', 'kind: task.kind,'),
+    text => text.replace('function selectedGuide(', 'function escaped(task: unknown) { return selectedGuide(task); } function selectedGuide('),
+    text => text.replace("marker?.profile === 'paper-illustration' && task?.kind === 'workspace.guide') {", "marker?.profile === 'paper-illustration') {"),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, baseline);
+    assert.throws(() => components.native(changed.ts, scope, baseline, read),
+      error => error.reason === 'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide byte relocation restores both entire modules and checks free bindings and selected-only extra callers', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input), decoder = components.decoder(input.ts, context, baseline);
+    const workspace = components.workspace(input.ts, context, baseline, decoder);
+    const relocation = components.relocation(input.ts, context, baseline);
+    return components.relocationResidual(input.ts, context, baseline, relocation, workspace);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}/${error.stage ?? ''}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts,
+    previous.program.getSourceFile(resolve(previous.projectRoot, 'apps/agent-worker/src/presentation/generated-image-review.ts')).text));
+  assert.deepEqual(videoPairRuntime(actual.ts, model.handlerText), videoPairRuntime(previous.ts, model.relocation.oldSource.text));
+  for (const [file, change] of [
+    ['apps/agent-worker/src/presentation/generated-image-review.ts', text => text.replace('Saved image review does not match the persisted image', 'changed ordinary saved review error')],
+    ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('Storyboard art correction checkpoint is invalid', 'changed ordinary art checkpoint error')],
+    ['apps/agent-worker/src/presentation/generated-image-review.ts', text => text.replace('export async function readPresentationInput(', 'const Buffer = unownedBuffer; export async function readPresentationInput(')],
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide Native config projection binds both actual uses suppliers and legacy callback ordering', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.handlers(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.suppliers.length >= 2);
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(actual.ts, model.rollback.text));
+  const file = 'apps/agent-worker/src/index.ts';
+  for (const change of [
+    text => text.replace('const nativeAgent: NonNullable', 'let nativeAgent: NonNullable'),
+    text => text.replace('runtime: nativeAgentRuntimeFromEnv(process.env), semanticSearchFor:', 'runtime: nativeAgentRuntimeFromEnv({ ...process.env }), semanticSearchFor:'),
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { get videoSpool() { throw new Error("observable options read"); },'),
+    text => text + '\nconst escapedFactory = createHandlers;\n',
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.handlers(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED');
+  }
+});
+
+test('selected guide illustration binds closed ordinary and video constructors and exact paper images delegation', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.illustration(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 120)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.ordinaryCalls.length, 1);
+  assert.equal(model.replayCalls.length, 1);
+  assert.equal(model.constructors.length, 2);
+  for (const [file, change] of [
+    ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap:',
+      '...payload, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap:')],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', text => text.replace('return source.images(args, result);', 'return source.images(result, args);')],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', text => text.replace(
+      'async function runNativeIllustrationTaskCore(input: NativeIllustrationTaskInput & { selectedImageAttachment?: ScienceReviewAttachment }) {',
+      'async function runNativeIllustrationTaskCore(input: NativeIllustrationTaskInput & { selectedImageAttachment?: ScienceReviewAttachment }) { opaqueInputWriter(input);')],
+    ['apps/agent-worker/src/native-agent/paper-tools.ts', text => text.replace('async images(args: unknown, result: unknown) {', 'async images(args: unknown, result: unknown) { observe(this);')],
+    ['apps/agent-worker/src/native-agent/host-task.ts', text => text.replace('const images = await input.paper.images(value.arguments, value.result);',
+      'observeFunctionIdentity(input.paper.images.name); const images = await input.paper.images(value.arguments, value.result);')],
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.illustration(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED');
+  }
+});
+
+test('selected guide illustration restores the entire old module with no schema export or materializer remainder', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input);
+    const initialization = components.initialization(input.ts, context, baseline);
+    const illustration = components.illustration(input.ts, context, baseline);
+    return components.illustrationResidual(input.ts, context, baseline, illustration, initialization);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.rollback.text));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  for (const change of [
+    text => text.replace('type SelectedImageAuthorContext =', 'export { SELECTED_IMAGE_TOOLS }; type SelectedImageAuthorContext ='),
+    text => text.replace("return { status: 'illustration_context', settings: input.settings,", "return { status: 'changed_illustration_context', settings: input.settings,"),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide dormant declarations leave all three actual legacy modules and exports exact', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input), decoder = components.decoder(input.ts, context, baseline);
+    return components.dormant(input.ts, context, baseline, decoder);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.removed.size, 5); assert.equal(model.projections.size, 3);
+  for (const value of model.projections.values()) assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text));
+  for (const [file, change] of [
+    ['packages/domain/src/assets/scene-image.ts', text => text.replace('Saved image review does not match the persisted image', 'changed ordinary saved image error')],
+    ['packages/domain/src/assets/scene-image.ts', text => text.replace('export async function requireSelectedImageSource(', 'const escapedWriteScope = requirePresentationWriteScope; export async function requireSelectedImageSource(')],
+    ['packages/domain/src/index.ts', text => text + '\nexport const untrackedSelectedValue = 1;\n'],
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN');
+  }
+});
+
+test('selected guide public reader preserves ordinary opaque data and quarantines unknown provenance on the same row', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.publicReader(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.getText()));
+  assert.deepEqual(videoPairRuntime(actual.ts, model.taskViewText), videoPairRuntime(previous.ts, model.previousTaskView.getText()));
+  const file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('ordinary = true;', "if (Object.hasOwn(rawResult.selectedImageContext ?? {}, 'assetId')) throw new Error('ordinary extension denied'); ordinary = true;"),
+    text => text.replace('selectedReference = undefined; selectedDraft = undefined;', 'ordinary = true; selectedReference = undefined; selectedDraft = undefined;'),
+    text => text.replace('projectAgentTaskResult(task.result, task.kind, task)', 'projectAgentTaskResult(task.result, task.kind, otherTask)'),
+    text => text.replace('task.result !== rawResult', 'task.result === rawResult'),
+    text => text.replace('delete publicResult.audioAuditionGrant;', 'delete publicResult.ordinaryExtension;'),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.publicReader(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN');
+  }
+});
+
+test('selected guide whole agent residual retains ordinary constructors retry and all original private filters', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const context = selectedGuideSourceContext(actual);
+  const decoder = components.decoder(actual.ts, context, baseline), reader = components.publicReader(actual.ts, context, baseline);
+  let model;
+  try { model = components.agent(actual.ts, context, baseline, decoder, reader); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 180)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('tx ?? deps.prisma', 'deps.prisma'),
+    text => text.replace('AI Credit 不足（§2.4-7），请补充后再试', 'changed ordinary billing behavior'),
+    text => {
+      const field = /kind: input.kind,\r?\n        payload:/gu;
+      assert.equal([...text.matchAll(field)].length, 1, 'the persisted kind mutant must bind exactly one original field');
+      return text.replace(field, match => match.replace('kind: input.kind,', "kind: 'workspace.guide',"));
+    },
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const changedDecoder = components.decoder(changed.ts, scope, baseline), changedReader = components.publicReader(changed.ts, scope, baseline);
+    assert.throws(() => components.agent(changed.ts, scope, baseline, changedDecoder, changedReader),
+      error => error.reason === 'SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide ingestion projection supplies its exact persisted row without changing the original reader', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.ingestion(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/ingestion/ingestion-service.ts';
+  for (const change of [
+    text => text.replace('task.agentTask ?? undefined);', 'otherTask ?? undefined);'),
+    text => text.replace("task.agentTask?.kind ?? ''", "task.agentTask?.kind ?? 'workspace.guide'"),
+    text => text.replace('artifact: true, agentTask: true, batch:', 'artifact: true, agentTask: false, batch:'),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.ingestion(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_INGESTION_READER_UNKNOWN');
+  }
+});
+
+test('selected guide new schema initializer is owned plain data and never an effect or cyclic value read', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.initialization(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}/${error.stage ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.pureInitializers.some(node => node.name.text === 'SELECTED_IMAGE_TOOLS'));
+  for (const path of ['apps/agent-worker/src/skills/media-direction.ts',
+    'apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/chart-generator.ts'])
+    assert.ok(model.moved.has(path), `the actual eager-order frontier must include ${path}`);
+  assert.ok(model.ordering.some(value => value.entry === 'apps/agent-worker/src/index.ts'));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  for (const change of [
+    text => text.replace('const SELECTED_IMAGE_TOOLS = [', 'const effect = globalThis.initializeSelected(); const SELECTED_IMAGE_TOOLS = ['),
+    text => text.replace('const SELECTED_IMAGE_TOOLS = [', "const unsafeRegex = new RegExp('(', 'u'); const SELECTED_IMAGE_TOOLS = ["),
+    text => text.replace(/(const SELECTED_IMAGE_TOOLS = )(\[[\s\S]*?\]);(\r?\ntype SelectedImageAuthorContext)/u, '$1$2.map(tool => unknown(tool));$3'),
+    text => text.replace(/(const SELECTED_IMAGE_TOOLS = )(\[[\s\S]*?\]);(\r?\ntype SelectedImageAuthorContext)/u, '$1initializeSelected($2);$3'),
+    text => text.replace("parameters: object({ kind: { type: 'string', enum: ['explanation', 'question'] }", "parameters: object({ __proto__: unownedPrototype, kind: { type: 'string', enum: ['explanation', 'question'] }"),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.initialization(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  }
+});
+
+test('selected guide High exact RegExp literal witness cannot obtain an initializer or full source proof', async () => {
+  const components = selectedGuideSourceComponents();
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const needle = "description: 'Read the actual selected saved image. This exact image is the revision target, not a style example. No other image can be selected here.'";
+  const actual = await retainedSelectedGuideProgram(new Map([[file, text => {
+    assert.equal(text.split(needle).length, 2);
+    return text.replace(needle, 'description: /(/');
+  }]]));
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  assert.equal(actual.program.getSyntacticDiagnostics().length, 0, 'This exact spelling escapes TS5.5 syntactic diagnostics');
+  assert.throws(() => components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
+    error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+});
+
+test('selected guide High ordinary constructor witness has equal old and current public outputs after the restoration', async () => {
+  const components = selectedGuideSourceComponents(), file = 'apps/agent-worker/src/index.ts';
+  const change = text => {
+    const needle = 'return { echoed: true };';
+    assert.equal(text.split(needle).length, 2);
+    return text.replace(needle, "return { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };");
+  };
+  const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
+  const previous = await historicalVideoIngressProgram(new Map([[file, change]]), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  const load = (input, names, globals = {}) => {
+    const source = input.program.getSourceFile(resolve(input.projectRoot, 'packages/domain/src/agent/agent.ts'));
+    const text = names.map(name => source.statements.find(node => node.name?.text === name).getText()).join('\n');
+    const exports = {};
+    runInNewContext(input.ts.transpileModule(text, { compilerOptions: { target: input.ts.ScriptTarget.ES2022, module: input.ts.ModuleKind.CommonJS } }).outputText,
+      { exports, ...globals });
+    return exports;
+  };
+  const nativeSource = actual.program.getSourceFile(resolve(actual.projectRoot, 'packages/domain/src/agent/native-agent-execution.ts'));
+  const nativeText = ['record', 'readNativeAgentExecution'].map(name => nativeSource.statements.find(node => node.name?.text === name
+    || actual.ts.isVariableStatement(node) && node.declarationList.declarations.some(value => value.name.text === name)).getText()).join('\n');
+  const native = {};
+  runInNewContext(actual.ts.transpileModule(nativeText, { compilerOptions: { target: actual.ts.ScriptTarget.ES2022, module: actual.ts.ModuleKind.CommonJS } }).outputText,
+    { exports: native });
+  const oldReader = load(previous, ['isJsonRecord', 'projectAgentTaskResult']);
+  const currentReader = load(actual, ['isJsonRecord', 'projectAgentTaskResult'], native);
+  const raw = { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };
+  const row = { id: 'ordinary-task', sessionId: 'ordinary-session', kind: 'demo.echo', payload: {}, executionAttempt: 0, result: raw };
+  const before = oldReader.projectAgentTaskResult(raw, row.kind), after = currentReader.projectAgentTaskResult(raw, row.kind, row);
+  assert.equal(Object.hasOwn(before, 'selectedImageReference'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(after)), JSON.parse(JSON.stringify(before)));
+});
+
+test('selected guide whole model preserves an arbitrary ordinary historical root through its actual retainers', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason ?? error.message}/${error.stage ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.equal(model.projected.size, 11);
+  assert.ok(model.closure.declarations.size > 0);
+  const origin = model.origin;
+  assert.equal(origin.status, 'conditional');
+  assert.equal(origin.domain, 'authenticated-ordinary-opaque-json-root');
+  assert.equal(origin.node.getText(), 'task.result');
+  assert.ok(origin.transfers.some(value => value.current.name.text === 'markTaskProgressOnce'));
+  assert.ok(origin.transfers.some(value => value.current.name.text === 'compareNativeAgentCheckpoint'));
+  for (const [key, value] of model.projected)
+    assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+  const file = 'apps/api/src/routes/agent.ts';
+  const writer = await retainedSelectedGuideProgram(new Map([[file, text => text
+    .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
+    .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
+  assert.throws(() => components.sourceModel(writer.ts, selectedGuideSourceContext(writer), baseline),
+    error => error.reason === 'SELECTED_GUIDE_FAMILY_NOT_CLOSED');
+  // These are conditional source observations, not fabricated successful
+  // collector arrays. W changes HTTP emission while its actual retained
+  // backend (including all selected CP/CAS/paid-final consumers) stays exact R.
+  const backend = input => input.program.getSourceFiles().filter(source => !source.isDeclarationFile
+    && /^(?:packages|apps\/agent-worker)\//u.test(relative(input.projectRoot, source.fileName).replaceAll('\\', '/')))
+    .map(source => [relative(input.projectRoot, source.fileName), source.text]);
+  assert.deepEqual(backend(writer), backend(actual), 'W/R retains the complete real capable backend');
+  assert.throws(() => components.sourceModel(previous.ts, baseline, selectedGuideSourceContext(actual)),
+    error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+  assert.throws(() => components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(actual)),
+    error => error.reason === 'SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL');
+  for (const supplied of [[], [['module:one', 'copied']]])
+    assert.equal(components.pair(actual.ts, supplied, [...supplied], actual.projectRoot, previous.projectRoot, []), false,
+      'No source-only/copy/custom-root result can acquire a production permit');
+});
+
+test('selected guide whole source closure rejects namespace observation and a selected function escaping its bound region', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), file = 'apps/api/src/routes/agent.ts';
+  for (const change of [
+    text => "import * as selectedDomain from '@openscience/domain';\n" + text.replace('return { requestId: String(req.id),',
+      'void Object.keys(selectedDomain); return { requestId: String(req.id),'),
+    text => text.replace('return { requestId: String(req.id),', 'void requireSelectedImageSource; return { requestId: String(req.id),'),
+  ]) {
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN',
+      'Both mutations must reach the actual bound-reference/namespace closure');
+  }
+});
+
+test('selected guide legacy retry cannot execute an added effect before its absence refusal', async () => {
+  const components = selectedGuideSourceComponents(), path = 'packages/domain/src/agent/agent.ts';
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const changed = await retainedSelectedGuideProgram(new Map([[path, text => text.replace(
+    /(function canRecoverSelectedGuideFinal\(task: AgentTaskRetrySnapshot\): boolean \{\r?\n  try \{)/u,
+    '$1\n    globalThis.observeLegacyRetry();')]]));
+  assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
+    error => error.reason === 'SELECTED_GUIDE_LEGACY_GUIDE_RETRY_UNKNOWN');
+});
+
+test('selected guide current combination closes the whole source over the exact voice reader', async () => {
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedVoiceProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
+  const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.equal(model.projected.size, 11);
+  assert.equal(model.origin.domain, 'authenticated-ordinary-opaque-json-root');
+  assert.ok(model.handlers.voicePredecessor);
+  assert.equal(relative(actual.projectRoot, model.handlers.voicePredecessor.factory.getSourceFile().fileName).replaceAll('\\', '/'), 'apps/agent-worker/src/voice.ts');
+  for (const [key, value] of model.projected)
+    assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+});
+
+test('selected guide initialization consumes original collected module equality without reclassifying root metadata', async t => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer));
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
+  const metadata = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const consumer = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  assert.ok(collector && metadata && consumer && initialization);
+  const contexts = new WeakMap(), defaultRoots = [], vendorCalls = [];
+  const functions = runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
+    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms })`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: defaultRoots,
+    // This custom-root component fixture isolates the existing vendor boundary;
+    // it is not installed DEFAULT/vendor-byte or release acceptance. Only the
+    // unmodified original collector writes its private contexts below.
+    verifyPrismaVendorRuntime(args) { vendorCalls.push(args.runtimeFile); return { controlledVendorFixture: true }; },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = join(projectRoot, 'tmp/first-image'); await mkdir(parent, { recursive: true });
+  const fixture = await mkdtemp(join(parent, 'selected-collected-runtime-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
+  const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
+  const input = directory => {
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    return genuine.slice(0, declaration.initializer.getStart(parsed)) + JSON.stringify(config) + genuine.slice(declaration.initializer.end);
+  };
+  for (const directory of [candidate, previous]) {
+    await mkdir(join(directory, 'packages/search/generated/client/runtime'), { recursive: true });
+    await writeFile(join(directory, 'tsconfig.json'), '{}');
+    await writeFile(join(directory, modulePath), input(directory));
+    await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
+  }
+  const collect = directory => functions.collect(ts, directory, roots, {});
+  const current = collect(candidate), old = collect(previous);
+  const left = contexts.get(current), right = contexts.get(old), key = `module:${modulePath}`;
+  assert.notEqual(roots, defaultRoots);
+  assert.equal(JSON.stringify(new Map(current).get(key)), JSON.stringify(new Map(old).get(key)));
+  assert.notEqual(left.modules.get(resolve(candidate, modulePath)).text, right.modules.get(resolve(previous, modulePath)).text);
+  assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
+  const refuses = action => assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
+  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
+    refuses(() => functions.initialize(ts, left, right, collected));
+  refuses(() => functions.initialize(ts, { ...left }, right, { current, previous: old }));
+  const capturedPath = resolve(candidate, modulePath), capturedSource = left.modules.get(capturedPath);
+  left.modules.set(capturedPath, ts.createSourceFile(capturedPath, capturedSource.text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS));
+  refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  left.modules.set(capturedPath, capturedSource);
+  const position = current.findIndex(([name]) => name === key), [missing] = current.splice(position, 1);
+  refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  current.splice(position, 0, missing);
+  const changedRuntime = input(candidate).replace(JSON.stringify(original.inlineSchemaHash), JSON.stringify(`${original.inlineSchemaHash}-changed`));
+  assert.notEqual(changedRuntime, input(candidate));
+  await writeFile(join(candidate, modulePath), changedRuntime);
+  const changed = collect(candidate);
+  assert.notEqual(JSON.stringify(new Map(changed).get(key)), JSON.stringify(new Map(old).get(key)));
+  refuses(() => functions.initialize(ts, contexts.get(changed), right, { current: changed, previous: old }));
+  for (const bad of [input(candidate).replace(JSON.stringify(join(candidate, 'infra/search/schema.prisma')), JSON.stringify(join(candidate, 'wrong/schema.prisma'))),
+    `${input(candidate)}\nexports.configObserver = config;`]) {
+    await writeFile(join(candidate, modulePath), bad);
+    assert.throws(() => collect(candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+  assert.ok(vendorCalls.length >= 2);
+});
+
+test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
+  const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
+  const check = async (changes, both, evidence) => {
+    const actual = await retainedSelectedVoiceProgram(changes);
+    const previous = await historicalVideoIngressProgram(both ? changes : new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
+    assert.throws(() => components.handlers(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED' && evidence(error.node, actual),
+      'The named boundary must refuse at its supplying node, not an unrelated earlier frontier');
+  };
+  await t.test('same factory eager effect on both source sides', () => check(new Map([[voice,
+    text => text.replace('  const wait = options.wait ??', '  globalThis.eagerVoiceFactory();\n  const wait = options.wait ??')]]), true,
+  node => node.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/voice.ts')));
+  await t.test('same changed returned key on both source sides', () => check(new Map([[voice,
+    text => text.replace("'voice.reply': handle", "'voice.changed': handle")]]), true,
+  node => node.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/voice.ts')));
+  await t.test('actual caller accessor', () => check(new Map([[worker,
+    text => text.replace(/(const handlers = createHandlers\(gateway, \{\r?\n)      voiceRuntime,/u,
+      '$1      get voiceRuntime() { return undefined; },')]]), false,
+  node => node.getText().includes('get voiceRuntime()')));
+  await t.test('actual caller opaque options', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, opaqueOptions || {')]]), false,
+  node => node.getText().startsWith('opaqueOptions')));
+  await t.test('actual caller opaque spread', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { ...opaqueOptions,')]]), false,
+  node => node.getText().includes('...opaqueOptions')));
+  await t.test('actual caller accessor inside conditional spread', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { ...(true ? { get voiceRuntime() { return undefined; } } : {}),')]]), false,
+  node => node.getText().includes('get voiceRuntime()')));
+  await t.test('actual factory second argument', () => check(new Map([[worker,
+    text => text.replace('...createHermesVoiceHandlers(options.voiceRuntime),', '...createHermesVoiceHandlers(options.voiceRuntime, {}),')]]), false,
+  node => node.getText().includes('createHermesVoiceHandlers(options.voiceRuntime, {})')));
+  await t.test('actual factory shorthand escape', () => check(new Map([[worker,
+    text => text + '\nconst leakedVoiceFactory = { createHermesVoiceHandlers };\n']]), false,
+  (node, input) => input.ts.isShorthandPropertyAssignment(node.parent)));
+});
+
+test('selected guide supplemental HTTP library identity requires the actual locked importer and same installed package', () => {
+  const components = selectedGuideSourceComponents();
+  const importer = readFileSync(new URL('../../apps/api/package.json', import.meta.url), 'utf8');
+  const lock = readFileSync(new URL('../../pnpm-lock.yaml', import.meta.url), 'utf8');
+  const pinned = JSON.parse(importer).dependencies.zod;
+  const make = (root, { packageVersion = pinned, lockText = lock, missing = false, dependency = pinned, nearVersion, cachePath } = {}) => {
+    const files = new Map([[resolve(root, 'apps/api/package.json'), JSON.stringify({ ...JSON.parse(importer), dependencies: { zod: dependency } })],
+      [resolve(root, 'pnpm-lock.yaml'), lockText]]);
+    if (!missing) files.set(resolve(root, 'apps/api/node_modules/zod/package.json'), JSON.stringify({ name: 'zod', version: packageVersion, main: './index.cjs' }));
+    if (nearVersion) files.set(resolve(root, 'apps/api/src/routes/node_modules/zod/package.json'), JSON.stringify({ name: 'zod', version: nearVersion }));
+    return { root: resolve(root), sourceHost: { fileExists: path => files.has(path), readFile: path => files.get(path),
+      realpath: path => cachePath ?? path } };
+  };
+  // These controlled filesystem records test the boundary, never provide a
+  // successful DEFAULT collection, execute Zod, or mint deployment authority.
+  const actual = make('/candidate'), previous = make('/previous');
+  assert.equal(components.httpLibrary(actual, previous).status, 'conditional');
+  for (const bad of [{ packageVersion: '0.0.0' }, { missing: true }, { lockText: `${lock}\nchanged` }, { dependency: `^${pinned}` },
+    { nearVersion: '0.0.0' }, { cachePath: '/unrelated-donor/zod/package.json' }])
+    assert.throws(() => components.httpLibrary(actual, make('/previous', bad)),
+      error => error.reason === 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
 });
 
 test('image producer partition uses the real initializer and preserves all consumer runtime', async () => {
@@ -1578,7 +2560,8 @@ test('image Domain projection preserves the entire original execution and compar
   const project=runInNewContext(`${component}; finiteImageExecutionProjection`,{resolve,relative});
   const path='packages/domain/src/agent/native-agent-execution.ts';
   const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(new Map([[path,text]]),{sourceRef});
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
   assert.equal(model.status,'conditional');
   assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
@@ -1589,7 +2572,7 @@ test('image Domain projection preserves the entire original execution and compar
     value=>value.replace('const marker = readNativeAgentExecution(task.result);',
       "const marker = readNativeAgentExecution(task.result); if (marker.imageResultPolicy) blocked();"),
   ]){
-    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    const unsafe=await videoIngressProgram(new Map([[path,change]]),{sourceRef});
     assert.throws(()=>{
       const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
       assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
@@ -1745,14 +2728,15 @@ test('image consumer projection retains original decision parsing and journal tu
   const project=runInNewContext(`${component}; finiteImageConsumerProjections`,{resolve,relative});
   const files=['apps/agent-worker/src/presentation/generated-image-review.ts','apps/agent-worker/src/native-agent/journal-task-store.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
   for(const[key,value]of model.projected)assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
   for(const[path,change]of[
     [files[0],value=>value.replace('else decision = parseDecision(parseStructuredJson(result.text));','else decision = JSON.parse(result.text);')],
     [files[1],value=>value.replace("paidCompletion ? turn.state !== 'completed' : turn.state !== 'started'","paidCompletion ? turn.state === 'completed' : turn.state !== 'started'")],
   ]){
-    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    const unsafe=await videoIngressProgram(new Map([[path,change]]),{sourceRef});
     assert.throws(()=>{
       const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
       for(const[key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
@@ -1778,12 +2762,23 @@ test('image legacy source model composes historical projections and refuses curr
   const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
   const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
   const current=await videoIngressProgram();
+  const illustrationSource=current.program.getSourceFile(resolve(current.projectRoot,'apps/agent-worker/src/native-agent/illustration-task.ts'));
+  const selectedTools=illustrationSource.statements.filter(current.ts.isVariableStatement).flatMap(node=>[...node.declarationList.declarations])
+    .find(node=>current.ts.isIdentifier(node.name)&&node.name.text==='SELECTED_IMAGE_TOOLS');
+  assert.ok(selectedTools&&current.ts.isArrayLiteralExpression(selectedTools.initializer));
   assert.throws(()=>project(current.ts,videoPairContext(current),videoPairContext(legacy)),error=>{
     assert.equal(error.reason,'IMAGE_DECLARATION_CONTEXT_UNKNOWN');
-    assert.ok(current.ts.isIdentifier(error.node),'the current image-only proof must identify its unclassified voice caller');
+    assert.equal(error.node,selectedTools,'CURRENT must stop at its actual selected-tool declaration rather than grant an older image-only projection');
+    assert.equal(error.node.getSourceFile(),illustrationSource);
+    return true;
+  });
+  const voice=await videoIngressProgram(new Map(),{sourceRef:'1c88ff813db128fd1933096a2f102c1c1c667b25'});
+  assert.throws(()=>project(voice.ts,videoPairContext(voice),videoPairContext(legacy)),error=>{
+    assert.equal(error.reason,'IMAGE_DECLARATION_CONTEXT_UNKNOWN');
+    assert.ok(voice.ts.isIdentifier(error.node),'the retained voice family must still identify its actual unclassified caller');
     assert.equal(error.node.text,'persistHermesVoiceTaskInTransaction');
-    assert.equal(resolve(error.node.getSourceFile().fileName),resolve(current.projectRoot,'packages/domain/src/agent/voice.ts'));
-    assert.ok(current.ts.isCallExpression(error.node.parent)&&error.node.parent.expression===error.node,
+    assert.equal(resolve(error.node.getSourceFile().fileName),resolve(voice.projectRoot,'packages/domain/src/agent/voice.ts'));
+    assert.ok(voice.ts.isCallExpression(error.node.parent)&&error.node.parent.expression===error.node,
       'the rejected identifier must be the actual voice call expression');
     return true;
   });
@@ -2241,6 +3236,32 @@ test('current host message alias rejects changed history and suppliers using act
     assert.ok(result.proven.includes('host-before-session'), result.reason);
     assert.equal(result.releaseCompatible, false);
   });
+});
+
+test('current candidate source keeps the legacy video helper conservative', async () => {
+  const { ts, program, projectRoot } = await videoIngressProgram();
+  const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
+  assert.equal(host.text, readFileSync(host.fileName, 'utf8'));
+  const illustration=program.getSourceFile(resolve(projectRoot,'apps/agent-worker/src/native-agent/illustration-task.ts'));
+  const factory=illustration.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createNativeIllustrationMaterializer');
+  assert.ok(factory);
+  const checker=program.getTypeChecker(), target=checker.getSymbolAtLocation(factory.name), callers=[];
+  const visit=node=>{
+    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&checker.getSymbolAtLocation(node.expression)===target){
+      let owner=node.parent;while(owner&&!(ts.isFunctionLike(owner)&&owner.body))owner=owner.parent;
+      callers.push(owner);
+    }
+    ts.forEachChild(node,visit);
+  };visit(illustration);
+  assert.deepEqual(callers.map(node=>node?.name?.text).sort(),['replayNativeVideoPlan','runNativeIllustrationTaskCore']);
+  assert.ok(!callers.some(node=>node.name?.text==='runNativeIllustrationTask'),
+    'the actual materializer is in the new core, outside the old helper live/replay ownership premise');
+  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.reason, 'EXTRA_MATERIALIZER_CALLER');
+  assert.ok(!result.proven.includes('materializer-host'));
+  assert.ok(!result.proven.includes('host-before-session'));
+  assert.equal(result.releaseCompatible, false);
 });
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
@@ -3050,6 +4071,53 @@ test('compatible ordinary rollback verifies both image Node runtimes and skips l
   });
   assert.equal(await operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
   assert.deepEqual(calls, ['lock', `openscience-agent-worker:${journal.candidateSha}`, `openscience-agent-worker:${journal.rollbackSha}`, 'reader-comparison']);
+});
+
+test('selected history cannot reuse a W over R journal as the earlier R over legacy transaction', async () => {
+  const extract = name => {
+    const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
+    assert.ok(body, name); return body;
+  };
+  const legacy = 'a'.repeat(40), reader = 'b'.repeat(40), writer = 'c'.repeat(40);
+  for (const fixture of [
+    { journal: [reader, legacy, 'switching'], requested: [reader, legacy], accepted: true },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], accepted: true },
+    { journal: [writer, reader, 'published'], requested: [reader, legacy], accepted: false },
+    { journal: [writer, reader, 'published'], requested: [legacy, reader], accepted: false },
+    { journal: [writer, reader, 'prepared'], requested: [writer, reader], accepted: false },
+    { journal: [writer, reader, 'migrating'], requested: [writer, reader], accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], mode: 0o644, accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], uid: 1234, accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], missing: true, accepted: false },
+  ]) {
+    const journal = { schemaVersion: 1, candidateSha: fixture.journal[0], rollbackSha: fixture.journal[1], phase: fixture.journal[2], updatedAt: '2026-10-16T00:00:00.000Z' };
+    const original = JSON.stringify(journal), calls = [], journalPath = '/production/.deploy-transaction.json';
+    const operation = runInNewContext(`${extract('exactObjectKeys')}\n${extract('readTrustedJournal')}\n${extract('applicationRollbackPreflight')}; applicationRollbackPreflight`, {
+      SHA_PATTERN: /^[a-f0-9]{40}$/u, JOURNAL_PHASES: new Set(['prepared', 'migrating', 'switching', 'published']),
+      process: { platform: 'linux', arch: 'x64' },
+      async verifyProductionDeployLockOnHost() { calls.push('lock'); },
+      async lstat(path) { assert.equal(path, journalPath); if (fixture.missing) throw Object.assign(Error('missing'), { code: 'ENOENT' });
+        return { isFile: () => true, isSymbolicLink: () => false, nlink: 1, uid: fixture.uid ?? 0, mode: fixture.mode ?? 0o600 }; },
+      async realpath(path) { return path; }, async readFile(path) { assert.equal(path, journalPath); return original; },
+      async nativeCommand() { calls.push('image-inspect'); return rollbackImageMetadataFixture(); },
+      async verifyApplicationRollbackReaders(options) { calls.push('source-comparison');
+        assert.equal(options.candidateRoot, `/opt/openscience-releases/${fixture.requested[0]}`);
+        assert.equal(options.rollbackRoot, `/opt/openscience-releases/${fixture.requested[1]}`); },
+      async queryNativeWork() { assert.fail('journal refusal does not consult queue emptiness or discard history'); },
+      rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); }, console: { error() {} },
+    });
+    const request = { candidateSha: fixture.requested[0], rollbackSha: fixture.requested[1], journalPath, requiredUid: 0 };
+    if (fixture.accepted) {
+      assert.equal(await operation(request), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
+      assert.deepEqual(calls, ['lock', 'image-inspect', 'image-inspect', 'source-comparison']);
+    } else {
+      await assert.rejects(operation(request), error => fixture.missing ? error.code === 'ENOENT'
+        : fixture.mode || fixture.uid ? error.message === 'production deploy journal is unsafe'
+          : error.message === 'ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');
+      assert.deepEqual(calls, ['lock']);
+    }
+    assert.equal(JSON.stringify(journal), original);
+  }
 });
 
 test('different or missing image Node runtime is unknown even when reader source would match', async () => {

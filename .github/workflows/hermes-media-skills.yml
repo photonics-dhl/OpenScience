@@ -697,7 +697,7 @@ jobs:
 
   skill-path:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 70
     services:
       redis:
         image: redis:7-alpine
@@ -756,6 +756,11 @@ jobs:
             npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
           )
           ROLLBACK_ROOT="$rollback_root" node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; console.log('R04_PAIR', process.env.GITHUB_SHA, process.env.ROLLBACK_REF); await verifyApplicationRollbackReaders({ candidateRoot: process.env.GITHUB_WORKSPACE, rollbackRoot: process.env.ROLLBACK_ROOT, diagnostics: true });"
+      - name: Storyboard selection lifecycle and media retention
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+          WEB_BASE_URL: http://127.0.0.1:3037
       - name: Verify Synclip voice contracts and the private task path
         run: |
           npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-audio-api.test.ts test/synclip-asr-api.test.ts test/synclip-voice.test.ts
@@ -793,7 +798,7 @@ jobs:
       - run: node --check infra/hermes-agent/offline_host.cjs
       - name: Test release tooling with the retained video source fixtures
         run: |
-          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 764020c76b25af571e8b88e80338406d70bdb37a ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e; do
+          for fixture_ref in ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54; do
             if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
               git fetch --no-tags --depth=1 origin "$fixture_ref"
             fi
@@ -851,7 +856,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/trash/content-list.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "reports private media retention authority"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "reports private media retention authority|selected image source binding"
       - run: node --test infra/scripts/cloudflared-resilience.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only|local budget|local-budget"
@@ -890,11 +895,6 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
-      - name: Storyboard selection lifecycle and media retention
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
-        env:
-          PLAYWRIGHT_CHANNEL: chrome
-          WEB_BASE_URL: http://127.0.0.1:3037
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only|rejected scene image remains|private narration result consumer|normal narration audition action|restores a scoped pending task|presentation task read recovery|shows a terminal task failure" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
@@ -911,6 +911,7 @@ jobs:
             tmp/hermes-entry-browser/
             tmp/hermes-guide-browser/
             tmp/storyboard-lifecycle-browser/
+            tmp/media-retention-check/harness.log
             tmp/presentation-retry-browser/
           if-no-files-found: ignore
           retention-days: 7

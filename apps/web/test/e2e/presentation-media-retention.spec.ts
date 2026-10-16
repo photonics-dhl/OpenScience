@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, openSync, readdirSync, closeSync } from 'node:fs';
+import { mkdirSync, openSync, readdirSync, closeSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test } from 'playwright/test';
+import { expect, test, type ConsoleMessage, type Page } from 'playwright/test';
 import english from '../../messages/en.json';
 
 const harnessUrl = 'http://127.0.0.1:3037';
@@ -28,6 +28,183 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(() => { harness?.kill(); if (log !== undefined) closeSync(log); });
+
+const failureObservations = new WeakMap<Page, {
+  pageErrors: string[]; consoleErrors: string[]; dropped: { pageErrors: number; consoleErrors: number };
+  detach(): void;
+}>();
+test.beforeEach(({ page }) => {
+  const pageErrors: string[] = [], consoleErrors: string[] = [], dropped = { pageErrors: 0, consoleErrors: 0 };
+  const record = (kind: keyof typeof dropped, text: string) => {
+    const buffer = kind === 'pageErrors' ? pageErrors : consoleErrors;
+    if (buffer.length < 12) buffer.push(text.slice(0, 1500));
+    else dropped[kind] += 1;
+  };
+  const onPageError = (error: Error) => { try { record('pageErrors', error.message); } catch { /* Diagnostics must not affect the test. */ } };
+  const onConsoleError = (message: ConsoleMessage) => {
+    try { if (message.type() === 'error') record('consoleErrors', message.text()); } catch { /* Keep the original failure. */ }
+  };
+  failureObservations.set(page, { pageErrors, consoleErrors, dropped, detach() {
+    try { page.off('pageerror', onPageError); } finally { page.off('console', onConsoleError); }
+  } });
+  try { page.on('pageerror', onPageError); } catch { /* Keep the original test behavior if observation is unavailable. */ }
+  try { page.on('console', onConsoleError); } catch { /* Do not turn a diagnostic failure into the test failure. */ }
+});
+test.afterEach(async ({ page }, testInfo) => {
+  const observation = failureObservations.get(page);
+  if (!observation) return;
+  failureObservations.delete(page);
+  try { observation.detach(); } catch { /* A closed page must not replace the original result. */ }
+  if (testInfo.status === testInfo.expectedStatus || !['failed', 'timedOut', 'interrupted'].includes(testInfo.status ?? '')) return;
+  try {
+    const output = testInfo.outputPath('harness-errors.json');
+    mkdirSync(path.dirname(output), { recursive: true });
+    writeFileSync(output, JSON.stringify({ pageErrors: observation.pageErrors, consoleErrors: observation.consoleErrors,
+      dropped: observation.dropped }, null, 2));
+  } catch { /* Preserve the original assertion if writing diagnostics fails. */ }
+  try {
+    if (!page.isClosed()) await page.screenshot({ path: testInfo.outputPath('harness-page.png'), timeout: 2000 });
+  } catch { /* Buffered text remains useful if the page or screenshot is unavailable. */ }
+});
+
+const guideImage = (letter: string) => `${letter}1000000-0000-4000-8000-000000000001`;
+async function selectedGuideFixture(page: Page) {
+  const state = { posts: [] as Array<{ key: string; body: { sessionId: string; payload: { goal: string; context: { presentation: { selectedImageAssetId: string } } } } }>,
+    loseResponse: false, release: null as (() => void) | null, runActor: 'fixture-viewer', runRo: 'ro', runVersion: 'working-version',
+    runReads: 0, writes: [] as string[], errors: [] as string[] };
+  page.on('pageerror', error => state.errors.push(error.message));
+  await page.route('**/api/**', async route => {
+    const request = route.request(), url = new URL(request.url()), pathname = url.pathname;
+    if (pathname === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'guide-fixture-token' } });
+    if (pathname === '/api/auth/me') return route.fulfill({ json: { userId: 'fixture-viewer', role: 'researcher', platformRole: 'user', creditBalance: 10 } });
+    if (request.method() === 'POST' && pathname === '/api/agent/sessions') return route.fulfill({ status: 201, json: { session: { id: 'guide-session' } } });
+    const task = () => ({ id: 'selected-task', researchObjectId: 'ro', sessionId: 'guide-session', kind: 'workspace.guide', status: 'pending',
+      progress: 0, retryCount: 0, canRetry: false, error: null, createdAt: '2026-10-16T00:00:00Z', updatedAt: '2026-10-16T00:00:00Z',
+      result: { selectedImageReference: { researchObjectId: 'ro', versionId: 'working-version', assetId: state.posts.at(-1)?.body.payload.context.presentation.selectedImageAssetId,
+        contentHash: 'a'.repeat(64), storyboardAssetId: guideImage('d'), parentContentHash: 'b'.repeat(64), sceneIndex: 0, sourceClaimIds: ['claim'] } } });
+    if (request.method() === 'POST' && pathname === '/api/agent/tasks') {
+      state.posts.push({ key: request.headers()['idempotency-key']!, body: request.postDataJSON() });
+      if (state.loseResponse) {
+        state.loseResponse = false;
+        await new Promise<void>(resolve => { state.release = resolve; });
+        return route.abort('connectionreset');
+      }
+      return route.fulfill({ status: 201, json: { task: task() } });
+    }
+    if (request.method() !== 'GET') { state.writes.push(`${request.method()} ${pathname}`); return route.fulfill({ status: 400, json: { error: { message: 'Unexpected fixture write' } } }); }
+    if (pathname === '/api/agent/tasks') return route.fulfill({ json: { tasks: [] } });
+    if (pathname === '/api/agent/tasks/selected-task') return route.fulfill({ json: { task: task() } });
+    if (pathname.endsWith('/versions')) return route.fulfill({ json: { versions: [{ versionId: 'working-version', status: 'draft' }] } });
+    if (pathname.endsWith('/hermes-runs')) {
+      await route.fulfill({ json: { run: { id: 'completed-run-f', actorId: state.runActor,
+      researchObjectId: state.runRo, versionId: state.runVersion, status: 'succeeded', steps: [
+        { stage: 'scene_image', ordinal: 0, status: 'succeeded', presentationAssetId: guideImage('f'), agentTaskId: guideImage('f') } ] } } });
+      state.runReads += 1; return;
+    }
+    if (pathname.endsWith('/presentation-assets')) return route.fulfill({ json: { assets: [{ id: guideImage('f'), researchObjectId: 'ro', versionId: 'working-version', kind: 'image', status: 'draft', label: 'Image F' }] } });
+    if (pathname.endsWith('/content')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"/>' });
+    return route.fulfill({ status: 404, json: { error: { message: `Unimplemented fixture GET ${pathname}` } } });
+  });
+  await page.goto(`${harnessUrl}/?selected-guide-W`);
+  await expect(page.getByLabel(english.hermesConversation.inputLabel, { exact: true })).toBeVisible();
+  return state;
+}
+
+test('actual selected guide preserves a lost B request while a completed F arrives, and resumes only the same body and key after reload', async ({ page }) => {
+  const state = await selectedGuideFixture(page);
+  const snapshot = () => page.locator('[data-hermes-image-snapshot]').textContent().then(value => JSON.parse(value!));
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe(guideImage('a'));
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe(guideImage('b'));
+  const goal = 'Make the leftmost arrow thinner';
+  await page.getByLabel(english.hermesConversation.inputLabel, { exact: true }).fill(goal);
+  state.loseResponse = true;
+  await page.locator('.hermes-conversation-composer button[type="submit"]').click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const original = structuredClone(state.posts[0]!);
+  expect(original.body.payload.context.presentation.selectedImageAssetId).toBe(guideImage('b'));
+  await page.getByRole('button', { name: 'Observe completed image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe(guideImage('f'));
+  await expect(page.locator('[data-hermes-image-reference]')).toHaveAttribute('data-hermes-image-reference', guideImage('b'));
+  state.release!();
+  await expect(page.locator('.hermes-conversation-error')).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel(english.hermesConversation.inputLabel, { exact: true })).toHaveValue(goal);
+  await expect(page.locator('[data-hermes-image-reference]')).toHaveAttribute('data-hermes-image-reference', guideImage('b'));
+  expect(state.posts).toEqual([original]);
+  await page.locator('.hermes-conversation-composer button[type="submit"]').click();
+  await expect.poll(() => state.posts.length).toBe(2);
+  expect(state.posts[1]).toEqual(original);
+  expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
+});
+
+test('fresh F is the next visible reference and exact gallery selection; old completion or wrong scope cannot steal a later C selection', async ({ page }) => {
+  const state = await selectedGuideFixture(page);
+  const snapshot = () => page.locator('[data-hermes-image-snapshot]').textContent().then(value => JSON.parse(value!));
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe(guideImage('a'));
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await page.getByRole('button', { name: 'Observe completed image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.pendingImageAssetId).toBe(guideImage('f'));
+  await expect(page.locator('[data-hermes-image-reference]')).toHaveAttribute('data-hermes-image-reference', guideImage('f'));
+  await expect(page.locator('[data-research-media-kind="image"] img')).toHaveCount(0);
+  expect((await snapshot()).images.map((image: { assetId: string }) => image.assetId)).not.toContain(guideImage('f'));
+  await page.getByRole('button', { name: 'Load completed image in gallery', exact: true }).click();
+  await expect(page.locator('[data-research-media-kind="image"] img')).toHaveAttribute('alt', 'Image F');
+  await expect.poll(async () => (await snapshot())?.pendingImageAssetId).toBeUndefined();
+  await page.getByRole('button', { name: 'Previous image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe(guideImage('c'));
+  const reads = state.runReads;
+  await page.getByRole('button', { name: 'Restore same completed operation', exact: true }).click();
+  await expect.poll(() => state.runReads).toBe(reads + 1);
+  await expect(page.locator('.hermes-conversation-change img')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-image-reference]')).toHaveAttribute('data-hermes-image-reference', guideImage('c'));
+  for (const scope of [{ runActor: 'other-user' }, { runRo: 'other-ro' }, { runVersion: 'other-version' }]) {
+    Object.assign(state, { runActor: 'fixture-viewer', runRo: 'ro', runVersion: 'working-version' }, scope);
+    const before = state.runReads;
+    await page.getByRole('button', { name: 'Observe another completion', exact: true }).click();
+    await expect.poll(() => state.runReads).toBe(before + 1);
+    await expect(page.locator('.hermes-conversation-change img')).toHaveCount(0);
+    await expect(page.locator('[data-research-media-kind="image"] img')).toHaveAttribute('alt', 'Image C');
+    await expect(page.locator('[data-hermes-image-reference]')).toHaveAttribute('data-hermes-image-reference', guideImage('c'));
+  }
+  expect(state.posts).toEqual([]); expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
+});
+
+test('Hermes image context retains the exact second image through reorder and remount, and clears a removed target', async ({ page }) => {
+  const writes: unknown[] = [];
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/**', async route => {
+    const request = route.request(), pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'local-fixture-token' } });
+    if (pathname === '/api/trash') {
+      writes.push(request.postDataJSON());
+      return route.fulfill({ status: 201, json: { entry: { id: 'trash-selected-b' } } });
+    }
+    expect(request.method()).toBe('GET');
+    return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"/>' });
+  });
+  await page.goto(`${harnessUrl}/?selected-image`);
+  const snapshot = () => page.locator('[data-hermes-image-snapshot]').textContent().then(value => JSON.parse(value!));
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe('image-a');
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe('image-b');
+  await expect(page.getByRole('img', { name: 'Image B', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Reverse images', exact: true }).click();
+  await expect.poll(async () => (await snapshot()).images[0].assetId).toBe('image-b');
+  await expect(page.getByRole('img', { name: 'Image B', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh media section', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe('image-b');
+  await expect(page.getByRole('img', { name: 'Image B', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('button', { name: 'Move to Trash', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBeNull();
+  expect((await snapshot()).images).toEqual([{ assetId: 'image-a', label: 'Image A' }]);
+  await expect(page.getByRole('img')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await expect.poll(async () => (await snapshot())?.selectedImageAssetId).toBe('image-a');
+  await expect(page.getByRole('img', { name: 'Image A', exact: true })).toBeVisible();
+  expect(writes).toEqual([{ kind: 'asset', resourceId: 'image-b' }]); expect(errors).toEqual([]);
+});
 
 for (const embedded of [false, true]) test(`storyboard refresh preserves the exact selected parent and scene (embedded=${embedded})`, async ({ page }) => {
   await page.goto(`${harnessUrl}/?storyboards&embedded=${embedded}`);
