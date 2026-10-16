@@ -2,9 +2,9 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
-- 图片R本轮CI终态FAIL：实际pair、release558及五PG/browser均通过，失败是API agent-payload在收集时无法解析真实Drawer的Web@别名（0tests），其他四API40项通过。已开唯一API测试配置最小修复窗；原发布包阻断且未执行备份/部署。独立R2首条RED→GREEN后，22项边界及另1条真实child/原像素审核链在外部模型替身下通过，UI投影与lease/paid后篡改/失败恢复继续；尚非完整产品或新PNG验收，Provider HOLD保持。
-- UI R已发布并完成站内只读观察，视觉差额保留。格式W真实CI有一项raw/display撤销断言失败及当前W→R配对未覆盖，原Same High已定三路径最小范围，原owner继续两infra配对与原case断言修复；未激活W，不阻图片链。
-- 视频原clone P1已由同High完整增量关闭，有界Source collection GO；整体验证仍未知。原owner继续唯一两infra窗；逗号initializer两RED已修并连同45/4/1分别通过证据冻结，原SameHigh完整判定1项rest参数P1，当前包HELD，已开仅本摘要接收参数语义的最小修复窗。它不是已发布应用故障，serializer及whole仍未知；保旧journal与paid/late语义，未消费新私有修订许可。
+- 图片R原CI失败已定位为真实Drawer的API测试别名；单文件修复通过同一High，root已提交并启动新的独立精确配对CI，原UI采集器已接续。原发布包阻断且没有备份/部署。本地五文件因缺同候选依赖而0tests，不称通过。R2继续真实guide-parent-child、完整Claim scope、晚到结果保用户选图与恢复边界，尚未接入生产写入或完成真实PNG验收；Provider HOLD保持。
+- UI R已发布并完成站内只读观察，视觉差额保留。格式W的有限配对模型及原撤销display/raw断言三路径已冻结，73项与补充5项分别通过（含重叠），交原同一High；浏览器仅静态准备，实际配对/完整CI仍待。未激活W，不阻图片链。
+- 视频原clone与后继finalizer签名P1均由同一High关闭，有界Source collection GO；原45/4/1与新6项证据分列。原owner已接续同两infra实际序列化attempt/rawOnly及必要逆读/CAS范围，整体仍未知；保旧journal与paid/late语义，未消费新私有修订许可。
 - 语音WAV writer完整CI六job已成功，release490/490及真实历史配对/PG/browser92通过；现生产祖先已更新，旧配对不代当前可发布。原paid-ID/1S不重放，恢复播放与ASR未验，旧运维包保持阻断。
-- 已知费用持久化的四路径及历史fixture修复均已审/收取，但新的实际配对CI失败于Worker/Domain两voice模块，后续主任务检查跳过；五PG/browser成功不冒充整轮。原Same High已定仅两infra实施范围，owner继续受检fee变体/原WAV组合。费用无生产授权，本轮固定失败配对完成修复与必要CI，不因别线发布自动扩大基线；仍禁费用生产/补历史账/新付费，成本整体P1未关闭。
+- 已知费用持久化仍在固定失败配对的两infra修复：完整Source审查发现事务可不执行仍误接受的P1，原owner正做最小执行骨架绑定；APP不动。root已补原missing-only历史对象单项，须与该增量同High复核后才收取CI。未通过费用整轮，无费用生产/补历史账/新付费授权，成本整体P1未关闭。
 - 各线复用未变证据、独立必要CI，未取消现有run或增无关门禁。R12整体、R08/R13、三篇论文与普通用户完整旅程、维护J14/B/C及137失败仍未完成；原图/public/来源/UNKNOWN和安装/cleanup/prune冻结保持。
