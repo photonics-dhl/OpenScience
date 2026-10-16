@@ -93,6 +93,9 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   };
   const known = 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', key = 'module:apps/reader.ts';
   assert.equal(run({ reason: known, node: source.statements[0] }).module, key);
+  assert.equal(run({ reason: known, initializationSite: 'SECRET' }).initializationSite, undefined);
+  assert.equal(run({ reason: known, initializationSite: 'moved-initializer' }).initializationSite, 'moved-initializer');
+  assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN', initializationSite: 'moved-initializer' }).initializationSite, undefined);
   assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN' }).code, 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
   let invoked = 0;
   const bad = { get reason() { invoked++; return 'SECRET'; }, get node() { invoked++; return source; },
@@ -101,6 +104,7 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   assert.equal(run({ reason: known, node: { parent: source, getSourceFile() { invoked++; return source; } } }).module, undefined);
   const proxy = new Proxy({}, { getOwnPropertyDescriptor() { invoked++; throw Error('SECRET-proxy'); }, get() { invoked++; throw Error('SECRET-proxy'); } });
   assert.equal(run(proxy).code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(run({ reason: known, get initializationSite() { invoked++; return 'moved-initializer'; } }).initializationSite, undefined);
   assert.equal(invoked, 0);
   const unknown = run({ reason: 'SECRET', message: 'SECRET', stack: 'SECRET', path: 'SECRET', stage: 'SECRET' });
   assert.equal(JSON.stringify(unknown).includes('SECRET'), false);
@@ -144,6 +148,104 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   const order = ['finiteVideoPairCompatibility','finiteImageCapablePairCompatibility','finiteImageFirstPairCompatibility','finiteVoicePairCompatibility'];
   assert.ok(order.every((name,index)=> index===0 || verifier.indexOf(order[index-1])<verifier.indexOf(name)));
   if (verifier.includes('finiteSelectedGuidePairCompatibility')) assert.ok(verifier.indexOf(order.at(-1))<verifier.indexOf('finiteSelectedGuidePairCompatibility'));
+});
+
+test('private eager diagnostics identify the original initialization phase and shallow captured nodes without executing inputs', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  const functions = runInNewContext(`${collector}; ${helper}; ${initialization};
+    ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+    console: { error: value => events.push(value) },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(join(parent, 'eager-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous'), roots = [['apps/reader.ts']];
+  const collectPair = async (a, b, extra = {}, selectedRoots = roots) => {
+    for (const [root, text] of [[candidate, a], [previous, b]]) {
+      await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+      await writeFile(join(root, 'apps/reader.ts'), text);
+      for (const [file, body] of Object.entries(extra)) await writeFile(join(root, file), body);
+    }
+    const current = functions.collect(ts, candidate, selectedRoots), old = functions.collect(ts, previous, selectedRoots);
+    return { current, old, left: contexts.get(current), right: contexts.get(old), roots: selectedRoots };
+  };
+  const refuse = (pair, phase, expectedModule) => {
+    let failure;
+    assert.throws(() => functions.initialize(ts, pair.left, pair.right, { current: pair.current, previous: pair.old }), error => {
+      failure = error; return error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN';
+    });
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, pair.roots, 'selected-guide', 'model', failure);
+    assert.equal(events.length, 1);
+    const output = JSON.parse(events[0].slice(events[0].indexOf(' ') + 1));
+    if (expectedModule) assert.equal(output.module, expectedModule);
+    assert.equal(output.initializationSite, phase);
+    return { failure, output };
+  };
+  // Original collector is the only context writer; custom roots do not prove
+  // installed DEFAULT compatibility. Candidate initializer bodies never run.
+  await t.test('retained and added pure declarations keep their original acceptance', async () => {
+    const pair = await collectPair('export const retained = 1; export const added = [2, 3];', 'export const retained = 1;');
+    events.length = 0;
+    assert.equal(functions.initialize(ts, pair.left, pair.right, { current: pair.current, previous: pair.old }).status, 'conditional');
+    assert.equal(events.length, 0);
+  });
+  await t.test('retained declaration refusal', async () => {
+    const pair = await collectPair('export const value = 2;', 'export const value = 1;');
+    assert.equal(refuse(pair, 'retained-declaration').output.module, 'module:apps/reader.ts');
+  });
+  await t.test('added initializer refusal', async () => {
+    const pair = await collectPair('export const value = globalThis.SECRET_probe();', '');
+    assert.equal(refuse(pair, 'added-declaration').output.module, 'module:apps/reader.ts');
+  });
+  await t.test('equal modules still refuse changed eager order with unknown effects', async () => {
+    const imports = ["import './a.js';", "import './b.js';"];
+    const pair = await collectPair(imports.join('\n'), [...imports].reverse().join('\n'), {
+      'apps/a.ts': 'export const a = globalThis.SECRET_probe();',
+      'apps/b.ts': 'export const b = globalThis.SECRET_probe();',
+    });
+    for (const key of ['module:apps/a.ts', 'module:apps/b.ts'])
+      assert.equal(JSON.stringify(new Map(pair.current).get(key)), JSON.stringify(new Map(pair.old).get(key)));
+    const moved = refuse(pair, 'moved-initializer');
+    assert.match(moved.output.module, /^module:apps\/[ab]\.ts$/u);
+    assert.equal(JSON.stringify(moved.output).includes('SECRET'), false);
+  });
+  await t.test('shallow captured node is not starved by a large later function', async () => {
+    // The old depth-first walk exhausts its unchanged 100000-node budget in
+    // this later function before reaching the earlier failing declaration.
+    const ballast = `export function ballast() { return [${'0,'.repeat(100010)}0]; }`;
+    const pair = await collectPair(`export const value = 2;\n${ballast}`, `export const value = 1;\n${ballast}`);
+    const node = pair.left.modules.get(resolve(candidate, 'apps/reader.ts')).statements[0].declarationList.declarations[0];
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, roots, 'selected-guide', 'model', {
+      reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node,
+    });
+    assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ') + 1)).module, 'module:apps/reader.ts');
+  });
+  await t.test('large first module cannot hide a second module while deep targets still obey the original budget', async () => {
+    const ballast = `export function ballast() { return [${'0,'.repeat(100010)}0]; }`;
+    const pair = await collectPair('export const value = 2;', 'export const value = 1;',
+      { 'apps/ballast.ts': ballast }, [['apps/ballast.ts'], ['apps/reader.ts']]);
+    assert.equal([...pair.left.modules.keys()][0], resolve(candidate, 'apps/ballast.ts'));
+    refuse(pair, 'retained-declaration', 'module:apps/reader.ts');
+    const parsed = pair.left.modules.get(resolve(candidate, 'apps/ballast.ts'));
+    const node = parsed.statements[0].body.statements[0].expression.elements.at(-1);
+    events.length = 0;
+    functions.emit(ts, pair.current, pair.old, candidate, previous, pair.roots, 'selected-guide', 'model', {
+      reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node,
+    });
+    const output = JSON.parse(events[0].slice(events[0].indexOf(' ') + 1));
+    assert.equal(output.module, undefined, 'budget exhaustion must omit attribution, never guess it');
+    assert.equal(JSON.stringify(output).includes('ballast'), false);
+  });
 });
 
 test('rollback verifier diagnostics are opt-in, bounded and preserve rejection', async () => {

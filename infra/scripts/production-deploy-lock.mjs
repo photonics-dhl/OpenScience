@@ -2705,7 +2705,7 @@ function finiteVideoFamilyClosure(candidate, rollback) {
 
 function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode) {
   try {
-    let code = 'COMPATIBILITY_UNKNOWN', module;
+    let code = 'COMPATIBILITY_UNKNOWN', module, initializationSite;
     const stages = ['video', 'selected-guide'];
     const sites = ['context', 'model', 'library', 'projected-keys', 'remaining-entry', 'captured-source',
       'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin'];
@@ -2733,29 +2733,41 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
         'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', 'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED', 'IMAGE_PROJECTED_RUNTIME_INVALID']);
       const thrown = data(error, 'reason');
       if ((branch === 'selected-guide' ? selected : new Set(['VIDEO_CONSTRUCTOR_NOT_PURE', 'VIDEO_TRANSFER_UNKNOWN'])).has(thrown)) code = thrown;
+      if (code === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN') {
+        const value = data(error, 'initializationSite');
+        if (['capture-context', 'module-identity', 'retained-function', 'declaration-binding', 'retained-declaration',
+          'added-declaration', 'retained-statement', 'graph-source', 'graph-transpile', 'graph-import', 'graph-existing',
+          'graph-edge', 'graph-order', 'moved-source', 'moved-initializer', 'moved-class', 'moved-statement'].includes(value)) initializationSite = value;
+      }
       if (branch === 'video' && site === 'family' && ['OLD_CONSTRUCTOR_CHANGED', 'READER_CAPABILITY_REMOVED',
         'RETAINED_CONSTRUCTOR_CHANGED', 'FRESH_SOURCE_UNKNOWN', 'TRANSFER_SOURCE_UNKNOWN', 'ROLLBACK_FAMILY_NOT_CLOSED'].includes(familyCode)) code = familyCode;
       const node = data(error, 'node');
-      let budget = 100000;
+      const pending = [];
       for (const [index, owner] of [left, right].entries()) {
         for (const [path, source] of owner.modules) {
           const key = `module:${relative(owner.root, path).replaceAll('\\', '/')}`;
-          let found = moduleKey === key;
-          if (!found && node && !nodeUtilTypes.isProxy(node)) {
-            const pending = [source];
-            while (pending.length && budget-- > 0) {
-              const actual = pending.pop();
-              if (actual === node) { found = true; break; }
-              ts.forEachChild(actual, child => { pending.push(child); });
-            }
-          }
-          if (found && entries[index].has(key) && key.length <= 240 && !key.includes('..')
-            && /^module:(?:apps|packages|infra)\/[A-Za-z0-9@_./:+-]+$/u.test(key)) { module = key; break; }
+          if (!entries[index].has(key) || key.length > 240 || key.includes('..')
+            || !/^module:(?:apps|packages|infra)\/[A-Za-z0-9@_./:+-]+$/u.test(key)) continue;
+          if (moduleKey === key) { module = key; break; }
+          pending.push({ actual: source, key });
         }
         if (module) break;
       }
+      // Search the captured forest breadth first with the original node budget.
+      // One deep function must not hide later modules' shallow failing nodes.
+      // Only actual captured nodes are traversed; error node methods/parents are
+      // never read. Missing identity remains unreported, never assumed valid.
+      if (!module && node && !nodeUtilTypes.isProxy(node)) {
+        let cursor = 0, budget = 100000;
+        while (cursor < pending.length && budget-- > 0) {
+          const { actual, key } = pending[cursor++];
+          if (actual === node) { module = key; break; }
+          ts.forEachChild(actual, child => { pending.push({ actual: child, key }); });
+        }
+      }
     }
-    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site, ...(module ? { module } : {}) })}`);
+    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site,
+      ...(initializationSite ? { initializationSite } : {}), ...(module ? { module } : {}) })}`);
   } catch { /* Diagnostics never replace the original refusal. */ }
 }
 
@@ -7632,7 +7644,8 @@ function finiteSelectedGuideIngestionReaderTerms(ts, context, rollbackContext) {
 }
 
 function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected) {
-  const fail = node => { throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node }; };
+  let initializationSite = 'capture-context';
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node, initializationSite }; };
   const need = (condition, node) => { if (!condition) fail(node); };
   let currentEntries, previousEntries;
   if (collected !== undefined) {
@@ -7700,7 +7713,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
           return { verifiedSchemaField: value, type: field === 'properties' ? 'object' : 'array' };
         }
         if (JSON.stringify(owner.canonical(factory)) !== JSON.stringify(owner.canonical(factoryGrammar)))
-          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `own-field:${field}` };
+          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `own-field:${field}`, initializationSite };
         if (field === 'properties') return value.arguments[0];
         fail(value);
       }
@@ -7826,19 +7839,19 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
           need(intrinsic(factory.parameters[1].initializer.expression.expression, 'Object', owner), factory);
           need(dataObject(within(node.arguments[0])) && (node.arguments.length === 1 || dataArray(within(node.arguments[1]))), node); return 'object';
         }
-        if (!equal(sceneGrammar) && !equal(scienceGrammar)) throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-grammar' };
+        if (!equal(sceneGrammar) && !equal(scienceGrammar)) throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-grammar', initializationSite };
         need(dataObject(within(node.arguments[0])) && (node.arguments.length === 1
           || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(node.arguments[1].kind)), node);
         const object = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
           .find(value => value.name.text === 'object');
         if (!(object && object.end < bound.pos && JSON.stringify(owner.canonical(unwrap(object.initializer))) === JSON.stringify(owner.canonical(factoryGrammar))))
-          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-object-factory' };
+          throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: 'schema-object-factory', initializationSite };
         need(intrinsic(unwrap(object.initializer).parameters[1].initializer.expression.expression, 'Object', owner), object);
         for (const name of ['str', 'list']) {
           const value = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
             .find(value => value.name.text === name);
           if (!(value && value.end < bound.pos && dataObject(pure(value.initializer, value, owner))))
-            throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `schema-${name}` };
+            throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node: factory, stage: `schema-${name}`, initializationSite };
         }
         if (equal(scienceGrammar)) {
           const scene = factory.getSourceFile().statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])
@@ -7853,6 +7866,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   const captured = context.modules ?? new Map(context.program.getSourceFiles().filter(parsed => !parsed.isDeclarationFile
     && /^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/'))).map(parsed => [parsed.fileName, parsed]));
   for (const current of captured.values()) {
+    initializationSite = 'module-identity';
     const path = relative(context.root, current.fileName).replaceAll('\\', '/');
     const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
     need(previous && context.program.getSourceFile(current.fileName) === current, current);
@@ -7874,17 +7888,21 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
       if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isInterfaceDeclaration(statement)
         || ts.isTypeAliasDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
       if (ts.isFunctionDeclaration(statement)) {
+        initializationSite = 'retained-function';
         need(statement.name && !(statement.modifiers ?? []).some(modifier => ![ts.SyntaxKind.AsyncKeyword, ts.SyntaxKind.ExportKeyword].includes(modifier.kind)), statement);
         if (!previous.statements.some(old => ts.isFunctionDeclaration(old) && old.name?.text === statement.name.text)) declarations.push(statement);
         continue;
       }
       if (ts.isVariableStatement(statement)) {
         for (const declaration of statement.declarationList.declarations) {
+          initializationSite = 'declaration-binding';
           need(ts.isIdentifier(declaration.name), declaration);
           const previousDeclaration = previousVariables.get(declaration.name.text);
           if (previousDeclaration) {
+            initializationSite = 'retained-declaration';
             need(JSON.stringify(context.canonical(declaration)) === JSON.stringify(rollbackContext.canonical(previousDeclaration)), declaration);
           } else {
+            initializationSite = 'added-declaration';
             need(Boolean(statement.declarationList.flags & ts.NodeFlags.Const) && declaration.initializer, declaration);
             pure(declaration.initializer, statement); pureInitializers.push(declaration); declarations.push(declaration);
           }
@@ -7894,6 +7912,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
       // No changed class/static/decorator/ambient call/throw/await can hide
       // behind a dormant selected function. Existing other statements must be
       // byte-structurally retained; import graph ordering is a separate lemma.
+      initializationSite = 'retained-statement';
       need(previous.statements.some(old => JSON.stringify(context.canonical(statement))
         === JSON.stringify(rollbackContext.canonical(old))), statement);
     }
@@ -7903,11 +7922,13 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
     const sources = owner.modules ?? new Map(owner.program.getSourceFiles().filter(parsed => !parsed.isDeclarationFile
       && /^(?:apps|packages)\//u.test(relative(owner.root, parsed.fileName).replaceAll('\\', '/'))).map(parsed => [parsed.fileName, parsed]));
     for (const parsed of sources.values()) {
+      initializationSite = 'graph-source';
       const path = relative(owner.root, parsed.fileName).replaceAll('\\', '/');
       if (!/^(?:apps|packages|infra)\//u.test(path)) continue;
       need(owner.program.getSourceFile(parsed.fileName) === parsed, parsed);
       const compiled = ts.transpileModule(parsed.text, { fileName: parsed.fileName, reportDiagnostics: true,
         compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+      initializationSite = 'graph-transpile';
       need(!compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error), parsed);
       const runtime = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
       need(!runtime.parseDiagnostics.length, parsed);
@@ -7915,6 +7936,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
         && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)).map(node => {
         const literal = parsed.statements.find(statement => (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement))
           && statement.moduleSpecifier?.text === node.moduleSpecifier.text)?.moduleSpecifier;
+        initializationSite = 'graph-import';
         need(literal, parsed);
         const target = owner.checker.getSymbolAtLocation(literal)?.declarations?.find(ts.isSourceFile);
         const path = target && relative(owner.root, target.fileName).replaceAll('\\', '/');
@@ -7928,6 +7950,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   const currentGraph = graph(context), oldGraph = graph(rollbackContext);
   const newEdges = [];
   for (const [path, value] of currentGraph) {
+    initializationSite = 'graph-existing';
     const previous = oldGraph.get(path); need(previous, value.source);
     for (const request of value.requests) if (request.owned && !previous.requests.some(old => old.owned === request.owned))
       newEdges.push({ from: path, to: request.owned });
@@ -7936,6 +7959,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   const visit = path => {
     indices.set(path, index); low.set(path, index++); stack.push(path); active.add(path);
     for (const { owned } of currentGraph.get(path)?.requests ?? []) if (owned) {
+      initializationSite = 'graph-edge';
       need(currentGraph.has(owned), currentGraph.get(path).source);
       if (!indices.has(owned)) { visit(owned); low.set(path, Math.min(low.get(path), low.get(owned))); }
       else if (active.has(owned)) low.set(path, Math.min(low.get(path), indices.get(owned)));
@@ -7955,6 +7979,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
     const seen = new Set(), modules = [], external = [];
     const visit = path => {
       if (seen.has(path)) return; seen.add(path);
+      initializationSite = 'graph-order';
       const current = graph.get(path); need(current, graph.get(entry)?.source);
       for (const request of current.requests) {
         if (request.owned) visit(request.owned);
@@ -7965,6 +7990,7 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   };
   for (const entry of entryPaths) {
     const before = order(oldGraph, entry), after = order(currentGraph, entry);
+    initializationSite = 'graph-order';
     // Resolve/cache/package identity is still consumed from the successful
     // collector's strict remaining entries; source occurrence order is only
     // the additional eager-order obligation checked here.
@@ -7986,20 +8012,23 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, co
   }
   const cycleInitializers = [];
   for (const path of moved) for (const owner of [context, rollbackContext]) {
+    initializationSite = 'moved-source';
     const parsed = (owner === context ? currentGraph : oldGraph).get(path)?.source; need(parsed, context.program.getSourceFile(resolve(context.root, path)));
     for (const statement of parsed.statements) {
       if (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement) || ts.isInterfaceDeclaration(statement)
         || ts.isTypeAliasDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEmptyStatement(statement)) continue;
       if (ts.isVariableStatement(statement)) {
+        initializationSite = 'moved-initializer';
         for (const declaration of statement.declarationList.declarations) if (declaration.initializer) pure(declaration.initializer, declaration, owner);
       } else if (ts.isClassDeclaration(statement)) {
+        initializationSite = 'moved-class';
         need(!(statement.modifiers ?? []).some(modifier => modifier.kind === ts.SyntaxKind.Decorator), statement);
         for (const clause of statement.heritageClauses ?? []) if (clause.token === ts.SyntaxKind.ExtendsKeyword)
           for (const type of clause.types) need(intrinsic(type.expression, 'Error', owner), type);
         for (const member of statement.members) need(!ts.isClassStaticBlockDeclaration(member)
           && !(member.modifiers ?? []).some(modifier => [ts.SyntaxKind.StaticKeyword, ts.SyntaxKind.Decorator].includes(modifier.kind))
           && (!member.name || ts.isIdentifier(member.name) || ts.isStringLiteral(member.name) || ts.isPrivateIdentifier(member.name)), member);
-      } else fail(statement);
+      } else { initializationSite = 'moved-statement'; fail(statement); }
       cycleInitializers.push({ source: parsed, node: statement });
     }
   }
