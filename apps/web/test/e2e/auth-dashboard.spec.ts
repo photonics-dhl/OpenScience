@@ -154,7 +154,7 @@ for (const viewport of [
       if (path.startsWith('/api/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method()))
         writes.push(`${request.method()} ${path}`);
     });
-    const core = { schemaVersion: 1, problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const core = { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
     const researchObject = { id: 'ro-created', workspaceId: 'workspace-1', title: 'Imported study', status: 'draft', visibility: 'private', version: 1, sdf: { core, nodes: [] } };
     await page.setViewportSize(viewport);
     await mockAuthenticatedUser(page);
