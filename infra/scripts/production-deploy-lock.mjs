@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { execFile, spawnSync } from 'node:child_process';
-import { promisify } from 'node:util';
+import { promisify, types as nodeUtilTypes } from 'node:util';
 import { existsSync, fstatSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import {
@@ -2702,52 +2702,125 @@ function finiteVideoFamilyClosure(candidate, rollback) {
   return { status: 'conditional', reachable: [...reachable], transitions };
 }
 
-function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
+function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode) {
+  try {
+    let code = 'COMPATIBILITY_UNKNOWN', module;
+    const stages = ['video', 'selected-guide'];
+    const sites = ['context', 'model', 'library', 'projected-keys', 'remaining-entry', 'captured-source',
+      'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin'];
+    if (!stages.includes(branch) || !sites.includes(site)) return;
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    const bound = [left, right].every((owner, index) => owner && owner.ts === ts && owner.roots === roots
+      && owner.root === [candidateRoot, rollbackRoot][index] && owner.program.getTypeChecker() === owner.checker);
+    const entries = bound ? [new Map(current), new Map(previous)] : undefined;
+    const captured = bound && entries[0].size === current.length && entries[1].size === previous.length
+      && [left, right].every((owner, index) => [...owner.modules].every(([path, source]) =>
+        owner.program.getSourceFile(path) === source && !source.isDeclarationFile
+        && entries[index].has(`module:${relative(owner.root, path).replaceAll('\\', '/')}`)));
+    if (captured && !nodeUtilTypes.isProxy(error)) {
+      const data = (object, name) => object && (typeof object === 'object' || typeof object === 'function')
+        && !nodeUtilTypes.isProxy(object) ? Object.getOwnPropertyDescriptor(object, name)?.value : undefined;
+      const selected = new Set(['SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN', 'SELECTED_GUIDE_AUXILIARY_RUNTIME_CHANGED',
+        'SELECTED_GUIDE_BYTE_READER_CHANGED', 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN', 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN',
+        'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', 'SELECTED_GUIDE_FAMILY_NOT_CLOSED', 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN',
+        'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED', 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN',
+        'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', 'SELECTED_GUIDE_ILLUSTRATION_RESIDUAL_UNKNOWN',
+        'SELECTED_GUIDE_INGESTION_READER_UNKNOWN', 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED', 'SELECTED_GUIDE_LEGACY_GUIDE_RETRY_UNKNOWN',
+        'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN', 'SELECTED_GUIDE_OVERLAPPING_PROJECTION', 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN',
+        'SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL', 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN',
+        'SELECTED_GUIDE_RESIDUAL_MISSING', 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN',
+        'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', 'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED', 'IMAGE_PROJECTED_RUNTIME_INVALID']);
+      const thrown = data(error, 'reason');
+      if ((branch === 'selected-guide' ? selected : new Set(['VIDEO_CONSTRUCTOR_NOT_PURE', 'VIDEO_TRANSFER_UNKNOWN'])).has(thrown)) code = thrown;
+      if (branch === 'video' && site === 'family' && ['OLD_CONSTRUCTOR_CHANGED', 'READER_CAPABILITY_REMOVED',
+        'RETAINED_CONSTRUCTOR_CHANGED', 'FRESH_SOURCE_UNKNOWN', 'TRANSFER_SOURCE_UNKNOWN', 'ROLLBACK_FAMILY_NOT_CLOSED'].includes(familyCode)) code = familyCode;
+      const node = data(error, 'node');
+      let budget = 100000;
+      for (const [index, owner] of [left, right].entries()) {
+        for (const [path, source] of owner.modules) {
+          const key = `module:${relative(owner.root, path).replaceAll('\\', '/')}`;
+          let found = moduleKey === key;
+          if (!found && node && !nodeUtilTypes.isProxy(node)) {
+            const pending = [source];
+            while (pending.length && budget-- > 0) {
+              const actual = pending.pop();
+              if (actual === node) { found = true; break; }
+              ts.forEachChild(actual, child => { pending.push(child); });
+            }
+          }
+          if (found && entries[index].has(key) && key.length <= 240 && !key.includes('..')
+            && /^module:(?:apps|packages|infra)\/[A-Za-z0-9@_./:+-]+$/u.test(key)) { module = key; break; }
+        }
+        if (module) break;
+      }
+    }
+    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site, ...(module ? { module } : {}) })}`);
+  } catch { /* Diagnostics never replace the original refusal. */ }
+}
+
+function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots, diagnostics = false) {
+  let site = 'context', moduleKey;
+  const reject = (error, familyCode) => {
+    if (diagnostics === true) emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots,
+      'video', site, error, moduleKey, familyCode);
+    return false;
+  };
   try {
     const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
     // Only the two original successful collections may enter this unequal
     // route. JSON clones/slices/source-only Programs cannot borrow authority.
     if (roots !== APPLICATION_ROLLBACK_READERS || !left || !right || left.ts !== ts || right.ts !== ts
       || left.roots !== roots || right.roots !== roots || left.root !== candidateRoot || right.root !== rollbackRoot
-      || left.program.getTypeChecker() !== left.checker || right.program.getTypeChecker() !== right.checker) return false;
+      || left.program.getTypeChecker() !== left.checker || right.program.getTypeChecker() !== right.checker) return reject();
+    site = 'model';
     const candidate = finiteVideoSourceModel(ts, left), rollback = finiteVideoSourceModel(ts, right);
     const projectedKeys = [...candidate.projected.keys()].sort();
-    if (projectedKeys.length !== 2 || JSON.stringify(projectedKeys) !== JSON.stringify([...rollback.projected.keys()].sort())) return false;
+    site = 'projected-keys';
+    if (projectedKeys.length !== 2 || JSON.stringify(projectedKeys) !== JSON.stringify([...rollback.projected.keys()].sort())) return reject();
     const affected = new Set(projectedKeys.map(key => `module:${key}`)), a = new Map(current), b = new Map(previous);
     for (const key of new Set([...a.keys(), ...b.keys()])) {
-      if (!a.has(key) || !b.has(key)) return false;
-      if (!affected.has(key) && JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))) return false;
+      site = 'remaining-entry'; moduleKey = key;
+      if (!a.has(key) || !b.has(key)) return reject();
+      if (!affected.has(key) && JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))) return reject();
     }
     for (const key of projectedKeys) {
+      site = 'captured-source'; moduleKey = `module:${key}`;
       const projected = [];
       for (const [context, model] of [[left, candidate], [right, rollback]]) {
+        site = 'captured-source';
         const { source, text } = model.projected.get(key), path = resolve(context.root, key);
         if (context.modules.get(path) !== source || context.program.getSourceFile(path) !== source
-          || !a.has(`module:${key}`) || !b.has(`module:${key}`)) return false;
+          || !a.has(`module:${key}`) || !b.has(`module:${key}`)) return reject();
         // Same captured TS source, same transpile options and original runtime
         // canonical. These two application modules have no Prisma location
         // literals; every generated/vendor entry remains untouched above.
+        site = 'transpile';
         const compiled = ts.transpileModule(text, { fileName: path, reportDiagnostics: true,
           compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
-        if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) return false;
+        if (compiled.diagnostics?.some(item => item.category === ts.DiagnosticCategory.Error)) return reject();
         const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
-        if (emitted.parseDiagnostics.length) return false;
+        if (emitted.parseDiagnostics.length) return reject();
         projected.push(context.canonical(emitted));
       }
-      if (JSON.stringify(projected[0]) !== JSON.stringify(projected[1])) return false;
+      site = 'projected-equality';
+      if (JSON.stringify(projected[0]) !== JSON.stringify(projected[1])) return reject();
     }
     // Reuse the independently reviewed actual bindings only under the complete
     // unchanged runtime/dependency premise just established. No per-Domain or
     // codec gate is introduced, and unrelated origins gain no new A constructor.
+    site = 'ingress'; moduleKey = undefined;
     for (const context of [left, right]) {
       const ingress = proveNativeVideoReceiptIngress(ts, context.program, context.root);
       if (ingress.reason !== 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN'
         || ingress.storeGraph.status !== 'conditional' || ingress.privateStoreChain.status !== 'conditional'
         || !['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix',
-          'verified-base', 'store-capability-use', 'generic-private-store-chain'].every(edge => ingress.proven.includes(edge))) return false;
+          'verified-base', 'store-capability-use', 'generic-private-store-chain'].every(edge => ingress.proven.includes(edge))) return reject();
     }
-    return finiteVideoFamilyClosure(candidate, rollback).status === 'conditional';
-  } catch { return false; }
+    site = 'family';
+    const family = finiteVideoFamilyClosure(candidate, rollback);
+    if (family.status !== 'conditional') return reject(undefined, family.reason);
+    return true;
+  } catch (error) { return reject(error); }
 }
 
 // The image discriminator belongs to the persisted server initializer. A
@@ -6100,7 +6173,7 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
     stage = 'comparison';
     if (JSON.stringify(current) !== JSON.stringify(previous)
       && !(roots === APPLICATION_ROLLBACK_READERS
-        && (finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+        && (finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots, diagnostics === true)
           || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
