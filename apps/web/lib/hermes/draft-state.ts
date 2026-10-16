@@ -1,5 +1,5 @@
 import type { HermesNarrativeGeneration, StoryboardRequest, WorkspaceGuidePayload, WorkspaceGuideResult } from '@/lib/api';
-import { isExplicitFirstImageRequest, parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
+import { isExplicitFirstImageRequest, parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage } from '@openscience/domain/workspace-guide-contract';
 
 const STORAGE_PREFIX = 'openscience:hermes-draft:';
 
@@ -44,6 +44,51 @@ export function savePendingFirstImageSubmission(storage: Storage | null, scope: 
     const snapshot = readFirstImageSubmission(value, scope);
     storage.setItem(firstImageSubmissionKey(scope), JSON.stringify(snapshot));
     return storage.getItem(firstImageSubmissionKey(scope)) === JSON.stringify(snapshot);
+  } catch { return false; }
+}
+
+export type SelectedImageSubmissionScope = Pick<HermesDraftScope, 'userId' | 'researchObjectId' | 'versionId'>;
+export interface PendingSelectedImageSubmission {
+  sessionId: string; key: string; payload: WorkspaceGuidePayload; taskId?: string;
+}
+function selectedImageSubmissionKey(scope: SelectedImageSubmissionScope): string {
+  return `${STORAGE_PREFIX}${encodeURIComponent(scope.userId)}:${encodeURIComponent(scope.researchObjectId)}:${encodeURIComponent(scope.versionId)}:selected-image-submit:v1`;
+}
+function readSelectedImageSubmission(value: unknown, scope: SelectedImageSubmissionScope): PendingSelectedImageSubmission {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid saved selected-image operation');
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).some(key => !['sessionId', 'key', 'payload', 'taskId'].includes(key))
+    || ![v.sessionId, v.key].every(id => typeof id === 'string' && id.length > 0 && id.length <= 200)
+    || v.taskId !== undefined && (typeof v.taskId !== 'string' || !v.taskId || v.taskId.length > 100)) throw new Error('Invalid saved selected-image operation');
+  const payload = readWorkspaceGuidePayloadWithSelectedImage(v.payload);
+  if (payload.executionIntent !== undefined || !payload.context.presentation?.selectedImageAssetId
+    || payload.context.presentation.researchObjectId !== scope.researchObjectId || payload.context.presentation.versionId !== scope.versionId)
+    throw new Error('Saved selected-image operation scope changed');
+  return { sessionId: v.sessionId as string, key: v.key as string, payload: v.payload as WorkspaceGuidePayload, ...(v.taskId ? { taskId: v.taskId as string } : {}) };
+}
+export function loadPendingSelectedImageSubmission(storage: Storage | null, scope: SelectedImageSubmissionScope): PendingSelectedImageSubmission | null {
+  const raw = storage?.getItem(selectedImageSubmissionKey(scope));
+  return raw == null ? null : readSelectedImageSubmission(JSON.parse(raw), scope);
+}
+export function savePendingSelectedImageSubmission(storage: Storage | null, scope: SelectedImageSubmissionScope, value: PendingSelectedImageSubmission): boolean {
+  try {
+    if (!storage) return false;
+    const snapshot = readSelectedImageSubmission(value, scope), existing = loadPendingSelectedImageSubmission(storage, scope);
+    if (existing && (existing.key !== snapshot.key || existing.sessionId !== snapshot.sessionId
+      || JSON.stringify(existing.payload) !== JSON.stringify(snapshot.payload) || existing.taskId !== undefined && existing.taskId !== snapshot.taskId)) return false;
+    const serialized = JSON.stringify(snapshot);
+    storage.setItem(selectedImageSubmissionKey(scope), serialized);
+    return storage.getItem(selectedImageSubmissionKey(scope)) === serialized;
+  } catch { return false; }
+}
+/** Clear an exactly recovered task, or its explicitly removed session. History remains server-owned. */
+export function clearPendingSelectedImageSubmission(storage: Storage | null, scope: SelectedImageSubmissionScope,
+  expected: { key: string; taskId: string } | { key: string; removedSessionId: string }): boolean {
+  try {
+    const saved = loadPendingSelectedImageSubmission(storage, scope);
+    if (!storage || !saved || saved.key !== expected.key || ('taskId' in expected ? saved.taskId !== expected.taskId : saved.sessionId !== expected.removedSessionId)) return false;
+    storage.removeItem(selectedImageSubmissionKey(scope));
+    return storage.getItem(selectedImageSubmissionKey(scope)) === null;
   } catch { return false; }
 }
 

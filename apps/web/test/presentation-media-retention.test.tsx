@@ -9,6 +9,18 @@ vi.stubGlobal('React', React);
 import { PresentationWorkbench } from '../components/presentation/PresentationWorkbench';
 import { ResearchMediaDeck } from '../components/presentation/ResearchMediaDeck';
 
+it('renders the selected asset identity across reorder and refuses a removed identity instead of choosing the first image', () => {
+  const slides = [{ id: 'a', kind: 'image' as const, url: '/a', label: 'First' }, { id: 'b', kind: 'image' as const, url: '/b', label: 'Second' }];
+  const props = { title: 'Images', slides, emptyTitle: 'No selection', emptyBody: 'Choose the intended image', previousLabel: 'Previous', nextLabel: 'Next',
+    positionLabel: (i: number, total: number) => `${i}/${total}`, emptyKind: 'image' as const, openImageLabel: 'Open', activeSlideId: 'b' };
+  expect(renderToStaticMarkup(<ResearchMediaDeck {...props} />)).toContain('alt="Second"');
+  expect(renderToStaticMarkup(<ResearchMediaDeck {...props} slides={[slides[1]!, slides[0]!]} />)).toContain('alt="Second"');
+  const removed = renderToStaticMarkup(<ResearchMediaDeck {...props} slides={[slides[0]!]} />);
+  expect(removed).not.toContain('<img');
+  expect(removed).toContain('Choose the intended image');
+  expect(removed).toContain('aria-label="Next"');
+});
+
 const asset: PresentationAsset = {
   id: 'image', researchObjectId: 'ro', versionId: 'version', kind: 'image', status: 'draft',
   contentHash: 'a'.repeat(64), generator: 'Hermes', generatorVersion: '1', label: 'Two components',

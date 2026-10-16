@@ -295,6 +295,11 @@ export {
 } from './ingestion/claim-evidence-bridge';
 export {
   parseWorkspaceGuidePayload,
+  readWorkspaceGuidePayloadWithSelectedImage,
+  readWorkspaceSelectedImageDraft,
+  readWorkspaceSelectedImageReference,
+  workspaceSelectedImageDraftSource,
+  type WorkspaceSelectedImageDraft,
   type WorkspaceGuidePayload,
   type WorkspaceWritingCitation,
   type WorkspaceWritingDraft,
@@ -466,7 +471,7 @@ export { parseSceneAnimation, requireAnimationSourceSupport, type SceneAnimation
 
 export { requireStoryboardBase, requireStoryboardRevisionTask, requireStoryboardImageRevision, readNarrativeImageReplanSource, readNarrativePixelReplanAuthority, WRITE_ROLES } from './assets/presentation-asset';
 
-export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, readStoredGeneratedImageReview, generatedSceneImageRequiresPixelReview, type GeneratedImageReview, type ImageReviewIdentity, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
+export { parseSceneImageRequest, presentationSceneImageView, requireSceneImageParent, requireSelectedImageSource, type SelectedImageSource, type SelectedImageBinding, requireSceneImageSpendIsNew, requireSceneImageRevision, requireStyleReferenceImage, findPaperOriginalAssets, requirePaperOriginalsForReuse, readStoredGeneratedImageReview, generatedSceneImageRequiresPixelReview, type GeneratedImageReview, type ImageReviewIdentity, type PaperOriginalRef, type SceneImageRequest } from './assets/scene-image';
 export { readNativeImageReviewCheckpoint, nativeImageReviewMatches, nativeImageReviewProvider, startNativeImageReview, completeNativeImageReview,
   prepareAgentNativeImageReview, agentNativeImageReviewEnvelope, requireAgentNativeImageReviewReservation, readNativeImageAgentExecution,
   type AgentNativeImageReviewPrepared, type AgentNativeImageReviewCompleted,

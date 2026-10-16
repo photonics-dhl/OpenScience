@@ -300,6 +300,21 @@
     }
   },
   "hermesConversation": {
+    "selectedImage": {
+      "target": "Modification target:",
+      "original": "Original image",
+      "proposal": "Private revision proposal — no new image yet",
+      "ambiguous": "Which image do you mean? Add its name or displayed position to this instruction.",
+      "missing": "I cannot identify that image. Add its name or displayed position to this instruction.",
+      "conflicting": "The image name and position point to different images. Which one should change?",
+      "scope": "The account, version or image context changed. Wait for the current images to load before continuing.",
+      "unresolved": "The target is still ambiguous. Clarify the image name or displayed position in this instruction.",
+      "scopeChanged": "The original image operation belongs to another account or version. Return to that operation; it has not been retargeted.",
+      "storageError": "The image-operation receipt cannot be saved or restored. Keep this page open and recover the original operation.",
+      "uncertain": "The earlier image submission is unconfirmed. Continue this same operation to recover its original task.",
+      "recoveryBlocked": "The original task cannot safely continue yet. Its task and paid history are retained; no new task was started.",
+      "tooLong": "The complete instruction exceeds 2,000 characters. Shorten the instruction before sending."
+    },
     "firstImage": {
       "command": "Generate one image",
       "storageError": "The operation receipt could not be saved or restored. Keep this page open and do not start another request.",
@@ -2181,6 +2196,8 @@
     "researchVideoTitle": "Research explainer video",
     "imagePlaceholderTitle": "The core concept image is not ready",
     "imagePlaceholderBody": "Tell Hermes which mechanism or finding to explain. The real image will replace this space when it is ready.",
+    "selectedImageRemoved": "The selected image is no longer here. Use the existing arrows or name another image in Hermes.",
+    "loadingSelectedImage": "Loading the completed image in the gallery.",
     "videoPlaceholderTitle": "The research explainer video is not ready",
     "videoPlaceholderBody": "Video is an optional follow-on result. Request it in the Hermes conversation and it will appear here when ready.",
     "previousSlide": "Previous image",

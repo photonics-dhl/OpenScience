@@ -4,7 +4,8 @@ import workspaceStyles from '@/components/shell/research-workspace.module.css';
 import styles from '@/app/research-objects/[id]/presentation/presentation-page.module.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
-import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
+import { HermesAssistantDrawer, applyFirstImageReady } from '@/components/hermes/HermesAssistantDrawer';
+import type { HermesImageContext } from '@/lib/api';
 import { HermesAudioAuditionPlayer } from '@/components/hermes/HermesAudioAuditionPlayer';
 import { useHermesViewerId } from '@/components/hermes/useHermesViewerId';
 import { useLocale, useTranslations } from 'next-intl';
@@ -118,7 +119,7 @@ function standaloneUrl(roId: string, versionId: string, taskId?: string): string
   return `/research-objects/${encodeURIComponent(roId)}/presentation?${query.toString()}`;
 }
 
-export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes, imageShortcutReady = false }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void; imageShortcutReady?: boolean }) {
+export function ResearchPresentation({ params, embedded = false, selectedVersionId, onAskHermes, imageShortcutReady = false, imageContext, onImageContextChange }: { params: { id: string }; embedded?: boolean; selectedVersionId?: string; onAskHermes?: (kind: 'image' | 'video') => void; imageShortcutReady?: boolean; imageContext?: HermesImageContext; onImageContextChange?(context: HermesImageContext): void }) {
   const t = useTranslations('presentation');
   const audioText = useTranslations('hermesAudioAudition');
   const viewerId = useHermesViewerId();
@@ -128,6 +129,8 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
   const companion = useTranslations('productSurfaces.overview');
   const [hermesOpen, setHermesOpen] = useState(false);
   const [hermesGoal, setHermesGoal] = useState('');
+  const [localImageContext, setLocalImageContext] = useState<HermesImageContext>();
+  const selectedImageContext = imageContext ?? localImageContext;
   const [assistantObject, setAssistantObject] = useState<ResearchObjectSummary | null>(null);
   const suggestion = { bodyKey: 'guide.continue.body', href: `/research-objects/${encodeURIComponent(params.id)}/edit`, kind: 'continue-research' as const, researchObjectId: params.id, titleKey: 'guide.continue.title' };
   const router = useRouter();
@@ -661,12 +664,19 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
             ownerId={viewerId} researchObjectId={params.id} versionId={versionId} taskId={taskId}
             caption={audioText('scene', { number: audioAudition.result.sceneIndex + 1, seconds: audioAudition.result.durationSeconds.toFixed(1) })} /> : null}
           <PresentationWorkbench
-            key={scopeKey}
+            key={`${scopeKey}:${actorId}`}
             researchObjectId={params.id}
             researchTitle={researchTitle}
             claims={claims}
             assets={assets}
             version={version}
+            imageContext={selectedImageContext?.actorId === viewerId ? selectedImageContext : undefined}
+            onImageContextChange={context => {
+              if (!scopeReady || !viewerId || actorId !== viewerId) return;
+              const next = { ...context, actorId: viewerId };
+              setLocalImageContext(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+              onImageContextChange?.(next);
+            }}
             canWrite={canWrite}
             readonlyReason={readonlyReason()}
             loading={scopeLoading}
@@ -726,7 +736,14 @@ export function ResearchPresentation({ params, embedded = false, selectedVersion
         <p className={styles.eyebrow}>HERMES</p><h2>{companion('companionTitle')}</h2><p>{companion('companionBody')}</p>
         <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state="idle" suggestion={suggestion} workspaceId={params.id} />
       </aside> : null}</div>
-      {!embedded && assistantObject?.id === params.id && versionId ? <HermesAssistantDrawer key={scopeKey} initialGoal={hermesGoal} dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }], presentation: { researchObjectId: params.id, versionId } }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
+      {!embedded && assistantObject?.id === params.id && versionId ? <HermesAssistantDrawer key={scopeKey} initialGoal={hermesGoal}
+        onImageReady={ready => {
+          if (!viewerRef.current || ready.actorId !== viewerRef.current || ready.researchObjectId !== params.id
+            || renderedScopeKey.current !== `${ready.researchObjectId}:${ready.versionId}`) return;
+          setLocalImageContext(previous => applyFirstImageReady(previous, ready, { actorId: viewerRef.current, researchObjectId: params.id, versionId }));
+        }}
+        imageContext={selectedImageContext?.actorId === viewerId && selectedImageContext.researchObjectId === params.id && selectedImageContext.versionId === versionId ? selectedImageContext : undefined}
+        dashboardContext={{ tasks: [], researchObjects: [{ id: params.id, status: assistantObject.status, title: researchTitle }], presentation: { researchObjectId: params.id, versionId } }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-edit" routeResearchObjectId={params.id} suggestion={suggestion} target={null} /> : null}
     </>);
   return embedded ? content : <DashboardShell className={workspaceStyles.workspace} mainClassName="p-0" navigationLabel={t('navigation')} skipLabel={t('skip')}>{content}</DashboardShell>;
 }

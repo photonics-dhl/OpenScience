@@ -300,6 +300,21 @@
     }
   },
   "hermesConversation": {
+    "selectedImage": {
+      "target": "修改目标：",
+      "original": "原图",
+      "proposal": "私有修改提案 · 尚未生成新图",
+      "ambiguous": "你指哪张图？请在当前指令中补充图名或展示顺序。",
+      "missing": "还无法确定这张图。请在当前指令中补充图名或展示顺序。",
+      "conflicting": "图名和展示顺序指向了不同图片，你要修改哪一张？",
+      "scope": "账号、版本或图片上下文已变化，请等当前图片加载后继续。",
+      "unresolved": "目标仍不明确，请在当前指令中明确图名或展示顺序。",
+      "scopeChanged": "原图片操作属于其他账号或版本，请回到原操作；没有改换目标图片。",
+      "storageError": "图片操作记录无法保存或恢复，请保留此页并恢复原操作。",
+      "uncertain": "之前的图片提交结果尚未确认，继续将恢复同一操作和原任务。",
+      "recoveryBlocked": "原任务目前不能安全继续，任务和付费记录已保留，没有另起任务。",
+      "tooLong": "完整指令超过 2000 字符，请精简当前指令后再发送。"
+    },
     "firstImage": {
       "command": "生成图片",
       "storageError": "无法保存或恢复操作凭据，请保持当前页面，勿重复发起。",
@@ -2181,6 +2196,8 @@
     "researchVideoTitle": "研究讲解视频",
     "imagePlaceholderTitle": "核心概念图尚未完成",
     "imagePlaceholderBody": "请在 Hermes 对话中说明要解释的核心机制或结论，真实图片会在完成后原位替换此区域。",
+    "selectedImageRemoved": "原选中的图片已移除。可用现有箭头切换，或直接在 Hermes 中说出其他图片名称。",
+    "loadingSelectedImage": "正在将刚完成的图片显示在媒体区。",
     "videoPlaceholderTitle": "研究讲解视频尚未完成",
     "videoPlaceholderBody": "视频是可选的后续成果。可在 Hermes 对话中提出需求，完成后会在此显示。",
     "previousSlide": "上一张图",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseWorkspaceGuidePayload } from '../src/agent/workspace-guide-contract';
+import { parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage } from '../src/agent/workspace-guide-contract';
 
 const payload = {
   goal: 'Help me shape the problem statement',
@@ -11,6 +11,31 @@ const payload = {
 };
 
 describe('workspace guide route and semantic target contract', () => {
+  const selected = { ...payload, target: null, goal: 'Make the left electron arrow clearer', context: {
+    tasks: [], researchObjects: [], presentation: { researchObjectId: 'ro-1', versionId: 'version-1',
+      selectedImageAssetId: 'b91223af-35d0-4fc0-9918-ac1220654b13' },
+  } };
+  it('reads a stored selected image without activating the legacy HTTP writer', () => {
+    expect(() => parseWorkspaceGuidePayload(selected)).toThrow();
+    expect(readWorkspaceGuidePayloadWithSelectedImage(selected)).toEqual(selected);
+    expect(readWorkspaceGuidePayloadWithSelectedImage(payload)).toEqual(parseWorkspaceGuidePayload(payload));
+  });
+  it.each([
+    { selectedImageAssetId: 'b91223af-35d0-4fc0-9918-ac1220654b13' },
+    { researchObjectId: 'ro-1', selectedImageAssetId: 'b91223af-35d0-4fc0-9918-ac1220654b13' },
+    { researchObjectId: 'ro-1', versionId: 'version-1', selectedImageAssetId: '' },
+    { researchObjectId: 'ro-1', versionId: 'version-1', selectedImageAssetId: 'latest' },
+    { ...selected.context.presentation, contentHash: 'client-forged' },
+  ])('rejects an unbound or expanded selected-image context: %j', presentation => {
+    expect(() => readWorkspaceGuidePayloadWithSelectedImage({ ...selected, context: { ...selected.context, presentation } })).toThrow();
+  });
+  it('never grants first-image execution or another route to a selected-image request', () => {
+    expect(() => readWorkspaceGuidePayloadWithSelectedImage({ ...selected, executionIntent: 'first-image' })).toThrow();
+    expect(() => readWorkspaceGuidePayloadWithSelectedImage({ ...selected, route: 'dashboard' })).toThrow();
+    const before = structuredClone(selected);
+    readWorkspaceGuidePayloadWithSelectedImage(selected);
+    expect(selected).toEqual(before);
+  });
   const firstImage = {
     ...payload, goal: '请为这篇论文生成一张图片，使用水彩风格', target: null,
     executionIntent: 'first-image',

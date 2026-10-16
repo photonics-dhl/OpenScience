@@ -21,7 +21,8 @@ import { buildInterestContext, validateInterestContext } from '../research-intel
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
 import { ResearchIntelligenceValidationError, validateSourceLocator } from '../research-intelligence/validation';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
-import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
+import { readWorkspaceGuidePayloadWithSelectedImage, workspaceSelectedImageDraftSource, readWorkspaceSelectedImageReference } from './workspace-guide-contract';
+import { requireSelectedImageSource, type SelectedImageBinding } from '../assets/scene-image';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
@@ -118,7 +119,7 @@ function assertTaskReplay(
     if (requestedContext?.currentGoal) {
       let legacyGoal: string | undefined;
       try {
-        legacyGoal = existing.kind === 'workspace.guide' ? parseWorkspaceGuidePayload(existing.payload).goal : undefined;
+        legacyGoal = existing.kind === 'workspace.guide' ? readWorkspaceGuidePayloadWithSelectedImage(existing.payload).goal : undefined;
       } catch {
         legacyGoal = undefined;
       }
@@ -193,6 +194,22 @@ function canRecoverAgentNativeImageFinal(task: AgentTaskRetrySnapshot): boolean 
     && !invalidResponse && (!error.startsWith('[blocked]') || expiredAfterFinal);
 }
 
+/** A saved final may be adopted after rights are restored; this never restarts paid Native work. */
+function canRecoverSelectedGuideFinal(task: AgentTaskRetrySnapshot): boolean {
+  try {
+    if (task.kind !== 'workspace.guide' || task.session.kind !== 'workspace.guide' || task.status !== 'failed' || task.retryCount !== 0) return false;
+    const guide = readWorkspaceGuidePayloadWithSelectedImage(task.payload), scope = guide.context.presentation;
+    const marker = readNativeAgentExecution(task.result), cp = marker?.checkpoint;
+    if (!scope?.selectedImageAssetId || !scope.versionId || scope.researchObjectId !== task.session.researchObjectId
+      || marker?.profile !== 'paper-illustration' || !cp || cp.state !== 'completed' || cp.sourceKind
+      || cp.taskId !== task.id || cp.executionAttempt > task.executionAttempt || cp.finishReason !== 'stop' || cp.hasToolCalls !== false
+      || !isJsonRecord(task.result) || !isJsonRecord(task.result.sourceMapRef) || !isJsonRecord(task.result.selectedImageContext)) return false;
+    const ref = task.result.sourceMapRef, selected = task.result.selectedImageContext;
+    return selected.researchObjectId === scope.researchObjectId && selected.versionId === scope.versionId && selected.assetId === scope.selectedImageAssetId
+      && cp.artifactId === ref.artifactId && cp.documentSha256 === ref.contentHash && cp.sourceMapHash === ref.serializedSha256;
+  } catch { return false; }
+}
+
 function evaluateAgentTaskRetryEligibility(
   task: AgentTaskRetrySnapshot,
   userId: string,
@@ -217,6 +234,9 @@ function evaluateAgentTaskRetryEligibility(
   const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
     ? task.payload as Record<string, unknown>
     : {};
+  // Only the authenticated completed selected-image final bypasses the generic blocked guard.
+  // Live source/write authority is rechecked by canRetryAgentTask, including inside retry's transaction.
+  if (task.kind === 'workspace.guide') return { authorityValid: true, canRetry: canRecoverSelectedGuideFinal(task) };
   const manualReviewPreflight = task.kind === 'presentation.generate'
     && task.error === '[blocked] Saved PNG review replacement has no current receipt'
     && !('hermesRunAuthority' in payload);
@@ -273,8 +293,17 @@ function evaluateAgentTaskRetryEligibility(
   }
 }
 
-async function canRetryAgentTask(deps: AgentDeps, task: AgentTaskRetrySnapshot, userId: string): Promise<boolean> {
+async function canRetryAgentTask(deps: AgentDeps, task: AgentTaskRetrySnapshot, userId: string, tx: Prisma.TransactionClient = deps.prisma): Promise<boolean> {
   if (!evaluateAgentTaskRetryEligibility(task, userId).canRetry) return false;
+  if (task.kind === 'workspace.guide') {
+    try {
+      const scope = readWorkspaceGuidePayloadWithSelectedImage(task.payload).context.presentation!;
+      const source = await requireSelectedImageSource(tx, { userId, researchObjectId: scope.researchObjectId,
+        versionId: scope.versionId!, assetId: scope.selectedImageAssetId! });
+      return isJsonRecord(task.result) && isDeepStrictEqual(task.result.selectedImageContext, source.binding)
+        && isDeepStrictEqual(task.result.sourceMapRef, source.source.reference);
+    } catch { return false; }
+  }
   if (!hasStandaloneScienceDiagnostics(task.result)) return true;
   if (!deps.audit?.record) return false;
   try { await inspectStandaloneScienceRecovery(deps.prisma, task, userId); return true; }
@@ -633,6 +662,17 @@ async function persistAgentTaskCoreInTransaction(
     session.researchObjectId,
     requestedContext,
   );
+  let selectedImageSource: Awaited<ReturnType<typeof requireSelectedImageSource>> | undefined;
+  if (input.kind === 'workspace.guide' && isJsonRecord(input.payload.context)
+    && isJsonRecord(input.payload.context.presentation) && Object.hasOwn(input.payload.context.presentation, 'selectedImageAssetId')) {
+    const guide = readWorkspaceGuidePayloadWithSelectedImage(input.payload);
+    const presentation = guide.context.presentation!;
+    if (session.researchObjectId !== presentation.researchObjectId || session.kind !== 'workspace.guide') {
+      throw new AgentError('VALIDATION_ERROR', 'Selected image does not belong to this Hermes session');
+    }
+    selectedImageSource = await requireSelectedImageSource(tx, { userId: input.userId, researchObjectId: presentation.researchObjectId,
+      versionId: presentation.versionId!, assetId: presentation.selectedImageAssetId! });
+  }
   // The current persisted role, not a caller-supplied claim, controls admin funding.
   const currentUser = billing === 'ai_credit'
     ? await tx.user.findUnique({ where: { id: input.userId }, select: { platformRole: true } })
@@ -653,7 +693,8 @@ async function persistAgentTaskCoreInTransaction(
     ? (await requireStoryboardBase(tx, parsePresentationGenerationPayload(input.payload)))?.nativePlanningContract : undefined;
   // Only a new direct first video plan opts in, atomically with its task and credit.
   // Existing rows replay above; other Native entry points retain the historical contract.
-  const nativeAgentResult = input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
+  const nativeAgentResult = selectedImageSource ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
+    : input.kind === 'sdf.extract' && artifactId && session.kind === 'ingestion'
     ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-author')
     : input.kind === 'presentation.generate' && supportsNativeIllustration(input.payload)
       ? isDirectNativeVideoStoryboard(input.payload)
@@ -662,6 +703,7 @@ async function persistAgentTaskCoreInTransaction(
           ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration', inheritedContract)
           : initialNativeAgentExecution(deps.nativeAgentRuntime, 'paper-illustration')
       : nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review') : undefined;
+  if (selectedImageSource && !nativeAgentResult) throw new AgentError('ILLEGAL_TRANSITION', 'Native image understanding is unavailable');
   if (input.kind === 'presentation.generate' && isJsonRecord(input.payload) && isJsonRecord(input.payload.storyboard)
     && input.payload.storyboard.output === 'video' && input.payload.storyboard.narrative === true && !nativeAgentResult) {
     throw new AgentError('ILLEGAL_TRANSITION', 'Native video planning runtime is unavailable');
@@ -674,7 +716,8 @@ async function persistAgentTaskCoreInTransaction(
         payload: input.payload as never,
         interestContext: interestContext as never,
         idempotencyKey: input.idempotencyKey,
-        ...(nativeReviewResult || nativeAgentResult ? { result: { ...nativeReviewResult, ...nativeAgentResult } as unknown as Prisma.InputJsonObject } : {}),
+        ...(nativeReviewResult || nativeAgentResult ? { result: { ...nativeReviewResult, ...nativeAgentResult,
+          ...(selectedImageSource ? { selectedImageContext: selectedImageSource.binding, sourceMapRef: selectedImageSource.source.reference } : {}) } as unknown as Prisma.InputJsonObject } : {}),
       },
     });
   } catch (error) {
@@ -1040,6 +1083,7 @@ export async function retryAgentTask(
         if (!task || task.deletedAt || task.session.deletedAt || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
         const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
         if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        if (task.kind === 'workspace.guide' && eligibility.canRetry) eligibility.canRetry = await canRetryAgentTask(deps, task, input.userId, tx);
         // Internal operator recovery after the windowing fix; public canRetry and
         // default retry keep the deterministic token-limit terminal unchanged.
         const sourceIndexRecovery = input.sourceIndexRecovery === 'token-limit-after-upgrade'
@@ -1469,6 +1513,10 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   }
   const sourceMapRef = rawResult.sourceMapRef;
   const publicResult = { ...rawResult };
+  if (kind === 'workspace.guide' && readNativeAgentExecution(rawResult)?.profile === 'paper-illustration' && isJsonRecord(rawResult.selectedImageContext)) {
+    try { publicResult.selectedImageReference = readWorkspaceSelectedImageReference(workspaceSelectedImageDraftSource(rawResult.selectedImageContext as unknown as SelectedImageBinding)); }
+    catch { delete publicResult.selectedImageReference; }
+  }
   delete publicResult.audioAuditionGrant;
   delete publicResult.audioAudition;
   if (isJsonRecord(rawResult.scientificReview)) {
@@ -1494,6 +1542,8 @@ export function projectAgentTaskResult(rawResult: unknown, kind: string): Record
   delete publicResult.nativeSourceReview;
   delete publicResult.nativeAgentExecution;
   delete publicResult.nativeIllustrationContext;
+  delete publicResult.selectedImageContext;
+  delete publicResult.selectedImageReply;
   delete publicResult.nativeIllustration;
   delete publicResult.illustrationPrompts;
   delete publicResult.nativeAgentObjects;
