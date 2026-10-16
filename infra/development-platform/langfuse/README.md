@@ -208,3 +208,45 @@ Old-to-new process handoff (B), full Worker exit (C), unknown in-flight records
 and the separately authorized ClickHouse maintenance remain unresolved. The old
 process has not loaded this fix; another blind stop300 or hot copy cannot prove
 it has. Do not change the running Compose or start a second queue consumer.
+
+## Worker Redis ownership: combined isolated image
+
+**Preconditions:** retain the original A image and evidence. The reviewed
+`worker-redis-image` package derives from the same cached pinned Worker image,
+keeps A's instrumentation, and adds owned Redis-client registration and bulk
+disconnect after business drain. The actual public shared-server export already
+points to the factory; no barrel or WorkerManager change is included. Source
+review and local 9-case/7-case evidence do not establish installed native socket
+release, full Worker exit, the cause of the old137, or a safe old-process handoff.
+
+**Execution:** in the root coordinator's separate isolated window, transfer this
+committed directory and the four adjacent
+`server-resource-maintenance-20261015-worker-redis-{fixture.cjs,lifecycle.test.cjs,native.test.cjs,sdk.test.cjs}`
+files through the existing SSH transport to a private stage. Run
+`bash worker-redis-image/verify-isolated.sh <already-pushed-full-source-sha>`.
+The wrapper uses the cached original and SDK-only images, the existing legacy
+builder, FROM plus three COPY instructions, and no dependency installation.
+Containers have no production volumes, business environment or app entry;
+network-none still permits the fixture's controlled loopback RESP peer.
+The wrapper refuses an existing candidate tag and preserves each TAP result.
+Standalone local fixture mode requires the original private source evidence and
+is not a second installed-runtime acceptance path.
+
+**Recovery:** no running service is switched by this package. Preserve both
+original images, current state, unknown/pending audit records and failed output.
+Return an exact failure to the same reviewer; do not increase the child budget,
+retry a production stop, hot-copy into a running process, start another consumer,
+clear data, or change the installed Compose. B/C and ClickHouse maintenance
+remain separate unresolved operations recorded in CURRENT.
+
+**Verification:** the public resolver and all three consumed image files must
+match the collected sources. The SDK-only image must show the original Redis
+1-pass/8-fail behavior, the candidate must pass9/9 and the unchanged SDK7/7.
+The native negative control is valid only after all five real clients are ready,
+the business drain and SDK-hook boundary complete, stderr is empty, and the
+original child reaches the fixed2-second budget without all clients ending.
+The candidate must end all five and exit naturally. Actual installed client
+versions are reported by the fixture; the native SDK hook is a boundary stub,
+while the separate seven cases use the installed SDK. Dependency/handshake
+failure is not a behavior RED. None of these assertions proves full live
+BullMQ/Worker drain or permits another stop of the old process.

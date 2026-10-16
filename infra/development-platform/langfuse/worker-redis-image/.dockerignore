@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!instrumentation.js
+!shutdown.js
+!redis.js
