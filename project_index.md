@@ -861,4 +861,4 @@ PDF原生观察限制与语音R操作包导航（2026-10-16）：shared树`tmp/u
 
 CI等待效率的证据与最小优化范围原地见[能力台账当前技术债](docs/runbooks/hermes-capability-registry.md#当前技术债与处理)，不另建性能门禁；原时间仍在voice唯一采集回执。
 
-queueMetricsRunner后继单叶LOCAL PREP定位既有 `tmp/server-resource-maintenance-20261015-worker-redis-queue-protocol/queue_metrics_{reader.py,carrier.cjs,scope_test.py,transport.test.cjs}` 与原PLAN/`tmp/server-resource-maintenance-20261015-worker-redis-receipt.md`短节；复用High798/816边界及原High836；一次实际未取源的原件为同目录queue-metrics-read-20261016T130257503Z.json/.stderr。技术/现场身份与后继scope只见CURRENT，不由路径导航授执行。
+queueMetricsRunner后继单叶LOCAL PREP定位既有 `tmp/server-resource-maintenance-20261015-worker-redis-queue-protocol/queue_metrics_{reader.py,carrier.cjs,scope_test.py,transport.test.cjs}` 与原PLAN/`tmp/server-resource-maintenance-20261015-worker-redis-receipt.md`短节；复用High798/816边界及原High836；一次实际未取源的原件为同目录queue-metrics-read-20261016T130257503Z.json/.stderr。后继基路径类型LOCAL PREP同目录queue_metrics_base reader/carrier与scope/transport，原包冻结；技术/现场身份与后继scope只见CURRENT，不由路径导航授执行。
