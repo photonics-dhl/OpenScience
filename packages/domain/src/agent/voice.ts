@@ -11,7 +11,7 @@ import { dispatchAgentTask, persistHermesVoiceTaskInTransaction, taskToView,
 import { AgentError } from './errors';
 import { HERMES_VOICE_HOLD, HERMES_VOICE_MAX_RECORDING_BYTES, HERMES_VOICE_MAX_RECORDING_SECONDS,
   HERMES_VOICE_RECEIPT_KEY, HERMES_VOICE_REPLY_MAX_UTF8_BYTES, hasHermesVoiceCheckpoint,
-  isHermesVoiceTaskKind, isHermesVoiceStopped, projectHermesVoiceResult, type HermesVoiceAudio, type HermesVoiceCheckpoint,
+  isHermesVoiceTaskKind, isHermesVoiceStopped, isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY, projectHermesVoiceResult, type HermesVoiceAudio, type HermesVoiceCheckpoint,
   type HermesVoiceIdentity, type HermesVoiceLanguage, type HermesVoicePayload, type HermesVoicePreset } from './voice-contract';
 
 export interface HermesVoiceDeps extends AgentDeps { storage: StorageAdapter; voicePresets: readonly HermesVoicePreset[] }
@@ -30,6 +30,9 @@ const credit = (value: unknown): boolean => value === undefined || (typeof value
 function blocked(message = HERMES_VOICE_HOLD): never { throw new AgentError('ILLEGAL_TRANSITION', message); }
 function unavailable(): never { throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Hermes 语音任务不存在或当前不可访问'); }
 function invalid(message: string): never { throw new AgentError('VALIDATION_ERROR', message); }
+function requireVoiceWriter(): void {
+  if (!isHermesVoiceWriterEnabled()) blocked(HERMES_VOICE_READER_ONLY);
+}
 function requestKey(value: string): string {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) invalid('语音请求需要有效的 UUID 幂等键');
   return value.toLowerCase();
@@ -173,6 +176,7 @@ async function storeRecording(deps: HermesVoiceDeps, objectKey: string, recordin
 export async function submitHermesVoiceTranscription(deps: HermesVoiceDeps, input: {
   userId: string; sessionId: string; idempotencyKey: string; recording: Buffer; language?: HermesVoiceLanguage;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
+  requireVoiceWriter();
   const idempotencyKey = requestKey(input.idempotencyKey);
   if (input.language !== undefined && !['zh', 'en'].includes(input.language)) invalid('语音语言仅支持 zh 或 en');
   const meta = validateHermesVoiceRecording(input.recording), sha256 = sha256HexBuffer(input.recording);
@@ -212,6 +216,7 @@ function permittedVoice(deps: HermesVoiceDeps, voiceId: string): void {
 export async function submitHermesVoiceReply(deps: HermesVoiceDeps, input: {
   userId: string; sourceTaskId: string; voiceId: string; idempotencyKey: string;
 }, ctx: AuditContext = {}): Promise<AgentTaskView> {
+  requireVoiceWriter();
   const idempotencyKey = requestKey(input.idempotencyKey);
   const task = await submissionTransaction(deps, async tx => {
     await lockTrashReferences(tx);
@@ -295,6 +300,7 @@ async function prepareSubmission(deps: HermesVoiceDeps, execution: HermesVoiceEx
  * A saved intent never grants another process a supplier POST. */
 export async function withHermesVoiceSubmission(deps: HermesVoiceDeps, execution: HermesVoiceExecution,
   create: (signal: AbortSignal) => Promise<{ providerId: string; credits?: number }>): Promise<HermesVoiceCheckpoint> {
+  requireVoiceWriter();
   const prepared = await prepareSubmission(deps, execution);
   let sent: Promise<{ providerId: string; credits?: number }> | undefined;
   try {

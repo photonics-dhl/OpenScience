@@ -77,7 +77,7 @@ test('rollback verifier diagnostics are opt-in, bounded and preserve rejection',
   assert.equal(JSON.parse(events[2].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')).code, 'ENOENT');
 });
 
-test('rollback verifier dispatches guarded image proofs only after original default collections differ', async () => {
+test('rollback verifier dispatches guarded finite proofs only after original default collections differ', async () => {
   // This is dispatch coverage, not a positive compatibility proof. The real
   // image helpers separately refuse copied arrays and source-only Programs.
   const verifierSource=deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
@@ -91,14 +91,15 @@ test('rollback verifier dispatches guarded image proofs only after original defa
     finiteVideoPairCompatibility(...args){events.push(['video',...args]);return accept==='video';},
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
+    finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first']){
+  for(const allowed of ['video','capable','first','voice']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first'].slice(0,['video','capable','first'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice'].slice(0,['video','capable','first','voice'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -802,6 +803,119 @@ function videoPairRuntime(ts, text) {
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
+
+function voicePairSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  assert.ok(component.startsWith('function finiteVoiceSourceModel('), 'finite voice proof must exist inside the original verifier');
+  return runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, pair: finiteVoicePairCompatibility })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+test('voice reader source proof preserves the actual old runtime and source-only Programs grant no deployment authority', async () => {
+  const methods = voicePairSourceComponents(), actual = await videoIngressProgram();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  let model;
+  try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 160) ?? ''}`); }
+  assert.equal(model.phase, 'reader');
+  assert.equal(model.domain, 'rollback-produced-state');
+  assert.ok(model.capsules.size >= 4, 'actual new initialization/call closure is analyzed');
+  for (const [key, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(old.ts, old.program.getSourceFile(resolve(old.projectRoot, key)).text), key);
+  assert.equal(methods.pair(actual.ts, [], [], actual.projectRoot, old.projectRoot, []), false,
+    'source proof never fabricates a genuine DEFAULT collector');
+});
+
+test('voice reader proof rejects opened admission, leaked private results, rearmed retry, lost late receipts and changed legacy audio', async () => {
+  const methods = voicePairSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  for (const [path, change] of [
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('return false;', 'return true;')],
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('export function isHermesVoiceWriterEnabled', 'export async function isHermesVoiceWriterEnabled')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('if (!isHermesVoiceWriterEnabled())', 'if (false)')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('function blocked(', 'async function blocked(')],
+    ['apps/agent-worker/src/voice.ts', value => value.replace('if (!checkpoint && !isHermesVoiceWriterEnabled())', 'if (false)')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;', 'if (isHermesVoiceTaskKind(kind)) return rawResult as Record<string, unknown>;')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace('canRetry: !isHermesVoiceTaskKind(task.kind) && canRetry', 'canRetry: canRetry')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace("throw new AgentError('VALIDATION_ERROR', 'Voice tasks require the dedicated Hermes voice submission');", 'return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('data: { result: result as unknown as Prisma.InputJsonObject }', "data: { result: result as unknown as Prisma.InputJsonObject, status: 'pending' }")],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('result: voiceResultEquals(task.result) }, data:', 'result: undefined }, data:')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('const next: HermesVoiceCheckpoint =', 'if (task.deletedAt) return prior; const next: HermesVoiceCheckpoint =')],
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('if (stopped) return { operation };', 'if (stopped) return { ...checkpoint } as any;')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('if (!hasHermesVoiceCheckpoint(result))', 'fetch("https://example.invalid"); if (!hasHermesVoiceCheckpoint(result))')],
+    ['packages/ai-gateway/src/synclip-voice.ts', value => value.replace('const path = env.', 'fetch("https://example.invalid"); const path = env.')],
+    ['apps/agent-worker/src/voice.ts', value => value.replace('const originalIdentity = checkpoint.identity;', "await runtime.client.create({ text: 'unsafe', voice: 'unsafe' }); const originalIdentity = checkpoint.identity;")],
+    ['packages/ai-gateway/src/synclip-audio-api.ts', value => value.replace("...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {})", "...(typeof body === 'string' ? {} : {})")],
+    ['packages/ai-gateway/src/synclip-audio-api.ts', value => value.replace('return transcriptionTask(await this.#request', "await this.#request('POST', '/asr'); return transcriptionTask(await this.#request")],
+    ['packages/domain/src/agent/voice-contract.ts', value => value + '\nfetch("https://example.invalid");\n'],
+    ['packages/domain/src/agent/voice-contract.ts', value => 'import "./agent";\n' + value],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]));
+    assert.throws(() => methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_'), path);
+  }
+});
+
+test('voice reader High boundaries reject discarded operand effects and dispatch before authority', async () => {
+  const methods = voicePairSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  const prematureDispatch = (value, name, taskId) => {
+    const file = old.ts.createSourceFile('voice.ts', value, old.ts.ScriptTarget.ES2022, true);
+    const fn = file.statements.find(node => old.ts.isFunctionDeclaration(node) && node.name?.text === name);
+    assert.ok(fn?.body, name);
+    const position = fn.body.getStart(file) + 1;
+    return value.slice(0, position) + ` await dispatchAgentTask(deps, ${taskId});` + value.slice(position);
+  };
+  const accepted = [];
+  for (const [label, path, change] of [
+    ['P1a retryCount increment', 'packages/domain/src/agent/agent.ts', value => value.replace(
+      "if (isHermesVoiceTaskKind(task.kind)) return { authorityValid: true, canRetry: false };",
+      "if (task.retryCount++ >= 0 && isHermesVoiceTaskKind(task.kind)) return { authorityValid: true, canRetry: false };")],
+    ['P1b unauthorised GET dispatch', 'packages/domain/src/agent/voice.ts', value => value.replace(
+      'export async function getHermesVoiceTask(deps: HermesVoiceDeps, input: { userId: string; taskId: string }): Promise<AgentTaskView> {',
+      'export async function getHermesVoiceTask(deps: HermesVoiceDeps, input: { userId: string; taskId: string }): Promise<AgentTaskView> { await dispatchAgentTask(deps, input.taskId);')],
+    ...[
+      ['findHermesVoiceSubmission', 'input.idempotencyKey'], ['loadHermesVoiceExecution', 'input.taskId'],
+      ['resumeHermesVoiceTask', 'input.taskId'], ['getHermesVoiceAudio', 'input.taskId'],
+      ['finalizeHermesVoiceTask', 'execution.identity.taskId'], ['saveHermesVoiceCheckpoint', 'identity.taskId'],
+    ].map(([name, taskId]) => [`P1b ${name} entry`, 'packages/domain/src/agent/voice.ts', value => prematureDispatch(value, name, taskId)]),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]));
+    try { methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)); accepted.push(label); }
+    catch (error) { assert.match(error.reason ?? '', /^VOICE_/u, label); }
+  }
+  assert.deepEqual(accepted, [], 'both exact High counterexamples must fail closed');
+});
+
+test('voice writer source transition permits only the pure selector while retaining reader and every remaining entry', async () => {
+  const methods = voicePairSourceComponents(), reader = await videoIngressProgram();
+  const key = 'packages/domain/src/agent/voice-contract.ts';
+  const writer = await videoIngressProgram(new Map([[key, value => value.replace('return false;', 'return true;')]]));
+  // Conditional source terms, never successful collector arrays. Each source
+  // module in these Programs participates; the pair still refuses this data.
+  const entries = value => value.program.getSourceFiles().filter(file => file.fileName.replaceAll('\\', '/').startsWith(value.projectRoot.replaceAll('\\', '/'))
+    && !/^apps\/(?:api|web)\//u.test(relative(value.projectRoot, file.fileName).replaceAll('\\', '/')))
+    .map(file => [`module:${relative(value.projectRoot, file.fileName).replaceAll('\\', '/')}`, videoPairRuntime(value.ts, file.text)]);
+  const a = entries(writer), b = entries(reader);
+  const model = methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), a, b);
+  assert.deepEqual(videoPairRuntime(writer.ts, model.text), videoPairRuntime(reader.ts, reader.program.getSourceFile(resolve(reader.projectRoot, key)).text));
+  for (const path of ['packages/domain/src/agent/voice.ts', 'packages/ai-gateway/src/synclip-audio-api.ts',
+    'packages/domain/src/agent/first-image-continuation.ts']) {
+    const changed = a.map(row => row[0] === `module:${path}` ? [row[0], 'changed actual source-runtime term'] : row);
+    assert.notDeepEqual(changed, a, path);
+    assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), changed, b),
+      error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+  }
+  assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), [...a, ['module:packages/new/src/runtime.ts', []]], b));
+  assert.equal(methods.pair(writer.ts, a, b, writer.projectRoot, reader.projectRoot, []), false);
+  const privateGate = value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;',
+    'if (isHermesVoiceTaskKind(kind)) return isHermesVoiceWriterEnabled() ? rawResult as Record<string, unknown> : null;');
+  const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]));
+  const unsafeWriter = await videoIngressProgram(new Map([[key, value => value.replace('return false;', 'return true;')], ['packages/domain/src/agent/agent.ts', privateGate]]));
+  assert.throws(() => methods.writer(unsafeWriter.ts, videoPairContext(unsafeWriter), videoPairContext(unsafeReader), entries(unsafeWriter), entries(unsafeReader)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the same new private phase-dependent behavior in both roots must reject');
+});
 
 test('image producer partition uses the real initializer and preserves all consumer runtime', async () => {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),

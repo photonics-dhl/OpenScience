@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { PrismaClient } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
-import { afterAll, afterEach, beforeAll, describe, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it, vi } from 'vitest';
 import type { AgentDeps } from '../../src/agent/agent';
 import type { HermesVoiceDeps } from '../../src/agent/voice';
 
@@ -65,17 +65,22 @@ async function bounded<T>(promise: Promise<T>): Promise<T> {
 }
 
 let domain: Domain;
+let writerContract: Pick<Domain, 'isHermesVoiceWriterEnabled'>;
 let db: PrismaClient, writer: PrismaClient, observer: PrismaClient;
 let voicePid: number;
 beforeAll(async () => {
   domain = support.loadRuntime().domain;
+  writerContract = requireRuntime(resolve(__dirname, '../../dist/agent/voice-contract.js')) as typeof writerContract;
   db = support.createClient(); writer = support.createClient(); observer = support.createClient();
   const pids = await Promise.all([db, writer, observer].map(support.warm));
   assert.equal(new Set(pids).size, 3); voicePid = pids[0]!;
 });
+// The original publication races exercise the writer overlay; the installed reader source remains false.
+beforeEach(() => { vi.spyOn(writerContract, 'isHermesVoiceWriterEnabled').mockReturnValue(true); });
 afterEach(async () => {
   for (const release of releases.splice(0)) release();
   await Promise.allSettled(pending.splice(0));
+  vi.restoreAllMocks();
 });
 afterAll(async () => { await Promise.all([db, writer, observer].filter(Boolean).map(client => client.$disconnect())); });
 
@@ -131,6 +136,40 @@ const lifecycle = (task: { status: string; error: string | null; executionAttemp
 });
 
 describe('Hermes voice with the installed PostgreSQL trash triggers', () => {
+  it('reader blocks direct producers and initial publication without new rows, debit or private intent', async () => {
+    const f = await seed();
+    vi.mocked(writerContract.isHermesVoiceWriterEnabled).mockReturnValue(false);
+    const taskCount = await db.agentTask.count({ where: { sessionId: f.sessionId } });
+    const debitCount = await db.usageLedger.count({ where: { userId: f.userId, kind: 'consume' } });
+    await assert.rejects(domain.submitHermesVoiceReply(deps(), { userId: f.userId,
+      sourceTaskId: f.execution.payload.operation === 'reply' ? f.execution.payload.sourceTaskId : '',
+      voiceId: 'synthetic-standard', idempotencyKey: randomUUID() }), /Voice reader stage/);
+    await assert.rejects(domain.submitHermesVoiceTranscription(deps(), { userId: f.userId,
+      sessionId: f.sessionId, idempotencyKey: randomUUID(), recording: Buffer.alloc(44) }), /Voice reader stage/);
+    let calls = 0;
+    await assert.rejects(domain.withHermesVoiceSubmission(deps(), f.execution, async () => {
+      calls++; return { providerId: 'must-not-publish' };
+    }), /Voice reader stage/);
+    assert.equal(calls, 0);
+    assert.equal(await db.agentTask.count({ where: { sessionId: f.sessionId } }), taskCount);
+    assert.equal(await db.usageLedger.count({ where: { userId: f.userId, kind: 'consume' } }), debitCount);
+    assert.equal((await db.agentTask.findUniqueOrThrow({ where: { id: f.taskId } })).result, null);
+  });
+  it('reader retains an original in-flight paid receipt and completes it without a second request', async () => {
+    const f = await seed(), paid = await published(f);
+    await assertVoiceTransactionReleased();
+    vi.mocked(writerContract.isHermesVoiceWriterEnabled).mockReturnValue(false);
+    paid.response.resolve({ providerId: 'synthetic-paid-task', credits: 1 });
+    const received = await paid.result; assert.ifError(received.error);
+    assert.equal(received.value?.providerId, 'synthetic-paid-task');
+    const sha256 = 'f'.repeat(64);
+    await domain.saveHermesVoiceCheckpoint(deps(), f.execution.identity, { phase: 'completed', credits: 1,
+      audio: { objectKey: `derived/hermes-voice/${f.userId}/${f.taskId}/${sha256}.mp3`,
+        sha256, bytes: 4, contentType: 'audio/mpeg' } });
+    assert.equal((await domain.finalizeHermesVoiceTask(deps(), f.execution)).status, 'succeeded');
+    assert.equal(paid.calls(), 1);
+    assert.equal(await db.usageLedger.count({ where: { userId: f.userId, kind: 'consume' } }), 1);
+  });
   it('commits publication and allows an actual same-session trigger writer while HTTP remains held', async () => {
     const f = await seed(); const paid = await published(f);
     await assertVoiceTransactionReleased();

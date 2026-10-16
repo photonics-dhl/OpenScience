@@ -2,15 +2,19 @@ import { isDeepStrictEqual } from 'node:util';
 import { Readable } from 'node:stream';
 import { Prisma } from '@prisma/client';
 import { sha256HexBuffer, type StorageAdapter } from '@openscience/storage';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
-import { claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery,
+import { claimAgentTask, getAgentTask, markTaskProgress, persistHermesVoiceTaskInTransaction, prepareAgentTaskForCrashRecovery,
   projectAgentTaskResult, recoverUndispatchedAgentTasks, retryAgentTask, submitAgentTask, taskToView } from '../../src/agent/agent';
 import { finalizeHermesVoiceTask, findHermesVoiceSubmission, getHermesVoiceAudio, getHermesVoiceTask,
   loadHermesVoiceExecution, readHermesVoiceCheckpoint, resumeHermesVoiceTask, saveHermesVoiceCheckpoint,
   submitHermesVoiceReply, submitHermesVoiceTranscription, validateHermesVoiceRecording,
   withHermesVoiceSubmission, type HermesVoiceDeps } from '../../src/agent/voice';
 import { HERMES_VOICE_MAX_RECORDING_BYTES, HERMES_VOICE_OWNED_STOP_REASON } from '../../src/agent/voice-contract';
+import * as voiceContract from '../../src/agent/voice-contract';
+
+// Exercise the eventual writer phase without changing the reader release source.
+beforeEach(() => { vi.spyOn(voiceContract, 'isHermesVoiceWriterEnabled').mockReturnValue(true); });
 
 const id = (n: number) => `90000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function wav(samples = 160, sample = 3): Buffer {
@@ -69,6 +73,114 @@ function fixture(personal = false) {
   };
   return { deps, prisma, db, storage, objects, row, transcriptionInput, replyInput, submit, claim };
 }
+
+describe('Hermes voice reader stage', () => {
+  beforeEach(() => { vi.mocked(voiceContract.isHermesVoiceWriterEnabled).mockReturnValue(false); });
+  async function paidBeforeReader() {
+    const f = fixture();
+    vi.spyOn(voiceContract, 'isHermesVoiceWriterEnabled').mockReturnValue(true);
+    try {
+      const task = await f.submit(), execution = await f.claim(task.id);
+      const create = vi.fn(async () => ({ providerId: 'original-paid-before-reader', credits: 1 }));
+      await withHermesVoiceSubmission(f.deps, execution, create);
+      return { f, task, execution, create };
+    } finally { vi.mocked(voiceContract.isHermesVoiceWriterEnabled).mockReturnValue(false); }
+  }
+  it('rejects direct new ASR and TTS before recording storage, task creation or accounting', async () => {
+    const f = fixture();
+    await expect(f.submit()).rejects.toThrow();
+    await expect(submitHermesVoiceReply(f.deps, f.replyInput)).rejects.toThrow();
+    expect(f.db.agentTasks).toHaveLength(1);
+    expect(f.db.usageLedger).toHaveLength(1);
+    expect(f.storage.headObject).not.toHaveBeenCalled();
+    expect(f.storage.putObject).not.toHaveBeenCalled();
+    expect(f.deps.redis.lpush).not.toHaveBeenCalled();
+  });
+  it('rejects the internal fresh producer instead of relying on its HTTP caller', async () => {
+    const f = fixture();
+    await expect(f.prisma.$transaction(tx => persistHermesVoiceTaskInTransaction(f.deps, tx, {
+      userId: id(1), sessionId: id(6), kind: 'voice.reply', idempotencyKey: id(21),
+      payload: { operation: 'reply', sourceTaskId: id(7), sourceExecutionAttempt: 1,
+        spokenText: 'A saved Hermes answer.', voiceId: 'standard-1' },
+    }))).rejects.toThrow();
+    expect(f.db.agentTasks).toHaveLength(1);
+    expect(f.db.usageLedger).toHaveLength(1);
+  });
+  it('rejects direct first publication before any checkpoint or supplier request', async () => {
+    const f = fixture();
+    const payload = { operation: 'reply' as const, sourceTaskId: id(7), sourceExecutionAttempt: 1,
+      spokenText: 'A saved Hermes answer.', voiceId: 'standard-1' };
+    f.db.agentTasks.push({ id: id(40), sessionId: id(6), kind: 'voice.reply', status: 'running',
+      executionAttempt: 1, retryCount: 0, deletedAt: null, error: null, result: null, payload });
+    const execution = await loadHermesVoiceExecution(f.deps, { taskId: id(40), executionAttempt: 1 });
+    const create = vi.fn(async () => ({ providerId: 'must-not-publish' }));
+    await expect(withHermesVoiceSubmission(f.deps, execution, create)).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
+    expect(f.row(id(40)).result).toBeNull();
+    expect(f.db.usageLedger).toHaveLength(1);
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, id(40))).toBe(false);
+    expect(f.row(id(40)).status).toBe('running');
+  });
+  it('hides an existing private checkpoint from the actual generic task query after revocation', async () => {
+    const f = fixture();
+    f.db.agentTasks.push({ id: id(40), sessionId: id(6), kind: 'voice.transcribe', status: 'failed',
+      executionAttempt: 1, retryCount: 0, deletedAt: null, error: 'private supplier detail',
+      result: { hermesVoice: { providerId: 'private-paid-id', transcript: 'private recording',
+        request: { objectKey: 'derived/hermes-voice/private.wav' } } } });
+    f.db.memberships.splice(0);
+    const view = await getAgentTask(f.deps, { userId: id(1), taskId: id(40) });
+    expect(view.result).toBeNull(); expect(view.canRetry).toBe(false);
+    expect(JSON.stringify(view)).not.toMatch(/private-paid-id|private recording|private\.wav|private supplier detail/);
+  });
+  it('recovers a known paid ID under the reader without rearming first publication', async () => {
+    const { f, task, create } = await paidBeforeReader();
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, task.id)).toBe(false);
+    await resumeHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id });
+    const resumed = await f.claim(task.id);
+    expect(resumed.checkpoint?.providerId).toBe('original-paid-before-reader');
+    expect(resumed.checkpoint?.identity.executionAttempt).toBe(1);
+    await expect(withHermesVoiceSubmission(f.deps, resumed, create)).rejects.toThrow('Voice reader stage');
+    await saveHermesVoiceCheckpoint(f.deps, resumed.checkpoint!.identity, { phase: 'completed', transcript: 'Original paid result' });
+    expect((await finalizeHermesVoiceTask(f.deps, resumed)).result?.transcript).toBe('Original paid result');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+  it('keeps unknown paid submission held under the reader without a new claim or POST', async () => {
+    const f = fixture();
+    vi.spyOn(voiceContract, 'isHermesVoiceWriterEnabled').mockReturnValue(true);
+    const task = await f.submit(), execution = await f.claim(task.id);
+    const create = vi.fn(async () => { throw new Error('Original response lost'); });
+    await expect(withHermesVoiceSubmission(f.deps, execution, create)).rejects.toThrow('Original response lost');
+    vi.mocked(voiceContract.isHermesVoiceWriterEnabled).mockReturnValue(false);
+    expect(await prepareAgentTaskForCrashRecovery(f.deps, task.id)).toBe(false);
+    await expect(resumeHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    await expect(retryAgentTask(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    expect(await claimAgentTask(f.deps, task.id)).toBeNull();
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)?.phase).toBe('submitting');
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+  it.each(['stopped', 'deleted', 'revoked', 'attempt'])('reader preserves the paid receipt after %s without adopting it', async loss => {
+    const { f, task, execution, create } = await paidBeforeReader();
+    if (loss === 'stopped') Object.assign(f.row(task.id), { status: 'failed', error: HERMES_VOICE_OWNED_STOP_REASON, executionAttempt: 2 });
+    if (loss === 'deleted') f.row(task.id).deletedAt = new Date();
+    if (loss === 'revoked') f.db.memberships.splice(0);
+    if (loss === 'attempt') f.row(task.id).executionAttempt = 2;
+    const lifecycle = () => ({ status: f.row(task.id).status, error: f.row(task.id).error,
+      executionAttempt: f.row(task.id).executionAttempt, deletedAt: f.row(task.id).deletedAt });
+    const originalLifecycle = lifecycle();
+    await saveHermesVoiceCheckpoint(f.deps, execution.identity, { phase: 'completed', transcript: 'Late original paid result' });
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)?.transcript).toBe('Late original paid result');
+    expect(lifecycle()).toEqual(originalLifecycle);
+    await expect(finalizeHermesVoiceTask(f.deps, execution)).rejects.toThrow();
+    if (loss === 'attempt') {
+      // A current owner may idempotently observe the newer running claim; the old claim still cannot adopt it.
+      await expect(resumeHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).resolves.toMatchObject({ status: 'running', executionAttempt: 2 });
+      expect(lifecycle()).toEqual(originalLifecycle);
+    } else await expect(resumeHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(projectAgentTaskResult(f.row(task.id).result, 'voice.transcribe')).toBeNull();
+  });
+});
 
 describe('Hermes voice privacy', () => {
   it.each(['voice.transcribe', 'voice.reply'])('keeps %s vendor receipts and storage locations out of generic task reads', kind => {

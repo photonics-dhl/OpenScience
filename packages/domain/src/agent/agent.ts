@@ -22,7 +22,8 @@ import { ResearchIdentityProfileError, validateResearchIdentityProfileState } fr
 import { ResearchIntelligenceValidationError, validateSourceLocator } from '../research-intelligence/validation';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
-import { hasHermesVoiceCheckpoint, HERMES_VOICE_HOLD, isHermesVoiceTaskKind, isHermesVoiceStopped } from './voice-contract';
+import { hasHermesVoiceCheckpoint, HERMES_VOICE_HOLD, isHermesVoiceTaskKind, isHermesVoiceStopped,
+  isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY } from './voice-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
@@ -739,6 +740,7 @@ export async function persistAgentTaskInTransaction(
 /** Internal voice producer only; generic submission cannot mint private input/receipts. */
 export async function persistHermesVoiceTaskInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>, ctx: AuditContext = {}) {
+  if (!isHermesVoiceWriterEnabled()) throw new AgentError('ILLEGAL_TRANSITION', HERMES_VOICE_READER_ONLY);
   if (!isHermesVoiceTaskKind(input.kind)) throw new AgentError('VALIDATION_ERROR', 'Voice task kind required');
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
 }
@@ -899,6 +901,7 @@ export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: 
   if (task && isHermesVoiceTaskKind(task.kind)) {
     if (task.deletedAt || isHermesVoiceStopped(task) || task.status === 'succeeded') return false;
     const receipt = hasHermesVoiceCheckpoint(task.result);
+    if (!receipt && !isHermesVoiceWriterEnabled()) return false;
     if (task.status === 'failed' && !(task.error === '[retryable] worker interrupted' && !receipt)) return false;
     if (!receipt && task.status === 'pending') return true;
     const changed = await deps.prisma.agentTask.updateMany({ where: { id: task.id, kind: task.kind,
@@ -1007,18 +1010,6 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?:
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
-        const snapshot = await tx.agentTask.findUnique({ where: { id: taskId } });
-        if (snapshot && isHermesVoiceTaskKind(snapshot.kind) && hasHermesVoiceCheckpoint(snapshot.result)) {
-          const checkpoint = (snapshot.result as Record<string, unknown>).hermesVoice;
-          if (!checkpoint || typeof checkpoint !== 'object' || !['submitted', 'completed'].includes(String((checkpoint as Record<string, unknown>).phase))) {
-            if (!snapshot.deletedAt && !isHermesVoiceStopped(snapshot) && ['pending', 'running'].includes(snapshot.status)) {
-              await tx.agentTask.updateMany({ where: { id: taskId, deletedAt: null, status: snapshot.status,
-                executionAttempt: snapshot.executionAttempt, result: { equals: snapshot.result == null ? Prisma.AnyNull : snapshot.result as Prisma.InputJsonValue } },
-                data: { status: 'failed', error: HERMES_VOICE_HOLD } });
-            }
-            return null;
-          }
-        }
         const claimed = await tx.agentTask.updateMany({
           where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
             ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,

@@ -1,6 +1,7 @@
 import { downloadSynclipAudio, validateHermesVoiceWav, type SynclipVoiceRuntime } from '@openscience/ai-gateway';
 import { finalizeHermesVoiceTask, loadHermesVoiceExecution, saveHermesVoiceCheckpoint,
-  withHermesVoiceSubmission, type HermesVoiceDeps, type HermesVoiceExecution } from '@openscience/domain';
+  withHermesVoiceSubmission, isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY,
+  type HermesVoiceDeps, type HermesVoiceExecution } from '@openscience/domain';
 import { rememberDiscardedTaskResult } from '@openscience/domain';
 import { sha256HexBuffer } from '@openscience/storage';
 import type { TaskHandler } from './index';
@@ -38,6 +39,7 @@ export function createHermesVoiceHandlers(runtime?: SynclipVoiceRuntime, options
     if (checkpoint?.phase === 'completed') return (await finalizeHermesVoiceTask(deps, execution)).result ?? {};
     if (checkpoint?.phase === 'submitting') throw new Error('[blocked] VOICE_SUBMISSION_UNCERTAIN');
     if (checkpoint?.phase === 'failed') throw new Error('[blocked] VOICE_PROVIDER_FAILED');
+    if (!checkpoint && !isHermesVoiceWriterEnabled()) throw new Error(HERMES_VOICE_READER_ONLY);
     if (!runtime) throw new Error('[blocked] VOICE_UNAVAILABLE');
     if (!checkpoint) {
       const input = execution.payload;

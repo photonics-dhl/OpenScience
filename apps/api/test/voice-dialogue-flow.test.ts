@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { Prisma } from '@prisma/client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSession } from '@openscience/auth';
 import { createConfiguredSynclipVoiceRuntime } from '@openscience/ai-gateway';
 import { sha256HexBuffer, type StorageAdapter } from '@openscience/storage';
@@ -11,6 +11,9 @@ import { createFakePrisma, createFakeMailer, seedUser } from '@openscience/domai
 import { createPollOnce, createHermesVoiceHandlers } from '@openscience/agent-worker';
 import { registerHermesVoiceRoutes } from '../src/routes/voice';
 import { httpStatusForError } from '../src/error-map';
+import * as voiceContract from '../../../packages/domain/src/agent/voice-contract';
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 const id = (value: number) => `80000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, data }), { headers: { 'content-type': 'application/json' } });
@@ -28,7 +31,8 @@ function upload(recording: Buffer) {
 }
 
 describe('Hermes voice HTTP, durable producer, Worker and private result integration', () => {
-  it('runs both real local producers once, replays safely, and denies another owner or revoked member', async () => {
+  it.each(['reader', 'writer'] as const)('%s preserves the real HTTP, queue and private result boundary', async stage => {
+    vi.spyOn(voiceContract, 'isHermesVoiceWriterEnabled').mockReturnValue(stage === 'writer');
     const { prisma, db } = createFakePrisma();
     Object.assign(prisma, { trashEntry: { findFirst: async () => null, findUnique: async () => null } });
     seedUser(db, { id: id(1) }); seedUser(db, { id: id(9) });
@@ -98,6 +102,26 @@ describe('Hermes voice HTTP, durable producer, Worker and private result integra
     try {
       const request = { method: 'POST' as const, url: '/agent/voice/transcriptions', cookies,
         headers: { 'idempotency-key': id(20), 'content-type': 'multipart/form-data; boundary=voice-fixture' }, payload: upload(wav()) };
+      if (stage === 'reader') {
+        const capability = await app.inject({ url: '/agent/voice/capabilities', cookies });
+        expect(capability.json()).toMatchObject({ available: false, voices: [] });
+        expect((await app.inject(request)).statusCode).toBe(409);
+        expect((await app.inject({ method: 'POST', url: '/agent/voice/replies', cookies,
+          headers: { 'idempotency-key': id(21) }, payload: { sourceTaskId: id(7), voiceId: 'en-US-JennyNeural' } })).statusCode).toBe(409);
+        expect(db.agentTasks).toHaveLength(1); expect(objects.size).toBe(0);
+        const bytes = wav(), sha256 = sha256HexBuffer(bytes);
+        // Fixture persistence simulates already queued fresh work; no producer or provider creates it.
+        db.agentTasks.push({ id: id(40), sessionId: id(6), kind: 'voice.transcribe', status: 'pending',
+          progress: 0, retryCount: 0, executionAttempt: 0, deletedAt: null, error: null, result: null,
+          idempotencyKey: id(20), payload: { operation: 'transcription', sha256, bytes: bytes.length,
+            durationSeconds: 1, objectKey: `derived/hermes-voice/${id(1)}/${id(20)}/${sha256}.wav` } });
+        queue.unshift(id(40)); await poll(deps as never);
+        expect(db.agentTasks).toHaveLength(2); expect(db.agentTasks[1].status).toBe('failed');
+        expect(db.agentTasks[1].result).toBeNull(); expect(objects.size).toBe(0);
+        expect(fetcher).not.toHaveBeenCalled();
+        expect(db.usageLedger.filter(entry => entry.kind === 'consume')).toHaveLength(0);
+        return;
+      }
       const submitted = await app.inject(request); expect(submitted.statusCode).toBe(202);
       const taskId = submitted.json().task.id as string;
       const replay = await app.inject(request); expect(replay.statusCode).toBe(202); expect(replay.json().task.id).toBe(taskId);

@@ -675,6 +675,7 @@ jobs:
           if ([...url.searchParams.keys()].some(key => key !== 'connection_limit')) throw new Error('Unapproved test database options');
           NODE
           npx pnpm@9.15.0 --filter '@openscience/domain...' build
+          npx pnpm@9.15.0 --filter @openscience/database build
           node packages/database/dist/migrate-cli.js deploy
           npx pnpm@9.15.0 --filter @openscience/domain exec vitest run --config vitest.integration.config.ts test/agent/voice-postgres.integration.test.ts | tee tmp/first-image-grant/voice.log
           npx pnpm@9.15.0 --filter @openscience/domain exec tsc -p tsconfig.integration.json --noEmit

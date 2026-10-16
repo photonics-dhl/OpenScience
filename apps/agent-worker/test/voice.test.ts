@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as voiceDomain from '@openscience/domain';
 import { SynclipAudioClient } from '@openscience/ai-gateway';
 import { createHermesVoiceHandlers } from '../src/voice';
 
@@ -25,10 +26,21 @@ const completed = { task_id: 'original-asr-id', status: 'completed', coins_used:
 const deps = { storage: { getObject: vi.fn(async () => ({ body: Readable.from([audio]), size: audio.length, contentType: 'audio/wav' })),
   putObject: vi.fn(async () => ({})) } };
 beforeEach(() => {
+  vi.spyOn(voiceDomain, 'isHermesVoiceWriterEnabled').mockReturnValue(false);
   vi.clearAllMocks(); authority.finalize.mockResolvedValue({ result: { operation: 'transcription', transcript: completed.output.text } });
   authority.save.mockImplementation(async (_deps, originalIdentity, update) => ({ identity: originalIdentity, request: payload, ...update }));
 });
+afterEach(() => { vi.restoreAllMocks(); });
 describe('Hermes voice paid submission boundary', () => {
+  it('reader refuses queued work without a receipt before reading recording or consulting the provider', async () => {
+    authority.load.mockResolvedValue({ identity, payload });
+    const fetcher = vi.fn<typeof fetch>(); const listPresets = vi.fn(async () => []);
+    const handlers = createHermesVoiceHandlers({ client: new SynclipAudioClient({ apiKey: 'test-key', fetch: fetcher }), listPresets });
+    await expect(handlers['voice.transcribe'](deps as never, task)).rejects.toThrow('Voice reader stage');
+    expect(deps.storage.getObject).not.toHaveBeenCalled(); expect(deps.storage.putObject).not.toHaveBeenCalled();
+    expect(listPresets).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    expect(authority.withSubmission).not.toHaveBeenCalled(); expect(authority.save).not.toHaveBeenCalled();
+  });
   it('recovers a saved supplier ID using GET only and saves the actual transcript', async () => {
     authority.load.mockResolvedValue({ identity: { ...identity, executionAttempt: 2 }, payload,
       checkpoint: { identity, request: payload, phase: 'submitted', providerId: 'original-asr-id', credits: 1 } });
@@ -58,6 +70,7 @@ describe('Hermes voice paid submission boundary', () => {
     expect(authority.finalize).toHaveBeenCalledOnce();
   });
   it('validates the original stored WAV before publishing one fresh provider request', async () => {
+    vi.spyOn(voiceDomain, 'isHermesVoiceWriterEnabled').mockReturnValue(true);
     const execution = { identity, payload }; authority.load.mockResolvedValue(execution);
     authority.withSubmission.mockImplementation(async (_deps, _execution, operation) => {
       const receipt = await operation(new AbortController().signal);
@@ -71,6 +84,7 @@ describe('Hermes voice paid submission boundary', () => {
     expect(authority.withSubmission).toHaveBeenCalledOnce(); expect(authority.finalize).toHaveBeenCalledOnce();
   });
   it('passes the current standard catalog into final TTS authority and saves private audio', async () => {
+    vi.spyOn(voiceDomain, 'isHermesVoiceWriterEnabled').mockReturnValue(true);
     const replyIdentity = { ...identity, kind: 'voice.reply' };
     const request = { operation: 'reply', sourceTaskId: 'saved-guide', sourceExecutionAttempt: 1,
       spokenText: 'A saved answer.', voiceId: 'en-US-JennyNeural' };

@@ -6,6 +6,7 @@ import type { MalwareScanner, StorageAdapter } from '@openscience/storage';
 import { HERMES_VOICE_MAX_WAV_BYTES, validateHermesVoiceWav, type SynclipVoiceRuntime } from '@openscience/ai-gateway';
 import { AgentError, findHermesVoiceSubmission, getHermesVoiceAudio, getHermesVoiceTask,
   resumeHermesVoiceTask, submitHermesVoiceReply, submitHermesVoiceTranscription,
+  isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY,
   type HermesVoiceDeps, type HermesVoicePreset } from '@openscience/domain';
 import { requireCurrentUser } from './session-guard';
 import { sendPresentationAssetContent } from './presentation-asset-content';
@@ -23,12 +24,13 @@ export function registerHermesVoiceRoutes(app: FastifyInstance, deps: VoiceRoute
     return { ...deps, storage: deps.storage, voicePresets };
   };
   const runtime = () => {
+    if (!isHermesVoiceWriterEnabled()) throw new AgentError('ILLEGAL_TRANSITION', HERMES_VOICE_READER_ONLY);
     if (!deps.voiceRuntime || !deps.storage) throw new AgentError('ILLEGAL_TRANSITION', '语音服务尚未配置，请继续使用文字对话。');
     return deps.voiceRuntime;
   };
   app.get('/agent/voice/capabilities', async (req, reply) => {
     if (!await requireCurrentUser(deps, req, reply)) return;
-    const available = Boolean(deps.voiceRuntime && deps.storage);
+    const available = isHermesVoiceWriterEnabled() && Boolean(deps.voiceRuntime && deps.storage);
     return reply.header('Cache-Control', 'private, no-store').send({ available, maxRecordingSeconds: 60,
       transcriptionCredits: 1, replyMaxUtf8Bytes: 1000,
       voices: available ? await deps.voiceRuntime!.listPresets() : [] });
