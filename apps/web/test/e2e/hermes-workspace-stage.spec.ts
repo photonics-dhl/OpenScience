@@ -104,6 +104,9 @@ test.beforeEach(async ({ page }) => {
     const url = new URL(route.request().url());
     const { pathname, searchParams } = url;
     if (route.request().method() === 'GET') {
+      if (pathname === '/api/agent/voice/capabilities' && searchParams.size === 0) return json(route, {
+        available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [],
+      });
       if (pathname === '/api/auth/me' && searchParams.size === 0) return json(route, { error: { code: 'SESSION_INVALID', message: 'Not signed in' } }, 401);
       if (pathname === '/api/workspaces' && searchParams.size === 0) return json(route, { workspaces: [{ id: 'workspace-hermes', name: 'Personal', type: 'personal', role: 'owner', status: 'active' }] });
       if (pathname === '/api/agent/tasks' && searchParams.get('actionable') === 'false') {

@@ -5,7 +5,7 @@ import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
 import { CodexSpoolImageProvider, CodexSolImageReviewProvider, SynclipSpoolImageProvider,
-  createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
+  createConfiguredSynclipVoiceRuntime, createNativeVideoReadinessReader, type ImageProvider, type ImageRecoveryState } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -103,7 +103,12 @@ async function main(): Promise<void> {
       : undefined;
     const nativeAgentRuntime = nativeAgentRuntimeFromEnv(process.env);
     const nativeSceneImageEnabled = env.ai.sceneImageEnabled && imagePrimaryKind === 'synclip';
+    const voiceRuntime = await createConfiguredSynclipVoiceRuntime(process.env).catch(() => {
+      logger.warn('Hermes voice runtime unavailable; text dialogue remains enabled');
+      return undefined;
+    });
     const app = ownedApp = await buildApp({
+      voiceRuntime,
       nativeAgentRuntime,
       prisma,
       redis,

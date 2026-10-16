@@ -196,6 +196,20 @@ export {
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
   type CreateAgentSessionInput, type SubmitAgentTaskInput,
 } from './agent/agent';
+export {
+  submitHermesVoiceTranscription, submitHermesVoiceReply, getHermesVoiceTask, findHermesVoiceSubmission,
+  resumeHermesVoiceTask, getHermesVoiceAudio, loadHermesVoiceExecution, withHermesVoiceSubmission,
+  saveHermesVoiceCheckpoint, finalizeHermesVoiceTask, readHermesVoiceCheckpoint, validateHermesVoiceRecording,
+  type HermesVoiceDeps, type HermesVoiceExecution, type HermesVoiceCheckpointUpdate,
+} from './agent/voice';
+export {
+  HERMES_VOICE_MAX_RECORDING_SECONDS, HERMES_VOICE_MAX_RECORDING_BYTES, HERMES_VOICE_REPLY_MAX_UTF8_BYTES,
+  HERMES_VOICE_TRANSCRIPTION_CREDITS, HERMES_VOICE_RECEIPT_KEY, HERMES_VOICE_HOLD, HERMES_VOICE_TASK_KINDS,
+  isHermesVoiceTaskKind, hasHermesVoiceCheckpoint, projectHermesVoiceResult,
+  isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY,
+  type HermesVoiceTaskKind, type HermesVoiceLanguage, type HermesVoicePreset, type HermesVoiceCapabilities,
+  type HermesVoicePayload, type HermesVoiceIdentity, type HermesVoiceAudio, type HermesVoiceCheckpoint, type HermesVoiceResult,
+} from './agent/voice-contract';
 export { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError } from './agent/search-index-source';
 export { hasStandaloneScienceDiagnostics, readStandaloneScienceDiagnostics, readStandaloneScienceRecovery } from './agent/standalone-science-recovery';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';

@@ -1200,6 +1200,7 @@ test.describe('normal narration audition action', () => {
       result: { summary: options.firstVideoPlan ? 'Prepare the first sourced video storyboard.' : 'Use the approved video storyboard.', nextSteps: [], needsMoreInformation: false,
         presentationDraft: { researchObjectId: ro.id, versionId: 'version-2', action: 'video.create', instruction: options.firstVideoPlan ? firstVideoInstruction : '' } } };
     const reads = new Map<string, unknown>([
+      ['/api/agent/voice/capabilities', { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] }],
       ['/api/workspaces', { workspaces: [{ id: ro.workspaceId, name: 'Personal', type: 'personal', role: 'author', status: 'active' }] }],
       [`/api/research-objects/${ro.id}`, { researchObject: { ...ro, sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' }, nodes: [] } } }],
       [`/api/research-objects/${ro.id}/versions`, { versions }],

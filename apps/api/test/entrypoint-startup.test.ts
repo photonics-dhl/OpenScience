@@ -5,13 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { loadApiEnv } from '@openscience/config';
 
 /** Execute the actual CommonJS entrypoint; replace only external services and the HTTP listener. */
-async function start(runtime: unknown, runtimeEnv: Record<string, string | undefined> = {}) {
+async function start(runtime: unknown, runtimeEnv: Record<string, string | undefined> = {},
+  voiceFactory: () => Promise<unknown> = async () => undefined) {
   const errors: unknown[][] = []; const options: Record<string, unknown>[] = []; let listening = 0;
   const prisma = { $disconnect: async () => undefined };
   const redis = { quit: async () => undefined, disconnect: () => undefined };
   const process = { env: runtimeEnv, exitCode: 0, on: () => undefined };
   const readiness = { available: false, reads: 0, prerequisites: undefined as unknown };
-  const log = { warn: () => undefined, info: () => undefined };
+  const warnings: unknown[][] = [];
+  const log = { warn: (...value: unknown[]) => warnings.push(value), info: () => undefined };
   class Mailer {}
   class SpoolImage {}
   const modules: Record<string, unknown> = {
@@ -21,7 +23,12 @@ async function start(runtime: unknown, runtimeEnv: Record<string, string | undef
     '@openscience/domain': { nativeAgentRuntimeFromEnv: () => runtime },
     '@openscience/storage': { createStorageAdapter: () => ({}), createClamAvScanner: () => ({}) },
     '@openscience/observability': { createLogger: () => log },
-    '@openscience/ai-gateway': { SynclipSpoolImageProvider: SpoolImage, createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
+    '@openscience/ai-gateway': {
+      SynclipSpoolImageProvider: SpoolImage,
+      createConfiguredSynclipVoiceRuntime: (env: unknown) => {
+        expect(env).toBe(runtimeEnv); return voiceFactory();
+      },
+      createNativeVideoReadinessReader: (env: unknown, prerequisites: unknown) => {
       expect(env).toBe(runtimeEnv); readiness.prerequisites = prerequisites;
       return async () => { readiness.reads++; return readiness.available; };
     } },
@@ -40,7 +47,7 @@ async function start(runtime: unknown, runtimeEnv: Record<string, string | undef
     },
   });
   await new Promise(resolve => setImmediate(resolve));
-  return { errors, options, listening, exitCode: process.exitCode, readiness };
+  return { errors, warnings, options, listening, exitCode: process.exitCode, readiness };
 }
 
 const nativeRuntime = { runtimeId: 'fixture-runtime', skillCatalogueId: 'fixture-catalogue', model: 'MiniMax-M3' };
@@ -48,6 +55,22 @@ const videoEnv = { AI_ENABLED: 'true', HERMES_SCENE_IMAGE_PROVIDER: 'synclip', S
   SYNCLIP_IMAGE_INBOX_DIR: '/fixture/image/inbox', SYNCLIP_IMAGE_RESULTS_DIR: '/fixture/image/results', HERMES_VIDEO_ENABLED: 'true' };
 
 describe('actual API CommonJS entrypoint', () => {
+  it('injects the optional voice runtime without changing Native or video readiness', async () => {
+    const voice = { client: {}, listPresets: async () => [] };
+    const result = await start(nativeRuntime, videoEnv, async () => voice);
+    expect(result.errors).toEqual([]); expect(result.listening).toBe(1);
+    expect(result.options[0]?.voiceRuntime).toBe(voice);
+    expect(result.options[0]?.nativeAgentRuntime).toEqual(nativeRuntime);
+    expect(result.readiness.reads).toBe(0);
+  });
+  it('keeps API startup available when optional voice credentials cannot initialize', async () => {
+    const result = await start(nativeRuntime, videoEnv, async () => { throw Error('synthetic-private-key-error'); });
+    expect(result.errors).toEqual([]); expect(result.exitCode).toBe(0); expect(result.listening).toBe(1);
+    expect(result.options[0]?.voiceRuntime).toBeUndefined();
+    expect(result.options[0]?.nativeAgentRuntime).toEqual(nativeRuntime);
+    expect(result.warnings).toHaveLength(1);
+    expect(JSON.stringify(result.warnings)).not.toContain('synthetic-private-key-error');
+  });
   it('injects a dynamically sampled video callback into the actual API app bootstrap', async () => {
     const result = await start(nativeRuntime, videoEnv);
     expect(result.errors).toEqual([]); expect(result.readiness.reads).toBe(0);

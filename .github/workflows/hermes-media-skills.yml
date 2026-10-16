@@ -12,6 +12,19 @@ on:
   push:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'packages/domain/src/agent/voice*.ts'
+      - 'packages/domain/test/agent/voice*.test.ts'
+      - 'packages/ai-gateway/src/synclip-voice.ts'
+      - 'packages/ai-gateway/src/synclip-audio-api.ts'
+      - 'packages/ai-gateway/test/synclip-*.test.ts'
+      - 'apps/agent-worker/src/voice.ts'
+      - 'apps/agent-worker/test/voice.test.ts'
+      - 'apps/api/src/routes/voice.ts'
+      - 'apps/api/test/voice*.test.ts'
+      - 'apps/web/components/hermes/HermesVoiceControls*'
+      - 'apps/web/lib/hermes/voice-*.ts'
+      - 'apps/web/test/hermes-voice-*.test.ts'
+      - 'apps/web/test/e2e/hermes-voice-dialogue.spec.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
       - 'packages/database/test/first-image-grant-migration.integration.test.ts'
       - '.agents/skills/openscience-handdraw-*/**'
@@ -300,6 +313,19 @@ on:
   pull_request:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'packages/domain/src/agent/voice*.ts'
+      - 'packages/domain/test/agent/voice*.test.ts'
+      - 'packages/ai-gateway/src/synclip-voice.ts'
+      - 'packages/ai-gateway/src/synclip-audio-api.ts'
+      - 'packages/ai-gateway/test/synclip-*.test.ts'
+      - 'apps/agent-worker/src/voice.ts'
+      - 'apps/agent-worker/test/voice.test.ts'
+      - 'apps/api/src/routes/voice.ts'
+      - 'apps/api/test/voice*.test.ts'
+      - 'apps/web/components/hermes/HermesVoiceControls*'
+      - 'apps/web/lib/hermes/voice-*.ts'
+      - 'apps/web/test/hermes-voice-*.test.ts'
+      - 'apps/web/test/e2e/hermes-voice-dialogue.spec.ts'
       - 'infra/migrations/20261014010000_first_image_generation_grant/**'
       - 'packages/database/test/first-image-grant-migration.integration.test.ts'
       - '.agents/skills/openscience-handdraw-*/**'
@@ -640,6 +666,26 @@ jobs:
           npx pnpm@9.15.0 --filter @openscience/database exec vitest run --config vitest.integration.config.ts test/first-image-grant-migration.integration.test.ts | tee tmp/first-image-grant/green.log
       - name: Lint the migration regression test
         run: npx pnpm@9.15.0 exec eslint packages/database/test/first-image-grant-migration.integration.test.ts
+      - name: Build and verify voice on the real test database
+        shell: bash
+        env:
+          NODE_ENV: test
+        run: |
+          set -o pipefail
+          node <<'NODE'
+          if (process.env.NODE_ENV !== 'test' || !process.env.DATABASE_URL?.trim()) throw new Error('Explicit test database environment required');
+          let url;
+          try { url = new URL(process.env.DATABASE_URL); } catch { throw new Error('Invalid test database target'); }
+          if (!['postgresql:', 'postgres:'].includes(url.protocol) || url.hostname !== '127.0.0.1'
+            || url.port !== '55440' || url.pathname !== '/image_grant_test' || url.hash) throw new Error('Unapproved test database target');
+          if ([...url.searchParams.keys()].some(key => key !== 'connection_limit')) throw new Error('Unapproved test database options');
+          NODE
+          npx pnpm@9.15.0 --filter '@openscience/domain...' build
+          npx pnpm@9.15.0 --filter @openscience/database build
+          node packages/database/dist/migrate-cli.js deploy
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run --config vitest.integration.config.ts test/agent/voice-postgres.integration.test.ts | tee tmp/first-image-grant/voice.log
+          npx pnpm@9.15.0 --filter @openscience/domain exec tsc -p tsconfig.integration.json --noEmit
+          npx pnpm@9.15.0 exec eslint packages/domain/test/agent/voice-postgres.integration.test.ts
       - name: Preserve real PostgreSQL regression evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -710,6 +756,17 @@ jobs:
             npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
           )
           ROLLBACK_ROOT="$rollback_root" node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; console.log('R04_PAIR', process.env.GITHUB_SHA, process.env.ROLLBACK_REF); await verifyApplicationRollbackReaders({ candidateRoot: process.env.GITHUB_WORKSPACE, rollbackRoot: process.env.ROLLBACK_ROOT, diagnostics: true });"
+      - name: Verify Synclip voice contracts and the private task path
+        run: |
+          npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-audio-api.test.ts test/synclip-asr-api.test.ts test/synclip-voice.test.ts
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/agent/voice.test.ts
+          npx pnpm@9.15.0 --filter @openscience/agent-worker build
+          npx pnpm@9.15.0 --filter @openscience/agent-worker exec vitest run test/voice.test.ts
+          npx pnpm@9.15.0 --filter @openscience/api exec vitest run test/voice-routes.test.ts test/voice-dialogue-flow.test.ts
+          npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-voice-api.test.ts test/hermes-voice-recorder.test.ts
+      - name: Lint voice sources and regressions
+        run: |
+          npx pnpm@9.15.0 exec eslint packages/ai-gateway/src/synclip-audio-api.ts packages/ai-gateway/src/synclip-voice.ts packages/ai-gateway/test/synclip-asr-api.test.ts packages/ai-gateway/test/synclip-voice.test.ts packages/domain/src/agent/voice.ts packages/domain/src/agent/voice-contract.ts packages/domain/test/agent/voice.test.ts apps/agent-worker/src/voice.ts apps/agent-worker/test/voice.test.ts apps/api/src/routes/voice.ts apps/api/test/voice-routes.test.ts apps/api/test/voice-dialogue-flow.test.ts apps/web/components/hermes/HermesVoiceControls.tsx apps/web/lib/hermes/voice-api.ts apps/web/lib/hermes/voice-recorder.ts apps/web/test/hermes-voice-api.test.ts apps/web/test/hermes-voice-recorder.test.ts apps/web/test/e2e/hermes-voice-dialogue.spec.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-agent-tools.test.ts test/native-agent-bridge.test.ts test/native-image-input.test.ts test/codex-sol-review-protocol.test.ts test/codex-sol-review.test.ts test/image-review-routing.test.ts test/structured-retry-budget.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-image-api.test.ts test/synclip-image-spool.test.ts test/codex-image.test.ts
       - name: Lint Synclip image Gateway sources and tests
@@ -736,7 +793,7 @@ jobs:
       - run: node --check infra/hermes-agent/offline_host.cjs
       - name: Test release tooling with the retained video source fixtures
         run: |
-          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696; do
+          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5; do
             if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
               git fetch --no-tags --depth=1 origin "$fixture_ref"
             fi
@@ -825,7 +882,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-source-reanalysis-api.test.ts test/hermes-source-reanalysis-intent.test.ts test/hermes-source-reanalysis-panel.test.tsx
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/illustration-style-switch.test.ts test/illustration-style-choices.test.tsx test/illustration-style-api.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/managed-illustration-style.test.ts test/managed-illustration-style-api.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-first-image.spec.ts create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts researcher-services.spec.ts guide-workspace.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
+      - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test hermes-first-image.spec.ts create-illustrated-research.spec.ts managed-illustration-style.spec.ts hermes-source-parsing.spec.ts researcher-services.spec.ts guide-workspace.spec.ts hermes-voice-dialogue.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/illustrated-creation-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - name: Guide layout and contextual companion focus
