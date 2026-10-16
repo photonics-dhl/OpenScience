@@ -424,6 +424,8 @@ describe('Hermes voice submitted fee retention', () => {
       { phase: 'submitted', providerId: prior.providerId!, credits: value });
     const lifecycle = () => {
       const { result: _result, updatedAt: _updatedAt, ...fields } = f.row(task.id);
+      void _result;
+      void _updatedAt;
       return structuredClone(fields);
     };
     return { f, task, execution, create, prior, save, lifecycle };
