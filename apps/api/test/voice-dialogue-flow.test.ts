@@ -1,17 +1,28 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Readable } from 'node:stream';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { Prisma } from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSession } from '@openscience/auth';
+import * as voiceDomain from '@openscience/domain';
 import { createConfiguredSynclipVoiceRuntime } from '@openscience/ai-gateway';
 import { sha256HexBuffer, type StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, createFakeMailer, seedUser } from '@openscience/domain/test-helpers';
 import { createPollOnce, createHermesVoiceHandlers } from '@openscience/agent-worker';
 import { registerHermesVoiceRoutes } from '../src/routes/voice';
 import { httpStatusForError } from '../src/error-map';
-import * as voiceContract from '../../../packages/domain/src/agent/voice-contract';
+import * as sourceVoiceContract from '../../../packages/domain/src/agent/voice-contract';
+
+// CI consumes compiled Domain; local source harnesses consume the source contract.
+// Change only the actual selector supplier, including its internal Domain callers.
+const requireRuntime = createRequire(__filename);
+const voiceContract = voiceDomain.isHermesVoiceWriterEnabled === sourceVoiceContract.isHermesVoiceWriterEnabled
+  ? sourceVoiceContract
+  : requireRuntime(resolve(dirname(requireRuntime.resolve('@openscience/domain')), 'agent/voice-contract.js')) as typeof sourceVoiceContract;
+expect(voiceContract.isHermesVoiceWriterEnabled).toBe(voiceDomain.isHermesVoiceWriterEnabled);
 
 afterEach(() => { vi.restoreAllMocks(); });
 

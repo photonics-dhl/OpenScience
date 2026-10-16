@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { PrismaClient } from '@prisma/client';
 import type { StorageAdapter } from '@openscience/storage';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it, vi } from 'vitest';
+import { createPrismaAuditSink } from '../../../database/dist/index';
 import type { AgentDeps } from '../../src/agent/agent';
 import type { HermesVoiceDeps } from '../../src/agent/voice';
 
@@ -36,9 +37,10 @@ const support = {
     return rows[0]!.pid;
   },
   deps(prisma: PrismaClient): AgentDeps {
+    const audit = createPrismaAuditSink(prisma);
     return { prisma, audit: { record: async (event, tx) => {
       assert.ok(tx, 'Audit must use the actual business transaction');
-      await tx.auditLog.create({ data: event });
+      await audit.record(event, tx);
     } } } as AgentDeps;
   },
 };

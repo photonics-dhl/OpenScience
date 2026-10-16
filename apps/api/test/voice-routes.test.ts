@@ -1,13 +1,25 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSession } from '@openscience/auth';
+import * as voiceDomain from '@openscience/domain';
 import { createFakePrisma, createFakeMailer, seedUser } from '@openscience/domain/test-helpers';
 import { registerHermesVoiceRoutes } from '../src/routes/voice';
 import { httpStatusForError } from '../src/error-map';
-import * as voiceContract from '../../../packages/domain/src/agent/voice-contract';
+import * as sourceVoiceContract from '../../../packages/domain/src/agent/voice-contract';
+
+// CI consumes compiled Domain; local source harnesses consume the source contract.
+// Change only the actual selector supplier, including its internal Domain callers.
+const requireRuntime = createRequire(__filename);
+const voiceContract = voiceDomain.isHermesVoiceWriterEnabled === sourceVoiceContract.isHermesVoiceWriterEnabled
+  ? sourceVoiceContract
+  : requireRuntime(resolve(dirname(requireRuntime.resolve('@openscience/domain')), 'agent/voice-contract.js')) as typeof sourceVoiceContract;
+expect(voiceContract.isHermesVoiceWriterEnabled).toBe(voiceDomain.isHermesVoiceWriterEnabled);
 
 beforeEach(() => { vi.spyOn(voiceContract, 'isHermesVoiceWriterEnabled').mockReturnValue(true); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 const userId = '10000000-0000-4000-8000-000000000001';
 const sessionId = '20000000-0000-4000-8000-000000000001';
