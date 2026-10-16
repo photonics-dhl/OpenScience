@@ -1,6 +1,6 @@
 # OpenScience (XGS) 项目文件索引
 
-UI readable R实际发布原件定位canonical `tmp/coordination/ui-readable-r-052a9115-{release-receipt,after,window,backup-read}`，原唯一浏览器观察仍由UI会话持有；图片八项test-only冻结包定位reference树 `tmp/first-image/ci-2ad-eight-review/` 与真实AST `ci-2ad-case77-probe.*`。费用纯组合定位canonical `tmp/coordination/voice-fee-ci-composition.json`；精确现役、写权及未验收只见CURRENT。
+UI readable R发布原件沿canonical tmp/coordination/ui-readable-r-052a9115-*；8截图/实际站内路径与差额沿shared树 tmp/ui-content-reading/live-r-052-20261017/。图片实际052组合与历史fixture原件沿reference树 tmp/first-image/ui-052-composition/，后继R2/W2b唯一source写权沿canonical tmp/coordination/image-r2-w2b-owner-window.md；新CI请求沿image-d918c547-ci-request.json/ui-w-ac252d20-ci-request.json。fee历史W测试修复沿fee树 tmp/voice-fee/fee-wav-historical-*。精确运行/发布/写权与验收只见CURRENT。
 
 图片入口初始化候选的独立 CI 原件定位 UI shared 树 `tmp/ui-content-reading/image-ci-2ad0aa1b/{receipt.md,failure-summaries.json,key-checks.json,fetch-ledger.json}`；精确八项发布工具失败与已成功实际 pair 分开记录。W/2b 只读调用链定位 reference 树 `tmp/first-image/w-after-r-readonly-checklist.md`，唯一同 High 的真实 guide-parent/child scope 沿 canonical `tmp/coordination/native-image-review-json-scope-high.md:1382`；实际写权、CI/发布与未验收边界只见 CURRENT。
 
