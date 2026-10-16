@@ -92,14 +92,15 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
     finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
+    finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','voice']){
+  for(const allowed of ['video','capable','first','voice','sdf']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice'].slice(0,['video','capable','first','voice'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf'].slice(0,['video','capable','first','voice','sdf'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -818,6 +819,72 @@ function videoPairRuntime(ts, text) {
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
+
+function sdfReadableSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  return runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
+    pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+test('SDF readable R source proof preserves the actual 764 runtime and old opaque domain', async () => {
+  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const methods = sdfReadableSourceComponents();
+  assert.equal(typeof methods.model, 'function', 'the original finite verifier must cover readable R');
+  let model;
+  try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 180) ?? ''}`); }
+  assert.equal(model.domain, 'stored-snapshot-copy-and-legacy-fresh');
+  assert.equal(model.projected.size, 6);
+  assert.equal(model.capsules.size, 1);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(old.ts, old.program.getSourceFile(resolve(old.projectRoot, path)).text), path);
+  assert.equal(methods.pair(actual.ts, [], [], actual.projectRoot, old.projectRoot, []), false,
+    'source-only Programs must never acquire genuine DEFAULT collector authority');
+  for (const values of [[], [['module:reader', 'opaque']], JSON.parse(JSON.stringify([['module:reader', 'opaque']]))])
+    assert.equal(methods.pair(actual.ts, values, values.slice(), actual.projectRoot, old.projectRoot, methods.defaultRoots), false,
+      'uncollected and cloned arrays cannot borrow the actual Program proof');
+});
+
+test('SDF readable R rejects changes to source, permission, revision, fresh admission and opaque semantics', async t => {
+  const methods = sdfReadableSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const commits = 'packages/domain/src/commit/commits.ts', readable = 'packages/sdf-schema/src/readable-core.ts';
+  const cases = [
+    ['fresh readable validator', commits, text => text.replace('storedCore === undefined ? validateSdfDraftCore(finalCore)', 'storedCore === undefined ? validateReadableSdfDraftCore(finalCore)')],
+    ['raw caller core', commits, text => text.replace('core = source.manifest.coreJson as Record<string, unknown>;', 'core = (input as any).sdfCore;')],
+    ['cross RO version', commits, text => text.replace('where: { id: input.source.versionId, researchObjectId: ro.id }', 'where: { id: input.source.versionId }')],
+    ['stored optimistic conflict', commits, text => text.replace('if (ro.version !== input.version) throw', 'if (false) throw')],
+    ['stored transaction lock', commits, text => text.replace('FOR UPDATE`;', '`;')],
+    ['missing artifact retention', commits, text => text.replace('deletedAt: null } }) !== new Set(artifactIds).size', 'deletedAt: null } }) !== -1')],
+    ['ordinary authority residual', commits, text => text.replace("if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (isDefault && membership.role === 'contributor'))", 'if (false)')],
+    ['commit persistence residual', commits, text => text.replace('data: { version: input.version + 1 }', 'data: { version: input.version + 2 }')],
+    ['old opaque map reinterpreted', readable, text => text.replace("(doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION", "'fieldFormats' in doc")],
+    ['full reader uses draft validation', readable, text => text.replace('return validateSdfCore(doc);', 'return validateSdfDraftCore(doc);')],
+    ['unsupported identity coerced', readable, text => text.replace('return validateSdfDraftCore(doc);', "return validateSdfDraftCore({ ...doc as object, schemaVersion: '0.1.0' });")],
+    ['unsafe Ajv mutation option', readable, text => text.replace('new Ajv({ allErrors: true })', 'new Ajv({ allErrors: true, removeAdditional: true })')],
+    ['extra eager initialization', readable, text => `${text}\nconst eager = Date.now();\n`],
+    ['unsupported format accepted', readable, text => text.replace("enum: ['plain', 'markdown']", "enum: ['plain', 'markdown', 'html']")],
+    ['fresh createRO version reopened', 'packages/domain/src/research-object/research-objects.ts', text => text.replace('core.schemaVersion !== undefined && core.schemaVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal version reopened', 'packages/domain/src/journal/publishing.ts', text => text.replace('explicitCoreVersion !== undefined && explicitCoreVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal strips opaque history', 'packages/domain/src/journal/publishing.ts', text => text.replace('const core = { ...draft.core, schemaVersion:', 'const core = { schemaVersion:')],
+    ['unchanged digest exposes spread order', 'packages/domain/src/journal/content.ts', text => text.replace('JSON.stringify(canonical(value))', 'JSON.stringify(value)'), true],
+    ['restore caller source substitution', 'packages/domain/src/commit/restore-draft.ts', text => text.replace("source: { kind: 'version', versionId: source.id }", "source: { kind: 'version', versionId: input.versionId + '-other' }")],
+    ['extra stored source caller', commits, text => `${text}\nexport const unsafeStoredAlias = createStoredSnapshotCommit;\n`],
+    ['internal source escape', commits, text => `${text}\nexport const unsafeInternalAlias = createCommitInternal;\n`],
+    ['unchanged namespace acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `import * as snapshots from './commits';\n${text}\nexport const escape = () => snapshots;\n`, true],
+    ['unchanged dynamic import acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `${text}\nexport async function escape() { return import('./commits'); }\n`, true],
+    ['changed old opaque domain', 'packages/sdf-schema/src/core.ts', text => text.replace("title: 'OpenScience SDF Draft Core',", "title: 'OpenScience SDF Draft Core', additionalProperties: false,")],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const previous = both ? await videoIngressProgram(new Map([[path, mutate]]), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' }) : old;
+    assert.throws(() => methods.model(current.ts, videoPairContext(current), videoPairContext(previous)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('SDF_R_'), name);
+  });
+});
 
 function voicePairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
