@@ -333,9 +333,12 @@ export async function saveHermesVoiceCheckpoint(deps: HermesVoiceDeps, identity:
       || task.sessionId !== identity.sessionId || !isDeepStrictEqual(task.payload, prior.request)) blocked('原语音付费请求身份不匹配');
     const next: HermesVoiceCheckpoint = { ...prior, ...update };
     if (isDeepStrictEqual(prior, next)) return prior;
-    if ((prior.phase === 'completed' || prior.phase === 'failed')
+    const fillsSubmittedCredits = prior.phase === 'submitted' && next.phase === 'submitted'
+      && prior.credits === undefined && next.credits !== undefined
+      && isDeepStrictEqual(next, { ...prior, credits: next.credits });
+    if (!fillsSubmittedCredits && ((prior.phase === 'completed' || prior.phase === 'failed')
       || (update.phase === 'submitted' && prior.phase !== 'submitting')
-      || (update.phase !== 'submitted' && prior.phase !== 'submitted')) blocked('语音回执终态不可覆盖');
+      || (update.phase !== 'submitted' && prior.phase !== 'submitted'))) blocked('语音回执终态不可覆盖');
     const result = { ...(record(task.result) ? task.result : {}), [HERMES_VOICE_RECEIPT_KEY]: next };
     readHermesVoiceCheckpoint(result);
     // Only the exact original receipt may survive trash; status/attempt/authority are never rearmed.

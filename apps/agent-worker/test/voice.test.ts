@@ -176,10 +176,13 @@ describe('Hermes voice paid submission boundary', () => {
     const objectKey = `derived/hermes-voice/${identity.userId}/${identity.taskId}/${sha256}.${format}`;
     expect(deps.storage.putObject).toHaveBeenCalledOnce();
     expect(deps.storage.putObject).toHaveBeenCalledWith(objectKey, bytes, { contentType, sha256 });
-    expect(authority.save).toHaveBeenCalledOnce();
-    expect(authority.save).toHaveBeenCalledWith(expect.anything(), replyIdentity,
+    expect(authority.save).toHaveBeenCalledTimes(2);
+    expect(authority.save).toHaveBeenNthCalledWith(1, expect.anything(), replyIdentity,
+      { phase: 'submitted', providerId: 'original-tts-id', credits: 1 });
+    expect(authority.save).toHaveBeenNthCalledWith(2, expect.anything(), replyIdentity,
       { phase: 'completed', credits: 1, audio: { objectKey, sha256, bytes: bytes.length, contentType } });
-    expect(deps.storage.putObject.mock.invocationCallOrder[0]).toBeLessThan(authority.save.mock.invocationCallOrder[0]!);
+    expect(authority.save.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(voiceGateway.downloadHermesVoiceAudio).mock.invocationCallOrder[0]!);
+    expect(deps.storage.putObject.mock.invocationCallOrder[0]).toBeLessThan(authority.save.mock.invocationCallOrder[1]!);
     expect(authority.finalize).toHaveBeenCalledOnce();
   });
   it('does not persist a malformed saved WAV even when its declared MIME is audio/wav', async () => {
@@ -235,9 +238,76 @@ describe('Hermes voice paid submission boundary', () => {
     await expect(createHermesVoiceHandlers(runtime)['voice.reply'](deps as never, task)).rejects.toThrow('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE');
     expect(fetcher).toHaveBeenCalledOnce(); expect(fetcher.mock.calls[0]?.[1]?.method).toBe('GET');
     expect(fetcher.mock.calls[0]?.[0]).toBe('https://api.synclip.ai/v1/tasks/original-tts-id');
-    expect(authority.withSubmission).not.toHaveBeenCalled(); expect(authority.save).not.toHaveBeenCalled();
+    expect(authority.withSubmission).not.toHaveBeenCalled(); expect(authority.save).toHaveBeenCalledOnce();
+    expect(authority.save).toHaveBeenCalledWith(expect.anything(), replyIdentity,
+      { phase: 'submitted', providerId: 'original-tts-id', credits: 1 });
     expect(deps.storage.putObject).not.toHaveBeenCalled(); expect(authority.finalize).not.toHaveBeenCalled();
     expect(voiceDomain.projectHermesVoiceResult('voice.reply', 'failed', checkpoint)).toEqual({ operation: 'reply', canResume: true });
+  });
+  it.each([[0, 'download'], [1, 'download'], [0, 'storage'], [1, 'storage']] as const)(
+    'retains a newly learned %s credit receipt before %s failure without completing or resubmitting', async (credits, failureStage) => {
+    const replyIdentity = { ...identity, kind: 'voice.reply' };
+    const request = { operation: 'reply', sourceTaskId: 'saved-guide', sourceExecutionAttempt: 1,
+      spokenText: 'A saved answer.', voiceId: 'voice' };
+    const checkpoint = { identity: replyIdentity, request, phase: 'submitted', providerId: 'original-tts-id' };
+    expect(checkpoint).not.toHaveProperty('credits');
+    authority.load.mockResolvedValue({ identity: { ...replyIdentity, executionAttempt: 2 }, payload: request, checkpoint });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ task_id: 'original-tts-id', status: 'completed', coins_used: credits,
+      output: { type: 'audio', url: 'https://cdn.synclip.ai/result' }, url_expires_at: '2099-01-01T00:00:00Z' }));
+    const runtime = { client: new SynclipAudioClient({ apiKey: 'test-key', fetch: fetcher }), listPresets: vi.fn() };
+    const failure = new Error(`${failureStage} unavailable`);
+    const downloadAudio = vi.fn(async () => {
+      if (failureStage === 'download') throw failure;
+      return { bytes: replyWav(), format: 'wav' as const, contentType: 'audio/wav' as const };
+    });
+    if (failureStage === 'storage') deps.storage.putObject.mockRejectedValueOnce(failure);
+    await expect(createHermesVoiceHandlers(runtime, { downloadAudio })['voice.reply'](deps as never, task)).rejects.toBe(failure);
+    expect(authority.save).toHaveBeenCalledOnce();
+    expect(authority.save).toHaveBeenCalledWith(expect.anything(), replyIdentity,
+      { phase: 'submitted', providerId: 'original-tts-id', credits });
+    expect(authority.save.mock.invocationCallOrder[0]).toBeLessThan(downloadAudio.mock.invocationCallOrder[0]!);
+    if (failureStage === 'storage') {
+      expect(authority.save.mock.invocationCallOrder[0]).toBeLessThan(deps.storage.putObject.mock.invocationCallOrder[0]!);
+    } else expect(deps.storage.putObject).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledWith('https://api.synclip.ai/v1/tasks/original-tts-id', expect.objectContaining({ method: 'GET' }));
+    expect(authority.withSubmission).not.toHaveBeenCalled(); expect(runtime.listPresets).not.toHaveBeenCalled();
+    expect(authority.finalize).not.toHaveBeenCalled(); expect(authority.discarded).not.toHaveBeenCalled();
+  });
+  it('stops before downloading paid audio when saving its newly learned fee fails', async () => {
+    const replyIdentity = { ...identity, kind: 'voice.reply' };
+    const request = { operation: 'reply', sourceTaskId: 'saved-guide', sourceExecutionAttempt: 1,
+      spokenText: 'A saved answer.', voiceId: 'voice' };
+    authority.load.mockResolvedValue({ identity: { ...replyIdentity, executionAttempt: 2 }, payload: request,
+      checkpoint: { identity: replyIdentity, request, phase: 'submitted', providerId: 'original-tts-id' } });
+    const failure = new Error('receipt persistence failed'); authority.save.mockRejectedValueOnce(failure);
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ task_id: 'original-tts-id', status: 'completed', coins_used: 1,
+      output: { type: 'audio', url: 'https://cdn.synclip.ai/result' }, url_expires_at: '2099-01-01T00:00:00Z' }));
+    const runtime = { client: new SynclipAudioClient({ apiKey: 'test-key', fetch: fetcher }), listPresets: vi.fn() };
+    const downloadAudio = vi.fn(async () => ({ bytes: replyWav(), format: 'wav' as const, contentType: 'audio/wav' as const }));
+    await expect(createHermesVoiceHandlers(runtime, { downloadAudio })['voice.reply'](deps as never, task)).rejects.toBe(failure);
+    expect(authority.save).toHaveBeenCalledOnce();
+    expect(authority.save).toHaveBeenCalledWith(expect.anything(), replyIdentity,
+      { phase: 'submitted', providerId: 'original-tts-id', credits: 1 });
+    expect(downloadAudio).not.toHaveBeenCalled(); expect(deps.storage.putObject).not.toHaveBeenCalled();
+    expect(authority.finalize).not.toHaveBeenCalled(); expect(authority.discarded).not.toHaveBeenCalled();
+    expect(authority.withSubmission).not.toHaveBeenCalled(); expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it('does not invent a fee while saving completed audio with no supplier fee', async () => {
+    const replyIdentity = { ...identity, kind: 'voice.reply' };
+    const request = { operation: 'reply', sourceTaskId: 'saved-guide', sourceExecutionAttempt: 1,
+      spokenText: 'A saved answer.', voiceId: 'voice' };
+    authority.load.mockResolvedValue({ identity: replyIdentity, payload: request,
+      checkpoint: { identity: replyIdentity, request, phase: 'submitted', providerId: 'original-tts-id' } });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ task_id: 'original-tts-id', status: 'completed',
+      output: { type: 'audio', url: 'https://cdn.synclip.ai/result' }, url_expires_at: '2099-01-01T00:00:00Z' }));
+    const runtime = { client: new SynclipAudioClient({ apiKey: 'test-key', fetch: fetcher }), listPresets: vi.fn() };
+    const downloadAudio = vi.fn(async () => ({ bytes: replyWav(), format: 'wav' as const, contentType: 'audio/wav' as const }));
+    await createHermesVoiceHandlers(runtime, { downloadAudio })['voice.reply'](deps as never, task);
+    expect(authority.save).toHaveBeenCalledOnce();
+    expect(authority.save.mock.calls[0]?.[2]).toEqual({ phase: 'completed', audio: expect.anything() });
+    expect(deps.storage.putObject.mock.invocationCallOrder[0]).toBeLessThan(authority.save.mock.invocationCallOrder[0]!);
+    expect(authority.finalize).toHaveBeenCalledOnce(); expect(authority.withSubmission).not.toHaveBeenCalled();
   });
   it.each(['mp3', 'wav'] as const)('remembers newly downloaded %s bytes when physical purge wins checkpoint persistence', async format => {
     const replyIdentity = { ...identity, kind: 'voice.reply' };

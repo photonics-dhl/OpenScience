@@ -74,6 +74,10 @@ export function createHermesVoiceHandlers(runtime?: SynclipVoiceRuntime, options
             ...(output.coins_used === undefined ? {} : { credits: output.coins_used }) });
         } else {
           if (!('url_expires_at' in output)) throw new Error('[blocked] VOICE_RESPONSE_INVALID');
+          if (output.coins_used !== undefined) {
+            await saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted',
+              providerId: checkpoint.providerId, credits: output.coins_used });
+          }
           const audio = await (options.downloadAudio ?? downloadHermesVoiceAudio)(output);
           if (audio.bytes.length > 20 * 1024 * 1024) throw new Error('[blocked] VOICE_AUDIO_TOO_LARGE');
           const sha256 = sha256HexBuffer(audio.bytes);

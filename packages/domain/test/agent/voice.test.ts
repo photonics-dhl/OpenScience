@@ -412,6 +412,146 @@ describe('Hermes voice current authority and source', () => {
   });
 });
 
+describe('Hermes voice submitted fee retention', () => {
+  async function submitted(credits?: number, transcription = false) {
+    const f = fixture();
+    const task = transcription ? await f.submit() : await submitHermesVoiceReply(f.deps, f.replyInput);
+    const execution = await f.claim(task.id);
+    const create = vi.fn(async () => ({ providerId: 'original-fee-provider', ...(credits === undefined ? {} : { credits }) }));
+    const prior = await withHermesVoiceSubmission(f.deps, execution, create);
+    f.row(task.id).result = { ...f.row(task.id).result, unrelated: { retained: true } };
+    const save = (value: number) => saveHermesVoiceCheckpoint(f.deps, execution.identity,
+      { phase: 'submitted', providerId: prior.providerId!, credits: value });
+    const lifecycle = () => {
+      const { result: _result, updatedAt: _updatedAt, ...fields } = f.row(task.id);
+      return structuredClone(fields);
+    };
+    return { f, task, execution, create, prior, save, lifecycle };
+  }
+  it.each([0, 1])('fills missing submitted credits with %s without changing the original receipt or lifecycle', async credits => {
+    const { f, task, prior, save, lifecycle, create } = await submitted();
+    expect(prior).not.toHaveProperty('credits');
+    const before = lifecycle(), resultBefore = structuredClone(f.row(task.id).result);
+    const raw = vi.spyOn(f.prisma, '$queryRaw'), locks = vi.spyOn(f.prisma, '$executeRaw');
+    const filled = await save(credits);
+    expect(filled).toEqual({ ...prior, credits });
+    expect(f.row(task.id).result).toEqual({ ...resultBefore, hermesVoice: filled });
+    expect(lifecycle()).toEqual(before);
+    expect(raw).toHaveBeenCalledTimes(1); expect(locks).toHaveBeenCalledTimes(1);
+    expect((raw.mock.calls[0][0] as TemplateStringsArray).join('')).toContain('FOR UPDATE');
+    expect((locks.mock.calls[0][0] as TemplateStringsArray).join('')).toContain('pg_advisory_xact_lock');
+    expect(projectAgentTaskResult(f.row(task.id).result, 'voice.reply')).toBeNull();
+    expect(JSON.stringify((await getHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).result)).not.toMatch(/credits|original-fee-provider/);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+  it.each([0, 1])('replays known submitted credits %s without another result write', async credits => {
+    const { f, prior, save } = await submitted(credits);
+    const writes = vi.mocked(f.prisma.agentTask.updateMany).mock.calls.length;
+    expect(await save(credits)).toEqual(prior);
+    expect(vi.mocked(f.prisma.agentTask.updateMany).mock.calls).toHaveLength(writes);
+  });
+  it.each([[0, 1], [1, 0]])('rejects overwriting known submitted credits %s with %s', async (known, changed) => {
+    const { f, task, save } = await submitted(known);
+    const before = structuredClone(f.row(task.id).result);
+    await expect(save(changed)).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(f.row(task.id).result).toEqual(before);
+  });
+  it.each(['provider', 'identity', 'request', 'receipt-identity'])('rejects fee filling with changed %s', async change => {
+    const { f, task, execution, prior } = await submitted();
+    const before = structuredClone(f.row(task.id).result);
+    const identity = change === 'identity' ? { ...execution.identity, executionAttempt: 99 } : execution.identity;
+    const update = { phase: 'submitted' as const, providerId: change === 'provider' ? 'other-provider' : prior.providerId!, credits: 1,
+      ...(change === 'request' ? { request: { ...prior.request, spokenText: 'Changed original reply' } } : {}),
+      ...(change === 'receipt-identity' ? { identity: { ...prior.identity, userId: id(99) } } : {}) };
+    await expect(saveHermesVoiceCheckpoint(f.deps, identity, update)).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(f.row(task.id).result).toEqual(before);
+  });
+  it.each([null, -0.1, 1.1, NaN, Infinity, '1'])('rejects invalid submitted credits %s without persisting them', async credits => {
+    const { f, task, save } = await submitted();
+    const before = structuredClone(f.row(task.id).result);
+    await expect(save(credits as number)).rejects.toThrow();
+    expect(f.row(task.id).result).toEqual(before);
+  });
+  it('leaves absent submitted credits absent instead of defaulting to zero', async () => {
+    const { f, task, execution, prior } = await submitted();
+    expect(await saveHermesVoiceCheckpoint(f.deps, execution.identity, { phase: 'submitted', providerId: prior.providerId! })).toEqual(prior);
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)).not.toHaveProperty('credits');
+  });
+  it('uses the complete prior result CAS and rejects a lost write', async () => {
+    const { f, task, save } = await submitted();
+    const before = structuredClone(f.row(task.id).result);
+    vi.mocked(f.prisma.agentTask.updateMany).mockImplementationOnce(async args => {
+      expect(args.where?.result).toEqual({ equals: before });
+      expect(Object.keys(args.data)).toEqual(['result']);
+      return { count: 0 };
+    });
+    await expect(save(1)).rejects.toThrow('已由其他执行更新');
+    expect(f.row(task.id).result).toEqual(before);
+  });
+  it('retains only the first competing submitted fee fill under the receipt lock', async () => {
+    const { f, task, prior, save } = await submitted();
+    const results = await Promise.allSettled([save(0), save(1)]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)).toEqual({ ...prior, credits: 0 });
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+  it.each(['completed', 'failed'] as const)('does not reopen a %s checkpoint to fill submitted fees', async phase => {
+    const { f, task, execution, save } = await submitted(undefined, true);
+    await saveHermesVoiceCheckpoint(f.deps, execution.identity, phase === 'completed' ? { phase, transcript: 'Saved original transcript' } : { phase });
+    const before = structuredClone(f.row(task.id).result);
+    await expect(save(1)).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
+    expect(f.row(task.id).result).toEqual(before);
+  });
+  it.each(['revoked', 'attempt', 'stopped'])('retains late submitted fees after %s without adoption or another charge', async loss => {
+    const { f, task, execution, prior, save, lifecycle, create } = await submitted();
+    if (loss === 'revoked') f.db.memberships.splice(0);
+    if (loss === 'attempt') f.row(task.id).executionAttempt = 2;
+    if (loss === 'stopped') Object.assign(f.row(task.id), { status: 'failed', error: HERMES_VOICE_OWNED_STOP_REASON, executionAttempt: 2 });
+    const before = lifecycle();
+    expect(await save(1)).toEqual({ ...prior, credits: 1 });
+    expect(lifecycle()).toEqual(before);
+    await expect(finalizeHermesVoiceTask(f.deps, execution)).rejects.toThrow();
+    expect(projectAgentTaskResult(f.row(task.id).result, 'voice.reply')).toBeNull();
+    if (loss === 'revoked') await expect(getHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    if (loss === 'stopped') await expect(resumeHermesVoiceTask(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+  it.each(['task', 'session', 'research-object'])('retains only the fee result after %s trash through existing maintenance', async deleted => {
+    const { f, task, execution, prior, save, lifecycle } = await submitted();
+    if (deleted === 'task') f.row(task.id).deletedAt = new Date();
+    if (deleted === 'session') f.db.agentSessions[0].deletedAt = new Date();
+    if (deleted === 'research-object') f.db.researchObjects[0].deletedAt = new Date();
+    const before = lifecycle();
+    let maintenance = false;
+    const write = f.prisma.agentTask.updateMany.bind(f.prisma.agentTask), raw = f.prisma.$executeRaw.bind(f.prisma);
+    const transaction = f.prisma.$transaction.bind(f.prisma);
+    f.prisma.$transaction = (async (...args: Parameters<typeof transaction>) => {
+      maintenance = false; try { return await transaction(...args); } finally { maintenance = false; }
+    }) as typeof f.prisma.$transaction;
+    f.prisma.$executeRaw = (async (query: TemplateStringsArray, ...values: unknown[]) => {
+      if (query.join('').includes("set_config('openscience.trash_mutation', 'on', true)")) maintenance = true;
+      return raw(query, ...values);
+    }) as typeof f.prisma.$executeRaw;
+    f.prisma.agentTask.updateMany = (async args => {
+      if (!maintenance) throw Object.assign(Error('Content is in trash'), { code: '55000' });
+      expect(Object.keys(args.data)).toEqual(['result']); return write(args);
+    }) as typeof f.prisma.agentTask.updateMany;
+    expect(await save(1)).toEqual({ ...prior, credits: 1 });
+    expect(lifecycle()).toEqual(before); expect(maintenance).toBe(false);
+    await expect(finalizeHermesVoiceTask(f.deps, execution)).rejects.toThrow();
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+  it('retains the original ASR submitted fee to failed refund-zero transition', async () => {
+    const { f, task, execution, prior } = await submitted(1, true);
+    expect(await saveHermesVoiceCheckpoint(f.deps, execution.identity, { phase: 'failed', credits: 0 }))
+      .toEqual({ ...prior, phase: 'failed', credits: 0 });
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)?.credits).toBe(0);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
+});
+
 describe('Hermes voice paid recovery and private completion', () => {
   it('holds a crash with uncertain submission forever without another supplier POST, generic retry or resume', async () => {
     const f = fixture(); const task = await f.submit(); const execution = await f.claim(task.id);
