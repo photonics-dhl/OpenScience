@@ -475,7 +475,8 @@ export async function downloadHermesVoiceAudio(task: SynclipAudioTask, options: 
     accept: 'audio/mpeg,audio/wav,application/octet-stream', types: ['audio/mpeg', 'audio/wav', 'application/octet-stream'],
     decode: (bytes, mime) => {
       const audio = validateHermesVoiceAudioBytes(bytes);
-      if (mime !== 'application/octet-stream' && mime !== audio.contentType) throw invalid();
+      const contentType = mime.split(';')[0]!.trim().toLowerCase();
+      if (contentType !== 'application/octet-stream' && contentType !== audio.contentType) throw invalid();
       return audio;
     } });
 }
@@ -562,7 +563,7 @@ async function downloadAudio<T>(task: SynclipAudioTask, options: SynclipAudioDow
           if (length !== undefined && size !== Number(length)) { fail(invalid()); return; }
           try {
             if (partial) chunks[chunks.length - 1] = partial.subarray(0, partialSize);
-            const result = format.decode(Buffer.concat(chunks, size), contentType.split(';')[0]!.trim().toLowerCase());
+            const result = format.decode(Buffer.concat(chunks, size), contentType);
             chunks.length = 0;
             partial = undefined;
             settled = true;

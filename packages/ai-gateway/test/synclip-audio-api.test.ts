@@ -325,6 +325,21 @@ describe('Synclip audio uncertain responses and bounds', () => {
 });
 
 describe('Synclip audio download transport', () => {
+  it('does not repeat MIME normalization for the existing one-argument MP3 decoder', async () => {
+    const split = String.prototype.split;
+    let normalizations = 0, result;
+    const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (this: string, separator, limit) {
+      if (String(this) === 'audio/mpeg' && separator === ';' && ++normalizations > 1)
+        throw new Error('second normalization');
+      return Reflect.apply(split, this, [separator, limit]);
+    });
+    try {
+      const transport = downloadTransport();
+      result = await downloadSynclipAudio(completed(), { resolve: resolvePublic(), request: transport.request });
+    } finally { spy.mockRestore(); }
+    expect(result).toEqual({ bytes: mp3, format: 'mp3', contentType: 'audio/mpeg' });
+    expect(normalizations).toBe(1);
+  });
   it('pins a single public IPv4, preserves TLS host and sends no credentials', async () => {
     const resolve = resolvePublic();
     const transport = downloadTransport();
@@ -581,6 +596,11 @@ describe('Hermes WAV reader output boundary', () => {
   it.each([['audio/mpeg', 'wav'], ['audio/wav', 'mp3'], ['text/html', 'wav']])('rejects declared %s with %s bytes', async (mime, format) => {
     const transport = downloadTransport(format === 'wav' ? pcm() : mp3, { 'content-type': mime });
     await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request })).rejects.toThrow();
+  });
+  it.each([' Audio/WAV ; charset=binary', ' Application/Octet-Stream ; fixture=true'])('normalizes raw Hermes MIME %s inside its dedicated decoder', async mime => {
+    const bytes = pcm(), transport = downloadTransport(bytes, { 'content-type': mime });
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request }))
+      .resolves.toEqual({ bytes, format: 'wav', contentType: 'audio/wav' });
   });
   it('bounds Hermes bytes to the private delivery limit and preserves pinned no-credential transport', async () => {
     const transport = downloadTransport(pcm(), { 'content-type': 'audio/wav', 'content-length': String(16 * 1024 * 1024 + 1) });
