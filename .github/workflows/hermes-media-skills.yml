@@ -787,7 +787,7 @@ jobs:
       - run: node --check infra/hermes-agent/offline_host.cjs
       - name: Test release tooling with the retained video source fixtures
         run: |
-          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696; do
+          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5; do
             if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
               git fetch --no-tags --depth=1 origin "$fixture_ref"
             fi

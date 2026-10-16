@@ -777,8 +777,9 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
   return { ts, program, projectRoot };
 }
 
-// Only legacy video controls opt into the released V1 oracle. All image
-// controls retain the current candidate source by default.
+// Legacy video controls opt into the released V1 oracle. The two historical
+// image recovery/legacy component controls explicitly use the released 3a
+// inventory; all other image controls retain the current candidate by default.
 function historicalVideoIngressProgram(changes = new Map(), sourceRef = 'e75f2764ded1074f4d307d34dca833517f0d3696') {
   return videoIngressProgram(changes, { sourceRef });
 }
@@ -1197,7 +1198,9 @@ test('image recovery projection retains both original task and run recovery modu
   const project=runInNewContext(`${component}; finiteImageRecoveryProjections`,{resolve,relative});
   const files=['packages/domain/src/agent/agent.ts','packages/domain/src/agent/research-run.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  // This historical image component proof is not current whole-candidate compatibility.
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
   assert.equal(model.status,'conditional');
   for(const [key,value]of model.projected)assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
@@ -1206,7 +1209,7 @@ test('image recovery projection retains both original task and run recovery modu
       'const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution); await tx.extraOperation();')],
     [files[0],value=>value.replace('task.retryCount === 0','task.retryCount >= 0')],
   ]){
-    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    const unsafe=await videoIngressProgram(new Map([[path,change]]),{sourceRef});
     assert.throws(()=>{
       const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
       for(const [key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
@@ -1281,7 +1284,7 @@ test('image consumer projection retains original decision parsing and journal tu
   }
 });
 
-test('image legacy source model composes the real projections and refuses a live prepared-method escape', async () => {
+test('image legacy source model composes historical projections and refuses current voice and live prepared-method escapes', async () => {
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   const project=runInNewContext(`${component}; finiteImageLegacySourceModel`,{resolve,relative});
@@ -1295,7 +1298,19 @@ test('image legacy source model composes the real projections and refuses a live
     'packages/ai-gateway/src/native-image-review.ts','packages/ai-gateway/src/index.ts',
   ];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  // Only this historical image component is compared with the retained ca0a bytes.
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
+  const current=await videoIngressProgram();
+  assert.throws(()=>project(current.ts,videoPairContext(current),videoPairContext(legacy)),error=>{
+    assert.equal(error.reason,'IMAGE_DECLARATION_CONTEXT_UNKNOWN');
+    assert.ok(current.ts.isIdentifier(error.node),'the current image-only proof must identify its unclassified voice caller');
+    assert.equal(error.node.text,'persistHermesVoiceTaskInTransaction');
+    assert.equal(resolve(error.node.getSourceFile().fileName),resolve(current.projectRoot,'packages/domain/src/agent/voice.ts'));
+    assert.ok(current.ts.isCallExpression(error.node.parent)&&error.node.parent.expression===error.node,
+      'the rejected identifier must be the actual voice call expression');
+    return true;
+  });
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
   assert.ok(model.closure.declarations.size>0);
   for(const[key,value]of model.projected){
@@ -1309,7 +1324,7 @@ test('image legacy source model composes the real projections and refuses a live
     }else assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
   }
   const unsafe=await videoIngressProgram(new Map([['packages/ai-gateway/src/gateway.ts',value=>value.replace(
-    '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]));
+    '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]),{sourceRef});
   assert.throws(()=>project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy)),error=>error.reason==='IMAGE_DECLARATION_CONTEXT_UNKNOWN');
 });
 
