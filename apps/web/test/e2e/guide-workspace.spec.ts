@@ -20,6 +20,9 @@ async function fixture(page: Page, options: { delayedSelection?: boolean; publis
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
     if (method !== 'GET') calls.writes.push(method + ' ' + path);
+    if (method === 'GET' && path === '/api/agent/voice/capabilities' && url.searchParams.size === 0) return json(route, {
+      available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [],
+    });
     if (path === '/api/auth/me') return json(route, { userId: options.ownerId ?? 'owner-1', email: 'researcher@example.invalid', displayName: 'Researcher', status: 'active', level: 'basic' });
     if (path === '/api/csrf-token') return json(route, { csrfToken: 'fixture-token' });
     if (path === '/api/workspaces') return json(route, { workspaces: [{ id: 'personal-1', name: 'Personal', type: 'personal', role: 'owner' }] });

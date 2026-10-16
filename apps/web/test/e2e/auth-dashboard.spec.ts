@@ -12,6 +12,9 @@ test.beforeEach(async ({ page }) => {
   await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'en', url: baseUrl }]);
   await page.context().route('**/api/**', (route) => {
     const url = new URL(route.request().url());
+    if (route.request().method() === 'GET' && url.pathname === '/api/agent/voice/capabilities' && url.searchParams.size === 0) {
+      return route.fulfill({ json: { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] } });
+    }
     const anonymousRead = url.pathname === '/api/auth/me'
       || (url.pathname === '/api/research-objects' && url.search === '?limit=20')
       || (url.pathname === '/api/agent/tasks' && url.search === '?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal');

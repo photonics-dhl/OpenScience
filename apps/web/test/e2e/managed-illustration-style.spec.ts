@@ -55,6 +55,9 @@ async function setup(page: Page, loseResponse = false, staleVersion = false, opt
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (request.method() === 'GET' && path === '/api/agent/voice/capabilities' && url.searchParams.size === 0) return json({
+      available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [],
+    });
     if (path === '/api/auth/me') {
       authReads.push(actor);
       return json({ userId: actor, email: 'author@example.invalid', displayName: 'Researcher', platformRole: options.platformRole ?? 'user', status: 'email_verified', level: 'free' });
