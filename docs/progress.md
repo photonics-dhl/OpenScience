@@ -2,11 +2,10 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
-- 维护三actual callee与一次3项受控等待验证已获原High824有限GO，未发现本体漏await，业务hunk=0。fulfilled不等写成功/资源退出；本单元关闭，停用候选startup拒绝、真实runner/SDK内部、旧heap交接/Writer保全两P1与B/C仍未证，无新现场操作。 最新queueMetrics单叶包已获原High836技术GO，root一次读取在leaf-pin报not-found，正文0B/无跟imports；原件保留、窗口关闭，不重试/换路径/运行服务。后继元数据包同High844后root一次实际取得稳定directory类型、0正文/0枚举；窗口关闭；原High854方案GO后owner已STARTED唯一J12 LOCAL PREP四新source reader/carrier/scope/transport文件，完成整包再同High审实现，当前无--execute/SSH/服务窗。目录不证明源码/loaded，旧判断与数据保护不变。
-- 用户纠正发布等待过长：已把原CI发布工具467项耗时23分39秒及最小复用/解耦后继写入原能力台账；当前389024继续，45→60仅预算补足，不新增门禁/重开R审查，不取消必要权限、费用保护与真实pair/体验验收。
-- 视频V1 reader已完成真实双版本CI及发布；后继writer完成源码/实际pair/CI，但最新人类暂停部署与激活。三项科学修订及后续真实私有规划目标保留，旧71e/591e/e875任务与已消费额度不重放，商业媒体/配音/公开暂停。
-- 图片I1与统一首次入口/耐久提交已发布；2a完整Source/组合原High零项GO已收eb5，再仅继承已审45→60预算为03c9e4f0 clean/pushed，历史refs及APP/proof不变。尚无本候选实际pair/CI/发布/browser GO；R后仍须原已定W→已发布R衔接和三项真实体验验收，PRIVATE brief不冒充新PNG，现有心跳已补连续续作。Provider HOLD、后继2.5目标及原图/public保护不变。
-- UI原文恢复已完成且历史/公开/原图保留，来源异常UNKNOWN。PDF676已上线，Open工具安全拒绝及内容可读性限制保留、原窗口关闭不绕行。独立0.2 readable R完整34路径原High零项Source GO，已收311cb1dc clean/pushed；有效分组测试通过，旧review3fail/类型旧诊断及API AJV初始化限制分开，browser/真实DB未跑。此后继不阻塞图片集成。
-- 语音新Media38902427201 exact764/rollback676六job完整SUCCESS，原DEFAULT self/真实pair与尾部检查通过，原45分钟取消记录保留。唯一collector已封存原件；root fresh before与新双库backup核通过，原R-only部署一次运行中，尚无after/上线结论。R完成即图片独立CI，不等TTS/ASR；paid原任务未恢复，供应商1积分与平台费用分开。
-- R12共同排序及已验收ordinary late-paid/真实PG子组保留；真实Redis/RO、主机断电、永久丢响应及整体仍OPEN。R08候选未部署，R13 OOM根因未关闭。
-- 原图、公开版本、PDF/SourceMap、task/oncekey/paid-unknown保护不变；全部本机archive/cleanup/prune冻结，不安装或修复共享依赖。三篇真实论文全流程、普通用户旅程、完整视频与整站审美目标仍未完成。
+- 图片首次入口与耐久提交已发布；本轮R修复已原High收取，新独立CI仍在实际pair比较失败，PG及四浏览器成功不能代替配对。新日志未给inner原因，唯一采集已关闭；原High已准两infra诊断增量，图片owner唯一实现并分出可移植video小hunk，保原判定失败和生产不变，完整审查后再各自实际pair。R未部署，必要W与同task/原key-body恢复/精确asset及位置验收仍继续，Provider HOLD。
+- UI独立R的实际CI发现两处fixture问题和未覆盖的SDF-R兼容模型。两fixture最小修正已原High收取，断言/timeout不变；pair由独立High模型worker仅两infra定向闭合，已得缺SDF family真实RED，不借其他媒体阻塞。已认可B/I/list/link完整W在独立源码树直接实施，保旧原像/公开版本和公式，R及本机W都不冒称页面已交付。PDF安全STOP保留。
+- 视频暂停已按最新直接人类解除；最小writer移植及High已收，新实际CI五job成功但pair比较失败，候选不发布。原owner只读窗口已关，有限诊断由图片唯一owner共用实现、root独立收取与配对，原一次新私有修订额度未消费；商业媒体/音频/公开暂停，旧任务及来源保留。
+- 语音R已真实发布，WAV写端本地15项原handler控制通过，独立W→R有限模型在补。16MiB专用helper与旧大MP3恢复差额明示；旧已存CP保留。原paid任务未恢复，真实播放/ASR未验，现有lint初始化失败不计绿；无新供应商调用。
+- 七问后继积分制最小方案已同High零项GO并纳入原整改计划：分级月授/可充值/成本等价积分、管理员个人不限但平台预算硬拦，优先补原子预留、收款唯一入账和Admin最小运营面。金额/精度/历史转换/支付通道待定，只方案不改生产。原维护J14暂停，旧heap/Writer保全/B/C及137失败保持未决。
+- 发布耗时债务沿原台账：复用未变证据、减少重复Program构建及无关发布耦合；保必要真实pair/权限/paid与产品验收，不因效率讨论取消正在执行的CI或增加新门禁。
+- R12已验收子组保留，整体Redis/RO/断电等仍OPEN；R08未部署，R13根因未闭合。原图/public/PDF/SourceMap/task/oncekey/UNKNOWN保护及本机安装/cleanup/prune冻结不变。三篇真实论文和普通用户完整旅程仍未完成。
