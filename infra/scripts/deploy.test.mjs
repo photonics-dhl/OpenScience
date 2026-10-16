@@ -813,8 +813,12 @@ function voicePairSourceComponents() {
     { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
 }
 
+// Preserve the actually released reader and all its mutations independently of
+// the current writer phase. These historical source Programs grant no authority.
+const releasedVoiceReaderSource = { sourceRef: '70e81398903db9cfd6f46cbab51db18ba5f7cb05' };
+
 test('voice reader source proof preserves the actual old runtime and source-only Programs grant no deployment authority', async () => {
-  const methods = voicePairSourceComponents(), actual = await videoIngressProgram();
+  const methods = voicePairSourceComponents(), actual = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
   let model;
   try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
@@ -852,7 +856,7 @@ test('voice reader proof rejects opened admission, leaked private results, rearm
     ['packages/domain/src/agent/voice-contract.ts', value => value + '\nfetch("https://example.invalid");\n'],
     ['packages/domain/src/agent/voice-contract.ts', value => 'import "./agent";\n' + value],
   ]) {
-    const changed = await videoIngressProgram(new Map([[path, change]]));
+    const changed = await videoIngressProgram(new Map([[path, change]]), releasedVoiceReaderSource);
     assert.throws(() => methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_'), path);
   }
@@ -882,7 +886,7 @@ test('voice reader High boundaries reject discarded operand effects and dispatch
       ['finalizeHermesVoiceTask', 'execution.identity.taskId'], ['saveHermesVoiceCheckpoint', 'identity.taskId'],
     ].map(([name, taskId]) => [`P1b ${name} entry`, 'packages/domain/src/agent/voice.ts', value => prematureDispatch(value, name, taskId)]),
   ]) {
-    const changed = await videoIngressProgram(new Map([[path, change]]));
+    const changed = await videoIngressProgram(new Map([[path, change]]), releasedVoiceReaderSource);
     try { methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)); accepted.push(label); }
     catch (error) { assert.match(error.reason ?? '', /^VOICE_/u, label); }
   }
@@ -890,9 +894,9 @@ test('voice reader High boundaries reject discarded operand effects and dispatch
 });
 
 test('voice writer source transition permits only the pure selector while retaining reader and every remaining entry', async () => {
-  const methods = voicePairSourceComponents(), reader = await videoIngressProgram();
+  const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const key = 'packages/domain/src/agent/voice-contract.ts';
-  const writer = await videoIngressProgram(new Map([[key, value => value.replace('return false;', 'return true;')]]));
+  const writer = await videoIngressProgram();
   // Conditional source terms, never successful collector arrays. Each source
   // module in these Programs participates; the pair still refuses this data.
   const entries = value => value.program.getSourceFiles().filter(file => file.fileName.replaceAll('\\', '/').startsWith(value.projectRoot.replaceAll('\\', '/'))
@@ -900,7 +904,13 @@ test('voice writer source transition permits only the pure selector while retain
     .map(file => [`module:${relative(value.projectRoot, file.fileName).replaceAll('\\', '/')}`, videoPairRuntime(value.ts, file.text)]);
   const a = entries(writer), b = entries(reader);
   const model = methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), a, b);
+  assert.equal(model.phase, 'writer');
   assert.deepEqual(videoPairRuntime(writer.ts, model.text), videoPairRuntime(reader.ts, reader.program.getSourceFile(resolve(reader.projectRoot, key)).text));
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  assert.throws(() => methods.model(writer.ts, videoPairContext(writer), videoPairContext(old)),
+    error => error.reason === 'VOICE_FRESH_PHASE_NOT_READER', 'writer-origin state cannot use the reader-to-old proof');
+  assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(old), a, entries(old)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the old release is not the compatible voice reader');
   for (const path of ['packages/domain/src/agent/voice.ts', 'packages/ai-gateway/src/synclip-audio-api.ts',
     'packages/domain/src/agent/first-image-continuation.ts']) {
     const changed = a.map(row => row[0] === `module:${path}` ? [row[0], 'changed actual source-runtime term'] : row);
@@ -912,8 +922,8 @@ test('voice writer source transition permits only the pure selector while retain
   assert.equal(methods.pair(writer.ts, a, b, writer.projectRoot, reader.projectRoot, []), false);
   const privateGate = value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;',
     'if (isHermesVoiceTaskKind(kind)) return isHermesVoiceWriterEnabled() ? rawResult as Record<string, unknown> : null;');
-  const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]));
-  const unsafeWriter = await videoIngressProgram(new Map([[key, value => value.replace('return false;', 'return true;')], ['packages/domain/src/agent/agent.ts', privateGate]]));
+  const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), releasedVoiceReaderSource);
+  const unsafeWriter = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]));
   assert.throws(() => methods.writer(unsafeWriter.ts, videoPairContext(unsafeWriter), videoPairContext(unsafeReader), entries(unsafeWriter), entries(unsafeReader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the same new private phase-dependent behavior in both roots must reject');
 });

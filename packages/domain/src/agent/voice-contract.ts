@@ -1,6 +1,6 @@
 /** Browser-safe voice contract. Private checkpoints are never generic task products. */
 /** Reader release: opening fresh writes is a separate, reviewed source change. */
-export function isHermesVoiceWriterEnabled(): boolean { return false; }
+export function isHermesVoiceWriterEnabled(): boolean { return true; }
 export const HERMES_VOICE_READER_ONLY = '[blocked] Voice reader stage does not accept new submissions';
 // Preserve an existing persisted owner-stop marker without adding the generic cancel API.
 export const HERMES_VOICE_OWNED_STOP_REASON = '[blocked] Execution stopped by its owner';
