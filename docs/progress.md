@@ -2,7 +2,7 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
-- 维护三actual callee与一次3项受控等待验证已获原High824有限GO，未发现本体漏await，业务hunk=0。fulfilled不等写成功/资源退出；本单元关闭，停用候选startup拒绝、真实runner/SDK内部、旧heap交接/Writer保全两P1与B/C仍未证，无新现场操作。
+- 维护三actual callee与一次3项受控等待验证已获原High824有限GO，未发现本体漏await，业务hunk=0。fulfilled不等写成功/资源退出；本单元关闭，停用候选startup拒绝、真实runner/SDK内部、旧heap交接/Writer保全两P1与B/C仍未证，无新现场操作。 最新人类另准优先queueMetricsRunner实际链，唯一单叶读取包LOCAL PREP已STARTED，未取正文或操作服务；旧判断与数据保护不变。
 - 视频V1 reader已完成真实双版本CI及发布；后继writer完成源码/实际pair/CI，但最新人类暂停部署与激活。三项科学修订及后续真实私有规划目标保留，旧71e/591e/e875任务与已消费额度不重放，商业媒体/配音/公开暂停。
 - 图片I1与统一首次入口/耐久提交已发布；2a完整Source/组合原High零项GO已收eb5，再仅继承已审45→60预算为03c9e4f0 clean/pushed，历史refs及APP/proof不变。尚无本候选实际pair/CI/发布/browser GO；R后仍须原已定W→已发布R衔接和三项真实体验验收，PRIVATE brief不冒充新PNG，现有心跳已补连续续作。Provider HOLD、后继2.5目标及原图/public保护不变。
 - UI原文恢复已完成且历史/公开/原图保留，来源异常UNKNOWN。PDF676已上线，Open工具安全拒绝及内容可读性限制保留、原窗口关闭不绕行。独立0.2 readable R完整34路径原High零项Source GO，已收311cb1dc clean/pushed；有效分组测试通过，旧review3fail/类型旧诊断及API AJV初始化限制分开，browser/真实DB未跑。此后继不阻塞图片集成。
