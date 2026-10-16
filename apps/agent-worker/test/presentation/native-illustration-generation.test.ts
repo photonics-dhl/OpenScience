@@ -348,7 +348,14 @@ describe('selected-image Native guide', () => {
     '请为我们解释如何修改图中的箭头', '给我一份修改这张图的方案',
     '请给我说明怎么生成这张图片', '为读者解释修改箭头的方案',
     '给大家一份修改这张图的方案', '给这张图的修改方案提些建议',
-    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因'])('does not produce from an accepted proposal without imperative authority: %s', async goal => {
+    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因',
+    '把修改图的方法告诉我', '修改图的方法告诉我', '把图中左边的箭头改细一点后告诉我原因',
+    '给这张图修改左边箭头', '给这张图修改左边箭头并解释原因',
+    '请把第二张图换成水彩风格', '修改这张图的右上角', '为我们重画第二张图的右上角',
+    '请给我把左边箭头改细一点', '给我示范把箭头改细一点', '请把左边箭头千万别改细',
+    '把这句原话“把箭头改细一点', '“把箭头改细一点”', '把箭头改细一点”',
+    '将来再把箭头改细一点', '将图中左边的箭头改细一点'])(
+    'does not produce from an accepted proposal without imperative authority (including unsupported argument forms): %s', async goal => {
     const f = await completedSelectedEditFixture(goal);
     const before = { tasks: f.db.agentTasks.length, assets: f.db.presentationAssets.length, ledger: structuredClone(f.db.usageLedger), nativeCalls: f.fetcher.mock.calls.length };
     expect(await f.prepare()).toBeUndefined();
@@ -403,8 +410,9 @@ describe('selected-image Native guide', () => {
     expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(before + 1);
     expect(f.fetcher).toHaveBeenCalledTimes(calls);
   });
-  it.each([undefined, '请把左边箭头改细一点', '请给我把左边箭头改细一点',
-    '给这张图修改左边箭头', '给这张图修改左边箭头并解释原因'])(
+  it.each([undefined, '请把左边箭头改细一点',
+    '把图中左边的箭头改细一点', '把图中左边的箭头改细一点并解释原因', '请把文字“MQED”移到右下角',
+    '把文字“不要”移到右下角', '把图中左边的箭头画细一点，不要修改其他内容'])(
     'adopts an accepted selected-image edit into one truthful parent and paid child without changing the guide receipt: %s', async goal => {
     const f = await selectedGuideFixture(goal);
     const result = await f.run();

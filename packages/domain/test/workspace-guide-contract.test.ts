@@ -4,13 +4,13 @@ import { parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage,
 
 describe('selected-image production intent', () => {
   it.each(['Make the left arrow thinner', 'Please redraw the selected image', 'Could you change its style to watercolor?',
-    'Clarify the left connecting line', '把左边箭头改细一点', '请把第二张图换成水彩风格', '修改这张图的右上角',
+    'Clarify the left connecting line', '把左边箭头改细一点',
     '把左边箭头画细一点', '把左边箭头画细一点，不要修改其他内容',
     'Please redraw the left arrow; do not change the other regions', 'Change the label “为什么” to Why',
     '请把文字“不要”移到右下角', 'Change the left arrow, but do not publish anything',
-    '请给我把左边箭头改细一点', '为我们重画第二张图的右上角',
-    '给这张图修改左边箭头', '给这张图修改左边箭头并解释原因',
-    'Change the left arrow and explain why'])('accepts an explicit current imperative: %s', goal => {
+    '把图中左边的箭头改细一点并解释原因',
+    'Change the left arrow and explain why', '把图中左边的箭头改细一点',
+    '把“MQED”移到右下角'])('accepts an explicit current imperative: %s', goal => {
     expect(selectedImageProductionIntent(goal)).toBe(true);
   });
   it.each(['Can you explain how to modify the arrow?', 'Tell me how to redraw this', 'Suggest a plan to improve the image',
@@ -22,9 +22,30 @@ describe('selected-image production intent', () => {
     '请为我们解释如何修改图中的箭头', '给我一份修改这张图的方案',
     '请给我说明怎么生成这张图片', '为读者解释修改箭头的方案',
     '给大家一份修改这张图的方案', '给这张图的修改方案提些建议',
-    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因'])('does not turn discussion into production: %s', goal => {
+    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因',
+    '把修改图的方法告诉我', '修改图的方法告诉我',
+    '把图中左边的箭头改细一点后告诉我原因', '把标签“改细一点”告诉我',
+    '把改细一点', '把“”改细一点', '请把左边箭头千万别改细', '把箭头不改细',
+    '给我示范把箭头改细一点', 'Modify the arrow but do not redraw it',
+    '将来再把箭头改细一点'])('does not turn discussion into production: %s', goal => {
     expect(selectedImageProductionIntent(goal)).toBe(false);
   });
+  it.each(['给这张图修改左边箭头', '给这张图修改左边箭头并解释原因',
+    '请把第二张图换成水彩风格', '修改这张图的右上角', '为我们重画第二张图的右上角',
+    '请给我把左边箭头改细一点', '将图中左边的箭头改细一点'])(
+    'retains an unsupported complete-argument form without production authority: %s', goal => {
+      expect(selectedImageProductionIntent(goal)).toBe(false);
+    });
+  it.each(['把这句原话“把箭头改细一点', '把“箭头改细一点', '把「箭头改细一点',
+    '把《箭头改细一点', '把‘箭头改细一点', '把"箭头改细一点', '把箭头改细一点”',
+    '把“箭头」改细一点', '“把箭头改细一点”'])(
+    'refuses unmatched quotes and quoted instruction-only text: %s', goal => {
+      expect(selectedImageProductionIntent(goal)).toBe(false);
+    });
+  it.each(['“MQED”', '‘MQED’', '「MQED」', '《MQED》', '"MQED"', '“标签‘不要’”'])(
+    'binds a balanced quoted object only to the outside predicate: %s', label => {
+      expect(selectedImageProductionIntent(`把${label}移到右下角`)).toBe(true);
+    });
 });
 
 const payload = {
