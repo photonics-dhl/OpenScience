@@ -35,6 +35,117 @@ test('skill-path keeps official Prisma targets and runs the complete rollback se
   assert.match(workflow, /verifyApplicationRollbackReaders\(\{ candidateRoot: process\.env\.GITHUB_WORKSPACE, rollbackRoot: process\.env\.GITHUB_WORKSPACE, diagnostics: true \}\)/u);
 });
 
+test('private rollback rejection diagnostics preserve refusal and opt in only for boolean true', () => {
+  const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0] ?? '';
+  const events = [], roots = [];
+  const functions = runInNewContext(`${helper}; ${video}; finiteVideoPairCompatibility`, {
+    rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: roots,
+    console: { error: value => events.push(value) }, nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+  });
+  for (const value of [undefined, false, 'true', 1, true]) {
+    events.length = 0;
+    assert.equal(functions({}, [], [], '/candidate', '/previous', roots, value), false);
+    assert.equal(events.length, value === true ? 1 : 0);
+    if (value === true) assert.deepEqual(JSON.parse(events[0].split(' ', 2)[1]),
+      { stage: 'video', code: 'COMPATIBILITY_UNKNOWN', site: 'context' });
+  }
+  const selected = deployLockSource.match(/function finiteSelectedGuidePairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  if (selected) {
+    const invoke = runInNewContext(`${helper}; ${selected}; finiteSelectedGuidePairCompatibility`, {
+      rollbackProofContexts:new WeakMap(), APPLICATION_ROLLBACK_READERS:roots,
+      console:{error:value=>events.push(value)}, nodeUtilTypes:createRequire(import.meta.url)('node:util').types,
+    });
+    events.length=0; assert.equal(invoke({},[],[],'/candidate','/previous',roots,true),false);
+    assert.equal(events.length,1); assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ')+1)).stage,'selected-guide');
+  }
+});
+
+test('private rollback diagnostic privacy uses only natural captured AST identity and fixed refusal sites', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  let sinkFailure = false;
+  const environment = { resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+    console: { error(value) { if (sinkFailure) throw Error('SECRET-sink'); events.push(value); } },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } };
+  const functions = runInNewContext(`${collector}; ${helper}; ({collect:rollbackReaderClosure, emit:emitPrivateRollbackDiagnostic})`, environment);
+  const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(join(parent, 'diagnostic-context-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous'), roots = [['apps/reader.ts']];
+  for (const [index, root] of [candidate, previous].entries()) {
+    await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+    await writeFile(join(root, 'apps/reader.ts'), `export function read() { return ${index + 1}; }`);
+  }
+  const current = functions.collect(ts, candidate, roots), old = functions.collect(ts, previous, roots);
+  const left = contexts.get(current), source = left.program.getSourceFile(join(candidate, 'apps/reader.ts'));
+  // Custom-root component evidence only: no test writes a WeakMap entry or
+  // turns this fixture into original full DEFAULT compatibility acceptance.
+  const run = (error, key, overrides = {}, familyCode) => {
+    events.length = 0;
+    functions.emit(ts, overrides.current ?? current, overrides.previous ?? old, overrides.candidate ?? candidate,
+      previous, roots, overrides.branch ?? 'selected-guide', overrides.site ?? 'model', error, key, familyCode);
+    assert.ok(events.length <= 1);
+    return events.length ? JSON.parse(events[0].slice(events[0].indexOf(' ') + 1)) : undefined;
+  };
+  const known = 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', key = 'module:apps/reader.ts';
+  assert.equal(run({ reason: known, node: source.statements[0] }).module, key);
+  assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN' }).code, 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
+  let invoked = 0;
+  const bad = { get reason() { invoked++; return 'SECRET'; }, get node() { invoked++; return source; },
+    getSourceFile() { invoked++; return source; }, toJSON() { invoked++; return 'SECRET'; } };
+  assert.equal(run(bad).code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(run({ reason: known, node: { parent: source, getSourceFile() { invoked++; return source; } } }).module, undefined);
+  const proxy = new Proxy({}, { getOwnPropertyDescriptor() { invoked++; throw Error('SECRET-proxy'); }, get() { invoked++; throw Error('SECRET-proxy'); } });
+  assert.equal(run(proxy).code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(invoked, 0);
+  const unknown = run({ reason: 'SECRET', message: 'SECRET', stack: 'SECRET', path: 'SECRET', stage: 'SECRET' });
+  assert.equal(JSON.stringify(unknown).includes('SECRET'), false);
+  for (const invalid of ['/SECRET', 'module:../SECRET', `module:apps/${'x'.repeat(241)}`, 'module:apps/unbound.ts'])
+    assert.equal(run({ reason: known }, invalid).module, undefined);
+  for (const override of [{current:[...current]}, {previous:[...old]}, {previous:current}, {candidate:previous}]) {
+    const result = run({reason:known,node:source}, key, override);
+    assert.equal(result.code, 'COMPATIBILITY_UNKNOWN'); assert.equal(result.module, undefined);
+  }
+  const originalChecker=left.checker;
+  try { left.checker={}; const result=run({reason:known,node:source},key);
+    assert.equal(result.code,'COMPATIBILITY_UNKNOWN'); assert.equal(result.module,undefined);
+  } finally { left.checker=originalChecker; }
+  sinkFailure = true; assert.doesNotThrow(() => run({reason:known,node:source})); sinkFailure = false;
+  const descriptorFailure = runInNewContext(`${helper}; (error=>{emitPrivateRollbackDiagnostic(ts,current,old,candidate,previous,roots,'selected-guide','model',error);return false;})`, {
+    ...environment, ts,current,old,candidate,previous,roots,
+    Object:{getOwnPropertyDescriptor(){throw Error('SECRET-descriptor');}},
+  });
+  events.length=0; assert.equal(descriptorFailure({reason:known,node:source}),false); assert.equal(events.length,0);
+  const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const segments = [
+    [video.slice(video.indexOf('    for (const key of new Set'), video.indexOf('    for (const key of projectedKeys)')), 'remaining-entry'],
+    [video.match(/      site = 'projected-equality';\r?\n      if [^\n]+/u)[0], 'projected-equality'],
+    [video.slice(video.indexOf("      if (ingress.reason"), video.indexOf("    site = 'family'")), 'ingress'],
+    [video.slice(video.indexOf("    site = 'family'"), video.indexOf('  } catch')), 'family'],
+  ];
+  for (let [body, expected] of segments) {
+    // The ingress snippet includes its original enclosing loop's closing brace.
+    if (expected === 'ingress') body = body.slice(0, body.lastIndexOf('    }'));
+    events.length = 0;
+    const reject = (error, reason) => { functions.emit(ts,current,old,candidate,previous,roots,'video',expected,error,key,reason); return false; };
+    const family = deployLockSource.match(/function finiteVideoFamilyClosure\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+    const execute = runInNewContext(`${family}; (()=>{let site,moduleKey; ${body}; return true;})`, {
+      a:new Map(current), b:new Map(old), affected:new Set(), projected:[new Map(current).get(key),new Map(old).get(key)],
+      ingress:{reason:'unproven'}, candidate:{constructors:{terms:{legacy:1}}}, rollback:{constructors:{terms:{legacy:2}}}, reject,
+    });
+    assert.equal(execute(), false); assert.equal(events.length,1);
+    assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ')+1)).site,expected);
+  }
+  const verifier = deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const order = ['finiteVideoPairCompatibility','finiteImageCapablePairCompatibility','finiteImageFirstPairCompatibility','finiteVoicePairCompatibility'];
+  assert.ok(order.every((name,index)=> index===0 || verifier.indexOf(order[index-1])<verifier.indexOf(name)));
+  if (verifier.includes('finiteSelectedGuidePairCompatibility')) assert.ok(verifier.indexOf(order.at(-1))<verifier.indexOf('finiteSelectedGuidePairCompatibility'));
+});
+
 test('rollback verifier diagnostics are opt-in, bounded and preserve rejection', async () => {
   const verifierSource = deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(verifierSource);
